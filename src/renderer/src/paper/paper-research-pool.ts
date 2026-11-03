@@ -52,7 +52,8 @@ function toolName(block: ToolBlock): string {
   return name.replace(/^mcp__kun__/, '')
 }
 
-function identityKeys(card: Pick<PaperSearchCardHit, 'doi' | 'arxivId' | 'coolId' | 'title'>): string[] {
+/** Identity keys of a paper: DOI, arXiv id, venue id, then the normalized title. */
+export function paperIdentityKeys(card: Pick<PaperSearchCardHit, 'doi' | 'arxivId' | 'coolId' | 'title'>): string[] {
   return [
     ...(card.doi ? [`doi:${card.doi.toLowerCase()}`] : []),
     ...(card.arxivId ? [`arxiv:${card.arxivId}`] : []),
@@ -81,7 +82,7 @@ class PoolBuilder {
   private readonly index = new Map<string, ResearchPoolEntry>()
 
   find(card: PaperSearchCardHit): ResearchPoolEntry | undefined {
-    for (const key of identityKeys(card)) {
+    for (const key of paperIdentityKeys(card)) {
       const hit = this.index.get(key)
       if (hit) return hit
     }
@@ -104,8 +105,8 @@ class PoolBuilder {
     } else {
       mergeCard(entry, card)
     }
-    for (const key of identityKeys(entry)) this.index.set(key, entry)
-    entry.key = identityKeys(entry)[0]!
+    for (const key of paperIdentityKeys(entry)) this.index.set(key, entry)
+    entry.key = paperIdentityKeys(entry)[0]!
     return { entry, isNew }
   }
 }

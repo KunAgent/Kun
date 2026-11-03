@@ -635,4 +635,19 @@ describe('usage per-turn timing aggregation', () => {
     const next = usage.record('thread-a', timed({ requestTtftMs: 200, requestGenerationMs: 1_000 }), undefined, 'turn-a')
     expect(next.turnAvgTtftMs).toBe(200)
   })
+
+  it('hands a settling turn the same averages its usage events carried', () => {
+    const usage = new UsageService()
+    usage.record('thread-a', timed({ completionTokens: 40, requestTtftMs: 800, requestGenerationMs: 1_000 }), undefined, 'turn-a')
+    const last = usage.record('thread-a', timed({ completionTokens: 60, requestTtftMs: 1_200, requestGenerationMs: 1_500 }), undefined, 'turn-a')
+
+    expect(usage.turnModelTiming('thread-a', 'turn-a')).toEqual({
+      avgTtftMs: last.turnAvgTtftMs,
+      avgTokensPerSecond: last.turnAvgTokensPerSecond
+    })
+    usage.record('thread-a', timed({}), undefined, 'turn-quiet')
+    expect(usage.turnModelTiming('thread-a', 'turn-quiet')).toBeUndefined()
+    usage.endTurn('thread-a', 'turn-a')
+    expect(usage.turnModelTiming('thread-a', 'turn-a')).toBeUndefined()
+  })
 })

@@ -1,4 +1,6 @@
 import { markThreadWorkspacePreparing } from './task-workspace-store'
+import { startNewTaskTiming } from './new-task-timing'
+import { seedEmptyThreadSnapshot } from './new-thread-snapshot'
 import { codeThreadWorkspaceIntent } from './code-thread-workspace-intent'
 import type { ChatBlock, ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
@@ -63,7 +65,6 @@ import {
   accountIdForComposerSelection,
   activeClawChannel,
   compactCodeWorkspaceRoots,
-  composerReasoningEffortForSelection,
   forgetCodeWorkspaceRoot,
   hydrateBlockModelLabels,
   isClawThread,
@@ -84,13 +85,20 @@ import {
   clearedThreadSelection,
   collectAssistantTextForTurn,
   findLatestUserBlockId,
-  findReusableEmptyThreadId,
   reconcileOptimisticUserBlock,
   settlePendingRuntimeWorkAfterInterrupt,
   threadHasPendingRuntimeWork,
   threadSnapshotLooksRunning,
   threadBelongsToWorkspace
 } from './chat-store-runtime-helpers'
+import {
+  adoptThreadCreationGuard,
+  pendingThreadCreation,
+  releaseThreadCreation,
+  threadCreationIntentKey,
+  trackThreadCreation
+} from './thread-creation-intent'
+import { reuseEmptySessionForNewTask } from './chat-store-new-session-reuse'
 import { restoredLiveProjection } from './chat-store-live-projection'
 import {
   WRITE_ASSISTANT_THREAD_TITLE,
@@ -124,7 +132,6 @@ import {
   forkedMessageCount,
   forkedTurnCount,
   isCodeSidebarThread,
-  isCodeThread,
   latestThread,
   looksLikeActiveTurnError,
   readActiveWriteWorkspace,
@@ -154,7 +161,6 @@ import {
 } from './thread-recovery-coordinator'
 import { GitCheckpointAvailabilityCache } from '../lib/git-checkpoint-availability'
 import { primaryAgentAvailableOnSurface } from '../lib/subagent-profile-surface'
-import { isDesignThreadId, readDesignThreadRegistry } from '../design/design-thread-registry'
 import { readSddThreadRegistry } from '../sdd/sdd-thread-registry'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { mergeChatBlocks } from '../agent/kun-mapper'
@@ -182,17 +188,21 @@ export function createThreadCreationActions(
   runtime: ThreadActionRuntime
 ): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn'> {
   const { set, get, sseAbortRef } = context
-  return {
-  createThread: async (options = {}) => {
+  const runCreateThread = async (
+    options: NonNullable<Parameters<ChatState['createThread']>[0]> = {},
+    stillWanted: () => boolean = () => options.activationGuard?.() !== false
+  ): Promise<string | null> => {
     const creationState = { ...get() }
-    const activationAllowed = (): boolean => options.activationGuard?.() !== false
+    const activationAllowed = (): boolean => stillWanted()
     if (get().runtimeConnection !== 'ready') {
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
     }
+    const timing = startNewTaskTiming('createThread')
     try {
       const p = getProvider()
       const settings = await rendererRuntimeClient.getSettings()
+      timing.step('settings')
       const runtime = getKunRuntimeSettings(settings)
       const activeThread = creationState.activeThreadId
         ? creationState.threads.find((thread) => thread.id === creationState.activeThreadId) ??
@@ -207,7 +217,7 @@ export function createThreadCreationActions(
             primaryAgentAvailableOnSurface(profile, requestedAgentSurface)
         )
         : undefined
-      // P4-11: explicit pins (harness defaults via the one-to-one pickers)
+      // explicit pins (harness defaults via the one-to-one pickers)
       // outrank the persona/global defaults for the new thread's route.
       const initialModel = options.model?.trim() ||
         personaProfile?.model?.trim() || runtime.model.trim()
@@ -259,8 +269,9 @@ export function createThreadCreationActions(
           threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
         }))
         if (activate) {
+          seedEmptyThreadSnapshot(t)
           await get().selectThread(t.id)
-          await get().refreshThreads()
+          void get().refreshThreads()
         }
         return t.id
       }
@@ -275,7 +286,9 @@ export function createThreadCreationActions(
         await get().chooseWorkspace({ createThreadAfter: true })
         return null
       }
-      if (!(await workspaceDirectoryExists(workspaceRoot))) {
+      const workspaceExists = await workspaceDirectoryExists(workspaceRoot)
+      timing.step('workspace')
+      if (!workspaceExists) {
         set({ error: workspaceMissingError() })
         await showWorkspaceMissingDialog(workspaceRoot)
         return null
@@ -297,51 +310,33 @@ export function createThreadCreationActions(
             creationState.composerIsolationExplicitWorkspaceRoot !== workspaceRoot
               ? undefined : options.useWorktreePool, worktreeBranch: options.worktreeBranch,
           stillCurrent: activationAllowed }) : undefined
+      timing.step('project-defaults')
       if (workspaceIntent === null) return null
-      // Worktree pool mode always needs a fresh thread bound to a fresh pool
-      // slot, so never reuse an existing main-workspace thread in that case.
-      // ADE 不复用 Code 线程:复用池只扫 Code 清单,跨模式必须新建。
-      const reusableThreadId = isAdeThread || options.forceNew || workspaceIntent?.isolation === 'worktree' ||
-        workspaceIntent?.createFields.projectDefaultsRevision || personaProfile
-        ? null
-        : await findReusableEmptyThreadId(
-            get(),
-            p,
-            workspaceRoot,
-            (thread) =>
-              isCodeThread(thread, get().clawChannels) &&
-              !isDesignThreadId(thread.id, readDesignThreadRegistry()) &&
-              (thread.agentSurface ?? 'code') === requestedAgentSurface
-          )
-      if (reusableThreadId) {
-        if (!activationAllowed()) return null
-        if (initialModel) {
-          rememberThreadComposerSelection(
-            reusableThreadId,
-            initialModel,
-            initialProviderId,
-            'default'
-          )
-        }
-        if (get().activeThreadId !== reusableThreadId) {
-          await get().selectThread(reusableThreadId)
-        } else {
-          set({
-            error: null,
-            ...(initialModel
-              ? {
-                  composerModel: initialModel,
-                  composerProviderId: initialProviderId,
-                  composerReasoningEffort: composerReasoningEffortForSelection(
-                    get().composerModelGroups,
-                    initialModel,
-                    initialProviderId
-                  )
-                }
-              : {})
-          })
-        }
-        return reusableThreadId
+      // Reuse is decided by what the thread actually is, not by whether the
+      // project has defaults: an empty, untouched thread of this project and
+      // surface is the right landing page for another New click.
+      const reuseTargetId = await reuseEmptySessionForNewTask({
+        get,
+        set,
+        provider: p,
+        workspaceRoot,
+        isAdeThread,
+        requestedAgentSurface,
+        worktreeIntent: workspaceIntent?.isolation === 'worktree',
+        forceNew: options.forceNew === true,
+        conversation: options.conversation,
+        agentId: options.agentId,
+        harnessId: options.harnessId,
+        personaProfileId: personaProfile?.id,
+        initialModel,
+        initialProviderId,
+        explicitSelection: Boolean(options.model?.trim() || personaProfile?.model?.trim()),
+        activationAllowed,
+        step: (name) => timing.step(name)
+      })
+      if (reuseTargetId) {
+        timing.finish('reused a thread')
+        return reuseTargetId
       }
       // Primary-agent persona snapshot: bind this thread to the picked
       // subagent profile and freeze its providerId / model / systemPrompt
@@ -362,6 +357,7 @@ export function createThreadCreationActions(
           ...(personaProfile.systemPrompt ? { systemPrompt: personaProfile.systemPrompt } : {})
         } : {})
       })
+      timing.step('create')
       if (initialModel) {
         rememberThreadComposerSelection(
           t.id,
@@ -392,13 +388,18 @@ export function createThreadCreationActions(
             })
       }))
       if (workspaceIntent?.isolation === 'worktree') markThreadWorkspacePreparing(t.id, '')
+      // The thread has no history yet: an empty seeded page lets selectThread
+      // skip its timeline round trips and enable the composer at once.
+      if (activate) seedEmptyThreadSnapshot(t)
       if (activate) await get().selectThread(t.id)
+      timing.step('select')
       if (workspaceIntent?.isolation === 'worktree') {
         await get().requestAdeThreadWorkspace(t.id, workspaceIntent.startFrom)
       }
-      if (activate) {
-        await (isAdeThread ? get().refreshAdeThreads() : get().refreshThreads())
-      }
+      // The sidebar already lists the thread optimistically; the inventory
+      // refresh must not hold the new conversation or callers awaiting its id.
+      if (activate) void (isAdeThread ? get().refreshAdeThreads() : get().refreshThreads())
+      timing.finish('created a thread')
       return t.id
     } catch (e) {
       set({
@@ -408,6 +409,34 @@ export function createThreadCreationActions(
           : {})
       })
       return null
+    }
+  }
+
+  return {
+  createThread: async (options = {}) => {
+    const intentKey = threadCreationIntentKey(options, get())
+    const guard = (): boolean => options.activationGuard?.() !== false
+    const shared = pendingThreadCreation(intentKey)
+    if (shared) {
+      // This click is now the newest owner of the shared creation, so its guard
+      // decides whether the result still takes over the view.
+      adoptThreadCreationGuard(intentKey, guard)
+      const threadId = await shared.promise
+      if (threadId && guard() && get().activeThreadId !== threadId) {
+        const thread = get().threads.find((item) => item.id === threadId)
+        if (thread) seedEmptyThreadSnapshot(thread)
+        await get().selectThread(threadId)
+      }
+      return threadId
+    }
+    const creation = runCreateThread(options, () =>
+      (pendingThreadCreation(intentKey)?.guard ?? guard)()
+    )
+    trackThreadCreation(intentKey, creation, guard)
+    try {
+      return await creation
+    } finally {
+      releaseThreadCreation(intentKey, creation)
     }
   },
 

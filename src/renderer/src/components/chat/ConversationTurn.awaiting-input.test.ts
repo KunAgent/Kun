@@ -64,7 +64,7 @@ describe('ConversationTurn awaiting-input progress row', () => {
       },
       true
     )
-    expect(html).toContain('Waiting for your answer')
+    expect(html).toContain('Kun is waiting for your answer')
     expect(html).not.toContain('data-turn-live-status-owner="generic"')
     expect(html).not.toContain('data-work-meta-row="true"')
     expect(html).not.toContain('Thinking')

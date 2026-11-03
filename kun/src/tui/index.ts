@@ -1,10 +1,12 @@
-import { stdin as processStdin, stdout as processStdout } from 'node:process'
+import { stdin as processStdin } from 'node:process'
 import {
   KunTuiClient,
   resolveTuiConnection,
   type TuiConnection
 } from './client.js'
 import { TuiController } from './controller.js'
+import { ChatSession } from './session/chat-session.js'
+import { redirectConsole } from './console-log.js'
 import { KUN_TUI_USAGE, parseTuiOptions } from './options.js'
 import {
   hasUnpublishedGuiRuntime,
@@ -12,13 +14,33 @@ import {
   type GuiConfigSyncResult
 } from '../cli/gui-settings-bridge.js'
 import { importGuiProviderCatalogForTui } from './gui-catalog-startup.js'
-import type { TerminalInput, TerminalOutput } from './pi-terminal.js'
+import {
+  TUI_HANDOFF_ENV,
+  downloadTuiNode,
+  findTuiNode,
+  handoffToTuiNode,
+  rendererAvailableInProcess,
+  BUNDLED_TUI_NODE_VERSION,
+  MINIMUM_TUI_RENDERER_NODE_VERSION
+} from './tui-node.js'
 import { checkStandaloneTuiUpdateOnce, readStandaloneTuiRelease } from '../cli/self-update.js'
 import { reconcilePendingTuiUpdate } from '../cli/self-update-reconcile.js'
 import type { ClientOwnedRuntimeHandle } from '../cli/client-owned-runtime.js'
 import type { TuiOptions } from './options.js'
 
 type WritableLike = { write(chunk: string): unknown }
+
+export type TerminalInput = NodeJS.ReadableStream & { isTTY?: boolean }
+export type TerminalOutput = WritableLike & { isTTY?: boolean; columns?: number; rows?: number }
+
+/**
+ * Where the opentui renderer runs. It needs Node >= 26.4 with node:ffi;
+ * other interpreters (Electron's Node, older system Node) hand off to one.
+ */
+export type TuiRendererHost = {
+  availableInProcess(nodeVersion: string): Promise<boolean>
+  handoff(argv: readonly string[], env: NodeJS.ProcessEnv, stderr: WritableLike): Promise<number>
+}
 
 export type TuiCommandIo = {
   stdin?: NodeJS.ReadableStream
@@ -29,6 +51,41 @@ export type TuiCommandIo = {
   fetch?: typeof fetch
   nodeVersion?: string
   resolveConnection?: typeof resolveTuiConnection
+  renderer?: TuiRendererHost
+}
+
+export const defaultTuiRendererHost: TuiRendererHost = {
+  availableInProcess: rendererAvailableInProcess,
+  async handoff(argv, env, stderr) {
+    if (env[TUI_HANDOFF_ENV] === '1') {
+      stderr.write(
+        `kun tui: the terminal renderer needs Node.js >=${MINIMUM_TUI_RENDERER_NODE_VERSION} with --experimental-ffi; ` +
+        `this process runs Node.js ${process.versions.node}.\n`
+      )
+      return 69
+    }
+    let node = findTuiNode(env)
+    if (!node) {
+      if (env.KUN_TUI_NODE_DOWNLOAD === '0') {
+        stderr.write(
+          `kun tui: Node.js >=${MINIMUM_TUI_RENDERER_NODE_VERSION} is required for the terminal UI and was not found.\n` +
+          'Install Node.js 26 (https://nodejs.org/) or set KUN_TUI_NODE to its executable.\n'
+        )
+        return 69
+      }
+      stderr.write(`kun tui: preparing the terminal UI runtime (Node.js ${BUNDLED_TUI_NODE_VERSION}, verified download, one time only)…\n`)
+      try {
+        node = await downloadTuiNode(env, fetch, (message) => stderr.write(`kun tui: ${message}\n`))
+      } catch (error) {
+        stderr.write(
+          `kun tui: could not prepare Node.js ${BUNDLED_TUI_NODE_VERSION}: ${error instanceof Error ? error.message : String(error)}\n` +
+          'Install Node.js 26 (https://nodejs.org/) or set KUN_TUI_NODE to its executable, then run kun again.\n'
+        )
+        return 69
+      }
+    }
+    return handoffToTuiNode(node, argv, env)
+  }
 }
 
 export const MINIMUM_TUI_NODE_VERSION = '22.19.0'
@@ -63,14 +120,20 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
     return 69
   }
   const input = (io.stdin ?? processStdin) as TerminalInput
-  const output = io.stdout as TerminalOutput
+  const output = io.stdout
   if (!input.isTTY || !output.isTTY) {
     io.stderr.write('kun tui: a TTY is required; use `kun chat` or `kun run` for non-interactive input.\n')
     return 64
   }
+  const rendererHost = io.renderer ?? defaultTuiRendererHost
+  if (!await rendererHost.availableInProcess(nodeVersion)) {
+    // Hand off before any Runtime is started so exactly one process owns it.
+    return rendererHost.handoff(argv, io.env ?? process.env, io.stderr)
+  }
 
   let controller: TuiController | undefined
-  let app: import('./pi-app.js').PiTuiApplication | undefined
+  let app: import('./app/main.js').OpenTuiApplication | undefined
+  let restoreConsole: (() => void) | undefined
   let ownedRuntime: ClientOwnedRuntimeHandle | undefined
   try {
     const guiSettings = parsed.options.url
@@ -94,8 +157,8 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
     let guiConfigSync: GuiConfigSyncResult | null = null
     let guiConfigWarning = ''
     if (guiSettings && !parsed.options.url) {
-      // Registry remains the catalog authority when explicit attach mode sees
-      // a live Runtime; default owned startup will reject that foreign owner.
+      // Registry remains the catalog authority when the TUI attaches to a live
+      // Runtime, whether through --no-start or because another client owns it.
       const imported = await importGuiProviderCatalogForTui({
         dataDir: parsed.options.dataDir,
         settings: guiSettings,
@@ -107,13 +170,13 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
         io.stderr.write(`kun tui: ${guiConfigWarning}\n`)
       }
     }
-    const [{ PiTuiApplication }, { loadTuiKeymap }] = await Promise.all([
-      import('./pi-app.js'),
-      import('./keymap.js')
-    ])
+    const { loadTuiKeymap } = await import('./keymap.js')
     const keymapConfig = await loadTuiKeymap()
     const resolveConnection = io.resolveConnection ?? resolveTuiConnection
     const connection = await resolveConnection(parsed.options, io.fetch ?? fetch)
+    // From here on the terminal belongs to the inline UI; library logging
+    // goes to <data-dir>/logs/tui.log instead of the transcript.
+    restoreConsole = redirectConsole(parsed.options.dataDir)
     ownedRuntime = connection.ownedRuntime
     const reconnect = createTuiReconnectResolver(
       connection,
@@ -163,7 +226,14 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
       controller.notify(keymapConfig.warnings.join(' '), 'error')
     }
     if (guiConfigWarning) controller.notify(guiConfigWarning, 'error')
-    app = new PiTuiApplication(controller, input, output, keymapConfig.keymap)
+    if (connection.attached) {
+      const owner = connection.attached.ownerKind ? `${connection.attached.ownerKind.toUpperCase()} ` : ''
+      controller.notify(`Attached to the running ${owner}Runtime (pid ${connection.attached.pid}); it stops when that client exits.`)
+    }
+    const session = new ChatSession(controller, keymapConfig.keymap)
+    suppressFfiExperimentalWarning()
+    const { startOpenTuiApplication } = await import('./app/main.js')
+    app = await startOpenTuiApplication(session, terminalStreams(input, output))
     const running = app.run()
     await controller.start()
     void checkStandaloneTuiUpdateOnce({
@@ -204,11 +274,35 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
       io.stderr.write(`kun tui: terminal cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)
     })
     await controller?.stop().catch(() => undefined)
+    restoreConsole?.()
     await ownedRuntime?.stop().catch((error) => {
       io.stderr.write(`kun tui: owned Runtime cleanup failed: ${error instanceof Error ? error.message : String(error)}\n`)
       return false
     })
   }
+}
+
+function terminalStreams(input: TerminalInput, output: TerminalOutput): { stdin?: NodeJS.ReadStream; stdout?: NodeJS.WriteStream } {
+  return {
+    ...(input !== processStdin ? { stdin: input as NodeJS.ReadStream } : {}),
+    ...(output !== process.stdout ? { stdout: output as unknown as NodeJS.WriteStream } : {})
+  }
+}
+
+/**
+ * node:ffi emits an ExperimentalWarning the first time it loads. The flag
+ * --disable-warning covers the CLI handoff, but an embedding process may
+ * not pass it; the warning would otherwise be printed over the TUI.
+ */
+function suppressFfiExperimentalWarning(): void {
+  const original = process.emitWarning
+  const filtered = function (this: NodeJS.Process, warning: string | Error, ...rest: unknown[]) {
+    const message = typeof warning === 'string' ? warning : warning.message
+    const type = typeof rest[0] === 'string' ? rest[0] : (rest[0] as { type?: string } | undefined)?.type
+    if (type === 'ExperimentalWarning' && /\bFFI\b/u.test(message)) return
+    return (original as (...args: unknown[]) => void).call(this, warning, ...rest)
+  } as typeof process.emitWarning
+  process.emitWarning = filtered
 }
 
 export function createTuiReconnectResolver(
@@ -218,8 +312,11 @@ export function createTuiReconnectResolver(
   resolveConnection: typeof resolveTuiConnection = resolveTuiConnection
 ): (() => Promise<{ baseUrl: string; runtimeToken: string }>) | undefined {
   if (!connection.discovered || connection.ownedRuntime) return undefined
+  // An attached connection belongs to another client. Reconnecting must never
+  // start a Runtime of its own when that client exits: nothing would stop it.
+  const reconnectOptions = connection.attached ? { ...options, noStart: true } : options
   return async () => {
-    const refreshed = await resolveConnection(options, fetchImpl)
+    const refreshed = await resolveConnection(reconnectOptions, fetchImpl)
     return {
       baseUrl: refreshed.baseUrl,
       runtimeToken: refreshed.runtimeToken

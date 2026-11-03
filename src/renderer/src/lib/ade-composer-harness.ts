@@ -10,6 +10,7 @@ import { harnessProfileReady, readyHarnessProfiles } from '@shared/harness-enabl
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { MODEL_REASONING_EFFORTS, type ModelReasoningEffort, type ModelProviderModelProfileV1 } from '@shared/app-settings'
 import type { HarnessModelInfo } from '../../../../kun/src/contracts/harness-models'
+import { agentHarnessIdForProviderKind } from './kun-model-provider-groups'
 
 export function harnessModelProfiles(models: readonly HarnessModelInfo[] = [], nativeReasoning = false): Record<string, ModelProviderModelProfileV1> {
   return Object.fromEntries(models.flatMap((model) => {
@@ -25,7 +26,7 @@ export function harnessModelProfiles(models: readonly HarnessModelInfo[] = [], n
 }
 
 /**
- * ADE composer harness/model resolution (docs/ade/12 §7.2).
+ * ADE composer harness/model resolution.
  *
  * Harness model catalogs are flat id lists; the composer regroups them by
  * `credentialModes` so a harness that supports both its native subscription
@@ -68,10 +69,7 @@ export function effectiveHarnessId(
   threadHarnessId: string | undefined,
   providerKind?: ModelProviderModelGroup['kind']
 ): string {
-  const legacy = providerKind === 'agent-sdk' ? 'claude-code'
-    : providerKind === 'cursor-sdk' ? 'cursor'
-      : providerKind === 'antigravity-cli' ? 'antigravity' : 'kun'
-  return composerHarnessId.trim() || threadHarnessId?.trim() || legacy
+  return composerHarnessId.trim() || threadHarnessId?.trim() || agentHarnessIdForProviderKind(providerKind) || 'kun'
 }
 
 /** The native Kun loop keeps the provider-registry model groups untouched. */
@@ -83,12 +81,16 @@ export type AdeCredentialGroupLabels = {
   nativeLogin: string
   provider: string
   kunGateway: string
+  /** Name of the Agent's own sign-in, e.g. "Claude Code account". */
+  agentAccount?: (agentName: string) => string
+  /** A Kun provider profile that supplies a native login (its name and preset). */
+  providerName?: (providerId: string) => { label: string; presetSource?: string } | undefined
 }
 
 /**
  * Synthesize pick-list groups: `native-login` lists the harness's own models;
  * `provider`/`kun-gateway` list one group per exposable configured provider
- * (P3-05) so a picked entry pins both the credential mode and the provider —
+ * so a picked entry pins both the credential mode and the provider —
  * the raw model id plus `providerId` resolves to the `kun/<provider>/<model>`
  * route in `parseGatewayModelId` semantics. Provider modes stay hidden when
  * no provider is configured or none are exposable.
@@ -114,7 +116,7 @@ export function adeHarnessModelGroups(input: {
     if (mode === 'native-login') {
       for (const profile of readyHarnessProfiles(row).filter((entry) => entry.credentialMode === mode)) groups.push({
         providerId: profile.providerId ? `${credentialGroupKey(mode)}:${profile.providerId}` : credentialGroupKey(mode),
-        label: profile.providerId ? `${labelFor[mode]} · ${profile.providerId}` : labelFor[mode],
+        ...nativeLoginGroupIdentity(row, profile.providerId, labels),
         modelIds: [...models],
         ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo, row.definition.id === 'devin') } : {}),
         ...(input.modelInfo ? { nativeHarnessId: row.definition.id,
@@ -133,11 +135,31 @@ export function adeHarnessModelGroups(input: {
         providerId: `${credentialGroupKey(mode)}:${provider.providerId}`,
         label: `${labelFor[mode]} · ${provider.label}`,
         modelIds: [...provider.models],
-        ...(provider.modelInfo ? { modelProfiles: harnessModelProfiles(provider.modelInfo) } : {})
+        ...(provider.modelInfo ? { modelProfiles: harnessModelProfiles(provider.modelInfo) } : {}),
+        ...(row.definition.id === 'cursor' && provider.modelInfo ? {
+          nativeHarnessId: row.definition.id,
+          modelInfo: Object.fromEntries(provider.modelInfo.map((entry) => [entry.id, entry]))
+        } : {})
       })
     }
   }
   return groups
+}
+
+/**
+ * The Agent's own sign-in is named after the Agent and shows its mark; a
+ * native login supplied by a Kun provider profile is named after that
+ * provider, so two native groups never read alike.
+ */
+function nativeLoginGroupIdentity(row: AdeHarnessRow, providerId: string | undefined, labels: AdeCredentialGroupLabels):
+  Pick<ModelProviderModelGroup, 'label' | 'agentIconId' | 'presetSource'> {
+  if (!providerId) {
+    return { label: labels.agentAccount?.(row.definition.displayName) ?? labels.nativeLogin, agentIconId: row.definition.id }
+  }
+  const provider = labels.providerName?.(providerId)
+  return provider
+    ? { label: provider.label, ...(provider.presetSource ? { presetSource: provider.presetSource } : {}) }
+    : { label: `${labels.nativeLogin} · ${providerId}` }
 }
 
 /** Credential mode for a route when the user never picked one explicitly. */
@@ -147,7 +169,7 @@ export function defaultCredentialModeForRow(row: AdeHarnessRow | undefined): str
 
 /**
  * Whether switching harness/model on a thread that already has turns needs
- * the handoff confirmation (12 §7.2): the runtime opens a fresh native
+ * the handoff confirmation: the runtime opens a fresh native
  * session and carries context via the deterministic handoff brief.
  */
 export function harnessSwitchNeedsConfirmation(input: {

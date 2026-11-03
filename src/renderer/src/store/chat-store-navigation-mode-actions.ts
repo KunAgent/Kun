@@ -54,6 +54,7 @@ import {
   optimisticUserModelLabel,
   readCodeWorkspaceRoots,
   rememberCodeWorkspaceRoots,
+  rememberThreadComposerSelection,
   rememberTurnModel,
   reconcileCodeWorkspaceRoots,
   saveCodeWorkspaceRoots
@@ -70,7 +71,6 @@ import {
 } from './chat-store-runtime-helpers'
 import {
   WRITE_ASSISTANT_THREAD_TITLE,
-  activeWriteThreadForWorkspace,
   forgetWriteThread,
   hydrateWriteThreadRegistry,
   isWriteAssistantThread,
@@ -82,12 +82,7 @@ import {
   writeWorkspaceForThreadId
 } from '../write/write-thread-registry'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
-import { beginWorkSessionTransition, useWorkSidebarStore, workDocumentKey } from '../write/work-sidebar-store'
-import {
-  pinnedWriteSessionId,
-  selectPinnedWorkSession,
-  workSessionDraftPending
-} from '../write/work-session-thread-hooks'
+import { beginWorkSessionTransition, currentWorkSessionId, useWorkSessionStore } from '../write/work-session-store'
 import {
   DESIGN_ASSISTANT_THREAD_TITLE,
   activeDesignThreadForWorkspace,
@@ -341,21 +336,25 @@ export function createNavigationModeActions(
     const activeThread = state.activeThreadId
       ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
       : null
+    // A Work session opened from elsewhere (a notification, search) becomes
+    // the space's current session; otherwise the space's current session
+    // comes back, and a space without one opens on a draft (the home).
     if (
       activeThread &&
       activeThread.archived !== true &&
       selectedWorkspace &&
       writeThreadBelongsToWorkspace(activeThread, selectedWorkspace, registry)
     ) {
-      if (activationAllowed()) set({ route: 'write' })
+      if (!activationAllowed()) return
+      useWorkSessionStore.getState().select(selectedWorkspace, activeThread.id)
+      set({ route: 'write' })
       return
     }
 
-    const target = activeWriteThreadForWorkspace(
-      selectedWorkspace,
-      state.threads.filter((thread) => thread.archived !== true),
-      registry
-    )
+    const currentId = selectedWorkspace ? currentWorkSessionId(selectedWorkspace) : ''
+    const target = currentId
+      ? state.threads.find((thread) => thread.id === currentId && thread.archived !== true) ?? null
+      : null
 
     if (!activationAllowed()) return
     set({ route: 'write' })
@@ -404,43 +403,21 @@ export function createNavigationModeActions(
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
     }
-    // A session picked in the sidebar keeps the turn, whatever document is open.
-    const pinnedId = pinnedWriteSessionId(targetWorkspace, state.activeThreadId)
-    if (pinnedId) {
+    // The space's current session takes the turn, whatever is open; a draft
+    // (or a space without a session yet) starts one anchored to the resource.
+    const currentId = currentWorkSessionId(targetWorkspace)
+    if (currentId && currentId === state.activeThreadId) {
       set({ route: 'write', error: null })
-      return pinnedId
+      return currentId
     }
-    // A drafted session must become a new conversation, never reuse one.
-    if (workSessionDraftPending(targetWorkspace)) {
-      return get().createWriteThread(targetWorkspace, targetFilePath)
-    }
-
-    const registry = hydrateWriteThreadRegistry(
-      state.threads,
-      [targetWorkspace],
-      pruneWriteThreadRegistry(state.threads, readWriteThreadRegistry())
-    )
-    saveWriteThreadRegistry(registry)
-    const activeThread = state.activeThreadId
-      ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
+    const current = currentId
+      ? state.threads.find((thread) => thread.id === currentId && thread.archived !== true) ?? null
       : null
-    const existing = activeWriteThreadForWorkspace(
-      targetWorkspace,
-      state.threads,
-      registry,
-      targetFilePath
-    )
-    if (activeThread && existing?.id === activeThread.id) {
-      set({ route: 'write', error: null })
-      return activeThread.id
-    }
-
-    if (existing) {
+    if (current) {
       set({ route: 'write' })
-      await get().selectThread(existing.id)
-      return existing.id
+      await get().selectThread(current.id)
+      return get().activeThreadId === current.id ? current.id : null
     }
-
     return get().createWriteThread(targetWorkspace, targetFilePath)
   },
 
@@ -462,7 +439,9 @@ export function createNavigationModeActions(
     const endPinTransition = beginWorkSessionTransition()
     try {
       const p = getProvider()
-      const pickedAgentId = get().composerAgentId?.trim() ?? ''
+      const external = options.route?.harnessId && options.route.harnessId !== 'kun' ? options.route : undefined
+      // A Kun persona profile only applies when Kun takes the session.
+      const pickedAgentId = external ? '' : get().composerAgentId?.trim() ?? ''
       const personaProfile = pickedAgentId
         ? (await rendererRuntimeClient.getSettings()).agents?.kun?.subagents?.profiles?.find(
           (profile) => profile.id === pickedAgentId &&
@@ -478,6 +457,14 @@ export function createNavigationModeActions(
         titleAuto: options.title?.trim() ? (options.titleAuto ?? false) : true,
         mode: 'agent',
         agentSurface: 'write',
+        ...(external ? {
+          harnessId: external.harnessId,
+          ...(external.credentialMode ? { credentialMode: external.credentialMode } : {}),
+          ...(external.gatewayBinding ? { gatewayBinding: external.gatewayBinding } : {}),
+          ...(external.model ? { model: external.model } : {}),
+          ...(external.providerId ? { providerId: external.providerId } : {}),
+          ...(external.accountId ? { accountId: external.accountId } : {})
+        } : {}),
         ...(personaProfile?.providerId?.trim()
           ? { providerId: personaProfile.providerId.trim() }
           : {}),
@@ -493,19 +480,25 @@ export function createNavigationModeActions(
         readWriteThreadRegistry(),
         activeFilePath
       ))
-      useWorkSidebarStore.getState().pinSession(
-        targetWorkspace,
-        thread.id,
-        workDocumentKey(useWriteWorkspaceStore.getState())
-      )
+      // The composer's choice becomes the session's, so selecting it below
+      // keeps the Agent and model the draft showed (a persona's model wins).
+      const route = options.route
+      if (route && (route.model || route.gatewayBinding) && !personaProfile?.model?.trim()) {
+        rememberThreadComposerSelection(thread.id, route.model ?? '', route.providerId ?? '', 'user',
+          route.harnessId ? { harnessId: route.harnessId, credentialMode: route.credentialMode,
+            ...(route.gatewayBinding ? { gatewayBinding: route.gatewayBinding } : {}) } : undefined)
+      }
+      useWorkSessionStore.getState().select(targetWorkspace, thread.id)
       set((s) => ({
         route: 'write',
         ...(pickedAgentId ? { composerAgentId: '' } : {}),
         threads: s.threads.some((item) => item.id === thread.id) ? s.threads : [thread, ...s.threads],
         error: null
       }))
-      await get().refreshThreads()
+      // Select first, as Code does: a new thread is unlisted until its first
+      // message, and the refresh only keeps it once it is the active one.
       await get().selectThread(thread.id)
+      await get().refreshThreads()
       return thread.id
     } catch (e) {
       set({
@@ -536,7 +529,13 @@ export function createNavigationModeActions(
       ))
     }
     set({ route: 'write' })
-    await selectPinnedWorkSession(targetWorkspace, targetId, () => get().selectThread(targetId))
+    const end = beginWorkSessionTransition()
+    try {
+      if (targetWorkspace) useWorkSessionStore.getState().select(targetWorkspace, targetId)
+      await get().selectThread(targetId)
+    } finally {
+      end()
+    }
   },
 
   ensureDesignThreadForWorkspace: async (workspaceRoot, docId) => {

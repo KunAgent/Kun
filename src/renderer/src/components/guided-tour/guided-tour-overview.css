@@ -1,0 +1,144 @@
+/* Only the overview's last card changes; the tour's routing and other steps stay intact. */
+.guided-tour-pop[data-guided-tour='overview'].is-last {
+  width: 490px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow: visible;
+  padding: 26px 28px 16px;
+  border-radius: 18px;
+  background: var(--ds-surface-elevated);
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-main {
+  align-items: center;
+  gap: 20px;
+  padding-right: 0;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-art {
+  order: 2;
+  width: 104px;
+  height: 104px;
+  margin: 0;
+  overflow: visible;
+  border-radius: 0;
+  background: none;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-art img {
+  width: 104px;
+  height: 104px;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-title {
+  font-size: 24px;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-body {
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pick-label {
+  margin-top: 20px;
+  color: var(--wt-text-3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-modes {
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-mode {
+  min-width: 0;
+  justify-content: center;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: transparent;
+}
+
+.guided-tour-overview-notes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 13px;
+  border-top: 1px solid var(--wt-line);
+  color: var(--wt-primary-bg);
+}
+
+.guided-tour-overview-notes > span {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.guided-tour-overview-notes button {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border: 0;
+  background: none;
+  color: var(--wt-text);
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.guided-tour-overview-notes button svg {
+  flex: none;
+  color: var(--wt-accent);
+}
+
+.guided-tour-overview-notes button:focus-visible {
+  outline: 2px solid var(--wt-accent);
+  outline-offset: 4px;
+}
+
+.guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-foot {
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid var(--wt-line);
+}
+
+@media (max-height: 560px) {
+  .guided-tour-pop[data-guided-tour='overview'].is-last {
+    overflow-y: auto;
+  }
+
+  .guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-caret {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .guided-tour-pop[data-guided-tour='overview'].is-last {
+    padding: 24px 20px 16px;
+  }
+
+  .guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-art,
+  .guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-pop-art img {
+    width: 80px;
+    height: 80px;
+  }
+
+  .guided-tour-pop[data-guided-tour='overview'].is-last .guided-tour-foot-hint {
+    display: none;
+  }
+}

@@ -1,3 +1,6 @@
+import type { WriteDocumentReviewHandle, WriteReviewOrigin } from '../../components/write/write-document-editor-handle'
+import { buildRichEditorHandle } from './rich-editor-handle'
+import { WriteSelectionHold } from './selection-hold'
 import {
   useEffect,
   useRef,
@@ -13,15 +16,13 @@ import 'katex/dist/katex.min.css'
 import type {
   WriteEditorSelectionState
 } from '../../components/write/WriteMarkdownEditor'
-import { computeWriteDocumentStatsFromText } from '../../components/write/write-workspace-view-utils'
 import { buildInlineCompletionPayload } from '../inline-completion'
 import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
-import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
+import type { WriteRecentEdit } from '../recent-edits'
 import { buildWriteRichExtensions, workCodecSchema } from './markdown-manager'
 import {
-  buildWriteRichMarkdownProjection,
-  posForProjectedOffset
+  buildWriteRichMarkdownProjection
 } from './markdown-projection'
 import { selectionStateFromEditor } from './rich-selection-state'
 import {
@@ -39,7 +40,6 @@ import { sanitizeWorkDocContent } from '../markdown/schema-check'
 import { splitFrontmatter } from '@shared/markdown/frontmatter'
 import { WritePropertiesPanel } from '../../components/write/WritePropertiesPanel'
 import { recentEditsFromRichTransaction } from './recent-edits-pm'
-import { replaceRangeWithMarkdown } from './markdown-insert'
 import { applyExternalMarkdownToEditor, applyParsedDocToEditor } from './markdown-sync'
 import { WriteLocalImage } from './local-image'
 import { WritePasteImage } from './paste-image'
@@ -57,13 +57,13 @@ import { WriteWorkLinks } from './extensions/work-links'
 import { requestKnowledgeSourceNavigation } from '../../lib/knowledge-source-navigation'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { WriteDocumentReviewBar } from '../../components/write/WriteDocumentReviewBar'
+import { WriteDocStatusLine } from '../../components/write/WriteDocStatusLine'
 import { NodeRange } from '@tiptap/extension-node-range'
 import { Placeholder } from '@tiptap/extensions'
 import { search } from 'prosemirror-search'
 import { WriteBlockHandle } from './blocks/block-handle'
 import { WriteBlockSelection } from './blocks/block-selection'
-import { WriteSlashMenu, insertPickedImage } from './blocks/slash-menu'
-import { setRichBlockType, toggleRichInlineFormat } from './rich-format-commands'
+import { WriteSlashMenu } from './blocks/slash-menu'
 import { WritePasteMarkdown } from './blocks/write-paste'
 import { WriteTableToolbar } from './blocks/table-toolbar'
 import { WriteBlockShortcuts } from './blocks/write-shortcuts'
@@ -76,7 +76,7 @@ import { useWriteEditorBridgePublisher } from './use-write-editor-bridge'
  * (inline edit, quoted selections). Ranges are projection offsets, the same
  * coordinate space used by the selection state this editor emits.
  */
-export type WriteRichEditorHandle = {
+export type WriteRichEditorHandle = WriteDocumentReviewHandle & {
   getProjectionText: () => string | null
   applyProjectedReplacement: (
     range: { from: number; to: number },
@@ -103,16 +103,7 @@ export type WriteRichEditorHandle = {
   /** Word/character counts computed from the live editor document — cheap
    *  compared to re-parsing the markdown source on every keystroke. */
   getDocumentStats: () => { characterCount: number; wordCount: number } | null
-  /**
-   * Enter the block-level diff review (V2 codec only): swaps the document
-   * to `nextDoc` and shows per-chunk accept/reject decorations against
-   * `original`. Returns false when the editor is read-only, not using the
-   * V2 codec, or the texts are identical.
-   */
-  beginDiffReview: (params: { original: string; nextDoc: string }) => boolean
-  isDiffReviewActive: () => boolean
-  acceptAllDiff: () => void
-  rejectAllDiff: () => void
+
 }
 
 type Props = {
@@ -148,7 +139,6 @@ function fileKeyOf(filePath?: string | null): string {
   return (filePath ?? '').trim()
 }
 
-const INLINE_EDIT_RECENT_CONTEXT_CHARS = 180
 
 export function WriteRichEditor({
   value,
@@ -203,8 +193,9 @@ export function WriteRichEditor({
   const lastEmittedValueRef = useRef<string | null>(null)
   const workCtxRef = useRef<WorkDocContext>(createWorkDocContext())
   const reviewSessionRef = useRef<WriteReviewSession | null>(null)
-  const [reviewUi, setReviewUi] = useState<{ active: boolean; total: number; index: number }>({
+  const [reviewUi, setReviewUi] = useState<{ active: boolean; total: number; index: number; origin: WriteReviewOrigin }>({
     active: false,
+    origin: 'agent',
     total: 0,
     index: 0
   })
@@ -215,7 +206,7 @@ export function WriteRichEditor({
   })
   const [mountedEditor, setMountedEditor] = useState<Editor | null>(null)
   // Initial parse result; large documents parse in a Web Worker and arrive
-  // asynchronously (§3.9/§11).
+  // asynchronously.
   const [boot, setBoot] = useState<{ parsed: ParsedWorkDocument; source: string } | null>(null)
 
   workspaceRootRef.current = workspaceRoot ?? ''
@@ -257,7 +248,7 @@ export function WriteRichEditor({
   useEffect(() => {
     if (value === lastEmittedValueRef.current) return
     // During an active diff review the agent's next snapshot re-enters
-    // through `beginDiffReview` (§6.3.4); applying it here would clobber
+    // through `beginDiffReview`; applying it here would clobber
     // chunk positions.
     if (reviewSessionRef.current?.isActive()) return
     const editor = editorRef.current
@@ -373,6 +364,7 @@ export function WriteRichEditor({
         WriteRichTemplateShortcuts.configure({
           isReadOnly: () => readOnlyRef.current
         }),
+        WriteSelectionHold,
         WriteDiffReview.configure({
           getFilePath: () => filePathRef.current
         }),
@@ -436,7 +428,7 @@ export function WriteRichEditor({
         // External snapshots are applied through applyExternalMarkdownToEditor;
         // re-emitting them as user changes would mark the file dirty and
         // autosave a normalized rewrite of content the agent just wrote.
-        if (transaction.getMeta(writeRichExternalSyncMeta)) {
+        if (!transaction.docChanged || reviewSessionRef.current?.isActive() || transaction.getMeta(writeRichExternalSyncMeta)) {
           onSelectionChangeRef.current(selectionStateFromEditor(instance, workCtxRef.current))
           return
         }
@@ -473,9 +465,11 @@ export function WriteRichEditor({
           lastEmittedValueRef.current = markdown
           onChangeRef.current(markdown)
         },
-        onStateChange: (active) => {
+        onStateChange: (active, origin) => {
+          if (!active) editorRef.current?.setEditable(!readOnlyRef.current, false)
           setReviewUi((current) => ({
             active,
+            origin,
             total: active ? current.total : 0,
             index: 0
           }))
@@ -483,7 +477,7 @@ export function WriteRichEditor({
         },
         onChunksChange: (count) => {
           setReviewUi((current) => ({
-            active: current.active,
+            ...current,
             total: count,
             index: Math.min(current.index, Math.max(0, count - 1))
           }))
@@ -496,119 +490,8 @@ export function WriteRichEditor({
     )
 
     if (handleRef) {
-      handleRef.current = {
-        getProjectionText: () => {
-          const instance = editorRef.current
-          if (!instance || instance.isDestroyed) return null
-          return buildWriteRichMarkdownProjection(instance.state.doc).text
-        },
-        applyProjectedReplacement: (range, original, replacement, instruction) => {
-          const instance = editorRef.current
-          if (!instance || instance.isDestroyed || readOnlyRef.current) return false
-          const doc = instance.state.doc
-          const projection = buildWriteRichMarkdownProjection(doc)
-          const from = posForProjectedOffset(doc, projection, range.from)
-          const to = posForProjectedOffset(doc, projection, range.to)
-          if (from === null || to === null || to < from) return false
-          const current = doc.textBetween(from, to, '\n', () => '')
-          if (current.replace(/\n+/g, '\n') !== original.replace(/\n+/g, '\n')) return false
-          const applied = replaceRangeWithMarkdown(
-            instance.state,
-            (tr) => instance.view.dispatch(tr),
-            from,
-            to,
-            replacement
-          )
-          if (!applied) return false
-          const record = createWriteRecentEdit({
-            source: 'inline-edit',
-            filePath: filePathRef.current,
-            from: range.from,
-            to: range.to,
-            deletedText: original,
-            insertedText: replacement,
-            beforeContext: projection.text.slice(
-              Math.max(0, range.from - INLINE_EDIT_RECENT_CONTEXT_CHARS),
-              range.from
-            ),
-            afterContext: projection.text.slice(
-              range.to,
-              Math.min(projection.text.length, range.to + INLINE_EDIT_RECENT_CONTEXT_CHARS)
-            ),
-            instruction,
-            scopeKind: 'selection'
-          })
-          if (record) onDocumentEditRef.current?.([record])
-          return true
-        },
-        replaceImageBySrc: (src, replacementMarkdown) => {
-          const instance = editorRef.current
-          if (!instance || instance.isDestroyed) return false
-          let target: { from: number; to: number } | null = null
-          instance.state.doc.descendants((docNode, pos) => {
-            if (target) return false
-            if (docNode.type.name === 'image' && docNode.attrs.src === src) {
-              target = { from: pos, to: pos + docNode.nodeSize }
-              return false
-            }
-            return true
-          })
-          if (!target) return false
-          const { from, to } = target
-          return replaceRangeWithMarkdown(
-            instance.state,
-            (tr) => instance.view.dispatch(tr),
-            from,
-            to,
-            replacementMarkdown
-          )
-        },
-        insertMarkdownAfterImage: (src, markdown) => {
-          const instance = editorRef.current
-          if (!instance || instance.isDestroyed) return false
-          let insertAt: number | null = null
-          instance.state.doc.descendants((docNode, pos) => {
-            if (insertAt !== null) return false
-            if (docNode.type.name === 'image' && docNode.attrs.src === src) {
-              insertAt = pos + docNode.nodeSize
-              return false
-            }
-            return true
-          })
-          if (insertAt === null) return false
-          return replaceRangeWithMarkdown(
-            instance.state,
-            (tr) => instance.view.dispatch(tr),
-            insertAt,
-            insertAt,
-            markdown
-          )
-        },
-        getDocumentStats: () => {
-          const instance = editorRef.current
-          if (!instance || instance.isDestroyed) return null
-          const doc = instance.state.doc
-          return computeWriteDocumentStatsFromText(
-            doc.textBetween(0, doc.content.size, '\n', '\n')
-          )
-        },
-        toggleInlineFormat: (kind) => toggleRichInlineFormat(editorRef.current, readOnlyRef.current, kind),
-        setBlockType: (type) => setRichBlockType(editorRef.current, readOnlyRef.current, type),
-        getEditor: () => editorRef.current,
-        openFind: () => setFindBar({ open: true, withReplace: false }),
-        insertImage: () => {
-          const instance = editorRef.current
-          if (instance && !instance.isDestroyed && !readOnlyRef.current) void insertPickedImage(instance, pickerOptions)
-        },
-        beginDiffReview: ({ original, nextDoc }) => {
-          const session = reviewSessionRef.current
-          if (!session || readOnlyRef.current) return false
-          return session.begin({ original, nextDoc })
-        },
-        isDiffReviewActive: () => reviewSessionRef.current?.isActive() ?? false,
-        acceptAllDiff: () => reviewSessionRef.current?.resolveAll('accept'),
-        rejectAllDiff: () => reviewSessionRef.current?.resolveAll('reject')
-      }
+      handleRef.current = buildRichEditorHandle({ editorRef, readOnlyRef, filePathRef,
+        onDocumentEditRef, reviewSessionRef, workCtxRef, lastEmittedValueRef, pickerOptions, setFindBar })
     }
 
     return () => {
@@ -626,7 +509,7 @@ export function WriteRichEditor({
   useEffect(() => {
     const editor = editorRef.current
     if (!editor || editor.isDestroyed) return
-    editor.setEditable(!readOnly)
+    editor.setEditable(!readOnly && !reviewSessionRef.current?.isActive(), false)
   }, [readOnly])
 
   const floatingOutline = useWriteEditorBridgePublisher({ editor: mountedEditor, enabled: publishToPanels,
@@ -649,8 +532,8 @@ export function WriteRichEditor({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-col">
-      {reviewUi.active ? (
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+      {reviewUi.active && reviewUi.origin === 'agent' ? (
         <WriteDocumentReviewBar
           total={reviewUi.total}
           index={reviewUi.index}
@@ -674,7 +557,7 @@ export function WriteRichEditor({
         withReplace={findBar.withReplace}
         onClose={() => setFindBar({ open: false, withReplace: false })}
       />
-      <div className="write-rich-scroll-wrap relative flex min-h-0 w-full min-w-0 flex-1">
+      <div className="write-rich-scroll-wrap relative flex h-0 min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
         <div
           ref={scrollHostRef}
           className="write-rich-host flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto"
@@ -683,10 +566,14 @@ export function WriteRichEditor({
             <WritePropertiesPanel
               frontmatter={frontmatter}
               onFrontmatterChange={handleFrontmatterChange}
-              readOnly={readOnly}
+              readOnly={readOnly || reviewUi.active}
               getDocumentText={() => splitFrontmatter(lastEmittedValueRef.current ?? '').body}
             />
             {fileName ? <div className="write-doc-title" aria-hidden="true">{fileName}</div> : null}
+            {fileName ? (
+              <WriteDocStatusLine filePath={filePathRef.current} value={value}
+                reviewTotal={reviewUi.active ? reviewUi.total : 0} />
+            ) : null}
           </div>
           <div ref={hostRef} className="write-rich-editor-mount" />
         </div>

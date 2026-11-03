@@ -1,0 +1,46 @@
+{
+  "composerApproval": {
+    "header": "आपकी मंज़ूरी चाहिए",
+    "kind": {
+      "command": "कमांड चलाएँ",
+      "edit": "फ़ाइल संपादित करें",
+      "email": "ईमेल भेजें",
+      "tool": "{{name}} इस्तेमाल करें",
+      "toolUnnamed": "एक टूल इस्तेमाल करें"
+    },
+    "question": {
+      "edit": "{{file}} संपादित करें?",
+      "editFiles_one": "इस {{count}} फ़ाइल को संपादित करें?",
+      "editFiles_other": "इन {{count}} फ़ाइलों को संपादित करें?"
+    },
+    "preview": {
+      "terminal": "टर्मिनल",
+      "email": "ईमेल",
+      "awaiting": "मंज़ूरी का इंतज़ार",
+      "files_one": "{{count}} फ़ाइल",
+      "files_other": "{{count}} फ़ाइलें",
+      "diffStats": "{{added}} पंक्तियाँ जोड़ी गईं, {{removed}} हटाई गईं",
+      "clipped": "बड़ा बदलाव; बाकी हिस्सा नहीं दिखाया गया",
+      "truncated": "तर्क लंबे हैं, इसलिए पूर्वावलोकन में सिर्फ़ कुछ हिस्सा दिख रहा है",
+      "moreInput_one": "{{count}} और तर्क",
+      "moreInput_other": "{{count}} और तर्क"
+    },
+    "option": {
+      "allow": "अनुमति दें",
+      "allowAlways": "हमेशा अनुमति दें",
+      "deny": "अस्वीकार करें",
+      "denyAlways": "हमेशा अस्वीकार करें",
+      "once": "सिर्फ़ इस बार",
+      "denyOnce": "इस बार अस्वीकार करें",
+      "alwaysSession": "इस सत्र में फिर न पूछें",
+      "alwaysScoped": "इस सत्र में {{scope}} के लिए फिर न पूछें",
+      "alwaysScopedEdit": "इस सत्र में {{scope}} में संपादन के लिए फिर न पूछें",
+      "denyAlwaysSession": "इस सत्र के बाकी हिस्से में ऐसी कार्रवाई अस्वीकार करें"
+    },
+    "feedbackPlaceholder": "Kun को बताएँ कि इसकी जगह क्या करे — अस्वीकृति के साथ भेजा जाएगा…",
+    "feedbackEmailPlaceholder": "Kun को बताएँ कि क्या बदलना है — अस्वीकृति के साथ भेजा जाएगा…",
+    "feedbackLabel": "अस्वीकृति के साथ भेजा गया नोट",
+    "hint": "चुनने के लिए 1–{{last}} दबाएँ, या ↑↓ से हिलकर Enter दबाएँ",
+    "confirm": "पुष्टि करें"
+  }
+}

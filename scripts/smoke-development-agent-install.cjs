@@ -47,8 +47,10 @@ async function runAgentInstallFlow({ page, poll, capture, runtimeRequest }) {
   const row = await runtimeRequest(page, '/v1/harnesses/devin/probe', 'POST')
   assert.equal(row.status.installed, 'yes')
   assert.equal(row.status.ready, 'yes')
-  await poll(async () => await card.locator('[data-agent-connection-summary]').count() > 0, 30_000, 'Final verified command shown in settings')
-  const primary = card.locator('[data-agent-action="test"]')
+  // The install step turns done and names the verified command; the next step is the check.
+  await poll(async () => await card.locator('[data-agent-step="1"][data-done]').count() > 0, 30_000, 'Final verified command shown in settings')
+  assert.ok((await card.locator('[data-agent-step="1"]').innerText()).includes(row.status.resolvedCommand), 'The install step names the verified command')
+  const primary = card.locator('[data-agent-enable-step]')
   await primary.waitFor()
   assert.notEqual(await primary.evaluate((button) => getComputedStyle(button).backgroundColor), 'rgba(0, 0, 0, 0)',
     'The primary action must have a visible theme background behind its white text')

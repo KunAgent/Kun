@@ -27,7 +27,7 @@ import { reportLanguage, type ReportLanguage } from './user-report.js'
 const DEFAULT_RACE_TIMEOUT_MS = 60 * 60_000
 const TERMINAL = new Set(['completed', 'failed', 'cancelled'])
 
-/** `races.json` inside the team directory (10 §6.2). */
+/** `races.json` inside the team directory. */
 export class FileRaceStore {
   constructor(
     private readonly dataDir: string,
@@ -113,7 +113,7 @@ export type RaceServiceDeps = {
   language?: () => string | undefined
   nowIso: () => string
   nowMs?: () => number
-  /** Race deadline (10 §6: default 60 minutes). */
+  /** Race deadline. */
   timeoutMs?: () => number
 }
 
@@ -126,7 +126,7 @@ export type RaceStartResult = {
 }
 
 /**
- * `worker_race` (10 §6): resolve the start point once, then fork an
+ * `worker_race`: resolve the start point once, then fork an
  * ephemeral worker per contender so all worktrees share the baseline sha.
  */
 export async function startRace(
@@ -224,7 +224,7 @@ export async function startRace(
 
 /**
  * running → ready once every live contender's dispatch is terminal or the
- * deadline passed (10 §6.3). Called on worker-turn terminal, on the
+ * deadline passed. Called on worker-turn terminal, on the
  * deadline timer, and lazily from the read route after restarts.
  */
 export async function reconcileRaces(
@@ -257,7 +257,7 @@ export async function reconcileRaces(
   }
 }
 
-/** User-only winner selection (10 §6.4); the manager can never call this. */
+/** User-only winner selection; the manager can never call this. */
 export async function decideRace(
   deps: RaceServiceDeps,
   raceId: string,
@@ -279,7 +279,7 @@ export async function decideRace(
 }
 
 /**
- * Discard every non-winner task workspace after decide (10 §6.5, 07 §8.3);
+ * Discard every non-winner task workspace after decide;
  * each contender's discard runs under the record's task-workspace rules.
  */
 export async function discardRaceOthers(
@@ -320,7 +320,7 @@ export async function discardRaceOthers(
   return { ok: true, discarded }
 }
 
-/** `race_recommend` (10 §6.4): the only manager write on a race — notes. */
+/** `race_recommend`: the only manager write on a race — notes. */
 export async function recommendRace(
   deps: RaceServiceDeps,
   ctx: ManagerToolContext,

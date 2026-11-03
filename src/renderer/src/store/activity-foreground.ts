@@ -2,7 +2,7 @@ import { getProvider } from '../agent/registry'
 import { useChatStore } from './chat-store'
 
 /**
- * Foreground-thread reporter (docs/ade/06 §7.2 condition 4): POSTs the
+ * Foreground-thread reporter: POSTs the
  * thread this client is actively viewing to /v1/activity/foreground so the
  * dormancy scanner keeps it resident. Fires on every active-thread change
  * and refreshes on an interval under the mark's 30 s TTL while the window

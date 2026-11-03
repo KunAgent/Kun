@@ -1,5 +1,5 @@
 /**
- * Public Work-document codec (implementation §3.5).
+ * Public Work-document codec.
  *
  * `parseWorkDocument` returns a ProseMirror doc plus a {@link WorkDocContext}
  * the caller keeps for the life of the document. `serializeWorkDocument`

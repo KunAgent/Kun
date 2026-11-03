@@ -140,7 +140,9 @@ export function createWriteFileActions({
       const root = await get().loadDirectory(normalized)
       if (!root || !navigationIsCurrent(generation, normalized)) return
       set((state) => ({ rootDirectory: root, expandedDirs: new Set([...state.expandedDirs, root]) }))
-      await get().loadWhiteboards(normalized)
+      // Only the small board index is read here: session grouping and restored
+      // tabs need it, while board scenes and the artifact scan stay lazy.
+      const whiteboardsKnown = await get().ensureWhiteboards(normalized)
       if (!navigationIsCurrent(generation, normalized)) return
       const restoredLayout = readWriteEditorLayout(normalized)
       if (restoredLayout) {
@@ -157,6 +159,12 @@ export function createWriteFileActions({
           for (const tab of candidates) {
             const itemKey = writeEditorItemKey(tab)
             if (isWriteWhiteboardTab(tab)) {
+              if (!whiteboardsKnown) {
+                // The index could not be read; keep the tab so the board stays
+                // reachable once storage recovers.
+                if (!openedKey) openedKey = itemKey
+                continue
+              }
               if (get().whiteboards[tab.boardId]) {
                 openedKey = itemKey
                 break

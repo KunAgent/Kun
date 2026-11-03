@@ -73,6 +73,8 @@ import {
 } from './cursor-sdk-event-mapper.js'
 import type { CursorBridgeTool } from './cursor-sdk-tool-bridge.js'
 
+export { cursorTurnModelParams } from '../../harness/cursor-subscription-catalog.js'
+
 const DEFAULT_CURSOR_MODEL = 'auto'
 const MAX_CURSOR_ERROR_LENGTH = 2_000
 export const CURSOR_AUTH_RECOVERY_PROMPT = [
@@ -115,7 +117,7 @@ export interface CursorSdkRuntimeDeps {
   /** Delegated read-only children must deny mutation regardless of parent defaults. */
   enforceReadOnly?: boolean
   sessionCoordinator?: DelegatedSessionCoordinator
-  /** Host task-workspace index for handoff work-state merging (docs/ade/07). */
+  /** Host task-workspace index for handoff work-state merging. */
   taskWorkspaces?: {
     list(filter?: { ownerThreadId?: string }): Array<{
       ownerThreadId: string
@@ -126,10 +128,10 @@ export interface CursorSdkRuntimeDeps {
   }
   /**
    * `ade.deterministicHandoff` — when false the runtime sends the raw portable
-   * transcript instead of the deterministic brief (docs/ade/08 §4).
+   * transcript instead of the deterministic brief.
    */
   deterministicHandoff?: boolean
-  contextProfile?: (model: string) => {
+  contextProfile?: (model: string, providerId?: string) => {
     contextWindowTokens: number
     softThresholdTokens: number
     hardThresholdTokens: number
@@ -162,7 +164,8 @@ export class CursorTurnInterruptedError extends Error {
 
 export function normalizeCursorModel(model: string | undefined): string {
   const normalized = model?.trim()
-  return normalized || DEFAULT_CURSOR_MODEL
+  // The composer's "Agent default model" maps to Cursor's own automatic choice.
+  return normalized && normalized !== 'default' ? normalized : DEFAULT_CURSOR_MODEL
 }
 
 export function cursorAgentExecutionOptions(input: {
@@ -174,6 +177,8 @@ export function cursorAgentExecutionOptions(input: {
   approvalPolicy: string
   sandboxMode: string
   enforceReadOnly?: boolean
+  /** SDK thinking parameter. Omitted for Auto and models without a mapped level. */
+  modelParams?: Array<{ id: string; value: string }>
 }): AgentOptions {
   const mutationAllowed =
     input.enforceReadOnly !== true
@@ -183,7 +188,10 @@ export function cursorAgentExecutionOptions(input: {
     && input.sandboxMode !== 'external-sandbox'
   return {
     apiKey: input.apiKey,
-    model: { id: normalizeCursorModel(input.model) },
+    model: {
+      id: normalizeCursorModel(input.model),
+      ...(input.modelParams?.length ? { params: input.modelParams } : {})
+    },
     name: input.name,
     mode: mutationAllowed ? 'agent' : 'plan',
     local: {

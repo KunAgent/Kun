@@ -172,6 +172,7 @@
     listProviderQuotas: invokeRaw('provider:quota:list'),
     fetchModelsDevCatalog: invokePayload('provider:models-dev-catalog'),
     optimizePrompt: invokePayload('prompt:optimize'),
+    cancelPromptOptimization: invokePayload('prompt:optimize-cancel'),
     uploadRuntimeImageAttachment: invokePayload('runtime:attachment:upload-image'),
     uploadRuntimeDocumentAttachment: invokePayload('runtime:attachment:upload-document'),
     gatewayCredential: function (action) { return invoke('gateway:credential', [action]) },
@@ -342,6 +343,10 @@
     readWorkspaceOfficeSemantic: invokePayload('file:read-workspace-office-semantic'),
     saveWorkspaceSpreadsheet: invokePayload('file:save-workspace-spreadsheet'),
     convertWorkspaceSpreadsheet: invokePayload('file:convert-workspace-spreadsheet'),
+    recordOfficeVersion: invokePayload('file:office-version-record'),
+    listOfficeVersions: invokePayload('file:office-version-list'),
+    readOfficeVersion: invokePayload('file:office-version-read'),
+    restoreOfficeVersion: invokePayload('file:office-version-restore'),
     openExtensionArtifact: invokePayload('extension:artifact:open'),
     lintProjectDesignMd: function (content) { return invoke('design:lint-project-design-md', [{ content: content }]) },
 
@@ -355,6 +360,10 @@
     },
     createGitCheckpoint: invokePayload('git:checkpoint:create'),
     restoreGitCheckpoint: invokePayload('git:checkpoint:restore'),
+    preflightTurnUndo: invokePayload('git:turn-undo:preflight'),
+    undoTurnFiles: invokePayload('git:turn-undo:undo'),
+    reapplyTurnFiles: invokePayload('git:turn-undo:reapply'),
+    getTurnUndoStatus: invokePayload('git:turn-undo:status'),
     checkoutGitBranchWorktree: function (workspaceRoot, branch) {
       return invoke('git:checkout-branch-worktree', [{ workspaceRoot: workspaceRoot, branch: branch }])
     },
@@ -420,7 +429,7 @@
     },
     openSkillRoot: function (rootPath) { return invoke('skill:open-root', [rootPath]) },
     getKunConfigFile: invokeRaw('kun:config:read'),
-    setKunConfigFile: function (content) { return invoke('kun:config:write', [content]) },
+    setKunConfigFile: function (content, baseContent) { return invoke('kun:config:write', [content, baseContent]) },
     openKunConfigDir: invokeRaw('kun:config:open-dir'),
     getKunProjectConfigFile: function (workspaceRoot) {
       return invoke('kun:project-config:read', [{ workspaceRoot: workspaceRoot }])
@@ -512,6 +521,7 @@
     // Write/design exports + inline tools.
     exportWriteDocument: invokePayload('write:export'),
     exportConversation: invokePayload('conversation:export'),
+    exportConversationBatch: invokePayload('conversation:export-batch'),
     exportMemoryMarkdown: invokePayload('memory:export-markdown'),
     exportDesignPrototype: invokePayload('design:export-prototype'),
     copyWriteDocumentAsRichText: invokePayload('write:copy-rich-text'),

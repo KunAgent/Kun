@@ -1,10 +1,6 @@
-import { MemoryErasureIncompleteError } from '../memory/memory-erasure-error.js'
-import { MemoryLifecycleResult, MemoryHistoryResult, type MemoryLifecycleRequest } from '../contracts/memory-lifecycle.js'
-import { MemoryRevisionConflictError } from '../memory/memory-revisions.js'
-import type { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
-import { MemoryDistillationCommitResult } from '../contracts/memory-distillation-storage.js'
-import { MemoryDistillationConflictError } from '../memory/memory-distillation-apply.js'
+import { referenceUnchangedItems } from './session-history-rewrite.js'
 import { z } from 'zod'
+import { ContextSnapshotEvent } from '../contracts/context-snapshot.js'
 import { ItemHistoryContentSchema } from '../contracts/item-history.js'
 import type {
   ArtifactStore,
@@ -14,10 +10,7 @@ import type {
   StoredArtifactMeta
 } from '../artifacts/artifact-store.js'
 import type { AttachmentContent, AttachmentStore } from '../attachments/attachment-store.js'
-import type {
-  AttachmentsCapabilityConfig,
-  MemoryCapabilityConfig
-} from '../contracts/capabilities.js'
+import type { AttachmentsCapabilityConfig } from '../contracts/capabilities.js'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
 import {
   AttachmentDiagnostics,
@@ -31,15 +24,7 @@ import {
   GraphRunV1Schema
 } from '../contracts/graph.js'
 import { TurnItem, type TurnItem as TurnItemValue } from '../contracts/items.js'
-import {
-  MemoryDiagnostics,
-  MemoryRecord,
-  type MemoryCreateRequest,
-  type MemoryUpdateRequest
-} from '../contracts/memory.js'
 import type { AgentSession } from '../domain/session.js'
-import type { MemoryAccess, MemoryListFilter, MemoryStore } from '../memory/memory-store.js'
-import type { MemoryRetrieveRequest } from '../memory/memory-retrieval.js'
 import type {
   AppendGraphEventInput,
   AppendGraphEventResult,
@@ -74,13 +59,6 @@ import { callManagerStore } from './remote-data-store-request.js'
 import { ManagerRemoteThreadStore } from './remote-thread-store.js'
 export { ManagerRemoteThreadStore } from './remote-thread-store.js'
 export { resolveManagerDataRequestTimeoutMs } from './remote-data-store-request.js'
-
-const MemoryDirectiveResultSchema = z.object({
-  records: z.array(MemoryRecord),
-  excludedByBudget: z.array(z.string()),
-  truncatedIds: z.array(z.string()),
-  characters: z.number().int().nonnegative()
-}).strict()
 
 const ItemSnapshotSchema = z.object({
   revision: z.number().int().nonnegative(),
@@ -197,6 +175,9 @@ export function createManagerRemoteStores(manager: ServiceManagerConnection): {
 }
 
 export class ManagerRemoteSessionStore implements SessionStore {
+  async itemHistoryVersion(threadId: string): Promise<string> {
+    return z.string().parse(await this.call('itemHistoryVersion', { threadId }))
+  }
   /** Used by the HTTP SSE route to bridge events emitted by the other flavor. */
   readonly isManagerBacked = true
 
@@ -239,10 +220,12 @@ export class ManagerRemoteSessionStore implements SessionStore {
     expectedRevision: number,
     items: TurnItemValue[]
   ): Promise<ItemHistoryCommit> {
+    const snapshot = await this.loadItemSnapshot(threadId)
+    if (snapshot.revision !== expectedRevision) {
+      return { applied: false, reason: 'conflict', revision: snapshot.revision }
+    }
     return ItemCommitSchema.parse(await this.call('rewriteItemsIfRevision', {
-      threadId,
-      expectedRevision,
-      items
+      threadId, expectedRevision, itemReferences: referenceUnchangedItems(snapshot, items)
     }))
   }
 
@@ -271,6 +254,10 @@ export class ManagerRemoteSessionStore implements SessionStore {
 
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEventValue[]> {
     return RuntimeEvent.array().parse(await this.call('loadEventsSince', { threadId, sinceSeq }))
+  }
+
+  async loadLatestContextSnapshot(threadId: string, maxSeq: number) {
+    return ContextSnapshotEvent.nullable().parse(await this.call('loadLatestContextSnapshot', { threadId, maxSeq }))
   }
 
   async loadEventPage(threadId: string, options: EventHistoryPageOptions): Promise<EventHistoryPage> {
@@ -445,101 +432,7 @@ export class ManagerRemoteArtifactStore implements ArtifactStore {
   }
 }
 
-export class ManagerRemoteMemoryStore implements MemoryStore {
-  private lastInjectedIds: string[] = []
-
-  constructor(
-    private readonly manager: ServiceManagerConnection,
-    private readonly config: MemoryCapabilityConfig
-  ) {}
-
-  async commitDistillation(candidate: PendingMemoryCandidate): Promise<MemoryRecord> {
-    const result = MemoryDistillationCommitResult.parse(await this.call('commitDistillation', candidate))
-    if (!result.ok) throw new MemoryDistillationConflictError(result.conflict)
-    return result.record
-  }
-
-  async erasureReceipt(operationId: string): Promise<string[]> {
-    return z.array(z.string()).parse(await this.call('erasureReceipt', { operationId }))
-  }
-
-  async isForgotten(input: MemoryCreateRequest, id?: string): Promise<boolean> {
-    return z.boolean().parse(await this.call('isForgotten', { input: {
-      content: input.content, scope: input.scope, workspace: input.workspace, project: input.project,
-      agentContext: input.agentContext, sources: input.sources, consolidation: input.consolidation, supersedes: input.supersedes
-    }, id }))
-  }
-
-  async history(id: string, access?: MemoryAccess) {
-    return MemoryHistoryResult.parse(await this.call('history', { id, access }))
-  }
-
-  async lifecycle(id: string, request: MemoryLifecycleRequest, access?: MemoryAccess) {
-    const result = z.discriminatedUnion('ok', [
-      z.object({ ok: z.literal(true), result: MemoryLifecycleResult }),
-      z.object({ ok: z.literal(false), conflict: z.string(), incomplete: z.boolean().optional() })
-    ]).parse(await this.call('lifecycle', { id, request, access }))
-    if (!result.ok) {
-      if (result.incomplete) throw new MemoryErasureIncompleteError()
-      throw new MemoryRevisionConflictError(result.conflict)
-    }
-    return result.result
-  }
-
-  async getById(id: string, access?: MemoryAccess): Promise<MemoryRecord> {
-    return MemoryRecord.parse(await this.call('getById', { id, access }))
-  }
-
-  async create(input: MemoryCreateRequest) {
-    return MemoryRecord.parse(await this.call('create', input))
-  }
-
-  async createWithId(id: string, input: MemoryCreateRequest) {
-    return MemoryRecord.parse(await this.call('createWithId', { id, input }))
-  }
-
-  async update(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess) {
-    return MemoryRecord.parse(await this.call('update', { id, patch, access }))
-  }
-
-  async delete(id: string, access?: MemoryAccess) {
-    return MemoryRecord.parse(await this.call('delete', { id, access }))
-  }
-
-  async purge(id: string, access?: MemoryAccess): Promise<void> {
-    await this.call('purge', { id, access })
-  }
-
-  async list(filter: MemoryListFilter = {}) {
-    return MemoryRecord.array().parse(await this.call('list', filter))
-  }
-
-  async listDirectives(access: MemoryAccess = {}) {
-    return MemoryDirectiveResultSchema.parse(await this.call('listDirectives', access))
-  }
-
-  async retrieve(input: MemoryRetrieveRequest) {
-    return MemoryRecord.array().parse(await this.call('retrieve', input))
-  }
-
-  async diagnostics() {
-    const diagnostics = MemoryDiagnostics.parse(await this.call('diagnostics', {}))
-    return diagnostics.lastInjectedIds.length > 0 || this.lastInjectedIds.length === 0
-      ? diagnostics
-      : { ...diagnostics, lastInjectedIds: [...this.lastInjectedIds] }
-  }
-
-  setLastInjected(ids: string[]): void {
-    this.lastInjectedIds = [...ids]
-  }
-
-  private call(operation: string, value?: unknown): Promise<unknown> {
-    return callManagerStore(this.manager, 'memory', operation, {
-      config: this.config,
-      value: value ?? {}
-    })
-  }
-}
+export { ManagerRemoteMemoryStore } from './remote-memory-store.js'
 
 export class ManagerRemoteGraphRunStore implements GraphRunStore {
   constructor(
@@ -634,6 +527,10 @@ export class ManagerRemoteAttachmentStore implements AttachmentStore {
       referencedIds: [...referencedIds],
       expiresBeforeIso
     }))
+  }
+
+  async expiredLeaseCandidates(expiresBeforeIso: string) {
+    return z.array(z.string()).parse(await this.call('expiredLeaseCandidates', { expiresBeforeIso }))
   }
 
   async replaceMetadata(metadata: z.infer<typeof AttachmentMetadata>): Promise<void> {

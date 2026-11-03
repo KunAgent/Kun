@@ -19,20 +19,22 @@ async function verifyRoomsHarnessReadiness({ page, poll, runtimeRequest }) {
   assert.equal(result.readiness.authentication, 'unverified', 'A fixture key must not claim verified remote authentication')
   assert.equal(result.handshake?.protocol, 'acp')
   assert.equal(result.handshake?.agent?.name, 'Devin offline fixture')
-  assert(result.handshake?.models?.includes(ROOMS_HARNESS_MODEL), 'The real ACP session must expose the pinned fixture model')
+  assert.equal(result.handshake.models, undefined, 'Readiness must not create a session to discover models')
   assert.equal(result.trial, undefined, 'Readiness must not run a model trial')
-  assert.deepEqual((await row()).readyProfiles.map(({ expiresAt: _expiresAt, ...profile }) => profile), [ROOMS_HARNESS_PROFILE])
+  assert.deepEqual((await row()).readyProfiles.map(({ expiresAt: _expiresAt, readiness: _readiness, ...profile }) => profile), [ROOMS_HARNESS_PROFILE])
   return result
 }
 
 /** Real rendered conversation -> catalog -> confirmation -> ACP -> durable result. */
 async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize, workspaceRoot, releaseFile, modelFixture }) {
-  await openAgentPrivateChat({ page, switchCode: async () => {
-    await page.locator('[data-workspace-mode-trigger]').first().click()
-    await page.locator('[data-workspace-mode-option="chat"]').click()
-  } })
+  await openAgentPrivateChat({ page })
   const entry = await runtimeRequest(page, '/v1/agents/chat-entry')
   assert(entry.initialized && entry.roomId)
+  const { agent } = await runtimeRequest(page, '/v1/agents/' + entry.agentId)
+  await runtimeRequest(page, '/v1/agents/' + entry.agentId, 'PATCH', {
+    clientRequestId: 'rooms-harness-offline-source', expectedRevision: agent.revision,
+    presetId: 'rooms-harness-smoke', workbench: { code: 'confirm', work: 'off', maxActiveTasks: 1 }
+  })
   await runtimeRequest(page, '/v1/workbench/directory', 'PUT', { workRoots: [], codeProjects: [workspaceRoot] })
   // Show localized production UI while keeping fixture markers out of normal copy.
   await page.evaluate(async () => { const { default: i18n } = await import('/src/i18n.ts'); await i18n.changeLanguage('zh') })
@@ -49,12 +51,21 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   const proposed = links.find((link) => link.status === 'awaiting_confirmation')
   assert(proposed && !proposed.threadId, 'A proposal must not start an external task')
   assert.equal(proposed.request.execution.model.harnessId, 'devin')
+  assert.equal(proposed.request.execution.model.model, ROOMS_HARNESS_MODEL)
   assertRoomsHarnessDiscoveryOrder(modelFixture.snapshot().observations)
   await card.locator('[data-workbench-agent="devin"]').waitFor()
   await poll(async () => !(await page.locator('.rooms-composer .rooms-rich-input').innerText()).trim(), 20_000, 'acknowledged composer cleared')
+  const dispatchControls = card.locator('[data-agent-dispatch-controls]')
+  await poll(async () => ['countdown', 'pending_confirmation'].includes(await dispatchControls.getAttribute('data-state')),
+    20_000, 'host dispatch ready before editing the proposal')
   await capture('rooms-01-agent-proposal')
 
   await card.locator('.rooms-workbench-option-summary').click()
+  await card.locator('[data-composer-harness-picker]').waitFor()
+  const editingLink = (await runtimeRequest(page, `/v1/rooms/${entry.roomId}/workbench-links/${proposed.id}`)).link
+  assert(editingLink.dispatchIntentId, 'The proposal must have a host dispatch before editing')
+  assert.equal((await runtimeRequest(page, `/v1/agent-dispatch-intents/${editingLink.dispatchIntentId}`)).intent.state,
+    'paused', 'Opening the editor must pause the host dispatch')
   await card.locator('[data-composer-harness-picker]').click()
   const menu = page.locator('[data-harness-picker-menu]')
   await menu.waitFor()
@@ -69,8 +80,11 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   await capture('rooms-03-execution-options')
   // Cancel must discard local edits and the selection must stay on this card only.
   await card.getByRole('button', { name: /^(Cancel editing|Cancel|取消编辑)$/u }).click()
+  await card.locator('.rooms-workbench-edit').waitFor({ state: 'hidden' })
   const before = await roomWorkbenchSnapshot(page)
-  await card.locator('.rooms-workbench-actions .is-primary').click()
+  await poll(async () => ['countdown', 'pending_confirmation'].includes(await dispatchControls.getAttribute('data-state')),
+    20_000, 'host dispatch resumed after cancelling edits')
+  await dispatchControls.getByRole('button').first().click()
   const linkPath = `/v1/rooms/${entry.roomId}/workbench-links/${proposed.id}`
   await poll(async () => (await runtimeRequest(page, linkPath)).link.status === 'running', 90_000, 'ACP task running')
   await poll(async () => await card.getAttribute('data-status') === 'running', 20_000, 'rendered progress')
@@ -92,7 +106,8 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   assert.equal(thread.agentSurface, 'code')
   assert.equal(thread.turns.length, 1, 'Single accepted proposal creates one task turn')
   assert.match(completed.result.finalExcerpt, /devin-fixture-model/u)
-  assert.equal(await card.getByRole('button', { name: /^(Stop|停止)$/u }).count(), 0)
+  await poll(async () => await card.getByRole('button', { name: /^(Stop|停止)$/u }).count() === 0,
+    20_000, 'terminal dispatch controls settled')
   await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('dark') })
   await capture('rooms-07-dark-result')
   await rm(releaseFile, { force: true })

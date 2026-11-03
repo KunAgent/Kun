@@ -23,7 +23,7 @@ import {
   workerTakeOverResponse
 } from './teams.js'
 
-/** ADE team routes (09 §6.2, §9): notice hold/readback + worker control. */
+/** ADE team routes: notice hold/readback + worker control. */
 export function registerTeamsRoutes(router: Router, runtime: ServerRuntime): void {
   const manager = (request: Request): JsonResponse | ManagerRuntime => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

@@ -45,6 +45,7 @@ describe('provider icon resolution', () => {
     ['tencent-tokenhub', 'tencentcloud'],
     ['vercel-ai-gateway', 'vercel'],
     ['local-openai', 'local-server'],
+    ['magpie', 'magpie'],
     ['opper', 'gateway']
   ])('maps trusted preset %s to %s', (presetId, expected) => {
     expect(resolveProviderIconKey({ presetId, providerId: 'custom-account-4' })).toBe(expected)

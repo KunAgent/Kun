@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
+import { capabilityFieldKnown } from '../../../../../kun/src/contracts/model-metadata-evidence.js'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode, type RefObject } from 'react'
 import type { TFunction } from 'i18next'
-import { Check, ChevronRight, Search, Settings2, Sparkles, Zap } from 'lucide-react'
+import { Check, ChevronRight, Search, Settings2, X, Zap } from 'lucide-react'
 import { modelSupportsImageInput } from '@shared/app-settings-provider-core'
 import type { ComposerFastModeState } from './composer-fast-mode'
 import { ComposerModelSourceIcon } from './ComposerModelSourceIcon'
@@ -16,6 +17,8 @@ import {
   type ComposerReasoningEffort
 } from './floating-composer-model-picker-logic'
 import { ModelCapabilityBadge } from './floating-composer-model-picker-rows'
+import { ComposerProviderModelSections } from './ComposerProviderModelSections'
+import { providerModelSections, providerSectionModelName } from './composer-provider-model-sections'
 
 /** Show the filter only when scanning the list stops being quick. */
 export const COMPOSER_MODEL_FILTER_THRESHOLD = 8
@@ -24,14 +27,9 @@ export const COMPOSER_MODEL_EXPAND_ALL_THRESHOLD = 12
 
 export type ComposerReasoningOption = { id: ComposerReasoningEffort; labelKey: string }
 
-/** Intensity levels shown as segments; adaptive is a separate switch. */
+/** Intensity levels shown as segments; Auto is the leading segment, ahead of these. */
 export function composerReasoningLevels(options: readonly ComposerReasoningOption[]): ComposerReasoningEffort[] {
   return orderComposerReasoningRailEfforts(options.map((option) => option.id)).filter((effort) => effort !== 'auto')
-}
-
-/** Level chosen when the user turns adaptive reasoning off. */
-export function composerReasoningLevelAfterAuto(levels: readonly ComposerReasoningEffort[]): ComposerReasoningEffort | undefined {
-  return levels.includes('high') ? 'high' : levels[levels.length - 1]
 }
 
 /** Providers expanded when the panel opens: all of them for short lists, otherwise the current one. */
@@ -47,6 +45,9 @@ type ComposerModelPanelProps = {
   style: CSSProperties
   locked: boolean
   reasoningEnabled: boolean
+  reasoningScope?: 'task'
+  reasoningUnavailable?: 'unsupported' | 'unknown'
+  reasoningInherited?: boolean
   reasoningOptions: ComposerReasoningOption[]
   currentReasoning: ComposerReasoningEffort
   onReasoningChange?: (effort: ComposerReasoningEffort) => void
@@ -61,12 +62,14 @@ type ComposerModelPanelProps = {
   onConfigureProviders?: () => void
   onPickModel: (modelId: string, providerId?: string) => void
   onClose: () => void
+  /** Shown under the model list without replacing the footer. */
+  notice?: ReactNode
   footer?: ReactNode
 }
 
 export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement {
-  const { t, panelRef, style, reasoningEnabled, fastModeState, footer, needsProviderSetup, onConfigureProviders, onClose } = props
-  const showReasoning = reasoningEnabled || fastModeState !== 'hidden'
+  const { t, panelRef, style, reasoningEnabled, fastModeState, notice, footer, needsProviderSetup, onConfigureProviders, onClose } = props
+  const showReasoning = reasoningEnabled || Boolean(props.reasoningUnavailable) || fastModeState !== 'hidden'
   return (
     <div
       ref={panelRef}
@@ -76,8 +79,16 @@ export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement
       data-composer-model-panel
       className="ds-composer-model-panel fixed z-[1000] flex flex-col overflow-hidden rounded-[14px] border border-ds-border bg-white text-[13px] text-ds-muted shadow-[0_18px_52px_rgba(20,30,50,0.18),0_2px_6px_rgba(20,30,50,0.06)] dark:bg-ds-card"
     >
+      {props.reasoningScope === 'task' ? <div className="flex shrink-0 items-center justify-between gap-3 border-b border-ds-border-muted px-4 py-2.5">
+        <span className="text-[13px] font-semibold text-ds-ink">{t('composerModelControls')}</span>
+        <button type="button" aria-label={t('dispatchIntent.reasoningClose')} onClick={onClose}
+          className="rounded-md p-1 text-ds-muted hover:bg-ds-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent">
+          <X className="h-3.5 w-3.5" aria-hidden />
+        </button>
+      </div> : null}
       {showReasoning ? <ComposerReasoningSection {...props} /> : null}
       <ComposerModelList {...props} />
+      {notice ? <div className="shrink-0 border-t border-ds-border-muted">{notice}</div> : null}
       {footer ? <div className="shrink-0 border-t border-ds-border-muted">{footer}</div>
         : onConfigureProviders && !needsProviderSetup && !props.emptyModelMessage ? (
           <button
@@ -97,18 +108,19 @@ export function ComposerModelPanel(props: ComposerModelPanelProps): ReactElement
 }
 
 function ComposerReasoningSection({
-  t, locked, reasoningEnabled, reasoningOptions, currentReasoning, onReasoningChange,
+  t, locked, reasoningEnabled, reasoningScope, reasoningUnavailable, reasoningInherited, reasoningOptions, currentReasoning, onReasoningChange,
   fastModeState, fastModeEnabled, onFastModeToggle
 }: ComposerModelPanelProps): ReactElement {
   const levels = useMemo(() => composerReasoningLevels(reasoningOptions), [reasoningOptions])
   const autoSupported = reasoningOptions.some((option) => option.id === 'auto')
   const autoActive = currentReasoning === 'auto'
+  const rail = useMemo(() => (autoSupported ? (['auto', ...levels] as ComposerReasoningEffort[]) : levels), [autoSupported, levels])
   const labelFor = (effort: ComposerReasoningEffort): string =>
     t(reasoningOptions.find((option) => option.id === effort)?.labelKey ?? 'composerReasoningMax')
-  const focusIndex = Math.max(0, levels.indexOf(currentReasoning))
+  const focusIndex = Math.max(0, rail.indexOf(currentReasoning))
   const onSegmentsKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (locked) return
-    const next = composerReasoningEffortForRailKey(levels, autoActive ? levels[focusIndex]! : currentReasoning, event.key)
+    const next = composerReasoningEffortForRailKey(rail, currentReasoning, event.key)
     if (!next) return
     event.preventDefault()
     onReasoningChange?.(next)
@@ -122,84 +134,80 @@ function ComposerReasoningSection({
     : t(fastActive ? 'composerFastModeOn' : 'composerFastModeOff')
   const fastDisabled = !fastSupported || locked
   return (
-    <div className="shrink-0 border-b border-ds-border-muted px-3.5 pb-3 pt-3" data-composer-reasoning-section>
+    <div className={`shrink-0 border-b border-ds-border-muted px-3.5 pb-3 pt-3${reasoningScope ? ' min-h-[128px]' : ''}`} data-composer-reasoning-section>
+      {reasoningUnavailable ? <div data-composer-reasoning-unavailable={reasoningUnavailable}>
+        <span className="text-[12.5px] font-semibold text-ds-ink">{t('composerReasoning')}</span>
+        <p className="mt-2 rounded-lg bg-ds-hover px-3 py-2 text-[12px] text-ds-ink">
+          {t(reasoningUnavailable === 'unknown' ? 'dispatchIntent.reasoningUnknown' : 'dispatchIntent.reasoningUnsupported')}
+        </p>
+        <p className="mt-2 text-[11.5px] leading-5 text-ds-muted">
+          {t(reasoningUnavailable === 'unknown' ? 'dispatchIntent.reasoningUnknownHint' : 'dispatchIntent.reasoningUnsupportedHint')}
+        </p>
+      </div> : null}
       {reasoningEnabled ? (
         <>
           <div className="flex items-baseline justify-between gap-3">
             <span className="text-[12.5px] font-semibold text-ds-ink">{t('composerReasoning')}</span>
             <span className="text-[11.5px] text-ds-faint" aria-hidden="true">
-              {t('composerReasoningFaster')} ↔ {t('composerReasoningSmarter')}
+              {autoActive ? t('composerReasoningAutoHint') : `${t('composerReasoningFaster')} ↔ ${t('composerReasoningSmarter')}`}
             </span>
           </div>
-          {levels.length > 0 ? (
+          {rail.length > 0 ? (
             <div
               role="radiogroup"
               aria-label={t('composerReasoning')}
               aria-disabled={locked || undefined}
               onKeyDown={onSegmentsKeyDown}
-              className="ds-composer-reasoning-segments mt-2.5"
+              className={`ds-composer-reasoning-segments mt-2.5${autoActive ? ' is-auto-mode' : ''}`}
             >
-              {levels.map((effort, index) => {
-                const checked = !autoActive && effort === currentReasoning
+              {rail.map((effort, index) => {
+                const checked = effort === currentReasoning
+                const isAuto = effort === 'auto'
                 return (
-                  <button
-                    key={effort}
-                    type="button"
-                    role="radio"
-                    aria-checked={checked}
-                    tabIndex={index === focusIndex ? 0 : -1}
-                    disabled={locked}
-                    data-reasoning-effort={effort}
-                    onClick={() => {
-                      if (!checked) onReasoningChange?.(effort)
-                    }}
-                    className={`ds-composer-reasoning-segment${checked ? ' is-checked' : ''}${checked && effort === 'max' ? ' is-maximum' : ''}`}
-                  >
-                    {labelFor(effort)}
-                  </button>
+                  <Fragment key={effort}>
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={checked}
+                      tabIndex={index === focusIndex ? 0 : -1}
+                      disabled={locked}
+                      data-reasoning-effort={effort}
+                      title={isAuto ? t('composerReasoningAutoHint') : undefined}
+                      onClick={() => {
+                        if (!checked || reasoningInherited) onReasoningChange?.(effort)
+                      }}
+                      className={`ds-composer-reasoning-segment${isAuto ? ' is-auto' : ''}${checked ? ' is-checked' : ''}${checked && effort === 'max' ? ' is-maximum' : ''}`}
+                    >
+                      {reasoningScope && checked ? <Check className="mr-1 inline h-3 w-3" aria-hidden /> : null}
+                      {labelFor(effort)}
+                    </button>
+                    {isAuto && rail.length > 1 ? <span className="ds-composer-reasoning-divider" aria-hidden="true" /> : null}
+                  </Fragment>
                 )
               })}
             </div>
           ) : null}
+          {reasoningInherited ? <p className="mt-2 text-[11.5px] leading-5 text-ds-muted" data-composer-reasoning-inherited>
+            {t('dispatchIntent.reasoningInherited')}
+          </p> : null}
         </>
       ) : null}
-      {(reasoningEnabled && autoSupported) || fastModeState !== 'hidden' ? (
+      {fastModeState !== 'hidden' ? (
         <div className={`flex flex-wrap items-center gap-2${reasoningEnabled ? ' mt-2.5' : ''}`}>
-          {reasoningEnabled && autoSupported ? (
-            <button
-              type="button"
-              aria-pressed={autoActive}
-              disabled={locked}
-              data-reasoning-effort="auto"
-              onClick={() => {
-                if (!autoActive) onReasoningChange?.('auto')
-                else {
-                  const next = composerReasoningLevelAfterAuto(levels)
-                  if (next) onReasoningChange?.(next)
-                }
-              }}
-              className={`ds-composer-panel-toggle${autoActive ? ' is-on' : ''}`}
-            >
-              <Sparkles className="h-3 w-3 shrink-0" strokeWidth={2} />
-              {labelFor('auto')}
-            </button>
-          ) : null}
-          {fastModeState !== 'hidden' ? (
-            <button
-              type="button"
-              aria-pressed={fastActive}
-              aria-disabled={fastDisabled}
-              aria-label={fastLabel}
-              title={fastSupported ? `${fastLabel} — ${t('composerFastModeHint')}` : fastLabel}
-              onClick={() => {
-                if (!fastDisabled) onFastModeToggle?.()
-              }}
-              className={`ds-composer-panel-toggle is-fast${fastActive ? ' is-on' : ''}${fastDisabled ? ' is-unavailable' : ''}`}
-            >
-              <Zap className={`h-3 w-3 shrink-0${fastActive ? ' fill-current' : ''}`} strokeWidth={2} />
-              {t('composerFastModeLabel')}
-            </button>
-          ) : null}
+          <button
+            type="button"
+            aria-pressed={fastActive}
+            aria-disabled={fastDisabled}
+            aria-label={fastLabel}
+            title={fastSupported ? `${fastLabel} — ${t('composerFastModeHint')}` : fastLabel}
+            onClick={() => {
+              if (!fastDisabled) onFastModeToggle?.()
+            }}
+            className={`ds-composer-panel-toggle is-fast${fastActive ? ' is-on' : ''}${fastDisabled ? ' is-unavailable' : ''}`}
+          >
+            <Zap className={`h-3 w-3 shrink-0${fastActive ? ' fill-current' : ''}`} strokeWidth={2} />
+            {t('composerFastModeLabel')}
+          </button>
         </div>
       ) : null}
     </div>
@@ -228,9 +236,38 @@ function ComposerModelList({
     if (showFilter) searchRef.current?.focus({ preventScroll: true })
     const selected = listRef.current?.querySelector<HTMLElement>('[role="menuitemradio"][aria-checked="true"]')
     if (typeof selected?.scrollIntoView === 'function') selected.scrollIntoView({ block: 'nearest' })
-    // Only on open: later selections close the panel.
+    // Focus on open only; task-scoped selections keep this list mounted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  const renderRow = (group: ComposerModelMenuGroup, id: string, shortName?: string): ReactElement => {
+    const profile = modelProfileForModel(group, id)
+    const selected = composerModelMenuItemSelected({ groupProviderId: group.providerId, selectedProviderId, currentModel, modelId: id })
+    const fullName = group.modelInfo?.[id]?.displayName ?? id
+    const title = shortName ?? fullName
+    return (
+      <button
+        key={`${group.providerId}:${id}`}
+        type="button"
+        role="menuitemradio"
+        aria-checked={selected}
+        data-model-nav
+        title={fullName === id ? id : `${fullName} (${id})`}
+        onClick={() => onPickModel(id, group.providerId === UNGROUPED_MODEL_PROVIDER_ID ? undefined : group.providerId)}
+        className={`flex min-h-[34px] w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none transition focus-visible:bg-ds-hover ${
+          selected ? 'bg-accent-soft text-ds-ink' : 'text-ds-ink hover:bg-ds-hover'
+        }`}
+      >
+        <span className={`min-w-0 flex-1 truncate text-[13px]${selected ? ' font-semibold' : ''}`}>{title}</span>
+        {!profile || !capabilityFieldKnown(profile, 'inputModalities') ? null : modelSupportsImageInput(profile)
+          ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
+          : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />}
+        <span className="flex w-4 shrink-0 justify-center">
+          {selected ? <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.4} /> : null}
+        </span>
+      </button>
+    )
+  }
 
   const onListKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
@@ -298,7 +335,7 @@ function ComposerModelList({
           <p className="px-2.5 py-2 text-[12.5px] font-medium text-ds-faint">{t('composerNoMatchingModels')}</p>
         ) : visibleGroups.map(({ group, modelIds }) => {
           const open = !collapsible || expanded.has(group.providerId)
-          const icon = <ComposerModelSourceIcon presetId={group.presetSource} providerId={group.providerId} className="h-3.5 w-3.5 shrink-0" />
+          const icon = <ComposerModelSourceIcon presetId={group.presetSource} providerId={group.providerId} agentId={group.agentIconId} className="h-3.5 w-3.5 shrink-0" />
           return (
             <div key={group.providerId} role="group" aria-label={group.label} data-model-provider={group.providerId}>
               {groups.length > 1 || group.providerId !== UNGROUPED_MODEL_PROVIDER_ID ? (
@@ -336,33 +373,13 @@ function ComposerModelList({
                   t={t}
                   onPick={(id) => onPickModel(id, group.providerId)}
                 />
-              ) : modelIds.map((id) => {
-                const profile = modelProfileForModel(group, id)
-                const selected = composerModelMenuItemSelected({ groupProviderId: group.providerId, selectedProviderId, currentModel, modelId: id })
-                const title = group.modelInfo?.[id]?.displayName ?? id
-                return (
-                  <button
-                    key={`${group.providerId}:${id}`}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    data-model-nav
-                    title={title === id ? id : `${title} (${id})`}
-                    onClick={() => onPickModel(id, group.providerId === UNGROUPED_MODEL_PROVIDER_ID ? undefined : group.providerId)}
-                    className={`flex min-h-[34px] w-full items-center gap-2 rounded-lg px-2.5 text-left outline-none transition focus-visible:bg-ds-hover ${
-                      selected ? 'bg-accent-soft text-ds-ink' : 'text-ds-ink hover:bg-ds-hover'
-                    }`}
-                  >
-                    <span className={`min-w-0 flex-1 truncate text-[13px]${selected ? ' font-semibold' : ''}`}>{title}</span>
-                    {!profile ? null : modelSupportsImageInput(profile)
-                      ? <ModelCapabilityBadge kind="vision" label={t('composerModelVision')} />
-                      : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />}
-                    <span className="flex w-4 shrink-0 justify-center">
-                      {selected ? <Check className="h-3.5 w-3.5 text-accent" strokeWidth={2.4} /> : null}
-                    </span>
-                  </button>
-                )
-              })}
+              ) : (() => {
+                const sections = providerModelSections(group, modelIds)
+                return sections
+                  ? <ComposerProviderModelSections sections={sections} currentModel={currentModel} filtering={Boolean(query)}
+                    expandAllAt={COMPOSER_MODEL_EXPAND_ALL_THRESHOLD} renderRow={(id) => renderRow(group, id, providerSectionModelName(group, id))} />
+                  : modelIds.map((id) => renderRow(group, id))
+              })()}
             </div>
           )
         })}

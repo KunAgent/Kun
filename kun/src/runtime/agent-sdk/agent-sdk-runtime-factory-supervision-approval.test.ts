@@ -564,11 +564,11 @@ describe('createAgentSdkRuntime turn context', () => {
         : { message: 'Command is broader than the initiating intent.' })
     })
     expect(review).toHaveBeenCalledWith(expect.objectContaining({
-      route: {
+      route: expect.objectContaining({
         model: 'selected-model',
         providerId: 'selected-provider',
         accountId: 'selected-account'
-      },
+      }),
       intent: 'Run the tests',
       approval: expect.objectContaining({
         toolName: 'Bash',

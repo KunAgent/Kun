@@ -189,6 +189,37 @@ describe('RoomComposer', () => {
       'Implement the corrected feature'
     )
   })
+  describe('failed send notice', () => {
+    const alerts = () => renderer.root.findAll((node) => node.type === 'p' && node.props.role === 'alert')
+    const text = () => JSON.stringify(renderer.toJSON())
+
+    it('explains a starting conversation service in the UI language and can be dismissed', async () => {
+      const send = vi.fn().mockRejectedValue(new Error(
+        'Conversation service is starting or reconnecting. Please try again in a moment.'))
+      await render(send)
+      input('hello')
+      await submit()
+      expect(alerts()).toHaveLength(1)
+      expect(text()).toContain('The conversation service is starting or reconnecting. Wait a moment, then retry.')
+      expect(text()).not.toContain('Please try again in a moment.')
+      act(() => alerts()[0].findByProps({ className: 'rooms-notice-dismiss' }).props.onClick())
+      expect(alerts()).toHaveLength(0)
+      expect(renderer.root.findByType('textarea').props.value).toBe('hello')
+    })
+
+    it('clears itself once the draft changes and keeps unrelated failures verbatim', async () => {
+      const send = vi.fn().mockRejectedValue(new Error('Connection lost'))
+      await render(send)
+      input('hello')
+      await submit()
+      expect(text()).toContain('Connection lost')
+      await submit()
+      expect(alerts()).toHaveLength(1)
+      input('hello again')
+      expect(alerts()).toHaveLength(0)
+    })
+  })
+
   it('sends mentions as stable IDs and preserves an existing discussion draft', async () => {
     stored.set('kun.rooms.draft.room', JSON.stringify({ body: '', intent: 'discussion' }))
     const send = vi.fn().mockResolvedValue(undefined)

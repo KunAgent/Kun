@@ -1,8 +1,13 @@
-import { replaceFailedWorkerDispatch } from './worker-dispatch-replacement.js'
-import { createHash } from 'node:crypto'
+import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
+import { replaceFailedBatchAssignment, replaceFailedWorkerDispatch } from './worker-dispatch-replacement.js'
+import { assignmentFallbacks, workerDispatchIds } from './worker-dispatch-ids.js'
 import { z } from 'zod'
 import type { ToolHostContext } from '../ports/tool-host.js'
-import { publicAgentDispatchIntent, type AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
+import {
+  publicAgentDispatchIntent,
+  type AgentDispatchAssignment,
+  type AgentDispatchIntent
+} from '../contracts/agent-dispatch-intents.js'
 import { ChildSecuritySnapshot } from '../delegation/delegation-runtime-contracts.js'
 import type { AgentDispatchReconciliation } from '../delegation/agent-dispatch-service.js'
 import { childSecurity } from '../adapters/tool/delegation-tool-context.js'
@@ -10,7 +15,7 @@ import { checkHarnessAdmission } from '../harness/harness-admission.js'
 import { authorityFromTurn, clampPermission } from './permission-clamp.js'
 import { newManagerWorkRefusal } from './new-work-admission.js'
 import { resolveManagerWorkerRoute } from './worker-route.js'
-import { countRecentWorkerFailures } from './worker-selector.js'
+import { workerRouteHealth } from './worker-route-health.js'
 import { WorkerCreateInputSchema, WorkerCreateBatchInputSchema, type WorkerCreateInput } from './manager-worker-inputs.js'
 import { rebuildWorkerDispatchContext } from './worker-dispatch-security.js'
 import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime-deps.js'
@@ -19,7 +24,9 @@ import type { ManagerRuntime, WorkerCreateResult } from './manager-runtime.js'
 const SavedItemSchema = z.object({
   input: WorkerCreateInputSchema,
   selection: z.record(z.string(), z.unknown()).optional(),
-  profileId: z.string().optional()
+  profileId: z.string().optional(),
+  /** 1 once this assignment was rerouted after its worker failed. */
+  fallbackCount: z.number().int().min(0).max(1).optional()
 })
 const PayloadSchema = z.object({
   items: z.array(SavedItemSchema).min(1).max(16),
@@ -29,9 +36,9 @@ const PayloadSchema = z.object({
   originalAgentId: z.string(), originalModel: z.string().optional()
 })
 
-export function workerDispatchIds(intent: Pick<AgentDispatchIntent, 'startRequestId' | 'replacementCount'>, index: number) {
-  const key = createHash('sha256').update(`${intent.startRequestId}:${intent.replacementCount}:${index}`).digest('hex').slice(0, 24)
-  return { workerId: `child_dispatch_${key}`, dispatchId: `dsp_dispatch_${key}` }
+/** Current ids for one assignment, following its automatic reroute. */
+function assignmentIds(intent: AgentDispatchIntent, index: number) {
+  return workerDispatchIds(intent, index, assignmentFallbacks(intent)[index] ?? 0)
 }
 
 /** Durable start decisions for ordinary model-initiated Code dispatch. */
@@ -65,24 +72,31 @@ export class ManagerWorkerDispatch {
     }
   }
 
-  private async resolve(ctx: ManagerToolContext, input: WorkerCreateInput) {
-    const isolation = input.workspace?.isolation ?? (input.agent?.harnessId
+  private async resolve(ctx: ManagerToolContext, input: WorkerCreateInput, previousAgent?: SavedAgent) {
+    let isolation = input.workspace?.isolation ?? (input.agent?.harnessId
       ? this.deps.harnessDefaults?.(input.agent.harnessId)?.isolation : undefined) ?? 'worktree'
-    const isolated = isolation === 'worktree'
-    const resolved = await resolveManagerWorkerRoute(this.deps, ctx, input, isolated,
-      (teamId, harnessId) => countRecentWorkerFailures(this.deps, teamId, harnessId))
+    const resolved = await resolveManagerWorkerRoute(this.deps, ctx, input, isolation === 'worktree',
+      (teamId, route) => workerRouteHealth(this.deps, teamId, route))
     if ('error' in resolved) throw new Error(resolved.error)
     const route = resolved.route
-    if (isolated && !this.deps.taskWorkspaces) throw new Error('Isolated task workspace service is unavailable.')
     const definition = this.deps.catalog.get(route.harnessId)
     if (!definition || this.deps.catalog.isDisabled(route.harnessId) || !this.deps.catalog.isProfileEnabled(route)) {
       throw new Error('The recommended Agent or credential profile is disabled.')
     }
+    const effective = await this.deps.capabilitiesForRoute(route)
+    // A card's saved local workspace belongs to its original Agent. A switched
+    // engine without a sandbox needs a worktree, not an exemption from admission.
+    if (isolation === 'local' && effective.facts.sandbox === 'none' && previousAgent &&
+        (previousAgent.harnessId !== route.harnessId || previousAgent.credentialMode !== route.credentialMode)) {
+      isolation = 'worktree'
+    }
+    const isolated = isolation === 'worktree'
+    if (isolated && !this.deps.taskWorkspaces) throw new Error('Isolated task workspace service is unavailable.')
     const permission = clampPermission(definition, input.permissionMode ??
       this.deps.harnessDefaults?.(route.harnessId)?.permissionMode, ctx.authority)
     const admission = checkHarnessAdmission({
       usage: 'manager-worker', credentialMode: route.credentialMode,
-      harness: definition, effective: await this.deps.capabilitiesForRoute(route),
+      harness: definition, effective,
       status: await this.deps.detector.status(route.harnessId),
       workspace: { isolated }, requestedPermissionMode: permission.effective,
       unattended: !ctx.authority.interactive,
@@ -107,6 +121,13 @@ export class ManagerWorkerDispatch {
           selection: resolved.selection, profileId: resolved.profileId, definition: resolved.definition })
       }
       const first = saved[0]
+      const assignments: AgentDispatchAssignment[] = saved.map(({ input, definition, profileId }) => ({
+        label: input.label, agentId: input.agent.harnessId, agentName: definition.displayName,
+        ...(profileId ? { profileId } : {}),
+        ...(input.agent.model ? { model: input.agent.model } : {}),
+        ...(input.agent.providerId ? { providerId: input.agent.providerId } : {}),
+        credentialMode: input.agent.credentialMode
+      }))
       const title = items.length === 1 ? first.input.label : items.map((item) => item.label).join(' / ').slice(0, 512)
       const task = items.map((item) => items.length === 1 ? item.task : `${item.label}\n${item.task}`).join('\n\n').slice(0, 128_000)
       const thread = await this.deps.threads.get(ctx.threadId)
@@ -129,7 +150,8 @@ export class ManagerWorkerDispatch {
           permissionMode: ctx.authority.kunPermissionMode,
           effectivePermissionMode: first.definition.permissionModes.find((mode) => mode.id === first.input.permissionMode)?.kunPermissionMode ?? ctx.authority.kunPermissionMode,
           agentSelection: items.some((item, index) => item.agentSelection === 'user' ||
-            userNamedAgent(context.approvalIntent, saved[index].input.agent.harnessId, saved[index].definition.displayName)) ? 'user' : 'auto'
+            userNamedAgent(context.approvalIntent, saved[index].input.agent.harnessId, saved[index].definition.displayName)) ? 'user' : 'auto',
+          assignments
         },
         payload: {
           items: saved.map(({ definition: _definition, ...entry }) => entry),
@@ -149,10 +171,14 @@ export class ManagerWorkerDispatch {
         ...(intent.target?.workerIds?.[0] ? { workerId: intent.target.workerIds[0] } : {}),
         ...(intent.target?.dispatchIds?.[0] ? { dispatchId: intent.target.dispatchIds[0] } : {}),
         route: first.input.agent,
+        ...(['failed', 'cancelled', 'running'].includes(intent.state) ? {} : {
+          followUp: `No worker exists yet. Check dispatch_intent_status with intentId=${intent.intentId} before ` +
+            'telling the user it is running; a refusal or failed start also arrives as a worker notice.'
+        }),
         userReport: intent.state === 'cancelled' ? 'Dispatch cancelled. No new work will start.'
           : intent.state === 'failed' ? intent.error ?? 'Automatic dispatch review failed.'
           : intent.state === 'pending_confirmation' ? 'Dispatch saved. Waiting for your confirmation.'
-          : intent.state === 'countdown' ? 'Dispatch saved. It will start in 60 seconds unless you adjust or cancel it.'
+          : intent.state === 'countdown' ? countdownReport(intent, Date.parse(this.deps.nowIso()))
           : intent.state === 'running' ? 'Dispatch started. The parent Agent will receive the result for review.'
           : 'Dispatch saved. Automatic review and task admission are managed by Kun.'
       }
@@ -166,17 +192,28 @@ export class ManagerWorkerDispatch {
     if (intent.recommendation.workspace !== payload.security.sandboxRoot) {
       throw new Error('The source workspace is frozen; propose a new dispatch to change it.')
     }
+    const assignments = intent.recommendation.assignments
+    if (assignments && assignments.length !== payload.items.length) {
+      throw new Error('The card routes no longer match its workers; propose a new dispatch.')
+    }
     if (payload.items.length > 1) {
-      if (intent.recommendation.agentId !== payload.originalAgentId || intent.recommendation.model !== payload.originalModel) {
+      if (!assignments && (intent.recommendation.agentId !== payload.originalAgentId || intent.recommendation.model !== payload.originalModel)) {
         throw new Error('Batch Agent routes are fixed; propose a new batch to change the execution Agents.')
       }
       return payload.items.map(({ input }, index) => ({ ...input,
+        ...(assignments ? { agent: assignmentAgent(input.agent, assignments[index]),
+          ...assignmentProfile(input, assignments[index]), ...assignmentWorkspace(input, assignments[index]) } : {}),
         ...(intent.recommendation.title !== payload.originalTitle ? { label: `${intent.recommendation.title} ${index + 1}`.slice(0, 64) } : {}),
         ...(intent.recommendation.task !== payload.originalTask
           ? { task: `${input.task}\n\nUser adjustment for this dispatch batch:\n${intent.recommendation.task}`.slice(0, 32_000) } : {})
       }))
     }
     const saved = payload.items[0].input
+    if (assignments) {
+      return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
+        agent: assignmentAgent(saved.agent, assignments[0]), ...assignmentProfile(saved, assignments[0]),
+        ...assignmentWorkspace(saved, assignments[0]) }]
+    }
     const changedAgent = intent.recommendation.agentId !== payload.originalAgentId
     return [{ ...saved, label: intent.recommendation.title.slice(0, 64), task: intent.recommendation.task.slice(0, 32_000),
       agent: changedAgent
@@ -205,8 +242,23 @@ export class ManagerWorkerDispatch {
     if (refused) throw new Error(refused.userReport)
     const { ctx } = await this.context(intent, signal)
     if (intent.recommendation.workspace !== ctx.workspace) throw new Error('The dispatch workspace cannot differ from its source task.')
+    const payload = PayloadSchema.parse(intent.payload)
     for (const [index, input] of this.inputs(intent).entries()) {
-      const resolved = await this.resolve(ctx, input)
+      const resolved = await this.resolve(ctx, input, payload.items[index].input.agent)
+      const assignment = intent.recommendation.assignments?.[index] ?? (payload.items.length === 1
+        ? { label: input.label, agentId: resolved.route.harnessId, profileId: resolved.profileId } : undefined)
+      if (assignment) {
+        // Persist isolation with the route so start uses the same workspace that
+        // passed validation, including after a restart or capability refresh.
+        intent.recommendation.assignments ??= []
+        intent.recommendation.assignments[index] = { label: assignment.label, agentId: resolved.route.harnessId,
+          agentName: resolved.definition.displayName, workspaceIsolation: resolved.isolation,
+          ...(assignment.profileId ? { profileId: assignment.profileId } : {}),
+          ...(assignment.reasoningEffort ? { reasoningEffort: assignment.reasoningEffort } : {}),
+          ...(resolved.route.model ? { model: resolved.route.model } : {}),
+          ...(resolved.route.providerId ? { providerId: resolved.route.providerId } : {}),
+          credentialMode: resolved.route.credentialMode }
+      }
       if (index === 0) {
         intent.recommendation.agentName = resolved.definition.displayName
         intent.recommendation.model = resolved.route.model
@@ -223,15 +275,24 @@ export class ManagerWorkerDispatch {
     const dispatchIds: string[] = []
     const payload = PayloadSchema.parse(intent.payload)
     for (let index = 0; index < inputs.length; index += 1) {
-      const allocation = { ...workerDispatchIds(intent, index), intentId: intent.intentId,
-        selection: payload.items[index]?.selection as import('../contracts/ade.js').WorkerRecord['selection'],
-        profileId: payload.items[index]?.profileId }
+      // A route the user switched on the card has no selector rationale or credential profile.
+      const savedRoute = !intent.recommendation.assignments ||
+        sameAssignmentRoute(payload.items[index]?.input.agent, intent.recommendation.assignments[index])
+      // A role picked on the card replaces the saved one; the saved one survives an unchanged route.
+      const cardProfileId = intent.recommendation.assignments?.[index]?.profileId
+      const allocation = { ...assignmentIds(intent, index), intentId: intent.intentId,
+        ...(intent.recommendation.assignments?.[index]?.reasoningEffort
+          ? { reasoningEffort: intent.recommendation.assignments[index].reasoningEffort } : {}),
+        ...(savedRoute ? {
+          selection: payload.items[index]?.selection as import('../contracts/ade.js').WorkerRecord['selection'],
+          profileId: cardProfileId ?? payload.items[index]?.profileId
+        } : cardProfileId ? { profileId: cardProfileId } : {}) }
       const current = await this.deps.agentDispatchService?.get(intent.intentId)
       if (current?.cancellationRequested || current?.takenOver || signal.aborted) break
       const result = await this.runtime.createWorkerNow(ctx, inputs[index], context, allocation)
       if (!result.ok || !result.workerId || !result.dispatchId) {
         for (let skipped = index; skipped < inputs.length; skipped += 1) {
-          const skippedIds = workerDispatchIds(intent, skipped)
+          const skippedIds = assignmentIds(intent, skipped)
           await this.deps.dispatches.create({ ...skippedIds, teamId: ctx.threadId, parentTurnId: ctx.turnId,
             title: inputs[skipped].label, task: inputs[skipped].task, mode: 'queue', state: 'failed',
             failureReason: skipped === index ? result.userReport : `Skipped after dispatch refusal: ${result.userReport}`,
@@ -248,7 +309,7 @@ export class ManagerWorkerDispatch {
   private async cancel(intent: AgentDispatchIntent) {
     const payload = PayloadSchema.parse(intent.payload)
     for (let index = 0; index < payload.items.length; index += 1) {
-      const { workerId, dispatchId } = workerDispatchIds(intent, index)
+      const { workerId, dispatchId } = assignmentIds(intent, index)
       const dispatch = await this.deps.dispatches.get(intent.source.threadId, dispatchId)
       if (dispatch?.state === 'pending') {
         await this.deps.dispatches.update(intent.source.threadId, dispatchId, { state: 'cancelled' }, { expect: ['pending'] })
@@ -312,14 +373,16 @@ export class ManagerWorkerDispatch {
     for (const intent of await service.list(teamId)) {
       if (intent.kind !== 'worker') continue
       const reconciliation = await this.reconcile(intent)
-      if (reconciliation && reconciliation.state !== 'absent' && reconciliation.state !== 'resume') await service.updateTarget(intent.intentId, reconciliation)
+      if (reconciliation && reconciliation.state !== 'absent' && reconciliation.state !== 'resume') {
+        await service.updateTarget(intent.intentId, reconciliation, intent.revision)
+      }
     }
   }
 
   async reconcile(intent: AgentDispatchIntent): Promise<AgentDispatchReconciliation | null> {
     const inputs = PayloadSchema.parse(intent.payload).items
     const records = await Promise.all(inputs.map((_item, index) =>
-      this.deps.dispatches.get(intent.source.threadId, workerDispatchIds(intent, index).dispatchId)))
+      this.deps.dispatches.get(intent.source.threadId, assignmentIds(intent, index).dispatchId)))
     if (!records.some(Boolean)) return { state: 'absent' }
     const live = records.filter((record): record is NonNullable<typeof record> => Boolean(record))
     const target = { threadId: intent.source.threadId, workerIds: live.map((record) => record.workerId), dispatchIds: live.map((record) => record.dispatchId) }
@@ -336,6 +399,26 @@ export class ManagerWorkerDispatch {
     if (live.some((record) => record.state === 'uncertain' || record.state === 'delivering')) {
       return { state: 'starting', target }
     }
+    // A failed assignment of an automatic batch moves to its next route while its siblings keep running.
+    // While one pass reroutes, a concurrent pass holds a stale card and must not publish its state.
+    const failedAssignments = records.flatMap((record, index) => record?.state === 'failed' ? [index] : [])
+    if (inputs.length > 1 && this.replacing.has(intent.intentId)) return null
+    if (inputs.length > 1 && failedAssignments.length) {
+      this.replacing.add(intent.intentId)
+      try {
+        for (const index of failedAssignments) {
+          const item = inputs[index]!
+          // A route the user picked on the card is theirs; never swap it behind their back.
+          if (item.fallbackCount || !sameAssignmentRoute(item.input.agent, intent.recommendation.assignments?.[index])) continue
+          if (await settleReplacement(intent, () => replaceFailedBatchAssignment(this.deps, intent, index, records[index]!, item))) return null
+        }
+      } finally { this.replacing.delete(intent.intentId) }
+    }
+    // Keep every sibling represented within the card's total budget.
+    const resultBudget = Math.floor(32_000 / live.length) - 2
+    const resultSummary = live.map((record) => clipWorkerResult(record.state === 'cancelled'
+      ? `Cancelled: ${record.title}`
+      : `### ${record.title}\n\n${workerResultSummary(record) ?? 'No result text returned.'}`, resultBudget)).join('\n\n')
     const failed = live.find((record) => record.state === 'failed')
     if (failed && live.some((record) => record.state === 'accepted' || record.state === 'pending')) {
       return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target,
@@ -345,10 +428,10 @@ export class ManagerWorkerDispatch {
       if (inputs.length === 1 && !this.replacing.has(intent.intentId)) {
         this.replacing.add(intent.intentId)
         try {
-          if (await replaceFailedWorkerDispatch(this.deps, intent, failed, inputs[0].input)) return null
+          if (await settleReplacement(intent, () => replaceFailedWorkerDispatch(this.deps, intent, failed, inputs[0].input))) return null
         } finally { this.replacing.delete(intent.intentId) }
       }
-      return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.' }
+      return { state: 'failed', target, error: failed.failureReason ?? 'Worker execution failed.', resultSummary }
     }
     if (live.every((record) => record.state === 'completed' || record.state === 'cancelled')) {
       // Cancelled siblings have no result to review, but completed work still
@@ -356,12 +439,61 @@ export class ManagerWorkerDispatch {
       const reviewed = live.filter((record) => record.state === 'completed')
         .every((record) => (record.verdict?.status ?? 'pending') !== 'pending')
       const settled = live.some((record) => record.state === 'cancelled') ? 'cancelled' : 'completed'
-      return { state: reviewed ? settled : 'awaiting_parent', target,
-        resultSummary: live.map((record) => record.state === 'cancelled'
-          ? `Cancelled: ${record.title}` : record.resultExcerpt ?? record.title).join('\n').slice(0, 32_000) }
+      return { state: reviewed ? settled : 'awaiting_parent', target, resultSummary }
     }
     return { state: live.some((record) => record.state === 'accepted') ? 'running' : 'queued', target }
   }
+}
+
+type SavedAgent = WorkerCreateInput['agent']
+
+/**
+ * A replacement attempt that throws (an uninspectable checkout, a store
+ * error) must not block the card: it settles on the ordinary failure instead
+ * of retrying the same attempt on every scan.
+ */
+async function settleReplacement(intent: AgentDispatchIntent, attempt: () => Promise<boolean>): Promise<boolean> {
+  try {
+    return await attempt()
+  } catch (error) {
+    console.warn(`[kun] dispatch replacement skipped intent=${intent.intentId}: ${error instanceof Error ? error.message : String(error)}`)
+    return false
+  }
+}
+
+function sameAssignmentRoute(saved: SavedAgent, assignment: AgentDispatchAssignment | undefined): boolean {
+  if (!saved || !assignment) return !assignment
+  return saved.harnessId === assignment.agentId && (saved.model ?? '') === (assignment.model ?? '') &&
+    (saved.providerId ?? '') === (assignment.providerId ?? '') &&
+    (saved.credentialMode ?? '') === (assignment.credentialMode ?? '')
+}
+
+/** Keep the proposed route (and its gateway binding) unless the user switched it on the card. */
+function assignmentAgent(saved: SavedAgent, assignment: AgentDispatchAssignment): NonNullable<SavedAgent> {
+  if (saved && sameAssignmentRoute(saved, assignment)) return saved
+  return { harnessId: assignment.agentId, ...(assignment.model ? { model: assignment.model } : {}),
+    ...(assignment.providerId ? { providerId: assignment.providerId } : {}),
+    ...(assignment.credentialMode ? { credentialMode: assignment.credentialMode } : {}) }
+}
+
+/** A host-approved worktree survives reconstruction; never downgrade the original workspace. */
+function assignmentWorkspace(saved: WorkerCreateInput, assignment: AgentDispatchAssignment): Pick<WorkerCreateInput, 'workspace'> {
+  return assignment.workspaceIsolation === 'worktree'
+    ? { workspace: { ...saved.workspace, isolation: 'worktree' } } : {}
+}
+
+/** The roster role a card assignment names, replacing the proposed one when the user switched it. */
+function assignmentProfile(saved: WorkerCreateInput, assignment: AgentDispatchAssignment | undefined): { profile?: string } {
+  const profile = assignment?.profileId ?? (sameAssignmentRoute(saved.agent, assignment) ? saved.profile : undefined)
+  return profile ? { profile } : {}
+}
+
+function countdownReport(intent: AgentDispatchIntent, now: number): string {
+  const seconds = intent.deadline ? Math.max(1, Math.round((Date.parse(intent.deadline) - now) / 1000)) : 0
+  const window = seconds >= 120 && seconds % 60 === 0 ? `${seconds / 60} minutes` : `${seconds} seconds`
+  return intent.recommendation.permissionMode === 'full-access'
+    ? `Dispatch saved. It will start in ${window} unless the user adjusts or cancels it.`
+    : `Dispatch saved. Waiting for the user's confirmation; it starts automatically if there is no response within ${window}.`
 }
 
 function userNamedAgent(intent: string | undefined, id: string, name: string): boolean {

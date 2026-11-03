@@ -30,7 +30,7 @@ const LazyWorkbenchApp = lazy(async () => {
   return { default: mod.default }
 })
 
-const fallback = <div className="min-h-screen bg-ds-canvas" />
+const fallback = <div className="kun-startup__fill bg-ds-canvas" />
 export const STARTUP_STATE_TIMEOUT_MS = 10_000
 
 export interface StartupGateProps {
@@ -107,8 +107,8 @@ function StartupErrorView({
   onOpenLogs: () => void
 }): React.ReactElement {
   return (
-    <main className="flex min-h-screen items-center justify-center bg-ds-canvas p-8 text-ds-ink">
-      <section className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-ds-border bg-ds-surface px-8 py-8 text-center shadow-sm">
+    <main className="kun-startup__fill flex items-center justify-center bg-ds-canvas p-8 text-ds-ink">
+      <section className="flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-ds-border bg-ds-card px-8 py-8 text-center shadow-sm">
         <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
         <h1 className="text-base font-semibold">{title}</h1>
         <p className="text-sm text-ds-faint">{message}</p>

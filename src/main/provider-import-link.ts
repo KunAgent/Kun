@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { AppSettingsV1, ModelProviderProfileV1 } from '../shared/app-settings'
 import { defaultModelRequestRetrySettings } from '../shared/app-settings'
 import { getModelProviderPreset, modelProviderPresetProfile } from '../shared/model-provider-preset-operations'
+import { MAGPIE_PROVIDER_ID } from '../shared/magpie-import'
 import {
   parseProviderImportLink,
   type ProviderImportLinkDraft
@@ -25,7 +26,7 @@ export function findProviderImportLinkArg(argv: readonly string[]): string | nul
   for (const raw of argv) {
     if (typeof raw !== 'string') continue
     const arg = raw.trim().replace(/^["']+/, '').replace(/["']+$/, '')
-    if (/^kun:\/\/import/i.test(arg)) return arg
+    if (/^kun:\/\/import/i.test(arg) || /^kun:\/\/provider\/import/i.test(arg)) return arg
   }
   return null
 }
@@ -82,11 +83,36 @@ function presetProfileFor(draft: ProviderImportLinkDraft): ModelProviderProfileV
   const preset = draft.presetId ? getModelProviderPreset(draft.presetId) : null
   if (!preset) return null
   const profile = modelProviderPresetProfile(preset, draft.key ?? '')
+  if (draft.presetId === MAGPIE_PROVIDER_ID) return magpieProfileFor(draft, profile)
   // A link may still override the preset base URL (self-hosted gateways).
   if (draft.chatBaseUrl) {
     profile.baseUrl = draft.chatBaseUrl
   }
   return profile
+}
+
+/** The link's gateway replaces the preset's default port. Existing Magpie settings stay put. */
+function magpieProfileFor(
+  draft: ProviderImportLinkDraft,
+  profile: ModelProviderProfileV1
+): ModelProviderProfileV1 {
+  const endpoints: NonNullable<ModelProviderProfileV1['endpoints']> = {
+    ...(draft.chatBaseUrl ? { chat_completions: draft.chatBaseUrl } : {}),
+    ...(draft.responsesBaseUrl ? { responses: draft.responsesBaseUrl } : {}),
+    ...(draft.anthropicBaseUrl ? { messages: draft.anthropicBaseUrl } : {})
+  }
+  return {
+    ...profile,
+    name: 'Magpie',
+    apiKey: draft.key ?? profile.apiKey,
+    baseUrl: draft.chatBaseUrl ?? draft.responsesBaseUrl ?? draft.anthropicBaseUrl ?? profile.baseUrl,
+    endpointFormat: draft.chatBaseUrl
+      ? 'chat_completions'
+      : draft.responsesBaseUrl
+        ? 'responses'
+        : 'messages',
+    ...(Object.keys(endpoints).length > 0 ? { endpoints } : {})
+  }
 }
 
 function customProfileFor(draft: ProviderImportLinkDraft): ModelProviderProfileV1 {
@@ -119,12 +145,16 @@ function customProfileFor(draft: ProviderImportLinkDraft): ModelProviderProfileV
 export function commitProviderImportLink(
   token: string,
   settings: AppSettingsV1
-): { ok: true; profile: ModelProviderProfileV1 } | { ok: false; message: string } {
+): { ok: true; profile: ModelProviderProfileV1; unchanged?: boolean } | { ok: false; message: string } {
   prunePending()
   const staged = pendingImports.get(token)
   if (!staged) return { ok: false, message: 'The import link expired or was already used.' }
   pendingImports.delete(token)
   const draft = staged.draft
+  if (draft.presetId === MAGPIE_PROVIDER_ID) {
+    const existing = settings.provider.providers.find((provider) => provider.id === MAGPIE_PROVIDER_ID)
+    if (existing) return { ok: true, profile: existing, unchanged: true }
+  }
   const profile = presetProfileFor(draft) ?? customProfileFor(draft)
   if (!profile.baseUrl.trim()) {
     return { ok: false, message: 'The link did not resolve to a usable endpoint.' }

@@ -30,7 +30,7 @@ export type WorktreeLifecycleDeps = {
 
 /**
  * Host-managed git worktree lifecycle shared by Graph write isolation and
- * ADE task workspaces (docs/ade/07 §3). Contains only git operations —
+ * ADE task workspaces. Contains only git operations —
  * leases, scope checks, state persistence and artifact storage stay with
  * the callers.
  */
@@ -129,7 +129,7 @@ export function createWorktreeLifecycle(deps: WorktreeLifecycleDeps) {
   }
 
   /**
-   * Working-tree baseline for ADE user takeover (09 §9): `write-tree` after
+   * Working-tree baseline for ADE user takeover: `write-tree` after
    * staging covers committed and uncommitted state, unlike rev-parse HEAD.
    */
   async function snapshot(path: string): Promise<string> {

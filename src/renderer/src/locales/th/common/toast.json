@@ -1,0 +1,6 @@
+{
+  "toastRegion": "การแจ้งเตือน",
+  "toastWaiting": "รออีก {{hidden}} รายการ",
+  "runtimeStatusRecovered": "Kun เชื่อมต่อใหม่แล้ว",
+  "runtimeStatusRecoveredDetail": "รันไทม์ภายในพร้อมใช้งานอีกครั้ง"
+}

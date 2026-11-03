@@ -3,7 +3,7 @@ import type { KunHarnessDefaultsEntryV1 } from '@shared/app-settings-types-kun-r
 import { defaultCredentialModeForRow } from '../../lib/ade-composer-harness'
 
 /**
- * P4-15: the one-on-one creation dialog remembers the last confirmed pick so
+ * the one-on-one creation dialog remembers the last confirmed pick so
  * a repeat session is one click. Stored in localStorage (renderer-local, never
  * synced into app settings); an unreadable or stale payload falls back to the
  * per-harness defaults from `agents.kun.harnesses.defaults`.
@@ -56,7 +56,7 @@ export type AdeOneOnOneResolved = {
 
 /**
  * Layered defaults for one harness pick: the remembered dialog values win
- * while still valid for that harness, then the configured P4-11 defaults,
+ * while still valid for that harness, then the configured defaults,
  * then the definition's first credential mode / local isolation.
  */
 export function resolveOneOnOnePick(input: {

@@ -1,3 +1,4 @@
+import { captureDesktopAnalytics } from '../product-analytics/report'
 import {
   dialog,
   ipcMain,
@@ -56,7 +57,8 @@ export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersO
   const { store, getMainWindow } = options
   const nativeDialogs = options.nativeDialogs ?? new NativeDialogCoordinator()
   registerAppConfirmationIpcHandlers(options, nativeDialogs)
-  ipcMain.handle('workspace:pick-directory', async (_, defaultPath: unknown): Promise<WorkspacePickResult> => {
+  ipcMain.handle('workspace:pick-directory', async (event, defaultPath: unknown): Promise<WorkspacePickResult> => {
+    const report = captureDesktopAnalytics(event)
     const normalizedDefaultPath = parseIpcPayload(
       'workspace:pick-directory',
       z.object({ defaultPath: defaultPathSchema }).strict(),
@@ -71,6 +73,7 @@ export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersO
     const result = mainWindow
       ? await dialog.showOpenDialog(mainWindow, options)
       : await dialog.showOpenDialog(options)
+    if (!result.canceled && result.filePaths[0]) report({ name: 'workspace_ready', properties: {} })
     return {
       canceled: result.canceled,
       path: result.canceled ? null : (result.filePaths[0] ?? null)

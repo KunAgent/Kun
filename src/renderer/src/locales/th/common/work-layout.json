@@ -5,7 +5,6 @@
   "workRailReviewCount": "การแก้ไข · รอตรวจ {{count}} รายการ",
   "workRailReferences": "อ้างอิงและเอกสาร",
   "workRailReferencesCount": "อ้างอิงและเอกสาร · {{count}} รายการ",
-  "workRailHistory": "ประวัติการสนทนา",
   "workOutlineSummary": "{{count}} หัวข้อ",
   "workOutlineEmpty": "ยังไม่มีหัวข้อ เริ่มส่วนใหม่ด้วย # แล้วโครงร่างจะแสดงที่นี่",
   "workOutlineUnavailable": "โครงร่างใช้ได้ในมุมมองแก้ไขเอกสาร",
@@ -24,6 +23,5 @@
   "workReferencesClear": "ล้าง",
   "workReferencesPage": "หน้า {{page}}",
   "workReferencesLines": "บรรทัด {{start}}–{{end}}",
-  "workHistoryNoResource": "เปิดไฟล์หรือไวท์บอร์ดเพื่อดูการสนทนาที่นี่",
   "workAssistantSelectionChip": "ส่วนที่เลือก · {{count}} อักขระ"
 }

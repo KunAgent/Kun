@@ -116,8 +116,8 @@ export function useWriteEditorBridgePublisher({
     if (!enabled || !editor || editor.isDestroyed) return
     const session = reviewSessionRef.current
     useWriteEditorBridge.getState().publish(ownerId, {
-      reviewActive,
-      reviewChunks: reviewActive && session ? session.chunkSummaries() : []
+      reviewActive: reviewActive && session?.getOrigin() !== 'selection',
+      reviewChunks: reviewActive && session && session.getOrigin() !== 'selection' ? session.chunkSummaries() : []
     })
   }, [editor, enabled, ownerId, reviewActive, reviewSessionRef, reviewTotal])
 

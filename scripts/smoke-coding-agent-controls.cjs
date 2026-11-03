@@ -1,7 +1,7 @@
 'use strict'
 const assert = require('node:assert/strict')
 const { readFile } = require('node:fs/promises')
-const { CODING_AGENT_PROFILE, CODING_AGENT_MODEL, CODING_AGENT_REPLY } = require('./smoke-coding-agent-fixture.cjs')
+const { CODING_AGENT_PROFILE, CODING_AGENT_MODEL, CODING_AGENT_ALTERNATE_MODEL, CODING_AGENT_REPLY } = require('./smoke-coding-agent-fixture.cjs')
 
 async function auditEntries(file) {
   try { return (await readFile(file, 'utf8')).trim().split('\n').filter(Boolean).map((line) => JSON.parse(line)) }
@@ -43,7 +43,8 @@ async function runCodingAgentFlow({ page, capture, poll, runtimeRequest, resize,
   const header = page.locator('.direct-header')
   await poll(async () => (await header.locator('.direct-chat-title strong').innerText().catch(() => '')) === 'OpenCode', 30_000, 'OpenCode private chat')
   await header.locator('.rooms-avatar[data-engine="opencode"]').waitFor()
-  await page.locator('.direct-coding-agent-chip[data-engine="opencode"]').waitFor()
+  const modelPicker = page.locator('.rooms-composer [data-coding-agent-model-picker="opencode"]')
+  await modelPicker.waitFor()
   const agent = (await runtimeRequest(page, '/v1/agents?limit=50')).agents.find((item) => item.executor?.harnessId === 'opencode')
   assert.deepEqual({ ...agent.executor, accountId: undefined },
     { kind: 'harness', harnessId: 'opencode', credentialMode: 'native-login', model: CODING_AGENT_MODEL, accountId: undefined })
@@ -62,6 +63,7 @@ async function runCodingAgentFlow({ page, capture, poll, runtimeRequest, resize,
   assert(privatePrompt?.text.includes('从哪里启动'), 'The real ACP prompt carries the user message')
   assert(!privatePrompt.text.includes('send_im_message'), 'External prompts never ask for Kun publishing tools')
   await capture('coding-02-private-reply')
+  await runCodingAgentModelFlow({ page, capture, poll, runtimeRequest, resize, agent, privateRoom, auditFile })
   await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('dark') })
   await capture('coding-03-private-dark')
   await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('light') })
@@ -102,9 +104,74 @@ async function runCodingAgentFlow({ page, capture, poll, runtimeRequest, resize,
     'The new chat picker lists the offline OpenCode engine with its probed model beside Kun Agents',
     'Choosing it creates one coding Agent contact with the engine mark, the pinned route and Kun memory off',
     'A private message runs through the real ACP subprocess and the host posts exactly one reply bubble',
+    'The conversation picker lists only native Agent models and persists the selected model across reload',
+    'The next actual ACP prompt uses the selected conversation model while the Agent default stays unchanged',
+    'The profile model settings use the native Agent catalog and save its default without clearing the conversation override',
     'Groups require a Kun lead; a coding Agent joins by mention and its discussion turn runs in plan mode',
     'Offline model and ACP fixtures only; no paid provider, real account or project modification'
   ]
+}
+
+async function runCodingAgentModelFlow({ page, capture, poll, runtimeRequest, resize, agent, privateRoom, auditFile }) {
+  const picker = () => page.locator('.rooms-composer [data-coding-agent-model-picker="opencode"]')
+  const trigger = () => picker().locator('[data-composer-model-trigger]')
+  const panel = () => page.locator('[data-composer-model-panel]')
+  const checkNativeModels = async () => {
+    await poll(async () => await panel().getByRole('menuitemradio').count() === 2, 30_000, 'native OpenCode model catalog')
+    const models = await panel().getByRole('menuitemradio').evaluateAll((items) => items.map((item) => item.title))
+    assert(models.some((item) => item.includes(CODING_AGENT_MODEL)))
+    assert(models.some((item) => item.includes(CODING_AGENT_ALTERNATE_MODEL)))
+    assert(models.every((item) => !item.includes('deepseek')), 'An external Agent never offers the Kun model catalog')
+  }
+  await trigger().click()
+  await checkNativeModels()
+  await capture('coding-model-01-native-menu')
+  await panel().getByRole('menuitemradio', { name: /OpenCode alternate model/u }).click()
+  await poll(async () => (await runtimeRequest(page, `/v1/rooms/${privateRoom.id}`)).room.privateExecutorModel === CODING_AGENT_ALTERNATE_MODEL,
+    30_000, 'conversation model persisted')
+  await poll(async () => (await trigger().innerText()).includes('OpenCode alternate model'), 20_000, 'conversation model displayed')
+  assert.equal((await runtimeRequest(page, `/v1/agents/${agent.id}`)).agent.executor.model, CODING_AGENT_MODEL,
+    'Conversation model selection does not change the Agent default')
+  const editor = page.locator('.rooms-composer .rooms-rich-input')
+  await editor.fill('Use the alternate native model [coding-agent-model-smoke]')
+  await editor.press('Enter')
+  await poll(async () => (await auditEntries(auditFile)).some((entry) => entry.method === 'session/prompt' &&
+    entry.model === CODING_AGENT_ALTERNATE_MODEL && entry.text.includes('[coding-agent-model-smoke]')),
+  60_000, 'actual ACP prompt uses alternate native model')
+  await page.locator('.rooms-message-row').filter({ hasText: '模型 ' + CODING_AGENT_ALTERNATE_MODEL }).first().waitFor({ timeout: 60_000 })
+  await capture('coding-model-02-selected-reply')
+  await resize(960, 800)
+  await trigger().click()
+  await checkNativeModels()
+  await capture('coding-model-03-narrow-menu')
+  assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Native model picker does not overflow at 960px')
+  await page.keyboard.press('Escape')
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  const row = page.locator(`[data-sidebar-entry="room:${privateRoom.id}"] .sidebar-agent-chat-row`)
+  await row.waitFor()
+  await row.click()
+  await poll(async () => (await trigger().innerText()).includes('OpenCode alternate model'), 30_000, 'native model restored after reload')
+  await resize(1360, 900)
+  await page.locator('.direct-chat-title').click()
+  await page.locator('[data-info-action="models"]').click()
+  const defaults = page.locator('.direct-model-settings [data-coding-agent-model-picker="opencode"]')
+  await defaults.waitFor()
+  assert.equal(await page.locator('.direct-model-settings select').count(), 0, 'External model settings do not show Kun provider selects')
+  await defaults.locator('[data-composer-model-trigger]').click()
+  await checkNativeModels()
+  await capture('coding-model-04-native-defaults')
+  await panel().getByRole('menuitemradio', { name: /OpenCode alternate model/u }).click()
+  await poll(async () => (await runtimeRequest(page, `/v1/agents/${agent.id}`)).agent.executor.model === CODING_AGENT_ALTERNATE_MODEL,
+    30_000, 'Agent default native model persisted')
+  assert.equal((await runtimeRequest(page, `/v1/rooms/${privateRoom.id}`)).room.privateExecutorModel, CODING_AGENT_ALTERNATE_MODEL)
+  await defaults.locator('[data-composer-model-trigger]').click()
+  await panel().getByRole('menuitemradio', { name: /OpenCode fixture model/u }).click()
+  await poll(async () => (await runtimeRequest(page, `/v1/agents/${agent.id}`)).agent.executor.model === CODING_AGENT_MODEL,
+    30_000, 'Agent default restored independently')
+  assert.equal((await runtimeRequest(page, `/v1/rooms/${privateRoom.id}`)).room.privateExecutorModel, CODING_AGENT_ALTERNATE_MODEL,
+    'Changing Agent defaults preserves existing conversation model selection')
+  await capture('coding-model-05-default-and-override')
+  await page.locator('[data-room-workbench-panel]').getByRole('button', { name: /^(Collapse right sidebar|收起右侧栏)$/u }).first().click()
 }
 
 module.exports = { verifyCodingAgentReadiness, runCodingAgentFlow }

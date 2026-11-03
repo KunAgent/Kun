@@ -22,6 +22,7 @@ import type { WorkspacePreviewProtocolRegistry } from '../services/workspace-pre
 type GuiUpdaterModule = typeof import('../gui-updater')
 
 export type ProtectedRuntimeRequestLease = Readonly<{
+  baseUrl?: string
   runtimeToken: string
   request: (
     path: string,

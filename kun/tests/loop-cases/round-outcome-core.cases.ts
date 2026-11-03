@@ -32,6 +32,33 @@ import {
 } from './round-outcome-support.cases.js'
 
 describe('RoundOutcomeCoordinator', () => {
+  it.each(['design_open', 'design_component'])('fences browser calls batched before %s', async (toolName) => {
+    const h = harness()
+    await h.coordinator.resolve(input(completed({ toolCalls: [
+      { callId: 'browser', toolName: 'mcp_playwright_browser_snapshot', arguments: {} },
+      { callId: 'publish', toolName, arguments: {} }
+    ] }), { prepared: prepared({ clientSurface: 'gui' }) }))
+    expect(h.dispatches[0]?.designPreviewOnly).toBe(true)
+  })
+
+  it('carries a published preview fence into later browser dispatches', async () => {
+    const h = harness()
+    await h.coordinator.resolve(input(completed({ toolCalls: [
+      { callId: 'browser', toolName: 'mcp_playwright_browser_snapshot', arguments: {} }
+    ] }), { prepared: prepared({
+      clientSurface: 'gui', toolDiscoveryContext: { designPreviewOnly: true } as ToolHostContext
+    }) }))
+    expect(h.dispatches[0]?.designPreviewOnly).toBe(true)
+  })
+
+  it('does not fence an ordinary browser-only Code batch', async () => {
+    const h = harness()
+    await h.coordinator.resolve(input(completed({ toolCalls: [
+      { callId: 'browser', toolName: 'mcp_playwright_browser_snapshot', arguments: {} }
+    ] }), { prepared: prepared({ clientSurface: 'gui' }) }))
+    expect(h.dispatches[0]?.designPreviewOnly).toBe(false)
+  })
+
   it('passes aborted and failed stream outcomes through without dispatching', async () => {
     const h = harness()
     await expect(h.coordinator.resolve(input({ kind: 'aborted' }))).resolves.toBe('aborted')
@@ -40,7 +67,7 @@ describe('RoundOutcomeCoordinator', () => {
     expect(h.effects).toEqual([])
   })
 
-  it('continues after the first all-suppressed round and resets after a different tool executes', async () => {
+  it('continues after the first all-suppressed round and keeps the budget after a different tool executes', async () => {
     const h = harness({ dispatchOutcomes: ['all_suppressed', 'continue'] })
     const repeatedCall = {
       callId: 'call_repeated',
@@ -59,7 +86,7 @@ describe('RoundOutcomeCoordinator', () => {
 
     await expect(h.coordinator.resolve(input(completed({ toolCalls: [alternateCall] }))))
       .resolves.toBe('continue')
-    expect(h.coordinator.toolSuppressionRecoverySteps(turnId)).toBe(0)
+    expect(h.coordinator.toolSuppressionRecoverySteps(turnId)).toBe(1)
   })
 
   it('terminates an active goal on the tools-disabled suppression final answer', async () => {
@@ -195,7 +222,7 @@ describe('RoundOutcomeCoordinator', () => {
     expect(h.failures.at(-1)).toMatchObject({ code: 'graph_create_run_failed' })
   })
 
-  it('materializes plan text before dispatch without adding interactive flags', async () => {
+  it('ends a plan turn on prose without writing it through create_plan', async () => {
     const h = harness()
     const planContext = {
       operation: 'draft' as const,
@@ -206,22 +233,11 @@ describe('RoundOutcomeCoordinator', () => {
       title: 'Example'
     }
     const outcome = await h.coordinator.resolve(input(completed({ text: '# Plan\nDo it.' }), {
-      softRequiredToolName: CREATE_PLAN_TOOL_NAME,
       prepared: prepared({
         mode: 'plan',
         planTurnActive: true,
-        activePlanContext: planContext,
-        userInputDisabled: true
+        activePlanContext: planContext
       }),
-      turn: createTurnRecord({
-        id: turnId,
-        threadId,
-        prompt: 'plan it',
-        status: 'running',
-        imContext: true
-      }),
-      modelProviderId: 'provider_main',
-      modelReasoningEffort: 'high',
       toolProviderMetadata: new Map([[
         CREATE_PLAN_TOOL_NAME,
         { providerId: 'provider_tool', providerKind: 'built-in' }
@@ -230,22 +246,9 @@ describe('RoundOutcomeCoordinator', () => {
       toolProviderKinds: new Map([[CREATE_PLAN_TOOL_NAME, 'built-in']])
     }))
 
-    expect(outcome).toBe('continue')
-    expect(h.effects).toEqual(['item:tool_call', 'event:tool_call_ready', 'dispatch'])
-    expect(h.items[0]).toMatchObject({
-      kind: 'tool_call',
-      toolName: CREATE_PLAN_TOOL_NAME,
-      arguments: {
-        markdown: '# Plan\nDo it.',
-        plan_id: 'example',
-        plan_relative_path: '.kunsdd/plan/example.md',
-        source_request: 'source request'
-      }
-    })
-    expect(h.dispatches[0]?.calls[0]).toMatchObject({ providerId: 'provider_tool', toolKind: 'file_change' })
-    expect(h.dispatches[0]?.reasoningEffort).toBe('high')
-    expect(Object.hasOwn(h.dispatches[0] ?? {}, 'userInputDisabled')).toBe(false)
-    expect(Object.hasOwn(h.dispatches[0] ?? {}, 'imContext')).toBe(false)
+    expect(outcome).toBe('stop')
+    expect(h.effects).toEqual([])
+    expect(h.dispatches).toEqual([])
   })
 
   it('records required-tool failure in event-then-item order', async () => {

@@ -1,0 +1,31 @@
+{
+  "composerAsk": {
+    "cardLabel": "Kun의 질문",
+    "previousQuestion": "이전 질문",
+    "nextQuestion": "다음 질문",
+    "freeTextPlaceholder": "직접 답변을 입력하세요…",
+    "otherPlaceholder": "기타 — 직접 답변을 입력하세요…",
+    "ruleAny": "해당하는 항목을 모두 선택하세요",
+    "ruleMax_one": "최대 {{count}}개까지 선택하세요",
+    "ruleMax_other": "최대 {{count}}개까지 선택하세요",
+    "ruleMin_one": "최소 {{count}}개 이상 선택하세요",
+    "ruleMin_other": "최소 {{count}}개 이상 선택하세요",
+    "ruleExact_one": "{{count}}개를 선택하세요",
+    "ruleExact_other": "{{count}}개를 선택하세요",
+    "ruleRange": "{{min}}–{{max}}개를 선택하세요",
+    "hintSingle": "↑↓ 또는 숫자 키로 선택, Enter {{enter}}, Esc {{escape}}",
+    "hintMulti": "↑↓ 이동, Space로 선택/해제, Enter {{enter}}",
+    "hintText": "Enter {{enter}}, Shift+Enter로 줄바꿈",
+    "hintTextOnly": "Enter {{enter}}, Shift+Enter로 줄바꿈, Esc {{escape}}",
+    "hintEnterSubmit": "제출",
+    "hintEnterNext": "다음",
+    "hintEscapeSkip": "건너뛰기",
+    "hintEscapeBack": "뒤로",
+    "skip": "건너뛰기",
+    "submit": "제출",
+    "next": "다음",
+    "submitting": "제출하는 중…",
+    "submitFailed": "답변이 전달되지 않았습니다: {{message}}",
+    "submitFailedGeneric": "답변이 전달되지 않았습니다. 다시 시도하세요."
+  }
+}

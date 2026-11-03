@@ -14,8 +14,14 @@ const { exerciseRoomApprovals } = require('./smoke-room-approvals.cjs')
 const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
+const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
+const { exerciseWorkSelectionMenu } = require('./smoke-work-selection-menu.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
+const { exerciseWorkTabMenu } = require('./smoke-work-tab-menu.cjs')
+const { exerciseWorkAssistantAgent } = require('./smoke-work-assistant-agent.cjs')
 const { exerciseOnboarding } = require('./smoke-onboarding.cjs')
+const { exerciseWhatsNew } = require('./smoke-whats-new.cjs')
+const { exerciseGuidedTours } = require('./smoke-guided-tours.cjs')
 const assert = require('node:assert/strict')
 const { createHash } = require('node:crypto')
 const { execFile, spawn } = require('node:child_process')
@@ -54,6 +60,8 @@ async function main() {
     'Agent model controls evidence must stay offline')
   assert(!(process.argv.includes('--avatar-only') && process.argv.includes('--real-model')),
     'Layered avatar evidence must stay offline')
+  assert(!(process.argv.includes('--wardrobe-only') && process.argv.includes('--real-model')),
+    'Wardrobe drop evidence must stay offline')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', 180_000)
   const evidenceRoot = resolve(argumentValue('--evidence') ?? join(repositoryRoot, 'dist', 'rooms-direct-smoke'))
   for (const entry of ['out/main/index.js', 'kun/dist/cli/serve-entry.js']) {
@@ -97,6 +105,10 @@ async function main() {
       home, appData, localAppData, temporaryDirectory
     }), { rendererPort, temporaryRoot })
     isolatedEnvironment.NODE_ENV = 'development'
+    // The wardrobe smoke needs a full shelf to exercise a real ten-pull.
+    if (process.argv.includes('--wardrobe-only')) isolatedEnvironment.KUN_WARDROBE_SEED_BOTTLES = '11'
+    // Development builds fake an upgrade from this version to show the post-update dialog.
+    if (process.argv.includes('--whats-new-only')) isolatedEnvironment.KUN_RELEASE_NOTICE_FROM = argumentValue('--whats-new-from') ?? '0.3.8'
     // Exclude ambient Git hooks, signing and global config from the disposable repository.
     const gitConfig = join(temporaryRoot, 'git-config')
     await writeFile(gitConfig, '')
@@ -118,6 +130,18 @@ async function main() {
     settings.agents.kun.baseUrl = modelFixture.baseUrl
     settings.agents.kun.apiKey = 'rooms-desktop-offline-fixture'
     settings.agents.kun.model = modelFixture.snapshot().model
+    // The loopback fixture stands in for the official DeepSeek API, but a
+    // deepseek-* model on any other host is an unproven relay and falls back to
+    // a 32k window. That is below a private chat's own prompt and tool overhead,
+    // so every step force-compacts the turn away and the scripted model never
+    // sees its own start message. Declare the official window on the built-in
+    // connection, as a user does for a relay in the model editor.
+    const declared = { source: 'user', status: 'declared', observedAt: new Date().toISOString() }
+    const fixtureModels = ['deepseek-v4-flash', 'deepseek-v4-pro']
+    settings.provider = { apiKey: settings.agents.kun.apiKey, baseUrl: modelFixture.baseUrl,
+      providers: [{ id: 'deepseek', models: fixtureModels, modelProfiles: Object.fromEntries(fixtureModels.map((id) => [id,
+        { metadata: { schemaVersion: 1, overrides: { contextWindowTokens: 1_000_000 },
+          overrideEvidence: { contextWindowTokens: declared }, observations: [] } }])) }] }
     if (process.argv.includes('--personal-workspace-only')) {
       // Existing exact-origin local-development policy; public SSRF rules stay unchanged.
       settings.agents.kun.browserUse = { ...settings.agents.kun.browserUse, enabled: true, mode: 'local-development' }
@@ -169,14 +193,20 @@ async function main() {
     await resize(electronApplication, 1360, 900)
     await page.locator(onboarding ? '[data-onboarding-step]' : '[data-workspace-mode-trigger]').first().waitFor({ timeout: timeoutMs })
     const exercise = onboarding ? exerciseOnboarding
+      : process.argv.includes('--whats-new-only') ? exerciseWhatsNew
+      : process.argv.includes('--guided-tours-only') || process.argv.includes('--code-tour-only') ? exerciseGuidedTours
       : process.argv.includes('--agent-models-only') ? exerciseAgentModelControls
       : process.argv.includes('--personal-workspace-only') ? exercisePersonalAgentWorkspace
       : process.argv.includes('--personal-im-storage-only') ? exercisePersonalAgentImStorage
       : process.argv.includes('--personal-im-only') ? exercisePersonalAgentIm
       : process.argv.includes('--avatar-only') ? exerciseLayeredAvatarControls
+      : process.argv.includes('--wardrobe-only') ? exerciseWardrobeDrops
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
+      : process.argv.includes('--work-selection-only') ? exerciseWorkSelectionMenu
       : process.argv.includes('--work-only') ? exerciseWorkLayout
+      : process.argv.includes('--work-tab-menu-only') ? exerciseWorkTabMenu
+      : process.argv.includes('--work-assistant-only') ? exerciseWorkAssistantAgent
       : process.argv.includes('--approvals') ? exerciseRoomApprovals
         : process.argv.includes('--pin-stream') ? exercisePinStream : exerciseDirectChat
     const exercised = exercise({ page, request: runtimeRequest, poll, capture, recordDiagnostic, fixture: modelFixture,
@@ -280,8 +310,7 @@ function runtimeRequest(page, path, method = 'GET', body) {
 }
 
 async function switchMode(page, mode) {
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  await page.locator(`[role="menuitemradio"][data-workspace-mode="${mode}"]`).click()
+  await page.locator(`[role="tab"][data-workspace-mode="${mode}"]`).click()
   await page.locator(`[data-workspace-mode-trigger][data-workspace-mode="${mode}"]`).first().waitFor()
 }
 

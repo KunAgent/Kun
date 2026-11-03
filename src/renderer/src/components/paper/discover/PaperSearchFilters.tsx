@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react'
-import { CheckSquare, Loader2, Quote, Send, Square, SquareCheckBig } from 'lucide-react'
-import { PaperImportFolderPicker } from '../import/PaperImportFolderPicker'
+import { Quote, Send, Sparkles } from 'lucide-react'
+import type { ImportCandidate } from '../../../paper/paper-import-plan'
+import { PaperImportAction } from '../import/PaperImportAction'
 import type {
   PaperSearchHit,
   PaperSearchResponse,
@@ -152,80 +153,60 @@ function FilterChip({
   )
 }
 
-/** Bulk actions for the selected hits (plan P5): import / BibTeX / send. */
+/**
+ * Floating action bar for the selected hits: one import control (the shared
+ * import sheet), BibTeX, send to the assistant and "hand these to the Agent
+ * as seeds". Sticks to the bottom of the results while anything is selected.
+ */
 export function PaperSearchSelectionBar({
-  total,
-  selectedCount,
-  importing,
+  scope,
+  candidates,
+  topic,
   copied,
-  onSelectAll,
-  onImport,
+  onClear,
   onCopyBibtex,
   onSend,
   canSend,
+  onSeedAgent,
   t
 }: {
-  total: number
-  selectedCount: number
-  importing: boolean
+  scope: string
+  candidates: readonly ImportCandidate[]
+  topic: string
   copied: boolean
-  onSelectAll: () => void
-  onImport: () => void
+  onClear: () => void
   onCopyBibtex: () => void
   onSend: () => void
   canSend: boolean
+  onSeedAgent: () => void
   t: Translate
 }): ReactElement {
+  const ghost = 'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-[12.5px] text-white/85 transition hover:bg-white/10 hover:text-white'
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg border border-ds-border-muted bg-ds-subtle px-2 py-1.5">
-      <button
-        type="button"
-        onClick={onSelectAll}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-      >
-        {selectedCount === total && total > 0 ? (
-          <CheckSquare className="h-3.5 w-3.5" strokeWidth={1.8} />
-        ) : selectedCount ? (
-          <SquareCheckBig className="h-3.5 w-3.5" strokeWidth={1.8} />
-        ) : (
-          <Square className="h-3.5 w-3.5" strokeWidth={1.8} />
-        )}
-        {t('writePaperSearchSelectAll')}
+    <div
+      role="toolbar"
+      aria-label={t('writePaperSearchSelected', { count: candidates.length })}
+      className="sticky bottom-4 z-20 mx-auto mt-4 flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-2xl bg-[#20242d] py-2 pl-4 pr-2 text-white shadow-[0_16px_40px_rgba(15,23,42,0.28)]"
+    >
+      <button type="button" onClick={onClear} title={t('paperSearchClearSelection')} className="text-[12.5px] tabular-nums text-white/90 hover:text-white">
+        {t('writePaperSearchSelected', { count: candidates.length })}
       </button>
-      <span className="text-[11px] tabular-nums text-ds-faint">
-        {t('writePaperSearchSelected', { count: selectedCount })}
-      </span>
-      <span className="flex-1" />
-      <PaperImportFolderPicker />
-      <button
-        type="button"
-        onClick={onImport}
-        disabled={!selectedCount || importing}
-        className="inline-flex items-center gap-1 rounded-md bg-[var(--ds-control)] px-2 py-0.5 text-[11px] font-medium text-[var(--ds-control-foreground)] transition hover:opacity-90 disabled:opacity-50"
-      >
-        {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-        {t('writePaperReportImportSelected', { count: selectedCount })}
-      </button>
-      <button
-        type="button"
-        onClick={onCopyBibtex}
-        disabled={!selectedCount}
-        className="rounded-md border border-ds-border px-2 py-0.5 text-[11px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-50"
-      >
-        {copied ? t('writePaperReportCopied') : t('writePaperReportCopyBibtex')}
+      <span aria-hidden="true" className="mx-1 h-[18px] w-px bg-white/20" />
+      <PaperImportAction scope={scope} candidates={candidates} topic={topic} onDark />
+      <button type="button" onClick={onCopyBibtex} className={ghost}>
+        <Quote className="h-3.5 w-3.5" strokeWidth={1.8} />
+        {copied ? t('writePaperReportCopied') : 'BibTeX'}
       </button>
       {canSend ? (
-        <button
-          type="button"
-          onClick={onSend}
-          disabled={!selectedCount}
-          title={t('writePaperReportSendHint')}
-          className="inline-flex items-center gap-1 rounded-md border border-ds-border px-2 py-0.5 text-[11px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-50"
-        >
-          <Send className="h-3 w-3" strokeWidth={1.8} />
+        <button type="button" onClick={onSend} title={t('writePaperReportSendHint')} className={ghost}>
+          <Send className="h-3.5 w-3.5" strokeWidth={1.8} />
           {t('writePaperReportSend')}
         </button>
       ) : null}
+      <button type="button" onClick={onSeedAgent} title={t('paperSearchSeedAgentHint')} className={`${ghost} text-[#c7d0ff] hover:text-white`}>
+        <Sparkles className="h-3.5 w-3.5" strokeWidth={1.8} />
+        {t('paperSearchSeedAgent')}
+      </button>
     </div>
   )
 }

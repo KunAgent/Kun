@@ -95,7 +95,8 @@ describe('DesignAIRail target toggle', () => {
             outputModalities: ['text'],
             supportsToolCalling: true,
             messageParts: ['text'],
-            serviceTiers: ['priority']
+            serviceTiers: ['priority'],
+            reasoning: { supportedEfforts: ['low', 'medium', 'high', 'max'], defaultEffort: 'high', requestProtocol: 'openai-responses' }
           }
         }
       }],
@@ -103,7 +104,9 @@ describe('DesignAIRail target toggle', () => {
       composerFastMode: true
     })))
 
-    expect(html).toContain('Codex · gpt-5.6-luna')
+    // The trigger reads "provider · model" across separate spans.
+    expect(html).toContain('ds-composer-model-trigger-provider">Codex<')
+    expect(html).toContain('ds-composer-model-trigger-model">gpt-5.6-luna<')
     expect(html).toContain('aria-label="Model and reasoning settings: Codex / gpt-5.6-luna / Reasoning High / Fast mode on"')
     expect(html).toContain('lucide-zap')
   })

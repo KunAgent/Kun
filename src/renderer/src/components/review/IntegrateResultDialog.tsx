@@ -11,7 +11,7 @@ import { cleanupWorkspace, useReviewStore } from '../../store/review-store'
 import { openTerminalAt } from '../terminal/terminal-open'
 
 /**
- * Result of a user-initiated integrate (docs/ade/11 §7.1): success offers
+ * Result of a user-initiated integrate: success offers
  * non-destructive worktree cleanup; `needs_human`/`conflict` explain the
  * reason with recovery steps and a "open this worktree in a terminal"
  * escape hatch that lands in the in-app terminal panel.

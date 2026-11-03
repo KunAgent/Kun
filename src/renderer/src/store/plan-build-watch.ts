@@ -3,7 +3,7 @@ import { getProvider } from '../agent/registry'
 import { loadWorkspaceDiff, useReviewStore } from './review-store'
 
 /**
- * External-harness plan builds (07 §10): the build turn runs on the build
+ * External-harness plan builds: the build turn runs on the build
  * thread inside a host-managed task worktree. The activity feed registers the
  * thread as its own unit; once the row settles we capture a fresh diff and
  * flag the thread so the workbench opens the Review panel for the user to

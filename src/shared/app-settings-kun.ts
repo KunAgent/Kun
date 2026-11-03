@@ -2,6 +2,7 @@ export {
   DEFAULT_KUN_STREAM_IDLE_TIMEOUT_MS,
   KUN_CONTEXT_COMPACTION_DEFAULTS_VERSION,
   KUN_RUNTIME_TUNING_DEFAULTS_VERSION,
+  KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION,
   defaultKunBrowserUseSettings,
   defaultKunComputerUseSettings,
   defaultKunContextCompactionSettings,

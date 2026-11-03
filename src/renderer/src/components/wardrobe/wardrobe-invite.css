@@ -1,0 +1,184 @@
+/* The Invite tab (share kit, claim, steps, progress, rules) and the shelf's invite row. */
+.kun-wardrobe-invite { container: kun-invite / inline-size; }
+.kun-wardrobe-invite button, .kun-wardrobe-shelf-invite { cursor: pointer; }
+.kun-wardrobe-invite button:disabled { cursor: not-allowed; }
+
+/* Share kit: the pitch and actions on the left, the code as a ticket on the right. */
+.kun-wardrobe-invite-hero { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 300px; grid-template-areas: 'pitch ticket' 'actions ticket';
+  column-gap: 28px; row-gap: 16px; padding: 24px 24px 24px 26px; overflow: hidden; border-radius: 22px; background: var(--account-sky); }
+.kun-wardrobe-invite-pitch { display: grid; grid-area: pitch; align-content: start; gap: 12px; min-width: 0; }
+.kun-wardrobe-invite-chip { display: inline-flex; justify-self: start; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px;
+  color: #4f6087; background: rgb(255 255 255 / .8); font-size: 11.5px; font-weight: 600; }
+[data-theme='dark'] .kun-wardrobe-invite-chip { color: #a3b3d6; background: rgb(255 255 255 / .08); }
+.kun-wardrobe-invite-pitch > h2 { max-width: 430px; margin: 0; font-size: 24px; font-weight: 750; line-height: 1.28; letter-spacing: -.01em; text-wrap: balance; }
+.kun-wardrobe-invite-pitch > p { max-width: 440px; margin: 0; color: var(--ds-text-muted); font-size: 12.5px; line-height: 1.65; text-wrap: pretty; }
+.kun-wardrobe-invite-rewards { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 2px; }
+.kun-wardrobe-invite-rewards > span { display: flex; align-items: center; gap: 9px; padding: 6px 12px 6px 8px; border-radius: 14px; background: rgb(255 255 255 / .72); }
+[data-theme='dark'] .kun-wardrobe-invite-rewards > span { background: rgb(255 255 255 / .06); }
+.kun-wardrobe-invite-rewards > span > span:last-child { display: grid; }
+.kun-wardrobe-invite-rewards b { font-size: 13px; font-weight: 700; }
+.kun-wardrobe-invite-rewards small { color: var(--ds-text-muted); font-size: 11px; }
+.kun-wardrobe-invite-bottles { display: flex; }
+.kun-wardrobe-invite-bottles > .rooms-wardrobe-bottle-icon + .rooms-wardrobe-bottle-icon { margin-left: -14px; }
+
+.kun-wardrobe-invite-actions { display: flex; flex-wrap: wrap; grid-area: actions; align-items: center; align-self: end; gap: 8px; }
+.kun-wardrobe-invite-actions > button, .kun-wardrobe-invite-empty > button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px;
+  padding: 0 16px; border: 1px solid var(--ds-border); border-radius: 11px; color: var(--ds-text); background: var(--ds-surface-card); font-size: 13px;
+  font-weight: 600; white-space: nowrap; transition: transform .15s, background-color .15s; }
+.kun-wardrobe-invite-actions > button:hover:not(:disabled), .kun-wardrobe-invite-empty > button:hover { background: var(--ds-surface-hover); }
+.kun-wardrobe-invite-actions > button[data-primary] { min-width: 168px; padding: 0 20px; border-color: transparent; color: var(--ds-control-foreground, #fff);
+  background: var(--ds-control, var(--ds-accent)); box-shadow: 0 10px 20px -12px color-mix(in srgb, var(--ds-control, #20242d) 80%, transparent); }
+.kun-wardrobe-invite-actions > button[data-primary]:hover:not(:disabled) { transform: translateY(-1px); background: var(--ds-control, var(--ds-accent)); }
+.kun-wardrobe-invite-actions > button[data-text] { height: 32px; padding: 0 4px; border-color: transparent; color: var(--ds-text-muted); background: transparent; font-weight: 550; }
+.kun-wardrobe-invite-actions > button[data-text]:hover { color: var(--ds-text); background: transparent; }
+.kun-wardrobe-invite-actions > button:disabled { opacity: .5; }
+.kun-wardrobe-invite-actions > p { flex-basis: 100%; margin: 0; color: var(--ds-danger, #d14343); font-size: 12px; }
+.kun-wardrobe-invite-actions > p > button { font-weight: 600; text-decoration: underline; }
+
+/* The code as a ticket; the link sits under a tear line with a notch cut at each end. Kun peeks out from behind it. */
+.kun-wardrobe-invite-ticket-wrap { position: relative; grid-area: ticket; align-self: center; padding-top: 62px; }
+.kun-wardrobe-invite-kun { position: absolute; top: -26px; right: 10px; width: 112px; pointer-events: none; user-select: none; }
+.kun-wardrobe-invite-ticket-shadow { position: relative; filter: drop-shadow(0 14px 16px rgb(42 58 120 / .16)) drop-shadow(0 0 1px rgb(78 103 219 / .2)); }
+[data-theme='dark'] .kun-wardrobe-invite-ticket-shadow { filter: drop-shadow(0 14px 18px rgb(0 0 0 / .45)) drop-shadow(0 0 1px rgb(255 255 255 / .22)); }
+.kun-wardrobe-invite-ticket { --tear: 78px; display: grid; grid-template-rows: var(--tear) auto; border-radius: 18px; background: var(--ds-surface-card);
+  -webkit-mask: radial-gradient(circle 9px at 0 var(--tear), #0000 96%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 9px at 100% var(--tear), #0000 96%, #000) right / 51% 100% no-repeat;
+  mask: radial-gradient(circle 9px at 0 var(--tear), #0000 96%, #000) left / 51% 100% no-repeat,
+    radial-gradient(circle 9px at 100% var(--tear), #0000 96%, #000) right / 51% 100% no-repeat; }
+.kun-wardrobe-invite-code { display: grid; align-content: center; gap: 4px; min-width: 0; padding: 0 14px 0 18px; }
+.kun-wardrobe-invite-code > small { color: var(--ds-text-muted); font-size: 11.5px; }
+.kun-wardrobe-invite-code > span { display: flex; align-items: center; gap: 10px; }
+.kun-wardrobe-invite-code b { flex: 1; min-width: 0; overflow: hidden; font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: 25px; font-weight: 700;
+  letter-spacing: .14em; text-overflow: ellipsis; white-space: nowrap; user-select: all; }
+.kun-wardrobe-invite-code button { display: grid; flex: none; place-items: center; width: 34px; height: 34px; border: 1px solid var(--ds-border);
+  border-radius: 10px; color: var(--ds-text-muted); background: var(--ds-surface-card); transition: background-color .15s, color .15s; }
+.kun-wardrobe-invite-code button:hover { color: var(--ds-text); background: var(--ds-surface-hover); }
+.kun-wardrobe-invite-code button[data-copied] { border-color: transparent; color: var(--ok-ink); background: var(--ok-soft); }
+.kun-wardrobe-invite-url { display: flex; align-items: center; gap: 7px; min-width: 0; margin: 0 14px; padding: 12px 4px 14px;
+  border-top: 1.5px dashed var(--ds-border); color: var(--ds-text-muted); font-size: 11.5px; }
+.kun-wardrobe-invite-url > svg { flex: none; }
+.kun-wardrobe-invite-url > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Cards and pills */
+.kun-wardrobe-invite-card { display: grid; gap: 12px; margin: 0; padding: 18px 20px; border: 1px solid var(--ds-border); border-radius: 18px; background: var(--ds-surface-card); }
+.kun-wardrobe-invite-card-head { display: flex; align-items: center; gap: 10px; }
+.kun-wardrobe-invite-card-head > strong { flex: 1; font-size: 14.5px; font-weight: 650; }
+.kun-wardrobe-invite-monthly { display: inline-flex; align-items: baseline; gap: 4px; color: var(--ds-text-muted); font-size: 12px; white-space: nowrap; }
+.kun-wardrobe-invite-monthly > b { margin-left: 3px; color: var(--ds-accent); font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.kun-wardrobe-invite-monthly > small { font-size: 12px; font-variant-numeric: tabular-nums; }
+.kun-wardrobe-invite-full, .kun-wardrobe-invite-list em, .kun-wardrobe-invite-claim-head > em { display: inline-flex; flex: none; align-items: center; gap: 4px;
+  height: 24px; padding: 0 9px; border-radius: 999px; color: var(--ds-text-muted); background: var(--ds-surface-subtle); font-size: 11.5px;
+  font-style: normal; font-weight: 650; white-space: nowrap; }
+.kun-wardrobe-invite-full, .kun-wardrobe-invite-list em[data-tone='wait'], .kun-wardrobe-invite-claim-head > em { color: var(--feather-ink); background: var(--feather-soft); }
+.kun-wardrobe-invite-list em[data-tone='ok'] { color: var(--ok-ink); background: var(--ok-soft); }
+.kun-wardrobe-invite-note { margin: 0; color: var(--ds-text-muted); font-size: 12px; line-height: 1.6; }
+
+/* How an invitation pays out */
+.kun-wardrobe-invite-steps { display: flex; gap: 12px; margin: 0; padding: 14px 18px; border: 1px solid var(--ds-border); border-radius: 16px;
+  background: var(--ds-surface-card); list-style: none; }
+.kun-wardrobe-invite-steps > li { display: flex; flex: 1; align-items: flex-start; gap: 11px; min-width: 0; }
+.kun-wardrobe-invite-steps > li:not(:last-child)::after { content: ''; flex: none; align-self: center; width: 7px; height: 7px; margin: 0 6px 0 auto;
+  border-top: 1.8px solid var(--ds-text-faint); border-right: 1.8px solid var(--ds-text-faint); transform: rotate(45deg); }
+.kun-wardrobe-invite-steps b { display: grid; flex: none; place-items: center; width: 26px; height: 26px; border-radius: 50%; color: var(--ds-accent);
+  background: var(--ds-accent-soft); font-size: 12.5px; font-weight: 750; }
+.kun-wardrobe-invite-steps > li[data-step='3'] b { color: var(--ok-ink); background: var(--ok-soft); }
+.kun-wardrobe-invite-steps li > span { display: grid; gap: 2px; min-width: 0; }
+.kun-wardrobe-invite-steps strong { font-size: 13px; font-weight: 650; }
+.kun-wardrobe-invite-steps small { color: var(--ds-text-muted); font-size: 11.5px; line-height: 1.5; }
+
+/* This month's rewards on a plank, like the bottle shelf. */
+.kun-wardrobe-invite-progress[data-full] { border-color: color-mix(in srgb, #f0a23f 40%, var(--ds-border)); }
+.kun-wardrobe-invite-plank { position: relative; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: end; height: 42px; margin-bottom: 6px; padding: 0 6px; }
+.kun-wardrobe-invite-plank::after { content: ''; position: absolute; right: 0; bottom: -6px; left: 0; height: 6px; border-radius: 3px;
+  background: linear-gradient(180deg, var(--plank-top), var(--plank)); box-shadow: 0 2px 2px rgb(0 0 0 / .06); }
+.kun-wardrobe-invite-plank > span { position: relative; display: grid; place-items: end center; }
+.kun-wardrobe-invite-plank > span[data-slot='empty'] .rooms-wardrobe-bottle-icon { filter: grayscale(1); opacity: .16; }
+.kun-wardrobe-invite-plank > span[data-slot='waiting'] .rooms-wardrobe-bottle-icon { opacity: .45; }
+.kun-wardrobe-invite-plank > span > i { position: absolute; top: 0; left: calc(50% + 5px); display: grid; place-items: center; width: 16px; height: 16px;
+  border-radius: 50%; color: var(--feather-ink); background: var(--ds-surface-card); box-shadow: 0 0 0 1px color-mix(in srgb, var(--feather-ink) 32%, transparent); }
+.kun-wardrobe-invite-stats { display: flex; flex-wrap: wrap; align-items: center; row-gap: 8px; }
+.kun-wardrobe-invite-stats > span { display: grid; gap: 1px; padding: 0 18px; border-left: 1px solid var(--ds-border); }
+.kun-wardrobe-invite-stats > span:first-child { padding-left: 0; border-left: 0; }
+.kun-wardrobe-invite-stats b { font-size: 20px; font-weight: 750; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.kun-wardrobe-invite-stats > span[data-tone='ok'] b { color: var(--ok-ink); }
+.kun-wardrobe-invite-stats small { color: var(--ds-text-muted); font-size: 11.5px; }
+.kun-wardrobe-invite-stats > .kun-wardrobe-invite-left { margin-left: auto; }
+.kun-wardrobe-invite-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.kun-wardrobe-invite-list > li { display: flex; align-items: center; gap: 12px; min-height: 52px; border-top: 1px solid var(--ds-border); font-size: 12.5px; }
+.kun-wardrobe-invite-avatar { display: grid; flex: none; place-items: center; width: 32px; height: 32px; border-radius: 10px; background: var(--ds-surface-subtle); }
+.kun-wardrobe-invite-list > li[data-status='pending'] .kun-wardrobe-invite-avatar .rooms-wardrobe-bottle-icon { opacity: .5; }
+.kun-wardrobe-invite-list > li[data-status='capped'] .kun-wardrobe-invite-avatar .rooms-wardrobe-bottle-icon { filter: grayscale(1); opacity: .45; }
+.kun-wardrobe-invite-friend { display: grid; flex: 1; gap: 3px; min-width: 0; }
+.kun-wardrobe-invite-friend > small { display: flex; align-items: center; gap: 8px; color: var(--ds-text-muted); font-size: 11px; }
+.kun-wardrobe-invite-track { display: inline-flex; flex: none; align-items: center; gap: 4px; }
+.kun-wardrobe-invite-track > i { width: 7px; height: 7px; border-radius: 50%; background: var(--ds-border); }
+.kun-wardrobe-invite-track > u { width: 16px; height: 2px; border-radius: 2px; background: var(--ds-border); }
+.kun-wardrobe-invite-track > [data-on] { background: var(--ok-ink); }
+.kun-wardrobe-invite-empty { display: flex; align-items: center; gap: 16px; padding: 2px; }
+.kun-wardrobe-invite-empty > img { flex: none; width: 76px; height: auto; user-select: none; }
+.kun-wardrobe-invite-empty > span { display: grid; flex: 1; gap: 4px; min-width: 0; }
+.kun-wardrobe-invite-empty strong { font-size: 13.5px; font-weight: 650; }
+.kun-wardrobe-invite-empty small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.6; }
+
+/* A new account's friend code, or the invitation it already accepted. */
+.kun-wardrobe-invite-claim { border-color: color-mix(in srgb, var(--feather-ink) 24%, var(--ds-border));
+  background: linear-gradient(100deg, var(--feather-soft), var(--ds-surface-card) 62%); }
+.kun-wardrobe-invite-claim-head { display: flex; align-items: center; gap: 12px; }
+.kun-wardrobe-invite-claim-icon { display: grid; flex: none; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--feather-ink); background: var(--feather-soft); }
+.kun-wardrobe-invite-claim-head > span:nth-child(2) { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.kun-wardrobe-invite-claim-head strong { font-size: 14px; font-weight: 650; }
+.kun-wardrobe-invite-claim-head small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.5; }
+.kun-wardrobe-invite-field { display: flex; gap: 8px; }
+.kun-wardrobe-invite-field > input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--ds-border); border-radius: 11px; color: var(--ds-text);
+  background: var(--ds-surface-card); font-family: 'SF Mono', ui-monospace, Menlo, monospace; font-size: 15px; letter-spacing: .1em; }
+.kun-wardrobe-invite-field > input::placeholder { color: var(--ds-text-faint); }
+.kun-wardrobe-invite-field > button { height: 40px; padding: 0 20px; border-radius: 11px; color: var(--ds-control-foreground, #fff);
+  background: var(--ds-control, var(--ds-accent)); font-size: 13px; font-weight: 650; }
+.kun-wardrobe-invite-field > button:disabled { color: var(--ds-text-faint); background: var(--ds-surface-subtle); }
+.kun-wardrobe-invite-by { display: flex; align-items: center; gap: 12px; padding: 12px 16px; color: var(--ds-text-muted); font-size: 12.5px; line-height: 1.55; }
+.kun-wardrobe-invite-by > span { display: grid; flex: none; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--ok-ink); background: var(--ok-soft); }
+.kun-wardrobe-invite-by[data-status='pending'] > span { color: var(--feather-ink); background: var(--feather-soft); }
+
+/* Rules, folded: the summary line already names the limits. */
+.kun-wardrobe-invite-rules { border-radius: 14px; background: var(--ds-surface-subtle); }
+.kun-wardrobe-invite-rules > summary { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border-radius: inherit; cursor: pointer; list-style: none; }
+.kun-wardrobe-invite-rules > summary::-webkit-details-marker { display: none; }
+.kun-wardrobe-invite-rules > summary:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 2px; }
+.kun-wardrobe-invite-rules > summary > svg { flex: none; color: var(--ds-text-muted); transition: transform .15s; }
+.kun-wardrobe-invite-rules[open] > summary > svg { transform: rotate(90deg); }
+.kun-wardrobe-invite-rules > summary strong { flex: none; font-size: 13px; font-weight: 650; }
+.kun-wardrobe-invite-rules > summary small { min-width: 0; overflow: hidden; color: var(--ds-text-faint); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.kun-wardrobe-invite-rules ul { display: grid; gap: 4px; margin: 0; padding: 0 18px 14px 42px; color: var(--ds-text-muted); font-size: 12px; line-height: 1.6; }
+
+/* Narrow: the ticket drops under the pitch, Kun moves to the corner, the steps stack. */
+@container kun-invite (max-width: 720px) {
+  .kun-wardrobe-invite-hero { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'pitch' 'ticket' 'actions'; padding: 20px; }
+  .kun-wardrobe-invite-pitch > h2 { padding-right: 84px; font-size: 21px; }
+  .kun-wardrobe-invite-ticket-wrap { position: static; padding-top: 0; }
+  .kun-wardrobe-invite-kun { top: 4px; right: 8px; width: 88px; }
+  .kun-wardrobe-invite-actions > button { flex: 1 1 auto; }
+  .kun-wardrobe-invite-actions > button[data-primary] { flex-basis: 100%; }
+  .kun-wardrobe-invite-steps { flex-direction: column; gap: 10px; }
+  .kun-wardrobe-invite-steps > li::after { display: none; }
+  .kun-wardrobe-invite-stats > span { padding: 0 12px; }
+  .kun-wardrobe-invite-stats > .kun-wardrobe-invite-left { flex-basis: 100%; margin-left: 0; }
+  .kun-wardrobe-invite-empty { flex-wrap: wrap; }
+}
+
+/* The shelf's invite row */
+.kun-wardrobe-shelf-invite { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px 8px 8px; text-align: left;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 22%, var(--ds-border)); border-radius: 12px;
+  background: linear-gradient(100deg, var(--ds-accent-soft), color-mix(in srgb, var(--ds-accent-soft) 35%, var(--ds-surface-card)));
+  animation: kun-wardrobe-shelf-invite-in .24s ease-out; transition: border-color .15s; }
+.kun-wardrobe-shelf-invite:hover { border-color: color-mix(in srgb, var(--ds-accent) 48%, var(--ds-border)); }
+.kun-wardrobe-shelf-invite-icon { display: grid; flex: none; place-items: center; width: 30px; height: 30px; border-radius: 9px; color: var(--ds-accent);
+  background: var(--ds-surface-card); box-shadow: 0 1px 2px color-mix(in srgb, var(--ds-accent) 24%, transparent); }
+.kun-wardrobe-shelf-invite-text { display: grid; flex: 1; gap: 1px; min-width: 0; }
+.kun-wardrobe-shelf-invite-text > b { color: var(--ds-text); font-size: 12.5px; font-weight: 650; }
+.kun-wardrobe-shelf-invite-text > small { overflow: hidden; color: var(--ds-text-muted); font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.kun-wardrobe-shelf-invite-arrow { flex: none; color: var(--ds-accent); transition: transform .15s; }
+.kun-wardrobe-shelf-invite:hover .kun-wardrobe-shelf-invite-arrow { transform: translateX(2px); }
+@keyframes kun-wardrobe-shelf-invite-in { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .kun-wardrobe-shelf-invite, .kun-wardrobe-invite-actions > button { animation: none; transition: none; }
+}

@@ -1,0 +1,22 @@
+{
+  "designAgentCardPending": "กำลังเตรียมบรีฟการออกแบบ…",
+  "designAgentCardQueued": "จะเริ่มเมื่อคำตอบนี้จบ",
+  "designAgentCardStarting": "กำลังเปิดแคนวาสออกแบบ…",
+  "designAgentCardDesigning": "กำลังออกแบบบนแคนวาส…",
+  "designAgentCardReady": "พร้อมบนแคนวาสแล้ว",
+  "designAgentCardNotStarted": "ยังไม่เริ่ม",
+  "designAgentCardStartFailed": "เริ่มการออกแบบไม่ได้",
+  "designAgentCardStartFailedDetail": "เริ่มไม่ได้: {{error}}",
+  "designAgentCardSuperseded": "ถูกแทนที่ด้วยคำขอออกแบบที่ใหม่กว่า",
+  "designAgentCardFailed": "คำขอออกแบบล้มเหลว",
+  "designAgentCardFailedDetail": "คำขอออกแบบล้มเหลว: {{error}}",
+  "designAgentCardScreens_one": "{{count}} หน้าจอ",
+  "designAgentCardScreens_other": "{{count}} หน้าจอ",
+  "designAgentCardTargetWeb": "เว็บ",
+  "designAgentCardTargetApp": "แอป",
+  "designAgentCardOpen": "เปิด",
+  "designAgentCardOpenAria": "เปิดแคนวาสออกแบบของ {{title}}",
+  "designAgentCardStart": "เริ่มออกแบบ",
+  "designAgentCardRetry": "ลองอีกครั้ง",
+  "toolBuiltinDesignOpen": "เปิดแคนวาสออกแบบ"
+}

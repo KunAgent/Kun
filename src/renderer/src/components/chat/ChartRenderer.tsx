@@ -27,7 +27,7 @@ export function ChartSkeleton({ title }: { title?: string }): ReactElement {
       data-chart-skeleton
       aria-busy="true"
       aria-label={title?.trim() || 'Preparing chart'}
-      className="my-3 min-w-0 rounded-xl border border-ds-border bg-ds-surface-card p-4"
+      className="my-3 min-w-0 rounded-xl border border-ds-border bg-ds-card p-4"
     >
       <div className="h-4 w-40 max-w-full rounded bg-ds-subtle" />
       <div className="mt-2 h-3 w-64 max-w-full rounded bg-ds-subtle/80" />
@@ -57,7 +57,7 @@ function DataTable({ spec }: { spec: RendererChartSpec }): ReactElement {
     <div className="max-h-72 overflow-auto rounded-lg border border-ds-border-muted">
       <table className="w-full border-collapse text-left text-xs">
         <caption className="sr-only">Data for {spec.title}</caption>
-        <thead className="sticky top-0 bg-ds-surface-elevated text-ds-muted">
+        <thead className="sticky top-0 bg-ds-elevated text-ds-muted">
           <tr>{fields.map((item) => <th key={item.field} scope="col" className="border-b border-ds-border-muted px-3 py-2 font-medium">{item.label ?? item.field}</th>)}</tr>
         </thead>
         <tbody>{spec.data.map((row, index) => (
@@ -114,7 +114,11 @@ function exportChartPng(source: SVGSVGElement, filename: string): void {
   image.src = objectUrl
 }
 
-export function ChartRenderer({ spec }: { spec: RendererChartSpec }): ReactElement {
+export function ChartRenderer({ spec, embedded = false }: {
+  spec: RendererChartSpec
+  /** Inside a report grid: no outer margin, the grid spaces the charts. */
+  embedded?: boolean
+}): ReactElement {
   const [table, setTable] = useState(spec.type === 'table')
   const [expanded, setExpanded] = useState(false)
   const frameRef = useRef<HTMLDivElement>(null)
@@ -150,7 +154,7 @@ export function ChartRenderer({ spec }: { spec: RendererChartSpec }): ReactEleme
       data-chart-type={spec.type}
       data-chart-orientation={shouldUseHorizontalBar(spec) ? 'horizontal' : 'vertical'}
       data-chart-stacked={usesStackedBars(spec) ? 'true' : 'false'}
-      className="my-3 min-w-0 rounded-xl border border-ds-border bg-ds-surface-card p-4 text-ds-ink"
+      className={`${embedded ? 'h-full' : 'my-3'} min-w-0 rounded-xl border border-ds-border bg-ds-card p-4 text-ds-ink`}
     >
       <figcaption>
         <h3 className="text-sm font-semibold">{spec.title}</h3>
@@ -182,7 +186,7 @@ export function ChartRenderer({ spec }: { spec: RendererChartSpec }): ReactEleme
       </div>
       {expanded ? (
         <div role="dialog" aria-modal="true" aria-label={spec.title} className="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4" onClick={() => setExpanded(false)}>
-          <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl border border-ds-border bg-ds-surface-card p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
+          <div className="max-h-[90vh] w-full max-w-5xl overflow-auto rounded-2xl border border-ds-border bg-ds-card p-5 shadow-xl" onClick={(event) => event.stopPropagation()}>
             <button type="button" autoFocus aria-label="Close expanded chart" onClick={() => setExpanded(false)} className={`${CHART_ACTION_CLASS} ml-auto`}>
               <X className="h-4 w-4" />Close
             </button>

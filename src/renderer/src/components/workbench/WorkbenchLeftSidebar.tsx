@@ -9,6 +9,8 @@ import { ExtensionViewOutlet } from '../../extensions/ControlledContributionSurf
 import { normalizeWorkbenchRoute } from './workbench-route'
 import { workbenchDividerClassName } from './workbench-divider'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useWardrobeRoute } from '../wardrobe/wardrobe-route'
+import { useArtifactLibraryStore } from '../../artifacts/artifact-library-store'
 
 type CodeSidebarProps = ComponentProps<typeof Sidebar>
 
@@ -68,7 +70,7 @@ export type WorkbenchLeftSidebarProps = {
 }
 
 function SidebarFallback(): ReactElement {
-  return <div className="h-full bg-ds-sidebar" />
+  return <div className="h-full" />
 }
 
 export function WorkbenchLeftSidebar({
@@ -114,8 +116,13 @@ export function WorkbenchLeftSidebar({
 }: WorkbenchLeftSidebarProps): ReactElement | null {
   const { t } = useTranslation('common')
   const remoteMobile = useRemoteMobileLayout()
+  // The wardrobe page keeps the sidebar of the mode it was opened from.
+  const wardrobeFromWork = useWardrobeRoute((state) => state.returnRoute === 'write')
+  // The artifact library opened from Work keeps Work's sidebar and space switcher.
+  const artifactsFromWork = useArtifactLibraryStore((state) => state.source === 'work')
   if (collapsed) return null
   const normalizedRoute = normalizeWorkbenchRoute(route)
+  const wardrobe = normalizedRoute === 'wardrobe'
   // On a phone the sidebar is an overlay drawer: navigation actions and the
   // backdrop both collapse it again (onBackdropClose toggles collapsed state).
   const close = (): void => { onBackdropClose?.() }
@@ -135,7 +142,10 @@ export function WorkbenchLeftSidebar({
           workspaceRoot={workspaceRoot}
           onClose={wrapCloseOpt(onCloseExtensionView)}
         />
-      ) : normalizedRoute === 'write' ? (
+      ) : normalizedRoute === 'write'
+        || (normalizedRoute === 'papers' && !remoteMobile)
+        || (wardrobe && wardrobeFromWork)
+        || (normalizedRoute === 'artifacts' && artifactsFromWork) ? (
         <Suspense fallback={<SidebarFallback />}>
           <WriteSidebar
             activeView="write"
@@ -152,7 +162,7 @@ export function WorkbenchLeftSidebar({
       ) : (
         <Sidebar
           threads={codeThreads}
-          activeThreadId={route === 'agent-chat' ? null : activeThreadId}
+          activeThreadId={route === 'agent-chat' || wardrobe ? null : activeThreadId}
           activeView={sidebarView === 'ade' ? 'chat' : sidebarView}
           connectPhoneSidebarOpen={connectPhoneSidebarOpen}
           connectPhoneInitialTarget={connectPhoneInitialTarget}

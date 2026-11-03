@@ -7,6 +7,7 @@ import { useChatStore } from './store/chat-store'
 import { normalizeWorkspaceRoot } from './lib/workspace-path'
 import { ensureCodexReferenceWatcher } from './history-reference/codex-reference-watcher'
 import { currentRemoteSurface } from './mobile/use-remote-surface'
+import { startTaskWorkspaceQueueRecovery } from './store/task-workspace-queue-recovery'
 
 type AppShellModule = typeof import('./AppShell')
 let preparedAppShell: AppShellModule['default'] | null = null
@@ -33,9 +34,10 @@ function SharedModelConnectionsLifecycle(): null {
     let disposed = false
     let modelCatalogLoaded = false
     let lastAppliedRevision = 0
+    let lastAppliedMetadataRevision = 0
     const stop = subscribeModelConnectionWatch(async (snapshot) => {
       if (disposed) return
-      const changed = !modelCatalogLoaded || snapshot.revision > lastAppliedRevision
+      const changed = !modelCatalogLoaded || snapshot.revision > lastAppliedRevision || (snapshot.metadataRevision ?? 0) > lastAppliedMetadataRevision
       if (!changed) return
       const state = useChatStore.getState()
       await state.loadComposerModels()
@@ -49,6 +51,7 @@ function SharedModelConnectionsLifecycle(): null {
         current.composerRouteExplicitWorkspaceRoot === currentWorkspace))
       )) {
         lastAppliedRevision = snapshot.revision
+        lastAppliedMetadataRevision = snapshot.metadataRevision ?? 0
         modelCatalogLoaded = true
         return
       }
@@ -80,6 +83,7 @@ function SharedModelConnectionsLifecycle(): null {
         }
       }
       lastAppliedRevision = snapshot.revision
+      lastAppliedMetadataRevision = snapshot.metadataRevision ?? 0
       modelCatalogLoaded = true
     })
     return () => {
@@ -87,6 +91,11 @@ function SharedModelConnectionsLifecycle(): null {
       stop()
     }
   }, [])
+  return null
+}
+
+function TaskWorkspaceQueueLifecycle(): null {
+  useEffect(() => startTaskWorkspaceQueueRecovery(useChatStore.setState, useChatStore.getState), [])
   return null
 }
 
@@ -100,6 +109,7 @@ export default function App(): React.ReactElement {
     <AppErrorBoundary>
       <DocumentUsabilityLifecycle />
       <SharedModelConnectionsLifecycle />
+      <TaskWorkspaceQueueLifecycle />
       <Suspense fallback={<StartupShell />}>
         <AppShell />
       </Suspense>

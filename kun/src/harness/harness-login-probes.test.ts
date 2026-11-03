@@ -18,6 +18,11 @@ async function file(path: string, value: unknown) {
 }
 
 describe('local login evidence', () => {
+  it('does not report an Agent with its own free models as signed out without credentials', async () => {
+    const empty = { ...deps(), env: { XDG_DATA_HOME: join(home, 'data') } }
+    expect(await probeHarnessLogin(def('opencode2'), empty)).toBe('unknown')
+    expect(await probeHarnessLogin(def('opencode'), empty)).toBe('unknown')
+  })
   it('does not authenticate Claude from an OAuth file or arbitrary parsed object', async () => {
     for (const value of [{}, { claudeAiOauth: { accessToken: 'fixture-only', expiresAt: 0 } }]) {
       await file('.claude/.credentials.json', value)

@@ -60,24 +60,15 @@ function Assert-NoReparsePathComponents([string]$PathValue, [string]$Label) {
 }
 
 function Assert-NoReparsePointsInTree([IO.FileSystemInfo]$Entry, [string]$Label) {
-  $pending = [Collections.Generic.Stack[string]]::new()
-  $pending.Push($Entry.FullName)
-  while ($pending.Count -gt 0) {
-    $current = $pending.Pop()
-    if (Test-ReparsePoint $current) {
-      throw "$Label contains a reparse point: $current"
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  try {
+    [KunInstallerPayloadCopy]::Validate((Normalize-FullPath $Entry.FullName))
+  } catch {
+    $reason = $_.Exception.GetBaseException().Message
+    if ($reason.StartsWith('Payload contains a reparse point:')) {
+      throw ($reason.Replace('Payload contains a reparse point:', "$Label contains a reparse point:"))
     }
-    if (-not (Test-Path -LiteralPath $current -PathType Container)) {
-      continue
-    }
-    foreach ($child in @(Get-ChildItem -LiteralPath $current -Force)) {
-      if (($child.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-        throw "$Label contains a reparse point: $($child.FullName)"
-      }
-      if ($child.PSIsContainer) {
-        $pending.Push($child.FullName)
-      }
-    }
+    throw "$Label cannot be safely traversed: $($_.Exception.Message)"
   }
 }
 
@@ -421,6 +412,9 @@ function Assert-PackagedInstallPayload {
   Assert-NonEmptyPayloadFile (
     Join-Path $target 'resources\app.asar.unpacked\kun\dist\manager\manager-entry.js'
   ) 'the unpacked Kun service manager entry'
+
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-runtime-integrity.ps1')
+  Assert-PackagedRuntimeIntegrity $target
 }
 
 function Get-RecoveryPayloadSource {
@@ -482,15 +476,8 @@ function Backup-InPlacePayload {
   $source = Get-RecoveryPayloadSource
   Assert-RecoveryPayload $source
   $backup = Get-InPlacePayloadBackupPath
-  if (Test-Path -LiteralPath $backup) {
-    Remove-Item -LiteralPath $backup -Recurse -Force
-  }
-  [IO.Directory]::CreateDirectory($backup) | Out-Null
-  foreach ($entry in @(Get-ChildItem -LiteralPath $source -Force)) {
-    if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Automatic update backup source' }
-    elseif (Test-ReparsePoint $entry.FullName) { throw "Automatic update backup source is a reparse point: $($entry.FullName)" }
-    Copy-Item -LiteralPath $entry.FullName -Destination $backup -Recurse -Force
-  }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  Copy-RecoveryPayloadTree $source $backup $true
   Assert-RecoveryPayload $backup
   Set-InPlacePayloadBackupEnvironment $backup
 }
@@ -503,14 +490,18 @@ function Restore-InPlacePayloadBackup {
   }
   $source = Get-RecoveryPayloadSource
   Assert-SafeInstallRoot $source 'Automatic update recovery destination'
-  [IO.Directory]::CreateDirectory($source) | Out-Null
-  foreach ($entry in @(Get-ChildItem -LiteralPath $backup -Force)) {
-    if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Automatic update backup' }
-    elseif (Test-ReparsePoint $entry.FullName) { throw "Automatic update backup is a reparse point: $($entry.FullName)" }
-    Copy-Item -LiteralPath $entry.FullName -Destination $source -Recurse -Force
-  }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  Copy-RecoveryPayloadTree $backup $source
   Assert-RecoveryPayload $source
   Set-InPlacePayloadBackupEnvironment $backup
+}
+
+# Stage, failed, old and backup trees hold a full payload under a longer root
+# than the install directory, beyond PowerShell 5.1 recursive removal limits.
+function Remove-PayloadTreeIfPresent([string]$PathValue) {
+  if ([string]::IsNullOrWhiteSpace($PathValue) -or -not (Test-Path -LiteralPath $PathValue)) { return }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  Remove-RecoveryPayloadTree $PathValue
 }
 
 function Resolve-RecoveryPayloadExecutable {

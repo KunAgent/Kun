@@ -2,14 +2,15 @@ import { createElement, useState, type ReactElement, type ReactNode } from 'reac
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, getKunAvatarConflicts,
+  KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, KUN_AVATAR_CATALOG, KUN_AVATAR_SCENES, getKunAvatarConflicts,
   type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatarComposer, editableKunAvatarParts } from './RoomAvatarComposer'
+import { avatarItemLayers } from './RoomAvatarItemArt'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), accept: vi.fn(), cache: vi.fn(), profile: {
+const mocks = vi.hoisted(() => ({ request: vi.fn(), save: vi.fn(), cache: vi.fn(), profile: {
   revision: 7, profile: { avatar: { kind: 'builtin', id: 'coder' } }
 } }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ i18n: { language: 'en' },
@@ -19,8 +20,13 @@ vi.mock('./RoomAvatar', () => ({ RoomAvatar: (props: { avatar?: RoomAvatarRefere
 vi.mock('./RoomModal', () => ({ RoomModal: ({ children }: { children: ReactNode }) => createElement('div', { role: 'dialog' }, children) }))
 vi.mock('./rooms-client', () => ({ roomsRequest: mocks.request, roomRequestId: () => 'save-avatar-id' }))
 vi.mock('./room-uploaded-avatar', () => ({ cacheRoomAvatar: mocks.cache }))
-vi.mock('./room-user-profile', () => ({ acceptRoomUserProfile: mocks.accept }))
+vi.mock('./room-user-profile', () => ({ saveRoomUserProfile: mocks.save }))
 vi.mock('./agent-client', () => ({ useAgentResource: () => ({ data: mocks.profile }) }))
+// Dressing up needs a signed-in account (a guest sees a sign-in card instead); these tests exercise the editor itself,
+// so they stand in for a signed-in user whose wardrobe locks nothing.
+vi.mock('./room-wardrobe', async (importOriginal) => ({ ...await importOriginal<typeof import('./room-wardrobe')>(),
+  useWardrobe: () => ({ mode: 'account', unlockAll: true, wardrobe: null, revision: 1, error: '', loaded: true }),
+  canChangeKunAppearance: () => true, requireKunAppearanceLogin: () => true }))
 
 let renderer: ReactTestRenderer
 const button = (label: string) => renderer.root.findAllByType('button').find((node) =>
@@ -107,6 +113,38 @@ describe('layered avatar editor drafts', () => {
     expect(onChange).toHaveBeenCalledWith(undefined)
   })
 
+  it('previews and saves illustrated scenes while preserving the outfit and valid custom color control', async () => {
+    await mount(createElement(ComposerHarness, { initial: { kind: 'composed', version: 1,
+      parts: { ...KUN_AVATAR_DEFAULT_PARTS, outfit: 'red-scarf' } } }))
+    changeCategory('bg')
+    for (const scene of KUN_AVATAR_SCENES) expect(button(scene.label.en)).toBeDefined()
+    act(() => button('Sunset bay').props.onPointerEnter())
+    expect(preview()).toMatchObject({ parts: { bg: '#f7f5ef' } })
+    click('Sunset bay')
+    expect(preview()).toMatchObject({ parts: { bg: 'scene:sunset-bay', outfit: 'red-scarf' } })
+    expect(renderer.root.findByProps({ type: 'color' }).props.value).toBe('#f7f5ef')
+    click('roomsAvatarTransparent')
+    expect(preview()).toMatchObject({ parts: { bg: 'transparent', outfit: 'red-scarf' } })
+  })
+
+  it('shows all six registered expression choices', async () => {
+    await mount(createElement(ComposerHarness, { initial: { kind: 'composed', version: 1, parts: KUN_AVATAR_DEFAULT_PARTS } }))
+    changeCategory('face')
+    for (const face of KUN_AVATAR_CATALOG.face) {
+      click(face.label.en)
+      expect(preview()).toMatchObject({ parts: { face: face.id } })
+    }
+  })
+
+  it('uses dedicated inventory icons including whole clothes, never body layers', () => {
+    for (const category of ['headwear', 'glasses', 'outfit', 'prop'] as const) {
+      for (const part of KUN_AVATAR_CATALOG[category]) {
+        expect(avatarItemLayers(category, part.id)).toEqual([`icon/${category}/${part.id}`])
+      }
+    }
+    expect(avatarItemLayers('outfit', 'unknown')).toEqual([])
+  })
+
   it('supports transparent and custom backgrounds without changing accessories', async () => {
     await mount(createElement(ComposerHarness, { initial: { kind: 'composed', version: 1,
       parts: { ...KUN_AVATAR_DEFAULT_PARTS, outfit: 'red-scarf' } } }))
@@ -130,24 +168,24 @@ describe('user avatar editor persistence', () => {
   it('saves the composed user avatar with the original revision and publishes the saved profile', async () => {
     const onClose = vi.fn(), preset = KUN_AVATAR_PRESETS[2]
     const saved = { ...mocks.profile, revision: 8, profile: { avatar: { kind: 'composed', version: 1, parts: preset.parts } } }
-    mocks.request.mockResolvedValueOnce(saved)
+    mocks.save.mockResolvedValueOnce(saved)
     await mount(createElement(RoomUserAvatarEditor, { onClose }))
     click(preset.label.en)
     await act(async () => { button('agentsSave').props.onClick() })
-    expect(mocks.request).toHaveBeenCalledWith('/v1/rooms/user-profile', 'PUT', {
+    // Saving goes through saveRoomUserProfile, which publishes the saved profile and syncs the account look.
+    expect(mocks.save).toHaveBeenCalledWith({
       avatar: saved.profile.avatar, expectedRevision: 7, clientRequestId: 'save-avatar-id'
     })
-    expect(mocks.accept).toHaveBeenCalledWith(saved)
     expect(onClose).toHaveBeenCalledOnce()
   })
 
   it('retains the draft and reports a version conflict without closing', async () => {
     const onClose = vi.fn()
-    mocks.request.mockRejectedValueOnce(new Error('revision_conflict'))
+    mocks.save.mockRejectedValueOnce(new Error('revision_conflict'))
     await mount(createElement(RoomUserAvatarEditor, { variant: 'panel', onClose }))
     click('roomsAvatarRestoreKun')
     await act(async () => { button('agentsSave').props.onClick() })
-    expect(mocks.request.mock.calls[0][2].avatar).toBeNull()
+    expect(mocks.save.mock.calls[0][0].avatar).toBeNull()
     expect(renderer.root.findByProps({ role: 'alert' }).children.join('')).toContain('revision_conflict')
     expect(onClose).not.toHaveBeenCalled()
     expect(button('agentsSave').props.disabled).toBe(false)

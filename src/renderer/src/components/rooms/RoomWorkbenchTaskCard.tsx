@@ -119,8 +119,19 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   }
   const cancelEditing = () => void act(async () => {
     if (link.dispatchIntentId) {
-      const intent = await agentDispatchClient.get(link.dispatchIntentId)
-      publishAgentDispatchIntent(await agentDispatchClient.act(intent, 'resume'))
+      let intent = await agentDispatchClient.get(link.dispatchIntentId)
+      if (intent.state === 'paused') {
+        try {
+          intent = await agentDispatchClient.act(intent, 'resume')
+        } catch (cause) {
+          // Another host action may have resumed or settled the dispatch after
+          // our read. Discarding a local draft must not repeat that action.
+          const current = await agentDispatchClient.get(link.dispatchIntentId).catch(() => undefined)
+          if (!current || current.state === 'paused') throw cause
+          intent = current
+        }
+      }
+      publishAgentDispatchIntent(intent)
     }
     setEditing(false)
     setDraft(null)

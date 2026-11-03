@@ -9,6 +9,36 @@ export type WorkspaceFileRevealTarget = WorkspaceFileTarget & {
   workspaceRoot: string
 }
 
+export const WORKSPACE_TEXT_ENCODINGS = [
+  'utf-8',
+  'gb18030',
+  'big5',
+  'shift_jis',
+  'utf-16le',
+  'utf-16be',
+  'windows-1252'
+] as const
+
+export type WorkspaceTextEncoding = (typeof WORKSPACE_TEXT_ENCODINGS)[number]
+
+/** First read of a text preview. Larger reads are an explicit "load more". */
+export const WORKSPACE_TEXT_PREVIEW_HEAD_BYTES = 1_500_000
+export const WORKSPACE_TEXT_PREVIEW_MAX_BYTES = 16 * 1024 * 1024
+
+export type WorkspaceFileReadPayload = WorkspaceFileTarget & {
+  /** Reopen with this encoding instead of detecting one. */
+  encoding?: WorkspaceTextEncoding
+  /** Bytes to read from the start, capped at WORKSPACE_TEXT_PREVIEW_MAX_BYTES. */
+  maxBytes?: number
+}
+
+export type WorkspaceFileReadFailureCode = 'binary' | 'not_found' | 'directory'
+
+/** Every file under a workspace, as relative forward-slash paths, for quick search. */
+export type WorkspaceFileListResult =
+  | { ok: true; root: string; files: string[]; truncated: boolean }
+  | { ok: false; message: string }
+
 export type WorkspaceEntry = {
   name: string
   path: string
@@ -180,8 +210,21 @@ export type WorkspaceFileReadResult =
       truncated: boolean
       line?: number
       column?: number
+      /** Detected (or forced) encoding; absent from older producers, which read UTF-8. */
+      encoding?: WorkspaceTextEncoding
+      /** Bytes decoded into `content`. */
+      bytesRead?: number
     }
-  | { ok: false; message: string }
+  | {
+      ok: false
+      message: string
+      code?: WorkspaceFileReadFailureCode
+      path?: string
+      size?: number
+      mtimeMs?: number
+      /** First 4 KB of a binary file, for a read-only hex view. */
+      headBase64?: string
+    }
 
 export type WorkspaceImageReadResult =
   | {
@@ -190,8 +233,10 @@ export type WorkspaceImageReadResult =
       dataUrl: string
       mimeType: string
       size: number
+      /** The source format cannot be shown by Chromium and was converted to PNG. */
+      convertedFrom?: string
     }
-  | { ok: false; message: string }
+  | { ok: false; message: string; code?: 'not_found' | 'too_large' | 'unsupported' }
 
 export type WorkspacePdfReadResult =
   | {

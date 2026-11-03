@@ -1,0 +1,6 @@
+{
+  "toastRegion": "通知",
+  "toastWaiting": "あと {{hidden}} 件待機中",
+  "runtimeStatusRecovered": "Kun が再接続しました",
+  "runtimeStatusRecoveredDetail": "ローカルランタイムが再び利用可能になりました"
+}

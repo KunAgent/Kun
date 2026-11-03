@@ -72,6 +72,9 @@ export type ExtensionRegistryEntry = {
   versions: Record<string, InstalledExtensionVersion>
   development?: DevelopmentExtensionRecord
   useDevelopment: boolean
+  /** Private monotonic CAS generation and bounded native remote-operation proofs. */
+  controlRevision?: number
+  enablementProofs?: import('./enablement-control.js').EnablementProof[]
 }
 
 export type ExtensionRegistryDocument = {

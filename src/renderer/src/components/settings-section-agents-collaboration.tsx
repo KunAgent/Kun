@@ -13,7 +13,11 @@ import type {
 } from '@shared/ade-collaboration-settings'
 import type { KunRuntimeSettingsSyncStatusPayload } from '@shared/kun-gui-api'
 import { defaultKunAdeSettings } from '@shared/app-settings-kun-harness'
+import { DEFAULT_ADE_TASK_SUGGESTION_SETTINGS, dispatchPreferencesValid } from '@shared/ade-collaboration-settings'
 import { SettingRow, SettingsCard, Toggle } from './settings-controls'
+import { DispatchAutoStartSettingRows } from './settings-dispatch-auto-start'
+import { DispatchPreferenceSettingRows } from './dispatch-preference-field'
+import { TaskSuggestionSettingRows } from './settings-task-suggestions'
 import { isKunModelProviderGroup } from '../lib/kun-model-provider-groups'
 import type { SettingsDraftController } from './settings-draft-navigation'
 
@@ -43,6 +47,11 @@ type Draft = {
   idleMinutes: string
   structuredMinutes: string
   terminalMinutes: string
+  autoStartSeconds: number
+  autoStartWhenConfirmationRequired: boolean
+  preferencePrompt: string
+  preferences: AdeCollaborationSettingsValue['dispatch']['preferences']
+  tasks: AdeCollaborationSettingsValue['tasks']
   harnessRouter: boolean
   deterministicHandoff: boolean
 }
@@ -66,6 +75,11 @@ function draftFrom(ade: AdeCollaborationSettingsValue): Draft {
     idleMinutes: String(ade.hibernation.idleMinutes),
     structuredMinutes: String(ade.stall.structuredMinutes),
     terminalMinutes: String(ade.stall.terminalMinutes),
+    autoStartSeconds: ade.dispatch.autoStartSeconds,
+    autoStartWhenConfirmationRequired: ade.dispatch.autoStartWhenConfirmationRequired,
+    preferencePrompt: ade.dispatch.preferencePrompt ?? '',
+    preferences: (ade.dispatch.preferences ?? []).map((rule) => ({ ...rule })),
+    tasks: { ...(ade.tasks ?? DEFAULT_ADE_TASK_SUGGESTION_SETTINGS) },
     harnessRouter: ade.harnessRouter,
     deterministicHandoff: ade.deterministicHandoff
   }
@@ -82,6 +96,7 @@ function draftValue(
   providerIds: Set<string>,
   existingProviderId?: string
 ): AdeCollaborationSettingsValue | null {
+  if (!dispatchPreferencesValid(draft)) return null
   const softWorkers = positiveInteger(draft.softWorkers, 1, 16)
   const hardWorkers = positiveInteger(draft.hardWorkers, 1, 32)
   const idleMinutes = positiveInteger(draft.idleMinutes, 1, 1_440)
@@ -108,6 +123,10 @@ function draftValue(
     ...(softTokens === undefined && hardTokens === undefined ? {} : { budget: { softTokens, hardTokens } }),
     hibernation: { enabled: draft.hibernationEnabled, idleMinutes },
     stall: { structuredMinutes, terminalMinutes },
+    dispatch: { autoStartSeconds: draft.autoStartSeconds,
+      autoStartWhenConfirmationRequired: draft.autoStartWhenConfirmationRequired,
+      preferencePrompt: draft.preferencePrompt.trim(), preferences: draft.preferences.map((rule) => ({ ...rule })) },
+    tasks: { ...draft.tasks },
     harnessRouter: draft.harnessRouter,
     deterministicHandoff: draft.deterministicHandoff
   }
@@ -265,8 +284,6 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
   return (
     <div
       id="agents-settings-panel-collaboration"
-      role="tabpanel"
-      aria-labelledby="agents-settings-tab-collaboration"
       className={activePanel === 'collaboration' ? '' : 'hidden'}
     >
       <SettingsCard title={t('adeSettings.collaborationTitle')}>
@@ -348,6 +365,13 @@ export function AgentsCollaborationSettingsPanel({ view }: { view: Collaboration
             </div>
           }
         />
+        <DispatchAutoStartSettingRows t={t} seconds={draft.autoStartSeconds}
+          whenConfirmationRequired={draft.autoStartWhenConfirmationRequired}
+          onSeconds={(value) => edit('autoStartSeconds', value)}
+          onWhenConfirmationRequired={(value) => edit('autoStartWhenConfirmationRequired', value)} />
+        <DispatchPreferenceSettingRows preferences={draft.preferences} notes={draft.preferencePrompt} disabled={saving || loading}
+          onPreferencesChange={(value) => edit('preferences', value)} onNotesChange={(value) => edit('preferencePrompt', value)} />
+        <TaskSuggestionSettingRows t={t} value={draft.tasks} onChange={(value) => edit('tasks', value)} />
         <details className="mt-4 border-t border-ds-border-muted pt-4">
           <summary className="cursor-pointer text-[13px] font-medium text-ds-ink">
             {t('adeSettings.collaborationAdvanced')}

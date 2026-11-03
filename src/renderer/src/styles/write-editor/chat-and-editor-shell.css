@@ -166,7 +166,7 @@ summary,
 }
 
 .cm-write-diff-reject-all:hover {
-  background: var(--ds-hover);
+  background: var(--ds-surface-hover);
 }
 
 /* @codemirror/merge unified diff: red deletions / green insertions + per-chunk
@@ -198,7 +198,7 @@ summary,
   cursor: pointer;
   border: 1px solid var(--ds-border);
   border-radius: 6px;
-  background: var(--ds-card);
+  background: var(--ds-surface-card);
   color: var(--ds-text);
   font-size: 11px;
   line-height: 1.6;
@@ -211,7 +211,7 @@ summary,
 }
 
 .write-codemirror-host .cm-chunkButtons button:hover {
-  background: var(--ds-hover);
+  background: var(--ds-surface-hover);
 }
 
 [data-theme='dark'] .write-codemirror-host .cm-deletedChunk,
@@ -525,7 +525,7 @@ summary,
   margin-inline: auto;
   border: 1px solid var(--ds-border-muted);
   border-radius: 10px;
-  background: var(--ds-card);
+  background: var(--ds-surface-card);
   object-fit: contain;
 }
 
@@ -535,7 +535,7 @@ summary,
   align-items: center;
   border: 1px solid color-mix(in srgb, #dc2626 38%, var(--ds-border-muted));
   border-radius: 8px;
-  background: color-mix(in srgb, #dc2626 8%, var(--ds-card));
+  background: color-mix(in srgb, #dc2626 8%, var(--ds-surface-card));
   padding: 0.28rem 0.55rem;
   color: #b91c1c;
   font-size: 0.82em;

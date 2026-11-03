@@ -13,7 +13,7 @@ import type { AppLocale } from '../shared/app-locales'
 import { createGuiUpdateScheduler, type GuiUpdateScheduler } from './gui-updater-scheduler'
 import { GuiUpdateOperationCoordinator, type GuiUpdateOperation } from './gui-updater-operation'
 import { GuiUpdateInstaller } from './gui-updater-install'
-import { showGuiUpdateReleaseNotes } from './gui-updater-release-notes'
+import { recordFirstLaunchVersion } from './gui-updater-release-notes'
 import {
   autoUpdater,
   DEVELOPMENT_APP_FLAVOR,
@@ -49,7 +49,6 @@ let configuredChannel: GuiUpdateChannel = normalizeGuiUpdateChannel(
 )
 let configuredFeedUrl = ''
 let getSelectedChannel: (() => GuiUpdateChannel | Promise<GuiUpdateChannel>) | null = null
-let getSelectedLocale: (() => AppLocale | Promise<AppLocale>) | null = null
 let beforeInstallUpdate: (() => void | Promise<void>) | null = null
 let checkBeforeInstallUpdate: (() => void | Promise<void>) | null = null
 let beforeInstallUpdatePromise: Promise<void> | null = null
@@ -276,7 +275,7 @@ export function initializeGuiUpdater(
   windowGetter: () => BrowserWindow | null,
   channelGetter?: () => GuiUpdateChannel | Promise<GuiUpdateChannel>,
   beforeInstall?: () => void | Promise<void>,
-  localeGetter?: () => AppLocale | Promise<AppLocale>,
+  _localeGetter?: () => AppLocale | Promise<AppLocale>,
   updateInstallQuittingSetter?: (active: boolean) => void,
   healthCheck?: () => Promise<boolean>,
   beforeInstallCheck?: () => void | Promise<void>
@@ -285,7 +284,6 @@ export function initializeGuiUpdater(
   getSelectedChannel = channelGetter ?? null
   beforeInstallUpdate = beforeInstall ?? null
   checkBeforeInstallUpdate = beforeInstallCheck ?? null
-  getSelectedLocale = localeGetter ?? null
   setUpdateInstallQuitting = updateInstallQuittingSetter ?? null
   pendingUpdateHealthCheck = healthCheck ?? null
   if (initialized) return
@@ -384,8 +382,9 @@ export function initializeGuiUpdater(
   void guiUpdateScheduler.scheduleNext()
 }
 
+/** The "what's new" dialog itself lives in the renderer; startup only records a first install. */
 export async function showPostUpdateReleaseNotes(): Promise<void> {
-  await showGuiUpdateReleaseNotes(getMainWindow, getSelectedLocale)
+  await recordFirstLaunchVersion()
 }
 
 export function getGuiUpdateState(): GuiUpdateState {

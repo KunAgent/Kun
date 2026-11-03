@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { RoomAvatarReference, RoomPreviewImage } from '@shared/rooms-api'
+import type { KunWardrobeDrop, RoomAvatarReference, RoomPreviewImage } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
-import { RoomAvatarComposer } from './RoomAvatarComposer'
+import { RoomAvatarComposer, editableKunAvatarParts } from './RoomAvatarComposer'
 import { RoomModal } from './RoomModal'
+import { RoomWardrobeProgress } from './RoomWardrobeProgress'
+import { markWardrobeSeen, useWardrobe, wardrobeGate, wearWardrobeDrop } from './room-wardrobe'
 import { roomsRequest } from './rooms-client'
 import { cacheRoomAvatar } from './room-uploaded-avatar'
 import './rooms-content.css'
@@ -34,8 +36,10 @@ function AvatarPickerDraft({ id, label, initial, fallback, onChange, onClose, on
   const [upload, setUpload] = useState<AvatarUpload | null>(null)
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
   const mounted = useRef(true), loadSerial = useRef(0), file = useRef<HTMLInputElement>(null)
+  const wardrobe = useWardrobe()
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   const select = (next: RoomAvatarReference | null) => { loadSerial.current++; setUpload(null); setAvatar(next); setError('') }
+  const wear = (drop: KunWardrobeDrop) => select({ kind: 'composed', version: 1, parts: wearWardrobeDrop(editableKunAvatarParts(avatar, id), drop) })
   const chooseFile = async (selected: File) => {
     const serial = ++loadSerial.current
     setBusy(true); onBusy(true); setError('')
@@ -60,7 +64,9 @@ function AvatarPickerDraft({ id, label, initial, fallback, onChange, onClose, on
     finally { if (mounted.current) { setBusy(false); onBusy(false) } }
   }
   return <div className="rooms-avatar-draft">
+    <RoomWardrobeProgress state={wardrobe} busy={busy} onWear={wear} />
     <RoomAvatarComposer id={id} label={label} avatar={avatar} disabled={busy} photo={!!upload} onChange={select}
+      wardrobe={wardrobeGate(wardrobe)} onSeen={(keys) => void markWardrobeSeen(keys).catch(() => undefined)}
       onUpload={() => file.current?.click()} preview={upload ? <img alt={t('roomsAvatarCropPreview')} src={`data:image/jpeg;base64,${upload.dataBase64}`} /> : !avatar ? fallback : undefined} />
     <input hidden ref={file} type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => {
       const selected = event.target.files?.[0]; event.target.value = ''; if (selected) void chooseFile(selected)

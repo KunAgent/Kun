@@ -49,7 +49,7 @@ function makeDeps(overrides: Partial<WorkerSelectorDeps> & {
         ? { entries: overrides.quotaEntries, refreshedAt: '2026-01-01T00:00:00.000Z' }
         : null,
     agentOrder: () => [],
-    recentFailures: async () => 0,
+    routeHealth: async () => ({ failures: 0 }),
     modelCostTier: () => 0,
     isolated: true,
     unattended: false,
@@ -132,14 +132,47 @@ describe('selectWorkerRoute', () => {
     expect(preferred.route.harnessId).toBe('kun')
   })
 
-  it('penalizes recent same-team same-harness failures', async () => {
+  it('penalizes recent same-team failures of the route', async () => {
     const deps = makeDeps({
       agentOrder: () => ['claude-code', 'kun'],
-      recentFailures: async (_teamId, harnessId) => (harnessId === 'claude-code' ? 4 : 0)
+      routeHealth: async (_teamId, route) => ({ failures: route.harnessId === 'claude-code' ? 4 : 0 })
     })
     const selection = await selectWorkerRoute(deps, baseInput)
     // claude-code: 0.5 - 1.2 < kun: 0.333
     expect(selection.route.harnessId).toBe('kun')
+  })
+
+  it('drops a role whose model was refused for this account and says why', async () => {
+    const docs: SubagentRoutingDocument[] = [{
+      kind: 'profile',
+      id: 'code-reviewer',
+      source: 'configured',
+      profile: {
+        mode: 'subagent',
+        toolPolicy: 'readOnly',
+        name: 'Code Reviewer',
+        delegationNotes: 'flaky login test review',
+        providerId: 'codex',
+        model: 'gpt-5.3-codex-spark'
+      }
+    }]
+    const routeHealth = vi.fn(async (_teamId: string, route: { model: string }) => route.model === 'gpt-5.3-codex-spark'
+      ? { failures: 2, unusable: "model request failed with status 400: The 'gpt-5.3-codex-spark' model is not supported" }
+      : { failures: 0 })
+    const selection = await selectWorkerRoute(makeDeps({ harnesses: [def('kun')], profiles: async () => docs, routeHealth }), baseInput)
+    expect(selection.route).toMatchObject({ harnessId: 'kun', model: 'deepseek-chat' })
+    expect(selection.alternatives.some((entry) => entry.route.model === 'gpt-5.3-codex-spark')).toBe(false)
+    expect(selection.reason).toMatch(/Code Reviewer unavailable: failed in this task within the last hour/)
+    // One health read per distinct route, shared by exclusion and scoring.
+    expect(routeHealth).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports refused routes when nothing else is left', async () => {
+    const deps = makeDeps({
+      harnesses: [def('kun')],
+      routeHealth: async () => ({ failures: 1, unusable: 'credentials were refused' })
+    })
+    await expect(selectWorkerRoute(deps, baseInput)).rejects.toThrow(/failed in this task within the last hour: credentials were refused/)
   })
 
   it('is deterministic for identical inputs', async () => {

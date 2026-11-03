@@ -1,0 +1,32 @@
+{
+  "composerTrayShells": {
+    "title": "คำสั่งเบื้องหลัง",
+    "ariaLabel": "คำสั่งเบื้องหลัง: {{detail}}",
+    "segmentCount_one": "คำสั่งเบื้องหลัง {{count}} รายการ",
+    "segmentCount_other": "คำสั่งเบื้องหลัง {{count}} รายการ",
+    "inBackground_one": "ทำงานเบื้องหลัง {{count}} รายการ",
+    "inBackground_other": "ทำงานเบื้องหลัง {{count}} รายการ",
+    "failedCount_one": "ล้มเหลว {{count}} รายการ",
+    "failedCount_other": "ล้มเหลว {{count}} รายการ",
+    "runningFor": "กำลังทำงานมาแล้ว {{duration}}",
+    "exitCode": "รหัสออก {{code}}",
+    "stopped": "หยุดแล้ว",
+    "endedBySignal": "สิ้นสุดด้วยสัญญาณ",
+    "failed": "ล้มเหลว",
+    "copyOutput": "คัดลอกผลลัพธ์",
+    "copied": "คัดลอกแล้ว",
+    "sendToKun": "ส่งให้ Kun",
+    "sendToKunTitle": "แนบผลลัพธ์นี้ไปที่กล่องข้อความ",
+    "sendCopiedInstead": "คัดลอกแทนแล้ว",
+    "sendUnavailable": "แนบไม่ได้",
+    "sendUnavailableTitle": "ไม่สามารถแนบผลลัพธ์นี้ไปที่กล่องข้อความได้",
+    "dismiss": "นำออก",
+    "showOutput": "แสดงผลลัพธ์ของ {{command}}",
+    "hideOutput": "ซ่อนผลลัพธ์ของ {{command}}",
+    "outputLabel": "ผลลัพธ์ของ {{command}}",
+    "outputFile": "ผลลัพธ์ทั้งหมด: {{path}}",
+    "outputTruncated": "ตัวอย่างถูกตัดทอน",
+    "noOutput": "(ยังไม่มีผลลัพธ์)",
+    "empty": "ไม่มีคำสั่งเบื้องหลัง"
+  }
+}

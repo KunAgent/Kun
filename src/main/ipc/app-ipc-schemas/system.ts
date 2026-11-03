@@ -162,6 +162,15 @@ export const clawTaskFromTextPayloadSchema = z
   })
   .strict()
 
+const scheduleTaskHarnessSchema = z.object({
+  id: z.string().trim().min(1).max(128),
+  credentialMode: z.string().trim().max(32).optional(),
+  providerId: z.string().trim().max(128).optional(),
+  model: z.string().trim().max(256).optional(),
+  accountId: z.string().trim().max(128).optional(),
+  reasoningEffort: z.string().trim().max(32).optional()
+}).strict()
+
 export const scheduleTaskCreatePayloadSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
@@ -174,6 +183,7 @@ export const scheduleTaskCreatePayloadSchema = z
     reasoningEffort: scheduleReasoningEffortSchema,
     mode: z.enum(['agent', 'plan']),
     orchestration: z.enum(['direct', 'graph']),
+    harness: scheduleTaskHarnessSchema.optional(),
     schedule: z.object({
       kind: z.literal('at'),
       atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),
@@ -188,6 +198,7 @@ export const scheduleTaskUpdatePayloadSchema = z
     providerId: z.string().trim().min(1).max(128),
     model: modelIdSchema,
     reasoningEffort: scheduleReasoningEffortSchema,
+    harness: scheduleTaskHarnessSchema.optional(),
     schedule: z.object({
       kind: z.literal('at'),
       atTime: z.string().datetime().refine((value) => Date.parse(value) > Date.now(), 'Execution time must be in the future.'),
@@ -274,7 +285,7 @@ export const terminalCreatePayloadSchema = z
     cols: z.number().int().min(1).max(TERMINAL_MAX_COLS).optional(),
     rows: z.number().int().min(1).max(TERMINAL_MAX_ROWS).optional(),
     /**
-     * ADE terminal agent (docs/ade/05 §6.1): registers an execution unit in
+     * ADE terminal agent: registers an execution unit in
      * kun, injects callback tokens into the PTY env, and reports exit.
      */
     agent: z
@@ -284,9 +295,16 @@ export const terminalCreatePayloadSchema = z
         task: z.string().max(8_192).optional(),
         taskWorkspaceId: trimmedString(256).optional(),
         parentThreadId: trimmedString(256).optional(),
-        workspaceKind: z.enum(['worktree', 'local', 'directory']).optional()
+        workspaceKind: z.enum(['worktree', 'local', 'directory']).optional(),
+        report: z.boolean().optional()
       })
       .strict()
+      .optional(),
+    shell: optionalTrimmedString(1_024),
+    shellIntegration: z.boolean().optional(),
+    env: z
+      .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/), z.string().max(4_096))
+      .refine((value) => Object.keys(value).length <= 16, 'Too many environment entries')
       .optional()
   })
   .strict()

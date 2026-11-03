@@ -8,7 +8,7 @@ export const WRITE_RIGHT_PANEL_IDS = [
   'outline',
   'review',
   'references',
-  'history',
+  'papers',
   'subagents',
   'mcpSkills',
   'usage'

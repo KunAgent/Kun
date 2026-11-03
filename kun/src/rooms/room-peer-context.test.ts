@@ -45,10 +45,10 @@ function parsedReference(prompt: string) {
 }
 
 describe('peer response context', () => {
-  it('uses a conservative budget for an unregistered model and retains the oldest pending update', async () => {
+  it('gives an unregistered model the full budget and still retains the oldest pending update', async () => {
     const f = await fixture(undefined, 'unknown-peer-model')
     const request = (await f.store.get<RoomRequestState>('request', f.sent.requestId))!.value
-    expect(roomBaseContextBudget(f.deps, request)).toBe(8000)
+    expect(roomBaseContextBudget(f.deps, request)).toBe(16000)
     const updates = (await f.peer.readUpdates(f.sent.requestId, 'developer'))!
     const items = Array.from({ length: 12 }, (_, index) => ({ ...updates.items[0], id: 'unknown-' + index,
       value: { ...updates.items[0].value, sourceId: 'source-' + index, body: 'u'.repeat(1500) } }))

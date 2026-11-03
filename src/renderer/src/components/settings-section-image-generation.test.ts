@@ -100,7 +100,7 @@ describe('ImageGenerationSettingsSection', () => {
     expect(html).toContain('value="240000"')
   })
 
-  it('uses the media generation tab for image generation settings', () => {
+  it('keeps media generation with the model pages and no separate image entry', () => {
     const html = renderToStaticMarkup(createElement(SettingsSidebar, {
       category: 'mediaGeneration',
       goBack: () => undefined,
@@ -108,14 +108,13 @@ describe('ImageGenerationSettingsSection', () => {
       t
     }))
 
-    const workIndex = html.indexOf('Work')
-    const mediaIndex = html.indexOf('Media generation')
-    const imageIndex = html.indexOf('Image generation')
-    const agentsIndex = html.indexOf('AI assistant')
-    expect(workIndex).toBeGreaterThanOrEqual(0)
-    expect(mediaIndex).toBeGreaterThan(workIndex)
-    expect(imageIndex).toBe(-1)
-    expect(agentsIndex).toBeGreaterThan(mediaIndex)
+    const modelsGroup = html.slice(
+      html.indexOf('id="settings-nav-group-models"'),
+      html.indexOf('id="settings-nav-group-assistant"')
+    )
+    const order = [...modelsGroup.matchAll(/data-settings-category="([A-Za-z]+)"/g)].map((match) => match[1])
+    expect(order).toEqual(['providers', 'gateway', 'speechToText', 'mediaGeneration'])
+    expect(html.indexOf('Image generation')).toBe(-1)
   })
 
   it('shows Agent Plan Seedream models and only its native 2K through 4K resolutions', () => {

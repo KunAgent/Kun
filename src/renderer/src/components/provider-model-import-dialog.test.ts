@@ -292,3 +292,17 @@ describe('ProviderModelImportDialog', () => {
     expect(html).toContain('disabled=""')
   })
 })
+
+it('labels preset fallback candidates without claiming provider API verification', () => {
+  const html = renderToStaticMarkup(createElement(ProviderModelImportDialog, {
+    provider: provider(), providerModelIds: ['candidate-model'], catalogResult: catalog([]),
+    discoverySource: 'preset', t: (key, params) => ({
+      'providerConfiguration.discoverypresetBadge': 'Preset candidate',
+      'providerConfiguration.discoverypresetCount': 'Preset candidates',
+      'providerConfiguration.candidateModelsHint': 'Account access is unverified'
+    } as Record<string, string>)[key] ?? t(key, params), onCancel: () => {}, onConfirm: async () => {}
+  }))
+  expect(html).toContain('Preset candidate')
+  expect(html).toContain('Account access is unverified')
+  expect(html).not.toContain('Provider API')
+})

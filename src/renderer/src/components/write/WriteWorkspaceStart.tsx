@@ -15,7 +15,6 @@ import {
   Table2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 
 export function WriteWorkspaceStart({
   onAskAssistant,
@@ -32,7 +31,7 @@ export function WriteWorkspaceStart({
   onAskAssistant: (prompt: string) => void
   onCreateDraft: () => void
   onCreateWhiteboard?: () => void
-  /** Opens the paper import dialog (§6.1 读论文 starter). */
+  /** Opens the paper import dialog. */
   onImportPaper?: () => void
   onPickWorkspace: () => void
   onRefreshWorkspace: () => void
@@ -42,7 +41,6 @@ export function WriteWorkspaceStart({
   onboarding?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
-  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
   const officeStarters = [
     { label: t('writeStarterSummarize'), prompt: t('writeStarterSummarizePrompt'), icon: FileText },
     { label: t('writeStarterPdf'), prompt: t('writeStarterPdfPrompt'), icon: MessageSquareQuote },
@@ -50,7 +48,7 @@ export function WriteWorkspaceStart({
     { label: t('writeStarterPresentation'), prompt: t('writeStarterPresentationPrompt'), icon: Presentation }
   ]
   return (
-    <div className="write-start-shell relative h-full min-h-[420px] overflow-auto rounded-[28px] bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(247,250,255,0.62))] p-[clamp(1.25rem,4.5cqw,2rem)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))]">
+    <div className="write-start-shell relative h-full min-h-0 min-w-0 flex-1 overflow-auto rounded-[28px] bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(247,250,255,0.62))] p-[clamp(1.25rem,4.5cqw,2rem)] dark:bg-[linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.025))]">
       <div className="write-start-grid mx-auto grid min-h-full w-full max-w-6xl gap-6">
         <section className="write-start-hero min-w-0 py-4">
           <div className="inline-flex items-center gap-2 rounded-full border border-accent/15 bg-accent/10 px-3 py-1.5 text-[12px] font-semibold text-accent">
@@ -115,7 +113,7 @@ export function WriteWorkspaceStart({
                   className="flex min-h-11 items-center gap-2 rounded-xl border border-accent/20 bg-accent/[0.055] px-3 py-2 text-left text-[12.5px] font-medium text-accent transition hover:bg-accent/10"
                 >
                   <GraduationCap className="h-4 w-4 shrink-0" strokeWidth={1.9} />
-                  <span>{t(workSurface === 'papers' ? 'writePaperStarter' : 'writePaperModeEnter')}</span>
+                  <span>{t('writePaperStarter')}</span>
                 </button>
               ) : null}
               {officeStarters.map(({ label, prompt, icon: StarterIcon }) => (

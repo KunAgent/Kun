@@ -12,6 +12,7 @@ import { RevisionedDocumentStore } from './revisioned-document-store.js'
 import { buildServiceManagerRouter } from './service-manager-router.js'
 import {
   reconcileVerifiedForcedRuntimeRecovery,
+  KUN_MANAGER_CAPABILITIES,
   ServiceManagerState,
   type ServiceManagerHandle
 } from './service-manager-state.js'
@@ -86,7 +87,7 @@ export async function startServiceManager(input: {
     onPermanentFailure: () => deferShutdown()
   })
   state.onMutation(() => {
-    stateQueue.enqueue(state.durableSnapshot())
+    stateQueue.enqueue(() => state.durableSnapshot())
   })
   const flushState = async () => {
     await stateQueue.flush()
@@ -205,6 +206,7 @@ export async function startServiceManager(input: {
       baseUrl: `http://${server.host}:${server.port}`,
       managerToken: input.managerToken,
       serviceVersion: KUN_VERSION,
+      capabilities: [...KUN_MANAGER_CAPABILITIES],
       ...(input.buildId ? { buildId: input.buildId } : {}),
       ...(input.appOwner ? { appOwner: input.appOwner } : {}),
       dataDir: input.dataDir,

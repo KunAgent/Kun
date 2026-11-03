@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 2,
+  "id": "magpie",
+  "name": "Magpie",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "credentialRequirement": "optional",
+  "baseUrl": "http://127.0.0.1:3425/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://usemagpie.ai/docs",
+  "credentialUrl": "https://usemagpie.ai/docs",
+  "origin": "local",
+  "endpoints": {
+    "chat_completions": "http://127.0.0.1:3425/v1",
+    "responses": "http://127.0.0.1:3425/v1",
+    "messages": "http://127.0.0.1:3425"
+  }
+}

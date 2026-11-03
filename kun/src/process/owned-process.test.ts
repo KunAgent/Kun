@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  beginOwnedProcessShutdown, resumeOwnedProcessAdmission,
-  shutdownOwnedProcesses, spawnOwnedProcess, stopOwnedProcess
+  beginOwnedProcessShutdown, OWNED_PROCESS_GUARD_IDLE_RETIRE_MS, resumeOwnedProcessAdmission,
+  setOwnedProcessGuardIdleRetireMs, shutdownOwnedProcesses, spawnOwnedProcess, stopOwnedProcess
 } from './owned-process.js'
 import { OWNED_PROCESS_GUARD_SOURCE } from './owned-process-guard.js'
 
@@ -15,6 +15,14 @@ const fixturePids = new Set<number>()
 
 function alive(pid: number): boolean {
   try { process.kill(pid, 0); return true } catch { return false }
+}
+
+function fixtureOwnerEnvironment(): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  // These fixtures explicitly test their own parent process as the owner.
+  delete env.KUN_PROCESS_STACK_OWNER_PID
+  delete env.KUN_PROCESS_STACK_OWNER_BIRTH
+  return env
 }
 
 async function waitUntil(predicate: () => boolean | Promise<boolean>, timeoutMs = 5000): Promise<void> {
@@ -111,21 +119,23 @@ describe.skipIf(process.platform === 'win32')('POSIX owned process containment',
       const {spawn}=require('node:child_process');
       const guard=spawn(process.execPath,['-e',${JSON.stringify(OWNED_PROCESS_GUARD_SOURCE)}],
         {stdio:['ignore','ignore','ignore','ipc'],detached:true});
-      let target;
+      let target, scopeOwnerPid;
       guard.on('message',message=>{
         if(message.ready){
+          scopeOwnerPid=message.scopeOwnerPid;
           target=spawn(process.execPath,['-e','setInterval(()=>{},1000)'],{detached:true,stdio:'ignore'});
           target.once('spawn',()=>guard.send({type:'register',id:1,pid:target.pid,ownerLossGraceMs:800}));
         }else if(message.id===1){
           guard.disconnect();
-          process.send({target:target.pid,guard:guard.pid});
+          process.send({target:target.pid,guard:guard.pid,scopeOwnerPid});
         }
       });
-    `], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+    `], { env: fixtureOwnerEnvironment(), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
     fixtures.push(parent)
-    const message = await new Promise<{ target: number; guard: number }>((resolve) => parent.once('message', resolve))
+    const message = await new Promise<{ target: number; guard: number; scopeOwnerPid: number }>((resolve) => parent.once('message', resolve))
     fixturePids.add(message.target)
     fixturePids.add(message.guard)
+    expect(message.scopeOwnerPid).toBe(parent.pid)
     // A lost channel is not proof of owner death: the stack must stay up.
     await new Promise((resolve) => setTimeout(resolve, 1500))
     expect(alive(message.target)).toBe(true)
@@ -133,6 +143,26 @@ describe.skipIf(process.platform === 'win32')('POSIX owned process containment',
     // Only a confirmed owner death brings the supervised group down.
     parent.kill('SIGKILL')
     await waitUntil(() => !alive(message.target) && !alive(message.guard), 8000)
+  }, 20_000)
+
+  it('retires an idle guard once no group remains and starts a fresh one for the next launch', async () => {
+    setOwnedProcessGuardIdleRetireMs(200)
+    try {
+      const first = await spawnOwnedProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'])
+      fixturePids.add(first.pid!)
+      const idleGuard = guardPid()
+      await new Promise((resolve) => setTimeout(resolve, 400))
+      // A live group keeps its guard.
+      expect(alive(idleGuard)).toBe(true)
+      await stopOwnedProcess(first, { graceMs: 50, timeoutMs: 3000 })
+      await waitUntil(() => !alive(idleGuard), 5000)
+      const second = await spawnOwnedProcess(process.execPath, ['-e', 'setInterval(()=>{},1000)'])
+      fixturePids.add(second.pid!)
+      expect(alive(second.pid!)).toBe(true)
+      expect(guardPid()).not.toBe(idleGuard)
+    } finally {
+      setOwnedProcessGuardIdleRetireMs(OWNED_PROCESS_GUARD_IDLE_RETIRE_MS)
+    }
   })
 
   it('starts a fresh guard for the next launch after the guard process dies', async () => {
@@ -152,24 +182,26 @@ describe.skipIf(process.platform === 'win32')('POSIX owned process containment',
       const {spawn}=require('node:child_process');
       const guard=spawn(process.execPath,['-e',${JSON.stringify(OWNED_PROCESS_GUARD_SOURCE)}],
         {stdio:['ignore','ignore','inherit','ipc'],detached:true});
-      let target;
+      let target, scopeOwnerPid;
       guard.on('message',message=>{
         if(message.ready){
+          scopeOwnerPid=message.scopeOwnerPid;
           target=spawn('/bin/sh',['-c','read token <&3 || exit 125; exec "$@"','fixture',
             process.execPath,'-e','setInterval(()=>{},1000)'],{detached:true,stdio:['ignore','ignore','ignore','pipe']});
           target.once('spawn',()=>guard.send({type:'register',id:1,pid:target.pid,ownerLossGraceMs:800}));
         }else if(message.id===1){
           target.stdio[3].end('start\\n');
-          process.send({target:target.pid,guard:guard.pid});
+          process.send({target:target.pid,guard:guard.pid,scopeOwnerPid});
         }
       });
-    `], { stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
+    `], { env: fixtureOwnerEnvironment(), stdio: ['ignore', 'ignore', 'pipe', 'ipc'] })
     fixtures.push(parent)
-    const message = await new Promise<{ target: number; guard: number }>((resolve) => parent.once('message', resolve))
+    const message = await new Promise<{ target: number; guard: number; scopeOwnerPid: number }>((resolve) => parent.once('message', resolve))
     fixturePids.add(message.target)
     fixturePids.add(message.guard)
+    expect(message.scopeOwnerPid).toBe(parent.pid)
     process.kill(message.target, 'SIGSTOP')
     parent.kill('SIGKILL')
     await waitUntil(() => !alive(message.target) && !alive(message.guard), 5000)
-  })
+  }, 20_000)
 })

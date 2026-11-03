@@ -10,10 +10,9 @@ import { ROOM_PEER_HOLD_LIMITS, type RoomPeerActivation, type RoomPeerMemberStat
   type RoomPeerInboxItem } from './room-peer-types.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from './room-ax-surfaces.js'
+import { roomPeerStoreBinding } from './room-peer-store-binding.js'
+export { roomPeerStoreBinding, bindRoomPeerStore } from './room-peer-store-binding.js'
 
-const bindings = new WeakMap<ThreadStore, RoomStore>()
-export function roomPeerStoreBinding(threads: ThreadStore) { return bindings.get(threads) }
-export function bindRoomPeerStore(threads: ThreadStore, store: RoomStore) { bindings.set(threads, store) }
 
 export type CurrentPeerActivation = {
   thread: ThreadRecord
@@ -29,7 +28,7 @@ export type CurrentPeerActivation = {
  */
 export async function assertCurrentPeerActivation(threads: ThreadStore, context: ToolHostContext): Promise<CurrentPeerActivation> {
   const thread = await (threads.getMetadata?.(context.threadId) ?? threads.get(context.threadId))
-  const room = thread?.roomContext, store = bindings.get(threads)
+  const room = thread?.roomContext, store = roomPeerStoreBinding(threads)
   if (!thread || !store || !room?.rootRequestId || room.collaborationProtocol !== 'peer' || room.kind !== 'discussion' ||
     !thread.turns.some((turn) => turn.id === context.turnId)) throw new Error('peer room scope required')
   const topic = await store.get<RoomPeerTopic>('peer_topic', room.rootRequestId)

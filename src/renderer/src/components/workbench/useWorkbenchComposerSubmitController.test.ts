@@ -564,12 +564,11 @@ describe('useWorkbenchComposerSubmitController', () => {
         }
       }
     }
-    useWriteWorkspaceStore.setState({
-      assistantModel: 'gpt-5.4',
-      assistantProviderId: 'codex-2'
-    })
+    // Work runs on the composer's (Code's) selection, not a Work-only model.
     const controller = useWorkbenchComposerSubmitController(controllerParams({
       input: 'polish it',
+      composerModel: 'gpt-5.4',
+      composerProviderId: 'codex-2',
       composerModelGroups: [modelGroup],
       composerFastMode: true,
       sendMessage
@@ -580,7 +579,10 @@ describe('useWorkbenchComposerSubmitController', () => {
     await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledWith(
       expect.any(String),
       'agent',
-      expect.objectContaining({ serviceTier: 'priority' })
+      expect.objectContaining({ serviceTier: 'priority', agentSurface: 'write', useComposerAgent: true })
     ))
+    const overrides = (sendMessage.mock.calls[0] as unknown[])[2] as Record<string, unknown>
+    expect(overrides).not.toHaveProperty('model')
+    expect(overrides).not.toHaveProperty('providerId')
   })
 })

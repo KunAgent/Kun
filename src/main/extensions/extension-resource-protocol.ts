@@ -1,3 +1,4 @@
+import { KUN_EXTENSION_PRIVILEGED_SCHEME } from '../privileged-schemes'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { extname, posix, resolve, sep } from 'node:path'
 import type { Protocol } from 'electron'
@@ -43,17 +44,7 @@ export type ExtensionResourceDescriptorResolver = (
 type SchemeRegistrar = Pick<Protocol, 'registerSchemesAsPrivileged'>
 type ProtocolHandler = Pick<Protocol, 'handle' | 'unhandle'>
 
-export const KUN_EXTENSION_PRIVILEGED_SCHEME = {
-  scheme: KUN_EXTENSION_SCHEME,
-  privileges: {
-    standard: true,
-    secure: true,
-    supportFetchAPI: true,
-    corsEnabled: false,
-    bypassCSP: false,
-    stream: true
-  }
-} as const
+export { KUN_EXTENSION_PRIVILEGED_SCHEME } from '../privileged-schemes'
 
 export function registerKunExtensionSchemeAsPrivileged(protocol: SchemeRegistrar): void {
   protocol.registerSchemesAsPrivileged([KUN_EXTENSION_PRIVILEGED_SCHEME])

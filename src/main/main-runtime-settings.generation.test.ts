@@ -110,6 +110,9 @@ vi.mock('./managed-runtime-startup-policy', () => ({
 vi.mock('./runtime/managed-runtime-idle', () => ({
   waitForRuntimeTurnsIdle: vi.fn(async () => 'idle')
 }))
+vi.mock('./runtime/model-connection-globals-sync', () => ({
+  syncModelConnectionGlobals: vi.fn(async () => undefined)
+}))
 vi.mock('./runtime/native-agent-network', () => ({
   resolveNativeAgentNetworkSnapshot: vi.fn(async () => ({ codex: { source: 'direct' } }))
 }))

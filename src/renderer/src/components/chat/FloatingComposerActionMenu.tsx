@@ -10,10 +10,10 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import {
+  Blocks,
   Bot,
   Check,
-  ChevronDown,
-  ChevronUp,
+  ChevronRight,
   CircleHelp,
   CircleSlash,
   FileText,
@@ -24,6 +24,7 @@ import {
   Paperclip,
   Settings2,
   Share2,
+  Sparkles,
   Target,
   UserRound,
   Users
@@ -31,8 +32,12 @@ import {
 import { LucideIconByName } from '../lucide-icon-by-name'
 import { bodyZoom } from '../../lib/body-zoom'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
+import {
+  ComposerActionFlyout, OPEN_PLUGINS_EVENT, useComposerPluginItems,
+  type ComposerFlyoutItem, type ComposerFlyoutKind
+} from './FloatingComposerActionFlyout'
 
-const ACTION_MENU_WIDTH = 224
+const ACTION_MENU_WIDTH = 236
 const ACTION_MENU_MAX_HEIGHT = 440
 const ACTION_MENU_ESTIMATED_HEIGHT = 320
 const ACTION_MENU_MARGIN = 12
@@ -53,7 +58,7 @@ function clamp(value: number, min: number, max: number): number {
 
 export function calculateActionMenuPlacement({
   buttonRect,
-  shellRect,
+  anchorRect,
   menuHeight,
   viewportWidth,
   preferredWidth = ACTION_MENU_WIDTH,
@@ -63,7 +68,7 @@ export function calculateActionMenuPlacement({
   coordinateScale = 1
 }: {
   buttonRect: Pick<DOMRect, 'left' | 'right'>
-  shellRect: Pick<DOMRect, 'top'>
+  anchorRect: Pick<DOMRect, 'top'>
   menuHeight: number
   viewportHeight?: number
   viewportWidth: number
@@ -79,7 +84,7 @@ export function calculateActionMenuPlacement({
     left: buttonRect.left / scale,
     right: buttonRect.right / scale
   }
-  const anchorTop = shellRect.top / scale
+  const anchorTop = anchorRect.top / scale
   const width = Math.min(preferredWidth, Math.max(1, viewportWidthNormalized - margin * 2))
   const left = clamp(
     button.left,
@@ -97,7 +102,7 @@ export function calculateActionMenuPlacement({
 export function calculatePersonaMenuPlacement({
   triggerRect,
   parentMenuRect,
-  shellRect,
+  anchorRect,
   menuHeight,
   viewportWidth,
   preferredWidth = ACTION_MENU_WIDTH,
@@ -108,7 +113,7 @@ export function calculatePersonaMenuPlacement({
 }: {
   triggerRect: Pick<DOMRect, 'top'>
   parentMenuRect: Pick<DOMRect, 'left' | 'right'>
-  shellRect: Pick<DOMRect, 'top'>
+  anchorRect: Pick<DOMRect, 'top'>
   menuHeight: number
   viewportWidth: number
   preferredWidth?: number
@@ -131,7 +136,7 @@ export function calculatePersonaMenuPlacement({
     : leftSideLeft >= margin
       ? leftSideLeft
       : clamp(parentMenu.left, margin, Math.max(margin, viewportWidthNormalized - margin - width))
-  const anchorTop = shellRect.top / scale
+  const anchorTop = anchorRect.top / scale
   const availableHeight = Math.max(0, anchorTop - margin - gap)
   const maxHeight = Math.min(maximumHeight, availableHeight)
   const visibleHeight = Math.min(Math.max(0, menuHeight), maxHeight)
@@ -141,7 +146,17 @@ export function calculatePersonaMenuPlacement({
   return { left, top, width, maxHeight }
 }
 
-const rowClass = 'ds-no-drag flex min-h-8 w-full items-center gap-2 px-3 py-1.5 text-left transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent disabled:hover:text-ds-muted'
+const rowClass = 'ds-no-drag group flex h-8 w-full items-center gap-2.5 rounded-[9px] px-2.5 text-left text-[13px] text-ds-ink transition-colors hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent'
+const iconClass = 'h-4 w-4 shrink-0 text-ds-ink'
+
+type AttachTile = {
+  key: string
+  Icon: typeof FileText
+  spin?: boolean
+  label: string
+  disabled: boolean
+  onClick: () => void
+}
 
 export function FloatingComposerActionMenu({
   context
@@ -152,15 +167,22 @@ export function FloatingComposerActionMenu({
     attachmentUploadBusy, attachmentUploadEnabled, busy, canCompose, canOpenGoalPanel,
     canPickAttachment, canPickDesignReference, canPickFileReference, canPickLocalFileReference,
     canToggleAutoPlanBuildMode, canToggleGraphMode, canTogglePlanMode, codeAgentPresets, composerMenuButtonRef,
-    composerMenuOpen, composerMenuPanelRef, composerPersonaId, composerShellRef,
+    composerMenuOpen, composerMenuPanelRef, composerPersonaId,
     fileReferenceEnabled, graphEnabled, handleAttachmentMenuClick, handleDesignReferenceMenuClick,
     handleFileReferenceMenuClick, handleGoalMenuClick, handleGraphToolbarClick,
     handleLocalFileReferenceMenuClick, handleAutoPlanBuildToolbarClick, handlePlanToolbarClick, mode, onComposerPersonaChange,
     onPickAttachments, openSettings, orchestration, resolvedCodeAgentPresets,
     setComposerMenuOpen, showAutoPlanBuildMenuOption, showGoalMenuOption, showGraphMenuOption, showPlanMenuOption, t,
-    collaborationAvailable, collaborationEnabled, collaborationBusy, collaborationError, toggleCollaboration
+    collaborationAvailable, collaborationEnabled, collaborationBusy, collaborationError, toggleCollaboration,
+    onOpenFileReferencePicker, onOpenDesignReferencePicker
   } = context
   const [personaOpen, setPersonaOpen] = useState(false)
+  const [flyout, setFlyout] = useState<ComposerFlyoutKind | null>(null)
+  const flyoutTriggerRef = useRef<HTMLButtonElement | null>(null)
+  const pluginItems = useComposerPluginItems(
+    composerMenuOpen && flyout === 'plugins',
+    String(context.effectiveWorkspaceRoot ?? '')
+  )
   const [style, setStyle] = useState<CSSProperties>({ visibility: 'hidden' })
   const [personaStyle, setPersonaStyle] = useState<CSSProperties>({ visibility: 'hidden' })
   const initialFocusAppliedRef = useRef(false)
@@ -170,11 +192,10 @@ export function FloatingComposerActionMenu({
 
   const updatePosition = useCallback((): void => {
     const buttonRect = composerMenuButtonRef.current?.getBoundingClientRect()
-    const composerRect = composerShellRef.current?.getBoundingClientRect()
-    if (!buttonRect || !composerRect) return
+    if (!buttonRect) return
     const placement = calculateActionMenuPlacement({
       buttonRect,
-      shellRect: composerRect,
+      anchorRect: buttonRect,
       menuHeight: mainMenuRef.current?.offsetHeight ?? ACTION_MENU_ESTIMATED_HEIGHT,
       viewportWidth: window.innerWidth,
       coordinateScale: bodyZoom()
@@ -190,7 +211,7 @@ export function FloatingComposerActionMenu({
     const personaPlacement = calculatePersonaMenuPlacement({
       triggerRect,
       parentMenuRect,
-      shellRect: composerRect,
+      anchorRect: buttonRect,
       menuHeight: personaMenuRef.current?.offsetHeight ?? PERSONA_MENU_ESTIMATED_HEIGHT,
       viewportWidth: window.innerWidth,
       coordinateScale: bodyZoom()
@@ -199,7 +220,7 @@ export function FloatingComposerActionMenu({
       ...personaPlacement,
       visibility: personaPlacement.maxHeight > 0 ? 'visible' : 'hidden'
     })
-  }, [composerMenuButtonRef, composerShellRef, personaOpen])
+  }, [composerMenuButtonRef, personaOpen])
 
   useEffect(() => {
     if (!canCompose) setPersonaOpen(false)
@@ -253,6 +274,7 @@ export function FloatingComposerActionMenu({
     if (!composerMenuOpen) {
       initialFocusAppliedRef.current = false
       setPersonaOpen(false)
+      setFlyout(null)
       return
     }
     updatePosition()
@@ -288,6 +310,28 @@ export function FloatingComposerActionMenu({
     close(true)
   }
 
+  const skillCommands = (context.skillCommands ?? []) as Array<{ id: string; name: string; description?: string }>
+  const disabledSkills = new Set(((context.disabledSkillIds ?? []) as string[]).map((id) => id.trim().toLowerCase()))
+  const skillItems: ComposerFlyoutItem[] = skillCommands
+    .filter((skill) => skill.id.trim() && skill.name.trim() && !disabledSkills.has(skill.id.trim().toLowerCase()))
+    .map((skill) => ({ id: skill.id, name: skill.name, description: skill.description ?? '' }))
+  const flyoutKinds: ComposerFlyoutKind[] = context.route === 'claw' || context.side ? [] : ['plugins', 'skills']
+
+  const attachTiles: AttachTile[] = [
+    ...(fileReferenceEnabled ? [
+      { key: 'files', Icon: FileText, label: t('composerAddLocalFiles'), disabled: !canPickLocalFileReference, onClick: handleLocalFileReferenceMenuClick },
+      // Surfaces without a file panel (Work) reference files with @ and the picker above.
+      ...(onOpenFileReferencePicker ? [{ key: 'workspace', Icon: Paperclip, label: t('composerBrowseWorkspaceFiles'), disabled: !canPickFileReference, onClick: handleFileReferenceMenuClick }] : []),
+      ...(onOpenDesignReferencePicker ? [{ key: 'design', Icon: Folder, label: t('composerBrowseDesignDocs'), disabled: !canPickDesignReference, onClick: handleDesignReferenceMenuClick }] : [])
+    ] : []),
+    ...(attachmentUploadEnabled ? [{ key: 'image', Icon: attachmentUploadBusy ? Loader2 : ImagePlus, spin: attachmentUploadBusy, label: t('composerAddImage'), disabled: !canPickAttachment || !onPickAttachments, onClick: handleAttachmentMenuClick }] : [])
+  ]
+  const showCollaboration = context.route === 'chat' && context.taskSurface === 'code' && !context.side
+  const hasModes = showPlanMenuOption || showAutoPlanBuildMenuOption || showGraphMenuOption || showGoalMenuOption || showCollaboration
+  const graphLabel = context.busy
+    ? t('graphModeNextTurnGraph', { defaultValue: 'Next turn: Graph' })
+    : t('graphModeGraph', { defaultValue: 'Graph' })
+
   const menu = (
     <div
       ref={mainMenuRef}
@@ -296,48 +340,25 @@ export function FloatingComposerActionMenu({
       aria-label={t('composerMenuTitle')}
       style={style}
       onKeyDown={handleMenuKeyDown}
-      className="ds-composer-action-menu fixed z-50 box-border overflow-y-auto rounded-[18px] border border-ds-border bg-white py-1.5 text-[13px] text-ds-muted shadow-[0_18px_52px_rgba(15,23,42,0.18)] dark:bg-ds-card"
+      className="ds-composer-action-menu kun-menu-pop fixed z-50 box-border overflow-y-auto rounded-[14px] border border-ds-border-muted bg-white p-1 text-[13px] text-ds-ink shadow-[var(--kun-shadow-lift)] [scrollbar-width:none] dark:bg-ds-card"
     >
-      {fileReferenceEnabled ? (
-        <>
-          <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickLocalFileReference} onClick={handleLocalFileReferenceMenuClick} className={rowClass}>
-            <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-            <span className="min-w-0 flex-1 truncate">{t('composerAddLocalFiles')}</span>
-          </button>
-          <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickFileReference} onClick={handleFileReferenceMenuClick} className={rowClass}>
-            <Paperclip className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-            <span className="min-w-0 flex-1 truncate">{t('composerBrowseWorkspaceFiles')}</span>
-          </button>
-          <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickDesignReference} onClick={handleDesignReferenceMenuClick} className={rowClass}>
-            <Folder className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-            <span className="min-w-0 flex-1 truncate">{t('composerBrowseDesignDocs')}</span>
-          </button>
-        </>
-      ) : null}
-      {attachmentUploadEnabled ? (
-        <>
-          {fileReferenceEnabled ? <div className="my-1 h-px bg-ds-border-muted/70" /> : null}
-          <button role="menuitem" tabIndex={-1} type="button" disabled={!canPickAttachment || !onPickAttachments} onClick={handleAttachmentMenuClick} className={rowClass}>
-            {attachmentUploadBusy
-              ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" strokeWidth={1.9} />
-              : <ImagePlus className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />}
-            <span className="min-w-0 flex-1 truncate">{t('composerAddImage')}</span>
-          </button>
-        </>
-      ) : null}
-      {(fileReferenceEnabled || attachmentUploadEnabled) && (showPlanMenuOption || showAutoPlanBuildMenuOption || showGraphMenuOption || showGoalMenuOption || personaAvailable)
-        ? <div className="my-1 h-px bg-ds-border-muted/70" />
-        : null}
+      {attachTiles.map(({ key, Icon, spin, label, disabled, onClick }) => (
+        <button key={key} role="menuitem" tabIndex={-1} type="button" disabled={disabled} onClick={onClick} data-composer-attach-item={key} className={rowClass}>
+          <Icon className={`${iconClass} ${spin ? 'animate-spin' : ''}`} strokeWidth={1.8} />
+          <span className="min-w-0 flex-1 truncate">{label}</span>
+        </button>
+      ))}
+      {attachTiles.length > 0 && hasModes ? <MenuDivider /> : null}
       {showPlanMenuOption ? (
         <button role="menuitem" tabIndex={-1} type="button" data-composer-plan-menu-item disabled={!canTogglePlanMode} onClick={handlePlanToolbarClick} className={rowClass}>
-          <ListTodo className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+          <ListTodo className={iconClass} strokeWidth={1.8} />
           <span className="min-w-0 flex-1 truncate">{t('composerMenuPlanMode')}</span>
           <MenuSwitch checked={mode === 'plan'} />
         </button>
       ) : null}
       {showAutoPlanBuildMenuOption ? (
         <button role="menuitem" tabIndex={-1} type="button" data-composer-auto-plan-build-menu-item disabled={!canToggleAutoPlanBuildMode} onClick={handleAutoPlanBuildToolbarClick} className={rowClass}>
-          <Bot className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+          <Bot className={iconClass} strokeWidth={1.8} />
           <span className="min-w-0 flex-1 truncate">{t('composerMenuAutoPlanBuild')}</span>
           <MenuSwitch checked={mode === 'auto'} />
         </button>
@@ -350,9 +371,7 @@ export function FloatingComposerActionMenu({
           data-composer-graph-menu-item
           disabled={!canToggleGraphMode}
           onClick={handleGraphToolbarClick}
-          aria-label={context.busy
-            ? t('graphModeNextTurnGraph', { defaultValue: 'Next turn: Graph' })
-            : t('graphModeGraph', { defaultValue: 'Graph' })}
+          aria-label={graphLabel}
           title={context.busy
             ? t('graphModeNextTurnHint', {
                 defaultValue: 'Controls the next turn and cannot change the turn already running'
@@ -366,18 +385,20 @@ export function FloatingComposerActionMenu({
                 })}
           className={rowClass}
         >
-          <Share2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-          <span className="min-w-0 flex-1 truncate">
-            {context.busy
-              ? t('graphModeNextTurnGraph', { defaultValue: 'Next turn: Graph' })
-              : t('graphModeGraph', { defaultValue: 'Graph' })}
-          </span>
+          <Share2 className={iconClass} strokeWidth={1.8} />
+          <span className="min-w-0 flex-1 truncate">{graphLabel}</span>
           <MenuSwitch checked={mode === 'agent' && orchestration === 'graph'} />
         </button>
       ) : null}
-      {context.route === 'chat' && context.taskSurface === 'code' && !context.side ? (
+      {showGoalMenuOption ? (
+        <button role="menuitem" tabIndex={-1} type="button" data-composer-goal-menu-item disabled={!canOpenGoalPanel} onClick={handleGoalMenuClick} className={rowClass}>
+          <Target className={iconClass} strokeWidth={1.8} />
+          <span className="min-w-0 flex-1 truncate">{t('composerMenuPursueGoal')}</span>
+          <MenuSwitch checked={Boolean(context.goalMenuChecked)} />
+        </button>
+      ) : null}
+      {showCollaboration ? (
         <>
-          <div className="my-1 h-px bg-ds-border-muted/70" />
           <button
             role="menuitem"
             tabIndex={-1}
@@ -387,64 +408,119 @@ export function FloatingComposerActionMenu({
               close(false)
               void toggleCollaboration()
             }}
+            title={collaborationEnabled ? t('codeCollaborationDisable') : undefined}
             className={rowClass}
             data-composer-collaboration-menu-item
           >
-            <Users className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+            <Users className={iconClass} strokeWidth={1.8} />
             <span className="min-w-0 flex-1 truncate">
-              {!collaborationAvailable
-                ? t('codeCollaborationSetup')
-                : collaborationEnabled
-                  ? t('codeCollaborationDisable')
-                  : t('codeCollaborationEnable')}
+              {collaborationAvailable ? t('codeCollaborationEnable') : t('codeCollaborationSetup')}
             </span>
-            {collaborationEnabled ? <Check className="h-3.5 w-3.5" strokeWidth={2} /> : null}
+            {collaborationBusy
+              ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-ds-faint" strokeWidth={1.9} />
+              : collaborationAvailable
+                ? <MenuSwitch checked={collaborationEnabled} />
+                : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />}
           </button>
           {collaborationError ? (
-            <p role="status" className="px-3 pb-1 text-[11px] text-ds-status-warning">
+            <p role="status" className="px-2.5 pb-1 text-[11px] leading-snug text-ds-status-warning">
               {collaborationError}
             </p>
           ) : null}
         </>
       ) : null}
-      {showGoalMenuOption ? (
-        <button role="menuitem" tabIndex={-1} type="button" data-composer-goal-menu-item disabled={!canOpenGoalPanel} onClick={handleGoalMenuClick} className={rowClass}>
-          <Target className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-          <span className="min-w-0 flex-1 truncate">{t('composerMenuPursueGoal')}</span>
-          <MenuSwitch checked={Boolean(context.goalMenuChecked)} />
+      {personaAvailable || flyoutKinds.length > 0 ? <MenuDivider /> : null}
+      {personaAvailable ? (
+        <button
+          ref={personaTriggerRef}
+          role="menuitem"
+          tabIndex={-1}
+          type="button"
+          data-composer-persona-menu-item
+          disabled={!canCompose}
+          aria-expanded={personaOpen}
+          aria-haspopup="menu"
+          aria-controls="floating-composer-persona-menu"
+          onClick={() => {
+            if (canCompose) {
+              setFlyout(null)
+              setPersonaOpen((open) => !open)
+            }
+          }}
+          className={`${rowClass} ${personaOpen ? 'bg-ds-hover' : ''}`}
+        >
+          <UserRound className={iconClass} strokeWidth={1.8} />
+          <span className="min-w-0 flex-1 truncate">{t('codeAgentPersonaLabel')}</span>
+          <span className={`max-w-24 truncate text-[12px] ${activePersona ? 'text-ds-ink' : 'text-ds-faint'}`}>
+            {activePersona?.name ?? t('codeAgentPersonaNone')}
+          </span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
         </button>
       ) : null}
-      {personaAvailable ? (
-        <>
-          {(showPlanMenuOption || showAutoPlanBuildMenuOption || showGraphMenuOption || showGoalMenuOption) ? <div className="my-1 h-px bg-ds-border-muted/70" /> : null}
-          <button
-            ref={personaTriggerRef}
-            role="menuitem"
-            tabIndex={-1}
-            type="button"
-            data-composer-persona-menu-item
-            disabled={!canCompose}
-            aria-expanded={personaOpen}
-            aria-haspopup="menu"
-            aria-controls="floating-composer-persona-menu"
-            onClick={() => {
-              if (canCompose) setPersonaOpen((open) => !open)
-            }}
-            className={rowClass}
-          >
-            <UserRound className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-            <span className="min-w-0 flex-1 truncate">{t('codeAgentPersonaLabel')}</span>
-            <span className="max-w-24 truncate text-[12px] text-ds-faint">
-              {activePersona?.name ?? t('codeAgentPersonaNone')}
-            </span>
-            {personaOpen
-              ? <ChevronUp className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
-              : <ChevronDown className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />}
-          </button>
-        </>
-      ) : null}
+      {flyoutKinds.map((kind) => (
+        <button
+          key={kind}
+          type="button"
+          role="menuitem"
+          tabIndex={-1}
+          aria-haspopup="menu"
+          aria-expanded={flyout === kind}
+          data-composer-flyout-trigger={kind}
+          onClick={(event) => {
+            flyoutTriggerRef.current = event.currentTarget
+            setPersonaOpen(false)
+            setFlyout((current) => (current === kind ? null : kind))
+          }}
+          className={`${rowClass} ${flyout === kind ? 'bg-ds-hover' : ''}`}
+        >
+          {kind === 'plugins'
+            ? <Blocks className={iconClass} strokeWidth={1.8} />
+            : <Sparkles className={iconClass} strokeWidth={1.8} />}
+          <span className="min-w-0 flex-1 truncate">{t(kind === 'plugins' ? 'composerMenuPlugins' : 'composerMenuSkills')}</span>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
+        </button>
+      ))}
     </div>
   )
+  const placeFlyout = (menuHeight: number) => {
+    const triggerRect = flyoutTriggerRef.current?.getBoundingClientRect()
+    const parentMenuRect = mainMenuRef.current?.getBoundingClientRect()
+    const anchorRect = composerMenuButtonRef.current?.getBoundingClientRect()
+    if (!triggerRect || !parentMenuRect || !anchorRect) return null
+    return calculatePersonaMenuPlacement({
+      triggerRect, parentMenuRect, anchorRect, menuHeight, preferredWidth: 340,
+      viewportWidth: window.innerWidth, coordinateScale: bodyZoom()
+    })
+  }
+  const pickSkill = (item: ComposerFlyoutItem): void => {
+    const current = String(context.input ?? '')
+    context.setInput(`${current && !/\s$/.test(current) ? `${current} ` : current}/skill:${item.id} `)
+    close(true)
+  }
+  const openPlugins = (): void => {
+    close(false)
+    window.dispatchEvent(new CustomEvent(OPEN_PLUGINS_EVENT))
+  }
+  const flyoutMenu = flyout ? (
+    <ComposerActionFlyout
+      key={flyout}
+      kind={flyout}
+      items={flyout === 'plugins' ? pluginItems.items : skillItems}
+      loading={flyout === 'plugins' && pluginItems.loading}
+      labels={{
+        title: t(flyout === 'plugins' ? 'composerMenuPlugins' : 'composerMenuSkills'),
+        search: t(flyout === 'plugins' ? 'composerPluginsSearch' : 'composerSkillsSearch'),
+        empty: t(flyout === 'plugins' ? 'composerPluginsEmpty' : 'composerSkillsEmpty'),
+        manage: t(flyout === 'plugins' ? 'composerPluginsManage' : 'composerSkillsManage'),
+        explore: t(flyout === 'plugins' ? 'composerPluginsExplore' : 'composerSkillsExplore')
+      }}
+      place={placeFlyout}
+      onPick={flyout === 'plugins' ? openPlugins : pickSkill}
+      onManage={flyout === 'plugins' ? openPlugins : () => { close(false); openSettings('skills') }}
+      onExplore={openPlugins}
+      onClose={() => setFlyout(null)}
+    />
+  ) : null
   const personaMenu = personaAvailable && personaOpen ? (
     <div
       ref={personaMenuRef}
@@ -454,7 +530,7 @@ export function FloatingComposerActionMenu({
       style={personaStyle}
       data-composer-persona-panel
       onKeyDown={handleMenuKeyDown}
-      className="ds-composer-persona-menu fixed z-50 box-border overflow-y-auto rounded-[18px] border border-ds-border bg-white py-1.5 text-[13px] text-ds-muted shadow-[0_18px_52px_rgba(15,23,42,0.18)] dark:bg-ds-card"
+      className="ds-composer-persona-menu kun-menu-pop fixed z-50 box-border overflow-y-auto rounded-[14px] border border-ds-border-muted bg-white p-1 text-[13px] text-ds-ink shadow-[var(--kun-shadow-lift)] [scrollbar-width:none] dark:bg-ds-card"
     >
       <PersonaOption disabled={!canCompose} selected={!composerPersonaId} icon="" label={t('codeAgentPersonaNone')} onClick={() => selectPersona('')} />
       {resolvedCodeAgentPresets.map((preset: { id: string; icon: string; name: string; persona: string }) => (
@@ -481,7 +557,7 @@ export function FloatingComposerActionMenu({
         }}
         className={rowClass}
       >
-        <Settings2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
+        <Settings2 className={iconClass} strokeWidth={1.8} />
         <span className="min-w-0 flex-1 truncate">{t('codeAgentPersonaManage')}</span>
       </button>
     </div>
@@ -490,6 +566,7 @@ export function FloatingComposerActionMenu({
     <div ref={composerMenuPanelRef} className="contents">
       {menu}
       {personaMenu}
+      {flyoutMenu}
     </div>
   )
   const portalHost = typeof Element !== 'undefined' && document.body instanceof Element
@@ -498,10 +575,15 @@ export function FloatingComposerActionMenu({
   return portalHost ? createPortal(menus, portalHost) : menus
 }
 
+function MenuDivider(): ReactElement {
+  return <div role="separator" className="mx-2.5 my-1 h-px bg-ds-border-muted" />
+}
+
+// Toggle rows read as a plain list: a check marks the active ones.
 function MenuSwitch({ checked }: { checked: boolean }): ReactElement {
   return (
-    <span role="switch" aria-checked={checked} className={`relative h-5 w-9 shrink-0 rounded-full ring-1 transition ${checked ? 'bg-accent ring-accent/35' : 'bg-ds-border-muted ring-ds-border-muted'}`}>
-      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white ring-1 ring-black/5 transition ${checked ? 'translate-x-[17px]' : 'translate-x-0.5'} shadow-[0_1px_4px_rgba(20,47,95,0.28)]`} />
+    <span role="switch" aria-checked={checked} className="flex h-4 w-4 shrink-0 items-center justify-center text-accent">
+      {checked ? <Check className="h-4 w-4" strokeWidth={2.2} /> : null}
     </span>
   )
 }
@@ -522,11 +604,11 @@ function PersonaOption({
   onClick: () => void
 }): ReactElement {
   return (
-    <button role="menuitemradio" tabIndex={-1} aria-checked={selected} disabled={disabled} type="button" onClick={onClick} className={`${rowClass} rounded-lg`}>
+    <button role="menuitemradio" tabIndex={-1} aria-checked={selected} disabled={disabled} type="button" onClick={onClick} className={rowClass}>
       {icon
-        ? <LucideIconByName name={icon} className="h-4 w-4 shrink-0" strokeWidth={1.8} />
+        ? <LucideIconByName name={icon} className={iconClass} strokeWidth={1.8} />
         : <CircleSlash className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />}
-      <span className="min-w-0 flex-1 truncate text-ds-ink">{label}</span>
+      <span className="min-w-0 flex-1 truncate">{label}</span>
       {description ? <PersonaHelpTip text={description} /> : null}
       {selected ? <Check className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={2.2} /> : null}
     </button>

@@ -1,5 +1,6 @@
-import { isAgentDispatchBlock } from './AgentDispatchCard'
+import { isOutcomeCardBlock } from './AgentDispatchCard'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import { readToolPresentation } from '../../agent/tool-presentation'
 import { blockHasPendingRuntimeWork } from './message-timeline-turns'
 import { isFastContextToolBlock } from './fast-context-card-copy'
 import { describeProcessBlock, getProcessDetail } from './message-timeline-process-detail'
@@ -8,6 +9,12 @@ export type ProcessSection = {
   id: string
   kind: 'reasoning' | 'execution' | 'output' | 'subagent'
   blocks: ChatBlock[]
+}
+
+export function keepInteractiveProcessBlock(block: ChatBlock): boolean {
+  return (block.kind === 'approval' && block.status === 'pending') ||
+    (block.kind === 'approval_review' && block.status === 'in-progress') ||
+    (block.kind === 'user_input' && block.status === 'pending')
 }
 
 /**
@@ -59,7 +66,7 @@ export function groupProcessSections(blocks: ChatBlock[]): ProcessSection[] {
   const sections: ProcessSection[] = []
 
   for (const block of blocks) {
-    if (isAgentDispatchBlock(block)) {
+    if (isOutcomeCardBlock(block)) {
       sections.push({ id: `dispatch-${block.id}`, kind: 'execution', blocks: [block] })
       continue
     }
@@ -208,7 +215,7 @@ export function isRequestUserInputTool(block: ChatBlock): boolean {
 export type ProcessErrorTone = 'tool' | 'error' | null
 
 export function processBlockErrorTone(block: ChatBlock): ProcessErrorTone {
-  if (block.kind === 'tool' && block.status === 'error') return 'tool'
+  if (block.kind === 'tool') return readToolPresentation(block).state === 'failed' ? 'tool' : null
   if (block.kind === 'compaction' && block.status === 'error') return 'error'
   if (block.kind === 'approval' && block.status === 'error') return 'error'
   if (

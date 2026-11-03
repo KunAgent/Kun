@@ -1,0 +1,31 @@
+{
+  "wardrobeShare": {
+    "title": "生成分享图",
+    "subtitle": "带上你现在的 Kun，邀请朋友一起养。",
+    "preview": "邀请分享图预览",
+    "style": "样式",
+    "night": "夜空",
+    "sunset": "日落",
+    "paper": "纸面",
+    "size": "尺寸",
+    "portrait": "竖版 3:4",
+    "square": "方图 1:1",
+    "showCode": "显示邀请码文字",
+    "privacy": "图片不含姓名、邮箱或头像照片。关闭邀请码文字，二维码仍然有效。",
+    "save": "保存图片",
+    "copyImage": "复制图片",
+    "copyLink": "复制链接",
+    "generating": "正在合成…",
+    "working": "处理中…",
+    "saved": "图片已保存",
+    "copied": "图片已复制，可以粘贴给朋友了",
+    "linkCopied": "邀请链接已复制",
+    "fallback": "这里不能直接复制图片，已改为保存",
+    "failed": "操作未完成，请重试。",
+    "missing": "邀请码暂时不可用，请重试。",
+    "retry": "重试",
+    "reveal": "在文件夹中显示",
+    "close": "关闭",
+    "hold": "长按图片，保存到相册。"
+  }
+}

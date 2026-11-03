@@ -26,6 +26,7 @@ import {
 } from '../browser-security/web-contents-hardening'
 import {
   BrowserUsePolicyProxy,
+  type BrowserUsePolicyEvent,
   type BrowserUsePolicyProxy as BrowserUsePolicyProxyType
 } from './network-policy'
 
@@ -91,11 +92,7 @@ export type BrowserUseManagerOptions = {
   createProxy?: (
     mode: BrowserUseMode,
     exactLocalOrigin: string | undefined,
-    onPolicyEvent: (event: {
-      outcome: 'allowed' | 'blocked'
-      sanitizedUrl: string
-      code?: string
-    }) => void
+    onPolicyEvent: (event: BrowserUsePolicyEvent) => void
   ) => BrowserUsePolicyProxy
   onState?: (state: BrowserUseViewState) => void
   onAudit?: (entry: BrowserUseAuditEntry) => void | Promise<void>
@@ -168,6 +165,8 @@ export type BrowserSessionEntry = {
   proxy?: BrowserUsePolicyProxy
   proxyUrl?: string
   proxyStart?: Promise<void>
+  /** Last policy block or connection failure, so a load error can name its real cause. */
+  lastNetworkFailure?: BrowserUsePolicyEvent & { at: number }
   exactLocalOrigin?: string
   grants: Set<string>
   tabs: Map<string, BrowserTab>
@@ -311,6 +310,41 @@ export function originOnly(rawUrl: string): string | undefined {
   } catch {
     return undefined
   }
+}
+
+/** Projects one policy proxy event onto the session audit log. */
+export function policyEventAudit(
+  event: BrowserUsePolicyEvent
+): Omit<BrowserUseAuditEntry, 'id' | 'timestamp' | 'threadId' | 'sessionId'> {
+  return {
+    category: 'network-policy',
+    action: 'network-request',
+    sanitizedPath: pathOnly(event.sanitizedUrl),
+    origin: originOnly(event.sanitizedUrl),
+    outcome: event.outcome === 'allowed'
+      ? 'success'
+      : event.outcome === 'blocked' ? 'blocked' : 'error',
+    ...(event.code ? { errorCode: event.code } : {})
+  }
+}
+
+/**
+ * Chromium reports a refused tunnel only as ERR_TUNNEL_CONNECTION_FAILED;
+ * append the policy proxy's own verdict for the same origin so the user and
+ * the agent see why (blocked range, unreachable system proxy, ...).
+ */
+export function describeLoadFailure(
+  loadError: string,
+  origin: string,
+  failure: (BrowserUsePolicyEvent & { at: number }) | undefined
+): string {
+  const base = loadError.trim() || 'The authorized page failed to load.'
+  const detail = failure && originOnly(failure.sanitizedUrl) === origin
+    ? failure.message ?? failure.code
+    : undefined
+  if (!detail) return base.slice(0, 512)
+  const suffix = failure?.message && failure.code ? ` [${failure.code}]` : ''
+  return `${base} - ${detail}${suffix}`.slice(0, 512)
 }
 
 export function pathOnly(rawUrl: string): string | undefined {

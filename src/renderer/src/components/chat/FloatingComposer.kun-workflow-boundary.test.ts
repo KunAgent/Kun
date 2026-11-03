@@ -6,13 +6,13 @@ import { useChatStore } from '../../store/chat-store'
 import { FloatingComposer } from './FloatingComposer'
 
 const captured = vi.hoisted(() => ({ context: {} as FloatingComposerRenderContext }))
-vi.mock('./FloatingComposerSurfaceView', () => ({
-  FloatingComposerSurfaceView: ({ context }: { context: FloatingComposerRenderContext }) => {
+// The stack view renders the whole composer surface from this one context.
+vi.mock('./FloatingComposerStackView', () => ({
+  FloatingComposerStackView: ({ context }: { context: FloatingComposerRenderContext }) => {
     captured.context = context
     return null
   }
 }))
-vi.mock('./FloatingComposerStackView', () => ({ FloatingComposerStackView: () => null }))
 vi.mock('./use-ade-composer-controls', () => ({
   useAdeComposerControls: () => ({
     harnessId: useChatStore((state) => state.composerHarnessId),

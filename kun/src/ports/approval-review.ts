@@ -9,6 +9,8 @@ import type {
 
 /** Immutable route selected for the acting turn. Credentials are resolved by the model adapter. */
 export type ApprovalReviewModelRoute = Readonly<{
+  /** Host-supplied provenance; never inferred from a native model name. */
+  source?: Readonly<{ harnessId: string; credentialMode?: string }>
   unresolvedGatewayAlias?: true
   requestedGatewayAlias?: string
   model: string

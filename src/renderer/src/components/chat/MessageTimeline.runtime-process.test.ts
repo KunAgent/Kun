@@ -133,7 +133,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     // Answering and cancelling moved to the composer-docked panel; the bubble
     // is now only a compact record pointing to that actionable surface.
     expect(html).not.toContain('<textarea')
-    expect(html).toContain('Complete this above the input box')
+    expect(html).toContain('Answer below')
     expect(html).not.toContain('Cancel')
   })
 
@@ -168,7 +168,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     // The record still shows what was asked…
     expect(html).toContain('你更想去南方还是北方？')
     // …but offers no live affordances, so it cannot fire a dead resolve.
-    expect(html).not.toContain('Complete this above the input box')
+    expect(html).not.toContain('Answer below')
     // It reads as an ended record rather than an active prompt.
     expect(html).toContain('Cancelled')
   })
@@ -438,7 +438,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('1m 27s')
     expect(html).toContain('The final answer is ready.')
     expect(html).toContain('ds-chat-answer')
-    expect(html).toMatch(/Processed 1m 27s|已处理 1m 27s/)
+    expect(html).toMatch(/This turn · 1m 27s|本轮记录 · 1m 27s/)
     expect(html).not.toContain('Read 1 file')
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('I am checking the relevant path.')
@@ -626,9 +626,9 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       })
     )
 
-    // Completed turns auto-collapse behind the processed disclosure, so the
+    // Completed turns auto-collapse behind the turn-record disclosure, so the
     // error text and detail stay hidden until the user expands the panel.
-    expect(html).toMatch(/Processed|已处理/)
+    expect(html).toMatch(/This turn|本轮记录/)
     expect(html).not.toMatch(/Work process|工作过程/)
     expect(html).toContain('aria-expanded="false"')
     expect(html).not.toContain('request failed with status 400')

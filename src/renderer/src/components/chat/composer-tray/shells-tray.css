@@ -1,0 +1,182 @@
+/*
+ * Background commands: tray segment extras and the sheet's command rows
+ * (Shells board). Shared chrome comes from composer-tray.css; this file only
+ * adds the command-specific pieces. Colors are tokens / color-mix only.
+ */
+.ds-shells-mono {
+  font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Monaco, Consolas, monospace;
+}
+
+/* Segment: "npm run dev •" or "2 个后台命令 •1 •1" */
+.ds-shells-segment-command {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.ds-composer-tray[data-compact='true'] .ds-shells-segment-command {
+  max-width: 140px;
+}
+
+.ds-shells-segment-counts {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 7px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-shells-segment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--ds-text-faint);
+}
+
+.ds-shells-segment-count[data-tone='error'] {
+  color: var(--ds-status-danger);
+}
+
+.ds-composer-tray[data-compact='true'] .ds-shells-segment-counts {
+  gap: 5px;
+}
+
+/* Sheet rows: 44px two-line rows with a regular-weight mono command. */
+.ds-shells-sheet .ds-composer-tray-row[data-two-line='true'] {
+  min-height: 44px;
+  gap: 10px;
+  padding: 6px 6px 6px 12px;
+}
+
+.ds-shells-sheet .ds-composer-tray-row[data-two-line='true'] .ds-composer-tray-row-title {
+  font-weight: 400;
+}
+
+.ds-shells-sheet .ds-composer-tray-row-subtitle {
+  margin-top: 1px;
+  color: var(--ds-text-faint);
+  line-height: 16px;
+}
+
+.ds-shells-sheet .ds-composer-tray-row-detail {
+  padding: 0 6px 6px;
+}
+
+/* Every row keeps its detail box (stable focus); a collapsed one takes no space. */
+.ds-shells-sheet .ds-composer-tray-row-detail:has(> .ds-shells-detail[hidden]) {
+  display: none;
+}
+
+.ds-shells-row[data-outcome='succeeded'] .ds-composer-tray-row-title,
+.ds-shells-row[data-outcome='stopped'] .ds-composer-tray-row-title {
+  color: var(--ds-text-muted);
+}
+
+.ds-shells-row-leading {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+
+.ds-shells-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--ds-status-dot-muted);
+}
+
+.ds-shells-status-dot[data-outcome='running'] {
+  background: var(--ds-status-dot-success);
+  box-shadow: 0 0 0 3px var(--ds-success-soft);
+  animation: ds-shells-pulse 1.8s ease-in-out infinite;
+}
+
+.ds-shells-status-dot[data-outcome='failed'] {
+  background: var(--ds-status-dot-danger);
+}
+
+@keyframes ds-shells-pulse {
+  50% {
+    box-shadow: 0 0 0 1.5px var(--ds-success-soft);
+    opacity: 0.72;
+  }
+}
+
+.ds-shells-finished-icon {
+  color: var(--ds-text-faint);
+}
+
+/* Output preview: last lines of the expanded command. */
+.ds-shells-output {
+  max-height: calc(8 * 18px + 22px);
+  margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 12px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 9px;
+  background: var(--ds-surface-subtle);
+  color: color-mix(in srgb, var(--ds-text) 82%, var(--ds-text-muted));
+  font-size: 11.5px;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+[data-theme='dark'] .ds-shells-output {
+  background: color-mix(in srgb, var(--ds-bg-canvas) 70%, var(--ds-surface-card));
+}
+
+.ds-shells-output[data-empty='true'] {
+  color: var(--ds-text-faint);
+}
+
+.ds-shells-output:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+.ds-shells-output-file {
+  display: block;
+  margin: 6px 0 0;
+  padding: 0 13px;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ds-shells-output-command {
+  display: block;
+  margin: 0 0 6px;
+  padding: 0 13px;
+  color: var(--ds-text-muted);
+  font-size: 11.5px;
+  line-height: 17px;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.ds-shells-empty {
+  margin: 0;
+  padding: 10px 12px 12px;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-shells-status-dot[data-outcome='running'] {
+    animation: none;
+  }
+}

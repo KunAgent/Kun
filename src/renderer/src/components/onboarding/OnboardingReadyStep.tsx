@@ -1,5 +1,5 @@
 import { useMemo, type ReactElement } from 'react'
-import { ArrowLeftRight, AtSign, ChevronRight, Globe, LayoutGrid } from 'lucide-react'
+import { ArrowLeftRight, AtSign, ChevronRight, Globe, LayoutGrid, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { KunToolPermissionMode } from '@shared/app-settings'
 import { AgentIcon } from '../agent-icon'
@@ -42,8 +42,10 @@ export function OnboardingConfetti(): ReactElement {
   )
 }
 
-export function OnboardingReadyStep({ provider, permissionMode, agents, localeLabel, themeLabel, onEdit }: {
+export function OnboardingReadyStep({ provider, permissionMode, agents, account, localeLabel, themeLabel, onEdit }: {
   provider: { presetId: string | null; name: string; model: string }
+  /** The signed-in account, or null when the user skipped sign-in. */
+  account: { name: string; email: string } | null
   permissionMode: KunToolPermissionMode
   agents: ReadonlyArray<{ id: string; name: string }>
   localeLabel: string
@@ -85,6 +87,14 @@ export function OnboardingReadyStep({ provider, permissionMode, agents, localeLa
           <span className="kun-onb-summary-key">{t('onboarding.ready.agents')}</span>
           <span className="kun-onb-summary-value">
             {agents.length ? ['Kun', ...agents.map((agent) => agent.name)].join(t('onboarding.ready.listSeparator')) : t('onboarding.ready.agentsNone')}
+          </span>
+          {edit}
+        </button>
+        <button type="button" className="kun-onb-summary-row" onClick={() => onEdit('account')} data-onboarding-summary="account">
+          <span className="kun-onb-summary-icon"><UserRound size={17} strokeWidth={1.8} aria-hidden="true" /></span>
+          <span className="kun-onb-summary-key">{t('onboarding.ready.account')}</span>
+          <span className="kun-onb-summary-value">
+            {account ? <>{account.name || account.email}{account.name ? <small>{account.email}</small> : null}</> : t('onboarding.ready.accountNone')}
           </span>
           {edit}
         </button>

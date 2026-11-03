@@ -1,4 +1,6 @@
+import { PolicyMutationRejected } from '../domain/remote-policy-revision.js'
 import { admitDurableSteering, flushDurableSteering } from './durable-steering.js'
+import { openDelegatedSteering, type DelegatedSteering } from './delegated-steering.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -61,6 +63,7 @@ import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacity
 
 export const turnServiceSteeringOperations = {
 async steerTurn(this: TurnService, input: {
+    requiredClientSurface?: 'api'
     operationId?: string
     sourceTurnId?: string
     threadId: string
@@ -77,6 +80,8 @@ async steerTurn(this: TurnService, input: {
     try {
     if (input.operationId) {
       const turn = await this.getTurn(input.threadId, input.turnId)
+      if (input.requiredClientSurface && turn?.clientSurface !== input.requiredClientSurface)
+        throw new PolicyMutationRejected('INVALID_REQUEST')
       if (turn?.orchestration === 'graph' && turn.status === 'running' && !this.isTurnExecutionActive(input.turnId)) {
         this['beginGraphSteeringResume'](input.turnId)
         try {
@@ -220,6 +225,10 @@ hasGraphSteeringResume(this: TurnService, turnId: string): boolean {
     return (this['graphSteeringResumeFences'].get(turnId) ?? 0) > 0
   },
 
+openDelegatedSteering(this: TurnService, threadId: string, turnId: string): DelegatedSteering {
+    return openDelegatedSteering(this, threadId, turnId)
+  },
+
 async steeringQueue(this: TurnService, input: { threadId: string; turnId: string }): Promise<SteeringEntry[]> {
     const current = await this['deps'].threadStore.get(input.threadId)
     const turn = current?.turns.find((candidate) => candidate.id === input.turnId)
@@ -274,7 +283,7 @@ async replaceSteering(this: TurnService, input: {
     return entries
   },
 
-async interruptTurn(this: TurnService, input: { threadId: string; turnId: string; discard?: boolean }): Promise<{ status: TurnStatus }> {
+async interruptTurn(this: TurnService, input: { threadId: string; turnId: string; discard?: boolean; preserveQueue?: boolean }): Promise<{ status: TurnStatus }> {
     let transition: boolean
     this['deps'].steering.closeAdmission(input.turnId)
     await this['deps'].steering.waitForAdmissions(input.turnId)
@@ -321,7 +330,7 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
         await this['deps'].threadStore.upsert({
           ...touchThread(current, this['deps'].nowIso()),
           turns,
-          ...(turn.status === 'running' ? { queueControl: { reason: 'user_stop' as const, sourceTurnId: turn.id, pausedAt: this['deps'].nowIso() } } : {}),
+          ...(turn.status === 'running' && !input.preserveQueue ? { queueControl: { reason: 'user_stop' as const, sourceTurnId: turn.id, pausedAt: this['deps'].nowIso() } } : {}),
           status: threadStatusAfterTurnTransition(current.status, turns),
           updatedAt: this['deps'].nowIso()
         })

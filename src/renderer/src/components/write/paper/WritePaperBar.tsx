@@ -37,7 +37,7 @@ const iconActionClass =
   'inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55'
 
 /**
- * Paper-unit toolbar strip (§6.4): rendered under the focused group's toolbar
+ * Paper-unit toolbar strip: rendered under the focused group's toolbar
  * when the active file belongs to a paper unit. Shows the paper identity chips,
  * deep links, and the four actions — Cool notes, interpret, extract figures,
  * open interpretation.

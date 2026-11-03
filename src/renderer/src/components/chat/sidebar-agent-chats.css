@@ -136,10 +136,11 @@
 }
 .sidebar-agent-chat-row:disabled { cursor: not-allowed; opacity: 0.6; }
 .sidebar-agent-chat-avatar { position: relative; display: flex; flex: 0 0 auto; }
+[data-focus-mode='on'] .sidebar-agent-chat-avatar { display: none; }
 .sidebar-agent-chat-avatar > i {
   position: absolute;
-  right: -1px;
-  bottom: -1px;
+  right: -3px;
+  bottom: -3px;
   width: 10px;
   height: 10px;
   border: 2px solid var(--ds-bg-sidebar);
@@ -148,7 +149,6 @@
 }
 .sidebar-agent-chat-row.is-selected .sidebar-agent-chat-avatar > i { border-color: var(--ds-sidebar-row-active); }
 .sidebar-agent-chat-copy { min-width: 0; flex: 1; }
-.sidebar-agent-chat-avatar:not([data-group]) .rooms-avatar:not([data-engine]) { border-radius: 50%; border: 0; }
 .sidebar-agent-chat-avatar .rooms-avatar-letter { display: none; }
 .sidebar-agent-chat-name,
 .sidebar-agent-chat-preview { display: flex; min-width: 0; align-items: center; gap: 6px; }
@@ -209,3 +209,14 @@
 .sidebar-agent-chats-more:hover { background: var(--ds-sidebar-row-hover); color: var(--ds-text); }
 .sidebar-agent-chats-error { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px 10px; color: var(--ds-danger); font-size: 12px; }
 .sidebar-agent-chats-error button { text-decoration: underline; }
+/* 对话 mode: the list fills the sidebar down to the account dock. */
+.sidebar-agent-chats[data-fill] {
+  flex: 1 1 auto;
+  max-height: none;
+}
+.sidebar-agent-chats[data-fill] .sidebar-agent-chats-title {
+  pointer-events: none;
+}
+.sidebar-agent-chats[data-fill] .sidebar-agent-chats-title :is(.lucide-chevron-down, .lucide-chevron-right) {
+  display: none;
+}

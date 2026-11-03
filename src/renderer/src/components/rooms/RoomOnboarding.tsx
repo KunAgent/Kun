@@ -1,3 +1,4 @@
+import { FirstRoomTask } from '../../product-analytics/FirstRoomTask'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentIdentity, OnboardingState, Room } from '@shared/rooms-api'
@@ -83,6 +84,7 @@ export function RoomWelcomeCard({ room, onTeam, onProfile }: { room: Room; onTea
     <RoomAvatar member={agent ? agentMember(agent) : room.members[0]} label={room.name} size={60} />
     <h2>{t('roomsInitMeet', { name: room.name })}</h2><p>{agent?.title || room.description}</p>
     <p className="rooms-welcome-description">{agent?.instructions || t('roomsInitWelcomeHint')}</p>
+    <FirstRoomTask roomId={room.id} />
     <div className="rooms-welcome-examples">{examples.map((body) => <button type="button" key={body}
       onClick={() => window.dispatchEvent(new CustomEvent('kun-room-example', { detail: { roomId: room.id, body } }))}>{body}</button>)}</div>
     <div className="rooms-welcome-links"><button type="button" onClick={onTeam}>{t('roomsInitTeam')}</button>

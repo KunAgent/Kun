@@ -23,7 +23,7 @@ import {
   taskWorkspaceSetupLogResponse
 } from './task-workspaces.js'
 
-/** Task workspace routes (docs/ade/07 §11). */
+/** Task workspace routes. */
 export function registerTaskWorkspaceRoutes(router: Router, runtime: ServerRuntime): void {
   const service = () => runtime.taskWorkspaces
   router.add('POST', '/v1/task-workspaces', async (request) => {

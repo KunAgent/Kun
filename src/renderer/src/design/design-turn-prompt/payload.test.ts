@@ -165,6 +165,48 @@ describe('design turn prompt payload', () => {
     expect(payload.prompt).not.toContain('frame_settings')
   })
 
+  it('lists a pending sibling as planned, without its imperative generation brief', async () => {
+    const compact = artifact('compact', 'Compact overview')
+    const detail: DesignArtifact = {
+      ...artifact('detail', 'Task detail'),
+      previewStatus: 'pending',
+      versions: [{
+        id: 'detail-v1',
+        relativePath: '.kun-design/doc/detail/v1.html',
+        createdAt: now,
+        summary: 'Create the second state with the Claude Cursor review task detail panel'
+      }]
+    }
+    const doc = createEmptyDocument()
+    const compactFrame = { ...createHtmlFrameShape('Compact overview', 0, 0, 'compact', 'desktop'), id: 'frame_compact', parentId: ROOT_SHAPE_ID }
+    const detailFrame = { ...createHtmlFrameShape('Task detail', 1400, 0, 'detail', 'desktop'), id: 'frame_detail', parentId: ROOT_SHAPE_ID }
+    doc.objects[ROOT_SHAPE_ID] = { ...doc.objects[ROOT_SHAPE_ID], children: [compactFrame.id, detailFrame.id] }
+    doc.objects[compactFrame.id] = compactFrame
+    doc.objects[detailFrame.id] = detailFrame
+
+    const payload = await buildDesignTurnPromptPayload({
+      target: 'screen',
+      mode: 'text',
+      promptText: 'Create the compact overview',
+      artifactRelativePath: compact.relativePath,
+      workspaceRoot: '/workspace',
+      promptState: promptState([compact, detail]),
+      boardArtifact: { ...artifact('board', 'Board'), kind: 'canvas' },
+      visibleTargets: [],
+      canvasDocument: doc,
+      designSystem: { tokens: {}, components: {} },
+      tokensByArtifact,
+      htmlArtifactId: compact.id,
+      selectedFrame: compactFrame
+    })
+
+    expect(payload.prompt).not.toContain('Other pages already in this project')
+    expect(payload.prompt).toContain('Planned in this batch')
+    expect(payload.prompt).toContain('do NOT read, write, or design them in this turn')
+    expect(payload.prompt).toContain('.kun-design/doc/detail/v1.html')
+    expect(payload.prompt).not.toContain('Create the second state')
+  })
+
   it('reads static quality findings through workspace files', async () => {
     const readWorkspaceFile = vi.fn(async ({ path }: { path: string }) => ({
       ok: true,

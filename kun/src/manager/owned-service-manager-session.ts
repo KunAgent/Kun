@@ -1,7 +1,8 @@
+import { StartupAttempt } from './startup-attempt.js'
 import { randomUUID } from 'node:crypto'
 import type { ChildProcess } from 'node:child_process'
 import { AppSessionOwnerSchema, sameAppSessionOwner, type AppSessionOwner, type AppSessionOwnerKind } from '../contracts/app-session-owner.js'
-import { runtimeProcessIdentity } from '../server/runtime-process-identity.js'
+import { requireRuntimeProcessIdentity } from '../server/runtime-process-identity.js'
 import { stopOwnedProcess } from '../process/owned-process.js'
 import { acquireAppSessionReservation, AppSessionConflictError, canonicalSessionPath, type AppSessionReservation } from './app-session-reservation.js'
 import { defaultKunControlDir, defaultProductionSettingsPath, removeManagerDiscovery, withManagerStartLock } from './manager-discovery.js'
@@ -31,8 +32,7 @@ export function createOwnedServiceManagerSession(input: {
   ownerSessionId?: string
 }): OwnedServiceManagerSession {
   const ownerSessionId = input.ownerSessionId ?? randomUUID()
-  const identity = runtimeProcessIdentity()
-  if (!identity) throw new Error('Cannot establish application process identity')
+  const identity = requireRuntimeProcessIdentity()
   const ownerBase = {
     ownerSessionId, ownerKind: input.ownerKind, ownerPid: process.pid,
     ownerStartedAt: new Date().toISOString(), ownerProcessIdentity: identity
@@ -75,8 +75,14 @@ export function createOwnedServiceManagerSession(input: {
     if (closed || stopping) return Promise.reject(new Error('Application service session is stopping'))
     if (startup) return startup
     cancel = new AbortController()
-    const signal = cancel.signal
+    const parentSignal = request.signal ? AbortSignal.any([cancel.signal, request.signal]) : cancel.signal
+    const attempt = request.startupAttempt ?? new StartupAttempt(request.timeoutMs, parentSignal, request.onStartupProgress)
+    const signal = AbortSignal.any([parentSignal, attempt.signal])
+    const check = () => { signal.throwIfAborted(); attempt.check() }
+    const lockOptions = { deadline: attempt.workDeadline, attemptId: attempt.id, onWait: () => attempt.note('profile') }
     startup = (async () => {
+      check()
+      attempt.note('profile')
       const profile = {
         dataDir: await canonicalSessionPath(request.dataDir),
         controlDir: await canonicalSessionPath(request.controlDir ?? defaultKunControlDir()),
@@ -86,23 +92,24 @@ export function createOwnedServiceManagerSession(input: {
         reservation!.profile[key as keyof typeof profile] !== value)) {
         throw new Error('Application session profile changed; close the existing session before relocation')
       }
-      signal.throwIfAborted()
+      check()
       if (current && childAlive(current.child)) return current.connection
       if (current) {
         await stopOwnedProcess(current.child, { graceMs: 0, timeoutMs: 2_000 })
         managerChildren.delete(current.child)
       }
       current = undefined
-      const owner = AppSessionOwnerSchema.parse({ ...ownerBase, generation: ++generation })
-      reservation ??= await acquireAppSessionReservation({ ...profile, owner, signal })
-      signal.throwIfAborted()
+      let owner = AppSessionOwnerSchema.parse({ ...ownerBase, generation: ++generation })
+      reservation ??= await acquireAppSessionReservation({ ...profile, owner, signal, lockOptions })
+      check()
       return withManagerStartLock(profile.controlDir, async () => {
-        signal.throwIfAborted()
+        check()
         const fetchImpl: typeof fetch = (url, init) => (request.fetch ?? fetch)(url, {
           ...init, signal: init?.signal ? AbortSignal.any([signal, init.signal]) : signal
         })
+        attempt.note('previous-processes')
         const existing = await inspectServiceManager(profile.controlDir, fetchImpl)
-        signal.throwIfAborted()
+        check()
         if (existing.state === 'unavailable') {
           if (existing.error.kind !== 'protocol_incompatible' && existing.error.kind !== 'capability_incompatible') {
             throw existing.error
@@ -116,7 +123,7 @@ export function createOwnedServiceManagerSession(input: {
               settingsPath: profile.settingsPath, fetch: fetchImpl, signal
             })
           } catch (error) {
-            signal.throwIfAborted()
+            check()
             const reason = error instanceof Error ? error.message : String(error)
             existing.error.message += ` Automatic takeover was not safe (${reason}).` +
               ' Close its clients, then explicitly run `kun manager retire --data-dir <this-data-directory>`' +
@@ -132,63 +139,83 @@ export function createOwnedServiceManagerSession(input: {
           if (existing.discovery.appOwner) throw new AppSessionConflictError(profile.dataDir)
           await retireIdleLegacyManager(existing.discovery, fetchImpl, signal)
         }
-        signal.throwIfAborted()
-        const launched = await launchServiceManagerProcess({
-          ...profile, appOwner: owner, reservationPath: reservation!.path,
-          ...(request.buildId ? { buildId: request.buildId } : {}),
-          ...(request.launch ? { launch: request.launch } : {})
-        })
-        const child = launched.child
-        managerChildren.add(child)
-        candidate = child
-        let spawnError: Error | undefined
-        child.on('error', (error) => { spawnError = error })
-        let recorded = false
-        let ownerReady = false
-        const grantStartup = () => {
-          if (recorded && ownerReady && !signal.aborted && child.connected) {
-            child.send({ type: 'kun-manager-start', owner }, () => undefined)
-          }
-        }
-        child.on('message', (value: unknown) => {
-          if (!value || typeof value !== 'object') return
-          const message = value as { type?: string; owner?: AppSessionOwner }
-          if (message.type !== 'kun-manager-owner-ready' || !sameAppSessionOwner(message.owner, owner)) return
-          ownerReady = true
-          grantStartup()
-        })
-        try {
-          signal.throwIfAborted()
-          if (!child.pid) throw spawnError ?? new Error('Manager process did not start')
-          await reservation!.recordProcess({ pid: child.pid, instanceId: `manager-${generation}` })
-          signal.throwIfAborted()
-          recorded = true
-          grantStartup()
-          const deadline = Date.now() + (request.timeoutMs ?? 30_000)
-          while (Date.now() < deadline) {
-            signal.throwIfAborted()
-            if (spawnError || !childAlive(child)) throw spawnError ?? new Error('Owned Manager exited before readiness')
-            const observed = await inspectServiceManager(profile.controlDir, fetchImpl, { deadline: Math.min(deadline, Date.now() + 500) })
-            signal.throwIfAborted()
-            if (observed.state === 'ready') {
-              if (observed.discovery.pid !== child.pid || !sameAppSessionOwner(observed.discovery.appOwner, owner)) {
-                throw new Error('Owned Manager readiness identity mismatch')
-              }
-              current = { child, connection: { discovery: observed.discovery }, generation, owner }
-              candidate = undefined
-              return current.connection
+        check()
+        for (let launchAttempt = 0; ; launchAttempt += 1) {
+          check()
+          attempt.note('manager-launch')
+          const launched = await launchServiceManagerProcess({
+            ...profile, appOwner: owner, reservationPath: reservation!.path, beforeLaunch: async () => check(),
+            ...(request.buildId ? { buildId: request.buildId } : {}),
+            ...(request.launch ? { launch: request.launch } : {})
+          })
+          const child = launched.child
+          managerChildren.add(child)
+          candidate = child
+          let spawnError: Error | undefined
+          child.on('error', (error) => { spawnError = error })
+          let recorded = false
+          let ownerReady = false
+          const grantStartup = () => {
+            if (recorded && ownerReady && !signal.aborted && child.connected) {
+              child.send({ type: 'kun-manager-start', owner }, () => undefined)
             }
-            await abortableDelay(25, signal)
           }
-          throw new Error(`Owned Manager readiness timed out; inspect ${launched.logPath}`)
-        } catch (error) {
-          await stopOwnedProcess(child, { graceMs: 0, timeoutMs: 2_000 })
-          managerChildren.delete(child)
-          candidate = undefined
-          throw error
+          child.on('message', (value: unknown) => {
+            if (!value || typeof value !== 'object') return
+            const message = value as { type?: string; owner?: AppSessionOwner }
+            if (message.type !== 'kun-manager-owner-ready' || !sameAppSessionOwner(message.owner, owner)) return
+            ownerReady = true
+            grantStartup()
+          })
+          try {
+            check()
+            if (!child.pid) throw spawnError ?? new Error('Manager process did not start')
+            await reservation!.recordProcess({ pid: child.pid, instanceId: `manager-${generation}` })
+            check()
+            recorded = true
+            grantStartup()
+            attempt.note('manager-ready')
+            const deadline = Date.now() + Math.max(1, attempt.workDeadline - performance.now())
+            while (Date.now() < deadline) {
+              check()
+              if (spawnError) throw spawnError
+              if (!childAlive(child)) throw Object.assign(new Error('Owned Manager exited before readiness'), { code: 'owned_manager_exited' })
+              const observed = await inspectServiceManager(profile.controlDir, fetchImpl, { deadline: Math.min(deadline, Date.now() + 500) })
+              check()
+              if (observed.state === 'ready') {
+                if (observed.discovery.pid !== child.pid || !sameAppSessionOwner(observed.discovery.appOwner, owner)) {
+                  throw new Error('Owned Manager readiness identity mismatch')
+                }
+                current = { child, connection: { discovery: observed.discovery }, generation, owner }
+                candidate = undefined
+                return current.connection
+              }
+              await abortableDelay(25, signal)
+            }
+            throw new Error(`Owned Manager readiness timed out; inspect ${launched.logPath}`)
+          } catch (error) {
+            attempt.note('cleanup')
+            await stopOwnedProcess(child, { graceMs: 0, timeoutMs: attempt.cleanupMs() })
+            managerChildren.delete(child)
+            candidate = undefined
+            // A proven-exited, fully reaped child is the only automatic retry.
+            // Identity, admission, permissions and timeout failures never retry.
+            if (launchAttempt === 0 && !signal.aborted && performance.now() < attempt.workDeadline &&
+              (error as { code?: string })?.code === 'owned_manager_exited') {
+              owner = AppSessionOwnerSchema.parse({ ...ownerBase, generation: ++generation })
+              continue
+            }
+            const failure = error instanceof Error ? error : new Error(String(error))
+            const logHint = `; inspect ${launched.logPath}`
+            if (!failure.message.endsWith(logHint)) failure.message += logHint
+            throw failure
+          }
         }
-      }, signal)
-    })().finally(() => { startup = undefined })
+      }, signal, lockOptions)
+    })().finally(() => {
+      if (!request.startupAttempt) attempt.dispose()
+      startup = undefined
+    })
     return startup
   }
 

@@ -270,7 +270,10 @@ async function readBoundedJsonResponse(
 }
 
 function safeErrorMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const base = error instanceof Error ? error.message : String(error)
+  // Node's fetch reports "fetch failed" and keeps ECONNREFUSED & co. in `cause`.
+  const cause = error instanceof Error && error.cause instanceof Error ? error.cause.message : ''
+  const message = cause && !base.includes(cause) ? `${base}: ${cause}` : base
   return message
     .replace(/Bearer\s+[A-Za-z0-9._~-]+/gi, 'Bearer [redacted]')
     .slice(0, 1024)

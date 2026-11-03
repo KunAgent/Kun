@@ -12,4 +12,10 @@ export function useQuotaReminderNotifications(enabled: boolean): void {
     if (!enabled || typeof api?.onQuotaReminderClicked !== 'function') return
     return api.onQuotaReminderClicked(() => useChatStore.getState().openSettings('providers'))
   }, [enabled])
+  // The storage cleanup advance notice opens the storage page to review or skip.
+  useEffect(() => {
+    const api = typeof window === 'undefined' ? undefined : window.kunGui
+    if (!enabled || typeof api?.storageCleanup?.onNoticeClicked !== 'function') return
+    return api.storageCleanup.onNoticeClicked(() => useChatStore.getState().openSettings('storageCleanup'))
+  }, [enabled])
 }

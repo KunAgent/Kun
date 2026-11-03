@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -9,7 +9,8 @@ vi.mock('electron', () => ({
   },
   BrowserWindow: class BrowserWindow {},
   dialog: {
-    showSaveDialog: vi.fn()
+    showSaveDialog: vi.fn(),
+    showOpenDialog: vi.fn()
   }
 }))
 
@@ -22,6 +23,7 @@ import { renderMarkdownDocumentToPdf } from './write-export-service'
 import {
   ensureConversationExportExtension,
   exportConversation,
+  exportConversationBatch,
   sanitizeConversationExportFileName
 } from './conversation-export-service'
 
@@ -112,5 +114,59 @@ describe('conversation-export-service', () => {
       defaultPath: join(tempDir, 'Bad--Name-.md')
     }))
     expect(result).toMatchObject({ ok: false, canceled: false })
+  })
+  it('writes one file per conversation into a new dated folder with unique names', async () => {
+    vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: false, filePaths: [tempDir] })
+
+    const result = await exportConversationBatch({
+      format: 'md',
+      folderName: 'Kun export 2026-10-08',
+      items: [
+        { title: 'A', markdown: '# A\n', defaultFileName: 'Same' },
+        { title: 'B', markdown: '# B\n', defaultFileName: 'same' }
+      ]
+    }, { downloadsPath: tempDir })
+
+    const directory = join(tempDir, 'Kun export 2026-10-08')
+    expect(result).toMatchObject({ ok: true, directory, written: 2, failed: [] })
+    expect((await readdir(directory)).sort()).toEqual(['Same.md', 'same (2).md'])
+    await expect(readFile(join(directory, 'same (2).md'), 'utf8')).resolves.toBe('# B\n')
+  })
+
+  it('keeps an existing export folder and reports per-item PDF failures', async () => {
+    vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: false, filePaths: [tempDir] })
+    vi.mocked(renderMarkdownDocumentToPdf)
+      .mockResolvedValueOnce(Buffer.from('pdf'))
+      .mockResolvedValueOnce(Buffer.from('pdf'))
+      .mockRejectedValueOnce(new Error('render failed'))
+    const payload = {
+      format: 'pdf' as const,
+      folderName: 'out',
+      items: [
+        { title: 'A', markdown: '# A\n', defaultFileName: 'A' },
+        { title: 'B', markdown: '# B\n', defaultFileName: 'B' }
+      ]
+    }
+
+    await exportConversationBatch({ ...payload, items: [payload.items[0]!] }, { downloadsPath: tempDir })
+    const result = await exportConversationBatch(payload, { downloadsPath: tempDir })
+
+    expect(result).toMatchObject({
+      ok: true,
+      directory: join(tempDir, 'out (2)'),
+      written: 1,
+      failed: [{ title: 'B', message: 'render failed' }]
+    })
+  })
+
+  it('reports a canceled folder picker without writing', async () => {
+    vi.mocked(dialog.showOpenDialog).mockResolvedValue({ canceled: true, filePaths: [] })
+    const result = await exportConversationBatch({
+      format: 'md',
+      folderName: 'out',
+      items: [{ title: 'A', markdown: '# A\n', defaultFileName: 'A' }]
+    }, { downloadsPath: tempDir })
+    expect(result).toEqual({ ok: false, canceled: true })
+    expect(await readdir(tempDir)).toEqual([])
   })
 })

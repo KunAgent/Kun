@@ -1,4 +1,6 @@
+import type { HandoffContinuationFailure } from './handoff-continuation'
 import type { CoreChildRuntimeMetadataJson } from './kun-contract-child'
+import type { MemoryRelationAnnotation } from '@shared/memory-working-context'
 export type { CoreChildRunActivityJson, CoreChildLauncher, CoreChildRuntimeMetadataJson } from './kun-contract-child'
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
 import type { AdeDelegatedTransport } from '@shared/ade-harnesses'
@@ -185,6 +187,7 @@ export type CoreTurnJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
   injectedDirectiveIds?: string[]
   injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
@@ -282,6 +285,7 @@ export type CoreTurnItemJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   injectedMemorySummaries?: Array<{ id: string; content: string }>
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
   injectedDirectiveIds?: string[]
   injectedDirectiveSummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
@@ -446,6 +450,8 @@ export type CoreUsageSnapshotJson = {
   requestTtftMs?: number
   /** Generation duration of this single model request (ms). */
   requestGenerationMs?: number
+  /** Tokens produced within `requestGenerationMs`; absent means the completion tokens. */
+  requestGenerationTokens?: number
   /** Average TTFT across model calls of the current turn. */
   turnAvgTtftMs?: number | null
   /** Average tokens-per-second across model calls of the current turn. */
@@ -466,6 +472,8 @@ export type CoreRuntimeEventJson = {
   /** UTF-16 offset of this incremental assistant delta within its item text. */
   deltaOffset?: number
   timestamp?: string
+  /** Execution start of a queued user item published when its turn is promoted. */
+  turnStartedAt?: string
   threadId?: string
   turnId?: string
   itemId?: string
@@ -484,6 +492,7 @@ export type CoreRuntimeEventJson = {
   toolResultCount?: number
   /** Public Agent dispatch intent, replayed through the parent thread stream. */
   dispatchIntent?: unknown
+  taskSuggestion?: unknown
   /** Durable Graph domain event projected through the existing thread SSE. */
   graph?: unknown
   /** Durable pre-run Graph planning lifecycle projected through thread SSE. */
@@ -504,6 +513,8 @@ export type CoreRuntimeEventJson = {
   providerId?: string
   stepIndex?: number
   contextWindowTokens?: number
+  contextWindowKnown?: boolean
+  maxInputTokens?: number
   softThresholdTokens?: number
   hardThresholdTokens?: number
   estimatedInputTokens?: number
@@ -517,6 +528,8 @@ export type CoreRuntimeEventJson = {
   activeSkillIds?: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
+  occupancySource?: 'estimate' | 'agent'
+  breakdownSource?: 'estimate' | 'agent'
   providerKind?: AdeDelegatedTransport
   phase?: 'portable' | 'resumed' | 'rebased' | 'preparing' | 'retrying' | 'succeeded' | 'failed'
   failureSummary?: string
@@ -531,18 +544,21 @@ export type CoreRuntimeEventJson = {
   }
   /** Explicit harness identity on delegated_runtime / harness_runtime events. */
   harnessId?: string
-  /** harness_session_state: native commands + mode surface (docs/ade/03 §7.3). */
+  /** harness_session_state: native commands + mode surface. */
   commands?: Array<{ name?: unknown; description?: unknown; inputHint?: unknown }>
   configOptions?: Array<{ id?: unknown; name?: unknown; currentValue?: unknown }>
   currentModeId?: string
-  /** task_workspace lifecycle/state transition on the owner thread (docs/ade/07 §5). */
+  /** harness_session_state: Agent-published settings. */
+  settings?: unknown
+  /** task_workspace lifecycle/state transition on the owner thread. */
   taskWorkspace?: {
     workspaceId?: string; unitId?: string; state?: string
     progress?: { step?: string; percent?: number; message?: string }
     setup?: { steps?: unknown[] }
     workspace?: { path?: string; sourceRoot?: string; kind?: string; branch?: string }
   }
-  /** handoff_injected: handoff provenance + brief stats (docs/ade/08). */
+  /** handoff_injected: handoff provenance + brief stats. */
+  continuationFailure?: HandoffContinuationFailure
   from?: { harnessName: string; model?: string }
   to?: { harnessName: string; model?: string }
   sinceTurnId?: string
@@ -553,7 +569,7 @@ export type CoreRuntimeEventJson = {
   status?: string | number
   /** turn_started: the effective routing and reasoning configuration. */
   accountId?: string
-  reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
+  reasoningEffort?: 'auto' | 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max'
   serviceTier?: 'priority'
   /** turn_started uses 'agent' | 'plan'; handoff_injected uses 'full' | 'delta'. */
   mode?: 'agent' | 'plan' | 'full' | 'delta'

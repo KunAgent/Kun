@@ -1,0 +1,22 @@
+{
+  "sessionId": "sess-text-only",
+  "initialize": {
+    "protocolVersion": 1,
+    "agentCapabilities": {
+      "loadSession": true,
+      "promptCapabilities": { "image": false, "embeddedContext": true },
+      "mcpCapabilities": { "http": true }
+    },
+    "authMethods": [],
+    "agentInfo": { "name": "fake-acp-agent", "version": "0.0.1" }
+  },
+  "newSession": {},
+  "turns": [
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "received" } } }
+      ],
+      "stopReason": "end_turn"
+    }
+  ]
+}

@@ -22,7 +22,7 @@ import {
 } from './manager-controls-test-support.js'
 import type { ManagerRuntimeDeps } from './manager-runtime.js'
 
-/** Cross-review: 10 §5 — ephemeral read-only reviewer, exclusion, merge. */
+/** Cross-review: — ephemeral read-only reviewer, exclusion, merge. */
 
 const READY: HarnessStatus = {
   harnessId: 'kun',
@@ -93,7 +93,7 @@ const firstRunChild = (harness: ReturnType<typeof makeHarness>) =>
   (harness.delegation.runChild as unknown as { mock: { calls: unknown[][] } })
     .mock.calls[0]![0] as Record<string, unknown> & Partial<ChildRunRecord>
 
-describe('readOnlyToolCeiling (10 §5)', () => {
+describe('readOnlyToolCeiling', () => {
   it('unions the worker callback tools for worker children only', () => {
     expect(readOnlyToolCeiling({ kind: 'worker' })).toEqual([
       ...SUBAGENT_READ_ONLY_TOOL_NAMES,
@@ -305,7 +305,7 @@ describe('ReviewRequests.request', () => {
   })
 })
 
-describe('reviewer terminal merge (10 §5)', () => {
+describe('reviewer terminal merge', () => {
   it('merges the reviewer report into the reviewed dispatch verdict and notifies', async () => {
     const { stores, harness } = await seeded()
     try {

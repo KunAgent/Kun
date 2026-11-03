@@ -127,7 +127,7 @@ describe('harness routes', () => {
     const kun = body.harnesses.find(
       (row: { definition: { id: string } }) => row.definition.id === 'kun'
     )
-    // P4-02: native-loop detection settles synchronously, so the fresh cache
+    // native-loop detection settles synchronously, so the fresh cache
     // wins over the optimistic peek placeholder by the time rows render.
     expect(kun.status.installed).toBe('yes')
     // Listing kicks off background detection but must not spawn for the kun loop.
@@ -443,7 +443,7 @@ describe('harness routes', () => {
     release?.()
   })
 
-  // P4-10: POST /v1/harnesses/:id/test
+  // POST /v1/harnesses/:id/test
   it('requires runtime authentication for harness tests', async () => {
     const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }))
     const response = await dispatch(router, 'POST', '/v1/harnesses/kun/test')
@@ -501,7 +501,7 @@ describe('harness routes', () => {
     expect(body.handshake).toBeUndefined()
   })
 
-  // P4-12: POST /v1/harnesses/probe-definition + /v1/harness-secrets
+  // POST /v1/harnesses/probe-definition + /v1/harness-secrets
   async function postJson(
     router: ReturnType<typeof buildRouter>,
     path: string,
@@ -567,6 +567,21 @@ describe('harness routes', () => {
     expect(json.ok).toBe(true)
     expect(json.agent).toMatchObject({ name: 'fake-acp-agent', version: '0.0.1' })
     expect(json.durationMs).toBeGreaterThanOrEqual(0)
+  })
+
+  it('handshakes a derived draft and rejects bases that cannot be extended', async () => {
+    const router = fakeRouter(() => ({ stdout: '', exitCode: 1 }), undefined, undefined, fakeCredentials())
+    const derived = await postJson(router, '/v1/harnesses/probe-definition', {
+      extends: 'opencode', displayName: 'Fork', command: process.execPath, args: [FAKE_ACP_AGENT],
+      env: { FAKE_ACP_SCENARIO: `${ACP_SCENARIOS}basic-chat.json` }
+    })
+    expect(derived.status).toBe(200)
+    expect(derived.json.ok).toBe(true)
+    for (const base of ['codex', 'claude-code', 'nowhere']) {
+      expect((await postJson(router, '/v1/harnesses/probe-definition', {
+        extends: base, displayName: 'x', command: 'tool'
+      })).status).toBe(400)
+    }
   })
 
   it('injects resolved secretEnv into the probed child env without leaking it', async () => {

@@ -29,9 +29,18 @@ export function useRoomVoiceInput(editor: RefObject<RoomRichInputHandle | null>,
 }
 
 type VoiceInput = ReturnType<typeof useRoomVoiceInput>
-export function RoomVoiceButton({ voice, disabled }: { voice: VoiceInput; disabled: boolean }): ReactElement | null {
+/**
+ * Dictation into the chat input. Without speech-to-text the mic stays visible
+ * where the surface can open its settings, so voice input is discoverable.
+ */
+export function RoomVoiceButton({ voice, disabled, onSetup }: {
+  voice: VoiceInput; disabled: boolean; onSetup?: () => void
+}): ReactElement | null {
   const { t } = useTranslation('common')
-  if (!voice.enabled) return null
+  if (!voice.enabled) {
+    return onSetup ? <button type="button" className="rooms-composer-voice" data-voice-setup aria-label={t('composerVoiceSetup')}
+      title={t('composerVoiceSetupHint')} disabled={disabled} onClick={onSetup}><Mic size={17} /></button> : null
+  }
   const label = voice.status === 'recording' ? t('composerVoiceStop')
     : voice.status === 'starting' ? t('composerVoicePreparing')
       : voice.status === 'transcribing' ? t('composerVoiceTranscribing') : t('composerVoiceStart')

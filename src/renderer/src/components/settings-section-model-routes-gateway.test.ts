@@ -94,7 +94,8 @@ describe('ModelRoutesSettings gateway section rejection', () => {
     })
 
     const content = textContent(renderer!.root)
-    expect(content).toContain('Kun Runtime synced')
+    // Synced, but the runtime refused the gateway section: the header says so instead of "Running".
+    expect(textContent(renderer!.root.findByProps({ 'data-gateway-state': true }))).toBe('Needs attention')
     expect(content).toContain('Local gateway is missing its independent API key')
     expect(content).not.toContain('Kun rejected the updated configuration')
     const fix = renderer!.root.findAllByType('button').find((button) => textContent(button).includes('Fix'))

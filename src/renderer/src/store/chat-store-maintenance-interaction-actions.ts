@@ -316,7 +316,7 @@ export function createMaintenanceInteractionActions(
       }
     }
   return {
-  resolveApproval: async (blockId, decision) => {
+  resolveApproval: async (blockId, decision, choice) => {
     const { blocks } = get()
     const block = blocks.find((b) => b.id === blockId)
     if (!block || block.kind !== 'approval' || block.status !== 'pending') return
@@ -336,7 +336,8 @@ export function createMaintenanceInteractionActions(
       const outcome = await p.submitApprovalDecision(
         block.approvalId,
         decision === 'allow' ? 'allow' : 'deny',
-        true
+        true,
+        ...(choice ? [choice] as const : [])
       )
       if (outcome === 'cancelled') {
         set((s) => ({

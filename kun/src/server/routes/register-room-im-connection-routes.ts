@@ -9,6 +9,7 @@ import { dispatchRoomContinuation } from '../../rooms/room-continuation-dispatch
 import { markRoomAppConnectionResumed, setRoomAppConnectionStatus } from '../../rooms/room-app-connections.js'
 import type { RouteContext } from '../router.js'
 import { readJsonBody } from '../read-json-body.js'
+import { isBoundGmailSensitiveHistory, isBoundGmailSensitiveRoom } from '../../gmail/thread-data-state.js'
 
 type Add = (method: string, path: string, handle: (rooms: RoomRuntime, request: Request, context: RouteContext) => Promise<unknown> | unknown) => void
 async function body(request: Request) {
@@ -29,6 +30,9 @@ export function registerRoomImConnectionRoutes(add: Add): void {
     const input = z.object({ connectionId: RoomIdSchema, ownerId: z.string().trim().min(1).max(256) }).strict().parse(await body(request))
     const resolved = await rooms.exclusive(async () => {
       const card = await imConnectionCard(rooms, params.roomId, RoomIdSchema.parse(params.messageId))
+      if (await isBoundGmailSensitiveHistory(rooms.deps.threadStore, card.run.value.threadId!)) {
+        throw new RoomStoreConflictError('Use a separate Agent conversation for messaging; this conversation contains Gmail data')
+      }
       const current = await rooms.deps.store.get<AgentImConnection>('agent_im_connection', input.connectionId)
       if (current) {
         if (current.value.cardId !== params.messageId || current.value.ownerId !== input.ownerId ||
@@ -78,6 +82,9 @@ export function registerRoomImConnectionRoutes(add: Add): void {
   })
   add('GET', route + '/delivery', async (rooms, request, { params }) => {
     await activeImConnection(rooms, params.roomId, params.connectionId)
+    if (await isBoundGmailSensitiveRoom(rooms.deps.threadStore, params.roomId)) {
+      throw new RoomStoreConflictError('Gmail conversation content cannot be delivered to an external messaging service')
+    }
     const query = new URL(request.url).searchParams
     const cursor = z.coerce.number().int().nonnegative().parse(query.get('cursor') ?? 0)
     const rows = await rooms.deps.store.list<RoomMessage>('message', { roomId: params.roomId,
@@ -88,6 +95,7 @@ export function registerRoomImConnectionRoutes(add: Add): void {
       const root = await rooms.deps.store.get<RoomRequestState>('request', entry.value.rootRequestId)
       // Only replies owed to this IM connection can leave the desktop; GUI-only topics never do.
       if (!root || root.roomId !== params.roomId || root.value.imConnectionId !== params.connectionId) continue
+      if (root.value.threadId && await isBoundGmailSensitiveHistory(rooms.deps.threadStore, root.value.threadId)) continue
       const presentation = entry.value.presentationKind
       if (presentation === 'setup') continue
       const text = presentation === 'app_connection'

@@ -8,7 +8,7 @@ import { readJsonBody } from '../server/read-json-body.js'
 import { jsonResponse } from '../server/response.js'
 import { Router } from '../server/router.js'
 import { GraphRunConflictError } from '../graph/graph-run-store.js'
-import { managerMemoryErrorResponse } from './manager-memory-errors.js'
+import { addManagerMemoryRoute } from './service-manager-router-memory.js'
 import { KUN_VERSION } from '../version.js'
 import {
   KUN_MANAGER_PROTOCOL_VERSION
@@ -18,7 +18,6 @@ import {
   type ManagerAttachmentStoreOperation,
   type ManagerArtifactStoreOperation,
   type ManagerGraphStoreOperation,
-  type ManagerMemoryStoreOperation,
   type ManagerSessionStoreOperation
 } from './shared-data-store.js'
 import {
@@ -37,7 +36,6 @@ import {
   GraphStoreOperationSchema,
   KUN_MANAGER_CAPABILITIES,
   MAX_MANAGER_DATA_BODY_BYTES,
-  MemoryStoreOperationSchema,
   RUNTIME_HEARTBEAT_TTL_MS,
   RuntimeRegistrationRequiredError,
   ServiceManagerState,
@@ -48,6 +46,7 @@ import {
   ThreadStoreOperationSchema
 } from './service-manager-state.js'
 import { ManagerDataRequestEnvelopeSchema } from './shared-data-store-contracts.js'
+import { ManagerMutationReplayCache } from './manager-mutation-replay.js'
 import { guardManagerDataTurnFence } from './service-manager-router-turn-fencing.js'
 import {
   authorized,
@@ -56,12 +55,11 @@ import {
   validation
 } from './service-manager-router-auth.js'
 import { addHostPowerRoute } from './service-manager-router-host-power.js'
+import { addManagerAtomicJsonRoutes } from './service-manager-router-atomic-json.js'
 import { addManagerRoomRoutes } from './service-manager-router-rooms.js'
 import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
 import {
-  fencedAtomicJsonMutation,
   flushRenewal,
-  isResourceFenceStale,
   resourceFenceStale
 } from './service-manager-router-fenced-mutation.js'
 import {
@@ -104,6 +102,7 @@ export function buildServiceManagerRouter(input: {
   }
 }): Router {
   const router = new Router()
+  const mutationReplay = new ManagerMutationReplayCache(input.instanceId)
   if (input.sharedData) addManagerRoomRoutes(router, {
     managerToken: input.managerToken,
     state: input.state,
@@ -113,7 +112,7 @@ export function buildServiceManagerRouter(input: {
   const capabilities = input.sharedData
     ? KUN_MANAGER_CAPABILITIES
     : KUN_MANAGER_CAPABILITIES.filter((capability) =>
-        capability !== 'shared-data-v1' &&
+        capability !== 'shared-data-v1' && capability !== 'mutation-replay-v1' &&
         capability !== 'artifact-memory-data-v1' &&
         capability !== 'memory-lifecycle-v1' &&
         capability !== 'atomic-json-v1' &&
@@ -407,12 +406,12 @@ export function buildServiceManagerRouter(input: {
           input.state, 'thread', operation.data, envelope,
           (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
-        const result = await input.sharedData!.executeThread(
-          operation.data,
-          envelope.value,
-          assertCurrent
-        )
-        return jsonResponse({ result })
+        return await mutationReplay.execute(envelope.replay,
+          ['thread', operation.data, envelope.value, envelope.turnFence], async () => {
+            assertCurrent?.()
+            const result = await input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent)
+            return jsonResponse({ result })
+          })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid thread-store request', error.issues)
         if (error instanceof StaleTurnFenceError) {
@@ -437,12 +436,13 @@ export function buildServiceManagerRouter(input: {
           input.state, 'session', operation.data, envelope,
           (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
-        const result = await input.sharedData!.executeSession(
-          operation.data as ManagerSessionStoreOperation,
-          envelope.value,
-          assertCurrent
-        )
-        return jsonResponse({ result })
+        return await mutationReplay.execute(envelope.replay,
+          ['session', operation.data, envelope.value, envelope.turnFence], async () => {
+            assertCurrent?.()
+            const result = await input.sharedData!.executeSession(
+              operation.data as ManagerSessionStoreOperation, envelope.value, assertCurrent)
+            return jsonResponse({ result })
+          })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid session-store request', error.issues)
         if (error instanceof StaleTurnFenceError) {
@@ -473,28 +473,7 @@ export function buildServiceManagerRouter(input: {
       }
     }
   ))
-  if (input.sharedData) router.add('POST', '/v1/data/memory/:operation', (request, context) => authorizedAsync(
-    request,
-    input.managerToken,
-    async () => {
-      const operation = MemoryStoreOperationSchema.safeParse(context.params.operation)
-      if (!operation.success) return validation('invalid memory-store operation')
-      const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
-      if (!body.ok) return body.response
-      try {
-        const result = await input.sharedData!.executeMemory(
-          operation.data as ManagerMemoryStoreOperation,
-          body.value
-        )
-        return jsonResponse({ result })
-      } catch (error) {
-        if (error instanceof z.ZodError) return validation('invalid memory-store request', error.issues)
-        const response = managerMemoryErrorResponse(error)
-        if (response) return response
-        throw error
-      }
-    }
-  ))
+  if (input.sharedData) addManagerMemoryRoute(router, input.managerToken, input.sharedData)
   if (input.sharedData) router.add('POST', '/v1/data/graph/:operation', (request, context) => authorizedAsync(
     request,
     input.managerToken,
@@ -542,91 +521,7 @@ export function buildServiceManagerRouter(input: {
     request, input.managerToken,
     async () => jsonResponse({ keys: await input.sharedData!.listHistoryReservationKeys() })
   ))
-  if (input.sharedData) router.add('POST', '/v1/data/atomic-json/read', (request) => authorizedAsync(
-    request,
-    input.managerToken,
-    async () => {
-      const body = await readJsonBody(request)
-      if (!body.ok) return body.response
-      const parsed = z.object({ path: z.string().min(1).max(4_096) }).strict().safeParse(body.value)
-      if (!parsed.success) return validation('invalid atomic JSON read', parsed.error.issues)
-      return jsonResponse({ snapshot: await input.sharedData!.readAtomicJson(parsed.data.path) })
-    }
-  ))
-  if (input.sharedData) router.add('PUT', '/v1/data/atomic-json/write', (request) => authorizedAsync(
-    request,
-    input.managerToken,
-    async () => {
-      const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
-      if (!body.ok) return body.response
-      const parsed = z.object({
-        path: z.string().min(1).max(4_096),
-        expectedRevision: z.number().int().nonnegative(),
-        value: z.unknown(),
-        fence: ManagerResourceFenceSchema.optional(),
-        commitId: z.string().min(1).max(256).optional()
-      }).strict().safeParse(body.value)
-      if (!parsed.success) return validation('invalid atomic JSON write', parsed.error.issues)
-      try {
-        return await fencedAtomicJsonMutation(input, parsed.data, (commitId) =>
-          input.sharedData!.writeAtomicJson({
-            path: parsed.data.path,
-            expectedRevision: parsed.data.expectedRevision,
-            value: parsed.data.value,
-            ...(parsed.data.fence && commitId ? {
-              beforeCommit: () => input.state.assertResourceCommit(
-                parsed.data.fence!, commitId
-              )
-            } : {})
-          }))
-      } catch (error) {
-        if (isResourceFenceStale(error)) return resourceFenceStale()
-        if (error instanceof RevisionConflictError) {
-          return jsonResponse({
-            code: 'revision_conflict',
-            currentRevision: error.currentRevision
-          }, 409)
-        }
-        throw error
-      }
-    }
-  ))
-  if (input.sharedData) router.add('DELETE', '/v1/data/atomic-json/delete', (request) => authorizedAsync(
-    request,
-    input.managerToken,
-    async () => {
-      const body = await readJsonBody(request)
-      if (!body.ok) return body.response
-      const parsed = z.object({
-        path: z.string().min(1).max(4_096),
-        expectedRevision: z.number().int().nonnegative(),
-        fence: ManagerResourceFenceSchema.optional(),
-        commitId: z.string().min(1).max(256).optional()
-      }).strict().safeParse(body.value)
-      if (!parsed.success) return validation('invalid atomic JSON delete', parsed.error.issues)
-      try {
-        return await fencedAtomicJsonMutation(input, parsed.data, (commitId) =>
-          input.sharedData!.deleteAtomicJson({
-            path: parsed.data.path,
-            expectedRevision: parsed.data.expectedRevision,
-            ...(parsed.data.fence && commitId ? {
-              beforeCommit: () => input.state.assertResourceCommit(
-                parsed.data.fence!, commitId
-              )
-            } : {})
-          }))
-      } catch (error) {
-        if (isResourceFenceStale(error)) return resourceFenceStale()
-        if (error instanceof RevisionConflictError) {
-          return jsonResponse({
-            code: 'revision_conflict',
-            currentRevision: error.currentRevision
-          }, 409)
-        }
-        throw error
-      }
-    }
-  ))
+  if (input.sharedData) addManagerAtomicJsonRoutes(router, { ...input, sharedData: input.sharedData })
   if (input.sharedData) router.add('GET', '/v1/controls/:kind/:id/owner', (request, context) => authorized(
     request,
     input.managerToken,
@@ -645,7 +540,9 @@ export function buildServiceManagerRouter(input: {
     async () => {
       const key = z.enum(['settings', 'client-state']).safeParse(context.params.key)
       if (!key.success) return validation('invalid document key')
-      return jsonResponse({ snapshot: await input.documents!.read(key.data) })
+      // Conditional read: an unchanged document answers with its etag only.
+      const ifNoneMatch = new URL(request.url).searchParams.get('ifNoneMatch')?.trim().slice(0, 128) || undefined
+      return jsonResponse({ snapshot: await input.documents!.readIfChanged(key.data, ifNoneMatch) })
     }
   ))
   if (input.documents) router.add('PUT', '/v1/documents/:key', (request, context) => authorizedAsync(

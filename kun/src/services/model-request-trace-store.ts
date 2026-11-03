@@ -24,7 +24,13 @@ export type ModelRequestTraceStorePage = {
 
 export type ModelRequestTraceStoreOptions = ModelRequestTraceRetentionOptions & {
   maxCachedThreads?: number
+  /** Retention is on by default; `false` keeps every trace (tests only). */
+  retention?: boolean
+  /** Delay before the first maintenance pass of an otherwise idle store. */
+  startupMaintenanceDelayMs?: number
 }
+
+const DEFAULT_STARTUP_MAINTENANCE_DELAY_MS = 2 * 60_000
 
 const DEFAULT_MAX_CACHED_TRACE_THREADS = 64
 
@@ -46,10 +52,33 @@ export class ModelRequestTraceStore {
   constructor(dataDir: string, options: ModelRequestTraceStoreOptions = {}) {
     this.root = join(dataDir, 'observability', 'trajectory', 'records')
     this.legacyRoot = join(dataDir, 'observability', 'model-http')
-    if (hasExplicitRetention(options)) {
-      this.retention = new ModelRequestTraceRetention(this.root, options)
+    // Traces were unbounded in production (single files reached 300 MB and
+    // the directory several GB). Retention now applies by default to both the
+    // current and the legacy directory.
+    if (options.retention !== false) {
+      this.retention = new ModelRequestTraceRetention(this.root, options, [this.legacyRoot])
+      const delay = options.startupMaintenanceDelayMs ?? DEFAULT_STARTUP_MAINTENANCE_DELAY_MS
+      const timer = setTimeout(() => { void this.runMaintenance() }, delay)
+      timer.unref?.()
     }
     this.maxCachedThreads = normalizeCachedThreadLimit(options.maxCachedThreads)
+  }
+
+  /** Bounded maintenance pass on the write queue (never concurrent with appends). */
+  runMaintenance(): Promise<void> {
+    const retention = this.retention
+    if (!retention) return Promise.resolve()
+    const queued = this.writeTail
+      .catch(() => undefined)
+      .then(async () => {
+        try {
+          if (await retention.sweepNow()) this.invalidateRecentCaches()
+        } catch (error) {
+          this.rememberWarning(`trace retention failed: ${safeError(error)}`)
+        }
+      })
+    this.writeTail = queued
+    return queued
   }
 
   append(record: ModelRequestTraceRecord): Promise<void> {
@@ -299,14 +328,6 @@ function normalizeCachedThreadLimit(value: number | undefined): number {
     return DEFAULT_MAX_CACHED_TRACE_THREADS
   }
   return Math.max(1, Math.floor(value))
-}
-
-function hasExplicitRetention(options: ModelRequestTraceStoreOptions): boolean {
-  return options.maxBytesPerThread !== undefined ||
-    options.maxTotalBytes !== undefined ||
-    options.maxAgeMs !== undefined ||
-    options.maintenanceIntervalMs !== undefined ||
-    options.now !== undefined
 }
 
 function isMissingFileError(error: unknown): boolean {

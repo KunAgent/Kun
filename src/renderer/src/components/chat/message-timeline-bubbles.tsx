@@ -1,14 +1,20 @@
-import { memo, useEffect, useState, type ReactElement } from 'react'
+import { GitHubToolCard, githubToolThread } from './github-tool-card'
+import { useResultPresented } from '../../product-analytics/presentation'
+import { useWorkPresentation } from '../../product-analytics/work-presentation'
+import { TimelineApprovalCard } from './TimelineApprovalCard'
+import { memo, useEffect, useState, type ReactElement, type RefObject } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, FileEdit, GitFork, Loader2, MoreHorizontal, RotateCcw, Terminal, Wrench, Ban, TriangleAlert } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
-import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import { isBackgroundShellNoticeBlock, isBackgroundSubagentNoticeBlock, isWorkerUpdateNoticeBlock } from './message-timeline-turns'
 import { isAssignmentBlock } from '@shared/assignment-card'
 import { AssignmentCard } from '../workers/AssignmentCard'
-import { DiffView } from '../DiffView'
+import { ToolBlockDetails } from './ToolBlockDetails'
+import { GmailToolCard, gmailToolThread } from './gmail-tool-card'
+import { ToolStateMeta } from './ToolStateMeta'
+import { readToolPresentation } from '../../agent/tool-presentation'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { readNumber, formatDuration, summarizeBackgroundShellToolBlock } from './message-timeline-tools'
 import { formatTtftSeconds, formatTps } from '../../hooks/use-thread-usage'
@@ -22,9 +28,9 @@ import {
   AssistantExportButton,
   CopyFeedbackButton,
   RuntimeMetaChips,
-  UserInputBubble,
   formatMessageDateTime
 } from './message-timeline-bubble-support'
+import { UserInputRecord } from './timeline-user-input-record'
 import { AssistantSpeakButton } from './AssistantSpeakButton'
 import { AssistantSpeakTrackButton } from './AssistantSpeakTrackButton'
 import { useSpeakStore } from '../../stores/speak-store'
@@ -33,7 +39,6 @@ import { ToolAttachmentPreviews } from './message-timeline-media-views'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
 import { metaString } from './message-timeline-bubble-meta'
 import { HandoffEntry } from './message-timeline-handoff-entry'
-import { MemoryApprovalHint } from './memory-approval-hint'
 import { useTimelineSurface } from './timeline-surface'
 import { useMobileMessageActionsStore } from '../../stores/mobile-message-actions'
 
@@ -48,8 +53,8 @@ export const MessageBubble = memo(MessageBubbleImpl)
  */
 export function assistantActionRowClass(speaking: boolean): string {
   return [
-    'mt-1 flex min-h-5 min-w-0 items-center justify-between gap-3 text-[11.5px] text-ds-faint',
-    'transition duration-150 group-hover/message:opacity-100',
+    'mt-1 flex min-h-5 min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-[11.5px] text-ds-faint',
+    'transition duration-150 group-hover/message:opacity-100 focus-within:opacity-100',
     speaking ? 'opacity-100' : 'opacity-0'
   ].join(' ')
 }
@@ -70,6 +75,13 @@ type TurnMetricsLike = {
   avgTtftMs: number | null
   avgTokensPerSecond: number | null
 }
+/** The settled turn's stamped timing, when the runtime measured any. */
+export function settledTurnMetrics(usage: TurnUsageSummary | undefined): TurnMetricsLike | undefined {
+  const avgTtftMs = usage?.avgTtftMs ?? null
+  const avgTokensPerSecond = usage?.avgTokensPerSecond ?? null
+  return avgTtftMs === null && avgTokensPerSecond === null ? undefined : { avgTtftMs, avgTokensPerSecond }
+}
+
 /**
  * Renders a turn's average TTFT/TPS as a compact footer label. Segments with
  * no data are omitted so legacy turns show nothing at all.
@@ -110,8 +122,9 @@ function MessageBubbleImpl({
   turnUsageStale?: boolean
   allowThreadActions?: boolean
 }): ReactElement {
+  useResultPresented(block)
+  const workAnalytics = useWorkPresentation(block)
   const { t, i18n } = useTranslation('common')
-  const resolveApproval = useChatStore((s) => s.resolveApproval)
   const turnTimingMetrics = useChatStore((s) => s.turnTimingMetrics)
   const busyUnconfirmed = useChatStore((s) => s.busyUnconfirmed)
   const catchingUpThread = useChatStore((s) =>
@@ -130,7 +143,7 @@ function MessageBubbleImpl({
     return <WorkerUpdateNoticeBubble block={block} nested={nested} />
   }
   // ADE worker threads fold the host-rendered `<kun_assignment>` first-turn
-  // input into a collapsed card (12 §6.3); the raw text stays in history.
+  // input into a collapsed card; the raw text stays in history.
   if (block.kind === 'user' && isAssignmentBlock(block)) {
     return <AssignmentCard block={block} nested={nested} />
   }
@@ -149,42 +162,44 @@ function MessageBubbleImpl({
     const createdAtLabel = block.createdAt
       ? formatMessageDateTime(block.createdAt, i18n.language)
       : null
+    // Live usage events cover turns that ran in this view; the runtime
+    // stamps the same averages on settled turns for reopened history.
     const turnMetrics =
       !streaming && block.turnId
-        ? turnTimingMetrics.get(block.turnId)
+        ? turnTimingMetrics.get(block.turnId) ?? settledTurnMetrics(turnUsage)
         : undefined
     return (
       <LiveAssistantStreamingProvider streaming={effectiveStreaming}>
-        <div className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
+        <div ref={workAnalytics.ref} className="group/message flex min-w-0 max-w-full flex-col" data-timeline-block-id={block.id}>
           <div className="ds-markdown ds-chat-answer min-w-0 max-w-full text-ds-ink">
             <AssistantMarkdown plainText={block.renderMode === 'plain-text'} safeMarkdown={block.renderMode === 'safe-markdown'} text={block.text} streaming={effectiveStreaming} />
           </div>
         {!streaming ? (
           <div className={assistantActionRowClass(speakingBlockId === block.id)} data-assistant-action-row>
-            <span className="flex min-w-0 items-center gap-2">
+            <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-2 gap-y-1" data-assistant-action-meta>
               <span className="truncate">{createdAtLabel ?? ''}</span>
               {turnMetrics ? (
                 <span
-                  className="shrink-0 whitespace-nowrap tabular-nums"
+                  className="min-w-0 max-w-full whitespace-normal break-words tabular-nums"
                   title={t('turnMetricsTitle')}
                 >
                   {turnMetricsLabel(t, turnMetrics)}
                 </span>
               ) : null}
             </span>
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-1.5 whitespace-nowrap [&>*]:shrink-0" data-assistant-action-buttons>
               {rollbackAction ? (
                 <button
                   type="button"
                   onClick={() => rollbackAction.onRollback()}
                   disabled={rollbackAction.busy}
                   className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:opacity-60"
-                  title={t('rollbackWorkspaceFromAssistantResponse')}
-                  aria-label={t('rollbackWorkspaceFromAssistantResponse')}
+                  title={t('turnUndoMessageActionTitle')}
+                  aria-label={t('turnUndoMessageActionTitle')}
                   data-assistant-action="rollback"
                 >
                   <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
-                  <span>{rollbackAction.busy ? t('rollingBackWorkspace') : t('rollbackWorkspace')}</span>
+                  <span>{rollbackAction.busy ? t('turnUndoWorking') : t('turnUndoMessageAction')}</span>
                 </button>
               ) : null}
               {forkAction ? (
@@ -203,8 +218,9 @@ function MessageBubbleImpl({
               ) : null}
               <AssistantSpeakButton blockId={block.id} text={block.text} />
               <AssistantSpeakTrackButton text={block.text} createdAt={block.createdAt} />
-              <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode} />
-              <CopyFeedbackButton text={block.text} />
+              <AssistantExportButton text={block.text} createdAt={block.createdAt} renderMode={block.renderMode}
+                onExportStarted={() => workAnalytics.captureAction('export')} />
+              <CopyFeedbackButton text={block.text} onCopyStarted={() => workAnalytics.captureAction('copy')} />
               {surface === 'mobile' ? (
                 <button
                   type="button"
@@ -225,6 +241,7 @@ function MessageBubbleImpl({
   if (block.kind === 'reasoning') {
     return (
       <div
+        ref={workAnalytics.ref}
         className="ds-card-soft rounded-[20px] px-4 py-3 text-[13.5px] leading-6 text-ds-muted"
         data-timeline-block-id={block.id}
       >
@@ -235,11 +252,11 @@ function MessageBubbleImpl({
     )
   }
   if (block.kind === 'tool') {
-    return <ToolEntry block={block} nested={nested} />
+    return <ToolEntry block={block} nested={nested} analyticsRef={workAnalytics.ref} />
   }
   if (block.kind === 'user_input') {
     return (
-      <UserInputBubble
+      <UserInputRecord
         block={block}
         nested={nested}
       />
@@ -263,6 +280,24 @@ function MessageBubbleImpl({
       block.status === 'timed-out' ||
       block.status === 'failed-closed' ||
       block.status === 'aborted'
+    const routeLabel = block.reviewModelRoute?.model?.trim()
+      ? block.reviewModelRoute.providerId
+        ? `${block.reviewModelRoute.providerId}/${block.reviewModelRoute.model}`
+        : block.reviewModelRoute.model
+      : null
+    const StatusIcon =
+      block.status === 'in-progress'
+        ? Loader2
+        : block.status === 'approved'
+          ? Check
+          : block.status === 'denied'
+            ? Ban
+            : TriangleAlert
+    const statusIconTone = block.status === 'in-progress'
+      ? 'animate-spin text-accent'
+      : block.status === 'approved'
+        ? 'text-ds-success'
+        : 'text-ds-danger'
     return (
       <div
         className={`rounded-[20px] border px-4 py-3 text-[13px] leading-6 shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${
@@ -275,28 +310,24 @@ function MessageBubbleImpl({
         aria-live="polite"
       >
         <div className="flex items-center gap-2 font-semibold text-ds-ink">
-          {block.status === 'in-progress' ? (
-            <Loader2 className="h-4 w-4 animate-spin text-accent" aria-hidden="true" />
-          ) : (
-            <Check className="h-4 w-4 text-accent" aria-hidden="true" />
-          )}
-          <span>{t('approvalReviewTitle')}</span>
+          <StatusIcon
+            className={`h-4 w-4 shrink-0 ${statusIconTone}`}
+            role="img"
+            aria-label={statusLabel}
+          />
+          <span className="min-w-0 [overflow-wrap:anywhere]">{t('approvalReviewTitle')}</span>
         </div>
         {block.toolName ? (
-          <div className="mt-1 text-[12px] text-ds-muted">
+          <div className="mt-1 text-[12px] text-ds-muted [overflow-wrap:anywhere]">
             {t('approvalTool', { name: block.toolName })}
           </div>
         ) : null}
-        {block.reviewModelRoute ? (
-          <div className="mt-1 text-[12px] text-ds-muted">
-            {t('approvalReviewModel', {
-              model: block.reviewModelRoute.providerId
-                ? `${block.reviewModelRoute.providerId}/${block.reviewModelRoute.model}`
-                : block.reviewModelRoute.model
-            })}
+        {routeLabel ? (
+          <div className="mt-1 text-[12px] text-ds-muted [overflow-wrap:anywhere]">
+            {t('approvalReviewModel', { model: routeLabel })}
           </div>
         ) : null}
-        <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-ds-ink">{block.summary}</p>
+        <p className="mt-1 whitespace-pre-wrap text-[13.5px] text-ds-ink [overflow-wrap:anywhere]">{block.summary}</p>
         <p className="mt-2 text-[12px] font-medium text-ds-muted">{statusLabel}</p>
         {block.riskLevel ? (
           <p className="mt-1 text-[12px] text-ds-muted">
@@ -304,7 +335,7 @@ function MessageBubbleImpl({
           </p>
         ) : null}
         {block.rationale ? (
-          <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-ds-muted">
+          <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-ds-muted [overflow-wrap:anywhere]">
             {t('approvalReviewRationale', { rationale: block.rationale })}
           </p>
         ) : null}
@@ -312,77 +343,7 @@ function MessageBubbleImpl({
     )
   }
   if (block.kind === 'approval') {
-    const submitting = block.status === 'submitting'
-    const done = !allowThreadActions || (block.status !== 'pending' && !submitting)
-    const statusLabel =
-      block.status === 'allowed'
-        ? t('approvalAllowed')
-        : block.status === 'denied'
-          ? t('approvalDenied')
-          : block.status === 'expired'
-            ? t('approvalExpired')
-          : block.status === 'error'
-            ? t('approvalFailed')
-            : submitting
-              ? t('approvalSubmitting')
-              : t('approvalPending')
-    return (
-      <div
-        className={`rounded-[22px] border px-4 py-4 text-[13px] leading-6 shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${
-          block.status === 'error'
-            ? 'border-red-300/80 bg-red-500/10 dark:border-red-800/60 dark:bg-red-950/35'
-            : block.status === 'expired'
-              ? 'border-amber-300/80 bg-amber-500/10 dark:border-amber-800/60 dark:bg-amber-950/30'
-            : 'border-accent/35 bg-[linear-gradient(180deg,rgba(79,124,255,0.08),rgba(79,124,255,0.12))] text-ds-ink'
-        }`}
-      >
-        <div className="font-semibold text-accent">{t('approvalTitle')}</div>
-        {block.toolName ? (
-          <div className="mt-1 text-[12px] text-ds-muted">
-            {t('approvalTool', { name: block.toolName })}
-          </div>
-        ) : null}
-        <p className="mt-2 whitespace-pre-wrap text-[14px] text-ds-ink">{block.summary}</p>
-        <MemoryApprovalHint toolName={block.toolName} action={block.action} t={t} />
-        {block.errorMessage ? (
-          <p className="mt-2 text-[12px] text-red-700 dark:text-red-300">{block.errorMessage}</p>
-        ) : null}
-        {/* Mobile owns pending approvals through the composer-adjacent
-            MobilePendingActions card — rendering Allow/Deny here too would
-            duplicate the same approval with the opposite button order. */}
-        {!done && surface !== 'mobile' ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              disabled={submitting}
-              className="rounded-lg bg-emerald-600 px-3 py-1.5 text-[13px] font-medium text-white hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-60"
-              onClick={(event) => runTrustedUserActivation(
-                event,
-                () => void resolveApproval(block.id, 'allow')
-              )}
-            >
-              {t('approvalAllow')}
-            </button>
-            <button
-              type="button"
-              disabled={submitting}
-              className="rounded-lg border border-ds-border bg-ds-card px-3 py-1.5 text-[13px] font-medium text-ds-ink hover:bg-ds-hover disabled:cursor-wait disabled:opacity-60"
-              onClick={(event) => runTrustedUserActivation(
-                event,
-                () => void resolveApproval(block.id, 'deny')
-              )}
-            >
-              {t('approvalDeny')}
-            </button>
-            {submitting ? (
-              <span className="self-center text-[12px] font-medium text-ds-muted">{statusLabel}</span>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-2 text-[12px] font-medium text-ds-muted">{statusLabel}</p>
-        )}
-      </div>
-    )
+    return <TimelineApprovalCard block={block} allowThreadActions={allowThreadActions} />
   }
   if (block.kind === 'compaction') {
     return (
@@ -424,24 +385,28 @@ function MessageBubbleImpl({
   return <></>
 }
 
-function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boolean }): ReactElement {
+function ToolEntry({ block, nested = false, analyticsRef }: {
+  block: ToolBlock; nested?: boolean; analyticsRef?: RefObject<HTMLDivElement | null>
+}): ReactElement {
   const { t } = useTranslation('common')
+  const presentation = readToolPresentation(block)
+  const running = presentation.state === 'running'
   // Errored tool calls stay collapsed by default — only the red header is shown so the
   // (often verbose) error payload doesn't disrupt reading. The user can still expand it.
-  const [open, setOpen] = useState(() => block.status === 'running')
+  const [open, setOpen] = useState(() => running)
 
   useEffect(() => {
-    if (block.status === 'running') {
+    if (running) {
       setOpen(true)
     }
-  }, [block.status, block.id])
+  }, [running, block.id])
 
-  const effectiveOpen = block.status === 'running' ? true : open
+  const effectiveOpen = running ? true : open
 
   const tone =
-    block.status === 'error'
+    presentation.state === 'failed'
       ? 'border-orange-300/80 bg-orange-500/10 text-orange-950 dark:border-orange-800/60 dark:bg-orange-950/35 dark:text-orange-100'
-      : block.status === 'running'
+      : running
         ? 'border-amber-300/80 bg-amber-500/10 text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100'
         : 'border-ds-border bg-ds-subtle text-ds-ink'
 
@@ -466,20 +431,23 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
   const sessionId = metaString(block.meta, 'session_id')
   const sessionStatus = metaString(block.meta, 'status')
 
-  const hasDetail = !!(block.detail && block.detail.trim().length > 0)
-  const patchText = block.toolKind === 'file_change' ? extractUnifiedDiffText(block.detail) : undefined
-  const canExpand = hasDetail || block.status === 'running'
+  const hasDetail = Boolean(block.meta?.toolPresentation || block.meta?.acpKind || block.detail?.trim())
+  const canExpand = hasDetail || running
+  const githubThread = githubToolThread(presentation)
+  if (githubThread) return <GitHubToolCard threadId={githubThread} presentation={presentation} />
+  const gmailThread = gmailToolThread(presentation)
+  if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
 
   return (
-    <div className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
+    <div ref={analyticsRef} className={`rounded-[22px] border shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${tone}`}>
       <button
         type="button"
         onClick={() => {
-          if (!canExpand || block.status === 'running') return
+          if (!canExpand || running) return
           setOpen((v) => !v)
         }}
         className={`flex w-full items-start gap-2 px-4 py-3 text-left text-[13.5px] leading-6 ${
-          canExpand && block.status !== 'running' ? 'cursor-pointer' : 'cursor-default'
+          canExpand && !running ? 'cursor-pointer' : 'cursor-default'
         }`}
       >
         <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-80" strokeWidth={1.75} />
@@ -488,12 +456,8 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
             <span className="font-semibold uppercase tracking-[0.12em] text-[11px] opacity-75">
               {kindLabel}
             </span>
-            {block.status === 'running' ? (
-              <span className="rounded-full bg-amber-200/40 px-2 py-0.5 text-[11px] font-medium text-amber-900 dark:bg-amber-700/30 dark:text-amber-100">
-                {t('inspectorStatusRunning')}
-              </span>
-            ) : null}
-            {typeof exitCode === 'number' ? (
+            <ToolStateMeta block={block} />
+            {typeof exitCode === 'number' && !presentation.terminals?.some((terminal) => typeof terminal.exitCode === 'number') ? (
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-mono ${
                   exitCode === 0
@@ -509,7 +473,7 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
                 {sessionStatus === 'running' ? t('inspectorStatusRunning') : sessionStatus || 'session'} {sessionId.slice(0, 12)}
               </span>
             ) : null}
-            {typeof durationMs === 'number' ? (
+            {typeof durationMs === 'number' && presentation.durationMs === undefined ? (
               <span className="rounded-full bg-ds-card px-2 py-0.5 text-[11px] font-mono text-ds-muted">
                 {formatDuration(durationMs)}
               </span>
@@ -534,13 +498,7 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
       <ToolAttachmentPreviews meta={block.meta} />
       {effectiveOpen && hasDetail ? (
         <div className="ds-panel-strip min-w-0 border-t border-ds-border-muted/60 px-4 py-3">
-          {patchText !== undefined ? (
-            <DiffView patch={patchText} filePath={block.filePath} />
-          ) : (
-            <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words font-mono text-[12px] leading-6 text-ds-ink">
-              {block.detail}
-            </pre>
-          )}
+          <ToolBlockDetails block={block} />
         </div>
       ) : null}
     </div>

@@ -18,5 +18,7 @@ export type RoomSidebarEntry = {
   /** Present on a private chat whose Agent identity is archived (deleted from the Code list). */
   agentArchived?: boolean
   activitySeq?: number; latestMessage?: RoomLatestMessage; latestMessageSeq: number; readSeq: number; runningCount: number; attentionCount: number
+  /** Execution tasks and integrations only; runningCount also includes live discussion and participation runs. */
+  taskRunningCount?: number
 }
 export type RoomSidebarPage = { entries: RoomSidebarEntry[]; nextCursor?: string }

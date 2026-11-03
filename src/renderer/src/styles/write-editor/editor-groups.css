@@ -14,7 +14,7 @@
 }
 
 .write-tabbar-action:hover {
-  background: var(--ds-hover);
+  background: var(--ds-surface-hover);
   color: var(--ds-text);
 }
 
@@ -72,7 +72,7 @@
 }
 
 .write-tabbar-menu-item:hover {
-  background: var(--ds-hover);
+  background: var(--ds-surface-hover);
 }
 
 .write-editor-groups[data-orientation='horizontal'] {
@@ -95,7 +95,8 @@
   min-height: 0;
   overflow: hidden;
   border: 1px solid var(--ds-border-muted);
-  background: var(--ds-card);
+  /* Panes let the document shell, including UI plugin themes, show through. */
+  background: transparent;
 }
 
 .write-editor-group[data-focused='true'] {

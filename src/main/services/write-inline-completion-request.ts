@@ -69,7 +69,7 @@ export async function requestWriteInlineCompletion(
   request: WriteInlineCompletionRequest
 ): Promise<WriteInlineCompletionResult> {
   const startedAt = Date.now()
-  if (settings.write.inlineCompletion.enabled === false) {
+  if (settings.write.inlineCompletion.enabled === false && request.mode !== 'edit') {
     appendInlineCompletionPreflightFailure(startedAt, settings, request, 'Inline completion is disabled.')
     return { ok: false, message: 'Inline completion is disabled.' }
   }

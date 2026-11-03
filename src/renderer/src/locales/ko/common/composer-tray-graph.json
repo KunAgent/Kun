@@ -1,0 +1,25 @@
+{
+  "composerTrayGraph": {
+    "segmentLabel": "Graph · {{titles}}",
+    "segmentLabelStatus": "Graph · {{status}}",
+    "titleSeparator": ", ",
+    "segmentAria": "Graph 실행: 노드 {{total}}개 중 {{accepted}}개 수락됨, {{running}}개 실행 중",
+    "segmentAriaQuiet": "Graph 실행: 노드 {{total}}개 중 {{accepted}}개 수락됨. 실행 중인 노드가 한동안 응답이 없습니다",
+    "segmentAriaAsking": "Graph 실행: 노드 {{total}}개 중 {{accepted}}개 수락됨. 노드 하나가 답변을 기다리고 있습니다",
+    "segmentAriaAwaiting": "Graph 실행: 노드 {{total}}개 중 {{accepted}}개 수락됨. 실행이 사용자의 조치를 기다리고 있습니다",
+    "segmentAriaFlagged": "Graph 실행: 노드 {{total}}개 중 {{accepted}}개 수락됨. 확인이 필요한 노드가 있습니다",
+    "sheetTitle": "Graph 실행",
+    "acceptedSummary": "노드 {{total}}개 중 {{accepted}}개 수락됨",
+    "runningSummary_one": "{{count}}개 실행 중",
+    "runningSummary_other": "{{count}}개 실행 중",
+    "nodeRetry": "재시도 {{number}}",
+    "lastActivitySeconds": "마지막 활동 {{seconds}}초 전",
+    "lastActivityAgo": "마지막 활동 {{ago}}",
+    "stillWaiting": "모델 또는 도구의 응답을 계속 기다리는 중",
+    "elapsedTitle": "{{duration}} 동안 실행 중",
+    "correctionAria": "Graph 플래닝이 일시 중지됨: plan에 사용자 입력이 필요합니다",
+    "correctionNote": "초안이 저장되었습니다. 채팅에 지침을 추가한 뒤 플래닝을 이어 가세요.",
+    "correctionMore_one": "문제 {{count}}개 더",
+    "correctionMore_other": "문제 {{count}}개 더"
+  }
+}

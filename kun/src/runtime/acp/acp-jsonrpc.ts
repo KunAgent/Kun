@@ -8,9 +8,11 @@
  *   pending map so a late response is dropped with a debug note.
  * - Writes are serialized through a queue that honors `write()` backpressure
  *   via the `drain` event.
- * - A line longer than the 8 MiB cap, a non-JSON line, or an unclassifiable
- *   frame closes the connection with `harness_protocol_error` — a peer that
- *   corrupts the stream can no longer be trusted.
+ * - A line longer than the 8 MiB cap, a malformed `{...` frame, or an
+ *   unclassifiable frame closes the connection with `harness_protocol_error` —
+ *   a peer that corrupts the stream can no longer be trusted. A line that
+ *   does not parse and does not start with `{` is stdout diagnostic noise and
+ *   is skipped with a debug note.
  * - `exitPromise` (the process exit) rejects every pending request with
  *   `harness_crashed` plus a sanitized stderr tail.
  *
@@ -19,6 +21,7 @@
  * `{id, method}` dialect used by app-server-style transports (Codex, Pi) —
  * do not port one dialect onto the other.
  */
+import { acpDiagnosticText } from './acp-diagnostic-text.js'
 import { StringDecoder } from 'node:string_decoder'
 import type { Readable, Writable } from 'node:stream'
 import { redactApprovalSensitiveText } from '../../domain/approval.js'
@@ -260,6 +263,14 @@ export class AcpJsonRpc {
     try {
       value = JSON.parse(line)
     } catch {
+      // Some agents print diagnostics (e.g. `[llm-account] model listing ...`)
+      // on stdout. A line that cannot be a JSON object frame is noise, not a
+      // corrupt frame: note it and keep going. A broken `{...` line is still
+      // a stream we can no longer trust.
+      if (!line.trimStart().startsWith('{')) {
+        this.io.debug?.({ direction: 'note', summary: `ignored non-JSON stdout line: ${previewText(line)}` })
+        return
+      }
       this.failProtocol('ACP frame is not valid JSON')
       return
     }
@@ -364,7 +375,7 @@ export class AcpJsonRpc {
     this.dropPending(id)
     if (frame.error) {
       entry.reject(
-        new AcpError('agent_error', frame.error.message, {
+        new AcpError('agent_error', acpDiagnosticText(frame.error.message), {
           rpcCode: frame.error.code,
           data: frame.error.data
         })
@@ -434,7 +445,11 @@ function previewFrame(frame: Record<string, unknown>): string {
   } catch {
     return '[unserializable frame]'
   }
-  const sanitized = redactApprovalSensitiveText(serialized)
+  return previewText(serialized)
+}
+
+function previewText(text: string): string {
+  const sanitized = redactApprovalSensitiveText(text)
   return sanitized.length > DEBUG_FRAME_PREVIEW_CHARS
     ? `${sanitized.slice(0, DEBUG_FRAME_PREVIEW_CHARS)}…[truncated]`
     : sanitized

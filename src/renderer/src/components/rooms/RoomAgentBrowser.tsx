@@ -74,10 +74,10 @@ export function RoomAgentBrowserStatus({ roomId, activity, error, onOpen }: {
       .then((state) => { if (!receivedEvent) accept(state) }).catch(() => undefined)
     return () => { live = false; off() }
   }, [scope, threadId, turnId])
-  if (!execution) return null
   const state = snapshot?.scope === scope ? snapshot.state : undefined
-  const label = !state?.sessionId ? text('需要时可打开浏览器', 'Browser is ready when needed')
-    : state.pendingOriginConsent || state.pendingActionConsent ? text('浏览器操作等待你确认', 'Browser action needs your approval')
+  // Stay out of the way until the Agent actually starts a browser session; the right panel still hosts it.
+  if (!execution || !state?.sessionId) return null
+  const label = state.pendingOriginConsent || state.pendingActionConsent ? text('浏览器操作等待你确认', 'Browser action needs your approval')
       : state.controlOwner === 'manual' ? text('你正在控制浏览器', 'You have browser control')
         : state.lifecycle === 'stopped' ? text('浏览器已停止', 'Browser stopped')
           : state.lifecycle === 'error' || state.capabilityStatus === 'unavailable' ? text('浏览器需要处理', 'Browser needs attention')

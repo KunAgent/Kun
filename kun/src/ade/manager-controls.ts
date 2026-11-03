@@ -24,7 +24,7 @@ import type { ManagerToolContext, ManagerRuntimeDeps } from './manager-runtime.j
 import { PERMISSION_RANK } from './permission-clamp.js'
 import { reportLanguage } from './user-report.js'
 
-/** `worker_send` (09 §4.1): a new dispatch for an existing worker. */
+/** `worker_send`: a new dispatch for an existing worker. */
 export const WorkerSendInputSchema = z
   .object({
     workerId: z.string().min(1).max(256),
@@ -43,7 +43,7 @@ export const WorkerStopInputSchema = z
 export const WorkerReleaseInputSchema = z
   .object({
     workerId: z.string().min(1).max(256),
-    /** Also hide the worker from the activity board (09 §4.1). */
+    /** Also hide the worker from the activity board. */
     archive: z.boolean().optional()
   })
   .strict()
@@ -59,7 +59,7 @@ export const DispatchQueueInputSchema = z
   .object({ workerId: z.string().min(1).max(256).optional() })
   .strict()
 
-/** `dispatch_update`: only `task` and `context` may change (09 §4.1). */
+/** `dispatch_update`: only `task` and `context` may change. */
 export const DispatchUpdateInputSchema = z
   .object({
     dispatchId: z.string().min(1).max(256),
@@ -72,7 +72,7 @@ export const DispatchCancelInputSchema = z
   .object({ dispatchId: z.string().min(1).max(256) })
   .strict()
 
-/** `worker_approve` (09 §6.5): only advertised while managerMayApprove is on. */
+/** `worker_approve`: only advertised while managerMayApprove is on. */
 export const WorkerApproveInputSchema = z
   .object({
     approvalId: z.string().min(1).max(256),
@@ -87,6 +87,7 @@ export type WorkerSendResult = {
   dispatchId?: string
   dispatched?: boolean
   deliveryPending?: DeliverOutcome['pendingReason']
+  failureReason?: string
   refusal?: string
   userReport: string
 }
@@ -97,13 +98,13 @@ export type ControlResult = {
   userReport: string
 }
 
-/** States a dispatch may still be edited or withdrawn in (09 §4.1). */
+/** States a dispatch may still be edited or withdrawn in. */
 const MUTABLE_STATES = ['pending'] as const
-/** States not yet owned by a worker turn (queue view, 09 §4.1). */
+/** States not yet owned by a worker turn (queue view). */
 const QUEUED_STATES = ['pending', 'delivering', 'uncertain'] as const
 
 /**
- * Manager control-plane tool operations (09 §4.1): worker_send/stop/release/
+ * Manager control-plane tool operations: worker_send/stop/release/
  * answer, dispatch queue/update/cancel, and the opt-in worker_approve. The
  * GUI team routes share the helpers via TeamControls; every write path here
  * is also reachable through ManagerRuntime delegates.
@@ -197,16 +198,17 @@ export class ManagerControls {
       ...(input.mode ? { mode: input.mode } : {})
     })
     return {
-      ok: true,
+      ok: dispatch.state !== 'failed' && dispatch.state !== 'cancelled',
       workerId: worker.workerId,
       dispatchId: dispatch.dispatchId,
       dispatched: delivered.accepted,
+      ...(delivered.failureReason ? { failureReason: delivered.failureReason } : {}),
       ...(delivered.pendingReason ? { deliveryPending: delivered.pendingReason } : {}),
       userReport: this.sendReport(worker, delivered, language)
     }
   }
 
-  /** `worker_stop` — interrupt the worker's active/queued turn (09 §4.1). */
+  /** `worker_stop` — interrupt the worker's active/queued turn. */
   async workerStop(ctx: ManagerToolContext, rawInput: unknown): Promise<ControlResult & {
     stopped?: boolean
   }> {
@@ -255,7 +257,7 @@ export class ManagerControls {
   }
 
   /**
-   * `worker_release` (09 §4.1/§9): stop work, mark released, dorm the
+   * `worker_release`: stop work, mark released, dorm the
    * activity row. The task workspace is captured first; an empty diff is
    * discarded, unmerged changes stay on disk and the report says so.
    */
@@ -310,7 +312,7 @@ export class ManagerControls {
         .captureForDispatch(workspaceId)
         .then((result) => result.stat)
         .catch(() => null)
-      // 07 §8.3: keep the worktree whenever it may still hold unmerged work
+      // keep the worktree whenever it may still hold unmerged work
       // (non-empty diff, or capture could not prove it clean).
       if (stat && stat.changedFiles === 0) {
         await this.deps.taskWorkspaces.discard(workspaceId, true).catch(() => undefined)
@@ -333,7 +335,7 @@ export class ManagerControls {
     }
   }
 
-  /** `worker_answer` (09 §6.4) — releases the waiting askManager call. */
+  /** `worker_answer` — releases the waiting askManager call. */
   async workerAnswer(ctx: ManagerToolContext, rawInput: unknown): Promise<ControlResult> {
     const input = WorkerAnswerInputSchema.parse(rawInput)
     const language = this.language()
@@ -390,7 +392,7 @@ export class ManagerControls {
     }
   }
 
-  /** `dispatch_update` — only `task`/`context`, only while `pending` (09 §4.1). */
+  /** `dispatch_update` — only `task`/`context`, only while `pending`. */
   async dispatchUpdate(ctx: ManagerToolContext, rawInput: unknown): Promise<ControlResult & {
     dispatch?: DispatchRecord
   }> {
@@ -441,7 +443,7 @@ export class ManagerControls {
     }
   }
 
-  /** `dispatch_cancel` — withdraw a `pending` dispatch (09 §4.1). */
+  /** `dispatch_cancel` — withdraw a `pending` dispatch. */
   async dispatchCancel(ctx: ManagerToolContext, rawInput: unknown): Promise<ControlResult> {
     const input = DispatchCancelInputSchema.parse(rawInput)
     const language = this.language()
@@ -478,7 +480,7 @@ export class ManagerControls {
   }
 
   /**
-   * `worker_approve` (09 §6.5): resolve a worker's approval request when the
+   * `worker_approve`: resolve a worker's approval request when the
    * action stays inside the manager's own authority snapshot. File writes
    * must land inside the worker's frozen write roots; command/effect kinds
    * additionally require the manager to run at full-access. Actions marked
@@ -630,7 +632,7 @@ export class ManagerControls {
     })
   }
 
-  /** P3-15 hard cap: refuse new work; first soft crossing sends one notice. */
+  /** hard cap: refuse new work; first soft crossing sends one notice. */
   async budgetRefusal(
     team: TeamRecord,
     language: 'en' | 'zh'
@@ -641,7 +643,7 @@ export class ManagerControls {
     return budgetHardRefusal(check, language)
   }
 
-  /** P3-15: first soft-cap crossing wakes the manager once. */
+  /** first soft-cap crossing wakes the manager once. */
   notifyBudgetCheck(
     team: TeamRecord,
     check: import('./team-budget.js').TeamBudgetCheck | undefined

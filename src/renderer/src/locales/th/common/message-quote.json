@@ -1,0 +1,19 @@
+{
+  "messageQuoteToolbarLabel": "การทำงานกับข้อความที่เลือก",
+  "messageQuoteStartSide": "เริ่มการสนทนาสาขา",
+  "messageQuoteStartSideTitle": "ถามเกี่ยวกับข้อความนี้ในการสนทนาสาขาที่เก็บบริบททั้งหมดไว้",
+  "messageQuoteSideNeedsRuntime": "ใช้ได้เมื่อเชื่อมต่อรันไทม์แล้ว",
+  "messageQuoteSideNeedsThread": "เริ่มการสนทนาก่อน",
+  "messageQuoteReply": "ตอบกลับ",
+  "messageQuoteReplyTitle": "อ้างอิงข้อความนี้ในข้อความถัดไป",
+  "messageQuoteReplyingToAssistant": "ตอบกลับ Kun",
+  "messageQuoteReplyingToUser": "ตอบกลับข้อความของคุณ",
+  "messageQuoteTruncated": "2,000 ตัวอักษรแรก",
+  "messageQuoteExpand": "แสดงข้อความอ้างอิงทั้งหมด",
+  "messageQuoteCollapse": "ย่อข้อความอ้างอิง",
+  "messageQuoteRemove": "ลบข้อความอ้างอิง",
+  "messageQuoteComposerPlaceholder": "ตอบกลับข้อความนี้…",
+  "messageQuoteSidePlaceholder": "ถามเกี่ยวกับข้อความนี้…",
+  "messageQuoteJumpToSource": "ไปยังต้นฉบับ",
+  "messageQuoteJumpToSourceLabel": "ไปยังข้อความต้นฉบับที่อ้างอิง: {{text}}"
+}

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defaultWriteSettings, normalizeAppSettings, type AppSettingsV1 } from '@shared/app-settings'
+import { mergeWriteSettings } from '@shared/app-settings-write'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useWriteWorkspaceStore } from './write-workspace-store'
 
@@ -32,6 +33,7 @@ afterEach(() => {
   useWriteWorkspaceStore.setState({
     workspaceRoot: '',
     workspaceRoots: [],
+    documentsByPath: {},
     inlineCompletion: defaultWriteSettings().inlineCompletion,
     settingsLoading: false,
     settingsError: null
@@ -77,10 +79,33 @@ describe('write workspace settings actions', () => {
     await selectingFirst
 
     expect(initializeWorkspace).toHaveBeenCalledTimes(1)
-    expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/b')
+    expect(initializeWorkspace).toHaveBeenCalledWith('/workspace/b', { navigationPrepared: true })
     expect(useWriteWorkspaceStore.getState().workspaceRoots).toContain('/workspace/b')
     expect(useWriteWorkspaceStore.getState().workspaceRoots).not.toContain('/workspace/a')
   })
+  it('does not persist or initialize a new Work root when dirty-file navigation is canceled', async () => {
+    const setSettings = vi.spyOn(rendererRuntimeClient, 'setSettings')
+    const initializeWorkspace = vi.fn(async () => undefined)
+    const confirm = vi.fn(() => false)
+    vi.stubGlobal('window', { confirm })
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: '/workspace/docs', workspaceRoots: ['/workspace/docs'], autoSaveEnabled: false,
+      documentsByPath: {
+        '/workspace/docs/a.md': { kind: 'text', path: '/workspace/docs/a.md', saveStatus: 'dirty' }
+      } as never,
+      initializeWorkspace
+    })
+
+    await useWriteWorkspaceStore.getState().selectWriteWorkspace('/workspace/other')
+
+    expect(confirm).toHaveBeenCalled()
+    expect(setSettings).not.toHaveBeenCalled()
+    expect(initializeWorkspace).not.toHaveBeenCalled()
+    expect(useWriteWorkspaceStore.getState().workspaceRoot).toBe('/workspace/docs')
+    expect(useWriteWorkspaceStore.getState().workspaceRoots).toEqual(['/workspace/docs'])
+    expect(useWriteWorkspaceStore.getState().documentsByPath['/workspace/docs/a.md'].saveStatus).toBe('dirty')
+  })
+
   it('loads mobile documents independently of the host paper mode without persisting a switch', async () => {
     const settings = normalizeAppSettings({ write: {
       defaultWorkspaceRoot: '/workspace/docs', activeWorkspaceRoot: '/workspace/library',
@@ -141,8 +166,8 @@ describe('loadWriteSettings concurrency and surface switch', () => {
     expect(initializeWorkspace).toHaveBeenLastCalledWith('/workspace/second', { force: false })
   })
 
-  it('stays on the docs surface and rolls the flag back when leaving is declined', async () => {
-    const enabled = normalizeAppSettings({
+  it('folds a legacy paper library into the spaces and stays put when leaving is declined', async () => {
+    let settings = normalizeAppSettings({
       write: {
         activeWorkspaceRoot: '/workspace/docs',
         workspaces: ['/workspace/docs'],
@@ -151,9 +176,11 @@ describe('loadWriteSettings concurrency and surface switch', () => {
         paperMode: { enabled: true, libraries: ['/library'], activeLibrary: '/library' }
       }
     } as AppSettingsV1)
-    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(enabled)
-    const setSettings = vi.spyOn(rendererRuntimeClient, 'setSettings')
-      .mockResolvedValue(settingsFor('/workspace/docs'))
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockImplementation(async () => settings)
+    vi.spyOn(rendererRuntimeClient, 'setSettings').mockImplementation(async (patch) => {
+      settings = { ...settings, write: mergeWriteSettings(settings.write, patch.write) }
+      return settings
+    })
     vi.stubGlobal('window', { confirm: vi.fn(() => false) })
     const initializeWorkspace = vi.fn(async () => undefined)
     useWriteWorkspaceStore.setState({
@@ -169,7 +196,9 @@ describe('loadWriteSettings concurrency and surface switch', () => {
 
     expect(useWriteWorkspaceStore.getState().workSurface).toBe('docs')
     expect(initializeWorkspace).not.toHaveBeenCalled()
-    expect(setSettings).toHaveBeenCalledWith({ write: { paperMode: { enabled: false } } })
+    expect(settings.write.paperMode.enabled).toBe(false)
+    expect(settings.write.workspaces).toEqual(expect.arrayContaining(['/workspace/docs', '/library']))
+    expect(settings.write.activeWorkspaceRoot).toBe('/workspace/docs')
     useWriteWorkspaceStore.setState({ documentsByPath: {} })
     vi.unstubAllGlobals()
   })

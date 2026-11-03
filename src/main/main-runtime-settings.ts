@@ -1,4 +1,6 @@
 import { resolveNativeAgentNetworkSnapshot } from './runtime/native-agent-network'
+import type { McpServersUpdatePayload } from '../../kun/src/contracts/runtime-config.js'
+import { syncModelConnectionGlobals } from './runtime/model-connection-globals-sync'
 import { BrowserWindow } from 'electron'
 import {
   getKunRuntimeSettings,
@@ -60,6 +62,7 @@ import {
 import { reconcileBrowserUseHostForRuntime } from './browser-use/browser-use-host'
 import { bundledSkillsDirectory } from './bundled-skill-resources'
 import { isAppQuitInProgress } from './main-lifecycle'
+import { forgetRecentRuntimeVerification } from './runtime/recent-runtime-verification'
 
 export function publishRuntimeSettingsSyncStatus(
   status: Omit<KunRuntimeSettingsSyncStatusPayload, 'at'>
@@ -308,7 +311,7 @@ export async function applyManagedRuntimeSettingsHot(
   const adapter = kunRuntimeAdapter
   if (!adapter.isChildRunning()) return { result: 'skipped' }
 
-  // P4-04: heal "gateway enabled but no independent key" before composing so
+  // heal "gateway enabled but no independent key" before composing so
   // a stale flag cannot veto unrelated hot-applied sections.
   const gatewayReconcile = await reconcileLocalGatewayCredential(settings, source).catch(
     (error): { outcome: 'unchanged' } => {
@@ -321,15 +324,25 @@ export async function applyManagedRuntimeSettingsHot(
   if (!shouldApply()) return { result: 'superseded' }
   const effectiveSettings =
     gatewayReconcile.outcome === 'disabled' ? gatewayReconcile.settings : settings
+  await syncModelConnectionGlobals(effectiveSettings, source).catch((error) => {
+    logWarn(source, 'Model-connection globals sync failed before apply.', {
+      message: error instanceof Error ? error.message : String(error)
+    })
+  })
+  if (!shouldApply()) return { result: 'superseded' }
 
   const runtime = resolveKunRuntimeSettings(effectiveSettings)
   const dataDir = resolveKunDataDir(runtime)
+  // The sync decides whether this apply may replace the Runtime's live MCP
+  // server set; the decision is bound to the exact snapshot it read.
+  let mcpServersUpdate: McpServersUpdatePayload | undefined
   const config = await syncGuiManagedKunConfig(dataDir, runtime, {
     scheduleMcp: {
       settings: effectiveSettings,
       launch: getClawScheduleMcpLaunchConfig()
     },
-    builtinSkillsRoot: bundledSkillsDirectory()
+    builtinSkillsRoot: bundledSkillsDirectory(),
+    onMcpServersUpdate: (update) => { mcpServersUpdate = update }
   })
   if (!shouldApply()) return { result: 'superseded' }
   const browserUseHost = await reconcileBrowserUseHostForRuntime(
@@ -347,7 +360,8 @@ export async function applyManagedRuntimeSettingsHot(
           bridgeToken: browserUseHostBinding.token,
           approvalSigningKey: browserUseHostBinding.approvalSigningKey
         }
-      : null
+      : null,
+    mcpServersUpdate
   )
 
   const headers = runtimeAuthHeaders(effectiveSettings)
@@ -640,7 +654,7 @@ export async function runtimeRequest(
     return runtimeFailure('runtime_shutting_down', 'Kun application is shutting down')
   }
   try {
-    return await runtimeRequestViaHost(settings, pathAndQuery, init, ensureRuntime)
+    return await runtimeRequestViaHost(settings, pathAndQuery, init, ensureRuntime, forgetRecentRuntimeVerification)
   } catch (e) {
     if (init.signal?.aborted) return runtimeFailure('aborted', 'Runtime request was cancelled.', 0)
     const message = e instanceof Error ? e.message : String(e)

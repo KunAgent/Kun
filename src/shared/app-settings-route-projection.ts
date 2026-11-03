@@ -67,6 +67,29 @@ export function projectExecutableModelRoutePools(
 }
 
 
+/**
+ * The Runtime config requires every pool to keep at least one target. Pools
+ * whose members all point at removed connections or models stay in settings
+ * but are left out here, together with nested aliases that named them.
+ */
+export function projectRuntimeModelRoutePools(
+  settings: Pick<ModelProviderSettingsV1, 'providers' | 'routePools'>
+): ModelRoutePoolV1[] {
+  let pools = projectExecutableModelRoutePools(settings).filter((pool) => pool.targets.length > 0)
+  for (;;) {
+    const aliases = new Set(pools.map((pool) => pool.modelId.toLowerCase()))
+    const next = pools.flatMap((pool) => {
+      const targets = pool.targets.filter((target) =>
+        target.providerId !== NESTED_ROUTE_PROVIDER_ID || aliases.has(target.modelId.toLowerCase()))
+      if (targets.length === pool.targets.length) return [pool]
+      if (targets.length === 0) return []
+      return [{ ...pool, enabled: pool.enabled && targets.some((target) => target.enabled), targets }]
+    })
+    if (next.length === pools.length && next.every((pool, index) => pool === pools[index])) return next
+    pools = next
+  }
+}
+
 /** Keeps valid middleware entries (unique ids, at most 32) and drops malformed ones. */
 export function normalizeGatewayMiddleware(input: unknown): { middleware?: GatewayMiddlewareConfig[] } {
   if (!Array.isArray(input)) return {}

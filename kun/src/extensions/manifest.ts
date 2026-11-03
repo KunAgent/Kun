@@ -7,6 +7,7 @@ import {
   type CompatibilityReport
 } from '@kun/extension-api'
 import semver from 'semver'
+import { kunEngineVersion } from '../version.js'
 import { extensionError } from './errors.js'
 import { extensionIdentity } from './paths.js'
 import {
@@ -127,9 +128,11 @@ export function manifestCompatibilityReport(
     capabilitiesByVersion
   })
   const manifestCompatible = compatibility.supportedManifestVersions.includes(manifest.manifestVersion)
-  const engineCompatible = semver.satisfies(compatibility.kunVersion, manifest.engines.kun, {
-    includePrerelease: true
-  })
+  const engineCompatible = semver.satisfies(
+    kunEngineVersion(compatibility.kunVersion),
+    manifest.engines.kun,
+    { includePrerelease: true }
+  )
   const supportedRpcVersions = [...(compatibility.supportedRpcVersions ?? [EXTENSION_RPC_VERSION])]
   const declaredRpcVersion = handshake.declaredRpcVersion ?? EXTENSION_RPC_VERSION
   const negotiatedRpcVersion = handshake.negotiatedRpcVersion ?? (

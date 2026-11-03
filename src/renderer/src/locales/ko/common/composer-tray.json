@@ -1,0 +1,38 @@
+{
+  "composerTray": {
+    "regionLabel": "현재 활동",
+    "queueLabel": "대기 중인 메시지",
+    "collapse": "접기",
+    "stop": "중지",
+    "duration": {
+      "seconds": "{{seconds}}초",
+      "minutes": "{{minutes}}분",
+      "minutesSeconds": "{{minutes}}분 {{seconds}}초",
+      "hours": "{{hours}}시간",
+      "hoursMinutes": "{{hours}}시간 {{minutes}}분",
+      "underMinute": "1분 미만",
+      "minutesRounded": "{{minutes}}분",
+      "hoursRounded": "{{hours}}시간",
+      "hoursMinutesRounded": "{{hours}}시간 {{minutes}}분",
+      "justNow": "방금",
+      "ago": "{{duration}} 전"
+    }
+  },
+  "composerInterrupt": {
+    "previous": "이전",
+    "next": "다음",
+    "pagerPosition": "{{total}}개 중 {{index}}번째",
+    "countdown": "{{seconds}}초",
+    "countdownTitle": "{{seconds}}초 후 Kun이 스스로 계속합니다",
+    "deciding": "Kun이 스스로 결정하는 중…",
+    "recommended": "추천",
+    "optionsLabel": "선택지",
+    "freeTextLabel": "직접 입력한 답변"
+  },
+  "composerDock": {
+    "runningPlaceholder": "계속 입력하면 후속 변경 사항을 대기열에 넣습니다…",
+    "queueMessage": "대기열에 추가",
+    "stopWithShortcut": "중지 (Esc)",
+    "enterToQueue": "Enter로 대기열에 추가"
+  }
+}

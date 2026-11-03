@@ -1,3 +1,4 @@
+import { isAgentSettingsCategory } from './settings-navigation'
 import {
   type AppSettingsPatch
 } from '@shared/app-settings'
@@ -62,9 +63,12 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [])
 
   useEffect(() => {
-    if (category !== 'agents') return
+    if (category !== 'skills') return
     void refreshSkillRoots()
   }, [category, refreshSkillRoots])
+
+  /** Content last read from or written to the shared MCP file. */
+  const mcpSavedTextRef = useRef<string | null>(null)
 
   const loadMcpConfig = async (): Promise<void> => {
     if (typeof window.kunGui?.getKunConfigFile !== 'function') return
@@ -74,6 +78,9 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
       const config = await window.kunGui.getKunConfigFile()
       setMcpConfigPath(config.path)
       setMcpConfigText(config.content)
+      // Baseline for the next save: a Runtime disable that lands after this
+      // read must not be overwritten by the stale editor snapshot.
+      mcpSavedTextRef.current = config.content
       setMcpConfigExists(config.exists)
       setMcpLoaded(true)
     } catch (e) {
@@ -87,7 +94,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }
 
   useEffect(() => {
-    if (category !== 'agents' || mcpLoaded || mcpLoading) return
+    if (category !== 'mcp' || mcpLoaded || mcpLoading) return
     void loadMcpConfig()
   }, [category, mcpLoaded, mcpLoading])
 
@@ -125,7 +132,11 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
     setMcpBusy(true)
     setMcpNotice(null)
     try {
-      const result = await window.kunGui.setKunConfigFile(mcpConfigText)
+      const result = await window.kunGui.setKunConfigFile(
+        mcpConfigText,
+        mcpSavedTextRef.current ?? ''
+      )
+      mcpSavedTextRef.current = mcpConfigText
       setMcpConfigPath(result.path)
       setMcpConfigExists(true)
       setMcpNotice({
@@ -173,7 +184,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [activeProjectWorkspaceRoot])
 
   useEffect(() => {
-    if (category !== 'agents') return
+    if (category !== 'projects') return
     void loadProjectConfig()
   }, [category, loadProjectConfig, projectConfigGrantFingerprint])
 
@@ -285,7 +296,7 @@ export function useSettingsDomainOperations(scope: Record<string, any>): Record<
   }, [activeProjectWorkspaceRoot])
 
   useEffect(() => {
-    if (category !== 'agents' && category !== 'laboratory' && category !== 'memory') return
+    if (!isAgentSettingsCategory(category) && category !== 'laboratory' && category !== 'memory') return
     void refreshKunDiagnostics()
   }, [category, refreshKunDiagnostics])
 

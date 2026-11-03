@@ -1,52 +1,4 @@
-.tray-quota-source > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
 
-.tray-quota-source svg {
-  width: 10px;
-  height: 10px;
-}
-
-.tray-quota-state {
-  display: flex;
-  min-height: 230px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 8px;
-  padding: 24px;
-  color: var(--tray-muted);
-  text-align: center;
-}
-
-.tray-quota-state > svg {
-  width: 26px;
-  height: 26px;
-  color: var(--tray-faint);
-}
-
-.tray-quota-state strong {
-  color: var(--tray-text);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.tray-quota-state p {
-  max-width: 300px;
-  margin: 0;
-  font-size: 12px;
-  line-height: 17px;
-}
-
-.tray-quota-state-missing_credentials > svg {
-  color: var(--tray-warn);
-}
-
-.tray-quota-state-error > svg {
-  color: var(--tray-danger);
-}
 
 .tray-quota-error {
   display: flex;
@@ -74,34 +26,6 @@
 
 .tray-quota-stale {
   margin-bottom: 8px;
-}
-
-.tray-quota-dashboard-button {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--tray-border);
-  border-radius: var(--tray-radius-control);
-  padding: 0 12px;
-  background: var(--tray-panel-strong);
-  color: var(--tray-text);
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition:
-    border-color var(--tray-duration) ease,
-    background var(--tray-duration) ease;
-}
-
-.tray-quota-dashboard-button:hover {
-  border-color: var(--tray-border-strong);
-  background: var(--tray-hover);
-}
-
-.tray-quota-dashboard-button svg {
-  width: 12px;
-  height: 12px;
 }
 
 .tray-quota-footer {
@@ -203,16 +127,18 @@
     box-shadow: none;
   }
 
-  .tray-provider-tab.is-active,
-  .tray-quota-footer button.is-primary {
+  .tray-quota-footer button.is-primary,
+  .kq-seg button[data-active='true'] {
     border: 1px solid Highlight;
     background: Highlight;
     color: HighlightText;
     forced-color-adjust: none;
   }
 
-  .tray-quota-progress span {
+  .kq-fill,
+  .kq-ring-fill {
     background: Highlight;
+    stroke: Highlight;
     forced-color-adjust: none;
   }
 

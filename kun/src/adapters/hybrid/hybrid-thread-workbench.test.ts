@@ -71,6 +71,50 @@ describe('HybridThreadStore combined Code workbench', () => {
       store.close()
     }
   })
+  it('filters Work before pagination and searches older sessions in a mixed indexed space', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-hybrid-work-history-'))
+    roots.push(root)
+    const store = new HybridThreadStore({ dataDir: root })
+    const seed = async (id: string, index: number, extra: Partial<ThreadRecord> = {}): Promise<void> => {
+      const record = createThreadRecord({ id, title: id, workspace: '/repo', model: 'm' })
+      const updatedAt = new Date(Date.UTC(2026, 9, 1, 0, 0, index)).toISOString()
+      await store.upsert({ ...record, updatedAt, ...extra })
+    }
+    try {
+      for (let index = 0; index < 85; index += 1) {
+        await seed(`work_${index}`, index, { agentSurface: 'write', ...(index === 0 ? { title: 'unique older title' } : {}) })
+      }
+      for (let index = 100; index < 190; index += 1) await seed(`code_${index}`, index)
+      await seed('legacy', 90, { title: 'Write Assistant', agentSurface: 'write' })
+      await seed('not_work', 91, { title: 'Write Assistant', agentSurface: 'code' })
+      await seed('archived', 92, { agentSurface: 'write', status: 'archived' })
+      await seed('side', 93, { agentSurface: 'write', relation: 'side', parentThreadId: 'work_1' })
+      await seed('worker', 94, { agentSurface: 'write', executionUnit: {
+        kind: 'worker', teamId: 'team', managerThreadId: 'manager', label: 'Worker', lifecycle: 'persistent', control: 'manager'
+      } })
+      await seed('elsewhere', 95, { agentSurface: 'write', workspace: '/other' })
+      await store.waitForBackfill()
+      const { db } = store as unknown as { db: import('better-sqlite3').Database }
+      db.prepare("UPDATE threads SET agent_surface = 'code' WHERE id = ?").run('legacy')
+
+      const options = { workbenchScope: 'work' as const, workspace: '/repo', workspaceMode: 'code' as const, limit: 80 }
+      const first = await store.listPage(options)
+      expect(first.threads).toHaveLength(80)
+      expect(first.hasMore).toBe(true)
+      expect(first.threads[0]?.id).toBe('legacy')
+      const second = await store.listPage({ ...options, cursor: first.nextCursor })
+      expect(second.threads).toHaveLength(6)
+      expect(second.hasMore).toBe(false)
+      const ids = [...first.threads, ...second.threads].map((thread) => thread.id)
+      expect(new Set(ids).size).toBe(86)
+      expect(ids).toContain('work_0')
+      expect(ids).not.toContain('not_work')
+      expect(ids).not.toContain('worker')
+      expect((await store.listPage({ ...options, search: 'unique older' })).threads.map((thread) => thread.id))
+        .toEqual(['work_0'])
+    } finally { store.close() }
+  })
+
   it('repairs old indexed routing metadata once, using metadata reads and preserving cursor order', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-hybrid-routing-repair-'))
     roots.push(root)

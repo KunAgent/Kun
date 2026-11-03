@@ -1,3 +1,4 @@
+import { parseMemoryRelationMetadata } from './memory-relation-metadata'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -83,6 +84,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     knowledgeBases: thread.knowledgeBases?.map((mount) => ({ ...mount })),
     status: thread.status,
     ...(typeof thread.latestSeq === 'number' ? { latestSeq: thread.latestSeq } : {}),
+    ...(typeof thread.turnCount === 'number' ? { turnCount: thread.turnCount } : {}),
     approvalPolicy: normalizeApprovalPolicy(thread.approvalPolicy),
     sandboxMode: normalizeSandboxMode(thread.sandboxMode),
     approvalReviewer: normalizeApprovalReviewer(thread.approvalReviewer),
@@ -96,6 +98,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
     relation: thread.relation,
     parentThreadId: thread.parentThreadId,
+    ...(thread.taskOrigin ? { taskOrigin: { ...thread.taskOrigin } } : {}),
     ...(thread.executionUnit ? { executionUnit: { ...thread.executionUnit } } : {}),
     ...(thread.roomContext ? { roomContext: thread.roomContext } : {}),
     ...(thread.workbenchOrigin ? { workbenchOrigin: { ...thread.workbenchOrigin } } : {}),
@@ -511,6 +514,7 @@ export function applyRuntimeDisclosureMeta(
   if (activeSkillIds) meta.activeSkillIds = activeSkillIds
   if (injectedMemoryIds) meta.injectedMemoryIds = injectedMemoryIds
   if (injectedMemorySummaries) meta.injectedMemorySummaries = injectedMemorySummaries
+  if (item.injectedMemoryRelations) meta.injectedMemoryRelations = parseMemoryRelationMetadata(item.injectedMemoryRelations)
   if (injectedDirectiveIds) meta.injectedDirectiveIds = injectedDirectiveIds
   if (injectedDirectiveSummaries) meta.injectedDirectiveSummaries = injectedDirectiveSummaries
   if (injectedInstructionSources) meta.injectedInstructionSources = injectedInstructionSources

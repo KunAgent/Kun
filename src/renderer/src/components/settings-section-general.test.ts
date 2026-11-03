@@ -2,6 +2,10 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GeneralSettingsSection } from './settings-section-general'
+import { AppearanceSettingsSection } from './settings-section-appearance'
+import { CodeSettingsSection } from './settings-section-code'
+import { LocalLogSettingsCard } from './settings-section-general-desktop'
+import { NotificationsSettingsSection } from './settings-section-notifications'
 import { APP_LOCALE_OPTIONS } from '@shared/app-locales'
 
 const labels: Record<string, string> = {
@@ -10,6 +14,7 @@ const labels: Record<string, string> = {
   workspaceRootDesc: 'Default workspace description',
   workspaceRootPlaceholder: '~/.kun/default_workspace',
   restoreWorkspaceDefault: 'Restore default',
+  restoreConversationWorkspaceDefault: 'Restore conversation default',
   browse: 'Browse',
   turnCompleteNotification: 'Reply completion notifications',
   mainAgentTurnCompleteNotification: 'Main agent completions',
@@ -70,6 +75,9 @@ function baseCtx(): Record<string, unknown> {
     pickWorkspace: async () => undefined,
     resetWorkspaceToDefault: noop,
     workspacePickerError: '',
+    pickConversationWorkspace: async () => undefined,
+    resetConversationWorkspaceToDefault: noop,
+    conversationWorkspacePickerError: '',
     logPath: '',
     logDirOpenError: '',
     setLogDirOpenError: noop,
@@ -114,7 +122,7 @@ function baseCtx(): Record<string, unknown> {
   }
 }
 
-describe('GeneralSettingsSection workspace layout', () => {
+describe('General, Appearance, Notifications and Code settings pages', () => {
   beforeEach(() => {
     vi.stubGlobal('window', { kunGui: {} })
   })
@@ -123,13 +131,13 @@ describe('GeneralSettingsSection workspace layout', () => {
     vi.unstubAllGlobals()
   })
 
-  it('keeps the workspace path input full width above the action buttons', () => {
-    const html = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+  it('puts the workspace path field before its browse and restore actions on the Code page', () => {
+    const html = renderToStaticMarkup(createElement(CodeSettingsSection, { ctx: baseCtx() }))
 
-    expect(html).toContain('grid w-full min-w-0 gap-2 md:max-w-xl')
     expect(html).toContain('w-full min-w-0 rounded-xl border border-ds-border')
-    expect(html).toContain('flex flex-wrap justify-end gap-2')
-    expect(html.indexOf('~/data/code/python/Kook-Voices')).toBeLessThan(html.indexOf('Restore default'))
+    expect(html).toContain('flex min-w-0 flex-wrap gap-2')
+    expect(html.indexOf('~/data/code/python/Kook-Voices')).toBeLessThan(html.indexOf('Browse'))
+    expect(html.indexOf('Browse')).toBeLessThan(html.indexOf('Restore default'))
   })
 
   it('offers every supported application locale', () => {
@@ -140,32 +148,38 @@ describe('GeneralSettingsSection workspace layout', () => {
     }
   })
 
-  it('shows editable dark colors, a live preview, and the global reset action', () => {
-    const html = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+  it('offers every color palette and folds the dark UI colors into the custom editor', () => {
+    const html = renderToStaticMarkup(createElement(AppearanceSettingsSection, { ctx: baseCtx() }))
 
-    expect(html).toContain('darkUiColorsTitle')
+    expect(html).toContain('colorPaletteTitle')
+    for (const id of ['kun', 'sky', 'parchment', 'mint', 'sakura', 'dusk', 'ember', 'graphite', 'custom']) {
+      expect(html).toContain(`data-color-palette-choice="${id}"`)
+    }
+    // Tuned dark colors without a palette migrate to the custom palette.
+    expect(html).toMatch(/data-color-palette-choice="custom"[^>]*aria-checked="true"|aria-checked="true"[^>]*data-color-palette-choice="custom"/)
     expect(html).toContain('value="#101010"')
     expect(html).toContain('value="#202020"')
     expect(html).toContain('value="#303030"')
-    expect(html).toContain('background-color:#101010')
-    expect(html).toContain('border-color:#202020')
-    expect(html).toContain('darkUiColorsReset')
+    expect(html).toContain('colorPaletteCustomReset')
+    expect(html).toContain('colorPalettePackFirst')
+    expect(html).not.toContain('darkUiColorsTitle')
   })
 
-  it('keeps every directory and desktop subtab panel mounted', () => {
-    const html = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+  it('keeps General free of nested tabs and moves folders, checkpoints and logs to their pages', () => {
+    const general = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+    expect(general).not.toContain('role="tab"')
+    expect(general).not.toContain('legacyImportTitle')
+    expect(general).not.toContain('gitCheckpointTitle')
+    expect(general).not.toContain('logTitle')
 
-    for (const tab of ['workspace', 'migration', 'checkpoints']) {
-      expect(html).toContain(`id="general-directories-tab-${tab}"`)
-      expect(html).toContain(`id="general-directories-panel-${tab}"`)
+    const code = renderToStaticMarkup(createElement(CodeSettingsSection, { ctx: baseCtx() }))
+    for (const tab of ['directories', 'worktree', 'checkpoints']) {
+      expect(code).toContain(`id="code-settings-tab-${tab}"`)
+      expect(code).toContain(`id="code-settings-panel-${tab}"`)
     }
-    for (const tab of ['command', 'behavior', 'logs']) {
-      expect(html).toContain(`id="general-desktop-tab-${tab}"`)
-      expect(html).toContain(`id="general-desktop-panel-${tab}"`)
-    }
-    expect(html).toContain('legacyImportTitle')
-    expect(html).toContain('gitCheckpointTitle')
-    expect(html).toContain('logTitle')
+    expect(code).toContain('gitCheckpointTitle')
+
+    expect(renderToStaticMarkup(createElement(LocalLogSettingsCard, { view: baseCtx() }))).toContain('logTitle')
   })
 
   it('explains main-window quit without exposing legacy background options', () => {
@@ -198,19 +212,18 @@ describe('GeneralSettingsSection workspace layout', () => {
     expect(windowsHtml).not.toContain('Use system title bar')
   })
 
-  it('shows disabled source controls beneath the disabled master notification switch', () => {
-    const html = renderToStaticMarkup(createElement(GeneralSettingsSection, { ctx: baseCtx() }))
+  it('folds the per-source notification switches away while the master switch is off', () => {
+    const html = renderToStaticMarkup(createElement(NotificationsSettingsSection, { ctx: baseCtx() }))
+    const revealIndex = html.indexOf('class="ds-settings-reveal"')
     const mainToggleIndex = html.indexOf('aria-label="Main agent completions"')
     const subagentToggleIndex = html.indexOf('aria-label="Subagent completions"')
     const mainToggle = html.slice(mainToggleIndex, mainToggleIndex + 500)
     const subagentToggle = html.slice(subagentToggleIndex, subagentToggleIndex + 500)
 
-    expect(html).toContain('ml-3 divide-y divide-ds-border-muted border-l')
-    expect(mainToggleIndex).toBeGreaterThan(-1)
-    expect(subagentToggleIndex).toBeGreaterThan(-1)
+    expect(html.slice(revealIndex, revealIndex + 120)).toContain('data-open="false" aria-hidden="true" inert=""')
+    expect(mainToggleIndex).toBeGreaterThan(revealIndex)
+    expect(subagentToggleIndex).toBeGreaterThan(revealIndex)
     expect(mainToggle).toContain('aria-checked="true"')
-    expect(mainToggle).toContain('aria-disabled="true"')
     expect(subagentToggle).toContain('aria-checked="false"')
-    expect(subagentToggle).toContain('aria-disabled="true"')
   })
 })

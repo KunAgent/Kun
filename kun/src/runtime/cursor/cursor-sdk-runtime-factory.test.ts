@@ -478,6 +478,10 @@ describe('Cursor SDK runtime factory', () => {
       },
       close: vi.fn(),
       reload: async () => undefined,
+      getUsage: async () => ({
+        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, totalTokens: 0 },
+        runs: []
+      }),
       listArtifacts: async () => [],
       downloadArtifact: async () => Buffer.alloc(0),
       [Symbol.asyncDispose]: async () => undefined

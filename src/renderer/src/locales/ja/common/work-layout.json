@@ -5,7 +5,6 @@
   "workRailReviewCount": "修正 · {{count}} 件が確認待ち",
   "workRailReferences": "引用と資料",
   "workRailReferencesCount": "引用と資料 · {{count}} 件",
-  "workRailHistory": "会話履歴",
   "workOutlineSummary": "見出し {{count}} 件",
   "workOutlineEmpty": "まだ見出しがありません。# でセクションを始めると、ここにアウトラインが表示されます。",
   "workOutlineUnavailable": "アウトラインはドキュメント編集ビューで利用できます。",
@@ -24,6 +23,5 @@
   "workReferencesClear": "クリア",
   "workReferencesPage": "{{page}} ページ",
   "workReferencesLines": "{{start}}–{{end}} 行",
-  "workHistoryNoResource": "ファイルまたはホワイトボードを開くと、その会話がここに表示されます。",
   "workAssistantSelectionChip": "選択範囲 · {{count}} 文字"
 }

@@ -7,8 +7,24 @@ import {
 import type { CanvasDocument } from './canvas-types'
 import type { ToolBlock } from '../../agent/types'
 
+/**
+ * How long after a successful screen dispatch the drain keeps waiting for the
+ * chat store to reflect the new turn. Runtime admission resolves slightly
+ * before `busy`/`currentTurnId` are published, and in that window the thread
+ * would otherwise look idle and release the next screen too early.
+ */
+export const SCREEN_DISPATCH_SETTLE_MS = 1_500
+
+/** Serializes screen follow-up dispatches across overlapping drain passes. */
+export type ScreenDispatchGate = { inFlight: boolean; settleUntil: number }
+
+export function createScreenDispatchGate(): ScreenDispatchGate {
+  return { inFlight: false, settleUntil: 0 }
+}
+
 export type CanvasTurnDrainContext = {
   pendingScreens: PendingScreenGeneration[]
+  screenDispatchGate: ScreenDispatchGate
   pendingSvgToolBlocks: Map<string, ToolBlock>
   svgSourceTurnIds: Map<string, string>
   isDisposed: () => boolean
@@ -55,8 +71,18 @@ export function drainPendingSvgBlocks(context: CanvasTurnDrainContext): void {
  */
 export async function drainPendingScreens(context: CanvasTurnDrainContext): Promise<void> {
   if (context.pendingScreens.length === 0) return
+  const gate = context.screenDispatchGate
+  // The dispatch awaits thread/board resolution before the turn is sent, during
+  // which the chat store still looks idle; a second pass must not slip through.
+  if (gate.inFlight) return
+  const settleWait = gate.settleUntil - Date.now()
+  if (settleWait > 0) {
+    context.scheduleScreenDrain(settleWait)
+    return
+  }
   const chatState = context.getChatState()
   const pendingRuntimeWork = threadHasPendingRuntimeWork(chatState.blocks)
+  gate.inFlight = true
   const result = await dispatchNextPendingScreen({
     pendingScreens: context.pendingScreens,
     document: context.getDocument(),
@@ -73,7 +99,10 @@ export async function drainPendingScreens(context: CanvasTurnDrainContext): Prom
       context.selectShape(pending.shapeId)
       return context.onScreenCreated?.(pending.shapeId, pending.userPrompt, pending.brief) ?? false
     }
+  }).finally(() => {
+    gate.inFlight = false
   })
+  if (result.status === 'dispatched') gate.settleUntil = Date.now() + SCREEN_DISPATCH_SETTLE_MS
   if (context.isDisposed()) return
   if (result.status === 'failed' && (result.pending?.attempts ?? 0) < 2) {
     context.scheduleScreenDrain(400)

@@ -1,3 +1,4 @@
+import { resolveModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
 import { normalizeRouteEffort } from './app-settings-route-rules'
 import { normalizeExtensionExports, normalizeGatewayMiddleware, projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
 import {
@@ -107,8 +108,9 @@ import {
 
 export const DEFAULT_MODEL_PROVIDER_NAME = 'DeepSeek'
 
-// Keep unknown desktop models aligned with the runtime's conservative fallback.
-export const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 32_000
+// Keep unknown desktop models aligned with the runtime's assumed window
+// (kun DEFAULT_CONTEXT_WINDOW_TOKENS).
+export const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 1_000_000
 
 export const DEFAULT_TEXT_MODEL_PROFILE: ModelProviderModelProfileV1 = {
   inputModalities: ['text'],
@@ -326,7 +328,7 @@ export function normalizeModelRoutePools(
   return out
 }
 
-export { projectExecutableModelRoutePools, resolveModelRouteTargetReference } from './app-settings-route-projection'
+export { projectExecutableModelRoutePools, projectRuntimeModelRoutePools, resolveModelRouteTargetReference } from './app-settings-route-projection'
 
 export function getModelProviderSettings(settings: AppSettingsV1): ModelProviderSettingsV1 {
   return normalizeModelProviderSettings((settings as { provider?: ModelProviderSettingsPatchV1 }).provider)
@@ -610,7 +612,8 @@ export function modelProviderModelProfile(
 ): ModelProviderModelProfileV1 | undefined {
   const normalized = normalizeModelKey(modelId)
   if (!normalized) return undefined
-  return provider.modelProfiles[normalized]
+  const profile = provider.modelProfiles[normalized]
+  return profile ? resolveModelMetadata(profile) : undefined
 }
 
 export function modelProviderModelProfilesForProvider(
@@ -622,24 +625,25 @@ export function modelProviderModelProfilesForProvider(
   for (const [modelId, profile] of Object.entries(provider.modelProfiles)) {
     const normalized = normalizeModelKey(modelId)
     if (!normalized || !isProviderComposerChatModelId(provider, normalized)) continue
+    const effective = resolveModelMetadata(profile)
     profiles[normalized] = {
-      ...profile,
-      contextWindowTokens: profile.contextWindowTokens ?? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
+      ...effective,
+      contextWindowTokens: effective.contextWindowTokens ?? DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS
     }
   }
   return profiles
 }
 
 export function modelSupportsImageInput(
-  profile: Pick<ModelProviderModelProfileV1, 'inputModalities'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'inputModalities' | 'metadata' | 'evidence'> | undefined
 ): boolean {
-  return profile?.inputModalities.includes('image') === true
+  return profile ? resolveModelMetadata(profile).inputModalities?.includes('image') === true : false
 }
 
 export function modelReasoningEfforts(
-  profile: Pick<ModelProviderModelProfileV1, 'reasoning'> | undefined
+  profile: Pick<ModelProviderModelProfileV1, 'reasoning' | 'supportsReasoning' | 'metadata' | 'evidence'> | undefined
 ): ModelProviderReasoningCapabilityV1 | undefined {
-  return profile?.reasoning
+  return profile ? resolveModelMetadata(profile).reasoning : undefined
 }
 
 export function listImageGenerationProviderProfiles(settings: AppSettingsV1): ModelProviderProfileV1[] {

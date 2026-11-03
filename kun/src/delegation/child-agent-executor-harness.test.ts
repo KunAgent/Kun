@@ -5,59 +5,8 @@ import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { makeAssistantTextItem, makeToolCallItem, makeToolResultItem } from '../domain/item.js'
 import type { ModelStreamChunk } from '../ports/model-client.js'
 import { createChildAgentExecutor } from './child-agent-executor.js'
-import { validPptDirectionBundle } from './child-ppt-test-fixtures.js'
 
 describe('child external-agent admission and results', () => {
-  it('extracts a successful direction tool result before surfacing a later fatal runtime error', async () => {
-    const childId = 'child_direction_then_fatal'
-    const directionBundle = validPptDirectionBundle(childId)
-    const executor = createChildAgentExecutor({
-      ...offlineAgentProfileConfig(['native-test']),
-      model: {
-        provider: 'fallback', model: 'fallback-model',
-        async *stream(): AsyncIterable<ModelStreamChunk> {
-          yield await Promise.reject(new Error('fallback model must not run'))
-        }
-      },
-      toolHost: new LocalToolHost({ tools: [] }),
-      prefix: createImmutablePrefix({ systemPrompt: 'test system prompt' }),
-      defaultModel: 'fallback-model',
-      createDelegatedRuntime: (boundary) => offlineAgentSdkHarness({
-        handlesProvider: (providerId: string | undefined) => providerId === 'native-test',
-        capabilities: () => ({
-          nativeResume: true, structuredStreaming: true, kunTools: true,
-          externalApproval: true, liveSteering: true, nativeContextTelemetry: true, fork: true
-        }),
-        runTurn: async (threadId: string, turnId: string) => {
-          await boundary.turns.applyItem(threadId, makeToolCallItem({
-            id: 'item_direction_call', threadId, turnId, callId: 'call_direction',
-            toolName: 'ppt_create_direction_bundle', arguments: {}, status: 'completed'
-          }))
-          await boundary.turns.applyItem(threadId, makeToolResultItem({
-            id: 'item_direction_result', threadId, turnId, callId: 'call_direction',
-            toolName: 'ppt_create_direction_bundle', output: { directionBundle }
-          }))
-          await boundary.events.record({
-            kind: 'error', threadId, turnId, message: 'fatal after direction creation',
-            code: 'late_fatal', severity: 'error'
-          })
-          await boundary.turns.finishTurn({ threadId, turnId, status: 'failed' })
-          return 'failed'
-        }
-      }, ['native-test'])
-    })
-
-    const run = executor({
-      childId, parentThreadId: 'thr_parent', parentTurnId: 'turn_parent',
-      prompt: 'create directions', workspace: '/tmp/workspace', model: 'native-model',
-      providerId: 'native-test', toolPolicy: 'inherit', signal: new AbortController().signal
-    })
-    await expect(run).rejects.toMatchObject({
-      name: 'ChildResultExecutionError', message: 'fatal after direction creation',
-      result: { directionBundle }
-    })
-  })
-
   it('dispatches provider-native children through the host runtime factory with the narrowed boundary', async () => {
     let nativeModelCalled = false
     let capturedBoundary:

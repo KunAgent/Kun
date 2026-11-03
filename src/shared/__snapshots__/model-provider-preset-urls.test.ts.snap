@@ -140,6 +140,11 @@ exports[`preset request URLs > builds stable URLs for every preset, region and p
   "longcat": {
     "chat_completions": "https://api.longcat.chat/openai/v1/chat/completions",
   },
+  "magpie": {
+    "chat_completions": "http://127.0.0.1:3425/v1/chat/completions",
+    "messages": "http://127.0.0.1:3425/v1/messages",
+    "responses": "http://127.0.0.1:3425/v1/responses",
+  },
   "minimax": {
     "messages": "https://api.minimaxi.com/anthropic/v1/messages",
   },

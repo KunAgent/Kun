@@ -1,4 +1,7 @@
 import { acpToolPresentation } from './acp-tool-presentation'
+import { mergeToolPresentations, toolPresentationFromItem } from './tool-presentation'
+import { readToolFileState } from '../lib/turn-file-undo-inputs'
+import { externalSubagentChildMeta, readExternalSubagentMeta } from './external-subagent'
 import type {
   ApprovalStatusPayload,
   ApprovalReviewEventPayload,
@@ -38,6 +41,7 @@ import {
 import { dedupeTimelineTextBlocks } from './timeline-text-blocks'
 import { earliestSourceHistoryOrder, orderSourceHistoryBlocks } from './source-history-order'
 import { visualizationFromToolPayload } from './conversation-visualization'
+import { applyAppSurfaceToolMeta } from '../app-surfaces/app-surface-tool-meta'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
 import {
@@ -82,6 +86,8 @@ import {
   toolStatus
 } from './kun-mapper-core'
 import { extractToolGeneratedFiles } from './kun-mapper-generated-files'
+import { designOpenStatusOverride, extractDesignOpenRequest } from './design-open-request'
+import { extractReportOpenRequest, reportOpenStatusOverride } from './report-open-request'
 
 
 export function extractComponentPrototype(item: CoreTurnItemJson): ComponentPrototypeMetadata | undefined {
@@ -344,6 +350,11 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     ...(item.cancelRequestedAt ? { cancelRequestedAt: item.cancelRequestedAt } : {})
   }
   applyRuntimeDisclosureMeta(meta, item, child)
+  const externalSubagent = readExternalSubagentMeta(item.meta)
+  if (externalSubagent) {
+    meta.externalSubagent = externalSubagent
+    if (!meta.child) meta.child = externalSubagentChildMeta(externalSubagent, item)
+  }
   const sources = extractToolSources(item)
   if (sources) meta.sources = sources
   const attachments = extractToolAttachments(item)
@@ -354,12 +365,17 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   if (componentPrototype) meta.componentPrototype = componentPrototype
   const diagramPrototype = extractDiagramPrototype(item)
   if (diagramPrototype) meta.diagramPrototype = diagramPrototype
+  const designOpenRequest = extractDesignOpenRequest(item)
+  if (designOpenRequest) meta.designOpenRequest = designOpenRequest
+  const reportOpenRequest = extractReportOpenRequest(item)
+  if (reportOpenRequest) meta.reportOpenRequest = reportOpenRequest
   if (item.toolName === 'show_visualization' && !item.isError) {
     const visualization = visualizationFromToolPayload(
       item.kind === 'tool_result' ? item.output : item.arguments
     )
     if (visualization) meta.conversationVisualization = visualization
   }
+  applyAppSurfaceToolMeta(meta, item)
   const presentationStudioToolId = presentationStudioWriteToolId(item)
   if (presentationStudioToolId) {
     meta.canonicalToolId = presentationStudioToolId
@@ -372,14 +388,19 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
   const presentation = inferToolPresentation(item)
   const acp = acpToolPresentation(item)
   if (acp) Object.assign(meta, acp.meta)
+  meta.toolPresentation = toolPresentationFromItem(item)
   const payload = payloadFor(item)
   if (typeof payload.dispatchIntentId === 'string') meta.dispatchIntentId = payload.dispatchIntentId
   if (payload.dispatchIntent && typeof payload.dispatchIntent === 'object') meta.dispatchIntent = payload.dispatchIntent
+  if (typeof payload.taskSuggestionId === 'string') meta.taskSuggestionId = payload.taskSuggestionId
+  if (payload.taskSuggestion && typeof payload.taskSuggestion === 'object') meta.taskSuggestion = payload.taskSuggestion
   const paperSearch = paperSearchMetaFromToolItem(item)
   if (paperSearch) meta.paperSearch = paperSearch
   const paperDetails = paperDetailsFromToolItem(item)
   if (paperDetails) meta.paperDetails = paperDetails
   applyOfficeEditMeta(meta, item, payload)
+  const fileState = item.kind === 'tool_result' && !item.isError ? readToolFileState(item.meta) : null
+  if (fileState) meta.fileState = fileState
   if (presentation.command) meta.command = presentation.command
   if (presentation.toolKind === 'command_execution' || item.toolName === 'background_shell') {
     applyCommandResultMeta(meta, item)
@@ -390,13 +411,21 @@ export function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRunti
     const plan = extractPlanMetadata(item)
     if (plan) meta.plan = plan
   }
+  const status = componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ??
+    designOpenStatusOverride(item, designOpenRequest) ?? reportOpenStatusOverride(item, reportOpenRequest) ??
+    delegateTaskStatusOverride(item, payload) ?? toolStatus(item)
+  const semantic = meta.toolPresentation as ReturnType<typeof toolPresentationFromItem>
+  if (status === 'running' && ['completed', 'failed', 'canceled'].includes(semantic.state)) semantic.state = 'running'
+  else if (status === 'success') semantic.state = 'completed'
+  else if (status === 'error' && semantic.state !== 'canceled') semantic.state = 'failed'
+  if (status !== 'running') semantic.canCancel = false
   return {
     kind: 'tool',
     id: toolBlockId(item),
     turnId: item.turnId,
     createdAt: itemCreatedAt(item),
     summary,
-    status: componentDesignStatusOverride(item, componentPrototype) ?? diagramStatusOverride(item, diagramPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item),
+    status,
     toolKind: presentation.toolKind,
     ...((acp?.filePath ?? presentation.filePath) ? { filePath: acp?.filePath ?? presentation.filePath } : {}),
     ...(detail ? { detail } : {}),
@@ -444,9 +473,10 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
       merged.push(block)
       continue
     }
-    const existingIndex = toolIndexes.get(block.id)
+    const identity = `${block.turnId ?? ''}\u0000${block.id}`
+    const existingIndex = toolIndexes.get(identity)
     if (existingIndex === undefined) {
-      toolIndexes.set(block.id, merged.length)
+      toolIndexes.set(identity, merged.length)
       merged.push(block)
       continue
     }
@@ -457,8 +487,7 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
     }
     // A paged source result is final even if a later page only brings the
     // matching call. Loading that call must not replace output with arguments.
-    const resultOwnsContent = /^(codex|claude-code|opencode):/u.test(existing.turnId ?? '') &&
-      existing.meta?.sourceItemKind === 'tool_result' && block.meta?.sourceItemKind !== 'tool_result'
+    const resultOwnsContent = existing.meta?.sourceItemKind === 'tool_result' && block.meta?.sourceItemKind !== 'tool_result'
     const first = resultOwnsContent ? block : existing
     const last = resultOwnsContent ? existing : block
     merged[existingIndex] = {
@@ -472,7 +501,8 @@ export function mergeChatBlocks(blocks: ChatBlock[]): ChatBlock[] {
       detail: last.detail ?? first.detail,
       filePath: last.filePath ?? first.filePath,
       toolKind: last.toolKind ?? first.toolKind,
-      meta: { ...(first.meta ?? {}), ...(last.meta ?? {}) },
+      meta: { ...(first.meta ?? {}), ...(last.meta ?? {}),
+        toolPresentation: mergeToolPresentations(first.meta?.toolPresentation, last.meta?.toolPresentation) },
       ...(existing.sourceRecords || block.sourceRecords ? {
         sourceRecords: [...new Map([...(first.sourceRecords ?? []), ...(last.sourceRecords ?? [])]
           .map((record) => [record.itemId, record])).values()]

@@ -426,6 +426,80 @@ describe('createAgentSdkRuntime delegated session binding', () => {
       await rm(root, { recursive: true, force: true })
     }
   })
+
+  test('keeps the Claude session and its state dir when only the model changes', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-claude-model-switch-'))
+    try {
+      const userItem = (turnId: string): TurnItem => ({
+        id: `item_${turnId}`, turnId, threadId: 'th', kind: 'user_message', role: 'user',
+        status: 'completed', text: turnId, createdAt: '2026-07-25T00:00:00.000Z'
+      }) as TurnItem
+      const turnWith = (id: string, model: string): ThreadRecord['turns'][number] =>
+        ({ id, prompt: id, model }) as ThreadRecord['turns'][number]
+      let items: TurnItem[] = [userItem('t1')]
+      let turns = [turnWith('t1', 'claude-sonnet-4-5')]
+      const coordinator = new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root))
+      const runtime = createAgentSdkRuntime({
+        registry: CapabilityRegistry.fromLocalTools([]),
+        turns: { updateTurnMetadata: async () => undefined } as never,
+        sessionStore: { loadItems: async () => items } as never,
+        threadStore: {
+          get: async () => threadWith({ id: 'th', providerId: 'claude-subscription', workspace: '/ws', turns })
+        } as never,
+        events: {} as never,
+        ids: { next: (prefix) => prefix },
+        prefix: { systemPrompt: 'Kun system prompt' },
+        providerConfigs: {
+          'claude-subscription': { kind: 'agent-sdk', apiKey: 'sk-ant-oat01-oauth-secret' }
+        } as never,
+        agentSdkProviderIds: new Set(['claude-subscription']),
+        defaultApprovalPolicy: 'auto',
+        sessionCoordinator: coordinator
+      })
+      type Loaded = {
+        model?: string
+        claudeConfigDir?: string
+        resumeSessionId?: string
+        handoffBrief?: string
+        sessionPreparation?: DelegatedSessionPreparation
+      } | null
+      const deps = (runtime as unknown as {
+        deps: { loadTurnContext(threadId: string, turnId: string): Promise<Loaded> }
+      }).deps
+      const runTurn = async (turnId: string, model: string, nativeSessionId: string): Promise<Loaded> => {
+        items = [...items.filter((item) => item.turnId !== turnId), userItem(turnId)]
+        turns = [...turns.filter((turn) => turn.id !== turnId), turnWith(turnId, model)]
+        const loaded = await deps.loadTurnContext('th', turnId)
+        await coordinator.commit({
+          preparation: loaded!.sessionPreparation!,
+          committedItems: items as never,
+          lastCommittedTurnId: turnId,
+          nativeSessionId
+        })
+        return loaded
+      }
+
+      const first = await runTurn('t1', 'claude-sonnet-4-5', 'session_claude')
+      expect(first?.resumeSessionId).toBeUndefined()
+
+      const second = await runTurn('t2', 'claude-opus-4-1', 'session_claude')
+      expect(second?.model).toBe('claude-opus-4-1')
+      expect(second?.resumeSessionId).toBe('session_claude')
+      expect(second?.sessionPreparation?.rebaseReason).toBeUndefined()
+      expect(second?.handoffBrief).toBeUndefined()
+      // OAuth state lives under a route-keyed dir: it must not move with the model.
+      expect(second?.claudeConfigDir).toBe(first?.claudeConfigDir)
+
+      // No explicit model is the CLI default, which a live session cannot go back to.
+      const third = await runTurn('t3', 'default', 'session_claude_default')
+      expect(third?.model).toBeUndefined()
+      expect(third?.resumeSessionId).toBeUndefined()
+      expect(third?.sessionPreparation?.rebaseReason).toBe('route_changed')
+      expect(third?.handoffBrief).toBeTruthy()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 })
 
 // handlesProvider only reads providerConfigs / agentSdkProviderIds / defaultIsAgentSdk,

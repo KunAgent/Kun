@@ -3,17 +3,19 @@ import { mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 
 import { basename, dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
 import { AppSessionOwnerSchema, type AppSessionOwner } from '../contracts/app-session-owner.js'
-import { runtimeProcessIdentity, runtimeProcessIsAlive } from '../server/runtime-process-identity.js'
-import { withManagerStartLock } from './manager-discovery.js'
+import { requireRuntimeProcessIdentity, runtimeProcessIsAlive, runtimeProcessOwnerState } from '../server/runtime-process-identity.js'
+import { sameCanonicalPath } from './canonical-path.js'
+import { readManagerHandoffDiscoveryStrict, withManagerStartLock } from './manager-discovery.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
+import type { ManagerStartLockOptions } from './manager-start-lock.js'
 
-const ParticipantSchema = z.object({
+export const AppSessionParticipantSchema = z.object({
   pid: z.number().int().positive(),
   startedAt: z.string().datetime(),
   processIdentity: z.string().min(1),
   instanceId: z.string().min(1)
 })
-const ReservationSchema = z.object({
+export const AppSessionReservationSchema = z.object({
   token: z.string().min(1),
   owner: AppSessionOwnerSchema,
   dataDir: z.string(),
@@ -27,12 +29,37 @@ export type AppSessionReservation = {
   release(): Promise<void>
 }
 
+const DEFAULT_CONFLICT_HINT = 'Close that client first, or isolate dataDir, controlDir and settingsPath'
+
 export class AppSessionConflictError extends Error {
   readonly code = 'app_session_owner_busy'
-  constructor(path: string, detail = 'another application session owns this profile') {
-    super(`Kun profile is already owned: ${path}; ${detail}. Close that client first, or isolate dataDir, controlDir and settingsPath.`)
+  constructor(readonly path: string, readonly detail = 'another application session owns this profile', hint = DEFAULT_CONFLICT_HINT) {
+    super(`Kun profile is already owned: ${path}; ${detail}. ${hint}.`)
     this.name = 'AppSessionConflictError'
   }
+}
+
+export class OrphanedAppSessionError extends AppSessionConflictError {}
+
+type LiveParticipant = z.infer<typeof AppSessionParticipantSchema>
+
+/**
+ * The owner exited but processes it recorded are still alive: owner-loss
+ * cleanup stalled (for example a wedged Manager). Name them so the user can
+ * stop exactly those processes instead of hunting for a "client" that is gone.
+ */
+export function orphanedReservationError(
+  path: string,
+  owner: AppSessionOwner,
+  orphans: readonly Pick<LiveParticipant, 'pid' | 'instanceId'>[],
+  _platform: NodeJS.Platform = process.platform
+): OrphanedAppSessionError {
+  const listed = orphans.map((orphan) => `pid ${orphan.pid} (${orphan.instanceId})`).join(', ')
+  return new OrphanedAppSessionError(
+    path,
+    `its ${owner.ownerKind} application (pid ${owner.ownerPid}) has exited, but processes it started are still running and did not shut down: ${listed}`,
+    'Use Recover Kun to verify and stop the recorded leftover processes, then retry'
+  )
 }
 
 /** Resolve existing ancestors too, so an absent settings file behind a symlink cannot alias a profile. */
@@ -55,6 +82,7 @@ export async function acquireAppSessionReservation(input: {
   controlDir: string
   settingsPath: string
   signal?: AbortSignal
+  lockOptions?: ManagerStartLockOptions
 }): Promise<AppSessionReservation> {
   const profile = {
     dataDir: await canonicalSessionPath(input.dataDir),
@@ -66,13 +94,22 @@ export async function acquireAppSessionReservation(input: {
     join(profile.controlDir, '.app-session'),
     `${profile.settingsPath}.kun-app-session`
   ])].sort()
+  const scopes = new Map([
+    [join(profile.dataDir, '.app-session'), 'dataDir' as const],
+    [join(profile.controlDir, '.app-session'), 'controlDir' as const],
+    [`${profile.settingsPath}.kun-app-session`, 'settingsPath' as const]
+  ])
   const record = { token: randomUUID(), owner: input.owner, ...profile }
   const owned: string[] = []
   try {
     for (const path of paths) {
-      await withManagerStartLock(`${path}.election`, () => claim(path, record), input.signal)
+      input.signal?.throwIfAborted()
+      await withManagerStartLock(`${path}.election`,
+        () => claimAppSessionReservation(path, record, { signal: input.signal }), input.signal,
+        { ...input.lockOptions, scope: scopes.get(path) })
       owned.push(path)
     }
+    input.signal?.throwIfAborted()
   } catch (error) {
     await Promise.allSettled(owned.map((path) => releaseMatching(path, record.token)))
     throw error
@@ -82,9 +119,8 @@ export async function acquireAppSessionReservation(input: {
     path,
     profile,
     recordProcess: async (participant) => {
-      const processIdentity = runtimeProcessIdentity(participant.pid)
-      if (!processIdentity) throw new Error(`Unable to verify owned process ${participant.pid}`)
-      const value = ParticipantSchema.parse({ ...participant, processIdentity, startedAt: participant.startedAt ?? new Date().toISOString() })
+      const processIdentity = requireRuntimeProcessIdentity(participant.pid)
+      const value = AppSessionParticipantSchema.parse({ ...participant, processIdentity, startedAt: participant.startedAt ?? new Date().toISOString() })
       // All profile claims retain participants, including shared settings with a different dataDir.
       for (const directory of paths) {
         await assertReservation(directory, input.owner.ownerSessionId)
@@ -100,9 +136,29 @@ export async function acquireAppSessionReservation(input: {
   }
 }
 
-async function claim(path: string, record: z.infer<typeof ReservationSchema>): Promise<void> {
+const CLAIM_PUBLICATION_GRACE_MS = 5_000
+const CLAIM_RETRY_MS = 50
+
+type ClaimOwnerState =
+  | { kind: 'record'; value: z.infer<typeof AppSessionReservationSchema> }
+  | { kind: 'missing' }
+  | { kind: 'unreadable' }
+
+/**
+ * Claim one profile path. An owner record that cannot be read is never treated
+ * as a free profile: live processes and a live Runtime Manager still block the
+ * claim, and a directory that stays unreadable past the publication grace is
+ * archived with its evidence before the claim is retried.
+ */
+export async function claimAppSessionReservation(
+  path: string,
+  record: z.infer<typeof AppSessionReservationSchema>,
+  options: { signal?: AbortSignal; publicationGraceMs?: number } = {}
+): Promise<void> {
+  const graceMs = options.publicationGraceMs ?? CLAIM_PUBLICATION_GRACE_MS
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   for (;;) {
+    options.signal?.throwIfAborted()
     try {
       await mkdir(path, { mode: 0o700 })
       try { await writeFile(join(path, 'owner.json'), JSON.stringify(record), { flag: 'wx', mode: 0o600 }) }
@@ -111,49 +167,146 @@ async function claim(path: string, record: z.infer<typeof ReservationSchema>): P
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
     }
-    let existing: z.infer<typeof ReservationSchema>
-    try { existing = ReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8'))) }
-    catch { throw new AppSessionConflictError(path, 'owner identity is starting or cannot be verified') }
-    if (runtimeProcessIsAlive(existing.owner.ownerPid, {
-      startedAt: existing.owner.ownerStartedAt, processIdentity: existing.owner.ownerProcessIdentity
-    }) || await participantsAlive(path)) throw new AppSessionConflictError(path)
-    const stale = `${path}.retired-${randomUUID()}`
-    try { await rename(path, stale) } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
-      throw error
+    const owner = await readClaimOwner(path)
+    if (owner.kind === 'record') {
+      const ownerState = runtimeProcessOwnerState(owner.value.owner.ownerPid, {
+        startedAt: owner.value.owner.ownerStartedAt, processIdentity: owner.value.owner.ownerProcessIdentity
+      })
+      if (ownerState === 'unknown') throw new AppSessionConflictError(path, 'application process birth identity cannot be verified')
+      if (ownerState === 'alive') {
+        throw new AppSessionConflictError(
+          path,
+          `a running ${owner.value.owner.ownerKind} application session (pid ${owner.value.owner.ownerPid}) owns this profile`
+        )
+      }
+      const orphans = await liveParticipants(path)
+      if (orphans.length > 0) throw orphanedReservationError(path, owner.value.owner, orphans)
+      await retireClaimDirectory(path)
+      continue
     }
-    await rm(stale, { recursive: true, force: true })
+    // Only a claim directory that nobody published into can be abandoned. A
+    // live writer publishes owner.json within the grace window below.
+    const participantConflict = await claimParticipantConflict(path)
+    if (participantConflict) throw participantConflict
+    const managerConflict = await claimManagerConflict(path, record)
+    if (managerConflict) throw managerConflict
+    const ageMs = await claimDirectoryAgeMs(path)
+    if (ageMs === undefined) continue
+    if (ageMs < graceMs) { await delay(CLAIM_RETRY_MS); continue }
+    await archiveUnverifiedClaim(path)
   }
 }
 
+async function readClaimOwner(path: string): Promise<ClaimOwnerState> {
+  let text: string
+  try { text = await readFile(join(path, 'owner.json'), 'utf8') } catch (error) {
+    // A missing record may be a writer that has not published yet; every other
+    // read failure is real evidence and must never read as "no owner".
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { kind: 'missing' }
+    throw error
+  }
+  try { return { kind: 'record', value: AppSessionReservationSchema.parse(JSON.parse(text)) } }
+  catch { return { kind: 'unreadable' } }
+}
+
+/** Directory mtime dates the last publish attempt, so it outlives a corrupt payload. */
+async function claimDirectoryAgeMs(path: string): Promise<number | undefined> {
+  try { return Date.now() - (await stat(path)).mtimeMs } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined
+    throw error
+  }
+}
+
+async function claimParticipantConflict(path: string): Promise<AppSessionConflictError | undefined> {
+  let live: LiveParticipant[]
+  try { live = await liveParticipants(path) } catch {
+    return new AppSessionConflictError(path,
+      'its leftover process records are unreadable, so ownership cannot be verified',
+      'Quit every Kun client, then inspect the app-session directory for diagnosis and retry')
+  }
+  if (live.length === 0) return undefined
+  const listed = live.map((participant) => `pid ${participant.pid} (${participant.instanceId})`).join(', ')
+  return new AppSessionConflictError(
+    path,
+    `its owner record is unreadable, but processes it started are still running and did not shut down: ${listed}`,
+    'Quit all Kun clients and verify the recorded processes before retrying')
+}
+
+async function claimManagerConflict(
+  path: string,
+  record: z.infer<typeof AppSessionReservationSchema>
+): Promise<AppSessionConflictError | undefined> {
+  let manager
+  try { manager = await readManagerHandoffDiscoveryStrict(record.controlDir) } catch {
+    return new AppSessionConflictError(path,
+      'its Runtime Manager record is unreadable, so no owner can be verified',
+      'Quit every Kun client, then inspect manager.json in the control directory and retry')
+  }
+  if (!manager || !sameCanonicalPath(manager.dataDir, record.dataDir)) return undefined
+  if (!runtimeProcessIsAlive(manager.pid, { startedAt: manager.startedAt })) return undefined
+  return new AppSessionConflictError(path, `a Runtime Manager (pid ${manager.pid}) still owns this profile`)
+}
+
+async function retireClaimDirectory(path: string): Promise<void> {
+  const stale = `${path}.retired-${randomUUID()}`
+  try { await rename(path, stale) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+    throw error
+  }
+  await rm(stale, { recursive: true, force: true })
+}
+
+/** Keep the unreadable record instead of deleting it: it is the only trace of that owner. */
+async function archiveUnverifiedClaim(path: string): Promise<void> {
+  const stamp = new Date().toISOString().replace(/[:.]/gu, '-')
+  try { await rename(path, `${path}.unverified-${stamp}-${randomUUID().slice(0, 8)}`) } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return
+    throw new AppSessionConflictError(path,
+      `its unreadable owner record could not be archived (${code ?? 'unknown error'})`,
+      `Check that ${dirname(path)} is writable, then retry`)
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
 async function participantsAlive(path: string): Promise<boolean> {
+  return (await liveParticipants(path)).length > 0
+}
+
+async function liveParticipants(path: string): Promise<LiveParticipant[]> {
   const entries = await readdir(path).catch((error) => {
     if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
     throw error
   })
-  for (const entry of entries.filter((name) => name.startsWith('process-'))) {
-    const value = ParticipantSchema.parse(JSON.parse(await readFile(join(path, entry), 'utf8')))
-    if (runtimeProcessIsAlive(value.pid, value)) return true
+  const live: LiveParticipant[] = []
+  for (const entry of entries.filter((name) => name.startsWith('process-')).sort()) {
+    const value = AppSessionParticipantSchema.parse(JSON.parse(await readFile(join(path, entry), 'utf8')))
+    const state = runtimeProcessOwnerState(value.pid, value)
+    if (state === 'unknown') throw new AppSessionConflictError(path, `recorded process ${value.pid} birth identity cannot be verified`)
+    if (state === 'alive') live.push(value)
   }
-  return false
+  return live
 }
 
 async function releaseMatching(path: string, token: string): Promise<void> {
-  let value: z.infer<typeof ReservationSchema>
-  try { value = ReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8'))) }
+  let value: z.infer<typeof AppSessionReservationSchema>
+  try { value = AppSessionReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8'))) }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
   if (value.token === token) await rm(path, { recursive: true, force: true })
 }
 
 export async function assertReservation(path: string, ownerSessionId: string): Promise<void> {
-  const value = ReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')))
+  const value = AppSessionReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')))
   if (value.owner.ownerSessionId !== ownerSessionId) throw new AppSessionConflictError(path)
 }
 
 export async function assertManagerSessionReservation(path: string, owner: AppSessionOwner, profile: {
   dataDir: string; controlDir: string; settingsPath: string
 }): Promise<void> {
-  const value = ReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')))
+  const value = AppSessionReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')))
   if (value.owner.ownerSessionId !== owner.ownerSessionId || value.owner.ownerPid !== owner.ownerPid ||
     value.owner.ownerProcessIdentity !== owner.ownerProcessIdentity || value.owner.ownerKind !== owner.ownerKind) {
     throw new AppSessionConflictError(path, 'application owner identity changed')
@@ -186,12 +339,11 @@ export async function recordAppSessionParticipant(path: string, owner: AppSessio
   // Foreground serve is its own application owner; the owner claim already
   // fences it and must be releasable after its stores close, before process exit.
   if (participant.pid === owner.ownerPid) return
-  const record = ReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')))
+  const record = AppSessionReservationSchema.parse(JSON.parse(await readFile(join(path, 'owner.json'), 'utf8')))
   if (record.owner.ownerSessionId !== owner.ownerSessionId ||
     record.owner.ownerProcessIdentity !== owner.ownerProcessIdentity) throw new AppSessionConflictError(path)
-  const processIdentity = runtimeProcessIdentity(participant.pid)
-  if (!processIdentity) throw new Error(`Unable to verify owned Runtime process ${participant.pid}`)
-  const value = ParticipantSchema.parse({ ...participant, processIdentity })
+  const processIdentity = requireRuntimeProcessIdentity(participant.pid)
+  const value = AppSessionParticipantSchema.parse({ ...participant, processIdentity })
   for (const directory of [...new Set([
     join(record.dataDir, '.app-session'), join(record.controlDir, '.app-session'),
     `${record.settingsPath}.kun-app-session`

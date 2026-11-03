@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
 import { harnessModelProfiles } from '../../lib/ade-composer-harness'
-import { nativeReasoningChoices } from './floating-composer-model-picker-logic'
+import { agentModelReasoningChoices, nativeReasoningChoices } from './floating-composer-model-picker-logic'
 
 let host: HTMLDivElement
 let root: Root
@@ -61,6 +61,11 @@ describe('Model picker after Agent selection moves to the mode control', () => {
     expect(nativeReasoningChoices({ reasoningEfforts: ['xhigh'] })).toEqual([])
     expect(nativeReasoningChoices({ reasoningEfforts: [] })).toEqual([])
     expect(nativeReasoningChoices({})).toBeUndefined()
+    // Unreported levels (OpenCode reports them only for its probe session's model) offer every level.
+    expect(agentModelReasoningChoices({})).toEqual(['auto', 'off', 'low', 'medium', 'high', 'max'])
+    expect(agentModelReasoningChoices(undefined)).toEqual(['auto', 'off', 'low', 'medium', 'high', 'max'])
+    expect(agentModelReasoningChoices({ reasoningEfforts: [] })).toEqual([])
+    expect(agentModelReasoningChoices({ reasoningEfforts: ['low', 'high'] })).toEqual(['auto', 'low', 'high'])
     const codexGroup = (efforts: string[]) => [{ providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'codex',
       modelIds: ['gpt'], modelInfo: { gpt: { id: 'gpt', reasoningEfforts: efforts, defaultReasoningEffort: 'low' } } }]
     const onReasoning = vi.fn()
@@ -77,6 +82,23 @@ describe('Model picker after Agent selection moves to the mode control', () => {
     // A model without levels (e.g. an OpenCode model with no variants) shows no reasoning control.
     await render('high', [])
     expect(onReasoning).not.toHaveBeenCalled()
+  })
+
+  it('shows a Cursor model thinking levels instead of Auto alone', async () => {
+    await act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', composerModel: 'grok-4.6', composerProviderId: 'ade-cred:provider:cursor-subscription',
+      composerPickList: ['grok-4.6', 'composer-2.5'], composerReasoningEffort: 'auto',
+      composerModelGroups: [{ providerId: 'ade-cred:provider:cursor-subscription', label: 'Provider · Cursor subscription', nativeHarnessId: 'cursor',
+        modelIds: ['grok-4.6', 'composer-2.5'], modelInfo: {
+          'grok-4.6': { id: 'grok-4.6', displayName: 'Grok 4.6', reasoningEfforts: ['high', 'max'], defaultReasoningEffort: 'high' },
+          'composer-2.5': { id: 'composer-2.5', displayName: 'Composer 2.5', reasoningEfforts: [] }
+        } }],
+      canChangeModel: true, onComposerModelChange: vi.fn(), onComposerReasoningEffortChange: vi.fn()
+    })))
+    await act(async () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!.click())
+    expect(document.body.textContent).toContain('Grok 4.6')
+    expect([...document.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]')].map((option) => option.dataset.reasoningEffort))
+      .toEqual(['auto', 'high', 'max'])
   })
 
   it('uses native image metadata and does not label unknown capabilities as text-only', async () => {

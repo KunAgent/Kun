@@ -5,6 +5,7 @@ import { roomButtonClass } from './RoomSettings'
 import { roomsClient } from './rooms-client'
 import { useRoomMutation } from './useRoomResource'
 import { RoomAvatar } from './RoomAvatar'
+import { roomMemberFailureContext, summarizeRoomMemberError } from './room-member-failure'
 import {
   roomPeerInboxPaused,
   roomPeerMemberBlocked,
@@ -30,7 +31,7 @@ export function RoomPeerSummary({
   loading: boolean
   onOpen: () => void
   onTasks?: () => void
-  taskCounts?: { runningCount?: number; attentionCount?: number }
+  taskCounts?: { taskRunningCount?: number; attentionCount?: number }
 }) {
   const { t } = useTranslation('common')
   const blockedMember = roomPeerMemberBlocked
@@ -54,7 +55,8 @@ export function RoomPeerSummary({
     (paused
       ? t('roomsPeerPausedSummary', { count: paused })
       : t('roomsPeerQuiet'))
-  if (!loading && !running && !pending && !stopping && !blocked && !paused && !taskCounts?.runningCount && !taskCounts?.attentionCount) return null
+  // Discussion runs are summarized on the left; the Tasks button counts execution work only.
+  if (!loading && !running && !pending && !stopping && !blocked && !paused && !taskCounts?.taskRunningCount && !taskCounts?.attentionCount) return null
   return (
     <div className="rooms-activity-summary">
       <button
@@ -71,8 +73,8 @@ export function RoomPeerSummary({
       {onTasks ? (
         <button className="shrink-0 py-2 text-accent" onClick={onTasks}>
           {t('roomsTasks')}
-          {(taskCounts?.runningCount ?? 0) > 0
-            ? ` · ${taskCounts?.runningCount} ${t('roomsState_running')}`
+          {(taskCounts?.taskRunningCount ?? 0) > 0
+            ? ` · ${taskCounts?.taskRunningCount} ${t('roomsState_running')}`
             : ''}
           {taskCounts?.attentionCount
             ? ` · ${taskCounts.attentionCount} ${t('roomsAttention')}`
@@ -141,11 +143,13 @@ export function RoomPeerActivity({
               })}
             </p>
           ) : null}
-          {topic.members.filter((member) => member.error || ['failed', 'recovery_required'].includes(member.state)).map((member) => (
-            <p key={member.memberId} className="rooms-topic-attention">
-              <strong>{memberName(member.memberId)}</strong> · {member.error || t(`roomsPeerMember_${member.state}`)}
+          {topic.members.filter((member) => member.error || ['failed', 'recovery_required'].includes(member.state)).map((member) => {
+            const context = roomMemberFailureContext(topic, member)
+            return <p key={member.memberId} className="rooms-topic-attention" title={member.error}>
+              <strong>{memberName(member.memberId)}</strong>{context ? <small> · {context}</small> : null}
+              {' · '}{member.error ? summarizeRoomMemberError(member.error) : t(`roomsPeerMember_${member.state}`)}
             </p>
-          ))}
+          })}
           <details className="rooms-topic-disclosure">
             <summary>{t('roomsTopicDetails')}</summary>
           <dl className="grid grid-cols-2 gap-2 text-xs">
@@ -205,8 +209,8 @@ export function RoomPeerActivity({
                   </p>
                 ) : null}
                 {member.error ? (
-                  <p className="mt-1 break-words text-red-500">
-                    {member.error}
+                  <p className="mt-1 break-words text-red-500" title={member.error}>
+                    {summarizeRoomMemberError(member.error)}
                   </p>
                 ) : null}
                 {onMember ? <button type="button" className="rooms-run-secondary" onClick={() => onMember(member.memberId, topic.rootRequestId)}>{t('roomsRunHistory')}</button> : null}

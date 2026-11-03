@@ -51,6 +51,23 @@ export class AcpModelSelectionError extends AcpError {
   }
 }
 
+/** The echoed selector value of a `session/set_config_option` result, if any. */
+export function echoedConfigOptionValue(
+  result: unknown,
+  configId: string
+): string | undefined {
+  if (!result || typeof result !== 'object') return undefined
+  const options = (result as { configOptions?: unknown }).configOptions
+  if (!Array.isArray(options)) return undefined
+  for (const entry of options) {
+    if (!entry || typeof entry !== 'object') continue
+    const option = entry as { id?: unknown; type?: unknown; currentValue?: unknown }
+    if (option.id !== configId || option.type !== 'select') continue
+    return typeof option.currentValue === 'string' ? option.currentValue : undefined
+  }
+  return undefined
+}
+
 /** Explicit model selections must be accepted by the authoritative selector. */
 export async function applyAcpSessionModel(
   conn: AcpConnection,
@@ -66,8 +83,9 @@ export async function applyAcpSessionModel(
     )
   }
   if (option.currentValue === modelId) return
+  let result: unknown
   try {
-    await conn.rpc.request(ACP_AGENT_METHODS.sessionSetConfigOption, {
+    result = await conn.rpc.request(ACP_AGENT_METHODS.sessionSetConfigOption, {
       sessionId: session.sessionId, configId: option.id, value: modelId
     })
   } catch (error) {
@@ -75,6 +93,14 @@ export async function applyAcpSessionModel(
       throw new AcpModelSelectionError('The agent does not support its model selector. Update the agent or choose Agent default; no prompt was sent.')
     }
     throw error
+  }
+  // An agent that echoes its selector must report the model this turn will use;
+  // otherwise the durable route would claim a model the session never adopted.
+  const echoed = echoedConfigOptionValue(result, option.id)
+  if (echoed !== undefined && echoed !== modelId) {
+    throw new AcpModelSelectionError(
+      `The agent kept model '${echoed}' instead of '${modelId}'. Refresh its model list or choose Agent default; no prompt was sent.`
+    )
   }
   option.currentValue = modelId
 }

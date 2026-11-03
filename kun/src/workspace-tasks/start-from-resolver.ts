@@ -52,8 +52,7 @@ async function fetchRemote(
 }
 
 /**
- * Resolve a start-from selector to a concrete commit sha (docs/ade/07
- * §5). All git calls go through `workspaceGit`; ref names are validated
+ * Resolve a start-from selector to a concrete commit sha. All git calls go through `workspaceGit`; ref names are validated
  * with `git check-ref-format` before use.
  */
 export async function resolveStartFrom(

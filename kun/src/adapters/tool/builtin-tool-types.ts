@@ -47,6 +47,58 @@ export const FAST_CONTEXT_EXCLUDED_DIRECTORY_NAMES = [
   'target',
   'vendor'
 ] as const
+/**
+ * Basenames pruned only while Fast Context walks recursively from a parent
+ * directory. An explicit path inside one of these (for example
+ * `.vscode/settings.json` or `.claude/skills`) remains searchable and readable.
+ */
+export const FAST_CONTEXT_DISCOVERY_EXCLUDED_DIRECTORY_NAMES = [
+  '.angular',
+  '.cargo',
+  '.claude',
+  '.dart_tool',
+  '.gradle',
+  '.idea',
+  '.m2',
+  '.mypy_cache',
+  '.nx',
+  '.parcel-cache',
+  '.pnpm-store',
+  '.pytest_cache',
+  '.svelte-kit',
+  '.terraform',
+  '.tox',
+  '.vscode',
+  'DerivedData',
+  'Pods',
+  'logs',
+  'tmp'
+] as const
+/** Binary, media, and generated bundles Fast Context never opens while searching. */
+export const FAST_CONTEXT_EXCLUDED_FILE_GLOBS = [
+  '!*.{png,jpg,jpeg,gif,webp,ico,icns,bmp,tif,tiff,psd,heic,avif}',
+  '!*.{pdf,zip,gz,tgz,bz2,xz,7z,rar,jar,war,dmg,iso}',
+  '!*.{woff,woff2,ttf,otf,eot}',
+  '!*.{mp3,mp4,m4a,mov,avi,mkv,wav,flac,ogg,webm}',
+  '!*.{wasm,so,dylib,dll,exe,bin,dat,db,sqlite,sqlite3,pyc,class,o,a,lib,node}',
+  '!*.{min.js,min.css,map}'
+] as const
+/** rg `--max-filesize` for Fast Context scans; larger files are almost never source. */
+export const FAST_CONTEXT_MAX_SCAN_FILE_SIZE = '1M'
+/** Per-file match ceiling while ranking candidate files across a directory. */
+export const FAST_CONTEXT_CANDIDATE_MAX_COUNT_PER_FILE = 50
+/** Candidate files collected before a ranked scan stops walking the tree. */
+export const FAST_CONTEXT_CANDIDATE_FILE_LIMIT = 2_000
+/** Files whose matching lines are returned after relevance ranking. */
+export const FAST_CONTEXT_RANKED_FILE_LIMIT = 12
+/** Process-wide ceiling on concurrent Fast Context rg/git helpers. */
+export const FAST_CONTEXT_DEFAULT_PROCESS_SLOTS = 4
+/** Above this many indexed files, unscoped root greps must name a path or glob. */
+export const FAST_CONTEXT_LARGE_WORKSPACE_FILE_COUNT = 50_000
+/** Timed-out source commands in one run before unscoped root greps are refused. */
+export const FAST_CONTEXT_TIMEOUTS_BEFORE_SCOPE_REQUIRED = 2
+/** Optional workspace file (gitignore syntax) with extra Fast Context exclusions. */
+export const FAST_CONTEXT_IGNORE_FILE_NAME = '.kunignore'
 export const DEFAULT_IMAGE_MAX_DIMENSION = 2000
 export const DEFAULT_IMAGE_MAX_BASE64_BYTES = 4.5 * 1024 * 1024
 export const FD_EXECUTABLE_CANDIDATES = [
@@ -334,6 +386,8 @@ export interface GrepLocalToolOperations {
       limit: number
     }
   ) => Promise<GrepMatch[]>
+  /** Test/composition seam for rg source command execution. */
+  spawnCapture?: SourceCommandCapture
 }
 
 export interface FindLocalToolOperations {
@@ -341,12 +395,29 @@ export interface FindLocalToolOperations {
     input: { pattern: string; path: string; limit: number }
   ) => Promise<Array<{ path: string; relative_path: string }>>
   /** Test/composition seam for fd/rg source command execution. */
-  spawnCapture?: (
-    file: string,
-    args: string[],
-    options: { cwd: string; signal?: AbortSignal; maxOutputBytes?: number; timeoutMs?: number }
-  ) => Promise<{ stdout: string; stderr: string; exitCode: number | null; outputTruncated: boolean; timedOut: boolean }>
+  spawnCapture?: SourceCommandCapture
 }
+
+/** Injectable source-command runner shared by grep, glob, and Fast Context indexes. */
+export type SourceCommandCapture = (
+  file: string,
+  args: string[],
+  options: {
+    cwd: string
+    signal?: AbortSignal
+    maxOutputBytes?: number
+    timeoutMs?: number
+    maxLines?: number
+    lowPriority?: boolean
+  }
+) => Promise<{
+  stdout: string
+  stderr: string
+  exitCode: number | null
+  outputTruncated: boolean
+  timedOut: boolean
+  lineLimitReached?: boolean
+}>
 
 export interface LsLocalToolOperations {
   stat?: (path: string) => Promise<FsStats>

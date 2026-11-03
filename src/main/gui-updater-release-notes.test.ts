@@ -4,8 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 let appVersion: string
 let appIsPackaged: boolean
 let mockedFiles: Map<string, string>
-let showMessageBox: ReturnType<typeof vi.fn>
-let openExternal: ReturnType<typeof vi.fn>
 let originalEnv: NodeJS.ProcessEnv
 
 beforeEach(() => {
@@ -14,8 +12,6 @@ beforeEach(() => {
   appVersion = '0.1.0'
   appIsPackaged = true
   mockedFiles = new Map()
-  showMessageBox = vi.fn().mockResolvedValue({ response: 1 })
-  openExternal = vi.fn().mockResolvedValue(undefined)
   vi.doMock('node:fs/promises', () => ({
     mkdir: vi.fn().mockResolvedValue(undefined),
     readFile: vi.fn(async (path: string) => {
@@ -36,9 +32,7 @@ beforeEach(() => {
       getVersion: () => appVersion,
       getLocale: () => 'en-US'
     },
-    BrowserWindow: class {},
-    dialog: { showMessageBox },
-    shell: { openExternal }
+    BrowserWindow: class {}
   }))
   vi.doMock('electron-updater', () => ({ default: { autoUpdater: {} }, autoUpdater: {} }))
 })
@@ -53,73 +47,95 @@ afterEach(() => {
 
 const versionStatePath = join('/tmp/deepseek-gui-updater-test-user-data', 'gui-version-state.json')
 
-async function showReleaseNotes(locale?: 'en' | 'zh'): Promise<void> {
-  const { showGuiUpdateReleaseNotes } = await import('./gui-updater-release-notes')
-  await showGuiUpdateReleaseNotes(() => null, locale ? () => locale : null)
+async function releaseNotes() {
+  return import('./gui-updater-release-notes')
 }
 
-describe('showGuiUpdateReleaseNotes', () => {
-  it('records the first launched version without showing a notice', async () => {
-    await showReleaseNotes()
+function versionState(): unknown {
+  return JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')
+}
 
-    expect(showMessageBox).not.toHaveBeenCalled()
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({ lastSeenVersion: '0.1.0' })
+describe('post-update release notice', () => {
+  it('records the first launched version without a notice', async () => {
+    const { readReleaseNotice, recordFirstLaunchVersion } = await releaseNotes()
+    await recordFirstLaunchVersion()
+
+    expect(await readReleaseNotice()).toBeNull()
+    expect(versionState()).toEqual({ lastSeenVersion: '0.1.0' })
   })
 
-  it('does not show or overwrite release-note state in development', async () => {
+  it('does not track versions in development unless a notice is faked', async () => {
     appIsPackaged = false
-    mockedFiles.set(versionStatePath, JSON.stringify({ lastSeenVersion: '0.2.0' }))
+    mockedFiles.set(versionStatePath, JSON.stringify({ lastSeenVersion: '0.0.1' }))
+    const { readReleaseNotice, acknowledgeReleaseNotice, recordFirstLaunchVersion } = await releaseNotes()
 
-    await showReleaseNotes()
-
-    expect(showMessageBox).not.toHaveBeenCalled()
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({ lastSeenVersion: '0.2.0' })
+    await recordFirstLaunchVersion()
+    expect(await readReleaseNotice()).toBeNull()
+    process.env.KUN_RELEASE_NOTICE_FROM = '0.0.9'
+    expect(await readReleaseNotice()).toEqual({
+      version: '0.1.0',
+      previousVersion: '0.0.9',
+      changelogUrl: 'https://github.com/KunAgent/Kun/blob/master/release/release-v0.1.0.md'
+    })
+    await acknowledgeReleaseNotice('0.1.0')
+    expect(versionState()).toEqual({ lastSeenVersion: '0.0.1' })
   })
 
-  it('does not show release notes when launching an older version', async () => {
+  it('stays quiet when launching an older version', async () => {
     mockedFiles.set(versionStatePath, JSON.stringify({ lastSeenVersion: '0.2.0' }))
+    const { readReleaseNotice } = await releaseNotes()
 
-    await showReleaseNotes()
-
-    expect(showMessageBox).not.toHaveBeenCalled()
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({ lastSeenVersion: '0.2.0' })
+    expect(await readReleaseNotice()).toBeNull()
+    expect(versionState()).toEqual({ lastSeenVersion: '0.2.0' })
   })
 
-  it('shows downloaded release notes once after the version changes', async () => {
+  it('keeps the notice due until it is acknowledged, then never again', async () => {
     appVersion = '0.2.0'
     mockedFiles.set(versionStatePath, JSON.stringify({
       lastSeenVersion: '0.1.0',
       pendingUpdate: { version: '0.2.0', releaseNotes: '修复更新流程并改进启动体验。' }
     }))
-    showMessageBox.mockResolvedValue({ response: 0 })
+    const { readReleaseNotice, acknowledgeReleaseNotice } = await releaseNotes()
+    const expected = {
+      version: '0.2.0',
+      previousVersion: '0.1.0',
+      releaseNotes: '修复更新流程并改进启动体验。',
+      changelogUrl: 'https://github.com/KunAgent/Kun/blob/master/release/release-v0.2.0.md'
+    }
 
-    await showReleaseNotes('zh')
-    await showReleaseNotes('zh')
+    expect(await readReleaseNotice()).toEqual(expected)
+    expect(await readReleaseNotice()).toEqual(expected)
+    await acknowledgeReleaseNotice('0.1.9')
+    expect(await readReleaseNotice()).toEqual(expected)
 
-    expect(showMessageBox).toHaveBeenCalledTimes(1)
-    expect(showMessageBox).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Kun 已更新',
-      message: '已更新到 Kun 0.2.0',
-      detail: '修复更新流程并改进启动体验。',
-      buttons: ['查看更新日志', '稍后']
-    }))
-    expect(openExternal).toHaveBeenCalledWith(
-      'https://github.com/KunAgent/Kun/blob/master/release/release-v0.2.0.md'
-    )
-    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({ lastSeenVersion: '0.2.0' })
+    await acknowledgeReleaseNotice('0.2.0')
+    expect(await readReleaseNotice()).toBeNull()
+    expect(versionState()).toEqual({ lastSeenVersion: '0.2.0' })
   })
 
-  it('substitutes a configured changelog URL', async () => {
+  it('keeps a newer downloaded update when acknowledging', async () => {
+    appVersion = '0.2.0'
+    mockedFiles.set(versionStatePath, JSON.stringify({
+      lastSeenVersion: '0.1.0',
+      pendingUpdate: { version: '0.3.0' }
+    }))
+    const { readReleaseNotice, acknowledgeReleaseNotice } = await releaseNotes()
+
+    expect((await readReleaseNotice())?.releaseNotes).toBeUndefined()
+    await acknowledgeReleaseNotice('0.2.0')
+    expect(versionState()).toEqual({ lastSeenVersion: '0.2.0', pendingUpdate: { version: '0.3.0' } })
+  })
+
+  it('returns the running version on request and substitutes a configured changelog URL', async () => {
     process.env.KUN_CHANGELOG_URL = 'https://example.com/release/release-{version}.md'
     appVersion = '0.2.1'
-    mockedFiles.set(versionStatePath, JSON.stringify({
-      lastSeenVersion: '0.2.0',
-      pendingUpdate: { version: '0.2.1' }
-    }))
-    showMessageBox.mockResolvedValue({ response: 0 })
+    mockedFiles.set(versionStatePath, JSON.stringify({ lastSeenVersion: '0.2.1' }))
+    const { readReleaseNotice } = await releaseNotes()
 
-    await showReleaseNotes()
-
-    expect(openExternal).toHaveBeenCalledWith('https://example.com/release/release-v0.2.1.md')
+    expect(await readReleaseNotice()).toBeNull()
+    expect(await readReleaseNotice({ current: true })).toEqual({
+      version: '0.2.1',
+      changelogUrl: 'https://example.com/release/release-v0.2.1.md'
+    })
   })
 })

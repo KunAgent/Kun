@@ -18,8 +18,11 @@ it('serializes concurrent mutations and preserves the winning revision', async (
     mutatePaperEvidenceWorkspace(root, 0, async () => { await new Promise((resolve) => setTimeout(resolve, 20)) }),
     mutatePaperEvidenceWorkspace(root, 0, () => undefined)
   ])
-  expect(results[0].status).toBe('fulfilled')
-  expect(results[1]).toMatchObject({ status: 'rejected', reason: { code: 'revision-conflict' } })
+  // Canonical-path lookups can finish in either order before joining the queue.
+  expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1)
+  expect(results.filter((result) => result.status === 'rejected')).toMatchObject([
+    { status: 'rejected', reason: { code: 'revision-conflict' } }
+  ])
   expect((await readPaperEvidenceWorkspace(root)).revision).toBe(1)
 })
 it('does not overwrite an external edit during async capture', async () => {

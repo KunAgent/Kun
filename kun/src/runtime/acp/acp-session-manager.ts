@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
+import type { HarnessContinuationFailure, HarnessContinuationPayload } from '../../contracts/harness-continuation.js'
+import { acpContinuationDiagnostic, acpContinuationFailure, recordAcpContinuation, type AcpContinuationContext } from './acp-continuation.js'
 /**
- * Thread ↔ ACP session management (docs/ade/03 §5). Reuses
+ * Thread ↔ ACP session management. Reuses
  * DelegatedSessionCoordinator for route matching, parked sessions, and
  * generation checks; the ACP-specific parts are `session/load` vs
  * `session/new`, config-option application, and the loading-phase update
@@ -19,6 +21,7 @@ import type { AcpDebugLog } from './acp-jsonrpc.js'
 import type { AcpConnection, AcpSessionUpdateSink } from './acp-connection.js'
 import {
   ACP_AGENT_METHODS,
+  ACP_RPC_ERROR,
   acpConfigOptionValues,
   AcpLoadSessionResultSchema,
   AcpNewSessionResultSchema,
@@ -30,26 +33,31 @@ import {
   type McpServer,
   type SessionUpdate
 } from './acp-schema.js'
-import { applyDevinSessionPermission } from './devin-session-permissions.js'
-import { applyAcpSessionPermission } from './acp-session-permissions.js'
+import { providerModule } from '../../harness/providers/registry.js'
+import { applyAcpProviderPermission } from './acp-provider-permissions.js'
 import { applyAcpSessionAgent } from './acp-session-agent.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
 import { AcpModelSelectionError, acpLegacyVariantModel, applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from './acp-legacy-models.js'
+import { applyAcpSessionSettings } from './acp-session-settings.js'
+import type { HarnessSettingValues } from '../../contracts/harness-session-settings.js'
 
 /** Per-turn input the runtime hands to the session manager. */
-export type AcpSessionRequest = {
+export type AcpSessionRequest = AcpContinuationContext & {
   threadId: string
   turnId: string
-  /** Absolute workspace path — always the task workspace root (§5.2). */
+  /** Absolute workspace path — always the task workspace root. */
   workspacePath: string
   harnessId: string
   model?: string
-  /** Resolved harness permission-level id (02 §5.3). */
+  /** Resolved harness permission-level id. */
   permissionModeId?: string
+  customPermissionMode?: boolean
   acpPermission?: HarnessDefinition['acpPermission']
   /** Composer-selected native Agent; replaces the permission-mapped mode. */
   nativeAgentId?: string
   reasoningEffort?: string
+  /** Composer values for Agent-published settings. */
+  harnessSettings?: HarnessSettingValues
   /** Kun Tools MCP server descriptors; user MCP servers are not forwarded. */
   mcpServers?: McpServer[]
   /** Stable native-session descriptor, activated for this turn only. */
@@ -75,6 +83,8 @@ export type AcpSessionHandle = {
    * session is fresh and has none of Kun's prior history.
    */
   replayedHistory: boolean
+  /** First failure, retained even if recovery succeeds. Not reused on later turns. */
+  continuation?: HarnessContinuationPayload
   /** Config options reported by session/new or session/load. */
   configOptions?: AcpConfigOption[] | null
   modes?: AcpSessionModes | null
@@ -100,7 +110,7 @@ export class AcpSessionManager {
   constructor(private readonly deps: AcpSessionManagerDeps) {}
 
   /**
-   * Create or resume the ACP session for this turn (§5.1). `sink` is the
+   * Create or resume the ACP session for this turn. `sink` is the
    * turn's session/update consumer — it is subscribed before `session/load`
    * so the manager can enforce the loading-phase filter: replayed
    * message/tool chunks are dropped while config-bearing updates are absorbed
@@ -112,6 +122,7 @@ export class AcpSessionManager {
     sink?: AcpSessionUpdateSink
   ): Promise<AcpSessionHandle> {
     const capabilities = conn.initResult?.agentCapabilities
+    let preparedDiagnostic: HarnessContinuationPayload | undefined
     const preparation = await this.deps.coordinator.prepare({
       threadId: ctx.threadId,
       route: {
@@ -120,20 +131,34 @@ export class AcpSessionManager {
         credentialIdentity: conn.identity,
         workspace: ctx.workspacePath,
         model: ctx.model ?? 'default',
+        // applyConfigOptions sets the turn's model on live, loaded and fresh
+        // sessions alike, so a model change keeps the native session.
+        modelScope: 'session',
         capabilityFingerprint: delegatedCapabilityFingerprint(capabilities ?? {}),
         // All ACP agents accept more prompts on a live session. loadSession
         // only determines whether it can be restored after process exit.
         continuationMode: 'native'
       },
-      priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turnId)
+      replayPendingUserMessages: true,
+      priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turnId),
+      beforeRebase: async (binding, reason) => {
+        if (reason !== 'history_changed' && reason !== 'capabilities_changed' && reason !== 'native_state_unavailable') return
+        await ctx.validateLaunch?.()
+        preparedDiagnostic = acpContinuationDiagnostic({ ...binding, rebaseReason: reason }, ctx.harnessId,
+          acpContinuationFailure(conn, 'binding_validation', undefined, reason))
+        await recordAcpContinuation(ctx, 'harness_continuation_failed', preparedDiagnostic)
+      }
     })
 
+    if (preparedDiagnostic) {
+      return this.recreate(conn, ctx, preparation, preparedDiagnostic.failure, sink, preparedDiagnostic)
+    }
     if (preparation.resumed && preparation.nativeSessionId) {
       const cached = this.live.get(conn)?.get(preparation.nativeSessionId)
       if (cached && !conn.closed) {
         await ctx.validateLaunch?.()
         if (cached.mcpSessionKey) ctx.sessionMcpServers?.(cached.mcpSessionKey)
-        const handle = { ...cached, preparation, replayedHistory: false, detach: () => unsubscribe() }
+        const handle = { ...cached, preparation, continuation: undefined, replayedHistory: false, detach: () => unsubscribe() }
         const unsubscribe = conn.subscribeSession(handle.sessionId, {
           onUpdate: (update) => { absorbLoadingUpdate(handle, update); sink?.(update) }
         })
@@ -147,9 +172,10 @@ export class AcpSessionManager {
         }
       }
       if (!capabilities?.loadSession) {
-        const rebased = await this.deps.coordinator.rejectResume(preparation)
-        return this.createFresh(conn, ctx, rebased, sink)
+        return this.recreate(conn, ctx, preparation,
+          acpContinuationFailure(conn, 'binding_validation', undefined, 'load_session_unsupported'), sink)
       }
+      await ctx.validateLaunch?.()
       const handle: AcpSessionHandle = {
         sessionId: preparation.nativeSessionId,
         mcpSessionKey: randomUUID(),
@@ -167,8 +193,8 @@ export class AcpSessionManager {
           sink?.(update)
         }
       })
+      let stage: HarnessContinuationFailure['stage'] = 'session/load'
       try {
-        await ctx.validateLaunch?.()
         const raw = await conn.rpc.request(
           ACP_AGENT_METHODS.sessionLoad,
           {
@@ -178,6 +204,7 @@ export class AcpSessionManager {
           },
           { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
         )
+        stage = 'session/load_result'
         const parsed = AcpLoadSessionResultSchema.safeParse(raw)
         if (!parsed.success) {
           throw new AcpError(
@@ -190,6 +217,7 @@ export class AcpSessionManager {
         handle.models = parseAcpLegacyModels(parsed.data.models)
         handle.phase = 'ready'
         conn.registerSession(handle.sessionId, ctx.threadId)
+        stage = 'session/configure'
         await this.applyConfigOptions(conn, handle, ctx)
         this.remember(conn, handle)
         return handle
@@ -204,13 +232,46 @@ export class AcpSessionManager {
           conn.unregisterSession(handle.sessionId)
           throw error
         }
-        this.debug(`session/load failed, rebasing to session/new: ${String(error)}`)
         unsubscribe()
-        const rebased = await this.deps.coordinator.rejectResume(preparation)
-        return this.createFresh(conn, ctx, rebased, sink)
+        conn.unregisterSession(handle.sessionId)
+        const failure = acpContinuationFailure(conn, stage, error)
+        // Only session/load's explicit not-found response proves native state
+        // is gone. Failed configuration, transport and decoding keep the binding.
+        if (stage !== 'session/load' || !(error instanceof AcpError)
+          || error.code !== 'agent_error' || error.rpcCode !== ACP_RPC_ERROR.sessionUnavailable) {
+          await recordAcpContinuation(ctx, 'harness_continuation_failed',
+            acpContinuationDiagnostic(preparation, ctx.harnessId, failure))
+          throw error
+        }
+        return this.recreate(conn, ctx, preparation, failure, sink)
       }
     }
     return this.createFresh(conn, ctx, preparation, sink)
+  }
+
+  private async recreate(
+    conn: AcpConnection,
+    ctx: AcpSessionRequest,
+    preparation: DelegatedSessionPreparation,
+    failure: HarnessContinuationFailure,
+    sink?: AcpSessionUpdateSink,
+    recordedDiagnostic?: HarnessContinuationPayload
+  ): Promise<AcpSessionHandle> {
+    await ctx.validateLaunch?.()
+    const diagnostic = recordedDiagnostic ?? acpContinuationDiagnostic(preparation, ctx.harnessId, failure)
+    // Persist before rejectResume clears state, and before session/new can fail differently.
+    if (!recordedDiagnostic) await recordAcpContinuation(ctx, 'harness_continuation_failed', diagnostic)
+    try {
+      const rebased = preparation.resumed ? await this.deps.coordinator.rejectResume(preparation) : preparation
+      const handle = await this.createFresh(conn, ctx, rebased, sink)
+      handle.continuation = diagnostic
+      return handle
+    } catch (error) {
+      await recordAcpContinuation(ctx, 'harness_session_recreation_failed', diagnostic, {
+        recreationError: acpContinuationFailure(conn, 'session/new', error)
+      })
+      throw error
+    }
   }
 
   private async createFresh(
@@ -281,10 +342,9 @@ export class AcpSessionManager {
     await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort))
     if (ctx.nativeAgentId) {
       await applyAcpSessionAgent(conn, session, ctx.nativeAgentId)
-    } else if (ctx.harnessId === 'devin') {
-      await applyDevinSessionPermission(conn, session, ctx.permissionModeId)
     } else {
-      await applyAcpSessionPermission(conn, session, ctx.permissionModeId, ctx.acpPermission)
+      await applyAcpProviderPermission(conn, session, ctx.permissionModeId, providerModule(ctx.harnessId), ctx.acpPermission,
+        undefined, ctx.customPermissionMode ?? false)
     }
     const options = session.configOptions
     if (!options?.length) return
@@ -297,6 +357,7 @@ export class AcpSessionManager {
     await this.setIfDifferent(conn, session, byCategory.get('thought_level'), [
       ...(ctx.reasoningEffort ? effortCandidates(ctx.reasoningEffort) : [])
     ])
+    await applyAcpSessionSettings(conn, session, ctx.harnessSettings, ctx.acpPermission?.configOptionId)
   }
 
   private async setIfDifferent(
@@ -324,7 +385,7 @@ export class AcpSessionManager {
     })
   }
 
-  /** Persist the committed session binding after a turn (§5.1). */
+  /** Persist the committed session binding after a turn. */
   async commit(
     session: AcpSessionHandle,
     input: {
@@ -366,7 +427,7 @@ export class AcpSessionManager {
 }
 
 /**
- * Loading-phase update handling (§5.1): while `session/load` replays history,
+ * Loading-phase update handling: while `session/load` replays history,
  * message/tool chunks are dropped entirely; only config-bearing updates are
  * absorbed into the handle so capability/config state stays current.
  */

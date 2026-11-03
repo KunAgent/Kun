@@ -5,7 +5,7 @@ import {
 import { rendererRuntimeClient } from './runtime-client'
 
 /**
- * ADE worker notices on the composer (09 §6.2): while a manager thread's
+ * ADE worker notices on the composer: while a manager thread's
  * composer holds a draft, the renderer renews a notice hold so wake-ups do
  * not interrupt typing; on send, pending notices are attached as a
  * worker-notices composer context and acknowledged via `ackNoticeIds`.
@@ -114,7 +114,7 @@ export type AdeNoticeSendExtras = {
 }
 
 /**
- * Resolve the worker-notice extras for one composer send (09 §6.2): on an
+ * Resolve the worker-notice extras for one composer send: on an
  * ADE manager thread the pending notices ride the user's message as a
  * `worker-notices` composer context and are acknowledged via the returned
  * ids. Queued retries reuse the ids frozen on the queued row — their

@@ -134,9 +134,10 @@ describe('writable room general-capability parity', () => {
       policy: 'auto', toolKind: 'tool_call', sideEffect: 'read-only', execute: async () => ({ output: {} }) })
     const registry = new CapabilityRegistry([
       { id: 'mcp:google_gmail', kind: 'mcp', enabled: true, available: true, tools: [tool('gmail_search')] },
+      { id: 'gmail', kind: 'built-in', enabled: true, available: true, tools: [tool('native_gmail_search')] },
       { id: 'mcp:notion', kind: 'mcp', enabled: true, available: true, tools: [tool('notion_search')] }
     ])
-    expect(registry.listTools(context).map((entry) => entry.name)).toEqual(['notion_search'])
+    expect(registry.listTools(context).map((entry) => entry.name)).toEqual(['native_gmail_search', 'notion_search'])
     expect(() => registry.resolveTool('gmail_search', context)).toThrow('not advertised')
     expect(registry.resolveTool('notion_search', context).tool.name).toBe('notion_search')
     expect(applyRoomToolPolicy(raw, roomThread({ kind: 'execution', blockedProviderIds: [] })).blockedProviderIds)
@@ -165,5 +166,45 @@ describe('writable room general-capability parity', () => {
       const unrestricted = applyRoomToolPolicy(raw, roomThread({ kind }))
       if (unrestricted.allowedToolNames) expect(unrestricted.allowedToolNames).toContain('read_room_playbook')
     }
+  })
+})
+
+describe('room memory policy', () => {
+  const enabledRaw: ToolHostContext = {
+    threadId: 'room_thread', turnId: 'turn_one', workspace: '/workspace',
+    sandboxMode: 'workspace-write', approvalPolicy: 'auto',
+    memoryPolicy: { enabled: true, scopes: ['user'] }, abortSignal: new AbortController().signal,
+    awaitApproval: async () => 'allow'
+  }
+
+  it('keeps the upstream memory policy for a writable conversation so explicit directives can be stored', () => {
+    const context = applyRoomToolPolicy(enabledRaw,
+      roomThread({ kind: 'conversation', participantAgentId: 'agent_one' }))
+    expect(context.memoryPolicy).toEqual({ enabled: true, scopes: ['user'] })
+  })
+
+  it('keeps memory disabled for a conversation when the upstream policy is disabled or absent', () => {
+    expect(applyRoomToolPolicy({ ...enabledRaw, memoryPolicy: { enabled: false } },
+      roomThread({ kind: 'conversation', participantAgentId: 'agent_one' })).memoryPolicy)
+      .toEqual({ enabled: false })
+    const absentRaw: ToolHostContext = { ...enabledRaw }
+    delete absentRaw.memoryPolicy
+    expect(applyRoomToolPolicy(absentRaw, roomThread({ kind: 'conversation' })).memoryPolicy)
+      .toEqual({ enabled: false })
+  })
+
+  it('still forces memory off for execution and discussion rooms even when upstream enables it', () => {
+    for (const kind of ['execution', 'discussion'] as const) {
+      expect(applyRoomToolPolicy(enabledRaw, roomThread({ kind })).memoryPolicy)
+        .toEqual({ enabled: false })
+    }
+  })
+
+  it('keeps memory off for a read-only conversation', () => {
+    const context = applyRoomToolPolicy(enabledRaw, {
+      ...roomThread({ kind: 'conversation', participantAgentId: 'agent_one' }),
+      sandboxMode: 'read-only'
+    })
+    expect(context.memoryPolicy).toEqual({ enabled: false })
   })
 })

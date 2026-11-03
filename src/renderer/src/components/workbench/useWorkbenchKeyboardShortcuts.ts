@@ -216,6 +216,9 @@ export function useWorkbenchKeyboardShortcuts({
         nativeDialogOpen: isNativeDialogOpen()
       })
       if (!commandId) return
+      // Keys typed into the terminal belong to the shell (Ctrl+K, Ctrl+R, ...);
+      // only the terminal toggle stays global there.
+      if (commandId !== 'toggle-terminal' && event.target instanceof Element && event.target.closest('[data-terminal-dock]')) return
 
       if (commandId === 'command-palette') {
         // Only consume the chord when there is a palette to open, so a build

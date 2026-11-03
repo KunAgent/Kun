@@ -13,7 +13,7 @@ const linkButtonClass =
   'inline-flex items-center gap-1 rounded-full border border-ds-border-muted px-2.5 py-1 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink'
 
 /**
- * In-reader translation settings dialog (§6.5): opened from a translate
+ * In-reader translation settings dialog: opened from a translate
  * card/notice when the request fails with a `config` error. Mirrors the
  * Write→Paper settings row (target language, inherit toggle, provider/model)
  * and persists via `setSettings` so the failed request can retry at once.

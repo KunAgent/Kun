@@ -6,13 +6,13 @@ import type {
 import type { DelegatedRuntimeState, HarnessRuntimeState } from './types'
 
 /**
- * UI degrade contract for harness capability v2 (plan 02 §6.2). Components
+ * UI degrade contract for harness capability v2. Components
  * call only these helpers; the mapping from capability keys to UI affordances
  * lives here. A missing snapshot means "runtime state has not arrived yet" —
  * helpers then preserve today's Kun-native behavior (affordance stays
  * enabled/visible) rather than degrading.
  *
- * Rule of thumb (02 §6.2): gray out before hiding; hide only when the
+ * Rule of thumb: gray out before hiding; hide only when the
  * capability can never exist (`reason: 'upstream'`) and the affordance would
  * clutter the main path.
  */
@@ -49,6 +49,16 @@ export function canSteer(runtime: RuntimeCaps): boolean {
     return true
   }
   return caps.statuses.sameTurnSteer.supported === true
+}
+
+/**
+ * How the composer's guidance reaches a running turn: `live` joins the run in
+ * flight, `deferred` is answered right after the Agent's current step within
+ * the same turn, `unsupported` waits in the queue for the next turn.
+ */
+export function steerDelivery(runtime: RuntimeCaps): 'live' | 'deferred' | 'unsupported' {
+  if (!canSteer(runtime)) return 'unsupported'
+  return capsOf(runtime)?.facts.steering === 'deferred' ? 'deferred' : 'live'
 }
 
 /** Stop button. An unadmitted abort-unsupported harness should not reach here. */

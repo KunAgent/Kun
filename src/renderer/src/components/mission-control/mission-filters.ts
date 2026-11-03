@@ -2,8 +2,8 @@ import type { ActivityRow } from '@shared/activity-row'
 import type { AdeTeamOverview } from '@shared/ade-teams'
 
 /**
- * Mission Control toolbar state (docs/ade/12 §5.2) plus the card-data joins
- * the view resolves lazily from /v1/teams and /v1/task-workspaces (§5.3).
+ * Mission Control toolbar state plus the card-data joins
+ * the view resolves lazily from /v1/teams and /v1/task-workspaces.
  */
 export type MissionFilters = {
   search: string
@@ -30,7 +30,7 @@ export function projectOfRow(row: ActivityRow): string {
   return tail[tail.length - 1] ?? normalized
 }
 
-/** Display text for the row's preview line (12 §5.1). */
+/** Display text for the row's preview line. */
 export function missionPreviewOf(row: ActivityRow): string | undefined {
   if (row.progressNote) return row.progressNote
   if (row.state === 'waiting' && row.waitingReason) {
@@ -45,7 +45,7 @@ export function missionFiltered(filters: MissionFilters): boolean {
 }
 
 /**
- * Search + project/agent/verdict filters (§5.2). Verdict filtering needs the
+ * Search + project/agent/verdict filters. Verdict filtering needs the
  * lazily loaded overviews; rows without verdict data only match '' filter.
  */
 export function filterMissionRows(
@@ -96,7 +96,7 @@ export function openQuestionFor(
   return overview?.questions.find((q) => q.state === 'open' && q.workerId === workerId)
 }
 
-/** Rows whose thread manages a team get an expander (12 §5.1). */
+/** Rows whose thread manages a team get an expander. */
 export function rowHasChildren(row: ActivityRow): boolean {
   const c = row.children
   return c.working + c.waiting + c.done + c.failed > 0

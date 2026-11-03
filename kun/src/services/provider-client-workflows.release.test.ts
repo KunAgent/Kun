@@ -32,7 +32,7 @@ it('keeps three same-template accounts independent through key rotation, rename,
       { kind: 'configure-connection', connectionId: 'one', configuration: { groupId: 'team', enabled: true, inherit: [], manualModels: [] } }
     ] })
     await registry.commitConfiguration({ expectedRevision: preview.expectedRevision, previewId: preview.previewId, idempotencyKey: 'group-account-workflow' })
-    expect(await registry.probe('one')).toEqual({ ok: true, models: ['coding', 'new-discovered'] })
+    expect(await registry.probe('one')).toMatchObject({ ok: true, source: 'provider', lastAttemptStatus: 'success', models: ['coding', 'new-discovered'] })
     expect((await registry.snapshot()).providers.find((profile) => profile.id === 'one')?.models).toEqual(['coding'])
     const reopened = makeRegistry()
     await reopened.initialize()

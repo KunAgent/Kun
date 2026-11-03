@@ -194,7 +194,7 @@ describe('project config MCP grants', () => {
     })
 
     // The digest covers the whole file: editing the MCP section revokes
-    // setup approval too (docs/ade/07 §7.1).
+    // setup approval too.
     await writeKunProjectConfig(workspace, JSON.stringify({
       version: 1,
       mcp: { servers: { api: { transport: 'stdio', command: 'node', args: ['a.js'] } } },

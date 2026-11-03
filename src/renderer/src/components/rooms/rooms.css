@@ -113,6 +113,7 @@
 .rooms-topic-disclosure > summary { color: var(--ds-text-muted); font-size: .75rem; cursor: pointer; }
 .rooms-topic-disclosure[open] > summary { margin-bottom: .75rem; }
 .rooms-topic-attention { margin-top: .5rem; padding: .5rem .625rem; background: var(--ds-danger-soft); border-radius: .5rem; color: var(--ds-danger); font-size: .75rem; }
+.rooms-topic-attention small { font-size: inherit; opacity: .72; }
 .rooms-topic-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem; }
 .rooms-topic-actions button { display: inline-flex; align-items: center; gap: .375rem; border-radius: 999px; padding: .375rem .625rem; font-size: .75rem; background: var(--ds-surface-hover); }
 

@@ -1,0 +1,80 @@
+{
+  "workersEmptyTitle": "No members yet",
+  "workersUnavailableTitle": "Can't read the team right now",
+  "workersRetry": "Retry",
+  "workersHeader": {
+    "members": "Team of {{n}}",
+    "usageTitle": "Tokens used by the whole team",
+    "success": "done",
+    "running": "working",
+    "warning": "waiting on you",
+    "danger": "failed"
+  },
+  "workersSection": {
+    "needs-you": "Needs you",
+    "working": "Working",
+    "done": "Finished"
+  },
+  "workersStatus": {
+    "question": "Waiting on your answer",
+    "approval": "Waiting on approval",
+    "waiting": "Waiting",
+    "failed": "Failed",
+    "working": "Working",
+    "done": "Done",
+    "released": "Released",
+    "idle": "Idle"
+  },
+  "workersTool": {
+    "read": "Reading files",
+    "edit": "Editing files",
+    "search": "Searching the code",
+    "command": "Running a command",
+    "web": "Looking things up online",
+    "delegate": "Delegating a subtask",
+    "other": "Calling {{tool}}"
+  },
+  "workersPhase": {
+    "investigating": "Investigating",
+    "implementing": "Implementing",
+    "verifying": "Verifying",
+    "blocked": "Blocked",
+    "compacting": "Compacting context"
+  },
+  "workersTime": {
+    "justNow": "just now",
+    "minutes": "{{n}} min ago",
+    "hours": "{{n}} h ago",
+    "days": "{{n}} d ago"
+  },
+  "workersRow": {
+    "files": "{{n}} files"
+  },
+  "workersAction": {
+    "openInMain": "Open in the main view",
+    "more": "More actions"
+  },
+  "workersQuestion": {
+    "waitingOn": "{{name}} is waiting on your answer",
+    "otherAnswer": "Or type another answer…",
+    "answer": "Answer",
+    "answerPlaceholder": "Or type your answer…",
+    "answerHint": "Answering doesn't take over"
+  },
+  "workerTab": {
+    "fallbackTitle": "Member",
+    "loadingConversation": "Loading conversation…",
+    "noConversation": "No conversation yet.",
+    "missing": "This member is no longer part of the team.",
+    "childReadOnly": "This agent is run by the manager; its conversation is read-only here.",
+    "releasedReadOnly": "This member was released; its conversation is read-only."
+  },
+  "workerComposer": {
+    "managed": "Managed by the manager",
+    "handBack": "You took over · hand back",
+    "takeOverTitle": "Take this member over from the manager",
+    "handBackTitle": "Hand control back to the manager",
+    "takeOverHint": "Sending takes it over; you can hand it back anytime."
+  },
+  "assignmentCardTask": "Task"
+}

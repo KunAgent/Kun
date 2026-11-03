@@ -33,7 +33,6 @@ import {
 import type { EventBus } from '../ports/event-bus.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import {
   applyWorkspaceAgentSurfaceFallback,
   loadWorkspaceAgentProfiles
@@ -62,7 +61,6 @@ import {
 } from './delegation-runtime-base.js'
 import {
   addChildUsage,
-  childPptWorkflowSnapshot,
   childActivityFromEvent,
   childContractError,
   childLifecycleMetadata,
@@ -94,15 +92,16 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     /**
      * Host-owned idempotency key for the child turn start. Retried deliveries
      * with the same key reattach to the already-admitted turn (manager
-     * dispatch exactly-once, 09 §5).
+ * dispatch exactly-once).
      */
     clientRequestId?: string
     /** Trusted host workflow control kept outside the child user message. */
     controlPrompt?: string
-    pptWorkflowScope?: PptWorkflowScope
     workspace?: string
     model?: string
     providerId?: string
+    /** Host-selected depth from the worker dispatch card; ordinary tools do not supply it. */
+    reasoningEffort?: string
     accountId?: string
     clientSurface?: TurnClientSurface
     /** Effective parent turn/thread model inherited together with inheritedProviderId. */
@@ -153,6 +152,8 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     fastContext?: boolean
     /** Original task grouping retained in the child record and evidence pack. */
     fastContextTasks?: readonly import('./fast-context-evidence.js').FastContextTask[]
+    /** Validated workspace-relative paths the parent marked as likely relevant. */
+    fastContextHintPaths?: readonly string[]
     /** Optional maximum time to wait for an execution slot before failing this child. */
     queueTimeoutMs?: number
     /**
@@ -307,11 +308,13 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
     // Default-inherit tools (e.g. fast_context) follow the parent session's
     // reasoning strength unless the profile configures an explicit depth;
     // reusable delegate_task profiles keep their existing 'off'-style default.
-    const resolvedReasoningEffort = ephemeralAgentInheritsSessionSelection
-      ? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
-      : input.inheritSessionDefaults === true
-        ? profile?.reasoningEffort ?? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
-        : profile?.reasoningEffort
+    const resolvedReasoningEffort = input.reasoningEffort !== undefined
+      ? ModelReasoningEffort.parse(input.reasoningEffort)
+      : ephemeralAgentInheritsSessionSelection
+        ? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
+        : input.inheritSessionDefaults === true
+          ? profile?.reasoningEffort ?? normalizeInheritedReasoningEffort(input.inheritedReasoningEffort)
+          : profile?.reasoningEffort
     // Explicit tool override wins; otherwise default-inherit tools adopt the
     // parent turn's Codex service tier ('fast'). The child model request is
     // still capability-gated downstream (Codex + priority-capable only).
@@ -360,17 +363,16 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       returnFormat,
       ...(input.fastContext === true ? { fastContext: true } : {}),
       ...(input.fastContextTasks?.length ? { fastContextTasks: [...input.fastContextTasks] } : {}),
+      ...(input.fastContextHintPaths?.length ? { fastContextHintPaths: [...input.fastContextHintPaths] } : {}),
       ...(input.detach ? { detached: true } : {}),
       ...(input.launcher ? { launcher: input.launcher } : {}),
-      ...(input.pptWorkflowScope
-        ? { pptWorkflow: childPptWorkflowSnapshot(input.pptWorkflowScope) }
-        : {}),
       status: 'queued',
       resumable: false,
       childSeq: this.nextChildSeq(id),
       createdAt: queuedAt,
       updatedAt: queuedAt
     })
+    this.ownedChildIds.add(record.id)
     await this.options.store.upsert(record)
     await this.recordChildEvent(record)
     // Surface allocation as queued. Running is emitted only after a scheduler
@@ -439,6 +441,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
         returnFormat,
         fastContext: input.fastContext === true,
         fastContextTasks: input.fastContextTasks,
+        fastContextHintPaths: input.fastContextHintPaths,
         queueTimeoutMs: input.queueTimeoutMs,
         workspace,
         security,
@@ -454,7 +457,6 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       gatewayBinding: input.gatewayBinding,
         executionUnit: input.executionUnit,
         controlPrompt,
-        pptWorkflowScope: input.pptWorkflowScope,
         signal: detachedController.signal
       }))
         .then((settled) => this.notifyDetachedChild(settled))
@@ -517,6 +519,7 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       returnFormat,
       fastContext: input.fastContext === true,
       fastContextTasks: input.fastContextTasks,
+      fastContextHintPaths: input.fastContextHintPaths,
       queueTimeoutMs: input.queueTimeoutMs,
       workspace,
       security,
@@ -532,7 +535,6 @@ export class DelegationRuntimeRun extends DelegationRuntimeBase {
       gatewayBinding: input.gatewayBinding,
       executionUnit: input.executionUnit,
       controlPrompt,
-      pptWorkflowScope: input.pptWorkflowScope,
       signal: controller.signal
     })
     const first = await Promise.race([

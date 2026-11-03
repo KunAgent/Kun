@@ -1,6 +1,7 @@
 import { HarnessGatewayBindingSchema, harnessGatewayBindingKey } from '../../kun/src/contracts/harness-gateway-binding.js'
 import type { AdeHarnessRow } from './ade-harnesses'
 import type { KunHarnessEnabledProfileV1, KunHarnessSettingsV1 } from './app-settings-types-kun-runtime'
+import { legacyProviderKindFor } from '../../kun/src/harness/harness-provider-kind.js'
 
 /** Mirrored by the runtime; neither presence on disk nor a legacy setting is opt-in. */
 export function harnessProfileKey(profile: KunHarnessEnabledProfileV1): string {
@@ -36,9 +37,16 @@ export function selectedHarnessProfile(row: AdeHarnessRow, settings: KunHarnessS
   const defaults = settings.defaults[row.definition.id]
   const credentialMode = defaults?.credentialMode && row.definition.credentialModes.includes(defaults.credentialMode)
     ? defaults.credentialMode : row.definition.credentialModes[0] ?? 'native-login'
+  // Native login binds a provider account only for engines whose native
+  // credential is itself a Kun provider kind (Claude Code, Cursor,
+  // Antigravity), mirroring the runtime's readiness rule. Any other saved
+  // providerId is a stale default the panel cannot show, so it must not turn
+  // native login into a rejected route.
+  const providerId = defaults?.providerId && (credentialMode !== 'native-login' || legacyProviderKindFor(row.definition.id))
+    ? defaults.providerId : undefined
   return { harnessId: row.definition.id, credentialMode,
     ...(defaults?.gatewayBinding && credentialMode === 'kun-gateway' ? { gatewayBinding: defaults.gatewayBinding }
-      : defaults?.providerId ? { providerId: defaults.providerId } : {}) }
+      : providerId ? { providerId } : {}) }
 }
 
 export function harnessProfileEnabled(settings: Pick<KunHarnessSettingsV1, 'enabledProfiles' | 'disabledIds'>,

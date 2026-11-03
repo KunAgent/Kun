@@ -3,6 +3,7 @@ import { RoomIdSchema } from '../../contracts/rooms.js'
 import { RoomRunPhaseSchema, RoomRunStatusSchema } from '../../contracts/room-runs.js'
 import { roomRunList, roomRunDetail, roomRunItems, roomMessageRunSource,
   decodeRunCursor, inspectRoomRun } from '../../rooms/room-run-query.js'
+import { roomRunSteps } from '../../rooms/room-run-steps.js'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import type { RouteContext } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -51,6 +52,10 @@ export function registerRoomRunRoutes(add: Add, runtime: ServerRuntime): void {
     return roomRunItems(rooms.deps, params.roomId, Id.parse(params.runId), {
       limit: input.limit, maxBytes: input.max_bytes, before: input.cursor,
       itemId: input.item_id, callId: input.call_id, contentOffset: input.content_offset })
+  })
+  add('GET', '/v1/rooms/:roomId/runs/:runId/steps', async (rooms, _request, { params }) => {
+    await rooms.service.get(params.roomId)
+    return roomRunSteps(rooms.deps, params.roomId, Id.parse(params.runId))
   })
   add('GET', '/v1/rooms/:roomId/runs/:runId/events', async (rooms, request, { params }) => {
     await rooms.service.get(params.roomId)

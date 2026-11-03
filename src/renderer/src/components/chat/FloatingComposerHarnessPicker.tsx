@@ -1,4 +1,5 @@
-import { useCallback, useId, useState, type ReactElement } from 'react'
+import { useCallback, useContext, useEffect, useId, useState, type ReactElement } from 'react'
+import { ComposerPickerPortalContext } from './composer-picker-portal-context'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, History, Loader2, Settings2 } from 'lucide-react'
@@ -29,13 +30,15 @@ type Props = {
    */
   needsConfirm: (harnessId: string) => boolean
   /**
-   * New-session continuation entry (01 §8): shown only for a fresh
+   * New-session continuation entry: shown only for a fresh
    * one-to-one thread whose selected harness exposes a `historySource`
    * and the matching lab flag is on.
    */
   onContinueLocalSession?: () => void
   onOpen?: () => void
   onSelect: (harnessId: string) => void
+  /** Menu footnote; defaults to the composer's next-turn rule, null hides it. */
+  hint?: string | null
 }
 
 /** New-turn picker: only explicitly enabled profiles with current readiness are selectable. */
@@ -48,9 +51,11 @@ export function FloatingComposerHarnessPicker({
   needsConfirm,
   onContinueLocalSession,
   onOpen,
-  onSelect
+  onSelect,
+  hint
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const portalContainer = useContext(ComposerPickerPortalContext)
   const [open, setOpen] = useState(false)
   const [pendingSwitch, setPendingSwitch] = useState<AdeHarnessRow | null>(null)
   const menuId = useId()
@@ -66,6 +71,13 @@ export function FloatingComposerHarnessPicker({
     estimatedHeight: MENU_ESTIMATED_HEIGHT
   })
 
+  useEffect(() => {
+    if (!open || !portalContainer) return
+    const frame = requestAnimationFrame(() => menuRef.current?.querySelector<HTMLElement>(
+      '[aria-checked="true"], button:not(:disabled)')?.focus())
+    return () => cancelAnimationFrame(frame)
+  }, [open, portalContainer, menuRef])
+
   const pick = (row: AdeHarnessRow): void => {
     if (!harnessRowAvailable(row)) return
     if (row.definition.id === harnessId) {
@@ -77,6 +89,7 @@ export function FloatingComposerHarnessPicker({
       return
     }
     onSelect(row.definition.id)
+    if (portalContainer) triggerRef.current?.focus()
     setOpen(false)
   }
 
@@ -141,7 +154,7 @@ export function FloatingComposerHarnessPicker({
         <>
           {rows.filter(harnessRowAvailable).map((row) => {
             const id = row.definition.id
-            // P4-05: stable reason code → localized label + next step; the
+            // stable reason code → localized label + next step; the
             // raw message stays in the title tooltip as the "reason detail".
             const { code, labelKey, nextStepKey, configureProvider } = harnessConnectionPresentation(row)
             const detecting = code === 'detecting'
@@ -187,7 +200,7 @@ export function FloatingComposerHarnessPicker({
                     role="menuitem"
                     onClick={() => openAgentSettings(row)}
                     aria-label={configureProvider ? t('adeAgentAction.configureProvider') : `${row.definition.displayName} ${t('adeHarnessOpenSettings')}`}
-                    className="shrink-0 rounded-md p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-accent"
+                    className="shrink-0 rounded-md p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
                     data-harness-repair={id}
                   >
                     <Settings2 className="h-4 w-4" strokeWidth={1.75} />
@@ -222,9 +235,9 @@ export function FloatingComposerHarnessPicker({
             <Settings2 className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
             {t('adeHarnessOpenSettings')}
           </button>
-          <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
-            {t('adeHarnessPicker.nextTurnHint')}
-          </div>
+          {hint === null ? null : <div className="border-t border-ds-border px-3 py-2 text-[11px] text-ds-faint">
+            {hint ?? t('adeHarnessPicker.nextTurnHint')}
+          </div>}
         </>
       )}
     </div>
@@ -246,7 +259,7 @@ export function FloatingComposerHarnessPicker({
             setPendingSwitch(null)
             if (next) onOpen?.()
           }}
-          className="flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-raised px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+          className="flex h-7 items-center gap-1 rounded-full border border-ds-border bg-ds-elevated px-2 text-xs text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
           title={t('adeHarnessPicker.title')}
           aria-label={t('adeHarnessPicker.title')}
           data-composer-harness-picker
@@ -260,7 +273,7 @@ export function FloatingComposerHarnessPicker({
           )}
         </button>
       </div>
-      {menu ? createPortal(menu, document.body) : null}
+      {menu ? createPortal(menu, portalContainer ?? document.body) : null}
     </>
   )
 }

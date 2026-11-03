@@ -1,6 +1,7 @@
 import type { ChatBlock } from '../../agent/types'
 import { isPptDirectionBundle } from '../../design/canvas/ppt-direction-board'
 import { isPptReviewBundle } from '../../design/canvas/ppt-review-board'
+import { isPptBoardToolName, pptToolOutputPath } from '../../design/canvas/ppt-tool-results'
 import type { CodeCanvasOpenRequestDetail, WorkCanvasOpenRequestDetail } from '../../lib/code-canvas-panel-event'
 
 type PptBundleIdentity = {
@@ -40,7 +41,7 @@ export function pptCanvasOpenRequestForBlock(
   if (
     block.kind !== 'tool' ||
     block.status !== 'success' ||
-    block.meta?.toolName !== 'ppt_agent' ||
+    !isPptBoardToolName(block.meta?.toolName) ||
     !block.detail ||
     !input.threadId?.trim()
   ) return null
@@ -55,8 +56,7 @@ export function pptCanvasOpenRequestForBlock(
   }
   const review = isPptReviewBundle(payload.reviewBundle) ? payload.reviewBundle : null
   const direction = isPptDirectionBundle(payload.directionBundle) ? payload.directionBundle : null
-  const deckArtifact = record(payload.deckArtifact)
-  const outputPath = nonEmptyString(deckArtifact?.output) ? deckArtifact.output.trim() : undefined
+  const outputPath = pptToolOutputPath(typeof block.meta?.toolName === 'string' ? block.meta.toolName.trim() : undefined, payload)
   const completed = payload.phase === 'completed' &&
     nonEmptyString(payload.workflowId) && nonEmptyString(payload.childId) && outputPath
       ? {
@@ -133,12 +133,6 @@ function normalizePptBoardTitle(
     ? sourcePath.split('/').pop()?.replace(/\.[^.]+$/, '')
     : ''
   return sourceStem ? `${sourceStem} · Presentation review` : 'Presentation review'
-}
-
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null
 }
 
 function nonEmptyString(value: unknown): value is string {

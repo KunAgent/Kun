@@ -13,7 +13,7 @@ export function useWorkWhiteboardCreation(input: {
   newWhiteboardDialogOpen: boolean
   creatingWhiteboard: boolean
   openNewWhiteboardDialog: () => Promise<void>
-  submitNewWhiteboardTitle: (title: string, engine?: CanvasEngine) => Promise<void>
+  submitNewWhiteboardTitle: (title: string, engine?: CanvasEngine) => Promise<boolean>
   closeNewWhiteboardDialog: () => void
 } {
   const createWhiteboard = useWriteWorkspaceStore((s) => s.createWhiteboard)
@@ -28,16 +28,17 @@ export function useWorkWhiteboardCreation(input: {
     setNewWhiteboardDialogOpen(true)
   }, [input.onNeedWorkspace, input.workspaceRoot])
 
-  const submitNewWhiteboardTitle = useCallback(async (title: string, engine?: CanvasEngine): Promise<void> => {
+  const submitNewWhiteboardTitle = useCallback(async (title: string, engine?: CanvasEngine): Promise<boolean> => {
     if (!input.workspaceRoot.trim()) {
       setNewWhiteboardDialogOpen(false)
       await input.onNeedWorkspace()
-      return
+      return false
     }
     setCreatingWhiteboard(true)
     const board = await createWhiteboard(input.workspaceRoot, { title, ...(engine ? { engine } : {}) })
     setCreatingWhiteboard(false)
     if (board) setNewWhiteboardDialogOpen(false)
+    return Boolean(board)
   }, [createWhiteboard, input.onNeedWorkspace, input.workspaceRoot])
 
   const closeNewWhiteboardDialog = useCallback((): void => {

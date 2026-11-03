@@ -141,6 +141,7 @@ module.exports = {
     '**/kun/dist/**/*',
     '**/kun/package*.json',
     '**/kun/node_modules/**/*',
+    '**/vendor/kun-remote/*.tgz',
     '**/packages/extension-api/**/*',
     '**/packages/provider-catalog/**/*',
     '**/packages/create-kun-extension/**/*',
@@ -198,6 +199,9 @@ module.exports = {
     'kun/package.json',
     'kun/package-lock.json',
     'kun/node_modules/**/*',
+    // kun/package.json depends on file:../vendor/kun-remote/*.tgz; the packed
+    // dependency prune resolves it from the unpacked app root.
+    'vendor/kun-remote/*.tgz',
     'packages/extension-api/package.json',
     'packages/extension-api/dist/**/*',
     'packages/extension-api/schema/**/*',
@@ -212,6 +216,8 @@ module.exports = {
     '!kun/node_modules/@anthropic-ai/claude-agent-sdk-*/**',
     '!**/*.map',
     '!**/*.d.ts',
+    // ESM/CJS-specific declaration twins are compile-time only as well.
+    '!**/*.d.{mts,cts}',
     '!**/*.ts',
     '!**/tsconfig*.json',
     '!**/README*',
@@ -220,6 +226,9 @@ module.exports = {
     // dependency test exclusions do not apply. gifwrap's ~6 MiB of test images
     // are not used by its src/ runtime; keep the runtime and LICENSE intact.
     '!**/node_modules/gifwrap/test{,/**/*}',
+    // Jimp's jest image snapshots are never loaded and carry ~200-character
+    // paths; on Windows they push update backup/stage copies past MAX_PATH.
+    '!**/node_modules/**/__image_snapshots__{,/**/*}',
     // Lark SDK ships an ESM (`es/`) build for bundlers alongside its CJS `main`
     // (`lib/`). The main process resolves `@larksuiteoapi/node-sdk` through
     // Node's `main` field, so the ESM copy is dead weight at runtime.
@@ -240,6 +249,14 @@ module.exports = {
     // DOCX export requires html-to-docx's Node entry. Its two browser bundles
     // duplicate the converter and are never loaded by the application.
     '!**/node_modules/html-to-docx/dist/html-to-docx.browser{,.esm}.js',
+    // The Kun TUI always runs on Node (see kun/src/tui/tui-node.ts), so
+    // opentui's Bun-only entry points never load. Node resolves the `node`
+    // export conditions, which import only the `chunk-node-*` files.
+    '!**/node_modules/@opentui/*/{index,testing,yoga}.bun.js',
+    '!**/node_modules/@opentui/core/chunk-bun-*.js',
+    // opentui loads web-tree-sitter's root `tree-sitter.js` + `.wasm`. The
+    // `./debug` build and the C sources under lib/ are never imported.
+    '!**/node_modules/web-tree-sitter/{debug,lib}{,/**/*}',
     'packages/create-kun-extension/templates/**/*',
     // @computer-use/libnut-linux currently publishes an x86-64 libnut.node
     // even though its npm metadata also declares arm64. Keep that incompatible
@@ -274,6 +291,11 @@ module.exports = {
       to: 'bundled-skills',
       filter: ['**/*']
     },
+    // Offline copies of the libraries Gen UI widgets may reference by their
+    // pinned CDN URLs (see src/main/app-sandbox/app-sandbox-vendor.ts).
+    { from: 'node_modules/d3/dist/d3.min.js', to: 'gen-ui-vendor/d3.min.js' },
+    { from: 'node_modules/echarts/dist/echarts.min.js', to: 'gen-ui-vendor/echarts.min.js' },
+    { from: 'node_modules/lucide/dist/umd/lucide.min.js', to: 'gen-ui-vendor/lucide.min.js' },
     {
       from: 'resources/whisper',
       to: 'whisper',
@@ -311,13 +333,16 @@ module.exports = {
         publish: [
           {
             provider: 'generic',
+            // Stable/frontier is selected by the URL; both feeds use latest*.yml.
+            // Do not derive a new manifest name from each daily prerelease version.
+            channel: 'latest',
             url: genericUpdateUrl
           }
         ]
       }),
   beforePack: './scripts/before-pack.cjs',
   afterPack: './scripts/after-pack.cjs',
-  afterSign: './scripts/mac-notarize.cjs',
+  afterSign: './scripts/after-sign.cjs',
   mac: {
     // macOS stores Chromium locales in language-named .lproj directories.
     electronLanguages: chromiumMacLanguages,
@@ -360,8 +385,8 @@ module.exports = {
       height: 430
     },
     contents: [
-      { x: 350, y: 310, type: 'file' },
-      { x: 535, y: 310, type: 'link', path: '/Applications' }
+      { x: 364, y: 284, type: 'file' },
+      { x: 548, y: 284, type: 'link', path: '/Applications' }
     ]
   },
   win: {
@@ -376,10 +401,12 @@ module.exports = {
     target: [{ target: 'nsis', arch: ['x64'] }]
   },
   nsis: {
+    // Custom LangStrings in build/installer-pages.nsh only cover en + zh_CN.
+    installerLanguages: ['en_US', 'zh_CN'],
     oneClick: false,
     installerHeader: './build/installerHeader.bmp',
     installerSidebar: './build/installerSidebar.bmp',
-    uninstallerSidebar: './build/installerSidebar.bmp',
+    uninstallerSidebar: './build/uninstallerSidebar.bmp',
     // The stock assisted directory page appends APP_FILENAME by substring and
     // turns a registered `DeepSeek GUI` location into `DeepSeek GUI\Kun`.
     // installer.nsh adds one MUI directory page with component-aware migration.
@@ -400,6 +427,11 @@ module.exports = {
     category: 'Development',
     icon: './src/asset/img/kun.png',
     maintainer: 'Kun Contributors <1736101137@qq.com>',
+    // Electron derives the window's WM_CLASS / Wayland app_id from package.json
+    // `desktopName`. afterPack renames the real binary to `<exe>.electron-bin`, which
+    // is what the window would otherwise be called, so the .desktop entry has to be
+    // named after desktopName for the dock to match windows with their icon.
+    syncDesktopName: true,
     // AppImage covers generic Linux; deb covers Debian-family installers such as
     // openKylin / Ubuntu that expect apt/software-store packages.
     target: [
@@ -414,8 +446,16 @@ module.exports = {
   appImage: {
     executableArgs: ['--disable-setuid-sandbox', '--no-first-run']
   },
+  deb: {
+    // Ubuntu 24.04+ denies unprivileged user namespaces, which Chromium's sandbox
+    // needs, to any program without an AppArmor profile that grants them. The stock
+    // profile only covers the launcher script; this one covers the renamed binary too.
+    appArmorProfile: 'build/linux-apparmor-profile.tpl'
+  },
   extraMetadata: {
     ...(releaseAppVersion ? { version: releaseAppVersion } : {}),
+    // Keeps a development build's dock entry apart from the production one.
+    ...(developmentFlavor ? { desktopName: 'kun-gui-dv.desktop' } : {}),
     kunAppFlavor: appFlavor,
     updateChannel,
     buildHints: {

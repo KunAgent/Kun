@@ -13,6 +13,7 @@ import type {
 } from '../contracts/turns.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { ExtensionToolCatalogEpoch, KnowledgeBaseMount } from '../contracts/threads.js'
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import type {
   UserInputRequest,
   UserInputResolution
@@ -74,11 +75,9 @@ export type GuiPlanContext = {
   turnId?: string
 }
 
-export type GuiDesignArtifactContext = {
-  kind: 'svg'
-  artifactId: string
-  relativePath: string
-}
+export type GuiDesignArtifactContext =
+  | { kind: 'svg'; artifactId: string; relativePath: string }
+  | { kind: 'html'; artifactId: string; relativePath: string; designMdPath?: string }
 
 export type ApprovedExternalWriteTarget = {
   /** Physical path shown in the approval prompt. */
@@ -107,54 +106,9 @@ export type KunActionApprovalGrant = {
   expiresAt: string
 }
 
-/**
- * Host-minted capability for one managed PPT child execution. Models cannot
- * supply or persist this scope; PPT-only tools require it at discovery and
- * execution time so the main agent and unrelated children cannot bypass the
- * dedicated workflow host.
- */
-export type PptWorkflowScope = Readonly<{
-  action: 'start' | 'select_direction' | 'revise_directions' | 'revise_previews' | 'retry_failed' | 'approve_and_build'
-  /** Structured output the active child attempt must produce before stopping. */
-  stage?: 'direction' | 'review' | 'build'
-  workflowId: string
-  projectDir: string
-  parentThreadId: string
-  previewMode: 'image-first' | 'editable'
-  /** Work-originated source must be read before the child plans the deck. */
-  sourceReadRequired?: boolean
-  directionGate?: Readonly<{
-    required: boolean
-    reason: 'existing-presentation' | 'explicit-skip' | 'work-document' | 'design-reference' | 'complete-visual-system' | 'underspecified-new-deck'
-    basis: string
-    sourceHash: string
-  }>
-  directionContext?: Readonly<{
-    childId: string
-    directions: ReadonlyArray<{
-      directionId: string
-      revision: number
-    }>
-    authority: ReadonlyArray<{
-      directionId: string
-      revision: number
-      recommended: boolean
-      planFingerprint: string
-      candidateFingerprint: string
-    }>
-    slidesFingerprint: string
-  }>
-  reviewContext?: Readonly<{
-    childId: string
-    slides: ReadonlyArray<{
-      slideId: string
-      revision: number
-      annotations?: readonly string[]
-    }>
-  }>
-}>
-
 export type ToolHostContext = {
+  /** Host-authored shared metadata snapshot. [] keeps the restricted fallback, undefined is an ordinary turn. */
+  attachmentAliases?: AttachmentAliases
   /** Host-authored room step scope, never accepted from model arguments. */
   roomAgent?: boolean
   roomStepKind?: 'coordination' | 'discussion' | 'execution' | 'review' | 'conversation'
@@ -190,6 +144,8 @@ export type ToolHostContext = {
   guiRoomExcalidrawCanvas?: boolean
   /** True only for product Design turns (not Code sidebar canvas turns). */
   guiDesignMode?: boolean
+  /** Current GUI turn published a canvas/component artifact; keep browser QA in-app. */
+  designPreviewOnly?: boolean
   /** Code is the compatibility default when an older turn omits the field. */
   agentSurface?: 'code' | 'write' | 'design'
   /** Reserved SVG artifact exposed to structured SVG tools for this turn. */
@@ -214,6 +170,11 @@ export type ToolHostContext = {
   fastContextScopeId?: string
   /** Number of grouped Fast Context tasks; source calls carry task_indexes for durable attribution. */
   fastContextTaskCount?: number
+  /**
+   * Host-owned state for one Fast Context retrieval run. Only the Fast Context
+   * tool-host wrapper attaches it; it is never derived from model arguments.
+   */
+  fastContextRun?: FastContextRunScope
   /** Active model provider id selected for this turn. Child agents inherit this routing unless a profile overrides it. */
   modelProviderId?: string
   /** Frozen harness identity for this turn; tool providers use it for harness-aware behavior. */
@@ -296,8 +257,6 @@ export type ToolHostContext = {
   kunActionApprovalGrant?: Readonly<KunActionApprovalGrant>
   /** Host-injected active tool-call id. Callers cannot supply or persist it. */
   activeToolCallId?: string
-  /** Managed PPT authority injected only into the dedicated PPT child loop. */
-  pptWorkflowScope?: PptWorkflowScope
   /** Kun runtime data root; used to allow sandbox-safe reads of background shell output files. */
   runtimeDataDir?: string
   /** Store used to offload oversized tool results from model context. */
@@ -311,6 +270,16 @@ export type ToolHostContext = {
   awaitUserInput?: (
     input: Omit<UserInputRequest, 'threadId' | 'turnId'>
   ) => Promise<UserInputResolution>
+}
+
+/** Per-run Fast Context retrieval state shared by grep, glob, and read. */
+export interface FastContextRunScope {
+  /** Workspace-relative files or directories the parent marked as likely relevant. */
+  readonly hintPaths: readonly string[]
+  /** Lowercased identifier-like terms from the grouped task titles and queries. */
+  readonly queryTerms: readonly string[]
+  /** Source commands in this run that hit their time limit. */
+  timedOutCommands: number
 }
 
 export type ToolCallLike = {

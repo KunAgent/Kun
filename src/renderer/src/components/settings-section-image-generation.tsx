@@ -92,7 +92,7 @@ export function ImageGenerationSettingsSection({ ctx }: { ctx: Record<string, an
   }, [imageGeneration.defaultSize])
   useEffect(() => {
     let cancelled = false
-    void fetchSharedModelConnectionCredentialStates()
+    void fetchSharedModelConnectionCredentialStates({ fresh: true })
       .then((states) => {
         if (!cancelled) setConnectionCredentials(states)
       })

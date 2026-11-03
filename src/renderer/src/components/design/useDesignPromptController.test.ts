@@ -10,14 +10,6 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key })
 }))
 
-vi.mock('./useDesignQualityRepair', () => ({
-  useDesignQualityRepair: () => ({
-    clearDesignAutoRepairScope: vi.fn(),
-    handleDesignRuntimeQualityFindings: vi.fn(),
-    handleDesignQualityRepairRequest: vi.fn()
-  })
-}))
-
 vi.mock('../../design/design-turn-submit', () => ({ submitDesignTurn: vi.fn() }))
 
 describe('useDesignPromptController', () => {

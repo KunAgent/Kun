@@ -1,6 +1,6 @@
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
- * Codex app-server model probing for `GET /v1/harnesses/:id/models` (P6-07).
+ * Codex app-server model probing for `GET /v1/harnesses/:id/models`.
  * Spawns a throwaway `codex app-server`, runs `initialize` + `model/list`,
  * and closes it — the same spawn-free-then-cached contract as AcpModelProbe.
  */
@@ -28,6 +28,8 @@ export type CodexModelProbeDeps = {
   resolveSecretEnv?: HarnessSecretRefResolver
   nowMs?: () => number
   cacheMs?: number
+  /** Receives each successful catalog, e.g. to keep it across restarts. */
+  onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
 }
 
 export class CodexModelProbe {
@@ -53,6 +55,11 @@ export class CodexModelProbe {
       : undefined
   }
 
+  /** Spawn-free cached model facts, under the same freshness rule as `peek`. */
+  peekInfo(definition: HarnessDefinition): HarnessModelCatalog['modelInfo'] | undefined {
+    return this.peek(definition) ? this.cache.get(this.cacheKey(definition))?.catalog.modelInfo : undefined
+  }
+
   async probe(definition: HarnessDefinition): Promise<string[]> {
     return (await this.probeCatalog(definition)).models
   }
@@ -69,6 +76,7 @@ export class CodexModelProbe {
     const task = this.probeUncached(definition, command).then((catalog) => {
       this.cache.set(key, { command, catalog, binaryIdentity: harnessExecutableIdentity(command),
         fetchedAt: this.nowMs(), expiresAt: this.nowMs() + (this.deps.cacheMs ?? CODEX_MODEL_PROBE_CACHE_MS) })
+      if (catalog.models.length > 0) this.deps.onCatalog?.(definition, catalog)
       return catalog
     }).catch(() => {
       const catalog = { models: [], modelInfo: [] }

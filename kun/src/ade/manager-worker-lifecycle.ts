@@ -1,5 +1,6 @@
 import type { TurnItem, AssistantTextTurnItem } from '../contracts/items.js'
 import type { RuntimeEvent } from '../contracts/events.js'
+import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
 import type {
   DispatchRecord,
   TurnRunOutcome,
@@ -12,11 +13,18 @@ import type { TeamControls } from './team-controls.js'
 import type { QualityVerdicts } from './quality-verdict.js'
 import { refreshWorkerReviewActivity } from './worker-review-activity.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
+import { settleStrandedWorkerDispatches } from './worker-stranded-dispatch.js'
+import { findTurnFailureCause, type SessionEventSource } from '../adapters/session-event-query.js'
+
+const CHILD_TERMINAL_EVENTS: ReadonlySet<RuntimeEvent['kind']> = new Set([
+  'turn_completed',
+  'turn_failed',
+  'turn_aborted'
+])
 
 /**
- * ADE worker lifecycle events (09 §5 turnId backfill, §6.1 terminal hook,
- * §6.5 approval notices, §9 implicit takeover, ephemeral release, startup
- * reconciliation). Extracted from ManagerRuntime; every method here runs
+ * ADE worker lifecycle events (ephemeral release; startup
+ * reconciliati). Extracted from ManagerRuntime; every method here runs
  * detached from the calling turn — event handling is fire-and-forget so the
  * runtime event pipeline is never held by workspace captures or store writes.
  */
@@ -28,13 +36,20 @@ export class ManagerWorkerLifecycle {
   ) {}
 
   /**
-   * Runtime-event observer hook (09 §5 turnId backfill + §6.1 terminal
-   * hook). Wired onto the RuntimeEventRecorder's observer list; every
+   * Runtime-event observer hook. Wired onto the RuntimeEventRecorder's observer list; every
    * branch is fire-and-forget so the event pipeline is never held by
    * workspace captures or store writes.
    */
   handleRuntimeEvent(event: RuntimeEvent): void {
-    if (event.child || !event.turnId) return
+    if (event.child) {
+      if (event.child.childLauncher === 'manager-worker' && CHILD_TERMINAL_EVENTS.has(event.kind)) {
+        void this.handleWorkerChildSettled(event.child.parentThreadId, event.child.childId).catch((error) => {
+          console.warn('[kun] ade stranded dispatch settlement failed:', error)
+        })
+      }
+      return
+    }
+    if (!event.turnId) return
     const turnId = event.turnId
     switch (event.kind) {
       case 'turn_started':
@@ -68,8 +83,8 @@ export class ManagerWorkerLifecycle {
 
   /**
    * `turn_started` on a worker thread: the admitted turn's clientRequestId
-   * is the dispatchId — backfill `turnId` on the accepted dispatch (09 §5).
-   * A turn without a dispatch is a user message: implicit take-over (09 §9).
+   * is the dispatchId — backfill `turnId` on the accepted dispatch.
+   * A turn without a dispatch is a user message: implicit take-over.
    */
   private async backfillDispatchTurnId(workerThreadId: string, turnId: string): Promise<void> {
     const thread = await this.deps.threads.get(workerThreadId).catch(() => null)
@@ -82,7 +97,7 @@ export class ManagerWorkerLifecycle {
       ? await this.deps.dispatches.findByClientRequestId(unit.teamId, key)
       : null
     if (!dispatch) {
-      // User typing in a worker thread takes it over (09 §9); the notice
+      // User typing in a worker thread takes it over; the notice
       // tells the manager and the queue holds until hand-back.
       await this.teamControls.takeOverWorker(workerThreadId)
       return
@@ -95,7 +110,7 @@ export class ManagerWorkerLifecycle {
   }
 
   /**
-   * `approval_requested` on a worker thread (09 §6.5): the request itself
+   * `approval_requested` on a worker thread: the request itself
    * stays user-only, but the manager sees a "waiting for approval" notice so
    * it can tell the user — or answer it via `worker_approve` when
    * `managerMayApprove` is on.
@@ -105,7 +120,7 @@ export class ManagerWorkerLifecycle {
     approvalId: string,
     summary?: string
   ): Promise<void> {
-    // 09 §6.5 / P1-14: the notice exists so the manager can `worker_approve`
+    // /: the notice exists so the manager can `worker_approve`
     // — with the gate off the request is user-only and nothing is reported.
     if (this.deps.managerMayApprove?.() !== true) return
     const thread = await this.deps.threads.get(workerThreadId).catch(() => null)
@@ -131,7 +146,7 @@ export class ManagerWorkerLifecycle {
   }
 
   /**
-   * Worker turn terminal hook (09 §6.1): resolves the owning dispatch,
+   * Worker turn terminal hook: resolves the owning dispatch,
    * captures the task-workspace diff, persists outcome + excerpt, enqueues
    * a manager notice, then delivers the worker's next queued dispatch.
    * User-originated worker turns (no dispatch) return silently. Idempotent:
@@ -166,7 +181,7 @@ export class ManagerWorkerLifecycle {
     ) {
       return
     }
-    // Reviewer workers share the reviewed workspace read-only (10 §5): a
+    // Reviewer workers share the reviewed workspace read-only: a
     // capture here would only re-read the reviewed worker's diff.
     const capture = worker.taskWorkspaceId && !worker.reviewOf && this.deps.taskWorkspaces
       ? await this.deps.taskWorkspaces
@@ -183,6 +198,10 @@ export class ManagerWorkerLifecycle {
     const resultExcerpt = dispatch.workerReport
       ? undefined
       : await this.lastAssistantExcerpt(workerThreadId, turnId)
+    // A step/time budget stop is otherwise reported only as the last sentence.
+    const failureReason = outcome === 'failed' && !dispatch.failureReason
+      ? await this.turnFailureCause(workerThreadId, turnId)
+      : undefined
     // A turn admitted but terminated before the deliverer marked `accepted`
     // is still completing a dispatch; normalize through 'accepted' first so
     // the terminal transition is legal.
@@ -204,7 +223,8 @@ export class ManagerWorkerLifecycle {
         ...(revision && dispatch.workerReport
           ? { workerReport: { ...dispatch.workerReport, revision } }
           : {}),
-        ...(resultExcerpt ? { resultExcerpt } : {})
+        ...(resultExcerpt ? { resultExcerpt } : {}),
+        ...(failureReason ? { failureReason: failureReason.slice(0, 4_000) } : {})
       },
       { expect: ['accepted'] }
     )
@@ -229,18 +249,16 @@ export class ManagerWorkerLifecycle {
         console.warn(`[kun] ade reviewer merge failed for ${worker.reviewOf}:`, error)
       })
     }
-    const dispatchIntent = worker.dispatchIntentId
-      ? await this.deps.agentDispatchService?.get(worker.dispatchIntentId).catch(() => null) : undefined
-    const userOwned = worker.control === 'user' || dispatchIntent?.cancellationRequested || dispatchIntent?.takenOver
+    const userOwned = worker.control === 'user' || await this.intentUserOwned(worker)
     if (!userOwned) {
       await this.deps.notices.enqueue(this.noticeForDispatch(updated, worker)).catch((error) => {
         console.warn(`[kun] ade worker notice enqueue failed for ${updated.dispatchId}:`, error)
       })
     }
-    // P3-15: a soft-cap crossing discovered at terminal still reaches the
+    // a soft-cap crossing discovered at terminal still reaches the
     // manager once even if no new dispatch is sent afterwards.
     this.teamControls.notifyBudgetCheck(team, this.deps.teamBudget?.check(team))
-    // Race contenders resolve their shared race when the last one lands (10 §6.3).
+    // Race contenders resolve their shared race when the last one lands.
     if (this.deps.races) {
       await reconcileRaces(
         {
@@ -266,7 +284,36 @@ export class ManagerWorkerLifecycle {
   }
 
   /**
-   * Delayed ephemeral-worker release (09 §6.1): the workspace stays for
+   * Worker child settled (child-run event or startup replay): a dispatch
+   * whose turn never started is settled from the child record and reported
+   * to the manager, then the worker's next queued dispatch is delivered.
+   */
+  async handleWorkerChildSettled(managerThreadId: string, workerId: string): Promise<boolean> {
+    const settlement = await settleStrandedWorkerDispatches(this.deps, managerThreadId, workerId)
+    if (!settlement) return false
+    const { team, worker } = settlement
+    const userOwned = worker.control === 'user' || await this.intentUserOwned(worker)
+    if (!userOwned) {
+      for (const dispatch of settlement.dispatches) {
+        await this.deps.notices.enqueue(this.noticeForDispatch(dispatch, worker)).catch((error) => {
+          console.warn(`[kun] ade stranded dispatch notice failed for ${dispatch.dispatchId}:`, error)
+        })
+      }
+      await this.deps.deliverer.tryDeliverNext(team.teamId, worker.workerId).catch((error) => {
+        console.warn(`[kun] ade next-dispatch delivery failed for ${worker.workerId}:`, error)
+      })
+    }
+    return true
+  }
+
+  private async intentUserOwned(worker: WorkerRecord): Promise<boolean> {
+    if (!worker.dispatchIntentId) return false
+    const intent = await this.deps.agentDispatchService?.get(worker.dispatchIntentId).catch(() => null)
+    return Boolean(intent?.cancellationRequested || intent?.takenOver)
+  }
+
+  /**
+   * Delayed ephemeral-worker release: the workspace stays for
    * review; the worker stops accepting dispatches and leaves the live roster.
    */
   private scheduleRelease(teamId: string, workerId: string): void {
@@ -301,7 +348,7 @@ export class ManagerWorkerLifecycle {
   }
 
   private noticeForDispatch(dispatch: DispatchRecord, worker: WorkerRecord): WorkerNotice {
-    const detail = dispatch.workerReport?.summary ?? dispatch.resultExcerpt
+    const detail = workerResultSummary(dispatch)
     return {
       noticeId: `ntc_${dispatch.dispatchId}`,
       teamId: dispatch.teamId,
@@ -315,7 +362,7 @@ export class ManagerWorkerLifecycle {
       dispatchId: worker.reviewOf ?? dispatch.dispatchId,
       title: dispatch.title,
       harnessLabel: this.harnessLabel(worker),
-      ...(detail ? { detail: detail.slice(0, 4_000) } : {}),
+      ...(detail ? { detail } : {}),
       ...(dispatch.capture
         ? {
             capture: {
@@ -336,7 +383,16 @@ export class ManagerWorkerLifecycle {
     return label.length <= 160 ? label : label.slice(0, 160)
   }
 
-  /** Tail of the worker's last assistant message for this turn (<=1500). */
+  private async turnFailureCause(workerThreadId: string, turnId: string): Promise<string | undefined> {
+    const store = this.deps.sessionStore
+    if (!store.loadEventsSince) return undefined
+    const cause = await findTurnFailureCause(
+      store as SessionEventSource, workerThreadId, turnId
+    ).catch(() => null)
+    return cause ?? undefined
+  }
+
+  /** Opening conclusion of the worker's last assistant message for this turn (<=1500). */
   private async lastAssistantExcerpt(
     workerThreadId: string,
     turnId: string
@@ -348,28 +404,39 @@ export class ManagerWorkerLifecycle {
       .map((item) => item.text)
       .filter((text) => text.trim().length > 0)
     const last = texts.at(-1)
-    return last ? last.slice(-1_500) : undefined
+    return last ? clipWorkerResult(last, 1_500) : undefined
   }
 
   /**
-   * Startup reconciliation (09 §5): re-resolve stuck `delivering`/`uncertain`
+   * Startup reconciliation: re-resolve stuck `delivering`/`uncertain`
    * dispatches against the worker thread's turns, then replay the terminal
    * hook for `accepted` dispatches whose turns ended while the app was off.
+   * Accepted dispatches whose turn never started are settled from the worker
+   * child record (the restart orphan sweep may already have failed it).
    */
   async reconcileOnStartup(): Promise<void> {
     await this.deps.deliverer.reconcileAll()
     for (const team of await this.deps.teams.list()) {
+      const unstarted = new Set<string>()
       for (const dispatch of await this.deps.dispatches.listByState(team.teamId, ['accepted'])) {
         const thread = await this.deps.threads.get(dispatch.workerId).catch(() => null)
         const turn = thread?.turns.find((entry) => entry.id === dispatch.turnId)
           ?? thread?.turns.find((entry) => entry.clientRequestId === dispatch.dispatchId)
-        if (!turn) continue
+        if (!turn) {
+          unstarted.add(dispatch.workerId)
+          continue
+        }
         if (turn.status === 'completed' || turn.status === 'failed' || turn.status === 'aborted') {
           await this.handleWorkerTurnTerminal(dispatch.workerId, turn.id, turn.status)
             .catch((error) => {
               console.warn(`[kun] ade terminal replay failed for ${dispatch.dispatchId}:`, error)
             })
         }
+      }
+      for (const workerId of unstarted) {
+        await this.handleWorkerChildSettled(team.managerThreadId, workerId).catch((error) => {
+          console.warn(`[kun] ade stranded dispatch replay failed for ${workerId}:`, error)
+        })
       }
     }
   }

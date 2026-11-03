@@ -4,14 +4,15 @@ export const kunFastContextPatchSchema = z.object({
   enabled: z.boolean().optional(),
   model: z.string().trim().max(256).optional(),
   providerId: z.string().trim().max(128).optional(),
-  reasoningEffort: z.enum(['auto', 'off', 'low', 'medium', 'high', 'max']).optional(),
+  reasoningEffort: z.enum(['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   fast: z.boolean().optional()
 }).strict()
 
 /** Lab (experimental) settings patch accepted by the settings:set IPC. */
 export const kunLabPatchSchema = z.object({
-  pptAgent: kunFastContextPatchSchema.extend({
-    imageFirst: z.boolean().optional()
+  pptAgent: z.object({
+    enabled: z.boolean().optional(),
+    imageAssets: z.boolean().optional()
   }).strict().optional(),
   conversationVisualization: z.object({
     enabled: z.boolean().optional()
@@ -24,7 +25,7 @@ export const kunLabPatchSchema = z.object({
     scheduledDefaults: z.object({
       providerId: z.string().trim().max(128).optional(),
       model: z.string().trim().max(256).optional(),
-      reasoningEffort: z.enum(['auto', 'off', 'low', 'medium', 'high', 'max']).optional(),
+      reasoningEffort: z.enum(['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
       timeZone: z.string().trim().max(128).optional()
     }).strict().optional()
   }).strict().optional(),
@@ -35,5 +36,9 @@ export const kunLabPatchSchema = z.object({
   }).strict().optional(),
   projectBoard: z.object({
     enabled: z.boolean().optional()
+  }).strict().optional(),
+  assistantMailbox: z.object({
+    enabled: z.boolean().optional(),
+    autoContinueEnabled: z.boolean().optional()
   }).strict().optional()
 }).strict()

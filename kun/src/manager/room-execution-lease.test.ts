@@ -79,11 +79,24 @@ describe('Room coordinator admission readiness', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
+  it('outlasts a dead previous owner whose lease only expires after its full TTL', async () => {
+    const { lease } = fixture([...Array.from({ length: 4 }, () => response(false)), response(true)])
+    await lease.start()
+    const settled = vi.fn()
+    const admitted = lease.waitForOwnership().then(settled)
+    await vi.advanceTimersByTimeAsync(11_999)
+    expect(settled).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await admitted
+    expect(lease.held).toBe(true)
+  })
+
   it('times out while a foreign owner retains the lease without ever receiving its fence', async () => {
-    const { lease } = fixture(Array.from({ length: 4 }, () => response(false)))
+    const { lease } = fixture(Array.from({ length: 6 }, () => response(false)))
     await lease.start()
     const ready = expect(lease.waitForOwnership()).rejects.toBeInstanceOf(RoomCoordinatorUnavailableError)
-    await vi.advanceTimersByTimeAsync(10_000)
+    await vi.advanceTimersByTimeAsync(14_999)
+    await vi.advanceTimersByTimeAsync(1)
     await ready
     expect(lease.getFence()).toBeUndefined()
   })

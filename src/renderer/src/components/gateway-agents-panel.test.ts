@@ -13,6 +13,8 @@ const base: AgentWiringStatus = { id: 'claude-code', name: 'Claude Code', protoc
 const models = [{ id: 'coding', displayName: 'Daily coding', contextWindow: 200_000, reasoningLevels: ['low', 'high', 'max'], images: true },
   { id: 'alpha/a1' }]
 const text = (node: ReactTestInstance): string => node.children.map((child) => typeof child === 'string' ? child : text(child)).join('')
+const agentSwitch = (root: ReactTestInstance, agent: string): ReactTestInstance =>
+  root.findByProps({ role: 'switch', 'aria-label': `Use Kun in ${agent}` })
 
 beforeEach(async () => { await i18n.changeLanguage('en') })
 
@@ -61,7 +63,8 @@ describe('agent rows', () => {
       agent: { ...base, connected: true, drifted: true, model: 'coding' }, models, busy: false, disabled: false, onConnect: vi.fn(), onDisconnect: vi.fn() }))
     expect(html).toContain('Changed outside Kun')
     expect(html).toContain('Reconnect')
-    expect(html).toContain('Disconnect')
+    // Still wired, so its switch stays on and turning it off disconnects.
+    expect(html).toContain('aria-label="Use Kun in Claude Code" aria-checked="true"')
   })
 })
 
@@ -80,8 +83,7 @@ describe('agents panel', () => {
     expect(agentWiring).toHaveBeenCalledWith({ action: 'list' })
     expect(text(renderer.root)).toContain('1 more not found on this computer')
     expect(text(renderer.root)).toContain('Focus')
-    const connect = renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Connect')[0]!
-    await act(async () => { connect.props.onClick() })
+    await act(async () => { agentSwitch(renderer.root, 'Claude Code').props.onClick() })
     expect(agentWiring).toHaveBeenCalledWith({ action: 'preview', agentId: 'claude-code', model: 'coding' })
     expect(agentWiring).not.toHaveBeenCalledWith(expect.objectContaining({ action: 'connect' }))
     expect(text(renderer.root)).toContain('Changes Kun will make for Claude Code')
@@ -101,7 +103,7 @@ describe('agents panel', () => {
     ;(globalThis as { window?: unknown }).window = { kunGui: { agentWiring, openExternal: vi.fn() } }
     let renderer!: ReturnType<typeof create>
     await act(async () => { renderer = create(createElement(GatewayAgentsPanel, { active: true })) })
-    await act(async () => { renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Connect')[0]!.props.onClick() })
+    await act(async () => { agentSwitch(renderer.root, 'Claude Code').props.onClick() })
     expect(text(renderer.root)).toContain("Nothing in this agent's config needs to change.")
     await act(async () => { renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Cancel')[0]!.props.onClick() })
     expect(text(renderer.root)).not.toContain('Changes Kun will make')
@@ -112,8 +114,7 @@ describe('agents panel', () => {
     ;(globalThis as { window?: unknown }).window = { kunGui: { agentWiring, openExternal: vi.fn() } }
     let renderer!: ReturnType<typeof create>
     await act(async () => { renderer = create(createElement(GatewayAgentsPanel, { active: true })) })
-    expect(text(renderer.root)).toContain('Turn on the local API above before connecting agents.')
-    const connect = renderer.root.findAll((node) => node.type === 'button' && text(node) === 'Connect')[0]!
-    expect(connect.props.disabled).toBe(true)
+    expect(text(renderer.root)).toContain('Turn on the local gateway before connecting agents.')
+    expect(agentSwitch(renderer.root, 'Claude Code').props.disabled).toBe(true)
   })
 })

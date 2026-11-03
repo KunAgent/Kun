@@ -10,8 +10,8 @@ import {
   usePaperMarksStore,
   newPaperHighlight
 } from '../../../paper/paper-marks-store'
-import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
-import { openBoundedPaperReading } from '../../../paper/paper-reading-entry'
+import { usePaperModeStore } from '../../../paper/paper-mode-store'
+import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 
 export type PendingPaperSelection = {
   workspaceRoot: string
@@ -40,17 +40,19 @@ export function usePaperSelection({
   unitDir,
   pdfSha256,
   onSelectionChange,
-  paper,
-  onAutoTranslate
+  onAutoTranslate,
+  onQuoteSelection,
+  onAskSelection
 }: {
   rootRef: RefObject<HTMLElement | null>
   workspaceRoot: string
   unitDir: string
   pdfSha256?: string
-  paper?: { unitDir: string; meta: PaperUnitMeta; pdfSha256?: string }
   onSelectionChange: ((selection: WriteEditorSelectionState) => void) | undefined
-  /** R1.3: fired 250ms after a stable selection when auto-translate is on. */
   onAutoTranslate?: (sel: PendingPaperSelection) => void
+  /** Host readers route quotes/asks to their own assistant instead of Work. */
+  onQuoteSelection?: (selection: PendingPaperSelection) => void
+  onAskSelection?: (question: string, selection: PendingPaperSelection) => void
 }): {
   pending: PendingPaperSelection | null
   askOpen: boolean
@@ -235,16 +237,30 @@ export function usePaperSelection({
     clearPendingSelection()
   }, [pending, clearPendingSelection, pdfSha256, unitDir, selectionMatches, workspaceRoot])
 
-  // Selected text enters the same explicit, frozen-context reading dialog.
+  // The passage becomes a quote chip (with its page) on the Work assistant's
+  // composer, like a selection in any document; the panel opens on it.
+  const quoteSelection = useCallback((selected: PendingPaperSelection): void => {
+    if (onQuoteSelection) {
+      onQuoteSelection(selected)
+      return
+    }
+    const write = useWriteWorkspaceStore.getState()
+    write.setSelection({
+      text: selected.text, ranges: [], charCount: selected.text.length, sourceKind: 'pdf',
+      pageStart: selected.page, pageEnd: selected.page, rects: selected.localRects
+    })
+    write.quoteCurrentSelection(workspaceRoot)
+  }, [workspaceRoot, onQuoteSelection])
+
   const addToConversation = useCallback((): void => {
     if (!pending || !selectionMatches(pending)) return
-    void openBoundedPaperReading({ workspaceRoot, unitDir, meta: paper?.meta,
-      selection: { text: pending.text, page: pending.page, pdfSha256: pending.pdfSha256 } })
-    clearPendingSelection()
-  }, [pending, selectionMatches, workspaceRoot, unitDir, paper, clearPendingSelection])
+    quoteSelection(pending)
+    setPending(null)
+    setAskOpen(false)
+  }, [pending, selectionMatches, quoteSelection])
 
-  // Quick ask: persist an `ask` mark card, quote the passage, submit the
-  // question to the paper-scoped thread.
+  // Quick ask: persist an `ask` mark card, quote the passage and send the
+  // question to the Work assistant right away.
   const submitQuickAsk = useCallback((question: string): void => {
     const sel = pending
     if (!sel || !selectionMatches(sel) || usePaperMarksStore.getState().unitDir !== unitDir || usePaperMarksStore.getState().workspaceRoot !== workspaceRoot) return
@@ -264,9 +280,14 @@ export function usePaperSelection({
         }
       }
     }))
-    void openBoundedPaperReading({ workspaceRoot, unitDir, meta: paper?.meta,
-      selection: { text: sel.text, page: sel.page, pdfSha256 }, question })
-  }, [pending, workspaceRoot, unitDir, pdfSha256, paper, selectionMatches])
+    if (onAskSelection) onAskSelection(question, sel)
+    else {
+      quoteSelection(sel)
+      const bridge = usePaperModeStore.getState().composerBridge
+      if (bridge?.submit) bridge.submit(question)
+      else bridge?.setInput(question)
+    }
+  }, [pending, workspaceRoot, unitDir, selectionMatches, quoteSelection, onAskSelection])
 
   return {
     pending,

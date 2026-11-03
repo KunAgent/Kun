@@ -50,6 +50,8 @@ export const AttachmentsCapabilityConfig = CapabilityToggleConfig.extend({
 export type AttachmentsCapabilityConfig = z.infer<typeof AttachmentsCapabilityConfig>
 
 export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
+  /** Only explicit true enables annotations; missing legacy settings stay off. */
+  relationContextEnabled: z.boolean().optional(),
   scopes: z.array(z.enum(['user', 'workspace', 'project'])).default(['user', 'workspace', 'project']),
   maxInjectedRecords: z.number().int().positive().default(8),
   distillation: z.object({

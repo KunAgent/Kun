@@ -286,7 +286,7 @@ export function ModelUsagePanel({
                       onMouseEnter={() => setActiveDayIndex(index)}
                       onFocus={() => setActiveDayIndex(index)}
                       onClick={() => setActiveDayIndex(index)}
-                      className="relative z-[1] flex min-h-[112px] items-end rounded-[10px] px-1 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2 focus:ring-offset-ds-bg"
+                      className="relative z-[1] flex min-h-[112px] items-end rounded-[10px] px-1 focus:outline-none focus:ring-2 focus:ring-accent/40 focus:ring-offset-2 focus:ring-offset-ds-main"
                     >
                       <span
                         className={`flex w-full flex-col-reverse overflow-hidden rounded-t-[6px] shadow-[inset_0_1px_0_rgba(255,255,255,0.36)] transition ${

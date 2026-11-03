@@ -1,3 +1,4 @@
+import { validateEnablementMetadata } from './enablement-control.js'
 import { isAbsolute, win32 } from 'node:path'
 import {
   ExtensionRegistrySchema as PublicExtensionRegistrySchema,
@@ -314,6 +315,7 @@ export function validateEntry(
       extensionId
     })
   }
+  validateEnablementMetadata(value)
   for (const [key, enabled] of Object.entries(value.workspaceEnablement)) {
     if (!/^[a-f0-9]{64}$/.test(key) || typeof enabled !== 'boolean') {
       throw extensionError('EXTENSION_REGISTRY_INVALID', 'Workspace enablement is invalid', {

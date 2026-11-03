@@ -26,6 +26,7 @@ type RecentScanOptions = {
 }
 
 const IGNORED_DIRS = new Set(['.git', '.hg', '.svn', 'node_modules'])
+const HIDDEN_DIRS = new Set(['.git', '.hg', '.svn'])
 const RECENT_FILE_LIMIT = 8
 const RECENT_SCAN_MAX_ENTRIES = 2_000
 const RECENT_SCAN_MAX_DEPTH = 8
@@ -157,16 +158,22 @@ export async function scanChatFileTreeRecentFilesInRoots(
   return sortRecentFiles(collected).slice(0, limit)
 }
 
+/** Skipped by recursive scans (recent files): VCS internals and dependency folders. */
 export function isChatFileTreeIgnoredDirectory(name: string): boolean {
   return IGNORED_DIRS.has(name.toLowerCase())
 }
 
-export function isChatFileTreePreviewableEntry(entry: WorkspaceEntry): boolean {
-  return entry.type === 'file' && isWorkspacePreviewPath(entry.path || entry.name)
+/** Never listed in the tree. Dependency folders stay visible but dimmed. */
+export function isChatFileTreeHiddenDirectory(name: string): boolean {
+  return HIDDEN_DIRS.has(name.toLowerCase())
 }
 
-export function formatChatFileTreeUnsupportedMessage(name: string): string {
-  return `${name} does not have an in-app preview.`
+export function isChatFileTreeDimmedDirectory(name: string): boolean {
+  return IGNORED_DIRS.has(name.toLowerCase()) && !HIDDEN_DIRS.has(name.toLowerCase())
+}
+
+export function isChatFileTreePreviewableEntry(entry: WorkspaceEntry): boolean {
+  return entry.type === 'file' && isWorkspacePreviewPath(entry.path || entry.name)
 }
 
 export function chatFileTreeEntryMatchesQuery(

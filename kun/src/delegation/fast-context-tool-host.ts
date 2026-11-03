@@ -1,22 +1,27 @@
 import { makeToolResultItem } from '../domain/item.js'
 import type {
+  FastContextRunScope,
   ToolCallLike,
   ToolHost,
   ToolHostContext,
   ToolHostResult
 } from '../ports/tool-host.js'
+import { fastContextQueryTerms } from '../adapters/tool/fast-context-ranking.js'
+import type { FastContextTask } from './fast-context-evidence.js'
 
 const SOURCE_TOOL_NAMES = new Set(['grep', 'glob', 'read'])
 
 const FAST_CONTEXT_TOOL_DESCRIPTIONS: Record<string, string> = {
   glob: [
-    'Fast Context candidate-file discovery.',
-    'Use this first to locate narrow candidate paths; it returns at most 100 entries and skips dependency, build, cache, and VCS directories.',
+    'Fast Context candidate-file discovery from a cached workspace file index.',
+    'Use this first to locate narrow candidate paths; it returns at most 100 entries ranked by relevance and skips dependency, build, cache, and VCS directories.',
     'Do not use cursor pagination. Every call must include task_indexes for the task(s) it supports.'
   ].join(' '),
   grep: [
-    'Fast Context bounded code search.',
-    'After locating candidates, search only the relevant paths; it returns at most 30 matches with at most 300 characters per match and skips dependency, build, cache, and VCS directories.',
+    'Fast Context bounded code search, ranked by relevance (path words, definitions, hint paths) rather than path order.',
+    'Omit path to let Fast Context choose the scope (hint paths first, then the package that defines a searched identifier); pass a directory, a glob, or path "." to search exactly there.',
+    'It returns at most 30 matches with at most 300 characters per match and skips dependency, build, cache, and VCS directories.',
+    'In large workspaces, or after repeated timeouts, a grep without path or glob is refused with code fast_context_scope_required.',
     'Do not use cursor pagination. Every call must include task_indexes for the task(s) it supports.'
   ].join(' '),
   read: [
@@ -32,7 +37,18 @@ const FAST_CONTEXT_TOOL_DESCRIPTIONS: Record<string, string> = {
  * the underlying ordinary source tool receives the index-free arguments it
  * already understands.
  */
-export function createFastContextToolHost(host: ToolHost, taskCount: number): ToolHost {
+export function createFastContextToolHost(
+  host: ToolHost,
+  taskCount: number,
+  options: { hintPaths?: readonly string[]; tasks?: readonly FastContextTask[] } = {}
+): ToolHost {
+  // One scope and one memo per retrieval child run.
+  const run: FastContextRunScope = {
+    hintPaths: [...(options.hintPaths ?? [])],
+    queryTerms: fastContextQueryTerms((options.tasks ?? []).flatMap((task) => [task.title, task.query])),
+    timedOutCommands: 0
+  }
+  const memo = new Map<string, Promise<ToolHostResult>>()
   return {
     id: `${host.id}:fast-context`,
     async listTools(context) {
@@ -52,12 +68,69 @@ export function createFastContextToolHost(host: ToolHost, taskCount: number): To
       const taskIndexes = call.arguments.task_indexes
       if (!areTaskIndexes(taskIndexes, taskCount)) return invalidTaskIndexesResult(call, context, taskCount)
       const { task_indexes: _taskIndexes, ...argumentsWithoutTaskIndexes } = call.arguments
-      return host.execute({ ...call, arguments: argumentsWithoutTaskIndexes }, context, onUpdate)
+      // Identical source calls in one run (common when several tasks share a
+      // lookup) reuse the first successful result instead of rescanning.
+      const key = `${call.toolName}\u0000${stableStringify(argumentsWithoutTaskIndexes)}`
+      const prior = memo.get(key)
+      if (prior) {
+        const settled = await prior.catch(() => null)
+        if (settled && !isErrorResult(settled)) return reuseResult(settled, call, context)
+      }
+      const pending = host.execute(
+        { ...call, arguments: argumentsWithoutTaskIndexes },
+        { ...context, fastContextRun: run },
+        onUpdate
+      )
+      memo.set(key, pending)
+      try {
+        const result = await pending
+        if (isErrorResult(result) && memo.get(key) === pending) memo.delete(key)
+        return result
+      } catch (error) {
+        if (memo.get(key) === pending) memo.delete(key)
+        throw error
+      }
     },
     ...(host.clearReadTracker
       ? { clearReadTracker: (threadId?: string) => host.clearReadTracker?.(threadId) }
       : {})
   }
+}
+
+function isErrorResult(result: ToolHostResult): boolean {
+  return result.item.kind === 'tool_result' && result.item.isError === true
+}
+
+function reuseResult(prior: ToolHostResult, call: ToolCallLike, context: ToolHostContext): ToolHostResult {
+  const item = prior.item
+  if (item.kind !== 'tool_result') return prior
+  const output = item.output && typeof item.output === 'object' && !Array.isArray(item.output)
+    ? { ...(item.output as Record<string, unknown>), reused_result: true }
+    : item.output
+  return {
+    item: makeToolResultItem({
+      id: `item_${call.callId}`,
+      threadId: context.threadId,
+      turnId: context.turnId,
+      callId: call.callId,
+      toolName: call.toolName,
+      toolKind: call.toolKind ?? 'tool_call',
+      output
+    }),
+    approved: prior.approved
+  }
+}
+
+/** Key-order-independent JSON for memo keys. */
+function stableStringify(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`
+  if (value && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, entry]) => entry !== undefined)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    return `{${entries.map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`).join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
 }
 
 function forbiddenToolResult(call: ToolCallLike, context: ToolHostContext): ToolHostResult {

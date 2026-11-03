@@ -48,7 +48,11 @@ describe('BrowserUseSettingsPanel', () => {
         onChange
       }))
     })
-    expect(renderer.root.findAllByType('select')).toHaveLength(0)
+    // Switched off, the detailed controls fold away and become inert.
+    const reveal = renderer.root.find((node) => node.props['data-open'] !== undefined
+      && typeof node.props.className === 'string' && node.props.className.includes('ds-settings-reveal'))
+    expect(reveal.props['data-open']).toBe('false')
+    expect(reveal.props.inert).toBe(true)
   })
 
   it('renders runtime capability state and preserves normalized custom limits', () => {

@@ -55,7 +55,7 @@ type ReminderBinding = {
   requestId?: string
   chainDepth: number
   triggerMessageId?: string
-  clientSurface?: 'gui' | 'im'
+  clientSurface?: 'gui' | 'im' | 'api'
   imConnectionId?: string
 }
 

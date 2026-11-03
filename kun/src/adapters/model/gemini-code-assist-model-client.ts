@@ -1,3 +1,4 @@
+import { fitModelRequestOutput, modelRequestCapacityFailure } from './model-request-capacity.js'
 import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
 import type { GeminiCodeAssistCredential } from '../../contracts/gemini-code-assist.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
@@ -17,6 +18,7 @@ import {
 import { normalizeToolSpecs } from './compat-request-builder.js'
 import { IncrementalSseFrameBuffer } from './incremental-sse-frame-buffer.js'
 import { KUN_VERSION } from '../../version.js'
+import { admitGmailAwareModelDispatch } from './gmail-aware-dispatch.js'
 
 const DEFAULT_CODE_ASSIST_BASE_URL = 'https://cloudcode-pa.googleapis.com'
 const GOOGLE_OAUTH_TOKEN_URL = 'https://oauth2.googleapis.com/token'
@@ -132,6 +134,10 @@ export class GeminiCodeAssistModelClient implements ModelClient {
     }
 
     const model = request.model?.trim() || this.model
+    const capability = this.modelCapabilities?.(model)
+    const failure = modelRequestCapacityFailure(request, capability)
+    if (failure) { yield failure; return }
+    request = { ...request, maxTokens: fitModelRequestOutput(request, capability) }
     const body = buildGeminiCodeAssistRequest({
       request,
       model,
@@ -154,7 +160,7 @@ export class GeminiCodeAssistModelClient implements ModelClient {
       return
     }
 
-    let result = await this.post(url, body, accessToken, request.abortSignal)
+    let result = await this.post(url, body, accessToken, request)
     if (result.kind === 'response' && result.response.status === 401 && requestAuth.refreshToken) {
       await result.response.body?.cancel().catch(() => {})
       try {
@@ -166,7 +172,7 @@ export class GeminiCodeAssistModelClient implements ModelClient {
         yield { kind: 'error', message: error instanceof Error ? error.message : String(error) }
         return
       }
-      result = await this.post(url, body, accessToken, request.abortSignal)
+      result = await this.post(url, body, accessToken, request)
     }
     if (result.kind === 'error') {
       yield {
@@ -179,7 +185,7 @@ export class GeminiCodeAssistModelClient implements ModelClient {
     if (!result.response.ok) {
       const text = await result.response.text()
       const upstreamModel = String(body.model ?? model)
-      console.warn('[kun:model] model HTTP request failed', {
+      if (!request.googleWorkspaceData) console.warn('[kun:model] model HTTP request failed', {
         ...compatHttpFailureLog({
           provider: this.provider,
           status: result.response.status,
@@ -289,9 +295,10 @@ export class GeminiCodeAssistModelClient implements ModelClient {
     url: string,
     body: Record<string, unknown>,
     accessToken: string,
-    signal: AbortSignal
+    request: ModelRequest
   ): Promise<{ kind: 'response'; response: Response } | { kind: 'error'; message: string }> {
     try {
+      await admitGmailAwareModelDispatch(request, { body, protocol: 'custom_endpoint' })
       return {
         kind: 'response',
         response: await this.fetchImpl(url, {
@@ -302,7 +309,8 @@ export class GeminiCodeAssistModelClient implements ModelClient {
             'User-Agent': `Kun/${KUN_VERSION} (gemini-code-assist)`
           },
           body: JSON.stringify(body),
-          signal
+          signal: request.abortSignal,
+          redirect: 'error'
         })
       }
     } catch (error) {

@@ -2,6 +2,8 @@ import { latestExecutedTurn, hasRunningTurn, restartSourceIsCurrent } from '../d
 import { touchThread } from '../domain/thread.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
+import type { StartTurnRequest, Turn } from '../contracts/turns.js'
+import type { TurnItem } from '../contracts/items.js'
 import type { TurnService } from '../services/turn-service.js'
 import {
   InterruptedTurnResumeCoordinator,
@@ -59,6 +61,11 @@ export type InterruptedTurnCoordinatorDeps = {
   nowIso: () => string
   nowMs: () => number
   runTurn: (threadId: string, turnId: string) => Promise<TurnRunOutcome>
+  /**
+   * Canonical session items for one thread. The resume policy needs them to
+   * prove the interrupted turn produced work worth continuing.
+   */
+  loadSessionItems: (threadId: string) => Promise<readonly TurnItem[]>
   interruptedResume?: InterruptedTurnResumeOptions
 }
 
@@ -130,7 +137,15 @@ export class InterruptedTurnCoordinator {
     if (thread.relation === 'side' && thread.roomContext?.kind !== 'conversation') return false
     const sourceTurnId = this.recoverySourceTurnByThread.get(threadId)
     const latest = latestExecutedTurn(thread)
-    if (latest?.paperContext || !sourceTurnId || !restartSourceIsCurrent(thread, sourceTurnId)) return false
+    if (!latest || latest.paperContext || !sourceTurnId || !restartSourceIsCurrent(thread, sourceTurnId)) return false
+    // A continuation turn that dies must not spawn another continuation. Each
+    // restart hop re-sends the whole history, so an interrupted auto-resume
+    // stays failed and waits for the user instead of resuming unattended.
+    if (latest.interruptedResume) return false
+    // Without assistant or tool output the interrupted turn never started real
+    // work (a lease race or a quit during the first model call). Resuming it
+    // would replay the entire history to "continue" nothing.
+    if (!interruptedTurnHasWork(await this.deps.loadSessionItems(threadId), latest.id)) return false
     // A still-active goal normally owns restart recovery. A failed child needs
     // the structured parent decision context instead, so reconciliation omits
     // that parent from goal auto-resume and allows this one continuation turn.
@@ -183,6 +198,7 @@ export class InterruptedTurnCoordinator {
       request: {
         prompt: INTERRUPTED_RESUME_PROMPT,
         ...(recoveryRequestId ? { clientRequestId: recoveryRequestId } : {}),
+        interruptedResume: { sourceTurnId },
         mode: 'agent',
         ...(lastTurn ? { clientSurface: resolveTurnClientSurface(lastTurn) } : {}),
         ...(lastTurn?.agentSurface ? { agentSurface: lastTurn.agentSurface } : {}),
@@ -194,7 +210,11 @@ export class InterruptedTurnCoordinator {
               ...(lastTurn.guiDesignMode ? { guiDesignMode: true } : {})
             }
           : {}),
-        ...(lastTurn?.disableUserInput ? { disableUserInput: true } : {})
+        ...(lastTurn?.disableUserInput ? { disableUserInput: true } : {}),
+        // Resume on the engine that was interrupted. Without the frozen route
+        // admission falls back to the thread pin or the default provider, so an
+        // external Agent's task restarted on the Kun loop.
+        ...(lastTurn ? interruptedTurnRoute(lastTurn) : {})
       }
     }, {
       expectedLatestFailedTurnId: sourceTurnId,
@@ -217,6 +237,21 @@ export class InterruptedTurnCoordinator {
   }
 }
 
+function interruptedTurnRoute(turn: Turn): Partial<StartTurnRequest> {
+  return {
+    ...(turn.harnessId ? { harnessId: turn.harnessId } : {}),
+    ...(turn.providerId ? { providerId: turn.providerId } : {}),
+    ...(turn.model ? { model: turn.model } : {}),
+    ...(turn.credentialMode ? { credentialMode: turn.credentialMode } : {}),
+    ...(turn.harnessAgentId ? { harnessAgentId: turn.harnessAgentId } : {}),
+    ...(turn.harnessSettings ? { harnessSettings: turn.harnessSettings } : {}),
+    ...(turn.gatewayBinding ? { gatewayBinding: turn.gatewayBinding } : {}),
+    ...(turn.accountId ? { accountId: turn.accountId } : {}),
+    ...(turn.reasoningEffort ? { reasoningEffort: turn.reasoningEffort } : {}),
+    ...(turn.serviceTier ? { serviceTier: turn.serviceTier } : {})
+  }
+}
+
 function childRecoveryContext(candidates: readonly InterruptedSubagentRecoveryCandidate[]): string | undefined {
   if (candidates.length === 0) return undefined
   return [
@@ -236,4 +271,23 @@ function childRecoveryContext(candidates: readonly InterruptedSubagentRecoveryCa
     })),
     '</subagent_recovery_candidates>'
   ].join('\n')
+}
+
+/** Item kinds that prove the interrupted turn actually produced work. */
+const WORK_ITEM_KINDS: ReadonlySet<string> = new Set([
+  'assistant_text',
+  'assistant_reasoning',
+  'tool_call',
+  'tool_result'
+])
+
+/**
+ * Restart auto-resume is only worth a model request when the interrupted turn
+ * left something to continue. A turn killed before its first assistant or tool
+ * output (a lease race, a quit during the first model request) has no
+ * unfinished work, so resuming it would replay the whole history to continue
+ * nothing and bill the user for it.
+ */
+export function interruptedTurnHasWork(items: readonly TurnItem[], turnId: string): boolean {
+  return items.some((item) => item.turnId === turnId && WORK_ITEM_KINDS.has(item.kind))
 }

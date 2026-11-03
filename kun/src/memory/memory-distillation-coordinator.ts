@@ -1,9 +1,10 @@
 import { memoryComparisonFitsBudget } from './memory-consolidation.js'
 import { canonicalMemoryHash } from './memory-record-normalizer.js'
+import { isBoundGmailSensitiveHistory } from '../gmail/thread-data-state.js'
 import { buildTurnMemoryEvidence } from './memory-distillation-evidence.js'
 import type { TurnItem } from '../contracts/items.js'
 import {
-  MemoryDistillationExtractionResponse,
+  parseMemoryDistillationExtractionResponse,
   type MemoryDistillationDecisionRequest,
   type PendingMemoryCandidate
 } from '../contracts/memory-distillation-runtime.js'
@@ -95,6 +96,7 @@ export class MemoryDistillationCoordinator {
     const thread = await this.options.threads.get(threadId)
     const turn = thread?.turns.find((entry) => entry.id === turnId)
     if (!thread?.workspace || !turn || turn.status !== 'completed' || turn.messageSource) return []
+    if (await isBoundGmailSensitiveHistory(this.options.threads, threadId, turn.items)) return []
     const userText = turn.prompt.trim()
     const assistantText = turn.items
       .flatMap((item) => item.kind === 'assistant_text' && item.status === 'completed' ? [item.text] : [])
@@ -430,7 +432,33 @@ export class MemoryDistillationCoordinator {
         }
       }
       controller.signal.throwIfAborted()
-      return MemoryDistillationExtractionResponse.parse(JSON.parse(output))
+      const parsed = parseMemoryDistillationExtractionResponse(JSON.parse(output))
+      if (parsed.dropped.length) {
+        this.options.onDiagnostic?.({
+          threadId: input.threadId,
+          turnId: input.turnId,
+          message: sanitizeMemoryDistillationDiagnostic(new Error(
+            `memory distillation dropped ${parsed.dropped.length} invalid candidate(s): ` +
+            parsed.dropped.map((entry) => `#${entry.index} ${entry.error}`).join('; ')
+          ))
+        })
+      }
+      if (parsed.salvaged.length) {
+        this.options.onDiagnostic?.({
+          threadId: input.threadId,
+          turnId: input.turnId,
+          message: sanitizeMemoryDistillationDiagnostic(new Error(
+            `memory distillation salvaged ${parsed.salvaged.length} extraction candidate(s) ` +
+            'with quarantined comparisons; decision checks still apply: ' +
+            parsed.salvaged.map((entry) => `#${entry.index} invalid comparison`).join('; ')
+          ))
+        })
+      }
+      // Salvaged candidates arrive with their comparisons stripped, and
+      // every decision in this pipeline becomes a pending candidate that
+      // only an explicit user decision can apply, so including them here
+      // cannot write anything automatically.
+      return { candidates: [...parsed.candidates, ...parsed.salvaged.map((entry) => entry.candidate)] }
     } finally {
       clearTimeout(timeout)
       this.extractionControllers.delete(controller)

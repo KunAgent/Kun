@@ -1,0 +1,20 @@
+{
+  "composerPromptEnhance": "프롬프트 개선",
+  "composerPromptEnhanceHint": "프롬프트 개선 · {{model}}(으)로 초안을 다시 씁니다",
+  "composerPromptEnhanceHintDefault": "프롬프트 개선 · Kun 기본 모델로 초안을 다시 씁니다",
+  "composerPromptEnhanceCancel": "개선 취소",
+  "composerPromptEnhanceCancelHint": "개선 취소 (Esc)",
+  "composerPromptEnhanceRunning": "{{model}}(으)로 개선하는 중… 초안은 읽기 전용입니다. 버튼을 다시 누르거나 Esc를 눌러 취소하세요",
+  "composerPromptEnhanceRunningDefault": "개선하는 중… 초안은 읽기 전용입니다. 버튼을 다시 누르거나 Esc를 눌러 취소하세요",
+  "composerPromptEnhanceDone": "{{model}}(으)로 개선해 초안을 바꿨습니다",
+  "composerPromptEnhanceUndo": "실행 취소",
+  "composerPromptEnhanceUndoHint": "개선 전 초안으로 되돌립니다",
+  "composerPromptEnhanceDismiss": "닫기",
+  "composerPromptEnhanceEmpty": "먼저 개선할 프롬프트를 입력하세요",
+  "composerPromptEnhanceUnsupportedAgent": "현재 모델은 {{agent}} 자체 로그인을 사용하므로 Kun이 직접 호출할 수 없습니다. Kun 공급자 모델로 바꾸거나 설정에서 개선용 모델을 지정하세요.",
+  "composerPromptEnhanceUnsupported": "현재 모델은 프롬프트 개선에 사용할 수 없습니다. Kun 공급자 모델로 바꾸거나 설정에서 개선용 모델을 지정하세요.",
+  "composerPromptEnhanceOpenSettings": "설정 열기",
+  "composerPromptEnhanceFailed": "개선 실패: {{message}} 초안은 바뀌지 않았습니다.",
+  "composerPromptEnhanceTimeout": "개선 시간이 초과되었습니다. 초안은 바뀌지 않았습니다. 다시 시도하거나 설정에서 제한 시간을 늘리세요.",
+  "composerPromptEnhanceDisabled": "프롬프트 개선이 설정에서 꺼져 있습니다."
+}

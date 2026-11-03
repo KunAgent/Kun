@@ -1,3 +1,8 @@
+!include "${PROJECT_DIR}\build\installer-pending-lease.nsh"
+!include "${PROJECT_DIR}\build\installer-update-scope.nsh"
+!include "${PROJECT_DIR}\build\installer-update-observability.nsh"
+!include "${PROJECT_DIR}\build\installer-update-extraction.nsh"
+
 !macro KunAbortAutomaticUpdate CODE PHASE MESSAGE
   !ifndef BUILD_UNINSTALLER
   ${if} ${isUpdated}
@@ -5,8 +10,8 @@
     StrCpy $KunInstallerAbortPhase "${PHASE}"
     StrCpy $KunInstallerAbortMessage "${MESSAGE}"
     Call KunRestoreAutomaticUpdateBackup
-    Call KunTryRelaunchOldApp
     Call KunWriteAutomaticUpdateResult
+    Call KunTryRelaunchOldApp
   ${endif}
   !endif
   SetErrorLevel 2
@@ -23,8 +28,8 @@
       StrCpy $KunInstallerAbortPhase "health"
       StrCpy $KunInstallerAbortMessage "The candidate application did not pass its first-launch health check."
       Call KunRestoreAutomaticUpdateBackup
-      Call KunTryRelaunchOldApp
       Call KunWriteAutomaticUpdateResult
+      Call KunTryRelaunchOldApp
       SetErrorLevel 2
       Quit
     ${endif}
@@ -43,6 +48,10 @@
 !macroend
 
 !macro KunAutomaticUpdateFunctions
+  !insertmacro KunPendingLeaseFunctions
+  !insertmacro KunAutomaticUpdateScopeFunctions
+  !insertmacro KunAutomaticUpdateObservabilityFunctions
+  !insertmacro KunAutomaticUpdateExtractionFunctions
   Function KunWriteAutomaticUpdateResult
     ${ifNot} ${isUpdated}
       Return
@@ -50,6 +59,7 @@
     ReadEnvStr $KunInstallerPendingResultPath "KUN_PENDING_UPDATE_RESULT"
     ${if} $KunInstallerPendingResultPath == ""
       !insertmacro kunRunMigrationHelper FinalizeUpdateTransaction
+      Call KunReleasePendingLease
       Return
     ${endif}
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_PENDING_RESULT", "$KunInstallerPendingResultPath").r0'
@@ -57,6 +67,7 @@
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_ABORT_PHASE", "$KunInstallerAbortPhase").r0'
     System::Call 'kernel32::SetEnvironmentVariable(t, t)i ("KUN_INSTALLER_ABORT_MESSAGE", "$KunInstallerAbortMessage").r0'
     !insertmacro kunRunMigrationHelper WriteUpdateResult
+    Call KunReleasePendingLease
     ${if} $KunInstallerHelperExitCode != 0
       DetailPrint "Kun could not record the automatic-update result: $KunInstallerHelperOutput"
       Return
@@ -90,13 +101,23 @@
     ${endif}
     StrCpy $KunInstallerJournalPath "$APPDATA\KunInstallerRecovery\${APP_GUID}.json"
     StrCpy $KunInstallerTransactionPath "$APPDATA\KunInstallerRecovery\${APP_GUID}-update.json"
-    StrCpy $KunInstallerTargetDir $INSTDIR
+    ; The running source remains authoritative if an interrupted builder wrote
+    ; staging registration. Scope selection has already authenticated that case.
+    ${if} $KunInstallerUpdateSourceDir != ""
+      StrCpy $KunInstallerSourceDir $KunInstallerUpdateSourceDir
+      StrCpy $INSTDIR $KunInstallerUpdateSourceDir
+      Call KunResolveInstallTarget
+    ${else}
+      Call KunRefreshInstallPaths
+    ${endif}
     Call KunSetMigrationEnvironment
-    !insertmacro kunRunMigrationHelper RecoverUpdateTransaction
+    !insertmacro kunRunMigrationHelper RecoverInstallerUpdateTransaction
     ${if} $KunInstallerHelperExitCode != 0
       MessageBox MB_OK|MB_ICONSTOP "Kun could not recover an interrupted automatic update.$\r$\n$KunInstallerHelperOutput" /SD IDOK
       !insertmacro KunAbortAutomaticUpdate recovery_failed recovery "An interrupted automatic update could not be recovered."
     ${endif}
+    ; Rollback may have restored registration; discard any pre-recovery snapshot.
+    StrCpy $KunInstallerSnapshotMode ""
   FunctionEnd
 
   Function KunRunAutomaticUpdateHealthCheck

@@ -49,6 +49,22 @@ describe('RoomTypingRow', () => {
     expect(JSON.stringify(renderer.toJSON())).toContain('Delivered')
     expect(JSON.stringify(renderer.toJSON())).toContain('Kun')
   })
+  it('counts only unnamed waiting members and never repeats a name', () => {
+    render({ names: [], waitingNames: ['Kun', 'Review', 'Kun', 'Dev', 'Coord'] })
+    const json = JSON.stringify(renderer.toJSON())
+    expect(json).toContain('Delivered · waiting for Kun, Review and 2 more…')
+    render({ names: [], waitingNames: ['Kun', 'Review'] })
+    expect(JSON.stringify(renderer.toJSON())).toContain('Delivered · waiting for Kun, Review…')
+  })
+  it('keeps the Chinese receipt and overflow wording in Chinese', async () => {
+    await i18n.changeLanguage('zh')
+    render({ names: [], waitingNames: ['小 Kun', '评审', '开发', '协调员'] })
+    expect(JSON.stringify(renderer.toJSON())).toContain('已送达 · 等待 小 Kun、评审 和另外 2 位成员回复…')
+    render({ names: ['小 Kun', '评审', '开发', '协调员'] })
+    const json = JSON.stringify(renderer.toJSON())
+    expect(json).toContain('另外 2 位成员')
+    expect(json).not.toContain('more')
+  })
   it('uses the plain fallback when there are no member states', () => {
     render({ names: [], fallback: 'Delivered, waiting for a response…' })
     const json = JSON.stringify(renderer.toJSON())

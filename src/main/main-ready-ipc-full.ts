@@ -1,4 +1,5 @@
 import { startQuotaReminderNotifications } from './quota-reminder-notification'
+import { relaunchApp } from './relaunch-app'
 import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import {
   app,
@@ -14,6 +15,7 @@ import {
 } from './settings-store'
 import { preserveRedactedProviderCredentials } from './settings-credential-redaction'
 import { syncLoginItemSettings } from './desktop-behavior'
+import { syncNativeThemeSource } from './native-theme-source'
 import {
   getKunRuntimeSettings,
   getModelProviderSettings,
@@ -49,6 +51,7 @@ import { registerRuntimeSseIpc } from './runtime-sse-ipc'
 import { registerRemoteAccessIpc } from './remote/remote-ipc-handlers'
 import { RemoteAccessService } from './remote/remote-access-service'
 import { registerTerminalPtyIpc } from './terminal/terminal-pty-ipc'
+import { registerTerminalDockIpc } from './terminal/terminal-dock-ipc'
 import { ensureKunCliLaunch } from './terminal/terminal-agent-cli-env'
 import { resolveKunExecutable } from './resolve-kun-binary'
 import { JsonRemoteSshHostStore } from './remote-ssh/host-store'
@@ -216,6 +219,7 @@ export function registerMainIpc(services: MainServices): void {
           })
       }
       syncAppKeepAwake(saved)
+      syncNativeThemeSource(saved.theme)
       try {
         mainState.scheduleRuntime?.sync(saved)
         mainState.workflowRuntime?.sync(saved)
@@ -320,6 +324,7 @@ export function registerMainIpc(services: MainServices): void {
         return saved
       })
       syncAppKeepAwake(saved)
+      syncNativeThemeSource(saved.theme)
       void remoteAccessService.sync()
       requestExtensionWorkbenchEnvironmentPublish()
       return saved
@@ -361,6 +366,7 @@ export function registerMainIpc(services: MainServices): void {
         const settings = await mainState.store.load()
         const lease = await acquireKunRuntimeRequestLease(settings, ensureRuntime)
         return Object.freeze({
+          baseUrl: lease.baseUrl,
           runtimeToken: lease.runtimeToken,
           request: (path: string, method?: string, body?: string, headers?: Record<string, string>) =>
             runtimeRequestOnLease(lease, path, { method, body, headers })
@@ -487,7 +493,7 @@ export function registerMainIpc(services: MainServices): void {
         await shutdownServiceManagerAndWait(serviceManager)
         if (mainState.activeServiceManager === serviceManager) mainState.activeServiceManager = null
         mainState.mainWindow?.destroy()
-        app.relaunch()
+        relaunchApp()
         app.exit(0)
       }
     }).registerIpc()
@@ -599,6 +605,7 @@ export function registerMainIpc(services: MainServices): void {
       getMainWindow: () => mainState.mainWindow,
       logError,
       getTerminalColorMode: async () => resolveTerminalColorMode(await mainState.store.load()),
+      shellIntegrationDir: join(app.getPath('userData'), 'terminal-shell-integration'),
       resolveKunCli: async () => {
         const appRoot = app.isPackaged
           ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked')
@@ -625,6 +632,7 @@ export function registerMainIpc(services: MainServices): void {
         } as RequestInit)
       }
     })
+    registerTerminalDockIpc(ipcMain, mainState.terminalPtyController)
     const remoteSshDataDir = join(app.getPath('userData'), 'remote-ssh')
     mainState.remoteSshController = registerRemoteSshIpc({
       ipcMain,

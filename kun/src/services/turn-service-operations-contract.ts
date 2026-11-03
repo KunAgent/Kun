@@ -1,4 +1,6 @@
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { createHash } from 'node:crypto'
+import type { DelegatedSteering } from './delegated-steering.js'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
 import type {
@@ -64,6 +66,7 @@ import {
   goalContextInstruction,
   goalContextKey
 } from '../loop/continuation-instructions.js'
+import type { ThreadMetadataScan } from './thread-metadata-scan.js'
 import type { TurnServiceDeps, TurnConflictError, TurnCapacityError, TerminalTurnStatus, TurnSettlement, GraphLeadSuspensionResult, GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
 export interface TurnServiceOperations {
@@ -75,6 +78,8 @@ export interface TurnServiceOperations {
     threadId: string
     request: StartTurnRequest
   }, options?: {
+    /** Host-authored attachment view; never accepted from StartTurnRequest. */
+    attachmentAliases?: AttachmentAliases
     /** Internal extension-broker accounting baseline; not part of StartTurnRequest. */
     extensionBudgetTokenBaseline?: number
     /** Private host-authored context; never accepted from HTTP or projected to clients. */
@@ -88,7 +93,7 @@ export interface TurnServiceOperations {
   enqueueTurn(input: {
     threadId: string
     request: StartTurnRequest
-  }): Promise<StartTurnResponse>;
+  }, options?: { attachmentAliases?: AttachmentAliases }): Promise<StartTurnResponse>;
   /**
    * Promote the oldest queued turn to running after re-running full
    * admission. Returns null when execution cannot start yet (busy thread,
@@ -96,10 +101,13 @@ export interface TurnServiceOperations {
    * queued turns are marked failed and skipped within the same call.
    */
   pauseQueuedTurns(threadId: string, reason: 'user_stop' | 'restart_recovery', sourceTurnId: string): Promise<void>;
-  resumeQueuedTurns(threadId: string): Promise<void>;
-  startNextQueuedTurn(threadId: string): Promise<{ turnId: string } | null>;
+  resumeQueuedTurns(threadId: string, options?: { expectedRevision: string }): Promise<void>;
+  editQueuedTurn(input: import('./turn-service-queued-edit.js').QueuedEditInput): Promise<{ threadId: string; turnId: string }>;
+  reconcileQueuedEdits(threadId: string): Promise<void>;
+  startNextQueuedTurn(threadId: string | { threadId: string }): Promise<{ turnId: string } | null>;
   /** Abort a queued turn before it starts; running turns must use interrupt. */
   cancelQueuedTurn(input: {
+    expectedQueueRevision?: string
     threadId: string
     turnId: string
   }): Promise<{ threadId: string; turnId: string; status: 'aborted' }>;
@@ -115,6 +123,7 @@ export interface TurnServiceOperations {
     turnId: string
   }): Promise<RewindThreadResponse>;
   steerTurn(input: {
+    requiredClientSurface?: 'api'
     operationId?: string
     sourceTurnId?: string
     threadId: string
@@ -124,18 +133,21 @@ export interface TurnServiceOperations {
     messageSource?: UserMessageSource
     attachmentIds?: string[]
   }): Promise<void>;
+  /** Reopen steering for a delegated runtime that delivers guidance mid-turn. */
+  openDelegatedSteering(threadId: string, turnId: string): DelegatedSteering;
   steeringQueue(input: { threadId: string; turnId: string }): Promise<SteeringEntry[]>;
   replaceSteering(input: {
     threadId: string
     turnId: string
     entries: readonly SteeringEntry[]
   }): Promise<SteeringEntry[]>;
-  interruptTurn(input: { threadId: string; turnId: string; discard?: boolean }): Promise<{ status: TurnStatus }>;
+  interruptTurn(input: { threadId: string; turnId: string; discard?: boolean; preserveQueue?: boolean }): Promise<{ status: TurnStatus }>;
   interruptActiveTurns(): Promise<number>;
   closeAdmissionForShutdown(): Promise<void>;
   suspendActiveTurnsForShutdown(): Promise<number>;
   reconcileManagerSettledInterruptions(input?: {
     settledAfter?: string
+    scan?: ThreadMetadataScan
   }): Promise<RestartRecoverySource[]>;
   suspendTurnForHostShutdown(input: {
     threadId: string
@@ -213,7 +225,7 @@ export interface TurnServiceOperations {
   getAbortController(turnId: string): AbortSignal | undefined;
   abortTurnExecution(turnId: string, reason?: unknown): boolean;
   abortThreadExecution(threadId: string): number;
-  reconcileOrphanedTurns(): Promise<RestartRecoverySource[]>;
+  reconcileOrphanedTurns(input?: { scan?: ThreadMetadataScan }): Promise<RestartRecoverySource[]>;
   getTurn(threadId: string, turnId: string): Promise<Turn | null>;
   ensureGoalContext(threadId: string, turnId: string, signal?: AbortSignal): Promise<void>;
   updateTurnMetadata(
@@ -224,6 +236,7 @@ export interface TurnServiceOperations {
       | 'activeSkillIds'
       | 'injectedMemoryIds'
       | 'injectedMemorySummaries'
+      | 'injectedMemoryRelations'
       | 'injectedDirectiveIds'
       | 'injectedDirectiveSummaries'
       | 'skillInjectionBytes'

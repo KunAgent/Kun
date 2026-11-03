@@ -21,6 +21,7 @@ import { ClawRuntimeInbound } from './claw-runtime-inbound'
 import type { TelegramInboundPayload } from './telegram-runtime'
 import { handleTelegramInbound } from './telegram-inbound-coordinator'
 import { handleFeishuInbound } from './feishu-inbound-coordinator'
+import { describeLocalListenError } from './local-listen-error'
 
 export { imWelcomeText } from './claw-im-model-support'
 
@@ -132,6 +133,11 @@ export class ClawRuntime extends ClawRuntimeInbound {
 
   protected syncWebhook(settings: AppSettingsV1): void {
     const im = settings.claw.im
+    // A disabled webhook answers every request with 503, so it does not need its port at all.
+    if (!settings.claw.enabled || !im.enabled) {
+      void this.closeWebhook()
+      return
+    }
     const key = `${im.port}|${im.path}`
     if (this.server && this.serverKey === key) return
     void this.closeWebhook()
@@ -140,9 +146,7 @@ export class ClawRuntime extends ClawRuntimeInbound {
       this.trackLifecycleTask('Claw webhook handler failed', this.handleWebhook(req, res))
     })
     server.on('error', (error) => {
-      this.deps.logError('claw-webhook', 'Claw IM webhook server failed', {
-        message: error instanceof Error ? error.message : String(error)
-      })
+      this.deps.logError('claw-webhook', 'Claw IM webhook server failed', describeLocalListenError(error, im.port, 'Settings > IM'))
       if (this.server === server) {
         void this.closeWebhook()
       }

@@ -20,6 +20,9 @@ export function buildCompatRequestHeaders(input: {
 }): Record<string, string> {
   const defaults: Record<string, string> = { 'Content-Type': 'application/json' }
   if (!input.stream) defaults.Accept = 'application/json'
+  // Public usage label for the local Magpie gateway. A caller-supplied
+  // User-Agent still wins because it is merged after these defaults.
+  if (input.apiKey === 'magpie-kun') defaults['User-Agent'] = 'Kun'
   if (input.apiKey) {
     if (isAzureOpenAiUrl(input.requestUrl)) defaults['api-key'] = input.apiKey
     else defaults.Authorization = `Bearer ${input.apiKey}`

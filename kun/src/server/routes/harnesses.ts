@@ -1,5 +1,5 @@
 import { gatewayPoolTargets } from '../../domain/model-gateway-export-policy.js'
-import type { HarnessModelCatalogError } from '../../contracts/harness-models.js'
+import type { HarnessModelCatalog, HarnessModelCatalogError } from '../../contracts/harness-models.js'
 import { nativeAgentNetworkStatus } from '../../harness/native-agent-network.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -16,16 +16,17 @@ import {
   HarnessTestRequestSchema
 } from '../../contracts/harness-test.js'
 import { runHarnessTest } from '../../services/harness-test-service.js'
-import { customToDefinition } from '../../harness/harness-catalog.js'
+import { userAgentDefinition } from '../../harness/harness-catalog.js'
 import { probeAcpHandshake } from '../../harness/acp-handshake-probe.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
+import { cursorHarnessModelInfo } from '../../harness/cursor-subscription-catalog.js'
 
 /**
  * `GET /v1/harnesses` — definitions plus detection status. With `wait_ms`
  * the handler briefly waits for inflight detections before answering so a
- * first-load client can show real verdicts instead of `unknown` forever
- * (P4-02). Rows still mid-detect carry `status.detecting: true`.
+ * first-load client can show real verdicts instead of `unknown` forever.
+ * Rows still mid-detect carry `status.detecting: true`.
  */
 const HARNESS_LIST_MAX_WAIT_MS = 30_000
 
@@ -39,6 +40,8 @@ export async function listHarnesses(
   const usage = url.searchParams.get('usage') ?? undefined
   const waitMs = clampWaitMs(url.searchParams.get('wait_ms'))
   const includeDisabled = url.searchParams.get('include_disabled') === 'true'
+  // Installing, enabling or revoking an extension changes its declared Agents.
+  await harnesses.extensionAgents?.refresh()
   const list = harnesses.catalog.list().filter((definition) => definition.availability !== 'retired' &&
     (includeDisabled || !harnesses.catalog.isDisabled(definition.id)))
 
@@ -116,6 +119,19 @@ function markDetecting(
   return { ...status, detecting: inflight }
 }
 
+export function warmHarness(
+  runtime: ServerRuntime,
+  params: Record<string, string>
+): JsonResponse {
+  const harnesses = runtime.harnesses
+  if (!harnesses) return ERRORS.notFound('harness catalog is unavailable')
+  const parsedId = HarnessIdSchema.safeParse(params.id)
+  if (!parsedId.success) return ERRORS.validation('invalid harness id')
+  if (!harnesses.catalog.get(parsedId.data)) return ERRORS.notFound('unknown harness')
+  harnesses.readiness?.warmProfiles(parsedId.data, { refreshStale: true })
+  return jsonResponse({ ok: true, checking: harnesses.readiness?.checking(parsedId.data) === true }, 202)
+}
+
 export async function probeHarness(
   runtime: ServerRuntime,
   request: Request,
@@ -132,7 +148,7 @@ export async function probeHarness(
 }
 
 /**
- * `POST /v1/harnesses/:id/test` (docs/ade/impl/p4 §3.5, P4-10): progressive
+ * `POST /v1/harnesses/:id/test`: progressive
  * detect → handshake → trial checks; the trial runs on a side thread that
  * never appears in conversation lists and is deleted afterwards.
  */
@@ -184,18 +200,20 @@ export async function listHarnessModels(
   if (!definition || definition.availability === 'retired') return ERRORS.notFound(`unavailable harness: ${parsedId.data}`)
 
   const url = new URL(request.url)
-  if (url.searchParams.get('refresh') === '1') harnesses.invalidateModels?.(definition.id)
-  const cachedModels = harnesses.probedModels?.(definition)
+  if (url.searchParams.get('refresh') === '1' && definition.transport !== 'acp') harnesses.invalidateModels?.(definition.id)
+  // A live session's catalog is distinct from one kept across restarts.
+  const cachedModels = (harnesses.liveProbedModels ?? harnesses.probedModels)?.(definition)
   const selectedModelParam = url.searchParams.get('selected_model')?.trim() || undefined
-  const reply = (body: Record<string, unknown>, source: 'native' | 'cache' | 'fallback' | 'provider' | 'static') => {
+  const reply = (body: Record<string, unknown>, source: 'native' | 'cache' | 'fallback' | 'provider' | 'static',
+    keptAt?: string) => {
     const detected = harnesses.detector?.cachedStatus?.(definition.id)
     const { error, ...rest } = body as Record<string, unknown> & { error?: HarnessModelCatalogError }
     // fetchedAt is the probe's own timestamp; a response time would claim a
     // fresh lookup that never happened.
-    const fetchedAt = definition.transport === 'acp'
+    const fetchedAt = keptAt ?? (definition.transport === 'acp'
       ? harnesses.acpModels?.fetchedAt?.(definition, selectedModelParam)
       : definition.transport === 'agent-sdk' ? harnesses.agentSdkModels?.fetchedAt?.(definition)
-        : definition.transport === 'codex-app-server' ? harnesses.codexModels?.fetchedAt?.(definition) : undefined
+        : definition.transport === 'codex-app-server' ? harnesses.codexModels?.fetchedAt?.(definition) : undefined)
     return jsonResponse({ ...rest, catalogStatus: { source,
       fetchedAt: fetchedAt ?? new Date().toISOString(),
       ...(detected?.version ? { version: detected.version } : {}),
@@ -206,6 +224,14 @@ export async function listHarnessModels(
   // A live failure that still carries the last good catalog is served as cache.
   const catalogSource = (catalog: { models: string[]; error?: unknown }): 'native' | 'cache' | 'fallback' =>
     catalog.models.length === 0 ? 'fallback' : catalog.error || cachedModels ? 'cache' : 'native'
+  // A failed live lookup keeps showing what this Agent listed before a
+  // restart. A sign-in prompt and per-model detail lookups are never masked.
+  const keptReply = (error: HarnessModelCatalogError | undefined) => {
+    const kept = selectedModelParam || error?.code === 'auth_required' ? undefined : harnesses.modelCatalogs?.get(definition)
+    return kept ? reply({ harnessId: definition.id, ...kept.catalog, error: error ?? { code: 'unavailable' } }, 'cache', kept.fetchedAt) : undefined
+  }
+  const replyCatalog = (catalog: HarnessModelCatalog) => (catalog.models.length === 0 ? keptReply(catalog.error) : undefined) ??
+    reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
   const credentialMode = url.searchParams.get('credential_mode') ?? undefined
   if (credentialMode && !definition.credentialModes.some((mode) => mode === credentialMode)) {
     return ERRORS.validation(`credentialMode ${credentialMode} is not supported by ${definition.id}`)
@@ -215,7 +241,8 @@ export async function listHarnessModels(
   // exposable HTTP profiles. Keep the displayed route identical to admission.
   if (credentialMode === 'provider' || credentialMode === 'kun-gateway') {
     const snapshot = await runtime.modelConnections?.snapshot().catch(() => undefined)
-    const groups = (snapshot?.providers ?? [])
+    const refreshCatalog = url.searchParams.get('refresh') === '1'
+    const groups = (await Promise.all((snapshot?.providers ?? [])
       .filter((provider) => {
         if (credentialMode === 'provider' && definition.transport === 'cursor-sdk') {
           return provider.kind === 'cursor-sdk' && provider.configured &&
@@ -223,16 +250,40 @@ export async function listHarnessModels(
         }
         return exposableProvider(provider)
       })
-      .map((provider) => ({
-        providerId: provider.id,
-        label: provider.name,
-        models: providerModelIds(provider),
-        ...(Object.keys(provider.modelCapabilities ?? {}).length ? { modelInfo: providerModelIds(provider).map((id) => ({ id,
+      .map(async (provider) => {
+        const savedModels = providerModelIds(provider)
+        const savedInfo = Object.keys(provider.modelCapabilities ?? {}).length ? savedModels.map((id) => ({ id,
           ...(provider.modelCapabilities?.[id]?.inputModalities
             ? { inputModalities: provider.modelCapabilities[id].inputModalities } : {})
-        })) } : {})
-      }))
-      .filter((group) => group.models.length > 0)
+        })) : undefined
+        if (credentialMode === 'provider' && definition.transport === 'cursor-sdk' && harnesses.cursorModels) {
+          try {
+            const listed = await harnesses.cursorModels.list({
+              providerId: provider.id, refresh: refreshCatalog, signal: request.signal
+            })
+            if (listed?.length) {
+              const modalities = Object.fromEntries(savedModels.flatMap((id) => {
+                const input = provider.modelCapabilities?.[id]?.inputModalities
+                return input ? [[id, input]] : []
+              }))
+              return {
+                providerId: provider.id,
+                label: provider.name,
+                models: listed.map((entry) => entry.id),
+                modelInfo: cursorHarnessModelInfo(listed, modalities)
+              }
+            }
+          } catch {
+            // A failed account listing keeps the models already saved on the provider.
+          }
+        }
+        return {
+          providerId: provider.id,
+          label: provider.name,
+          models: savedModels,
+          ...(savedInfo ? { modelInfo: savedInfo } : {})
+        }
+      }))).filter((group) => group.models.length > 0)
     const aliasGroups = credentialMode === 'kun-gateway' ? (snapshot?.routePools ?? []).filter((pool) => pool.enabled).flatMap((pool) => {
       const targets = gatewayPoolTargets(snapshot?.providers ?? [], pool)
       return targets.length ? [{ routeId: pool.id, label: pool.name, modelId: pool.modelId, connectionIds: [...new Set(targets.map((target) => target.providerId))] }] : []
@@ -266,18 +317,25 @@ export async function listHarnessModels(
         models: providerModels(legacyProviderKindFor(definition.id))
       }, 'provider')
     case 'probe': {
+      if (definition.transport === 'antigravity-cli' && harnesses.antigravityModels) {
+        return replyCatalog(await harnesses.antigravityModels.probeCatalog(definition))
+      }
       if (definition.transport === 'pi-rpc' && harnesses.piModels) {
         const models = await harnesses.piModels.probe(definition, request.signal)
-        return reply({ harnessId: definition.id, models }, models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
+        return (models.length ? undefined : keptReply(undefined)) ??
+          reply({ harnessId: definition.id, models }, models.length ? cachedModels ? 'cache' : 'native' : 'fallback')
       }
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
         if (selectedModelParam && selectedModelParam.length > 1024) return ERRORS.validation('invalid model id')
         const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModelParam)
-        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
+        if (catalog.models.length > 0) return reply({ harnessId: definition.id, ...catalog }, 'cache')
+        const kept = harnesses.modelCatalogs?.get(definition)
+        if (kept) return reply({ harnessId: definition.id, ...kept.catalog }, 'cache', kept.fetchedAt)
+        return reply({ harnessId: definition.id, models: definition.staticModels.length ? definition.staticModels : ['default'],
+          message: 'Native model options become available after a conversation starts.' }, 'fallback')
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
-        const catalog = await harnesses.codexModels.probeCatalog(definition)
-        return reply({ harnessId: definition.id, ...catalog }, catalogSource(catalog))
+        return replyCatalog(await harnesses.codexModels.probeCatalog(definition))
       }
       if (definition.transport === 'agent-sdk' && harnesses.agentSdkModels?.probeCatalog) {
         // Keeps Claude Code's recommended default and labels; empty falls through to staticModels.
@@ -296,15 +354,16 @@ export async function listHarnessModels(
         return reply({ harnessId: definition.id, models: probed }, cachedModels ? 'cache' : 'native')
       }
       // A probe that fails (missing binary, auth gate, timeout) falls back to
-      // the harness's static list rather than failing the models request.
-      return reply({ harnessId: definition.id, models: definition.staticModels,
+      // the last kept catalog, else the harness's static list, rather than
+      // failing the models request.
+      return keptReply(undefined) ?? reply({ harnessId: definition.id, models: definition.staticModels,
         error: { code: 'unavailable' } }, 'fallback')
     }
   }
 }
 
 /**
- * `POST /v1/harnesses/probe-definition` (docs/ade/impl/p4 §3.7, P4-12):
+ * `POST /v1/harnesses/probe-definition`:
  * handshake an unsaved custom ACP definition so the Agent Center can gate
  * "save" on a real initialize result. `secretEnv` refs resolve against the
  * credential store; their values never appear in the response or logs.
@@ -321,22 +380,21 @@ export async function probeHarnessDefinition(
   if (!parsed.success) {
     return ERRORS.validation('invalid harness definition', parsed.error.issues)
   }
-  const built = HarnessDefinitionSchema.safeParse(
-    customToDefinition({
-      id: parsed.data.id ?? 'custom-probe',
-      displayName: parsed.data.displayName,
-      command: parsed.data.command,
-      args: parsed.data.args,
-      env: parsed.data.env,
-      secretEnv: parsed.data.secretEnv
-    })
-  )
+  const { id, extends: base, displayName, args, env, secretEnv, command } = parsed.data
+  const draft = userAgentDefinition(id ?? 'custom-probe', {
+    extends: base ?? 'acp', label: displayName, command, env, secretEnv,
+    // A derived Agent keeps its base engine's arguments unless the form lists its own.
+    ...(args.length || !base ? { args: { mode: 'replace' as const, values: args } } : {})
+  })
+  if (!draft) return ERRORS.validation('invalid harness definition', [{ message: `'${base}' cannot be extended` }])
+  const built = HarnessDefinitionSchema.safeParse(draft.definition)
   if (!built.success) {
     return ERRORS.validation('invalid harness definition', built.error.issues)
   }
   const definition = built.data
   const started = Date.now()
-  const handshake = await probeAcpHandshake(
+  // The model catalog stays internal; the wire carries the handshake contract.
+  const { catalog: _catalog, ...handshake } = await probeAcpHandshake(
     definition,
     definition.launch?.command ?? '',
     { resolveSecretEnv: harnesses.resolveSecretEnv, signal: request.signal }

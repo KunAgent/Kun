@@ -12,6 +12,7 @@ import {
 // workspace barrel also exports Electron-backed editors and files, which
 // unnecessarily requires the Electron binary during CI.
 import { expandHomePath } from './workspace-paths'
+import { readSkillProvenance } from './market/market-provenance'
 
 export type GuiSkillScope = 'project' | 'global'
 export type GuiSkillSource = 'project' | 'global' | 'builtin'
@@ -27,6 +28,8 @@ export type GuiSkillSummary = {
   readOnly: boolean
   builtin: boolean
   legacy: boolean
+  /** Set when the skill was installed from a remote market (see `.kun-market.json`). */
+  market?: { sourceId: string; version?: string }
 }
 
 export type GuiSkillListResult =
@@ -434,7 +437,8 @@ async function loadSkillSummary(
       source,
       readOnly: source === 'builtin',
       builtin: source === 'builtin',
-      legacy: false
+      legacy: false,
+      ...(await marketField(root))
     }
   }
   const entryPath = join(root, 'SKILL.md')
@@ -452,8 +456,16 @@ async function loadSkillSummary(
     source,
     readOnly: source === 'builtin',
     builtin: source === 'builtin',
-    legacy: true
+    legacy: true,
+    ...(await marketField(root))
   }
+}
+
+async function marketField(root: string): Promise<Pick<GuiSkillSummary, 'market'>> {
+  const provenance = await readSkillProvenance(root)
+  return provenance
+    ? { market: { sourceId: provenance.sourceId, ...(provenance.version ? { version: provenance.version } : {}) } }
+    : {}
 }
 
 /**

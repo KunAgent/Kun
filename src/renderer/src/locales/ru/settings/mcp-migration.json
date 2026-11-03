@@ -396,8 +396,6 @@
   "uiModeWorkshopDesc": "Выберите набор маскотов. Встроенный iKun — пример UI-плагина.",
   "uiModeDefaultTitle": "Обычный Kun",
   "uiModeDefaultSubtitle": "Маленькая синяя птица",
-  "uiPaletteRetromaOn": "Retroma палитра включена — нажмите для обычной",
-  "uiPaletteRetromaOff": "Переключить на Retroma палитру",
   "uiPluginInstall": "Установить папку плагина…",
   "uiPluginActivate": "Использовать",
   "uiPluginActive": "Активен",

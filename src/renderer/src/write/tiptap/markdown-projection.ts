@@ -103,7 +103,7 @@ function visitBlock(node: PMNode, pos: number, prefix: string, state: Projection
     case 'rawMarkdownBlock': {
       // Raw source stays visible in the projection but has no block mapping:
       // offsets inside it cannot map back to a PM position, so inline edit
-      // and completion abandon (implementation §5).
+      // and completion abandon.
       const raw = typeof node.attrs.raw === 'string' ? node.attrs.raw : ''
       for (const line of raw.split('\n')) {
         lines.push({ text: prefix + line })

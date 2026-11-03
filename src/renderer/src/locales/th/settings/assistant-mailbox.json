@@ -1,0 +1,5 @@
+{
+  "labAssistantMailboxTitle": "ผู้ช่วยส่วนตัว",
+  "labAssistantMailboxDescription": "ให้ Kun มอบหมายงานแก่ผู้ช่วยส่วนตัว เช่น Cue, Grok Bot, Muse และ dots ผ่านกล่องข้อความที่เข้ารหัสแบบต้นทางถึงปลายทาง เพิ่มผู้ช่วยได้ในแผงระยะไกล",
+  "labAssistantMailboxEnabled": "เปิดใช้ผู้ช่วยส่วนตัว"
+}

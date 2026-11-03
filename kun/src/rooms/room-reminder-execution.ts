@@ -113,6 +113,7 @@ async function fireRoomReminder(deps: RoomRuntimeDeps, service: RoomService,
   }
   request.clientSurface = reminder.clientSurface
   request.imConnectionId = reminder.imConnectionId
+  request.remoteDeviceId = reminder.remoteDeviceId
   const occurrence = (reminder.occurrence ?? 0) + 1
   const next = nextReminderOccurrence(reminder, now)
   const continueSchedule = next && (!reminder.maxOccurrences || occurrence < reminder.maxOccurrences) &&

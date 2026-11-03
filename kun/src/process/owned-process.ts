@@ -35,6 +35,49 @@ let guardStartFailed = false
 let stopping = false
 const retired = new WeakSet<ChildProcess>()
 const windowsOwned = new WeakSet<ChildProcess>()
+/**
+ * A guard with nothing left to supervise is retired after this long. Each
+ * guard is an Electron-as-Node process (tens of MB); the Runtime only needs
+ * one while it has live children (MCP servers, Agent sessions, commands).
+ */
+export const OWNED_PROCESS_GUARD_IDLE_RETIRE_MS = 60_000
+let guardIdleRetireMs = OWNED_PROCESS_GUARD_IDLE_RETIRE_MS
+let guardIdleTimer: ReturnType<typeof setTimeout> | undefined
+/** Launches between guard acquisition and registration; retirement waits for them. */
+let admissionsInFlight = 0
+
+/** Test hook: shorten or disable (0) idle guard retirement. */
+export function setOwnedProcessGuardIdleRetireMs(ms: number): void {
+  guardIdleRetireMs = Math.max(0, Math.floor(ms))
+}
+
+function guardHasGroups(guard: Guard): boolean {
+  for (const owner of owned.values()) if (owner === guard) return true
+  return false
+}
+
+function scheduleGuardRetirement(): void {
+  if (guardIdleTimer || guardIdleRetireMs <= 0 || stopping) return
+  const guard = activeGuard
+  if (!guard || guardHasGroups(guard)) return
+  guardIdleTimer = setTimeout(() => {
+    guardIdleTimer = undefined
+    if (stopping || admissionsInFlight > 0 || activeGuard !== guard || guardHasGroups(guard)) return
+    if (guardChildDead(guard.child)) return
+    // Detach first so a concurrent launch starts a fresh guard instead of
+    // registering with the one that is about to exit.
+    activeGuard = undefined
+    guardPromise = undefined
+    void guard.request({ type: 'shutdown', graceMs: 0, timeoutMs: 5000 }).catch(() => undefined)
+  }, guardIdleRetireMs)
+  guardIdleTimer.unref?.()
+}
+
+function cancelGuardRetirement(): void {
+  if (!guardIdleTimer) return
+  clearTimeout(guardIdleTimer)
+  guardIdleTimer = undefined
+}
 
 function startGuard(): Promise<Guard> {
   return new Promise((resolveGuard, rejectGuard) => {
@@ -90,6 +133,7 @@ function startGuard(): Promise<Guard> {
           retired.add(target)
           owned.delete(target)
         }
+        scheduleGuardRetirement()
         return
       }
       if (message.id === undefined) return
@@ -197,6 +241,21 @@ export async function spawnOwnedProcess(
   }
   if (options.shell) throw new Error('Owned commands must select an explicit shell executable')
   const executable = await resolveCommand(command, options)
+  admissionsInFlight += 1
+  cancelGuardRetirement()
+  try {
+    return await spawnWithGuard(executable, args, options)
+  } finally {
+    admissionsInFlight -= 1
+    scheduleGuardRetirement()
+  }
+}
+
+async function spawnWithGuard(
+  executable: string,
+  args: readonly string[],
+  options: SpawnOwnedProcessOptions
+): Promise<ChildProcess> {
   const guard = await getGuard()
   await options.beforeLaunch?.()
   if (stopping) throw new Error('Owned process admission is closed')
@@ -237,6 +296,7 @@ export async function spawnOwnedProcess(
 /** Close admission synchronously before an asynchronous shutdown starts. */
 export function beginOwnedProcessShutdown(): void {
   stopping = true
+  cancelGuardRetirement()
   if (process.platform === 'win32') beginWindowsOwnedProcessShutdown()
 }
 
@@ -256,7 +316,14 @@ export async function registerOwnedProcessGroup(
   options: { ownerLossGraceMs?: number; trackDescendants?: boolean } = {}
 ): Promise<{ stop(options?: OwnedProcessStopOptions): Promise<void> }> {
   if (process.platform === 'win32') throw new Error('External groups require native Windows job registration')
-  const guard = await getGuard()
+  admissionsInFlight += 1
+  cancelGuardRetirement()
+  let guard: Guard
+  try {
+    guard = await getGuard()
+  } finally {
+    admissionsInFlight -= 1
+  }
   const reference = { pid } as ChildProcess
   owned.set(reference, guard)
   try {
@@ -322,6 +389,7 @@ export async function stopOwnedProcess(
   }
   owned.delete(child)
   retired.add(child)
+  scheduleGuardRetirement()
 }
 
 /** Wait for all registered groups and the session guard itself to exit. */

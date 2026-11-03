@@ -24,10 +24,13 @@ import {
 import { clearHistoricalKunServeProcesses } from './runtime/kun-serve-process-cleanup'
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import { retireVerifiablyIdleLegacyManager } from '../../kun/src/manager/legacy-manager-retire.js'
+import { AppSessionConflictError } from '../../kun/src/manager/app-session-reservation.js'
+import { retireOrphanedAppSessionManager } from '../../kun/src/manager/app-session-recovery.js'
 import { rememberedManagerStartupProfile } from './runtime/kun-startup-manager-recovery'
 import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { throwIfApplicationQuitting } from './app-quit-signal'
 import { logWarn } from './logger'
+import { recentRuntimeVerification, rememberRuntimeVerification } from './runtime/recent-runtime-verification'
 import {
   mainState,
   runtimeJsonError
@@ -53,13 +56,22 @@ export async function ensureRuntime(settings: AppSettingsV1): Promise<AppSetting
   }
   mainState.assertCanonicalRuntimeMigrationReady()
   const fingerprint = runtimeFingerprint(requested)
-  return runtimeSupervisor.ensure(
+  const generation = runtimeSupervisor.lifecycleGeneration()
+  const verified = runtimeSupervisor.hasPendingOperation()
+    ? null
+    : recentRuntimeVerification(fingerprint, generation)
+  if (verified) return verified
+  const ensured = await runtimeSupervisor.ensure(
     fingerprint,
     // Freeze this FIFO node to the snapshot used for its fingerprint. A later
     // persisted settings snapshot has its own queued apply node and must not
     // jump across this lifecycle barrier.
     () => ensureRuntimeOnce(requested)
   )
+  if (generation === runtimeSupervisor.lifecycleGeneration()) {
+    rememberRuntimeVerification({ fingerprint, generation, settings: ensured })
+  }
+  return ensured
 }
 
 /** Recover data service without first trying to load settings from its dead endpoint. */
@@ -148,6 +160,7 @@ async function resolveManagedKunPort(
 }
 
 function noteSuccessfulRuntimeSettings(source: string, settings: AppSettingsV1): AppSettingsV1 {
+  desktopProcessStack.assertCanStart()
   mainState.settledRuntimeSettings = settings
   runtimeSupervisor.noteLatest(settings)
   noteRuntimeHealthy(source, settings)
@@ -156,6 +169,7 @@ function noteSuccessfulRuntimeSettings(source: string, settings: AppSettingsV1):
 
 export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1> {
   desktopProcessStack.assertCanStart()
+  desktopProcessStack.startupAttempt?.note('runtime-launch')
   const recoveredManager = await desktopProcessStack.recoverManager(() => kunRuntimeAdapter.stopAndWait())
   if (recoveredManager) {
     mainState.activeServiceManager = configureKunManagerDataPlaneForCurrentProcess(recoveredManager)
@@ -174,7 +188,7 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
     // Match the watchdog probe budget: a single big scan (large events.jsonl
     // cold read) can exceed 2s without the runtime being unhealthy, and the
     // hung path below still provides the multi-second confirmation window.
-    await kunRuntimeHealthMonitor.waitForHealthy(currentSettings, 5_000)
+    await kunRuntimeHealthMonitor.waitForHealthy(currentSettings, 5_000, desktopProcessStack.startupAttempt?.signal)
   if (healthy) {
     const runtimeApi = await probeRuntimeApi(currentSettings)
     if (runtimeApi.ok) {
@@ -246,7 +260,7 @@ export async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSett
       throw retryError
     }
   }
-  const started = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
+  const started = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000, desktopProcessStack.startupAttempt?.signal)
   if (!started) {
     throw runtimeJsonError(
       'runtime_unhealthy',
@@ -274,23 +288,32 @@ function isClientRuntimeOwnerConflict(error: unknown): boolean {
     String((error as Error & { code?: unknown }).code ?? '') === 'client_runtime_owner_busy'
 }
 
-export async function prepareGuiRuntimeForStartupRetry(error?: unknown): Promise<void> {
+export async function prepareGuiRuntimeForStartupRetry(error?: unknown, signal?: AbortSignal): Promise<void> {
+  signal?.throwIfAborted()
   // Fence the watchdog before cleanup so it cannot launch a replacement while
   // the recovery window is preparing a new Electron instance.
   runtimeSupervisor.setManagedRuntimeExpected(false)
   // Retry relaunches Electron. Stop the old complete stack; the new process
   // acquires a fresh session instead of starting a Manager just before quit.
   await kunRuntimeAdapter.stopAndWait()
+  signal?.throwIfAborted()
   await mainState.stopDesktopServicesForRecovery?.()
+  signal?.throwIfAborted()
   await desktopProcessStack.stopManager(Date.now() + 10_000)
+  signal?.throwIfAborted()
   const profile = rememberedManagerStartupProfile()
   if (profile) {
+    if (error instanceof AppSessionConflictError) {
+      await retireOrphanedAppSessionManager({ ...profile, signal })
+    }
     await retireVerifiablyIdleLegacyManager({
       controlDir: profile.controlDir,
       dataDir: profile.dataDir,
-      settingsPath: profile.settingsPath
+      settingsPath: profile.settingsPath,
+      ...(signal ? { signal } : {})
     })
   }
+  signal?.throwIfAborted()
   if (!isClientRuntimeOwnerConflict(error)) return
   // The conflicting owner may be a stale record — e.g. its PID was recycled
   // by an unrelated process — that the plain liveness probe cannot disprove.
@@ -484,7 +507,7 @@ async function restartRuntimeAfterStopping(
     throw e
   }
 
-  const healthy = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000)
+  const healthy = await kunRuntimeHealthMonitor.waitForHealthy(launchSettings, 20_000, desktopProcessStack.startupAttempt?.signal)
   if (!healthy) {
     throw runtimeJsonError(
       'runtime_unhealthy',

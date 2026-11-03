@@ -16,7 +16,7 @@ import {
 } from '../../store/harness-store'
 
 /**
- * ADE home readiness (docs/ade/impl/p4 §P4-14): the three gates a fresh
+ * ADE home readiness: the three gates a fresh
  * manager or one-to-one session needs — a usable model provider for the
  * manager's Kun turns, at least one turn-capable agent ready, and the
  * local Kun gateway toggled on and applied cleanly.

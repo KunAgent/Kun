@@ -1,9 +1,10 @@
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
 import { HarnessCredentialModeSchema, HarnessStatusSchema } from './harness.js'
+import { HarnessDiagnosticRowSchema } from './harness-diagnostics.js'
 
 /**
- * `POST /v1/harnesses/:id/test` contract (docs/ade/impl/p4 §3.5, P4-10).
+ * `POST /v1/harnesses/:id/test` contract.
  *
  * Three progressive levels — each deeper level includes the shallower
  * results so a single response renders the whole checklist:
@@ -103,7 +104,9 @@ export const HarnessReadinessSchema = z.object({
     detail: z.string().optional()
   }).strict()),
   checkedAt: z.string().datetime(),
-  detail: z.string().optional()
+  detail: z.string().optional(),
+  /** Human-readable findings per stage; never secrets. */
+  diagnostics: z.array(HarnessDiagnosticRowSchema).max(16).optional()
 }).strict()
 export type HarnessReadiness = z.infer<typeof HarnessReadinessSchema>
 
@@ -124,7 +127,7 @@ export const HarnessTestResponseSchema = z
 export type HarnessTestResponse = z.infer<typeof HarnessTestResponseSchema>
 
 /**
- * `POST /v1/harnesses/probe-definition` (docs/ade/impl/p4 §3.7, P4-12):
+ * `POST /v1/harnesses/probe-definition`:
  * handshake a custom ACP definition before it is saved. Mirrors the
  * `harnesses.custom[]` entry shape minus `id` — the unsaved agent has no
  * stable id yet, so `id` is optional and only used for log correlation.
@@ -132,6 +135,8 @@ export type HarnessTestResponse = z.infer<typeof HarnessTestResponseSchema>
 export const HarnessProbeDefinitionRequestSchema = z
   .object({
     id: z.string().trim().min(1).max(128).optional(),
+    /** A builtin ACP engine the Agent derives from; absent means a generic ACP agent. */
+    extends: z.string().trim().min(1).max(64).optional(),
     displayName: z.string().trim().min(1).max(64),
     command: z.string().trim().min(1).max(4_096),
     args: z.array(z.string().max(1_024)).max(32).default([]),

@@ -103,25 +103,27 @@ export function useWorkbenchComposerCapabilities({
     state.threads.find((thread) => thread.id === state.activeThreadId)?.harnessId || 'kun')
   const credentialMode = useChatStore((state) => state.composerCredentialMode)
   const nativeModels = useHarnessStore((state) => state.models[harnessId]?.modelInfo)
+  // Work runs on Code's composer selection; the SDD rail keeps its own model.
+  const sddAssistant = route !== 'write' && rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sddAi
   const selectedComposerModel =
     route === 'claw'
       ? activeClawModel ?? 'auto'
       : route === 'design'
         ? designAssistantModel
-        : route === 'write' || rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sddAi
+        : sddAssistant
           ? writeAssistantModel
           : composerModel
   const selectedComposerProviderId =
     route === 'design'
       ? resolvedDesignAssistantProviderId
-      : route === 'write' || rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sddAi
+      : sddAssistant
         ? resolvedWriteAssistantProviderId
-        : route === 'chat'
+        : route === 'chat' || route === 'write'
           ? composerProviderId
           : ''
   const selectedModelSupportsImageInput = useMemo(() => {
     const selected = selectedComposerModel.trim()
-    if ((route === 'chat' || route === 'ade') && harnessId !== 'kun' && credentialMode === 'native-login') {
+    if ((route === 'chat' || route === 'ade' || route === 'write') && harnessId !== 'kun' && credentialMode === 'native-login') {
       const model = !selected || selected === 'default' || selected === 'auto'
         ? nativeModels?.find((entry) => entry.isDefault) : nativeModels?.find((entry) => entry.id === selected)
       return model?.inputModalities?.includes('image') === true

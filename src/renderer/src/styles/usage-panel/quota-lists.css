@@ -1,0 +1,324 @@
+/* Allowance board, continued: rings, balances, problems, empty and loading states. */
+
+/* Tray variant: rings beside the reset line. */
+.kq-rings-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.kq-rings-reset {
+  min-width: 0;
+  flex: 1;
+  margin: 0;
+  color: var(--kq-faint);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.kq-rings {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.kq-ring {
+  position: relative;
+  display: grid;
+  width: 56px;
+  align-content: start;
+  justify-items: center;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  --kq-fill: var(--kq-ring);
+}
+
+.kq-ring svg {
+  width: 42px;
+  height: 42px;
+  transform: rotate(-90deg);
+}
+
+.kq-ring-track,
+.kq-ring-fill {
+  fill: none;
+  stroke-width: 4.5;
+}
+
+.kq-ring-track {
+  stroke: var(--kq-track);
+}
+
+.kq-ring-fill {
+  stroke: var(--kq-fill);
+  stroke-linecap: round;
+  transition: stroke-dasharray 240ms ease;
+}
+
+.kq-ring-value {
+  position: absolute;
+  top: 0;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  color: var(--kq-text);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.kq-ring-name {
+  display: -webkit-box;
+  max-width: 56px;
+  overflow: hidden;
+  color: var(--kq-faint);
+  font-size: 11px;
+  line-height: 13px;
+  text-align: center;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.kq-ring-name.is-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.kq-ring-name.is-stacked > span {
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Balances: one small tile each, two to a row. */
+.kq-balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 8px;
+}
+
+.kq-balance {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--kq-border);
+  border-radius: var(--kq-radius-card);
+  background: var(--kq-card);
+  text-align: left;
+}
+
+button.kq-balance {
+  cursor: pointer;
+  transition: border-color var(--kq-duration) ease, background-color var(--kq-duration) ease;
+}
+
+button.kq-balance:hover {
+  border-color: var(--kq-border-strong);
+  background: var(--kq-hover);
+}
+
+.kq-balance-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--kq-muted);
+  font-size: 11.5px;
+}
+
+.kq-balance-name > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kq-balance-amount {
+  color: var(--kq-text);
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kq-balance-extra {
+  color: var(--kq-faint);
+  font-size: 11px;
+}
+
+/* What needs the user: one row a provider, its fix at the end. */
+.kq-problems {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--kq-border);
+  border-radius: var(--kq-radius-card);
+  background: var(--kq-card);
+}
+
+.kq-problem {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px 9px 12px;
+}
+
+.kq-problem + .kq-problem {
+  border-top: 1px solid var(--kq-border);
+}
+
+.kq-problem-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.kq-problem-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.kq-problem-title strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--kq-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kq-problem-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  color: var(--kq-danger);
+  font-size: 11px;
+}
+
+.kq-problem[data-status='missing_credentials'] .kq-problem-status {
+  color: var(--kq-warn);
+}
+
+.kq-problem[data-status='available'] .kq-problem-status {
+  color: var(--kq-faint);
+}
+
+.kq-problem-status svg {
+  width: 11px;
+  height: 11px;
+}
+
+.kq-problem-copy small {
+  overflow: hidden;
+  color: var(--kq-faint);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kq-footnote {
+  margin: -6px 2px 0;
+  color: var(--kq-faint);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.kq-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px 20px;
+  border: 1px dashed var(--kq-border-strong);
+  border-radius: var(--kq-radius-card);
+  text-align: center;
+}
+
+.kq-empty-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  color: var(--kq-muted);
+  background: var(--kq-subtle);
+}
+
+.kq-empty-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.kq-empty strong {
+  color: var(--kq-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.kq-empty p {
+  max-width: 280px;
+  margin: 0 0 6px;
+  color: var(--kq-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+/* Loading: two cards' outlines while the vendors answer. */
+.kq-skeleton {
+  gap: 9px;
+}
+
+.kq-skeleton span {
+  display: block;
+  height: 10px;
+  border-radius: 6px;
+  background: var(--kq-track);
+  animation: kq-pulse 1.4s ease-in-out infinite;
+}
+
+.kq-skeleton span:nth-child(1) {
+  width: 38%;
+  height: 14px;
+}
+
+.kq-skeleton span:nth-child(2) {
+  width: 92%;
+}
+
+.kq-skeleton span:nth-child(3) {
+  width: 64%;
+}
+
+@keyframes kq-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kq-fill,
+  .kq-ring-fill,
+  .kq-spin,
+  .kq-skeleton span {
+    transition: none;
+    animation: none;
+  }
+}

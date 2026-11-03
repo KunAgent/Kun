@@ -113,6 +113,7 @@ import {
   watchTurnCompletionNotification
 } from './chat-store-runtime'
 import { createNavigationActions } from './chat-store-navigation-actions'
+import { activeThreadMayHaveUsage } from './active-thread-usage-gate'
 import { createThreadActions } from './chat-store-thread-actions'
 import { createMaintenanceActions } from './chat-store-maintenance-actions'
 import { createInitialChatStoreState } from './chat-store-initial-state'
@@ -255,3 +256,8 @@ export function installRemovedWorkspaceSharedStateListener(): void {
 }
 
 installRemovedWorkspaceSharedStateListener()
+
+/** False for an active thread that never accepted a turn; usage panels skip their requests then. */
+export function useActiveThreadMayHaveUsage(): boolean {
+  return useChatStore(activeThreadMayHaveUsage)
+}

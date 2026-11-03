@@ -10,6 +10,9 @@ import type {
 import { harnessProfileKey, readyHarnessProfiles } from '@shared/harness-enablement'
 import { getProvider } from '../agent/registry'
 import type { HarnessNativeAgent } from '../../../../kun/src/contracts/harness-native-agents'
+import { rememberAgentIconAliases } from '../lib/agent-icon-aliases'
+import { rendererRuntimeClient } from '../agent/runtime-client'
+import { kunHarnessWarmPath } from '@shared/kun-endpoints'
 
 /** A model-detail lookup may omit the Agent list; keep the last known one. */
 function nativeAgentCacheFields(source: { agents?: HarnessNativeAgent[]; defaultAgentId?: string } | undefined) {
@@ -17,13 +20,18 @@ function nativeAgentCacheFields(source: { agents?: HarnessNativeAgent[]; default
     ? { agents: source.agents, ...(source.defaultAgentId ? { defaultAgentId: source.defaultAgentId } : {}) } : {}
 }
 
+/** Agent settings follow the same rule as the Agent list. */
+function settingsCacheFields(source: { settings?: AdeHarnessModels['settings'] } | undefined) {
+  return source?.settings?.length ? { settings: source.settings } : {}
+}
+
 /**
- * Harness catalog + per-thread session surface (docs/ade/12 §7.2).
+ * Harness catalog + per-thread session surface.
  *
  * - `rows` is the `GET /v1/harnesses` cache; ordinary menu opens reuse it.
  *   Settings changes and explicit refreshes invalidate it (`probe` stays server-side).
  * - `models[harnessId]` is the lazy `GET /v1/harnesses/:id/models` cache.
- * - `sessions[threadId]` is the last `harness_session_state` event (03 §7.3):
+ * - `sessions[threadId]` is the last `harness_session_state` event:
  *   native slash commands + config options the composer renders.
  */
 export type HarnessSessionSurface = {
@@ -31,6 +39,7 @@ export type HarnessSessionSurface = {
   commands?: AdeHarnessCommand[]
   currentModeId?: string
   agents?: HarnessNativeAgent[]
+  settings?: AdeHarnessSessionState['settings']
   updatedAt: string
 }
 
@@ -44,6 +53,7 @@ export type HarnessModelCacheEntry = {
   modelInfo?: AdeHarnessModels['modelInfo']
   agents?: HarnessNativeAgent[]
   defaultAgentId?: string
+  settings?: AdeHarnessModels['settings']
   detailsModel?: string
   catalogStatus?: AdeHarnessModels['catalogStatus']
   loadedAt?: number
@@ -59,9 +69,11 @@ export const HARNESS_MODEL_RETRY_DELAYS_MS = [5_000, 15_000, 45_000] as const
 type HarnessStoreState = {
   /** One-shot deep link from an Agent repair action into its settings detail. */
   settingsHarnessId?: string
+  /** Tab the deep link opens on (e.g. Version from an update notice). */
+  settingsHarnessTab?: 'connection' | 'models' | 'launch' | 'version'
   rows: AdeHarnessRow[]
   /**
-   * Timestamp of the last successful list response (P4-02): replaced the
+   * Timestamp of the last successful list response: replaced the
    * load-once `rowsLoaded` flag so callers can force a refresh while
    * detection is still settling.
    */
@@ -70,8 +82,8 @@ type HarnessStoreState = {
   rowsError?: string
   models: Record<string, HarnessModelCacheEntry>
   /**
-   * Provider-grouped models for `provider`/`kun-gateway` credential modes
-   * (12 §7.2): the exposable providers each harness turn could address. The
+   * Provider-grouped models for `provider`/`kun-gateway` credential modes:
+   * the exposable providers each harness turn could address. The
    * two modes share one exposable set, so a single per-harness entry serves
    * both.
    */
@@ -109,15 +121,20 @@ const modelRequestGeneration = new Map<string, number>()
 const generationFor = (id: string): number => modelRequestGeneration.get(id) ?? 0
 
 /**
- * P4-02: while any row still reports `detecting`, the store polls the
+ * while any row still reports `detecting`, the store polls the
  * catalog until detection settles or the budget expires — the first load
  * usually lands mid-probe, and without this the sidebar/picker would pin
  * the provisional `unknown` verdict forever.
  */
-const DETECTING_POLL_MS = 2_000
+export const HARNESS_DETECTING_POLL_MS = 5_000
 const DETECTING_POLL_BUDGET_MS = 30_000
 const LOAD_RETRY_DELAYS_MS = [1_000, 2_000, 5_000, 10_000]
-export const HARNESS_CATALOG_TTL_MS = 30_000
+/**
+ * Every composer mount asks for the catalog, and each answer costs Kun a full
+ * readiness pass. Edits, installs and explicit refreshes force a reload, so
+ * the passive cache can live for minutes.
+ */
+export const HARNESS_CATALOG_TTL_MS = 5 * 60_000
 
 let expiryTimer: ReturnType<typeof setTimeout> | null = null
 let pollTimer: ReturnType<typeof setTimeout> | null = null
@@ -159,6 +176,24 @@ export function resetHarnessPolling(): void {
   }
 }
 
+const HARNESS_WARM_MIN_INTERVAL_MS = 5 * 60_000
+const lastWarmRequestAt = new Map<string, number>()
+
+/**
+ * Selecting an Agent in the composer re-validates its readiness proof ahead of
+ * the next turn. This replaces background refresh-ahead, which re-spawned every
+ * enabled Agent CLI every few minutes while the app sat idle.
+ */
+export function warmHarnessReadiness(harnessId: string): void {
+  if (harnessId === 'kun' || typeof window === 'undefined' || !window.kunGui?.runtimeRequest) return
+  const last = lastWarmRequestAt.get(harnessId) ?? 0
+  if (now() - last < HARNESS_WARM_MIN_INTERVAL_MS) return
+  lastWarmRequestAt.set(harnessId, now())
+  void rendererRuntimeClient.runtimeRequest(kunHarnessWarmPath(harnessId), 'POST', '{}').catch(() => {
+    lastWarmRequestAt.delete(harnessId)
+  })
+}
+
 export async function loadHarnesses(
   force = false,
   options?: { waitMs?: number }
@@ -185,12 +220,13 @@ export async function loadHarnesses(
       delete providerGroups[id]
     }
     scheduleReadinessExpiry(rows)
+    rememberAgentIconAliases(rows)
     useHarnessStore.setState({ rows, rowsLoadedAt: now(), rowsLoading: false, models, providerGroups })
     retryCount = 0
     if (anyRowDetecting(rows)) {
       if (pollWindowStart === null) pollWindowStart = now()
       if (now() - pollWindowStart <= DETECTING_POLL_BUDGET_MS) {
-        scheduleHarnessPoll(DETECTING_POLL_MS)
+        scheduleHarnessPoll(HARNESS_DETECTING_POLL_MS)
       } else {
         resetHarnessPolling()
       }
@@ -274,7 +310,7 @@ export async function loadHarnessModels(harnessId: string, force = false, select
     const failed = result.models.length === 0 && (lookupError !== undefined || result.catalogStatus?.source === 'fallback')
     const models = failed && existing?.models.length ? existing.models : result.models
     if (!failed && !selectedModel && result.models.length > 0 && result.catalogStatus?.source !== 'provider' &&
-      result.catalogStatus?.source !== 'static') {
+      result.catalogStatus?.source !== 'static' && result.catalogStatus?.source !== 'fallback') {
       writeCatalogSeed(harnessId, { models: result.models, ...(result.modelInfo ? { modelInfo: result.modelInfo } : {}),
         ...(result.catalogStatus?.version ? { version: result.catalogStatus.version } : {}), savedAt: result.catalogStatus?.fetchedAt ?? new Date().toISOString() })
     }
@@ -284,6 +320,7 @@ export async function loadHarnessModels(harnessId: string, force = false, select
         return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
           ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
       }), ...nativeAgentCacheFields(result.agents?.length ? result : existing),
+        ...settingsCacheFields(result.settings?.length ? result : existing),
         detailsModel: selectedModel, catalogStatus: result.catalogStatus,
         loadedAt: Date.now(), loading: false,
         ...(failed ? { error: lookupError?.message ?? lookupError?.code ?? 'model_catalog_unavailable',
@@ -352,7 +389,28 @@ export async function loadHarnessProviderGroups(
   }
 }
 
-/** Sink entry for mapped `harness_session_state` runtime events (03 §7.3). */
+const pendingSessionModelRefresh = new Map<string, () => void>()
+
+/** Refresh a fallback after the real session arrives, even if its first lookup is still in flight. */
+function refreshSessionModels(harnessId: string): void {
+  const cache = useHarnessStore.getState().models[harnessId]
+  if (!cache) return
+  if (!cache.loading) {
+    if (cache.catalogStatus?.source === 'fallback') void loadHarnessModels(harnessId, true)
+    return
+  }
+  if (pendingSessionModelRefresh.has(harnessId)) return
+  const unsubscribe = useHarnessStore.subscribe((state) => {
+    const current = state.models[harnessId]
+    if (current?.loading) return
+    pendingSessionModelRefresh.delete(harnessId)
+    unsubscribe()
+    if (current?.catalogStatus?.source === 'fallback') void loadHarnessModels(harnessId, true)
+  })
+  pendingSessionModelRefresh.set(harnessId, unsubscribe)
+}
+
+/** Sink entry for mapped `harness_session_state` runtime events. */
 export function receiveHarnessSessionState(state: AdeHarnessSessionState): void {
   const threadId = state.threadId.trim()
   if (!threadId || !state.harnessId.trim()) return
@@ -376,14 +434,21 @@ export function receiveHarnessSessionState(state: AdeHarnessSessionState): void 
           : current.sessions[threadId]?.harnessId === state.harnessId && current.sessions[threadId]?.agents
             ? { agents: current.sessions[threadId]!.agents }
             : {}),
+        ...(state.settings !== undefined
+          ? { settings: state.settings }
+          : current.sessions[threadId]?.harnessId === state.harnessId && current.sessions[threadId]?.settings
+            ? { settings: current.sessions[threadId]!.settings }
+            : {}),
         updatedAt: new Date().toISOString()
       }
     }
   }))
+  const harness = useHarnessStore.getState().rows.find((row) => row.definition.id === state.harnessId)
+  if (harness?.definition.transport === 'acp') refreshSessionModels(state.harnessId)
 }
 
 /**
- * Turn-serving rows (P4-13): `transport: 'terminal'` entries are interactive
+ * Turn-serving rows: `transport: 'terminal'` entries are interactive
  * CLIs launched inside a Kun terminal tab — they never host a delegated turn,
  * so every turn picker (composer, one-on-one, subagent profile) hides them.
  */
@@ -398,7 +463,7 @@ export function harnessRowAvailable(row: AdeHarnessRow): boolean {
 }
 
 /**
- * Stable unavailability code for pickers (P4-05). Returns the 'detecting'
+ * Stable unavailability code for pickers. Returns the 'detecting'
  * sentinel while a probe is inflight or the verdict is still provisional;
  * otherwise the wire `reasonCode` (falling back to field derivation for
  * statuses that predate it). Consumers localize `adeHarnessUnavailable.*`
@@ -417,7 +482,7 @@ export function harnessRowUnavailableCode(row: AdeHarnessRow): string | null {
     if (status.ready === 'no') return 'handshake_failed'
     if (status.login === 'signed-out') return 'signed_out'
   }
-  // A settled `unknown` (the version probe failed and the P4-02 polling
+  // A settled `unknown` (the version probe failed and the polling
   // budget is spent) is unavailable — not "detecting" forever.
   return 'readiness_required'
 }
@@ -472,8 +537,8 @@ export function harnessUnavailableNextStepKey(code: string): string | null {
 
 /** Drop removed grants immediately; an in-flight older catalog cannot restore them. */
 /**
- * Agents whose launch settings (command path, profile defaults, custom
- * definition) differ between two snapshots. Only these lose their readiness
+ * Agents whose launch settings (command path and other `providers`
+ * overrides, profile defaults) differ between two snapshots. Only these lose their readiness
  * proof on save; editing one Agent must not send every other Agent back to checking.
  */
 export function harnessIdsWithChangedLaunchSettings(before: import('@shared/app-settings').KunHarnessSettingsV1,
@@ -484,11 +549,8 @@ export function harnessIdsWithChangedLaunchSettings(before: import('@shared/app-
       if (JSON.stringify(left?.[id] ?? null) !== JSON.stringify(right?.[id] ?? null)) changed.add(id)
     }
   }
-  const byId = (entries: readonly { id: string }[] | undefined): Record<string, unknown> =>
-    Object.fromEntries((entries ?? []).map((entry) => [entry.id, entry]))
-  compare(before.binaryPaths, after.binaryPaths)
+  compare(before.providers, after.providers)
   compare(before.defaults, after.defaults)
-  compare(byId(before.custom), byId(after.custom))
   return [...changed]
 }
 

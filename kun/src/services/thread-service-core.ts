@@ -45,6 +45,7 @@ import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import type { ThreadLifecycleFence } from './thread-lifecycle-fence.js'
 import { withFileMutationQueue } from '../adapters/tool/file-mutation-queue.js'
 import { withThreadStoreMutation } from './thread-mutation-coordinator.js'
+import { recoverWorkSessionTitle } from './work-session-title.js'
 import { DEFAULT_KUN_MODEL } from '../config/kun-config.js'
 import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
 import {
@@ -190,6 +191,12 @@ export class ThreadService {
     this.onStatusChanged = options.onStatusChanged
     this.onForked = options.onForked
   }
+
+  async recoverWorkTitle(threadId: string): Promise<ThreadRecord | null> {
+    return recoverWorkSessionTitle({
+      threadStore: this.threadStore, sessionStore: this.sessionStore, events: this.events
+    }, threadId)
+  }
 }
 
 export interface ThreadService {
@@ -222,6 +229,8 @@ export interface ThreadService {
       roomContext?: ThreadRecord['roomContext']
       /** Host-written provenance for a thread a bot Agent started; never from a request body. */
       workbenchOrigin?: ThreadRecord['workbenchOrigin']
+      /** Host-written suggestion-card provenance for `relation: 'task'`; never from a request body. */
+      taskOrigin?: ThreadRecord['taskOrigin']
       historyRefId?: string
     }
   ): Promise<ThreadRecord>;
@@ -230,9 +239,9 @@ export interface ThreadService {
     titleAuto?: boolean
     summary?: string
     workspace?: string
-    /** Set-only binding to a host-managed task workspace (07 §5). */
+    /** Set-only binding to a host-managed task workspace. */
     taskWorkspaceId?: string
-    /** Harness rebind for external-session continuation (01 §8). */
+    /** Harness rebind for external-session continuation. */
     harnessId?: string
     collaboration?: ThreadRecord['collaboration']
     additionalWorkspaces?: string[]
@@ -250,11 +259,13 @@ export interface ThreadService {
     relation?: ThreadRelation
     /** Host-only provenance update; omitted from the public thread-update schema. */
     workbenchOrigin?: ThreadRecord['workbenchOrigin']
-  }): Promise<ThreadRecord>;
+    /** Host-only: binds a forked `task` session to its card row. */
+    taskOrigin?: ThreadRecord['taskOrigin']
+  }, options?: { expectedRevision: number }): Promise<ThreadRecord>;
   getGoal(threadId: string): Promise<ThreadGoal | null>;
-  setGoal(threadId: string, request: SetThreadGoalRequest): Promise<ThreadGoal>;
+  setGoal(threadId: string, request: SetThreadGoalRequest, options?: { expectedRevision: string }): Promise<ThreadGoal>;
   recordGoalUsage(threadId: string, tokenDelta: number): Promise<ThreadGoal | null>;
-  clearGoal(threadId: string): Promise<boolean>;
+  clearGoal(threadId: string, options?: { expectedRevision: string }): Promise<boolean>;
   getTodos(threadId: string): Promise<ThreadTodoList | null>;
   setTodos(threadId: string, request: SetThreadTodosRequest): Promise<ThreadTodoList>;
   setTodosFromTool(threadId: string, request: SetThreadTodosRequest): Promise<ThreadTodoList>;
@@ -267,7 +278,7 @@ export interface ThreadService {
   ): Promise<ThreadTodoList>;
   clearTodos(threadId: string): Promise<boolean>;
   syncTodosFromPlan(threadId: string, options: SyncPlanTodosOptions): Promise<ThreadTodoList>;
-  delete(threadId: string): Promise<boolean>;
+  delete(threadId: string, options?: { expectedRevision: number }): Promise<boolean>;
   fork(threadId: string, options?: ForkThreadOptions ): Promise<ThreadRecord>;
   resumeSession(
     sessionId: string,
@@ -361,7 +372,8 @@ export function cloneTurnForFork(
   options: { relation: ThreadRelation; designDocumentTarget?: DesignDocumentTarget }
 ): Turn {
   const isInFlight = turn.status === 'queued' || turn.status === 'running'
-  if (options.relation === 'side' && isInFlight) {
+  // A task session forked with history may start while the suggesting turn still runs.
+  if ((options.relation === 'side' || options.relation === 'task') && isInFlight) {
     const userPromptItem = turn.items.find((item) => item.kind === 'user_message')
     const userPromptItemCloned = userPromptItem
       ? cloneItemForThread(userPromptItem, threadId, now, options.designDocumentTarget)

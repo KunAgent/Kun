@@ -1,5 +1,5 @@
 /**
- * P6-07: `SessionTurnRuntimeDeps` assembly for the native `codex app-server`
+ * `SessionTurnRuntimeDeps` assembly for the native `codex app-server`
  * transport. Kept out of runtime-composition-agent.ts for the 700-line gate;
  * every field mirrors the ACP dep surface minus ACP-only mediation pieces.
  */
@@ -24,8 +24,10 @@ import type { LlmDebugSink } from '../services/llm-debug-recorder.js'
 import type { TaskWorkspaceLister } from '../handoff/turn-handoff.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import type { HarnessSecretRefResolver } from '../harness/harness-secret-env.js'
+import type { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { DEFAULT_APPROVAL_REVIEWER } from '../contracts/policy.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 
 /** The composition locals the codex transport needs, grouped for the call site. */
 export type CodexRuntimeSharedDeps = {
@@ -44,6 +46,8 @@ export type CodexRuntimeSharedDeps = {
   attachmentStore?: AttachmentStore
   taskWorkspaces?: TaskWorkspaceLister
   debugSink?: LlmDebugSink
+  /** Kun Tools MCP grants; only the main runtime passes it (workers stay without). */
+  kunToolsMcp?: KunToolsMcpProvider
   nowIso: () => string
 }
 
@@ -63,7 +67,7 @@ export function buildCodexAppServerDeps(
     capabilitiesV2: CODEX_APP_SERVER_CAPABILITIES,
     catalog: harnesses.catalog,
     readiness: harnesses.readiness,
-    binaryPath: (harnessId) => options.harnesses?.binaryPaths?.[harnessId],
+    binaryPath: (harnessId) => harnessCommandOverride(options.harnesses, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(options.harnesses, id),
     resolveSecretEnv: deps.resolveSecretEnv ?? harnesses.resolveSecretEnv,
     threadStore: deps.threadStore,
@@ -89,6 +93,7 @@ export function buildCodexAppServerDeps(
       harnesses.detector.recordLaunchFailure(id, detail),
     ...(deps.debugSink ? { debugSink: deps.debugSink } : {}),
     nowIso: deps.nowIso,
+    ...(deps.kunToolsMcp ? { kunToolsMcp: deps.kunToolsMcp } : {}),
     ...(deps.taskWorkspaces ? { taskWorkspaces: deps.taskWorkspaces } : {})
   }
 }

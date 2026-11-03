@@ -45,6 +45,7 @@ export function scopedQuotaFetch(fetcher: ProviderQuotaFetch, provider: Provider
 export function providerQuotaIdentity(provider: ProviderQuotaProbeProfile): string {
   const headers = Object.fromEntries(Object.entries(provider.headers ?? {}).filter(([name]) => name.toLowerCase() !== 'session_id').sort(([a], [b]) => a.localeCompare(b)))
   return createHash('sha256').update(JSON.stringify({ id: provider.id, kind: provider.kind, presetId: provider.presetId,
+    accountId: provider.accountId, authType: provider.authType,
     baseUrl: provider.baseUrl, balanceUrl: provider.balanceUrl, balanceUnit: provider.balanceUnit,
     balanceKeyHeader: provider.balanceKeyHeader, balanceHost: provider.balanceHost, configured: provider.configured, key: provider.apiKey, credentialSourceId: provider.credentialSourceId,
     headers, authProfile: provider.authProfile, proxyUrl: provider.proxyUrl })).digest('hex')

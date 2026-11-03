@@ -35,7 +35,7 @@ import { rawGatewayCredential, splitAttributedKey } from './gateway-caller-agent
 export { exposableProvider } from '../../domain/model-gateway-export-policy.js'
 
 /**
- * Transport-independent core of the local model gateway (docs/ade/04 §5.2):
+ * Transport-independent core of the local model gateway:
  * credential guard, request body reading, inbound message → TurnItem
  * conversion, route-pool model resolution, and shared value/error helpers.
  * The OpenAI (`openai-model-gateway.ts`) and Anthropic
@@ -85,7 +85,7 @@ export function authorizePublicGateway(runtime: ServerRuntime, request: Request)
 }
 
 /**
- * Gateway caller identity (docs/ade/04 §5.2): either a public gateway
+ * Gateway caller identity: either a public gateway
  * credential or a `kgw_` harness grant. Harness tokens are checked first and
  * fail closed — a `kgw_` token is never accepted as a public credential.
  */
@@ -615,7 +615,7 @@ export async function gatewayRunningTurnId(runtime: ServerRuntime, threadId: str
 }
 
 /**
- * Persist usage observed on a grant-scoped request (docs/ade/04 §6): one
+ * Persist usage observed on a grant-scoped request: one
  * `source: 'harness-gateway'` event per completed call, counted into the
  * usage service with the grant's thread (and running turn, when present).
  * The event carries the service's cumulative snapshot so it lands on the

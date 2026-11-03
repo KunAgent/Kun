@@ -4,8 +4,19 @@ import { lstat, mkdir, rm } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import { pipeline } from 'node:stream/promises'
 import { Transform } from 'node:stream'
-import * as yauzl from 'yauzl'
-import * as yazl from 'yazl'
+import type { ZipFile as YauzlZipFile } from 'yauzl'
+
+// Zip libraries load only when a data package is actually read or written.
+type YauzlModule = typeof import('yauzl')
+type YazlModule = typeof import('yazl')
+async function loadYauzl(): Promise<YauzlModule> {
+  const module = await import('yauzl')
+  return ((module as { default?: YauzlModule }).default ?? module) as YauzlModule
+}
+async function loadYazl(): Promise<YazlModule> {
+  const module = await import('yazl')
+  return ((module as { default?: YazlModule }).default ?? module) as YazlModule
+}
 import {
   DataMigrationPackageEntrySchema,
   PackageRelativePathSchema,
@@ -101,6 +112,7 @@ export async function writeZip64Archive(input: {
   entries: readonly PreparedZip64ArchiveEntry[]
 }): Promise<DataMigrationPackageEntry[]> {
   await mkdir(dirname(input.outputPath), { recursive: true, mode: 0o700 })
+  const yazl = await loadYazl()
   const zipfile = new yazl.ZipFile()
   for (const entry of input.entries) {
     const options = {
@@ -315,7 +327,8 @@ export async function extractZip64ArchiveEntries(input: {
   }
 }
 
-async function openZip64(archivePath: string): Promise<yauzl.ZipFile> {
+async function openZip64(archivePath: string): Promise<YauzlZipFile> {
+  const yauzl = await loadYauzl()
   return yauzl.openPromise(archivePath, {
     lazyEntries: true,
     decodeStrings: true,

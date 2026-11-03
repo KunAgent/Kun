@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { setupCancellationSettled, prepareModelSelection } = require('./smoke-agent-model-readiness.cjs')
 const { roomWorkbenchSnapshot, waitCodeConversation } = require('./smoke-agent-chat-workbench.cjs')
 
 /** Real Electron controls and runtime, using the existing isolated offline model fixture. */
@@ -45,7 +46,8 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   const catalog = await request(page, '/v1/agents/creation-models')
   const eligible = catalog.options.filter((item) => item.available && item.providerId)
   assert(eligible.length > 1, 'Offline model fixture must expose two eligible models')
-  const selected = eligible[0]
+  const selected = eligible.find((item) => item.providerId === offline.id && item.model !== 'rooms-model-alternative')
+  assert(selected, 'The disposable offline model must be available for the new Agent')
   const key = JSON.stringify([selected.providerId, selected.accountId, selected.model])
   await modal.getByLabel('Provider, account and model', { exact: true }).selectOption(key)
   await capture('agent-models-create-selected')
@@ -56,22 +58,49 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   assert.deepEqual(created.modelRef, JSON.parse(JSON.stringify({ providerId: selected.providerId, accountId: selected.accountId, model: selected.model })))
   await request(page, '/v1/agents/' + created.id + '/setup', 'POST', { clientRequestId: 'model-smoke-skip', action: 'skip' })
   const current = (await request(page, '/v1/agents/' + created.id + '/conversation', 'POST', {})).room
+  const activityPath = '/v1/rooms/' + current.id + '/direct'
+  const setupActivity = await request(page, activityPath)
+  assert.equal(setupActivity.requests.length, 1, 'New Agent has exactly one setup request')
+  const setupRequestId = setupActivity.requests[0].id
+  await poll(async () => setupCancellationSettled(await request(page, activityPath), setupRequestId),
+    15000, 'exact setup request durably cancelled')
   await waitCodeConversation(page, poll, current.id, created.name)
-  const picker = conversation.getByLabel('Model for this conversation', { exact: true })
+  await conversation.locator('.direct-failed').getByText('Response stopped', { exact: true }).waitFor()
+
+  // The private composer shares Code's "model · effort" pill; the note lives in its panel, not under it.
+  const picker = conversation.locator('[data-room-model-picker] [data-composer-model-trigger]')
   await picker.waitFor()
-  await poll(async () => await picker.isEnabled() && await picker.inputValue() === key, 10000, 'composer model metadata loaded')
-  assert.equal(await picker.inputValue(), key)
+  await poll(async () => await picker.isEnabled() && (await picker.getAttribute('aria-label'))?.includes(selected.model), 10000,
+    'composer model metadata loaded')
+  assert.equal(await conversation.locator('[data-room-model-picker] small, [data-room-model-picker] select').count(), 0,
+    'No native select or caption grows the composer row')
   await capture('agent-models-composer-light')
-  const alternative = eligible.find((item) => JSON.stringify([item.providerId, item.accountId, item.model]) !== key)
+  const alternative = eligible.find((item) => item.providerId === selected.providerId &&
+    item.accountId === selected.accountId && item.model === 'rooms-model-alternative')
   assert(alternative)
   const binding = { providerId: alternative.providerId, accountId: alternative.accountId, model: alternative.model }
-  await picker.selectOption(JSON.stringify([binding.providerId, binding.accountId, binding.model]))
+  const sharedProvider = new Set(eligible.filter((item) => item.providerId === binding.providerId).map((item) => item.accountId ?? '')).size > 1
+  const groupKey = sharedProvider ? binding.providerId + '::' + (binding.accountId ?? '') : binding.providerId
+  const panel = page.locator('[data-composer-model-panel]')
+  const group = panel.locator('[data-model-provider="' + groupKey + '"]')
+  const header = group.locator('button[aria-expanded="false"]')
+  const target = group.locator('[role="menuitemradio"][title="' + binding.model + '"]')
+  const selectionTimeout = await prepareModelSelection({ poll,
+    ready: async () => await conversation.locator('[data-room-model-picker]').getAttribute('aria-busy') === 'false' &&
+      await picker.isEnabled() && (await picker.getAttribute('aria-label'))?.includes(selected.model),
+    panelVisible: () => panel.isVisible(), open: (timeout) => picker.click({ timeout }),
+    expand: async (timeout) => { if (await header.count()) await header.click({ timeout }) },
+    targetVisible: () => target.isVisible(), capture: () => capture('agent-models-composer-panel') })
+  // Capability badges are part of each item's accessible name; the title is the exact model id.
+  await target.click({ timeout: selectionTimeout })
+  await panel.waitFor({ state: 'hidden' })
   await poll(async () => {
     const saved = (await request(page, '/v1/rooms/' + current.id)).room.privateModelRef
     return saved?.providerId === binding.providerId && saved?.accountId === binding.accountId && saved?.model === binding.model
   }, 10000, 'exact composer provider/account/model saved')
   assert.deepEqual((await request(page, '/v1/agents/' + created.id)).agent.modelRef, created.modelRef)
-  assertions.push('Composer exposes exact model and conversation-only selection preserves role defaults')
+  await poll(async () => (await picker.getAttribute('aria-label'))?.includes(binding.model), 10000, 'pill shows the saved model')
+  assertions.push('Composer pill exposes the exact model and a conversation-only selection preserves role defaults')
   await resize(720, 800)
   await page.evaluate(async () => { const { applyTheme } = await import('/src/lib/apply-theme.ts'); applyTheme('dark') })
   await capture('agent-models-composer-dark-narrow')
@@ -102,7 +131,13 @@ async function exerciseAgentModelControls({ page, request, poll, capture, resize
   await activePage.getByText('Model changes save immediately. Profile changes use the profile Save button.', { exact: true }).waitFor()
   const roleModel = activePage.getByLabel('Main model', { exact: true })
   await roleModel.waitFor()
-  assert.equal(await roleModel.inputValue(), key, 'Manager displays the role default, not the conversation override')
+  await roleModel.click()
+  const roleOptionsList = page.getByRole('listbox', { name: 'Main model', exact: true })
+  await roleOptionsList.waitFor()
+  assert.equal(await roleOptionsList.locator('[role="option"][aria-selected="true"]').getAttribute('data-agent-model-option'), key,
+    'Manager displays the exact role provider/account/model, not the conversation override')
+  await page.keyboard.press('Escape')
+  await roleOptionsList.waitFor({ state: 'hidden' })
   await capture('agent-models-manager-role-defaults')
   assertions.push('All-Agent manager opens inline role-default model configuration')
   // The workspace renders this drawer as an embedded region, not a modal dialog.

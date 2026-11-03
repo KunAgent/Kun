@@ -1,3 +1,4 @@
+import { validateHtmlElementReference } from './html-element-reference-validation'
 import type { AttachmentReference } from '../agent/types'
 import type { SendMessageOverrides } from '../store/chat-store-types'
 import { canvasOpErrorKey, takeLastCanvasOpErrors } from './canvas/apply-shape-ops'
@@ -13,12 +14,12 @@ import {
 } from './design-board'
 import type { DesignHtmlElementContext } from './design-composer-context'
 import { useProjectDesignSystemStore } from './canvas/project-design-system-store'
-import type { DesignPromptSource } from './design-quality-repair-dispatch'
 import type { DesignArtifact } from './design-types'
 import { designDocumentResolvedEngine } from './design-types'
 import { resolveExcalidrawSceneForPrompt, excalidrawScenePath } from '../whiteboard/excalidraw-persistence'
 import {
   buildDesignTurnSendOverrides,
+  reservedHtmlArtifactContext,
   type DesignTurnPromptState
 } from './design-turn-dispatch'
 import {
@@ -46,6 +47,9 @@ import {
   applyDesignTaskProfileContract,
   designContextFromTaskProfile
 } from './design-task-profile-input'
+
+/** Where a design prompt came from; repairs keep their own source tag. */
+export type DesignPromptSource = 'user' | 'auto-quality-repair' | 'manual-quality-repair'
 
 export type DesignTurnSubmitSendMessage = (
   text: string,
@@ -94,7 +98,6 @@ export type SubmitDesignTurnOptions = SubmitDesignTurnDeps & {
   explicitScreenShapeId?: string | null
   explicitSvgArtifactId?: string | null
   imageEditReferencePath?: string
-  clearAutoRepairScope?: (scopeKey: string) => void
   designTaskProfileForTarget?: (target: DesignDocumentTarget) => DesignTaskProfileInput
   /**
    * When a locked task cannot rebuild an identity profile, omit both
@@ -108,6 +111,8 @@ export type SubmitDesignTurnOptions = SubmitDesignTurnDeps & {
    */
   boardArtifactId?: string
   waitForRuntimeAdmission?: boolean
+  /** Agent-started passes render as a notice instead of a user bubble. */
+  messageSource?: 'design_continuation'
   /** Called after local preparation but immediately before the runtime request. */
   onBeforeSend?: () => void | Promise<void>
 }
@@ -239,9 +244,6 @@ export async function submitDesignTurn(
   if (resolvedTarget.nextIntentMode) {
     getDesignState().setDesignIntentMode(resolvedTarget.nextIntentMode)
   }
-  if (options.source === 'user') {
-    options.clearAutoRepairScope?.(resolvedTarget.targetAutoRepairKey)
-  }
   getDesignState().setActiveArtifact(boardArtifact.id)
 
   let turnFiles: PrepareDesignTurnFilesResult
@@ -280,11 +282,20 @@ export async function submitDesignTurn(
         '.kun-design'
       )
     : null
+  // Kun attaches the stable page rules to reserved HTML page turns and the
+  // canvas reference to Design canvas turns, so those prompts stay short.
+  const reservedHtml = !resolvedTarget.svgArtifactId &&
+    (resolvedTarget.target === 'screen' || resolvedTarget.target === 'html')
+    ? reservedHtmlArtifactContext(resolvedTarget)
+    : undefined
+  const runtimeModePolicy = Boolean(reservedHtml) ||
+    (resolvedTarget.target === 'canvas' && canvasEngine !== 'excalidraw')
   let promptPayload: DesignTurnPromptPayload
   try {
     promptPayload = await buildPayload({
       target: resolvedTarget.target,
       mode: (options.attachmentIds?.length ?? 0) > 0 ? 'image' : 'text',
+      ...(runtimeModePolicy ? { runtimeModePolicy: true } : {}),
       promptText: options.promptText,
       artifactRelativePath: resolvedTarget.artifactRelativePath,
       workspaceRoot: options.workspaceRoot,
@@ -326,6 +337,7 @@ export async function submitDesignTurn(
   let sent: boolean
   try {
     await options.onBeforeSend?.()
+    await validateHtmlElementReference(resolvedTarget.htmlElementContext)
     sent = await options.sendMessage(
       designProfile
         ? applyDesignTaskProfileContract(promptPayload.prompt, designProfile)
@@ -345,6 +357,7 @@ export async function submitDesignTurn(
         ...(!omitLockedProfile && designProfile ? { designProfile, designDocumentTarget } : {}),
         ...(designImagePlacementTarget ? { designImagePlacementTarget } : {}),
         ...(options.waitForRuntimeAdmission ? { waitForRuntimeAdmission: true } : {}),
+        ...(options.messageSource ? { messageSource: options.messageSource } : {}),
         attachmentIds: options.attachmentIds ?? [],
         attachments: options.attachments ?? [],
         ...(resolvedTarget.svgArtifactId ? {
@@ -353,7 +366,7 @@ export async function submitDesignTurn(
             artifactId: resolvedTarget.svgArtifactId,
             relativePath: resolvedTarget.artifactRelativePath
           }
-        } : {})
+        } : reservedHtml ? { guiDesignArtifact: reservedHtml } : {})
       })
     )
   } catch (error) {

@@ -5,7 +5,6 @@
  * in-memory image payloads for the caller to persist.
  */
 import { gunzipSync } from 'node:zlib'
-import * as tar from 'tar-stream'
 
 const MAX_TAR_ENTRIES = 2_000
 const MAX_TAR_BYTES = 200 * 1024 * 1024
@@ -23,7 +22,8 @@ export type TexFigureEnv = {
 
 /** Extract a `.tar` payload into a path→buffer map (bounds-checked). */
 export async function extractTarEntries(data: Buffer): Promise<Map<string, Buffer>> {
-  const extract = tar.extract()
+  const tarStream = await import('tar-stream')
+  const extract = (tarStream.default ?? tarStream).extract()
   const files = new Map<string, Buffer>()
   let total = 0
 

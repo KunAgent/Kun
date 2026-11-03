@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { useTranslation } from 'react-i18next'
 import { ArrowDown, GitCommitHorizontal, Hash } from 'lucide-react'
 import type { ToolBlock } from '../../agent/types'
-import { useChatStore } from '../../store/chat-store'
+import { useActiveThreadMayHaveUsage, useChatStore } from '../../store/chat-store'
 import { threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 import { useTimelineJumpRail } from './use-timeline-jump-rail'
 import { SourceHistoryCard, SourceHistoryTurnLabel, SourceHistoryBoundary } from '../../history-reference/SourceHistoryCard'
@@ -16,11 +16,14 @@ import { useTimelineScroll } from './use-timeline-scroll'
 import { useTimelineTurnTargetBlocks } from './thread-turn-target'
 import { useTimelineTurnNavigation } from './use-timeline-turn-navigation'
 import { useTimelineFindJump } from './use-timeline-find-jump'
-import { MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint } from './message-timeline-empty'
+import {
+  MessageTimelineEmptyHero, ThreadForkBanner, ThreadForkPoint, shouldShowTimelineEmptyHero
+} from './message-timeline-empty'
 import { WorkerControlBanner } from '../workers/WorkerControlBanner'
 import {
   activeTimelineTurnIndex,
   groupTurns,
+  timelineTaskStartedAtMs,
   sameTurnContent,
   stableTurnKey,
   turnTaskSurface,
@@ -58,7 +61,10 @@ import { MemoMessageTurn } from './message-timeline-conversation-turn'
 import { TimelineSurfaceProvider } from './timeline-surface'
 import { useMobileJumpLatest } from './use-mobile-jump-latest'
 import type { MessageTimelineProps } from './message-timeline-props'
+import { MessageSelectionToolbar } from './MessageSelectionToolbar'
 import { useTurnUsageState } from '../../hooks/use-turn-usage'
+import { RoomWardrobeDropCard } from '../rooms/RoomWardrobeDropCard'
+import { useIsPlanBuildSession } from '../plan/PlanBuildSessionCard'
 import {
   timelineTurnAllowsRecoveryContinue,
   timelineTurnIsProcessing
@@ -110,6 +116,7 @@ export function MessageTimeline({
   onOpenGeneratedDocuments,
   compactCards = false,
   surface = 'desktop',
+  messageSelectionToolbar = false,
   onOpenChildThread,
   onComponentPrototypePrompt,
   extensionMessageActions = [],
@@ -125,7 +132,9 @@ export function MessageTimeline({
   const threadLoadingId = useChatStore((state) => state.threadLoadingId)
   const usageRefreshKey = useChatStore((state) => state.usageRefreshKey)
   const cancelToolCall = useChatStore((state) => state.cancelToolCall)
-  const turnUsage = useTurnUsageState(threadLoadingId === activeThreadId ? null : activeThreadId, usageRefreshKey)
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
+  const turnUsage = useTurnUsageState(
+    threadLoadingId === activeThreadId || !activeThreadMayHaveUsage ? null : activeThreadId, usageRefreshKey)
   const handleCancelToolCall = useCallback(async (block: ToolBlock): Promise<boolean> => {
     if (!activeThreadId || !block.turnId) return false
     const callId = typeof block.meta?.callId === 'string' ? block.meta.callId : ''
@@ -144,12 +153,16 @@ export function MessageTimeline({
     loadEarlierThreadHistory,
     currentTurnId,
     currentTurnUserId,
+    currentTurnStartedAtMs,
     turnStartedAtByUserId,
     turnDurationByUserId,
     turnReasoningFirstAtByUserId,
     turnReasoningLastAtByUserId,
     activeThread
   } = useTimelineStores(activeThreadId)
+  const liveStartedAtMs = currentTurnStartedAtMs ?? (
+    currentTurnUserId ? turnStartedAtByUserId[currentTurnUserId] : undefined
+  )
   const graphPlanningCorrectionTurnId = useGraphStore((state) =>
     selectGraphPlanningCorrectionDraft(state.drafts, activeThreadId)?.draft.sourceTurnId ?? null
   )
@@ -161,6 +174,7 @@ export function MessageTimeline({
   const heroRoute: 'chat' | 'claw' =
     route === 'claw' ? 'claw' : 'chat'
   const hasContent = blocks.length > 0 || live || liveReasoning
+  const planBuildSession = useIsPlanBuildSession()
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null), contentRef = useRef<HTMLDivElement>(null)
   const turnRefMap = useRef(new Map<string, HTMLDivElement>())
@@ -392,7 +406,12 @@ export function MessageTimeline({
         timelineBottomPaddingClass()
       }`}>
         {activeThread?.historyRefId ? <SourceHistoryCard referenceId={activeThread.historyRefId} /> : null}
-        {(!hasContent && !activeThread?.historyRefId) || !activeThreadId ? (
+        {shouldShowTimelineEmptyHero({
+          hasContent: Boolean(hasContent) || planBuildSession,
+          hasHistoryReference: Boolean(activeThread?.historyRefId),
+          activeThreadId,
+          route: heroRoute
+        }) ? (
           <MessageTimelineEmptyHero
             route={heroRoute}
             ready={runtimeConnection === 'ready'}
@@ -431,15 +450,16 @@ export function MessageTimeline({
         {visibleTurns.map((turn, index) => {
           const absoluteTurnIndex = hiddenTurnCount + index
           const userId = turn.user?.id
-          const isLive = !!(userId && currentTurnUserId === userId)
-          const startedAt = userId ? turnStartedAtByUserId[userId] : undefined
+          const isActiveTurn = index === activeTurnIndex
+          const sourceHistory = isSourceHistoryTurn(turn)
+          const turnPending = !sourceHistory && threadHasPendingRuntimeWork(turn.blocks)
+          const startedAt = (busy && isActiveTurn) || turnPending
+            ? timelineTaskStartedAtMs(turn, turnStartedAtByUserId, isActiveTurn ? liveStartedAtMs : undefined)
+            : undefined
           const recordedDuration = userId ? turnDurationByUserId[userId] : undefined
-          // For the live turn this is only a render-time snapshot: the visible
-          // elapsed label ticks itself via the DOM (LiveElapsedText), so the
-          // timeline no longer re-renders every second just to update it.
           const durationMs =
             recordedDuration ??
-            (isLive && typeof startedAt === 'number'
+            (typeof startedAt === 'number'
               ? Math.max(0, Date.now() - startedAt)
               : undefined)
           const reasoningFirst = userId ? turnReasoningFirstAtByUserId[userId] : undefined
@@ -448,15 +468,12 @@ export function MessageTimeline({
             typeof reasoningFirst === 'number' && typeof reasoningLast === 'number'
               ? Math.max(0, reasoningLast - reasoningFirst)
               : undefined
-          const sourceHistory = isSourceHistoryTurn(turn)
-          const turnPending = !sourceHistory && threadHasPendingRuntimeWork(turn.blocks)
           const turnContributions = messageContributionsForSurface?.(turnTaskSurface(turn))
           const turnMessageActions = turnContributions?.actions ?? extensionMessageActions
           const turnContextMenus = turnContributions?.contextMenus ?? extensionContextMenus
           const turnAttachmentMenus = turnContributions?.attachmentContextMenus ?? extensionAttachmentContextMenus
           const turnResultPreviews = turnContributions?.resultPreviews ?? extensionResultPreviews
           const isLatestTurn = index === visibleTurns.length - 1
-          const isActiveTurn = index === activeTurnIndex
           const hasLiveStream = isActiveTurn && !!(liveReasoning.trim() || live.trim())
           const turnIsProcessing = !sourceHistory && timelineTurnIsProcessing({
             busy,
@@ -525,7 +542,7 @@ export function MessageTimeline({
                 liveReasoning={isActiveTurn && !sourceHistory ? liveReasoning : ''}
                 live={isActiveTurn && !sourceHistory ? live : ''}
                 durationMs={durationMs}
-                liveStartedAtMs={isLive ? startedAt : undefined}
+                liveStartedAtMs={startedAt}
                 reasoningDurationMs={reasoningDurationMs}
                 devPreviewCard={isLatestTurn && !sourceHistory ? devPreviewCard : null}
                 planActionsBusy={planActionsBusy}
@@ -582,6 +599,7 @@ export function MessageTimeline({
           )
         })}
 
+        {activeThreadId && !busy && threadLoadingId !== activeThreadId && !activeThread?.historyRefId ? <RoomWardrobeDropCard threadId={activeThreadId} /> : null}
         {activeThread?.historyRefId && turns.length > 0 && isSourceHistoryTurn(turns[turns.length - 1]!) ? <SourceHistoryBoundary /> : null}
         {forkPointIndex !== undefined &&
         forkPointIndex === turns.length &&
@@ -621,13 +639,11 @@ export function MessageTimeline({
             compactCards={compactCards}
             allowRecoveryContinue={!busy && !busyUnconfirmed}
             durationMs={
-              currentTurnUserId && typeof turnStartedAtByUserId[currentTurnUserId] === 'number'
-                ? Math.max(0, Date.now() - turnStartedAtByUserId[currentTurnUserId])
+              busy && typeof liveStartedAtMs === 'number'
+                ? Math.max(0, Date.now() - liveStartedAtMs)
                 : undefined
             }
-            liveStartedAtMs={
-              currentTurnUserId ? turnStartedAtByUserId[currentTurnUserId] : undefined
-            }
+            liveStartedAtMs={busy ? liveStartedAtMs : undefined}
             reasoningDurationMs={(() => {
               if (!currentTurnUserId) return undefined
               const first = turnReasoningFirstAtByUserId[currentTurnUserId]
@@ -639,6 +655,7 @@ export function MessageTimeline({
         ) : null}
         <div ref={endRef} aria-hidden className="h-px w-full shrink-0" />
       </div>
+      {messageSelectionToolbar && surface !== 'mobile' ? <MessageSelectionToolbar containerRef={containerRef} surface="main" /> : null}
       {onExtensionCommand ? (
         <DeclarativeContextMenuOverlay
           contributions={messageContextMenu?.context &&

@@ -4,9 +4,11 @@ import type { RouteContext } from '../router.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { readJsonBody } from '../read-json-body.js'
 import { AgentModelRef } from '../../contracts/agent-identities.js'
+import { AgentExecutorSchema } from '../../contracts/agent-executor.js'
+import { TurnReasoningEffortSchema } from '../../contracts/turn-reasoning.js'
 import { chatEntryState, quickCreateAgent, CHAT_ENTRY_ID, QuickAgentRequest } from '../../agents/agent-chat-entry.js'
 import { startAgentSetupTurn } from '../../agents/agent-setup.js'
-import { agentModelOptions, agentFastModel, assertAgentModel, assertExplicitAgentModel } from '../../agents/agent-models.js'
+import { agentModelOptions, agentFastModel, assertAgentModel, assertExplicitAgentModel, sameModelBinding } from '../../agents/agent-models.js'
 import { updateDirectModel } from '../../agents/agent-direct-model.js'
 import { externalAgentBinding } from '../../agents/agent-external.js'
 import { codingAgentCatalog, prepareCodingAgent, resolveCodingAgentExecutor, saveCodingAgent } from '../../agents/agent-coding-agents.js'
@@ -22,8 +24,9 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
       const member = room.members.find((value) => value.id === room.defaultMemberId)!
       const agent = await runtime.rooms!.agents.active(member.participantAgentId!)
       if (room.privateWorkspace && agent.allowedRepositoryRoots && !agent.allowedRepositoryRoots.includes(room.privateWorkspace)) throw new Error('Project is outside this Agent\'s allowed directories')
-      // An external coding Agent always runs its own pinned engine route.
-      if (agent.executor) return externalAgentBinding(agent.executor)
+      // Accepted requests keep the frozen engine route and conversation model.
+      const executor = member.executor ?? agent.executor
+      if (executor) return externalAgentBinding(executor, room.privateExecutorModel)
       const resolved = await agentModelOptions(runtime.rooms!.deps, agent)
       const main = room.privateModelRef ?? resolved.main
       const fast = room.privateModelRef ? agentFastModel(runtime.rooms!.deps, agent, main) : resolved.fast
@@ -80,8 +83,12 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
     const input = z.object({ clientRequestId: Id, expectedRevision: z.number().int().nonnegative(),
       modelRef: AgentModelRef.nullable(), fastModelRef: AgentModelRef.nullable() }).strict().parse(await body(request))
     return rooms.exclusive(async () => {
-      if (input.modelRef) await assertExplicitAgentModel(rooms.deps, input.modelRef)
-      if (input.fastModelRef) {
+      const current = await rooms.agents.get(params.agentId)
+      if (current.executor) throw new Error('Choose a model from this coding Agent\'s engine')
+      // Only a newly chosen ref is checked: a saved ref whose model has since left its connection must
+      // not block changing (or restoring) the other field, or both stale refs could never be repaired.
+      if (input.modelRef && !sameModelBinding(input.modelRef, current.modelRef)) await assertExplicitAgentModel(rooms.deps, input.modelRef)
+      if (input.fastModelRef && !sameModelBinding(input.fastModelRef, current.fastModelRef)) {
         await assertAgentModel(rooms.deps, input.fastModelRef, true)
         await assertExplicitAgentModel(rooms.deps, input.fastModelRef)
       }
@@ -91,7 +98,10 @@ export function registerAgentChatRoutes(add: Add, runtime: ServerRuntime) {
   })
   add('PUT', '/v1/rooms/:roomId/direct/model', async (rooms, request, { params }) => {
     const input = z.object({ clientRequestId: Id, expectedRevision: z.number().int().nonnegative(),
-      modelRef: AgentModelRef }).strict().parse(await body(request))
+      modelRef: AgentModelRef.optional(), executorModel: AgentExecutorSchema.shape.model.optional(),
+      reasoningEffort: TurnReasoningEffortSchema.nullable().optional() }).strict()
+      .refine((value) => value.modelRef !== undefined || value.executorModel !== undefined || value.reasoningEffort !== undefined, 'Choose a model or reasoning effort')
+      .parse(await body(request))
     return rooms.exclusive(async () => ({ room: await updateDirectModel(rooms, params.roomId, input) }))
   })
   add('GET', '/v1/rooms/:roomId/direct', (rooms, _request, { params }) => directActivity(rooms, params.roomId))

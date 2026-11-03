@@ -20,7 +20,7 @@ import { defaultEditLocalToolOperations, defaultWriteLocalToolOperations } from 
 import { parseEditInstructions, resolveWorkspacePath, withToolBoundary } from './builtin-tool-utils.js'
 import { assertCanWritePath, assertDelegatedWritePathPhysicalScope } from './sandbox-policy.js'
 import { resolvePathThroughSymlinks, sameFilesystemPath } from './workspace-path.js'
-import { fileWriteChanged } from './file-write-evidence.js'
+import { fileStateMeta, fileWriteChanged } from './file-write-evidence.js'
 
 function approvedExternalTarget(
   absolutePath: string,
@@ -165,7 +165,8 @@ export function createWriteLocalTool(_options: WriteLocalToolOptions = {}): Loca
             relative_path: relativePath,
             ...(changed === undefined ? {} : { changed }),
             bytes_written: Buffer.byteLength(content, 'utf8')
-          }
+          },
+          meta: fileStateMeta(absolutePath, content)
         }
       })
     })
@@ -251,7 +252,8 @@ export function createEditLocalTool(_options: EditLocalToolOptions = {}): LocalT
               diff,
               patch,
               first_changed_line: firstChangedLine(baseContent, newContent)
-            }
+            },
+            meta: fileStateMeta(absolutePath, next)
           }
         } finally {
           await handle?.close()

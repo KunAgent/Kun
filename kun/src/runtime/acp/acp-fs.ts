@@ -1,5 +1,5 @@
 /**
- * ACP fs/read_text_file + fs/write_text_file (docs/ade/03 §8.1).
+ * ACP fs/read_text_file + fs/write_text_file.
  * Every path is resolved through symlinks and must land inside a declared
  * root — reads use the thread's read roots (workspace + additional
  * workspaces), writes only the task workspace. Writes pass the Kun approval

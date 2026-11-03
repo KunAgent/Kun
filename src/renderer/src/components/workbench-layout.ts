@@ -11,6 +11,7 @@ import {
 } from '../lib/thread-right-panel-expansion'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
 import { TERMINAL_OPEN_AT_EVENT, hasPendingTerminalRequest } from './terminal/terminal-open'
+import { DEV_PREVIEW_OPEN_URL_EVENT } from '../lib/dev-preview-request'
 import { isNarrowViewportNow, isRemoteWeb } from '../lib/remote-mobile'
 import {
   CODE_CANVAS_OPEN_REQUEST_EVENT,
@@ -152,8 +153,8 @@ export function useWorkbenchLayout({
   const [writeRightWidth, setWriteRightWidth] = useState(() =>
     readStoredWidth(WRITE_RIGHT_PANEL_WIDTH_KEY, WRITE_RIGHT_PANEL_DEFAULT_WIDTH)
   )
-  const rightSidebarWidth = route === 'write' ? writeRightWidth : codeRightWidth
-  const setRightSidebarWidth = route === 'write' ? setWriteRightWidth : setCodeRightWidth
+  const rightSidebarWidth = route === 'write' || route === 'papers' ? writeRightWidth : codeRightWidth
+  const setRightSidebarWidth = route === 'write' || route === 'papers' ? setWriteRightWidth : setCodeRightWidth
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(() =>
     readStoredWidth(TERMINAL_HEIGHT_KEY, TERMINAL_HEIGHT_DEFAULT)
@@ -170,7 +171,9 @@ export function useWorkbenchLayout({
     : null
   const rightPanelVisible = route === 'write'
     ? writeAssistantOpen
-    : route === 'design'
+    : route === 'papers'
+      ? false
+      : route === 'design'
       ? designAssistantOpen || designImplementOpen
       : codeRightTabs.expanded || rightPanelMode !== null
   const widthConstraints = workbenchWidthConstraintsForRightPanel(route, rightPanelMode)
@@ -284,14 +287,15 @@ export function useWorkbenchLayout({
 
   useEffect(() => {
     const onCanvasOpenRequest = (event: Event): void => {
-      if (canvasOpenRequestDetail(event)?.target === 'write') return
+      const detail = canvasOpenRequestDetail(event)
+      if (detail?.target === 'write' || (detail?.threadId && detail.threadId !== activeThreadId)) return
       ensureInitialCodePanelWidth()
       setCodeRightTabs((current) => openCodeRightTab(current, BUILTIN_RIGHT_PANEL_IDS.canvas))
     }
 
     window.addEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
     return () => window.removeEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
-  }, [ensureInitialCodePanelWidth])
+  }, [activeThreadId, ensureInitialCodePanelWidth])
 
   useEffect(() => {
     const onCanvasFocusRequest = (): void => {
@@ -580,7 +584,7 @@ export function useWorkbenchLayout({
   // "Open this worktree in a terminal" requests come from other surfaces
   // (e.g. the review result dialog); they only open the panel — the mounted
   // TerminalPanel drains the pending cwd itself (terminal-open.ts).
-  // P4-09: a setup prefill can be dispatched while a covering route
+  // a setup prefill can be dispatched while a covering route
   // (Settings) still hides the workbench; the pending request is checked on
   // mount so the panel still opens once the workbench remounts.
   useEffect(() => {
@@ -589,6 +593,13 @@ export function useWorkbenchLayout({
     window.addEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
     return () => window.removeEventListener(TERMINAL_OPEN_AT_EVENT, onOpenAt)
   }, [])
+  // The terminal asks for a URL in the preview panel; the URL itself flows
+  // through useDevPreviewRequestStore into the panel's preferred URL.
+  useEffect(() => {
+    const onOpenUrl = (): void => openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.browser)
+    window.addEventListener(DEV_PREVIEW_OPEN_URL_EVENT, onOpenUrl)
+    return () => window.removeEventListener(DEV_PREVIEW_OPEN_URL_EVENT, onOpenUrl)
+  }, [openRightPanelTab])
 
   return {
     beginLeftResize,

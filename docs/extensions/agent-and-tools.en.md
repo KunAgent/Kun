@@ -287,9 +287,9 @@ Invocation includes a stable ID, deadline, cancellation, workspace/account/netwo
 
 `sideEffects` is policy input, not self-authorization. Kun can upgrade a declared read-only operation to require approval. An extension cannot weaken user, sandbox, workspace, or ApprovalGate policy.
 
-- External effects require a real decision in a Host-owned protected surface.
-- Extension messages, Agent steering, Webview clicks, and content scripts cannot fabricate approval.
-- Direct DOM is revoked while approval is pending; synthetic clicks are rejected, and a real click still requires Main's native confirmation plus a short-lived, one-shot, action-bound consent verified by the Kun backend.
+- Tool effects follow Runtime policy; when approval is required, a real user decides once on the visible Code or Room card.
+- Extension messages, Agent steering and Webviews are not approval APIs.
+- Direct DOM is revoked while approval is pending and synthetic button clicks are rejected. Main validates the pending action and exact choice, then issues a short-lived, one-shot consent verified by Kun without a second native modal. A compromised workbench able to invoke the trusted IPC can submit decisions; this is not an independent DOM-isolated consent boundary.
 - Any actual execution-policy or sandbox change likewise requires Main's native confirmation and a one-shot consent bound to old values, new values, and the sending frame; ordinary Settings/Composer DOM cannot authorize it.
 - `request_user_input` can be answered only through Kun's authenticated user boundary.
 - Without a trusted interactive surface, headless execution remains gated or follows explicit policy; it never synthesizes an answer.

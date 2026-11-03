@@ -10,6 +10,7 @@ export type NativePermissionPreview = {
   label: string
   /** The native mode answers or plans without changing files. */
   readOnly: boolean
+  requiresFullAccess?: boolean
 }
 
 /**
@@ -46,6 +47,13 @@ export function nativePermissionPreview(
 ): NativePermissionPreview | null {
   if (transport === 'codex-app-server') return { ...CODEX_SANDBOX_BY_LEVEL[level], readOnly: false }
   if (permissionFollowsKunLevel(transport)) requested = undefined
+  requested = requested?.trim()
+  if (harnessId === 'devin' && (requested === 'normal' || requested === 'auto')) {
+    return { id: 'normal', label: 'Normal', readOnly: false }
+  }
+  if (transport === 'acp' && requested && !modes?.some(mode => mode.id === requested)) {
+    return { id: requested, label: requested, readOnly: false, requiresFullAccess: level !== 'full-access' }
+  }
   if (!modes?.length) return null
   const ceiling = KUN_TOOL_PERMISSION_MODES.indexOf(level)
   const rank = (mode: AdeHarnessPermissionMode): number =>

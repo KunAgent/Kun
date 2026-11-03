@@ -1,3 +1,4 @@
+import { metadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import type {
   ImageGenerationProtocol,
   MusicGenerationProtocol,
@@ -23,6 +24,7 @@ import {
 import {
   CODEX_RESPONSES_REASONING,
   MINIMAX_BUILT_IN_REASONING,
+  MINIMAX_M31_FLASH_REASONING,
   MINIMAX_M3_REASONING,
   ModelProviderPreset,
   ModelProviderTokenPlanPreset,
@@ -78,6 +80,10 @@ export function xiaomiTextChatProfile(contextWindowTokens: number): ModelProvide
 
 export function xiaomiVisionChatProfile(contextWindowTokens: number): ModelProviderModelProfileV1 {
   return visionChatProfile(contextWindowTokens, XIAOMI_REASONING)
+}
+
+export function minimaxM31FlashChatProfile(): ModelProviderModelProfileV1 {
+  return visionChatProfile(1_000_000, MINIMAX_M31_FLASH_REASONING)
 }
 
 export function minimaxM3ChatProfile(): ModelProviderModelProfileV1 {
@@ -145,6 +151,7 @@ export function copyModelProfiles(
       modelId,
       {
         ...profile,
+        evidence: profile.evidence ?? metadataEvidence(profile, 'adapter'),
         ...(profile.aliases ? { aliases: [...profile.aliases] } : {}),
         inputModalities: [...profile.inputModalities],
         outputModalities: [...profile.outputModalities],
@@ -153,6 +160,7 @@ export function copyModelProfiles(
         ...(profile.reasoning
           ? {
               reasoning: {
+                ...profile.reasoning,
                 supportedEfforts: [...profile.reasoning.supportedEfforts],
                 defaultEffort: profile.reasoning.defaultEffort,
                 requestProtocol: profile.reasoning.requestProtocol

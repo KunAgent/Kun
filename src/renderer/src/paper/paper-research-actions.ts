@@ -2,11 +2,10 @@ import type { PaperSearchSource } from '@shared/paper/paper-search'
 import type { PaperTranslate } from '../write/paper/paper-actions'
 import { useChatStore } from '../store/chat-store'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
-import { usePaperStore } from '../write/paper/paper-store'
 import { normalizePath } from '../write/write-workspace-store-helpers'
 import { usePaperModeStore } from './paper-mode-store'
-import { PAPER_MODE_SWITCH_CANCELED, switchPaperLibrary } from './paper-mode-actions'
 import { openPaperViewTab } from './paper-view'
+import { activeWriteThreadForWorkspace, readWriteThreadRegistry } from '../write/write-thread-registry'
 import {
   newResearchSessionId,
   researchResourcePath,
@@ -95,37 +94,36 @@ export async function startPaperResearch(request: PaperResearchRequest): Promise
   return { ok: true, sessionId, threadId }
 }
 
-/** Switch the stage to an existing session (or the "new research" state with null). */
+/**
+ * Switch the stage to an existing research session (or the "new research"
+ * state with null). A research run is a session, so picking it makes its
+ * thread the current session of the space.
+ */
 export function selectPaperResearchSession(sessionId: string | null): void {
   const state = useWriteWorkspaceStore.getState()
   state.setPaperResearch({ agentTab: true, sessionId })
   writeLastResearchSession(state.workspaceRoot, sessionId)
+  if (!sessionId) return
+  const chat = useChatStore.getState()
+  const thread = activeWriteThreadForWorkspace(state.workspaceRoot, chat.threads, readWriteThreadRegistry(),
+    researchResourcePath(state.workspaceRoot, sessionId))
+  if (thread && thread.id !== chat.activeThreadId) void chat.selectWriteThread(thread.id, state.workspaceRoot)
 }
 
 /**
- * Open a research session from the aggregated history list. When the session
- * belongs to another library the editor root is switched first — saving any
- * dirty documents; a failed or cancelled save leaves everything untouched.
+ * Open a research session from the history list. When it belongs to another
+ * space that space is mounted first (settling dirty documents); a cancelled
+ * switch leaves everything untouched.
  */
 export async function openPaperResearchSession(
   input: { libraryRoot: string; sessionId: string | null },
-  t?: PaperTranslate
+  _t?: PaperTranslate
 ): Promise<boolean> {
   const target = normalizePath(input.libraryRoot)
   const current = normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
   if (target && target !== current) {
-    const result = await switchPaperLibrary(target)
-    if (!result.ok) {
-      if (result.message !== PAPER_MODE_SWITCH_CANCELED) {
-        usePaperStore.getState().setNotice({
-          tone: 'error',
-          message: result.message === 'save-failed' && t
-            ? t('writePaperSaveFailed')
-            : result.message
-        })
-      }
-      return false
-    }
+    await useWriteWorkspaceStore.getState().selectWriteWorkspace(target)
+    if (normalizePath(useWriteWorkspaceStore.getState().workspaceRoot) !== target) return false
   }
   openPaperViewTab('discover:search')
   selectPaperResearchSession(input.sessionId)

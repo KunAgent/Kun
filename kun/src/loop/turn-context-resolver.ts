@@ -14,9 +14,14 @@ import {
   resolveMemoryTurnContext,
   type MemoryTurnStore
 } from '../memory/memory-turn-context.js'
-import type { GuiPlanContext, PptWorkflowScope, ToolHost, ToolHostContext } from '../ports/tool-host.js'
+import type { GuiPlanContext, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
+import { hasPublishedDesignPreview } from '../shared/design-preview-policy.js'
 import { SVG_ARTIFACT_ALLOWED_TOOL_NAMES } from './design-mode.js'
+import {
+  DESIGN_HTML_PAGE_ALLOWED_TOOL_NAMES,
+  DESIGN_HTML_PAGE_BLOCKED_SKILL_IDS
+} from './design-html-page-mode.js'
 import { InteractiveToolBridge } from './interactive-tool-bridge.js'
 import {
   allowedToolNamesWithGuiStateTools,
@@ -26,17 +31,14 @@ import {
   todoContinuationInstruction
 } from './continuation-instructions.js'
 import { isStalePlanContext } from './plan-mode.js'
-import {
-  createToolDiscoveryContext,
-  modelToolDiscoveryContexts
-} from './tool-discovery-context-factory.js'
+import { createToolDiscoveryContext } from './tool-discovery-context-factory.js'
 import type {
-  DiscoveredTool,
   PreparedTurnContext,
   ResolvedTurnAttachments
 } from './turn-execution-types.js'
 import { collectTurnAttachmentIds } from './turn-steering-attachments.js'
 import { applyRoomToolPolicy, mergeRoomDeniedIds } from './room-turn-policy.js'
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 
 const EMPTY_SKILL_RESOLUTION: SkillTurnResolution = {
   activeSkillIds: [],
@@ -80,6 +82,7 @@ export type TurnContextResolverDeps = {
     threadId: string
     workspace: string
     modelCapabilities: ModelCapabilityMetadata
+    attachmentAliases?: AttachmentAliases
   }) => Promise<ResolvedTurnAttachments>
   skillRuntime?: Pick<SkillRuntime, 'resolveTurn'>
   instructionRuntime?: Pick<InstructionRuntime, 'resolveTurn'>
@@ -93,7 +96,6 @@ export type TurnContextResolverDeps = {
   allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
-  pptWorkflowScope?: PptWorkflowScope
   blockedProviderIds?: readonly string[]
   blockedToolNames?: readonly string[]
   blockedSkillIds?: readonly string[]
@@ -123,9 +125,16 @@ export class TurnContextResolver {
     const approvalReviewer = normalizeApprovalReviewer(
       input.thread.roomContext ? input.thread.approvalReviewer : input.turn.approvalReviewer ?? input.thread.approvalReviewer
     )
-    const memoryStore = input.thread.roomContext ? undefined : this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    const availableMemoryStore = this.deps.getMemoryStore?.() ?? this.deps.memoryStore
+    // Room memory injection stays isolated from the global read-side context.
+    // Tool availability is separate and is restricted by applyRoomToolPolicy.
+    const memoryStore = input.thread.roomContext ? undefined : availableMemoryStore
     const workbenchCeiling = input.thread.workbenchOrigin?.capabilityCeiling
-    const blockedSkillIds = mergeRoomDeniedIds(this.deps.blockedSkillIds, input.thread.roomContext?.blockedSkillIds, workbenchCeiling?.blockedSkillIds)
+    // A reserved HTML page turn owns one file: it gets a fixed read/write tool
+    // set, and capability skills for tools it cannot see stay inactive.
+    const htmlPageTurn = input.turn.guiDesignArtifact?.kind === 'html'
+    const blockedSkillIds = mergeRoomDeniedIds(this.deps.blockedSkillIds, input.thread.roomContext?.blockedSkillIds, workbenchCeiling?.blockedSkillIds,
+      htmlPageTurn ? DESIGN_HTML_PAGE_BLOCKED_SKILL_IDS : undefined)
     const allowedSkillIds = intersectAllowedToolNames(this.deps.allowedSkillIds, workbenchCeiling?.allowedSkillIds)
     // These inputs are independent snapshots. Resolve their filesystem/store
     // I/O together so model dispatch pays the slowest branch, not their sum.
@@ -134,7 +143,8 @@ export class TurnContextResolver {
         attachmentIds: collectTurnAttachmentIds(input.turn),
         threadId: input.threadId,
         workspace,
-        modelCapabilities: input.modelCapabilities
+        modelCapabilities: input.modelCapabilities,
+        attachmentAliases: input.turn.attachmentAliases
       }),
       (input.thread.roomContext?.skillsEnabled === false || workbenchCeiling?.skillsEnabled === false ? undefined : this.deps.skillRuntime)?.resolveTurn({
         prompt: input.turn.prompt,
@@ -167,13 +177,14 @@ export class TurnContextResolver {
       : todoContinuationInstruction(input.thread.todos, input.thread.executionTasks)
     const forcedAllowedToolNames = intersectAllowedToolNames(
       this.deps.forcedAllowedToolNames,
-      input.mode.dedicatedSvgTurn ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES : undefined
+      input.mode.dedicatedSvgTurn ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES
+        : htmlPageTurn ? DESIGN_HTML_PAGE_ALLOWED_TOOL_NAMES : undefined
     )
     const allowedToolNames = intersectAllowedToolNames(
       allowedToolNamesWithGuiStateTools(
-        // A dedicated SVG turn must not let an unrelated activated skill hide
-        // its required edit/validate tool family.
-        input.mode.dedicatedSvgTurn ? undefined : skillResolution.allowedToolNames,
+        // A dedicated SVG or page turn must not let an unrelated activated
+        // skill hide the tool family its reserved file needs.
+        input.mode.dedicatedSvgTurn || htmlPageTurn ? undefined : skillResolution.allowedToolNames,
         activeGoalInstruction !== null
       ),
       intersectAllowedToolNames(intersectAllowedToolNames(forcedAllowedToolNames, input.thread.roomContext?.allowedToolNames), workbenchCeiling?.allowedToolNames)
@@ -190,11 +201,14 @@ export class TurnContextResolver {
       additionalWorkspaces: input.thread.additionalWorkspaces,
       knowledgeBases: input.thread.knowledgeBases,
       clientSurface,
+      attachmentAliases: input.turn.attachmentAliases,
       threadMode: input.mode.effectiveMode,
       ...(input.mode.activePlanContext ? { activePlanContext: input.mode.activePlanContext } : {}),
       ...(input.turn.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
       ...(input.turn.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
       ...(input.turn.guiDesignMode ? { guiDesignMode: true } : {}),
+      ...(clientSurface === 'gui' && hasPublishedDesignPreview(input.history, input.turnId)
+        ? { designPreviewOnly: true } : {}),
       agentSurface: input.turn.agentSurface ?? 'code',
       ...(input.turn.guiDesignArtifact ? { guiDesignArtifact: input.turn.guiDesignArtifact } : {}),
       ...(input.turn.imContext ? { imContext: true } : {}),
@@ -226,14 +240,13 @@ export class TurnContextResolver {
       ...(userInputDisabled ? { userInputDisabled: true } : {}),
       signal: input.signal
     }, {
-      memoryEnabled: Boolean(memoryStore),
+      memoryEnabled: Boolean(availableMemoryStore),
       ...(this.deps.allowedProviderIds ? { allowedProviderIds: this.deps.allowedProviderIds } : {}),
       ...(this.deps.allowedSkillIds ? { allowedSkillIds: this.deps.allowedSkillIds } : {}),
       ...(this.deps.allowedReadPaths ? { allowedReadPaths: this.deps.allowedReadPaths } : {}),
       ...(this.deps.allowHostReads ? { allowHostReads: true } : {}),
       ...(this.deps.allowedWritePaths ? { allowedWritePaths: this.deps.allowedWritePaths } : {}),
       ...(this.deps.allowedArtifactIds ? { allowedArtifactIds: this.deps.allowedArtifactIds } : {}),
-      ...(this.deps.pptWorkflowScope ? { pptWorkflowScope: this.deps.pptWorkflowScope } : {}),
       ...(this.deps.blockedProviderIds ? { blockedProviderIds: this.deps.blockedProviderIds } : {}),
       ...(this.deps.blockedToolNames ? { blockedToolNames: this.deps.blockedToolNames } : {}),
       ...(this.deps.blockedSkillIds ? { blockedSkillIds: this.deps.blockedSkillIds } : {}),
@@ -243,10 +256,10 @@ export class TurnContextResolver {
       ...(this.deps.fastContextTaskCount ? { fastContextTaskCount: this.deps.fastContextTaskCount } : {}),
       interactiveToolBridge: this.deps.interactiveToolBridge
     }), input.thread)
-    const tools = await listModelTools(
-      this.deps.toolHost,
-      modelToolDiscoveryContexts(toolDiscoveryContext)
-    )
+    // Discover against the real turn: a cache-stable union of Code/Design
+    // contexts advertises canvas tools that dispatch must then reject.
+    const tools = [...await this.deps.toolHost.listTools(toolDiscoveryContext)]
+      .sort((left, right) => left.name.localeCompare(right.name))
     return {
       threadId: input.threadId,
       turnId: input.turnId,
@@ -274,6 +287,8 @@ export class TurnContextResolver {
       instructionResolution,
       memories,
       memoryDirectives,
+      memoryReferenceBlocks: memoryContext.referenceBlocks,
+      memoryRelationContext: memoryContext.relationContext,
       activeGoalInstruction,
       goalRecoveryInstruction,
       activeTodoInstruction,
@@ -287,20 +302,6 @@ export class TurnContextResolver {
       tools
     }
   }
-}
-
-async function listModelTools(
-  toolHost: Pick<ToolHost, 'listTools'>,
-  contexts: readonly ToolHostContext[]
-): Promise<DiscoveredTool[]> {
-  const listings = await Promise.all(contexts.map((context) => toolHost.listTools(context)))
-  const byName = new Map<string, DiscoveredTool>()
-  for (const tools of listings) {
-    for (const tool of tools) {
-      if (!byName.has(tool.name)) byName.set(tool.name, tool)
-    }
-  }
-  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name))
 }
 
 export function resolveTurnClientSurface(turn: Pick<

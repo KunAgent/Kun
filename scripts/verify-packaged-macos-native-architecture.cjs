@@ -45,11 +45,13 @@ function packagedSharpBinding(bindingPackage, arch) {
 }
 
 function assertMachOArchitecture(path, arch, inspect = (candidate) =>
-  execFileSync('file', ['-b', candidate], { encoding: 'utf8' }).trim()) {
+  execFileSync('file', ['-b', candidate], { encoding: 'utf8' }).trim(), { allowUniversal = false } = {}) {
   const description = String(inspect(path))
   const required = arch === 'x64' ? /\bx86_64\b/ : /\barm64\b/
   const forbidden = arch === 'x64' ? /\barm64\b/ : /\bx86_64\b/
-  if (!/\bMach-O\b/.test(description) || !required.test(description) || forbidden.test(description)) {
+  const universal = allowUniversal && /\bMach-O universal binary\b/.test(description)
+  if (!/\bMach-O\b/.test(description) || !required.test(description) ||
+      (forbidden.test(description) && !universal)) {
     throw new Error(`Expected ${path} to be a darwin/${arch} Mach-O file, got: ${description}`)
   }
   return description
@@ -68,9 +70,15 @@ function verifyPackagedMacosNativeArchitecture({ resourcesDir, arch, inspect }) 
   const bindingPackage = join(unpackedModules, '@img', `sharp-darwin-${arch}`)
   const libvipsPackage = join(unpackedModules, '@img', `sharp-libvips-darwin-${arch}`)
   const canvasPackage = join(unpackedModules, '@napi-rs', `canvas-darwin-${arch}`)
+  const cuaPackage = join(unpackedModules, '@trycua', `cua-driver-darwin-${arch}`)
+  const opentuiPackage = join(
+    resources, 'app.asar.unpacked', 'kun', 'node_modules', '@opentui', `core-darwin-${arch}`
+  )
   assertTargetManifest(join(bindingPackage, 'package.json'), arch, 'Sharp binding')
   assertTargetManifest(join(libvipsPackage, 'package.json'), arch, 'Sharp libvips')
   assertTargetManifest(join(canvasPackage, 'package.json'), arch, 'Canvas binding')
+  assertTargetManifest(join(cuaPackage, 'package.json'), arch, 'CUA Driver')
+  assertTargetManifest(join(opentuiPackage, 'package.json'), arch, 'OpenTUI')
 
   const mainExecutable = requirePath(join(contents, 'MacOS', 'Kun'), 'main executable')
   const binding = packagedSharpBinding(bindingPackage, arch)
@@ -83,10 +91,18 @@ function verifyPackagedMacosNativeArchitecture({ resourcesDir, arch, inspect }) 
     join(canvasPackage, `skia.darwin-${arch}.node`),
     'Canvas native binding'
   )
-  for (const path of [mainExecutable, binding, libvips, canvas]) {
+  const cuaDriver = requirePath(join(cuaPackage, 'libcua_driver_sdk.dylib'), 'CUA Driver library')
+  const cuaRuntime = requirePath(join(cuaPackage, 'cua_driver_node_runtime.node'), 'CUA Driver runtime')
+  const opentui = requirePath(join(opentuiPackage, 'libopentui.dylib'), 'OpenTUI library')
+  for (const path of [mainExecutable, binding, libvips, canvas, opentui]) {
     assertMachOArchitecture(path, arch, inspect)
   }
-  return { arch, mainExecutable, binding, libvips, canvas }
+  // CUA 0.22.2 publishes universal binaries in both architecture-specific
+  // packages. Require the target slice without relaxing other native checks.
+  for (const path of [cuaDriver, cuaRuntime]) {
+    assertMachOArchitecture(path, arch, inspect, { allowUniversal: true })
+  }
+  return { arch, mainExecutable, binding, libvips, canvas, cuaDriver, cuaRuntime, opentui }
 }
 
 function main() {
@@ -96,7 +112,7 @@ function main() {
   })
   process.stdout.write(
     `Packaged macOS native architecture OK: darwin/${result.arch}, ` +
-    'Sharp, libvips, and Canvas match the app\n'
+    'Sharp, libvips, Canvas, CUA Driver, and OpenTUI match the app\n'
   )
 }
 

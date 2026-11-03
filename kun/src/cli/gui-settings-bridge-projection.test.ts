@@ -213,7 +213,7 @@ describe('GUI settings bridge', () => {
     expect(JSON.stringify(snapshot)).not.toContain('gui-secret')
   })
 
-  it('projects audited GLM reasoning capabilities into legacy GUI catalogs', () => {
+  it('preserves legacy reasoning preferences without replacing them with model-name defaults', () => {
     const snapshot = modelConnectionSnapshotFromGuiSettings({
       settingsPath: '/tmp/kun-settings.json',
       dataDir: '/tmp/kun-data',
@@ -245,9 +245,9 @@ describe('GUI settings bridge', () => {
     })
 
     expect(snapshot.providers[0]?.modelCapabilities?.['glm-5.2']?.reasoning).toEqual({
-      supportedEfforts: ['off', 'high', 'max'],
-      defaultEffort: 'max',
-      requestProtocol: 'glm-chat-completions'
+      supportedEfforts: ['auto'],
+      defaultEffort: 'auto',
+      requestProtocol: 'none'
     })
     expect(snapshot.providers[0]?.modelCapabilities?.['custom-model']?.reasoning).toBeUndefined()
     expect(JSON.stringify(snapshot)).not.toContain('must-not-be-projected')

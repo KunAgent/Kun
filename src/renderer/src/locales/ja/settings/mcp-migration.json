@@ -396,8 +396,6 @@
   "uiModeWorkshopDesc": "ワークスペース マスコット パックを選択します。組み込みの iKun モード自体は、プリインストールされた UI プラグインのサンプルです。開発者ガイドを使用して独自のパックを構築してインストールします (宣言型イメージ パック、実行可能コードはありません)。",
   "uiModeDefaultTitle": "デフォルトくん",
   "uiModeDefaultSubtitle": "青い小鳥",
-  "uiPaletteRetromaOn": "レトロマ パレットがオン — クリックするとデフォルトのパレットが使用されます",
-  "uiPaletteRetromaOff": "レトロマ羊皮紙パレットに切り替える",
   "uiPluginInstall": "プラグインフォルダをインストール…",
   "uiPluginActivate": "使用する",
   "uiPluginActive": "アクティブ",

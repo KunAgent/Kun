@@ -10,9 +10,40 @@ import {
   projectMessageRawDetail,
   projectMessageSourceDetail
 } from './trajectory-query-message-detail.js'
-import { TrajectoryQueryService } from './trajectory-query-service.js'
+import { TrajectoryQueryService, withTraceTiming } from './trajectory-query-service.js'
 
 describe('TrajectoryQueryService', () => {
+  it('derives request timing for native traces from their own stamps', async () => {
+    const usage = { promptTokens: 10, completionTokens: 30, totalTokens: 40, cacheHitRate: null, turns: 1 }
+    expect(withTraceTiming(usage, {
+      startedAt: '2026-10-21T00:00:00.000Z',
+      firstTokenAt: '2026-10-21T00:00:00.600Z',
+      finishedAt: '2026-10-21T00:00:01.600Z'
+    })).toEqual({ ...usage, requestTtftMs: 600, requestGenerationMs: 1_000 })
+    // Agent-reported timing and traces without a first token stay as they are.
+    const reported = { ...usage, requestTtftMs: 25 }
+    expect(withTraceTiming(reported, { startedAt: '2026-10-21T00:00:00.000Z', firstTokenAt: '2026-10-21T00:00:09.000Z' })).toBe(reported)
+    expect(withTraceTiming(usage, { startedAt: '2026-10-21T00:00:00.000Z' })).toBe(usage)
+
+    const recorder = new LlmDebugRecorder()
+    const round = recorder.start({
+      threadId: 'thread-native', turnId: 'turn-1', provider: 'test', model: 'gpt-test', roundId: 'round-1', step: 0, captureContent: false
+    })
+    recorder.beginHttpAttempt(round, {
+      endpointFormat: 'chat_completions', attempt: 1, reason: 'initial',
+      url: 'https://provider.example/v1/chat/completions', headers: {}, bodyText: '{}'
+    })
+    recorder.captureChunk(round, { kind: 'assistant_text_delta', text: 'hi' })
+    recorder.captureChunk(round, { kind: 'usage', usage })
+    recorder.captureChunk(round, { kind: 'completed', stopReason: 'stop' })
+    await recorder.finish(round)
+    const service = new TrajectoryQueryService(recorder, { loadItems: async () => [] } as unknown as SessionStore)
+    const page = await service.page('thread-native', { limit: 20, filter: 'llm', query: '' })
+    const record = page.records.find((candidate) => candidate.kind === 'llm_request')
+    expect(record?.kind === 'llm_request' ? record.usage?.requestTtftMs : undefined).toEqual(expect.any(Number))
+    expect(page.summary.avgTtftMs).toEqual(expect.any(Number))
+  })
+
   it('joins model attempts with canonical tool and message items', async () => {
     const recorder = new LlmDebugRecorder()
     const round = recorder.start({

@@ -73,7 +73,7 @@ export function ProviderStaleModels({ snapshot, connectionId, review, disabled, 
       if (!cancelled && result.ok) setClientNames(new Map((result.clients ?? []).map((client) => [client.clientId, client.name])))
     }).catch(() => undefined)
     return () => { cancelled = true }
-  }, [snapshot.revision])
+  }, [snapshot.revision, snapshot.metadataRevision])
   useEffect(() => {
     let cancelled = false
     void window.kunGui.runtimeRequest(`/v1/model-connections/${encodeURIComponent(connectionId)}/catalog`, 'GET').then((response) => {
@@ -82,7 +82,7 @@ export function ProviderStaleModels({ snapshot, connectionId, review, disabled, 
       setCatalog(body.cached === true ? body : null)
     }).catch(() => undefined)
     return () => { cancelled = true }
-  }, [connectionId, snapshot.revision])
+  }, [connectionId, snapshot.revision, snapshot.metadataRevision])
   const plan = planStaleModelRemoval(snapshot, connectionId, catalog, clientNames)
   if (!plan.models.length) return null
   return <section className="col-span-full space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3" aria-label={t('providerStaleModels.title')} data-provider-stale-models>

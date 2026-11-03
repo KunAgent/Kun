@@ -221,7 +221,7 @@ export function createClient({ base, token, settleMs }) {
     return `v1.${expiresAt}.${nonce}.${sig}`
   }
 
-  /** Resolve a pending approval as the user (09 §6.5 worker approval lane). */
+  /** Resolve a pending approval as the user. */
   async function decideApproval(approvalId, decision = 'allow') {
     const res = await fetch(`${base}/v1/approvals/${approvalId}`, {
       method: 'POST',
@@ -251,8 +251,8 @@ export function createClient({ base, token, settleMs }) {
 
   /**
    * Watch worker threads over SSE: every `approval_requested` still pending
-   * is auto-allowed inside the scratch workspace — this is the user lane
-   * from 09 §6.5, which unattended worker turns would otherwise block on
+   * is auto-allowed inside the scratch workspace — this is the user lane,
+   * which unattended worker turns would otherwise block on
    * forever. Returns {approved, flush, close}.
    */
   function watchWorkerApprovals(workerIds) {

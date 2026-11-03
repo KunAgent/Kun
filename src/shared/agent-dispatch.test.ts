@@ -1,15 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import { AgentDispatchIntentPublicSchema } from './agent-dispatch'
-import { AgentDispatchIntentSchema, AgentDispatchStateSchema, publicAgentDispatchIntent } from '../../kun/src/contracts/agent-dispatch-intents'
+import { AgentDispatchActionSchema, AgentDispatchIntentSchema, AgentDispatchStateSchema, publicAgentDispatchIntent } from '../../kun/src/contracts/agent-dispatch-intents'
 
 describe('Agent dispatch HTTP contract mirror', () => {
+  it.each(['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'])('accepts the explicit %s reasoning route edit', (reasoningEffort) => {
+    const input = { action: 'update', requestId: 'edit', expectedRevision: 3,
+      recommendation: { assignments: [{ agentId: 'kun', model: 'model', reasoningEffort }] } }
+    expect(AgentDispatchActionSchema.parse(input).recommendation?.assignments?.[0].reasoningEffort).toBe(reasoningEffort)
+    expect(AgentDispatchActionSchema.safeParse({ ...input, recommendation: {
+      assignments: [{ agentId: 'kun', reasoningEffort: 'invented-depth' }] } }).success).toBe(false)
+  })
+
+  it.each(['local', 'worktree'])('rejects client-supplied %s isolation in route edits', (workspaceIsolation) => {
+    expect(AgentDispatchActionSchema.safeParse({ action: 'update', requestId: 'edit', expectedRevision: 3,
+      recommendation: { assignments: [{ agentId: 'codex', model: 'model', workspaceIsolation }] } }).success).toBe(false)
+  })
+
   it.each(AgentDispatchStateSchema.options)('accepts the canonical %s state with all public fields', (state) => {
     const intent = AgentDispatchIntentSchema.parse({ intentId: 'dispatch', kind: 'worker', state, revision: 3,
       source: { threadId: 'parent', turnId: 'turn', toolCallId: 'call', applicationSessionId: 'app', userIntent: 'Private user excerpt',
         actingModelRoute: { model: 'model', providerId: 'provider', accountId: 'account', unresolvedGatewayAlias: true, requestedGatewayAlias: 'alias' } },
       policySnapshot: { approvalPolicy: 'auto', sandboxMode: 'danger-full-access', approvalReviewer: 'user' },
       recommendation: { title: 'Task', task: 'Assignment', agentId: 'codex', agentName: 'Codex', model: 'model', workspace: '/workspace',
-        acceptanceCriteria: ['Tests pass'], permissionMode: 'full-access', effectivePermissionMode: 'approve-for-me', agentSelection: 'auto' },
+        acceptanceCriteria: ['Tests pass'], permissionMode: 'full-access', effectivePermissionMode: 'approve-for-me', agentSelection: 'auto',
+        assignments: [{ label: 'Task', agentId: 'codex', profileId: 'reviewer', reasoningEffort: 'off', agentName: 'Codex', model: 'model', providerId: 'provider', credentialMode: 'native-login', workspaceIsolation: 'worktree' }] },
       payload: { private: true }, requestLedger: { call: 'hash' }, startRequestId: 'start', batchId: 'batch',
       deadline: '2026-10-07T02:01:00.000Z', decision: { decision: 'allow', reason: 'Reviewed', decidedAt: '2026-10-07T02:00:00.000Z' },
       target: { taskId: 'task', threadId: 'child', turnId: 'child-turn', workerIds: ['child'], dispatchIds: ['dispatch'] },
@@ -18,6 +32,8 @@ describe('Agent dispatch HTTP contract mirror', () => {
       createdAt: '2026-10-07T02:00:00.000Z', updatedAt: '2026-10-07T02:00:00.000Z' })
     const publicIntent = publicAgentDispatchIntent(intent)
     expect(AgentDispatchIntentPublicSchema.parse(publicIntent)).toEqual(publicIntent)
+    expect(AgentDispatchIntentPublicSchema.safeParse({ ...publicIntent, recommendation: { ...publicIntent.recommendation,
+      assignments: [{ ...publicIntent.recommendation.assignments![0], reasoningEffort: 'invented-depth' }] } }).success).toBe(false)
     expect(AgentDispatchIntentPublicSchema.safeParse({ ...publicIntent, payload: { secret: true } }).success).toBe(false)
     expect(AgentDispatchIntentPublicSchema.safeParse({ ...publicIntent, source: { ...publicIntent.source, userIntent: 'Private' } }).success).toBe(false)
   })

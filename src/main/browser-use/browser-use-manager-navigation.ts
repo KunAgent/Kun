@@ -27,12 +27,13 @@ import {
   attributesRecord,
   axProperties,
   axString,
+  describeLoadFailure,
   errorMessage,
   isNearViewport,
   isDisabledTarget,
   isSensitiveTarget,
-  originOnly,
   pathOnly,
+  policyEventAudit,
   randomToken,
   resultError,
   resultOk,
@@ -113,6 +114,7 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
     const previousLifecycle = entry.lifecycle
     entry.lifecycle = 'loading'
     entry.reason = undefined
+    entry.lastNetworkFailure = undefined
     this.publish(entry)
     let openedTab: BrowserTab | undefined
     try {
@@ -158,7 +160,7 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
       const code = browserUseErrorCode(error, 'navigation_failed')
       const restoredPreviousTab = newTab && previousActive && this.activeTab(entry) === previousActive
       entry.lifecycle = restoredPreviousTab ? previousLifecycle : 'error'
-      const reason = errorMessage(error).slice(0, 512) || 'The authorized page failed to load.'
+      const reason = describeLoadFailure(errorMessage(error), origin, entry.lastNetworkFailure)
       entry.reason = restoredPreviousTab ? undefined : reason
       if (openedTab) openedTab.error = reason
       this.audit(entry, {
@@ -191,14 +193,10 @@ export abstract class BrowserUseManagerNavigation extends BrowserUseManagerFound
         entry.exactLocalOrigin,
         (event) => {
           if (entry.stopping || this.sessions.get(entry.threadId) !== entry) return
-          this.audit(entry, {
-            category: 'network-policy',
-            action: 'network-request',
-            sanitizedPath: pathOnly(event.sanitizedUrl),
-            origin: originOnly(event.sanitizedUrl),
-            outcome: event.outcome === 'allowed' ? 'success' : 'blocked',
-            ...(event.code ? { errorCode: event.code } : {})
-          })
+          if (event.outcome !== 'allowed') {
+            entry.lastNetworkFailure = { ...event, at: this.now().getTime() }
+          }
+          this.audit(entry, policyEventAudit(event))
         }
       )
       const pending = (async () => {

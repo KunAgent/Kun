@@ -47,6 +47,11 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   default data location and existing history; never silently select another.
 - A live or starting foreign owner fails closed with actionable guidance. Do
   not reuse it because its build matches, or replace it because builds differ.
+- Explicit startup Recover can stop recorded orphan Runtime participants, then
+  their Manager, after verifying the dead application owner, all canonical
+  profile claims, matching participant records and process birth identities.
+  Keep Manager alive until consumers exit. Recheck identity before each signal
+  and escalation; never infer shutdown authority from an HTTP timeout.
 - Main-window close, platform Quit, updater exit, and storage relocation use
   the same shutdown barrier. Close admission and restart/recovery timers before
   awaiting cleanup; collect each failure without skipping remaining resources.
@@ -58,6 +63,24 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   stays in the same application session. Manager failure recovery belongs to
   the application owner and must stop old consumers before rebinding a new
   Manager generation; app-owned Runtime must never independently elect one.
+- Steady app-owned Manager heartbeats run in a dedicated worker and are
+  single-flight. Main-loop progress bounds renewal to a thirty-second stall
+  window; the worker never registers/elects a Manager or renews thread leases.
+  Stop and await it before final Runtime unregister/cleanup. Transport failures park new
+  side-effecting tools and retry the same Manager with capped backoff; reads
+  may continue. Resume only after both the heartbeat and thread lease are
+  confirmed. Only an explicit slot rejection proves Runtime ownership loss;
+  prolonged outages still obey thread lease deadlines and app-owned recovery.
+- Thread/session mutation retries require the Manager's advertised
+  `mutation-replay-v1` capability and retain one request id, deadline, owner
+  fence and Manager generation across attempts. Manager keeps bounded
+  acknowledgement/deduplication records until that deadline, rejects stale
+  fences before replay, and never evicts live records to admit new writes.
+  A changed generation or expired retry window must fail without reapplying.
+- Log the first shutdown reason, Runtime instance and PID before cleanup,
+  then its completion, failure or deadline. Distinguish ownership loss,
+  host stop requests, IPC disconnects and signals. Heartbeat logs must omit
+  credentials and raw response bodies.
 - Owned launchers register processes before user commands can run. POSIX uses
   a dedicated process group and owner-loss guard; Windows uses a native Job
   launcher that assigns suspended children before resuming them. PTY, daemon,
@@ -102,20 +125,29 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
    ACP can express (session resume/fork, per-kind approvals, account/quota surface),
    must implement the shared session contract (`kun/src/session/`), must stay behind
    `kun serve`'s HTTP/SSE boundary, and must obey harness routing and governance.
-   The gap analysis and admission checklist live in `docs/ade/impl/p6-native-agent-adapters.md`
-   and `docs/ade/13-governance-rollout.md`.
 
 ## Conversation Agent Dispatch
+
+Ordinary `delegate_task` resume calls need only `prompt`, `resumeChildId`, and
+`expectedResumeCount`. Echoed labels/result formats retain the persisted values;
+a non-empty profile is an assertion against the stored role, never a reroute.
+Neutral creation-field placeholders and `detach: false` must not block resume.
+Reject custom-role replacement and `detach: true`, preserve ownership/count,
+security and retry-budget checks, and never suggest a replacement child to fix
+a resume argument error.
 
 Ordinary new Code tasks can delegate without the advanced ADE switch. External
 main Agents require a functioning scoped Kun tool bridge; workers and delegated
 children must never create recursive teams. Both worker tools and private assistant
 Code handoffs use the shared host-owned dispatch intent: user confirmation,
-immediate automatic review, or a 60-second full-access intervention window.
-Renderer timers display deadlines only. Do not implement auto-click or create
+immediate automatic review, or a full-access intervention window. The
+no-response window is `agents.kun.ade.dispatch.autoStartSeconds` (default 60,
+0 = always wait); `autoStartWhenConfirmationRequired` extends it to
+ask-for-approval cards, and every user adjustment restarts it. Worker cards carry
+per-worker routes (`recommendation.assignments`) that stay switchable until
+admission. Renderer timers display deadlines only. Do not implement auto-click or create
 workspaces/processes before host admission. Controls use revisions and replay IDs;
 source authority only narrows, and completion preserves the source main route.
-See [conversation dispatch](./ade/16-conversation-agent-dispatch.md).
 
 ## Agent-Managed Plan Worktrees
 

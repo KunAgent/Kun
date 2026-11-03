@@ -1,0 +1,22 @@
+{
+  "designAgentCardPending": "디자인 요구 사항을 정리하는 중…",
+  "designAgentCardQueued": "이 답변이 끝나면 시작합니다",
+  "designAgentCardStarting": "디자인 캔버스를 여는 중…",
+  "designAgentCardDesigning": "캔버스에서 디자인하는 중…",
+  "designAgentCardReady": "캔버스에 준비됨",
+  "designAgentCardNotStarted": "시작되지 않음",
+  "designAgentCardStartFailed": "디자인을 시작하지 못했습니다",
+  "designAgentCardStartFailedDetail": "시작하지 못함: {{error}}",
+  "designAgentCardSuperseded": "새 디자인 요청으로 대체됨",
+  "designAgentCardFailed": "디자인 요청 실패",
+  "designAgentCardFailedDetail": "디자인 요청 실패: {{error}}",
+  "designAgentCardScreens_one": "화면 {{count}}개",
+  "designAgentCardScreens_other": "화면 {{count}}개",
+  "designAgentCardTargetWeb": "웹",
+  "designAgentCardTargetApp": "앱",
+  "designAgentCardOpen": "열기",
+  "designAgentCardOpenAria": "{{title}} 디자인 캔버스 열기",
+  "designAgentCardStart": "디자인 시작",
+  "designAgentCardRetry": "다시 시도",
+  "toolBuiltinDesignOpen": "디자인 캔버스 열기"
+}

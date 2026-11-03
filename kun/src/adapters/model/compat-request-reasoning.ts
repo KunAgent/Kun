@@ -22,6 +22,8 @@ export function responsesReasoningForEffort(
     effort: wireEffort,
     ...(options.includeSummary ? { summary: 'auto' } : {})
   })
+  const mapped = reasoning?.effortMapping?.[normalized]
+  if (mapped && (!reasoning?.nativeEfforts || reasoning.nativeEfforts.includes(mapped))) return payload(mapped)
   switch (normalized) {
     case 'low':
       return payload('low')
@@ -29,6 +31,8 @@ export function responsesReasoningForEffort(
       return payload('medium')
     case 'high':
       return payload('high')
+    case 'xhigh':
+      return payload(reasoning?.supportedEfforts.includes('xhigh') ? 'xhigh' : (options.maxEffort ?? 'high'))
     case 'max':
       return payload(options.maxEffort ?? 'high')
     default:
@@ -117,9 +121,13 @@ function applyProfileReasoningEffort(
     case 'openai-responses':
     case 'anthropic-thinking':
       return
-    case 'openai-chat-completions':
-      applyOpenAiChatReasoningEffort(body, effort)
+    case 'openai-chat-completions': {
+      const mapped = reasoning.effortMapping?.[effort]
+      if (mapped && effort !== 'auto' && (!reasoning.nativeEfforts || reasoning.nativeEfforts.includes(mapped))) {
+        body.reasoning_effort = mapped
+      } else applyOpenAiChatReasoningEffort(body, effort)
       return
+    }
     case 'qwen-chat-completions':
       applyQwenChatReasoningEffort(body, effort)
       return
@@ -236,11 +244,12 @@ export function applyAnthropicReasoningEffort(
 
 function anthropicOutputEffortForReasoningEffort(
   effort: NormalizedReasoningEffort
-): 'low' | 'medium' | 'high' | 'max' | null {
+): 'low' | 'medium' | 'high' | 'xhigh' | 'max' | null {
   switch (effort) {
     case 'low':
     case 'medium':
     case 'high':
+    case 'xhigh':
     case 'max':
       return effort
     case 'auto':
@@ -254,8 +263,13 @@ export function resolveReasoningEffort(
   reasoning: ModelReasoningCapability
 ): NormalizedReasoningEffort | undefined {
   const normalized = normalizeReasoningEffortValue(effort)
-  if (!normalized) return undefined
+  if (!normalized || !reasoning.supportedEfforts.length) return undefined
   if (reasoning.supportedEfforts.includes(normalized)) return normalized
+  // Providers without a distinct xhigh tier keep the historical xhigh → max alias.
+  if (normalized === 'xhigh') {
+    if (reasoning.supportedEfforts.includes('max')) return 'max'
+    return reasoning.supportedEfforts.includes(reasoning.defaultEffort) ? reasoning.defaultEffort : undefined
+  }
   if (
     normalized === 'low' &&
     reasoning.supportedEfforts.includes('off') &&
@@ -263,7 +277,7 @@ export function resolveReasoningEffort(
   ) {
     return 'off'
   }
-  return reasoning.defaultEffort
+  return reasoning.supportedEfforts.includes(reasoning.defaultEffort) ? reasoning.defaultEffort : undefined
 }
 
 function normalizeReasoningEffortValue(effort: string | undefined): NormalizedReasoningEffort | undefined {
@@ -284,9 +298,10 @@ function normalizeReasoningEffortValue(effort: string | undefined): NormalizedRe
       return 'medium'
     case 'high':
       return 'high'
+    case 'xhigh':
+      return 'xhigh'
     case 'max':
     case 'maximum':
-    case 'xhigh':
       return 'max'
     default:
       return undefined

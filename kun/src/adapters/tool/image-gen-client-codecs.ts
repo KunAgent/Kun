@@ -1,6 +1,5 @@
 import type { GeneratedImage } from './image-gen-tool-provider.js'
 
-export const CODEX_IMAGE_RESPONSES_MODEL = 'gpt-5.5'
 export const CODEX_IMAGE_INSTRUCTIONS = 'You must fulfill image generation requests by using the image_generation tool.'
 export const MAX_CODEX_IMAGE_SSE_BYTES = 64 * 1024 * 1024
 const MAX_CODEX_IMAGE_SSE_EVENTS = 512

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AtomicJsonFile, configureManagerAtomicJsonClient } from './atomic-json.js'
+import { ServiceManagerTransportError } from '../manager/usage-errors.js'
 
 function validateCounter(value: unknown): { count: number } {
   if (
@@ -83,5 +84,37 @@ describe('AtomicJsonFile manager data plane', () => {
     const file = new AtomicJsonFile('/tmp/kun-dv-profile/view-state.json', validateCounter)
     await expect(file.read(() => ({ count: 9 }))).resolves.toEqual({ count: 9 })
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('retries an expired Manager read once so a slow Manager cannot fail the caller', async () => {
+    vi.stubEnv('KUN_MANAGER_BASE_URL', 'http://127.0.0.1:19000')
+    vi.stubEnv('KUN_MANAGER_TOKEN', 'manager-secret')
+    vi.stubEnv('KUN_MANAGER_DATA_DIR', '/tmp/kun-shared-data')
+    const timeout = new ServiceManagerTransportError(
+      'timeout',
+      'Kun Service Manager connection failed (timeout; 5000ms).'
+    )
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(timeout)
+      .mockResolvedValueOnce(Response.json({ snapshot: { revision: 1, value: { count: 5 } } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new AtomicJsonFile('/tmp/kun-shared-data/registry.json', validateCounter)
+    await expect(file.read(() => ({ count: 0 }))).resolves.toEqual({ count: 5 })
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not replay a Manager read that failed for a non-timeout reason', async () => {
+    vi.stubEnv('KUN_MANAGER_BASE_URL', 'http://127.0.0.1:19000')
+    vi.stubEnv('KUN_MANAGER_TOKEN', 'manager-secret')
+    vi.stubEnv('KUN_MANAGER_DATA_DIR', '/tmp/kun-shared-data')
+    const fetchMock = vi.fn()
+      .mockRejectedValueOnce(new ServiceManagerTransportError('socket_closed', 'socket closed'))
+      .mockResolvedValueOnce(Response.json({ snapshot: { revision: 1, value: { count: 5 } } }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const file = new AtomicJsonFile('/tmp/kun-shared-data/registry.json', validateCounter)
+    await expect(file.read(() => ({ count: 0 }))).rejects.toMatchObject({ kind: 'socket_closed' })
+    expect(fetchMock).toHaveBeenCalledOnce()
   })
 })

@@ -52,6 +52,7 @@ const NORMAL_TRANSITIONS: Record<DesktopStartupPhase, readonly DesktopStartupPha
 export class DesktopStartupState {
   private phaseValue: DesktopStartupPhase = 'bootstrapping'
   private detailValue: string | undefined
+  private readonly readinessWaiters = new Set<(ready: boolean) => void>()
 
   constructor(private readonly getMainWindow: () => MainWindowState | null) {}
 
@@ -67,6 +68,13 @@ export class DesktopStartupState {
     return this.phaseValue === 'ready'
   }
 
+  /** Shell visibility is not runtime health. Wait for the real terminal startup state. */
+  whenReady(): Promise<boolean> {
+    if (this.isReady()) return Promise.resolve(true)
+    if (this.phaseValue === 'recovery_required') return Promise.resolve(false)
+    return new Promise((resolve) => this.readinessWaiters.add(resolve))
+  }
+
   isShellReady(): boolean {
     return this.phaseValue !== 'bootstrapping' && this.phaseValue !== 'recovery_required'
   }
@@ -79,6 +87,10 @@ export class DesktopStartupState {
     this.phaseValue = next
     if (detail === undefined) this.detailValue = undefined
     else this.detailValue = detail
+    if (next === 'ready' || next === 'recovery_required') {
+      for (const resolve of this.readinessWaiters) resolve(next === 'ready')
+      this.readinessWaiters.clear()
+    }
     this.publish()
   }
 

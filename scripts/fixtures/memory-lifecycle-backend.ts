@@ -44,11 +44,24 @@ export async function createMemorySmokeBackend(root: string) {
       status: 'pending', action: 'update', targetId: memory.id, targetFingerprint: canonicalMemoryHash(memory), runId: 'fixture-run', sourceMessageIds: [message.id],
       candidate: { content: 'Always use a cached test result, even after source changes.', type: 'fact', confidence: .6, importance: .5,
         observedAt: new Date().toISOString(), tags: [], sources: [{ id: 'fixture-inference', kind: 'inference', trust: 'inferred', excerpt: 'Unverified proposed optimization.' }] } } }] })
+  const reviewSource = (await conversations.send(room.id, { clientRequestId: 'fixture-review-source',
+    body: 'Include source links in the task completion report.' })).message
+  const reviewedCandidateId = 'candidate-fixture-scoped-create'
+  await rooms.commit({ requestId: 'fixture-scoped-create',
+    checks: [{ kind: 'agent_memory_job', id: reviewedCandidateId, expectedRevision: null }],
+    puts: [{ kind: 'agent_memory_job', id: reviewedCandidateId, roomId: room.id, value: {
+      id: reviewedCandidateId, phase: 'candidate', participantAgentId: agent.id, roomId: room.id,
+      rootRequestId: 'fixture-root', status: 'pending', action: 'create', runId: 'fixture-review-run',
+      captureScope: { conversationId: room.id, taskId: 'fixture-task', handoffId: 'fixture-handoff' },
+      sourceMessageIds: [reviewSource.id], reason: "invalid-relation 'related': comparisons quarantined; review required",
+      candidate: { content: 'Include source links in the task completion report.', type: 'preference', confidence: .9,
+        importance: .7, observedAt: new Date().toISOString(), tags: [], sources: [{ id: reviewSource.id, kind: 'user', trust: 'explicit-user', excerpt: reviewSource.body }] }
+    } }] })
   const receipt = memoryInjectionReceipt([memory], memory.content)
   let conflictOnNextEdit = false
   const calls: Array<{ path: string; method: string; body?: unknown; status: number }> = []
   const bootstrap = async () => ({ agentId: agent.id, memoryId: memory.id, projectRoot, projectId: project.id,
-    project: await storage.getById(project.id, { project: projectRoot }), receipt, originalContent: memory.content })
+    project: await storage.getById(project.id, { project: projectRoot }), receipt, originalContent: memory.content, reviewedCandidateId })
 
   async function dispatch(path: string, method = 'GET', body?: string) {
     const url = new URL(path, 'http://isolated-fixture.invalid')
@@ -62,8 +75,9 @@ export async function createMemorySmokeBackend(root: string) {
     if (url.pathname === prefix + '/conversations' && method === 'GET') return jsonResponse({ conversations: [room] })
     if (url.pathname === prefix + '/memory-candidates' && method === 'GET') return jsonResponse(await listAgentMemoryCandidates(service, agent.id))
     if (url.pathname === prefix + '/memory-work' && method === 'GET') return jsonResponse({ jobs: await rooms.list('agent_memory_job', { participantAgentId: agent.id, phase: 'capture' }) })
-    if (url.pathname === prefix + '/memory-candidates/candidate-fixture-build/decision' && method === 'POST') {
-      return jsonResponse(await decideAgentMemoryCandidate(service, agent.id, 'candidate-fixture-build', input))
+    const candidateId = [reviewedCandidateId, 'candidate-fixture-build'].find((id) => url.pathname === prefix + '/memory-candidates/' + id + '/decision')
+    if (candidateId && method === 'POST') {
+      return jsonResponse(await decideAgentMemoryCandidate(service, agent.id, candidateId, input))
     }
     const memoryPath = prefix + '/memories/' + encodeURIComponent(memory.id)
     if (url.pathname === memoryPath + '/history' && method === 'GET') return jsonResponse(await storage.history(memory.id, { agent: { agentId: agent.id, manage: true } }))
@@ -109,6 +123,21 @@ export async function createMemorySmokeBackend(root: string) {
         project: await fresh.getById(project.id, { project: projectRoot }),
         candidates: await rooms.list('agent_memory_job', { phase: 'candidate' }),
         calls: [...calls], sourceMessageRetained: Boolean(await rooms.get('message', message.id)) }
+    },
+    async verifyReviewedCandidate() {
+      const candidate = await rooms.get<{ memoryId?: string; status: string }>('agent_memory_job', reviewedCandidateId)
+      const fresh = new FileMemoryStore({ rootDir: join(root, 'fixture-memory'), config })
+      const records = await fresh.list({ agent: { agentId: agent.id, manage: true } })
+      const created = records.find((record) => record.id === candidate?.value.memoryId)
+      const matching = await fresh.list({ agent: { agentId: agent.id, conversationId: room.id, taskId: 'fixture-task', handoffId: 'fixture-handoff' } })
+      const unrelated = await fresh.list({ agent: { agentId: agent.id, conversationId: room.id, taskId: 'other-task', handoffId: 'other-handoff' } })
+      return { memoryId: created?.id, status: candidate?.value.status, createdCount: records.filter((record) => record.content === 'Include source links in the task completion report.').length,
+        content: created?.content, locked: created?.agentContext?.locked,
+        conversationId: created?.agentContext?.sourceConversationId, taskId: created?.agentContext?.sourceTaskId,
+        handoffId: created?.agentContext?.sourceHandoffId, expectedConversationId: room.id,
+        visibleInTask: matching.some((record) => record.id === created?.id),
+        visibleOutsideTask: unrelated.some((record) => record.id === created?.id),
+        supersedes: created?.supersedes, originalSupersededAt: records.find((record) => record.id === memory.id)?.supersededAt }
     },
     async verifyErasure() {
       const replayRecreated = await service.create(agent.id, createInput).then(() => true, () => false)

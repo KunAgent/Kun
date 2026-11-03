@@ -15,6 +15,7 @@
       "model": { "title": "모델 연결", "detail": "서비스를 고르고 키 입력" },
       "permission": { "title": "작업 방식", "detail": "Kun이 스스로 하는 범위" },
       "agents": { "title": "Agent 데려오기", "detail": "이 컴퓨터의 코딩 Agent 연결" },
+      "account": { "title": "로그인", "detail": "선택 · 옷장 동기화" },
       "ready": { "title": "준비 완료", "detail": "사용 시작" }
     },
     "bubble": {
@@ -30,6 +31,9 @@
       "agents": "컴퓨터에서 오랜 친구 몇 명을 찾았어요. 같이 데려갈까요?",
       "agentsMany": "동료가 늘었어요. 함께하면 더 빨라요!",
       "agentsEmpty": "아직 동료가 없어요. 언제든 데려올 수 있어요.",
+      "account": "로그인하면 골라 준 옷을 어느 컴퓨터에서든 입을 수 있어요.",
+      "accountWaiting": "브라우저에서 좋은 소식이 오길 기다리는 중…",
+      "accountSignedIn": "환영해요, {{name}}님! 이제 옷장이 어디든 따라가요.",
       "ready": "모두 준비됐어요! 필요할 때 언제든 불러 주세요."
     },
     "welcome": {
@@ -186,6 +190,26 @@
         "ready": "설치됨 · 연결 가능"
       }
     },
+    "account": {
+      "title": "Kun 계정 로그인 (선택)",
+      "titleSignedIn": "로그인됨",
+      "subtitle": "로그인하지 않아도 Kun의 모든 기능을 쓸 수 있어요. 로그인하면 옷장, 병, 초대 보상이 계정에 저장되어 다른 컴퓨터에서도 그대로예요.",
+      "cardTitle": "Kun 계정",
+      "cardSignedOut": "로그인 안 됨 · 이메일 인증 코드, 비밀번호 불필요",
+      "benefits": "로그인하면",
+      "benefitsSignedIn": "사용 중",
+      "benefitsHint": "여러 컴퓨터에서 동기화",
+      "benefit": {
+        "wardrobe": { "title": "내 옷장", "body": "Kun 코디와 모은 아이템을 계정에 저장해요" },
+        "bottles": { "title": "병과 깃털", "body": "대화에서 얻은 병을 계정에 기록하고, 중복 아이템은 깃털로 바꿔요" },
+        "invite": { "title": "친구 초대", "body": "친구가 가입하면 둘 다 병을 받아요" }
+      },
+      "optionalNote": "모델, Agent, 대화는 이 컴퓨터에만 있고 계정은 이를 읽지 않아요. 나중에 왼쪽 아래 계정 카드에서 언제든 로그인할 수 있어요.",
+      "signedInNote": "로그인 정보는 이 컴퓨터에 암호화되어 저장돼요. 관리나 로그아웃은 왼쪽 아래 계정 카드에서 할 수 있어요.",
+      "unavailable": "이 환경에서는 로그인할 수 없어요. 지금은 건너뛰고 나중에 데스크톱 앱 왼쪽 아래에서 로그인하세요.",
+      "footHint": "로그인은 브라우저에서 진행돼요",
+      "skipNext": "로그인 없이 계속"
+    },
     "ready": {
       "title": "모두 준비됐어요. 시작해 볼까요!",
       "subtitle": "방금 고른 내용입니다. 행을 누르면 돌아가서 바꿀 수 있고, 나중에 설정에서도 조정할 수 있습니다.",
@@ -195,6 +219,8 @@
       "permission": "작업 방식",
       "agents": "Agent",
       "agentsNone": "지금은 Kun만 (언제든 추가 가능)",
+      "account": "계정",
+      "accountNone": "로그인 안 됨 (선택)",
       "appearance": "언어와 테마",
       "listSeparator": ", ",
       "tipSwitchTitle": "Agent 바꾸기",

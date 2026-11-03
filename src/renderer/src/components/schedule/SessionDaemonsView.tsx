@@ -463,7 +463,7 @@ const [guardianMessage, setGuardianMessage] = useState<string | null>(null)
                   <button
                     type="button"
                     onClick={() => setLogDrawer({ id: daemon.id, name: daemon.title || t('scheduleUntitled'), logPath: item?.logPath ?? '' })}
-                    className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold text-ds-accent transition hover:bg-ds-accent-soft"
+                    className="inline-flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-[12px] font-semibold text-accent transition hover:bg-accent-soft"
                   >
                     <Logs className="h-3.5 w-3.5" strokeWidth={1.8} />
                     {t('daemonViewLogs')}

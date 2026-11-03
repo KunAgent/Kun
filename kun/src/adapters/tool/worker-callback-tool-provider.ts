@@ -4,7 +4,7 @@ import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
 
 /**
- * Worker callback tools (05 §2). Advertised only on worker threads — the
+ * Worker callback tools. Advertised only on worker threads — the
  * service independently re-verifies `executionUnit` so a direct invocation
  * on a non-worker thread still fails closed.
  */

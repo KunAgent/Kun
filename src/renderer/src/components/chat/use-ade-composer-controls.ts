@@ -15,6 +15,7 @@ import {
   loadHarnessModels,
   loadHarnessProviderGroups,
   loadHarnesses,
+  warmHarnessReadiness,
   useHarnessStore
 } from '../../store/harness-store'
 import { useTaskWorkspaceStore } from '../../store/task-workspace-store'
@@ -36,7 +37,7 @@ import { useCodeProjectDefaults } from './use-code-project-defaults'
 import { readHarnessLastModel, rememberHarnessLastModel } from '../../lib/harness-last-model'
 
 /**
- * ADE composer wiring (docs/ade/12 §7.2–7.4): harness catalog, per-harness
+ * ADE composer wiring: harness catalog, per-harness
  * model groups keyed by credential mode, native slash commands, and the
  * new-session isolation picker state shared by the Code workbench.
  */
@@ -62,11 +63,18 @@ export function useAdeComposerControls(input: {
     onComposerModelChange
   } = input
   const { t } = useTranslation('common')
+  // Kun's provider profiles name a native login they supply (e.g. a Claude subscription).
+  const kunProviderGroups = useChatStore((state) => state.composerModelGroups)
   const labels = useMemo<AdeCredentialGroupLabels>(() => ({
     nativeLogin: t('adeCredential.nativeLogin'),
     provider: t('adeCredential.provider'),
-    kunGateway: t('adeCredential.kunGateway')
-  }), [t])
+    kunGateway: t('adeCredential.kunGateway'),
+    agentAccount: (agent) => t('adeCredential.agentAccount', { agent }),
+    providerName: (providerId) => {
+      const group = (kunProviderGroups ?? []).find((entry) => entry.providerId === providerId)
+      return group?.label ? { label: group.label, ...(group.presetSource ? { presetSource: group.presetSource } : {}) } : undefined
+    }
+  }), [kunProviderGroups, t])
   const pendingProvider = useRef<{
     harnessId: string; credentialMode: string; threadId: string | null; workspace: string; draft: number
     previous: { providerId: string; model: string }; defaults: { providerId?: string; model?: string } | undefined
@@ -90,8 +98,10 @@ export function useAdeComposerControls(input: {
   const setComposerIsolation = useChatStore((state) => state.setComposerIsolation)
   const setComposerExecutionSettings = useChatStore((state) => state.setComposerExecutionSettings)
   const requestAdeThreadWorkspace = useChatStore((state) => state.requestAdeThreadWorkspace)
-  const worktreeGit = useAdeWorktreeGit({ enabled, activeThreadId, workspaceRoot })
-  useCodeProjectDefaults({ enabled, activeThreadId, workspaceRoot })
+  // Projects, worktrees and their default Agent are Code's; Work only switches Agents.
+  const codeProject = useChatStore((state) => state.route !== 'write')
+  const worktreeGit = useAdeWorktreeGit({ enabled: enabled && codeProject, activeThreadId, workspaceRoot })
+  useCodeProjectDefaults({ enabled: enabled && codeProject, activeThreadId, workspaceRoot })
   const providerKind = useChatStore((state) => state.composerModelGroups
     .find((group) => group.providerId === state.composerProviderId)?.kind)
   const harnessId = effectiveHarnessId(composerHarnessId, threadHarnessId, providerKind)
@@ -122,6 +132,9 @@ export function useAdeComposerControls(input: {
   useEffect(() => {
     if (enabled && harnessId !== 'kun') void loadHarnessModels(harnessId)
   }, [enabled, harnessId, rowFingerprint])
+  useEffect(() => {
+    if (enabled && harnessId !== 'kun') warmHarnessReadiness(harnessId)
+  }, [enabled, harnessId])
   // A failed native catalog lookup (for example a transient backend timeout
   // inside the Agent) retries on its own with backoff instead of waiting for
   // the user to find the refresh button.
@@ -135,10 +148,10 @@ export function useAdeComposerControls(input: {
     return () => clearTimeout(timer)
   }, [enabled, harnessId, modelCatalogFailed, modelFailures, modelCache?.errorCode])
   useEffect(() => {
-    if (!composerGatewayBinding || composerModel || composerCredentialMode !== 'kun-gateway') return
+    if (!enabled || !composerGatewayBinding || composerModel || composerCredentialMode !== 'kun-gateway') return
     const alias = providerGroupCache?.aliasGroups?.find((entry) => entry.routeId === composerGatewayBinding.main.routeId)
     if (alias) { setComposerModel(alias.modelId, ''); setComposerGatewayBinding(composerGatewayBinding) }
-  }, [composerGatewayBinding, composerModel, composerCredentialMode, providerGroupCache?.aliasGroups, setComposerModel, setComposerGatewayBinding])
+  }, [enabled, composerGatewayBinding, composerModel, composerCredentialMode, providerGroupCache?.aliasGroups, setComposerModel, setComposerGatewayBinding])
   const credentialMode = composerCredentialMode.trim() || defaultCredentialModeForRow(row)
   const harnessLabel = row?.definition.displayName ?? harnessId
   const isNativeHarness = harnessId !== 'kun' &&
@@ -175,7 +188,7 @@ export function useAdeComposerControls(input: {
 
   useEffect(() => {
     const pending = pendingProvider.current
-    if (!pending || providerGroupCache?.loading || !providerGroupCache) return
+    if (!enabled || !pending || providerGroupCache?.loading || !providerGroupCache) return
     const state = useChatStore.getState()
     if (state.activeThreadId !== pending.threadId || state.workspaceRoot !== pending.workspace ||
       state.adeDraftRevision !== pending.draft || state.composerHarnessId !== pending.harnessId ||
@@ -188,7 +201,7 @@ export function useAdeComposerControls(input: {
     const selection = selectHarnessProvider(providerGroupCache.groups.filter((group) => readyRow &&
       harnessProfileReady(readyRow, { harnessId: pending.harnessId, credentialMode: pending.credentialMode as 'provider' | 'kun-gateway', providerId: group.providerId })), pending.defaults, pending.previous)
     if (selection.providerId) setComposerModel(selection.model, selection.providerId)
-  }, [providerGroupCache, setComposerModel, rows])
+  }, [enabled, providerGroupCache, setComposerModel, rows])
 
   const harnessCommands = useMemo(() => {
     if (!enabled || !isNativeHarness || !session?.commands?.length) return null
@@ -242,7 +255,7 @@ export function useAdeComposerControls(input: {
   }, [composerProviderId, credentialMode, enabled, harnessId, isNativeHarness, row, onComposerModelChange, setComposerHarness, setComposerModel, setComposerGatewayBinding])
 
   /**
-   * External-session continuation (01 §8): a fresh one-to-one thread whose
+   * External-session continuation: a fresh one-to-one thread whose
    * selected harness exposes a `historySource` can import a local session
    * of that source, then the new thread is rebound to the same harness.
    * Hidden while a thread is open or the matching lab flag is off.
@@ -262,10 +275,10 @@ export function useAdeComposerControls(input: {
 
   const selectHarness = (nextId: string, nextCredentialMode?: string): void => {
     const nextRow = rows.find((entry) => entry.definition.id === nextId)
-    // P4-13: picker rows are filtered, but a stale persisted pick can still
+    // picker rows are filtered, but a stale persisted pick can still
     // call in with a terminal-only id — it cannot host turns.
     if (nextId !== 'kun' && (!nextRow || !harnessRowRunsTurns(nextRow) || !harnessRowAvailable(nextRow))) return
-    // P4-11: the configured per-harness defaults supply whatever the user
+    // the configured per-harness defaults supply whatever the user
     // did not pick explicitly on this switch.
     const defaults = harnessDefaults[nextId]
     const defaultCred = defaults?.credentialMode &&
@@ -339,7 +352,7 @@ export function useAdeComposerControls(input: {
 
   return {
     enabled,
-    // P4-13: terminal-only agents live in the catalog for the terminal menu
+    // terminal-only agents live in the catalog for the terminal menu
     // and `harness_list`, but they cannot host turns — keep them out.
     rows: rows.filter((entry) => harnessRowRunsTurns(entry) && harnessRowAvailable(entry)),
     rowsLoading,

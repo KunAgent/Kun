@@ -99,4 +99,67 @@ describe('createFastContextToolHost', () => {
     await host.execute(readCall({ path: 'src/a.ts', task_indexes: [1] }), singleContext)
     expect(executed).toHaveBeenCalledWith(expect.objectContaining({ arguments: { path: 'src/a.ts' } }))
   })
+
+  it('attaches one run scope with hint paths and task terms to every source call', async () => {
+    const contexts: ToolHostContext[] = []
+    const inner = sourceHost()
+    const host = createFastContextToolHost({
+      ...inner,
+      execute: async (call, callContext, onUpdate) => {
+        contexts.push(callContext)
+        return inner.execute(call, callContext, onUpdate)
+      }
+    }, 2, {
+      hintPaths: ['src/shared'],
+      tasks: [{ title: 'Endpoint URL', query: 'How is the provider endpoint URL built?' }]
+    })
+    await host.execute(readCall({ path: 'src/a.ts', task_indexes: [1] }), context)
+    await host.execute({ callId: 'grep_call', toolName: 'grep', arguments: { pattern: 'x', task_indexes: [2] } }, context)
+    expect(contexts[0]?.fastContextRun).toMatchObject({ hintPaths: ['src/shared'], timedOutCommands: 0 })
+    expect(contexts[0]?.fastContextRun?.queryTerms).toEqual(expect.arrayContaining(['endpoint', 'url', 'provider', 'built']))
+    expect(contexts[1]?.fastContextRun).toBe(contexts[0]?.fastContextRun)
+  })
+
+  it('reuses an identical successful source call within one run under the new call id', async () => {
+    const executed = vi.fn()
+    const host = createFastContextToolHost(sourceHost(executed), 2)
+    const first = await host.execute(readCall({ path: 'src/a.ts', offset: 1, task_indexes: [1] }), context)
+    const [concurrentA, concurrentB] = await Promise.all([
+      host.execute({ callId: 'read_again', toolName: 'read', arguments: { offset: 1, path: 'src/a.ts', task_indexes: [2] } }, context),
+      host.execute({ callId: 'read_third', toolName: 'read', arguments: { path: 'src/a.ts', offset: 1, task_indexes: [1, 2] } }, context)
+    ])
+    expect(executed).toHaveBeenCalledTimes(1)
+    expect(first.item).toMatchObject({ callId: 'read_call', output: { ok: true } })
+    expect(concurrentA.item).toMatchObject({ id: 'item_read_again', callId: 'read_again', output: { ok: true, reused_result: true } })
+    expect(concurrentB.item).toMatchObject({ callId: 'read_third', output: { reused_result: true } })
+    await host.execute(readCall({ path: 'src/a.ts', offset: 2, task_indexes: [1] }), context)
+    expect(executed).toHaveBeenCalledTimes(2)
+    // A fresh child run starts with an empty memo.
+    const freshExecuted = vi.fn()
+    await createFastContextToolHost(sourceHost(freshExecuted), 2).execute(readCall({ path: 'src/a.ts', offset: 1, task_indexes: [1] }), context)
+    expect(freshExecuted).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not memoize failed source calls', async () => {
+    let attempts = 0
+    const failing: ToolHost = {
+      ...sourceHost(),
+      execute: async (call) => {
+        attempts += 1
+        return {
+          item: makeToolResultItem({
+            id: `item_${call.callId}`, threadId: 'child', turnId: 'turn', callId: call.callId,
+            toolName: call.toolName, output: { error: 'transient' }, isError: attempts === 1
+          }),
+          approved: true
+        }
+      }
+    }
+    const host = createFastContextToolHost(failing, 1)
+    const first = await host.execute(readCall({ path: 'src/a.ts', task_indexes: [1] }), { ...context, fastContextTaskCount: 1 })
+    const second = await host.execute(readCall({ path: 'src/a.ts', task_indexes: [1] }), { ...context, fastContextTaskCount: 1 })
+    expect(first.item).toMatchObject({ isError: true })
+    expect(second.item).toMatchObject({ isError: false })
+    expect(attempts).toBe(2)
+  })
 })

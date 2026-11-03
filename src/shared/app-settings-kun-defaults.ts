@@ -232,6 +232,7 @@ export function defaultKunRuntimeSettings(
     memoryEnabled: false,
     memoryDistillationEnabled: false,
     memoryDirectivesEnabled: true,
+    memoryRelationContextEnabled: false,
     instructions: defaultKunInstructionSettings(),
     computerUse: defaultKunComputerUseSettings(),
     browserUse: defaultKunBrowserUseSettings(),
@@ -380,13 +381,21 @@ export function defaultKunTextToSpeechSettings(): KunTextToSpeechSettingsV1 {
   }
 }
 
+/**
+ * Version 2 shows the composer's prompt-enhance button by default. Older
+ * stores persisted the previous `enabled: false` default, so normalizing a
+ * store below this version turns the button on once.
+ */
+export const KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION = 2
+
 export function defaultKunPromptOptimizationSettings(): KunPromptOptimizationSettingsV1 {
   return {
-    enabled: false,
+    enabled: true,
     providerId: '',
     model: '',
     prompt: '',
-    timeoutMs: 60_000
+    timeoutMs: 60_000,
+    defaultsVersion: KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION
   }
 }
 

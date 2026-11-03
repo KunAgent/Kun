@@ -21,12 +21,17 @@ export type RoomRequestState = {
   /** Immutable provenance for a host-queued continuation, never supplied by a model. */
   privateContinuation?: {
     sourceTurnId: string
+    sourceCallId?: string
+    sourceFingerprint?: string
+    assistantTaskId?: string
+    assistantOwnerId?: string
+    assistantResultId?: string
     kind: import('./room-continuation-dispatch.js').RoomContinuation['kind']
     goalCreatedAt?: string
     inboxId?: string
     /** Exact accepted parent route and authority; a task return cannot select a new engine. */
     route?: Pick<import('../contracts/turns.js').Turn, 'model' | 'providerId' | 'accountId' | 'harnessId' |
-      'credentialMode' | 'gatewayBinding' | 'reasoningEffort' | 'serviceTier' | 'harnessAgentId'>
+      'credentialMode' | 'gatewayBinding' | 'reasoningEffort' | 'serviceTier' | 'harnessAgentId' | 'harnessSettings'>
     policy?: import('../contracts/policy.js').KunToolPermissionSettings
   }
   /** Provenance of the durable reminder that woke this private request. */
@@ -49,7 +54,8 @@ export type RoomRequestState = {
   peerCoordinationDone?: boolean
   status: 'pending' | 'running' | 'completed' | 'needs_input' | 'failed' | 'stopping' | 'cancelled' | 'recovery_required'
   message: SendRoomMessage
-  clientSurface?: 'gui' | 'im'
+  clientSurface?: 'gui' | 'im' | 'api'
+  remoteDeviceId?: string
   imConnectionId?: string
   sourceMessageId: string
   roomSnapshot: Room
@@ -57,6 +63,8 @@ export type RoomRequestState = {
   turnId?: string
   admissionAttempted?: boolean
   error?: string
+  /** Document revision at which the user saw this failure; any later write raises attention again. */
+  failureAcknowledgedRevision?: number
   round?: number
   stage?: 'coordinate' | 'discuss'
   stepAttempt?: number
@@ -114,6 +122,8 @@ export type RoomTaskExecution = {
   contextSnapshot?: RoomContextSnapshot
 }
 export type RoomRuntimeDeps = {
+  assistantContinuationAuthority?: (input: import('./room-continuation-dispatch.js').RoomContinuation) => Promise<{ authorized: boolean; unavailable?: boolean; result?: { id: string; body: string } }>
+
   /** Global execution ceiling; per-room limits remain independently enforced. */
   maxConcurrentTasks?: number
   eventBus?: import('../ports/event-bus.js').EventBus
@@ -139,6 +149,11 @@ export type RoomRuntimeDeps = {
   modelCapabilities?: (model: string, providerId?: string) => import('../contracts/capabilities.js').ModelCapabilityMetadata
   modelSnapshot?: () => Promise<import('../contracts/model-connections.js').ModelConnectionSnapshot>
   profiles: () => Record<string, SubagentProfileConfig>
+  /**
+   * Agent roster lookup that also sees a repository's `.kun/agents` roles;
+   * execution tasks resolve unsnapshotted member roles through it.
+   */
+  workspaceProfile?: (presetId: string, workspace: string) => Promise<SubagentProfileConfig | undefined>
   peerModels?: {
     client: import('../ports/model-client.js').ModelClient
     roles: () => import('../config/kun-config.js').RolesConfig | undefined
@@ -150,6 +165,8 @@ export type RoomRuntimeDeps = {
   /** Stop verification for one cancelled task; unrelated user turns remain independent. */
   proveTurnStopped?: (threadId: string, turnId: string) => Promise<boolean>
   unsupportedProviderIds?: () => string[]
+  /** Exact native background owners for lifecycle stop; no process commands or captured output. */
+  activeBackgroundTurns?: () => Array<{ threadId: string; turnId?: string }>
   backgroundExecutionActive?: (threadId: string) => boolean
   stopBackgroundExecution?: (threadId: string, turnId?: string) => Promise<void>
 }

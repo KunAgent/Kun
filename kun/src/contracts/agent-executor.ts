@@ -6,7 +6,7 @@ import { HarnessCredentialModeSchema } from './harness.js'
  * gated by an engine sandbox or permission mode that Kun can force read-only;
  * engines without such a gate stay Code-task only.
  */
-export const CONVERSATION_HARNESS_IDS = ['claude-code', 'codex', 'opencode'] as const
+export const CONVERSATION_HARNESS_IDS = ['claude-code', 'codex', 'opencode', 'codemaker'] as const
 export const ConversationHarnessIdSchema = z.enum(CONVERSATION_HARNESS_IDS)
 export type ConversationHarnessId = z.infer<typeof ConversationHarnessIdSchema>
 

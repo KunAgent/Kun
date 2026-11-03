@@ -4,13 +4,20 @@
     {
       "name": "dsgui-site",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--prefix", "/Users/zxy/codeproject/ds_project/dsgui-admin"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--prefix",
+        "/Users/zxy/codeproject/ds_project/dsgui-admin"
+      ],
       "autoPort": true
     },
     {
       "name": "renderer-live",
       "runtimeExecutable": "sleep",
-      "runtimeArgs": ["86400"],
+      "runtimeArgs": [
+        "86400"
+      ],
       "port": 5173
     }
   ]

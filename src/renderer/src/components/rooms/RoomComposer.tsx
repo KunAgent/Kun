@@ -3,6 +3,7 @@ import { RoomVoiceButton, RoomVoiceStatus, useRoomVoiceInput } from './RoomVoice
 import { RoomPermissionPicker } from './RoomPermissionPicker'
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { X } from 'lucide-react'
 import type { Room, RoomTask, SendRoomMessage, RoomContentReference } from '@shared/rooms-api'
 import {
   readBrowserStorageItem,
@@ -27,6 +28,7 @@ import { RoomPollCreator } from './RoomPollCreator'
 import './rooms-interactions.css'
 import './rooms-composer.css'
 import { roomComposerFileReference, type RoomFileReferenceDetail } from './room-composer-file-reference'
+import { isRoomCoordinatorUnavailable } from './room-coordinator-error'
 
 type Draft = {
   executionAgentId?: string
@@ -76,12 +78,15 @@ function RoomComposerEditor({
   draftId,
   replyTarget,
   topicChoices = [],
-  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, modelUpdating = false, compactControls = true
+  onSend, onStop, onConnectProject, onClearReply, responding, autoFocus = true, quickTools = false, modelControl, modelUpdating = false, compactControls = true,
+  onVoiceSetup
 }: {
   onStop?: () => void
   onClearReply?: () => void
   modelControl?: ReactNode
   modelUpdating?: boolean
+  /** Opens speech-to-text settings when voice input is not set up; without it the mic stays hidden. */
+  onVoiceSetup?: () => void
   compactControls?: boolean
   /** Show emoji / mention / attach / poll directly in the toolbar (desktop IM layout). */
   quickTools?: boolean
@@ -122,6 +127,9 @@ function RoomComposerEditor({
   draftRef.current = draft
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // A failed send stays visible until the user changes what would be re-sent or dismisses it.
+  const draftContentKey = JSON.stringify([draft.body, draft.attachments.map(({ id }) => id), draft.references])
+  useEffect(() => setError(''), [draftContentKey])
   const [pollOpen, setPollOpen] = useState(false)
   const editorRef = useRef<RoomRichInputHandle>(null)
   const voice = useRoomVoiceInput(editorRef, busy || Boolean(room.archivedAt))
@@ -383,7 +391,7 @@ function RoomComposerEditor({
       setBusy(false)
     }
   }
-  const attach = async (files: FileList | null): Promise<void> => {
+  const attach = async (files: FileList | File[] | null): Promise<void> => {
     if (!files || room.archivedAt || busy) return
     const selected = Array.from(files)
     if (fileRef.current) fileRef.current.value = ''
@@ -421,7 +429,8 @@ function RoomComposerEditor({
         <RoomAttachmentUploads pending={uploads.pending} onCancel={uploads.cancel} onRetry={uploads.retry} />
         <RoomContentReferenceChips references={draft.references} onChange={(references) => patch({ references })} disabled={disabled} />
         <RoomRichInput ref={editorRef} room={room} value={draft.body} mentions={draft.mentions}
-          disabled={disabled} placeholder={t('directPlaceholder', { name: room.name })} onChange={patch}
+          disabled={disabled} placeholder={responding && room.conversationKind === 'user_agent'
+            ? t('directSteerPlaceholder') : t('directPlaceholder', { name: room.name })} onChange={patch}
           onDictationPendingChange={voice.setInsertionPending}
           onSubmit={() => void submit()} onPasteFiles={(files) => void attach(files)} />
         <RoomVoiceStatus voice={voice} />
@@ -448,10 +457,12 @@ function RoomComposerEditor({
           privateControls={compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
             ? <RoomPermissionPicker roomId={room.id} compact /> : undefined}
           modelControl={modelControl}
-          voiceControl={<RoomVoiceButton voice={voice} disabled={disabled} />}
+          voiceControl={<RoomVoiceButton voice={voice} disabled={disabled} onSetup={onVoiceSetup} />}
           references={<RoomContentReferencePicker showLabel room={room} tasks={tasks} references={draft.references}
             onChange={(references) => patch({ references })} disabled={disabled} />} quickTools={quickTools} />
-        <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p>
+        {/* A private chat keeps the shortcut on the send button's tooltip instead of a standing row. */}
+        {room.conversationKind !== 'user_agent'
+          ? <p className="rooms-composer-shortcuts">{t('roomsComposerShortcuts', { defaultValue: 'Enter to send · Shift+Enter for a new line' })}</p> : null}
       </fieldset>
       {!compactControls && room.conversationKind === 'user_agent' && !draft.taskId && !draft.executionAgentId
         ? <RoomPermissionPicker roomId={room.id} /> : null}
@@ -466,8 +477,12 @@ function RoomComposerEditor({
       ) : null}
       {room.archivedAt ? <p className="rooms-run-note">{t('roomsArchiveHint')}</p> : null}
       {error ? (
-        <p role="alert" className="mt-2 text-sm text-red-500">
-          {error} {t('roomsSendRetry')}
+        <p role="alert" className="mt-2 flex items-start gap-1.5 text-sm text-red-500">
+          <span className="min-w-0 flex-1">
+            {isRoomCoordinatorUnavailable(error) ? t('directCoordinatorUnavailable') : error} {t('roomsSendRetry')}
+          </span>
+          <button type="button" className="rooms-notice-dismiss" aria-label={t('roomsDismissNotice')}
+            title={t('roomsDismissNotice')} onClick={() => setError('')}><X size={13} aria-hidden="true" /></button>
         </p>
       ) : null}
     </form>

@@ -101,9 +101,9 @@ export function highlightTerminalCode(code: string, info?: string): string[] {
 }
 
 /**
- * `pi-tui` calls the same theme hook for a bare opening fence and for a closing
- * fence. Label only presentation-time bare openings so the hook can render a
- * real header and closing rule without changing the stored Markdown.
+ * A bare opening fence looks exactly like a closing fence. Label only
+ * presentation-time bare openings so block splitting and code headers can tell
+ * them apart without changing the stored Markdown.
  */
 export function normalizeTerminalCodeFences(markdown: string): string {
   let openFence: FenceState | undefined

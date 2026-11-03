@@ -1,5 +1,5 @@
 /**
- * Persisted ACP readiness cache (P4-03): a successful `initialize`
+ * Persisted ACP readiness cache: a successful `initialize`
  * handshake stays valid for 24h while the resolved command and version are
  * unchanged, so a runtime restart does not re-spawn every ACP agent just
  * to fill the catalog. Failures are never cached — a crashed or timed-out

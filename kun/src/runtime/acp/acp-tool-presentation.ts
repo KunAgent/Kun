@@ -1,5 +1,9 @@
 import type { DelegatedToolPresentation, DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 import type { AcpToolCallWire } from './acp-tool-call-mapper.js'
+import type { ToolPresentation } from '../../contracts/tool-presentation.js'
+import { boundedToolPresentationContent } from '../../contracts/tool-presentation-content.js'
+import { toolPresentationFields } from '../../contracts/tool-presentation-fields.js'
+import { boundCompleteToolPresentation } from '../../contracts/tool-presentation-bounds.js'
 
 const LIMIT = 64 * 1024
 export type AcpToolEvidence = {
@@ -7,7 +11,7 @@ export type AcpToolEvidence = {
   terminals?: DelegatedTerminalPresentation[]
 }
 
-export function acpToolPresentation(call: AcpToolCallWire, evidence?: AcpToolEvidence): DelegatedToolPresentation {
+export function acpToolPresentation(call: AcpToolCallWire, evidence?: AcpToolEvidence): ToolPresentation {
   let truncated = false
   const bound = (text: string): string => {
     if (text.length <= LIMIT) return text
@@ -40,28 +44,39 @@ export function acpToolPresentation(call: AcpToolCallWire, evidence?: AcpToolEvi
       }
     }
     if (content.type === 'diff' && typeof content.path === 'string' && typeof content.newText === 'string') {
-      diffs.push({ path: content.path, oldText: typeof content.oldText === 'string' ? bound(content.oldText) : null, newText: bound(content.newText) })
+      diffs.push({ path: content.path, oldText: typeof content.oldText === 'string' ? content.oldText : null, newText: content.newText })
     }
     if (content.type === 'terminal' && typeof content.terminalId === 'string') terminalIds.push(content.terminalId)
   }
   const terminals = evidence?.terminals?.filter((terminal) => terminalIds.includes(terminal.terminalId))
   const command = string(input, 'command', 'cmd', 'script')
   const args = Array.isArray(input.args) ? input.args.filter((arg): arg is string => typeof arg === 'string') : []
-  const detail: DelegatedToolPresentation = {
+  const rich = boundedToolPresentationContent(call.content?.filter((entry) => entry.type !== 'diff' && entry.type !== 'terminal'))
+  const inferred = toolPresentationFields(call.kind ?? 'other', call.rawInput, call.rawOutput)
+  const detail: ToolPresentation = {
+    ...inferred,
+    ...rich,
     version: 1,
+    source: 'acp',
+    state: call.status === 'completed' ? 'completed' : call.status === 'failed' ? 'failed'
+      : call.status === 'in_progress' ? 'running' : 'pending',
+    canCancel: false,
     kind: call.kind ?? 'other',
     title: call.title ?? undefined,
-    name: string(record(call), 'name'),
+    name: string(record(call), 'name') ?? inferred.name,
     filePath: first?.path ?? string(input, 'file_path', 'filePath', 'path', 'file') ?? diffs[0]?.path,
     line: first?.line ?? number(input, 'offset', 'line', 'start_line'),
+    locations: call.locations?.length ? call.locations.map((location) => ({ path: location.path,
+      ...(typeof location.line === 'number' ? { line: location.line } : {}) }))
+      : diffs.length ? diffs.map((diff) => ({ path: diff.path })) : inferred.locations,
     command: command ? [command, ...args].join(' ') : terminals?.[0]?.command,
     cwd: string(input, 'cwd', 'workdir') ?? terminals?.[0]?.cwd,
     query: string(input, 'query', 'pattern'),
     input: raw(call.rawInput), output: raw(call.rawOutput),
-    text: texts.length ? bound(texts.join('\n')) : undefined,
+    text: texts.length ? bound(texts.join('\n')) : inferred.text,
     fileContent: evidence?.fileContent !== undefined ? bound(evidence.fileContent)
-      : call.kind === 'read' ? string(output, 'content', 'text') : undefined,
-    diffs: diffs.length ? diffs : undefined,
+      : call.kind === 'read' ? string(output, 'content', 'text') ?? inferred.fileContent : inferred.fileContent,
+    diffs: diffs.length ? diffs : inferred.diffs,
     terminals: terminals?.length ? terminals.map((terminal) => {
       // Keep live snapshots small: repeated tool updates are durable events.
       // Settlement retains a larger tail without writing full logs each tick.
@@ -70,11 +85,11 @@ export function acpToolPresentation(call: AcpToolCallWire, evidence?: AcpToolEvi
       truncated ||= clipped
       return { ...terminal, output: clipped ? `[earlier output omitted]\n${terminal.output.slice(-limit)}` : terminal.output,
         truncated: terminal.truncated || clipped }
-    }) : undefined
+    }) : inferred.terminals
   }
   if (detail.fileContent) detail.fileContent = bound(detail.fileContent)
-  if (truncated || terminals?.some((terminal) => terminal.truncated)) detail.truncated = true
-  return detail
+  if (truncated || rich.truncated || terminals?.some((terminal) => terminal.truncated)) detail.truncated = true
+  return boundCompleteToolPresentation(detail)
 }
 
 function record(value: unknown): Record<string, unknown> {

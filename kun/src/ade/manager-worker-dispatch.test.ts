@@ -23,7 +23,8 @@ const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0)) await close() })
 
 async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorkers = 8,
-  harnessDefaults?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['harnessDefaults']) {
+  harnessDefaults?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['harnessDefaults'],
+  roster?: import('./manager-runtime-deps.js').ManagerRuntimeDeps['roster'], withoutTaskWorkspaces = false) {
   const root = await mkdtemp(join(tmpdir(), 'kun-worker-dispatch-'))
   const clock = { now: Date.parse('2026-10-07T00:00:00.000Z') }
   const nowIso = () => new Date(clock.now).toISOString()
@@ -50,10 +51,13 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
   const deliverer = new DispatchDeliverer({ teams, dispatches, threads, childRuns,
     taskWorkspaces: taskWorkspaces as never, delegation, turns: { interruptTurn: vi.fn() } as never })
   const disabled = new Set<string>()
-  const service = new AgentDispatchService({ store: new FileAgentDispatchIntentStore(root),
+  const store = new FileAgentDispatchIntentStore(root)
+  const service = new AgentDispatchService({ store,
     applicationSessionId: 'app', now: () => clock.now,
     review: async () => ({ decision: 'allow', reason: 'The assignment matches the user request.' }) })
   cleanup.push(async () => { await service.stop(); await rm(root, { recursive: true, force: true }) })
+  const capabilitiesForRoute = vi.fn<import('./manager-runtime-deps.js').ManagerRuntimeDeps['capabilitiesForRoute']>(
+    async () => KUN_NATIVE_CAPABILITIES)
   const runtime = new ManagerRuntime({
     agentDispatchService: service, teams, dispatches, childRuns, threads,
     questions: new FileQuestionStore(root, nowIso), notices: new FileWorkerNoticeStore(root, nowIso),
@@ -64,10 +68,10 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
       list: () => BUILTIN_HARNESSES, isDisabled: (id: string) => disabled.has(id),
       isProfileEnabled: (route: { harnessId: string }) => !disabled.has(route.harnessId) } as never,
     detector: { status: async (harnessId: string) => ({ harnessId, installed: 'yes', login: 'signed-in', checkedAt: nowIso() }) } as never,
-    capabilitiesForRoute: async () => KUN_NATIVE_CAPABILITIES,
-    taskWorkspaces: taskWorkspaces as never, delegation, deliverer, nowIso,
+    capabilitiesForRoute,
+    taskWorkspaces: withoutTaskWorkspaces ? undefined : taskWorkspaces as never, delegation, deliverer, nowIso,
     ids: { next: (prefix) => `${prefix}_unused` }, teamLimits: () => ({ hardWorkers, softWorkers: Math.min(4, hardWorkers) }),
-    harnessDefaults,
+    harnessDefaults, ...(roster ? { roster } : {}),
     providerPool: async () => ({ models: ['main-model', 'other-model'] }), allowUnattendedFullAccess: () => true
   })
   await service.start()
@@ -80,7 +84,7 @@ async function setup(mode: KunToolPermissionMode, rootHarness = 'kun', hardWorke
   const assignment = { label: 'Independent task', task: 'Implement a bounded change and verify it.',
     context: { constraints: ['Existing behavior remains correct.'] }, workspace: { isolation: 'worktree' as const } }
   return { source, clock, context, ctx, runtime, service, teams, dispatches, childRuns,
-    runChild, taskWorkspaces, disabled, threads, assignment, workspace, deliverer }
+    runChild, taskWorkspaces, disabled, threads, assignment, workspace, deliverer, capabilitiesForRoute, store }
 }
 
 async function startNow(fixture: Awaited<ReturnType<typeof setup>>, id: string) {
@@ -120,12 +124,84 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild.mock.calls[0][0]).toMatchObject({ harnessId: worker })
   })
 
+  it.each(['off', 'max', 'auto', 'xhigh'] as const)('persists a card-selected %s effort through admission and delivery', async (reasoningEffort) => {
+    const f = await setup('ask-for-approval')
+    const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    const route = intent.recommendation.assignments![0]
+    const { label: _label, agentName: _name, workspaceIsolation: _isolation, ...editable } = route
+    const updated = await f.service.act(intent.intentId, { action: 'update', requestId: 'reasoning', expectedRevision: intent.revision,
+      recommendation: { assignments: [{ ...editable, reasoningEffort }] } })
+    expect(updated.recommendation.assignments![0].reasoningEffort).toBe(reasoningEffort)
+    expect((await f.service.get(intent.intentId))!.recommendation.assignments![0].reasoningEffort).toBe(reasoningEffort)
+    expect(updated.recommendation.agentSelection).toBe('user')
+    expect(f.runChild).not.toHaveBeenCalled()
+    await startNow(f, intent.intentId)
+    expect(f.runChild.mock.calls[0][0]).toMatchObject({ reasoningEffort })
+    expect((await f.teams.get('parent'))!.workers[0].reasoningEffort).toBe(reasoningEffort)
+  })
+
+  it('keeps sibling reasoning choices independent and legacy workers without an override', async () => {
+    const f = await setup('ask-for-approval')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, workspaceIsolation: _isolation, ...route }, index) =>
+      index === 0 ? { ...route, reasoningEffort: 'off' as const } : route)
+    await f.service.act(intent.intentId, { action: 'update', requestId: 'reasoning', expectedRevision: intent.revision,
+      recommendation: { assignments: routes } })
+    await startNow(f, intent.intentId)
+    expect(f.runChild.mock.calls[0][0]).toMatchObject({ reasoningEffort: 'off' })
+    expect(f.runChild.mock.calls[1][0]).not.toHaveProperty('reasoningEffort')
+    expect((await f.teams.get('parent'))!.workers[1].reasoningEffort).toBeUndefined()
+  })
+
   it('starts a batch with one intervention window', async () => {
     const f = await setup('full-access')
     const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
     expect(result.dispatchIntentId).toBeTruthy(); expect(await f.service.list('parent')).toHaveLength(1)
+    expect(result.followUp).toContain(`dispatch_intent_status with intentId=${result.dispatchIntentId}`)
     expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
     f.clock.now += 60_000; await f.service.reconcile(); expect(f.runChild).toHaveBeenCalledTimes(2)
+  })
+
+  it('uses structured worker results, checks and risks rather than task titles alone', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Review' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    for (const record of await f.dispatches.list('parent')) {
+      await f.dispatches.update('parent', record.dispatchId, { state: 'completed', workerReport: {
+        summary: `Result from ${record.title}`, outcome: 'partial', submittedAt: new Date(f.clock.now).toISOString(),
+        checks: [{ name: 'UI smoke', status: 'skipped', detail: 'Not run' }], risks: ['Packaged app unverified']
+      } })
+    }
+    await f.service.reconcile()
+    const intent = await f.service.get(result.dispatchIntentId!)
+    expect(intent?.state).toBe('awaiting_parent')
+    expect(intent?.resultSummary).toContain('### Independent task\n\nResult from Independent task')
+    expect(intent?.resultSummary).toContain('### Review\n\nResult from Review')
+    expect(intent?.resultSummary).toContain('[skipped] UI smoke: Not run')
+    expect(intent?.resultSummary).toContain('Packaged app unverified')
+  })
+
+  it('keeps every batch assignment represented within the result budget', async () => {
+    const f = await setup('full-access', 'kun', 16)
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: Array.from({ length: 16 }, (_, i) =>
+      ({ ...f.assignment, label: `Task ${i}` })) }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    const records = await f.dispatches.list('parent')
+    expect(records).toHaveLength(16)
+    for (const record of records) {
+      await f.dispatches.update('parent', record.dispatchId, { state: 'completed', workerReport: {
+        summary: 'Result '.repeat(570), outcome: 'succeeded', submittedAt: new Date(f.clock.now).toISOString(),
+        checks: [{ name: 'tests', status: 'passed', detail: 'All checked. '.repeat(140) }],
+        risks: ['Risk '.repeat(200)]
+      } })
+    }
+    await f.service.reconcile()
+    const intent = await f.service.get(result.dispatchIntentId!)
+    expect(intent?.resultSummary?.length).toBeLessThanOrEqual(32_000)
+    for (const record of records) expect(intent?.resultSummary).toContain(`### ${record.title}\n`)
+    expect(intent?.resultSummary).toContain('[truncated]')
   })
 
   it.each(['passed', 'needs_changes', 'rejected', 'waived'] as const)(
@@ -195,6 +271,157 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild.mock.calls[0][0]).toMatchObject({ prompt: expect.stringContaining('Perform the revised task.') })
   })
 
+  it('switches one worker of a batch to another Agent and model from the card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent.recommendation.assignments).toEqual([
+      expect.objectContaining({ label: 'Independent task', agentId: 'kun', model: 'main-model' }),
+      expect.objectContaining({ label: 'Second', agentId: 'kun', model: 'main-model' })])
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, ...route }) => route)
+    f.clock.now += 30_000
+    const updated = await f.service.act(intent.intentId, { action: 'update', requestId: 'route', expectedRevision: intent.revision,
+      recommendation: { assignments: [routes[0], { agentId: 'claude-code', model: 'other-model', credentialMode: 'native-login' }] } })
+    expect(updated).toMatchObject({ state: 'countdown', recommendation: { agentSelection: 'user', assignments: [
+      { agentId: 'kun', model: 'main-model' }, { agentId: 'claude-code', model: 'other-model', agentName: 'Claude Code' }] } })
+    f.clock.now += 59_000; await f.service.reconcile(); expect(f.runChild).not.toHaveBeenCalled()
+    f.clock.now += 1_000; await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
+    const harnesses = f.runChild.mock.calls.map(([input]) => (input as { harnessId?: string }).harnessId).sort()
+    expect(harnesses).toEqual(['claude-code', 'kun'])
+  })
+
+  it.each([[1, false], [2, false], [1, true], [2, true]] as const)(
+    'isolates the switched sandbox-none Agent on a %i-worker card (capabilities refreshed: %s)', async (count, refreshed) => {
+    const f = await setup('full-access')
+    f.capabilitiesForRoute.mockImplementation(async (route) => ({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: route.harnessId === 'deepseek-harness' ? 'none' : 'host' } }))
+    const item = { ...f.assignment, workspace: { isolation: 'local', startFrom: { kind: 'current-head' } } }
+    const result = count === 1 ? await f.runtime.createWorker(f.ctx, item, f.context)
+      : await f.runtime.createWorkerBatch(f.ctx, { items: [item, { ...item, label: 'Second' }] }, f.context)
+    const paused = await f.service.act(result.dispatchIntentId!, { action: 'pause', requestId: 'pause', expectedRevision: 1 })
+    const routes = [{ agentId: 'deepseek-harness', model: 'other-model', credentialMode: 'native-login' as const },
+      ...(count === 2 ? [{ agentId: 'kun', model: 'main-model', providerId: 'test', credentialMode: 'provider' as const }] : [])]
+    const updated = await f.service.act(paused.intentId, { action: 'update', requestId: 'switch',
+      expectedRevision: paused.revision, recommendation: { assignments: routes } })
+    expect(updated.state).toBe('countdown')
+    expect(updated.recommendation.assignments?.[0]).toMatchObject({ agentId: 'deepseek-harness', workspaceIsolation: 'worktree' })
+    if (count === 2) expect(updated.recommendation.assignments?.[1]).toMatchObject({ agentId: 'kun', workspaceIsolation: 'local' })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+    expect(f.runChild).not.toHaveBeenCalled()
+    // Admission consumes the persisted choice, even if capabilities improve before start.
+    if (refreshed) f.capabilitiesForRoute.mockResolvedValue(KUN_NATIVE_CAPABILITIES)
+    await startNow(f, paused.intentId)
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(count))
+    expect(f.taskWorkspaces.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      isolation: 'worktree', startFrom: { kind: 'current-head' }, sourceRoot: '/repo' }), expect.anything())
+    expect(f.runChild.mock.calls[0][0]).toMatchObject({ harnessId: 'deepseek-harness', workspace: '/repo/.worktrees/fix-login' })
+    if (count === 2) expect(f.taskWorkspaces.create).toHaveBeenNthCalledWith(2,
+      expect.objectContaining({ isolation: 'local' }), expect.anything())
+  })
+
+  it('keeps local isolation when switching to an Agent with a native sandbox', async () => {
+    const f = await setup('full-access')
+    f.capabilitiesForRoute.mockResolvedValue({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: 'native' } })
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    const updated = await f.service.act(result.dispatchIntentId!, { action: 'update', requestId: 'switch', expectedRevision: 1,
+      recommendation: { assignments: [{ agentId: 'claude-code', model: 'other-model', credentialMode: 'native-login' }] } })
+    expect(updated.recommendation.assignments?.[0]).toMatchObject({ workspaceIsolation: 'local' })
+    await startNow(f, updated.intentId)
+    expect(f.taskWorkspaces.create).toHaveBeenCalledWith(expect.objectContaining({ isolation: 'local' }), expect.anything())
+  })
+
+  it('still rejects an explicitly local sandbox-none proposal instead of bypassing admission', async () => {
+    const f = await setup('full-access')
+    f.capabilitiesForRoute.mockResolvedValue({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: 'none' } })
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' },
+      agent: { harnessId: 'deepseek-harness', model: 'main-model', credentialMode: 'native-login' } }, f.context)
+    expect(result).toMatchObject({ ok: false, userReport: 'harness without sandbox must run in an isolated worktree' })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+    expect(f.runChild).not.toHaveBeenCalled()
+  })
+
+  it('rejects a switched Agent missing capabilities without changing the paused card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    const paused = await f.service.act(result.dispatchIntentId!, { action: 'pause', requestId: 'pause', expectedRevision: 1 })
+    f.capabilitiesForRoute.mockImplementation(async (route) => route.harnessId === 'kun' ? KUN_NATIVE_CAPABILITIES : {
+      ...KUN_NATIVE_CAPABILITIES, facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: 'none' },
+      statuses: { ...KUN_NATIVE_CAPABILITIES.statuses, abort: { supported: false, reason: 'not-implemented' } } })
+    await expect(f.service.act(paused.intentId, { action: 'update', requestId: 'switch', expectedRevision: paused.revision,
+      recommendation: { assignments: [{ agentId: 'deepseek-harness', model: 'other-model', credentialMode: 'native-login' }] } }))
+      .rejects.toThrow(/abort/)
+    expect(await f.service.get(paused.intentId)).toMatchObject({ state: 'paused', revision: paused.revision,
+      recommendation: { assignments: [{ agentId: 'kun', workspaceIsolation: 'local' }] } })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+  })
+
+  it('upgrades a persisted legacy single-worker card when edited after reload', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    await f.store.transaction((file) => { delete file.intents[0].recommendation.assignments })
+    f.capabilitiesForRoute.mockImplementation(async (route) => ({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: route.harnessId === 'deepseek-harness' ? 'none' : 'host' } }))
+    const updated = await f.service.act(result.dispatchIntentId!, { action: 'update', requestId: 'switch', expectedRevision: 1,
+      recommendation: { agentId: 'deepseek-harness', model: 'other-model' } })
+    expect(await f.store.get(updated.intentId)).toMatchObject({ recommendation: { assignments: [
+      { agentId: 'deepseek-harness', workspaceIsolation: 'worktree' }] } })
+    await startNow(f, updated.intentId)
+    expect(f.runChild).toHaveBeenCalledTimes(1)
+    expect(f.taskWorkspaces.create).toHaveBeenCalledWith(expect.objectContaining({ isolation: 'worktree' }), expect.anything())
+  })
+
+  it('keeps the card unchanged when a switched Agent needs an unavailable worktree service', async () => {
+    const f = await setup('full-access', 'kun', 8, undefined, undefined, true)
+    const result = await f.runtime.createWorker(f.ctx, { ...f.assignment, workspace: { isolation: 'local' } }, f.context)
+    f.capabilitiesForRoute.mockImplementation(async (route) => ({ ...KUN_NATIVE_CAPABILITIES,
+      facts: { ...KUN_NATIVE_CAPABILITIES.facts, sandbox: route.harnessId === 'deepseek-harness' ? 'none' : 'host' } }))
+    await expect(f.service.act(result.dispatchIntentId!, { action: 'update', requestId: 'switch', expectedRevision: 1,
+      recommendation: { assignments: [{ agentId: 'deepseek-harness', model: 'other-model', credentialMode: 'native-login' }] } }))
+      .rejects.toThrow('Isolated task workspace service is unavailable.')
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ revision: 1,
+      recommendation: { assignments: [{ agentId: 'kun', workspaceIsolation: 'local' }] } })
+    expect(f.taskWorkspaces.create).not.toHaveBeenCalled()
+    expect(f.runChild).not.toHaveBeenCalled()
+  })
+
+  it('carries a roster role from the proposal through card switches to the started worker', async () => {
+    const roster = { resolve: vi.fn(async (id: string) => ({
+      ok: true as const, id, source: 'workspace' as const,
+      profile: { name: id, mode: 'subagent' as const, toolPolicy: 'readOnly' as const },
+      engine: { kind: 'bound' as const, harnessId: 'claude-code', displayName: 'Claude Code', credentialMode: 'native-login' as const },
+      route: { harnessId: 'claude-code', model: 'other-model', credentialMode: 'native-login' as const }
+    })) }
+    const f = await setup('full-access', 'kun', 8, undefined, roster)
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [
+      { ...f.assignment, profile: 'reviewer' }, { ...f.assignment, label: 'Second' }] }, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent.recommendation.assignments).toEqual([
+      expect.objectContaining({ agentId: 'claude-code', model: 'other-model', profileId: 'reviewer' }),
+      expect.not.objectContaining({ profileId: expect.anything() })])
+    const routes = intent.recommendation.assignments!.map(({ label: _label, agentName: _name, ...route }) => route)
+    await f.service.act(intent.intentId, { action: 'update', requestId: 'role', expectedRevision: intent.revision,
+      recommendation: { assignments: [routes[0], { ...routes[1], profileId: 'explore' }] } })
+    f.clock.now += 60_000; await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(2))
+    const started = f.runChild.mock.calls.map(([input]) => input as { harnessId?: string; profile?: string })
+      .map((input) => [input.harnessId, input.profile]).sort()
+    expect(started).toEqual([['claude-code', 'reviewer'], ['kun', 'explore']])
+  })
+
+  it('rejects an unavailable model choice without changing the card', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    await expect(f.service.act(intent.intentId, { action: 'update', requestId: 'bad', expectedRevision: intent.revision,
+      recommendation: { assignments: [{ agentId: 'claude-code', model: 'missing-model', credentialMode: 'native-login' }] } }))
+      .rejects.toThrow(/missing-model/)
+    expect(await f.service.get(intent.intentId)).toMatchObject({ revision: intent.revision,
+      recommendation: { agentId: 'kun', assignments: [{ agentId: 'kun' }] } })
+  })
+
   it('revalidates disabled profiles before workspace creation', async () => {
     const f = await setup('full-access'); const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
     f.disabled.add('kun'); f.clock.now += 60_000; await f.service.reconcile()
@@ -249,6 +476,80 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect(f.runChild).toHaveBeenCalledTimes(2)
     expect(f.runChild.mock.calls[1][0]).toMatchObject({ harnessId: 'codex' })
     expect(f.runChild.mock.calls[1][0].childId).not.toBe(original.workerId)
+  })
+
+  it('reroutes only the failed assignment of an automatic batch while its sibling keeps running', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(2)
+    const [original, sibling] = (await f.teams.get('parent'))!.workers
+    await f.teams.upsertWorker('parent', { ...original, selection: { reason: 'Automatic choice', score: 1,
+      alternatives: [{ route: { harnessId: 'codex', model: 'main-model', credentialMode: 'native-login' }, label: 'Codex', score: 0.9 }] } })
+    const failed = (await f.dispatches.list('parent')).find((entry) => entry.workerId === original.workerId)!
+    await f.dispatches.update('parent', failed.dispatchId, { state: 'failed',
+      failureReason: "model request failed with status 400: The 'main-model' model is not supported" })
+    await f.childRuns.upsert({ ...(await f.childRuns.get(original.workerId))!, status: 'failed',
+      failure: { source: 'model', code: 'http_400', category: 'model_not_found', httpStatus: 400 } })
+    await f.service.reconcile(); await f.service.reconcile()
+    await vi.waitFor(() => expect(f.runChild).toHaveBeenCalledTimes(3))
+    const rerouted = f.runChild.mock.calls[2][0]
+    expect(rerouted).toMatchObject({ harnessId: 'codex' })
+    expect([original.workerId, sibling.workerId]).not.toContain(rerouted.childId)
+    const intent = (await f.service.get(result.dispatchIntentId!))!
+    expect(intent).toMatchObject({ replacementCount: 0, recommendation: { assignments: [
+      { label: f.assignment.label, agentId: 'codex' }, { label: 'Second', agentId: sibling.route.harnessId }] } })
+    expect(intent.replacementReason).toContain('took over')
+    expect(intent.target?.workerIds).toEqual([rerouted.childId, sibling.workerId])
+    expect(await f.teams.worker('parent', original.workerId)).toMatchObject({ state: 'released' })
+
+    // One reroute per assignment: a second failure settles the card instead of looping.
+    const replacement = (await f.dispatches.list('parent')).find((entry) => entry.workerId === rerouted.childId)!
+    await f.dispatches.update('parent', replacement.dispatchId, { state: 'failed', failureReason: 'Still failing' })
+    const siblingDispatch = (await f.dispatches.list('parent')).find((entry) => entry.workerId === sibling.workerId)!
+    await f.dispatches.update('parent', siblingDispatch.dispatchId, { state: 'completed', verdict: { status: 'passed', checks: [] } })
+    await f.service.reconcile(); await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(3)
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed' })
+  })
+
+  it('settles a failed local-isolation batch instead of retrying an impossible handover', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorkerBatch(f.ctx, { items: [f.assignment, { ...f.assignment, label: 'Second' }] }, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    expect(f.runChild).toHaveBeenCalledTimes(2)
+    // The worker ran in the source checkout itself: there is no worktree to capture.
+    Object.assign(f.workspace, { isolation: 'local', path: '/repo', repositoryRoot: undefined })
+    f.taskWorkspaces.captureForDispatch.mockRejectedValue(new Error('local isolation has no host worktree to operate on'))
+    const stopWorker = vi.spyOn(f.deliverer, 'stopWorker')
+    const [original, sibling] = (await f.teams.get('parent'))!.workers
+    await f.teams.upsertWorker('parent', { ...original, selection: { reason: 'Automatic choice', score: 1,
+      alternatives: [{ route: { harnessId: 'codex', model: 'main-model', credentialMode: 'native-login' }, label: 'Codex', score: 0.9 }] } })
+    const records = await f.dispatches.list('parent')
+    await f.dispatches.update('parent', records.find((entry) => entry.workerId === original.workerId)!.dispatchId,
+      { state: 'failed', failureReason: 'turn exceeded 128 model steps' })
+    await f.dispatches.update('parent', records.find((entry) => entry.workerId === sibling.workerId)!.dispatchId,
+      { state: 'completed', verdict: { status: 'passed', checks: [] } })
+    await f.service.reconcile(); await f.service.reconcile()
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed', error: 'turn exceeded 128 model steps' })
+    expect(stopWorker).not.toHaveBeenCalled()
+    expect(f.taskWorkspaces.captureForDispatch).not.toHaveBeenCalled()
+    expect(f.runChild).toHaveBeenCalledTimes(2)
+  })
+
+  it('settles the card when inspecting a failed worker\'s checkout throws', async () => {
+    const f = await setup('full-access')
+    const result = await f.runtime.createWorker(f.ctx, f.assignment, f.context)
+    f.clock.now += 60_000; await f.service.reconcile()
+    const original = (await f.teams.get('parent'))!.workers[0]
+    await f.teams.upsertWorker('parent', { ...original, selection: { reason: 'Automatic choice', score: 1,
+      alternatives: [{ route: { harnessId: 'codex', model: 'main-model', credentialMode: 'native-login' }, label: 'Codex', score: 0.9 }] } })
+    f.taskWorkspaces.captureForDispatch.mockRejectedValue(new Error('task workspace not found'))
+    const dispatch = (await f.dispatches.list('parent'))[0]
+    await f.dispatches.update('parent', dispatch.dispatchId, { state: 'failed', failureReason: 'Worker unavailable' })
+    await f.childRuns.upsert({ ...(await f.childRuns.get(original.workerId))!, status: 'failed' })
+    await f.service.reconcile()
+    expect(await f.service.get(result.dispatchIntentId!)).toMatchObject({ state: 'failed', replacementCount: 0 })
   })
 
   it('keeps a user-pinned Agent fixed on failure', async () => {
@@ -322,4 +623,13 @@ describe('Code dispatch start decisions', { timeout: 30_000 }, () => {
     expect((await f.teams.get('parent'))!.workers[0]).toMatchObject({ permissionMode: 'default' })
   })
 
+})
+
+// Unit fixtures intentionally use a virtual checkout; keep store I/O real.
+// dispatch-deliverer.test.ts covers real checkout and missing-path behavior.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, stat: (path: string) =>
+    path === '/repo/.worktrees/fix-login' || path === '/repo'
+      ? Promise.resolve({ isDirectory: () => true }) : actual.stat(path) }
 })

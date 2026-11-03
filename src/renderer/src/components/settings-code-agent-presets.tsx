@@ -57,7 +57,7 @@ export function CodeAgentPresetsEditor({ presets, onChange }: Props): ReactEleme
                   setOpenId(open ? null : preset.id)
                 }
               }}
-              className="group flex w-full cursor-pointer items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-ds-hover/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ds-accent/35"
+              className="group flex w-full cursor-pointer items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-ds-hover/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent-tint/35"
             >
               <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-ds-hover/70 text-ds-ink">
                 <LucideIconByName name={resolved.icon} className="h-3.5 w-3.5" strokeWidth={1.8} />

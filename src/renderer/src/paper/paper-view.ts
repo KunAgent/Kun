@@ -5,16 +5,14 @@ import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import type { PaperModeView } from './paper-conversation-scope'
 
 /**
- * Paper-mode "view" is derived from the focused editor group's active tab
- * (U4): a focused library/discover virtual tab maps to its surface, anything
- * else (a file tab — the reader, notes, interpretations — or an empty group)
- * counts as 'reader'.
+ * The paper "view" follows the focused editor group's active tab: a focused
+ * library/discover tab maps to its page, anything else (a file tab — a reader,
+ * notes, a document — or an empty group) counts as 'reader'.
  */
 export function paperModeView(
-  state: Pick<WriteWorkspaceState, 'workSurface' | 'editorLayout'> &
+  state: Pick<WriteWorkspaceState, 'editorLayout'> &
     Partial<Pick<WriteWorkspaceState, 'paperResearch'>>
 ): PaperModeView {
-  if (state.workSurface !== 'papers') return 'library'
   const id = activePaperViewId(state.editorLayout)
   if (id === 'library') return 'library'
   if (id === 'discover:search' && state.paperResearch?.agentTab) return 'research'
@@ -28,9 +26,22 @@ export function paperModeView(
  * steps aside to keep a single composer on screen.
  */
 export function paperResearchStageActive(
-  state: Pick<WriteWorkspaceState, 'workSurface' | 'editorLayout' | 'paperResearch'>
+  state: Pick<WriteWorkspaceState, 'editorLayout' | 'paperResearch'>
 ): boolean {
   return paperModeView(state) === 'research'
+}
+
+/**
+ * The research stage only hosts the conversation while the documents own the
+ * Work stage. Once a session tab takes the stage (`assistantMain`), the
+ * research page is hidden or docked beside it and the assistant panel is the
+ * conversation again.
+ */
+export function paperResearchStageOnStage(
+  state: Pick<WriteWorkspaceState, 'editorLayout' | 'paperResearch'>,
+  assistantMain: boolean
+): boolean {
+  return !assistantMain && paperResearchStageActive(state)
 }
 
 /** Research session the conversation resource resolves to (null = new research). */
@@ -42,9 +53,8 @@ export function paperResearchSessionId(
 
 /** Focused paper view tab id ('library' / 'discover:*') or null when reading. */
 export function focusedPaperViewId(
-  state: Pick<WriteWorkspaceState, 'workSurface' | 'editorLayout'>
+  state: Pick<WriteWorkspaceState, 'editorLayout'>
 ): WritePaperViewId | null {
-  if (state.workSurface !== 'papers') return null
   return activePaperViewId(state.editorLayout)
 }
 

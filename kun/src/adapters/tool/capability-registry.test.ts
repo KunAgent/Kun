@@ -82,12 +82,14 @@ describe('CapabilityRegistry Graph orchestration policy', () => {
         'read',
         'graph_create_run',
         'graph_control_run',
+        'list_subagent_profiles',
         'fast_context'
       ])
       expect(registry.resolveTool('fast_context', current).provider.id).toBe('fast-context')
+      // The read-only roster listing lets the Lead name a task `profile`; it dispatches nothing.
+      expect(registry.resolveTool('list_subagent_profiles', current).provider.id).toBe('delegation')
       for (const name of [
         'delegate_task',
-        'list_subagent_profiles',
         'task_graph',
         'design_component'
       ]) {

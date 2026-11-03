@@ -10,10 +10,12 @@ import {
   ExternalLink,
   History,
   RefreshCw,
+  ScrollText,
   SlidersHorizontal,
   X
 } from 'lucide-react'
 import type { KunRuntimeSettingsPatchV1, KunRuntimeSettingsV1 } from '@shared/app-settings'
+import { LocalLogSettingsCard } from './settings-section-general-desktop'
 import {
   SettingsCard,
   SettingsTabPanel,
@@ -51,7 +53,7 @@ export type LlmDebugRound = {
 
 type Translate = (key: string, options?: Record<string, unknown>) => string
 type DetailTab = 'overview' | 'request' | 'response'
-type LlmDebugPageTab = 'capture' | 'records'
+type LlmDebugPageTab = 'records' | 'capture' | 'logs'
 
 const PAGE_SIZE = 5
 const detailTabs: DetailTab[] = ['overview', 'request', 'response']
@@ -548,7 +550,7 @@ export function LlmDebugRequestBrowser({
 }
 
 export function LlmDebugSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
-  const { t, kun, updateKun } = ctx as {
+  const { t, kun, updateKun } = ctx as Record<string, any> & {
     t: Translate
     kun: KunRuntimeSettingsV1
     updateKun: (patch: KunRuntimeSettingsPatchV1) => void
@@ -556,10 +558,11 @@ export function LlmDebugSettingsSection({ ctx }: { ctx: Record<string, any> }): 
   const [rounds, setRounds] = useState<LlmDebugRound[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activePageTab, setActivePageTab] = useState<LlmDebugPageTab>('capture')
+  const [activePageTab, setActivePageTab] = useState<LlmDebugPageTab>('records')
   const pageTabs = [
+    { id: 'records', label: t('llmDebugRecords'), icon: History },
     { id: 'capture', label: t('llmDebugCaptureSettings'), icon: SlidersHorizontal },
-    { id: 'records', label: t('llmDebugRecords'), icon: History }
+    { id: 'logs', label: t('logTitle'), icon: ScrollText }
   ] as const
 
   const load = useCallback(async (): Promise<void> => {
@@ -655,6 +658,10 @@ export function LlmDebugSettingsSection({ ctx }: { ctx: Record<string, any> }): 
         ) : (
           <LlmDebugRequestBrowser rounds={rounds} t={t} />
         )}
+      </SettingsTabPanel>
+
+      <SettingsTabPanel baseId="llm-debug-settings" tabId="logs" active={activePageTab === 'logs'}>
+        <LocalLogSettingsCard view={ctx} />
       </SettingsTabPanel>
     </div>
   )

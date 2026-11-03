@@ -60,6 +60,7 @@ import {
 import { defaultKunDataDir } from './runtime/kun-adapter'
 import { resolveClaudeBinary } from './agent-sdk-installer'
 import type { KunUnexpectedExitInfo } from './runtime/kun-process-controller'
+import { KUN_NODE_CHILD_V8_FLAGS } from '../../kun/src/process/node-child-v8-flags.js'
 import {
   waitForKunStartup
 } from './runtime/kun-runtime-health-monitor'
@@ -202,7 +203,7 @@ export async function ensureKunServiceManager(input: {
     settingsPath: input.settingsPath,
     launch: {
       command: resolveNodeScriptCommand(process.execPath),
-      args: [managerEntry],
+      args: [...KUN_NODE_CHILD_V8_FLAGS, managerEntry],
       runAsNode: true
     },
     ...(input.onLegacyHandoverStatus ? { onLegacyHandoverStatus: input.onLegacyHandoverStatus } : {})
@@ -360,7 +361,7 @@ export async function startKunSharedRuntime(
     ...(serviceManagerSettingsPath ? { settingsPath: serviceManagerSettingsPath } : {}),
     launch: {
       command: resolveNodeScriptCommand(process.execPath),
-      args: [managerEntry],
+      args: [...KUN_NODE_CHILD_V8_FLAGS, managerEntry],
       runAsNode: true
     }
   })
@@ -440,7 +441,8 @@ async function prepareKunLaunch(
       launch: {
         appPath: app.getAppPath(),
         execPath: process.execPath,
-        isPackaged: app.isPackaged
+        isPackaged: app.isPackaged,
+        userDataDir: app.getPath('userData')
       }
     },
     builtinSkillsRoot: bundledSkillsDirectory()
@@ -561,6 +563,7 @@ async function startKunChildOnce(
       [KUN_RUNTIME_CLIENT_OWNER_KIND_ENV]: 'gui'
     },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+    beforeLaunch: async () => desktopProcessStack.assertCanStart(),
     ownerLossGraceMs: 20_000
   })
   processController.child = startedChild
@@ -605,12 +608,17 @@ async function startKunChildOnce(
     )
   })
   try {
-    await waitForKunStartup(startedChild, runtime.port)
+    const attempt = desktopProcessStack.startupAttempt
+    await waitForKunStartup(startedChild, runtime.port, attempt ? {
+      timeoutMs: Math.max(1, attempt.workDeadline - performance.now()), signal: attempt.signal
+    } : {})
+    desktopProcessStack.assertCanStart()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     startedLogCapture.logLifecycle(`startup failed before ready: ${message}`)
     if (processController.child === startedChild) {
-      await stopKunChildAndWait()
+      const attempt = desktopProcessStack.startupAttempt
+      await stopKunChildAndWait(attempt ? { deadline: Date.now() + attempt.cleanupMs() } : {})
     }
     throw error
   }

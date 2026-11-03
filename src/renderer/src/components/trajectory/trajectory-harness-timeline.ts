@@ -96,8 +96,12 @@ function timedTimeline(
 
 function assistantTtft(cell: HarnessCell): { ttftFraction?: number } {
   const request = cell.request?.request
-  const ttft = request?.usage?.requestTtftMs
-  const generation = request?.usage?.requestGenerationMs
+  // An Agent may report usage once per turn; its rebuilt call's own times are per call.
+  const agentTimes = request?.origin === 'agent' && request.firstTokenAt && request.completedAt
+    ? { start: Date.parse(request.startedAt), first: Date.parse(request.firstTokenAt), end: Date.parse(request.completedAt) }
+    : null
+  const ttft = agentTimes ? agentTimes.first - agentTimes.start : request?.usage?.requestTtftMs
+  const generation = agentTimes ? agentTimes.end - agentTimes.first : request?.usage?.requestGenerationMs
   if (cell.kind !== 'assistant' || !ttft || !generation || ttft + generation <= 0) return {}
   return { ttftFraction: Math.min(1, Math.max(0, ttft / (ttft + generation))) }
 }

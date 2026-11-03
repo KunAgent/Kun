@@ -27,11 +27,12 @@ function launch(path: string, args = ['--profile', 'acp']) {
 }
 
 describe('DeepSeek Harness Preview', () => {
-  it('pins the official agent and honestly declares unsupported ACP features', () => {
+  it('requires a minimum agent version and honestly declares unsupported ACP features', () => {
     const def = HarnessDefinitionSchema.parse(DEEPSEEK_HARNESS_DEFINITION)
-    expect(def.detect?.exactVersion).toBe('0.2.0-rc.2')
+    expect(def.detect?.minVersion).toBe('0.2.0-rc.2')
+    expect(def.detect?.exactVersion).toBeUndefined()
     expect(def.availability).toBe('preview')
-    expect(def.setup?.install?.[0]?.command).toBe('npm install -g @deepseek-ai/dsh@0.2.0-rc.2')
+    expect(def.setup?.install?.[0]?.command).toBe('npm install -g @deepseek-ai/dsh@next')
     expect(def.setup?.login).toBeUndefined()
     expect(def.credentialModes).toEqual(['native-login'])
     expect(def.staticModels).toEqual([])

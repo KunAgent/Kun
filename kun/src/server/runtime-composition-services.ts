@@ -1,4 +1,5 @@
 import { createRuntimeAgentDispatch } from './runtime-composition-dispatch.js'
+import { createRuntimeTaskSuggestions } from './runtime-composition-tasks.js'
 import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { createReviewContextResolver } from '../services/review-composer-context.js'
 import { ManagerRemoteMemoryDistillationPendingStore } from '../manager/remote-memory-distillation-pending.js'
@@ -12,8 +13,6 @@ import {
   buildPptBoardLocalTools,
   buildDesignMotionLocalTools,
   buildDesignSvgLocalTools,
-  buildPptAgentLocalTools,
-  PPT_AGENT_LOCAL_PROVIDER_ID,
   LocalToolHost,
   buildDefaultLocalTools,
   buildExecutionTaskLocalTools,
@@ -45,7 +44,7 @@ import {
   InstructionRuntime,
   resolveConfiguredHooks,
   BackgroundShellRuntime,
-  stopBashSessionById,
+  stopBashSessionById, writeBashSessionStdin,
   createBashLocalTool,
   createBackgroundShellTool,
   type LocalTool,
@@ -56,6 +55,7 @@ import {
 import type { createRuntimeModelComposition } from './runtime-composition-model.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import {
+  buildPptDeckRuntimeProvider,
   builtinToolOptionsForOptions,
   contextWindowModeFor,
   skillsConfigForRuntime,
@@ -68,6 +68,7 @@ import {
   seedUsageCarryover
 } from './runtime-factory-storage.js'
 import { createRuntimeBackgroundMaintenance } from './runtime-background-maintenance.js'
+import { createMaintenanceCompletionLog } from './runtime-maintenance-schedule.js'
 import { createRuntimeMaintenanceSlices } from './runtime-maintenance-slices.js'
 import { ThreadStoreGuardian } from '../services/thread-store-guardian.js'
 import { ThreadSnapshotStore } from '../services/thread-snapshot-store.js'
@@ -82,6 +83,7 @@ import {
 import { FileTeamStore } from '../ade/team-store.js'
 import { FileDispatchStore } from '../ade/dispatch-store.js'
 import { reconcileWorkerReviewActivity } from '../ade/worker-review-activity.js'
+import { restoreWorkerActivityRows } from '../ade/worker-activity-restore.js'
 import { captureReviewRevision } from '../workspace-tasks/review-revision.js'
 import { FileQuestionStore } from '../ade/question-store.js'
 import { FileWorkerNoticeStore } from '../ade/worker-notice-store.js'
@@ -101,12 +103,25 @@ import { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
 import { createAcpCredentialEnv } from '../runtime/acp/acp-credential-env.js'
 import { providerKindsForOptions } from './runtime-factory-model.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { buildGitHubAppProvider } from '../adapters/tool/github-app-provider.js'
+import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
+import { buildFigmaToolProvider } from '../adapters/tool/figma-tool-provider.js'
+
+export const MCP_STARTUP_CONNECTION_BUDGET_MS = 3_000
+
+export function prepareInitialCapabilities<M, S, C>(
+  mcp: () => Promise<M>, skills: () => Promise<S>, computerUse: () => Promise<C>
+): Promise<[M, S, C]> {
+  return Promise.all([mcp(), skills(), computerUse()])
+}
 
 export async function createRuntimeServices(
   model: Awaited<ReturnType<typeof createRuntimeModelComposition>>
 ) {
   const agentDispatchService = createRuntimeAgentDispatch(model)
+  const taskSuggestionService = createRuntimeTaskSuggestions(model)
   const { core } = model
+  const gmail = model.gmail
   const { options } = core
   const {
     stores,
@@ -140,13 +155,17 @@ export async function createRuntimeServices(
     resolveCapabilityProviderCredential,
     oauthEncryptor
   } = model
-  let [mcpProviders, skillRuntime] = await Promise.all([
-    buildMcpToolProviders(core.activeOptions.capabilities?.mcp, {
+  let [mcpProviders, skillRuntime, computerUseProviders] = await prepareInitialCapabilities(
+    () => buildMcpToolProviders(core.activeOptions.capabilities?.mcp, {
+      // Failed connections continue through the existing background reconnect.
+      startupConnectTimeoutMs: MCP_STARTUP_CONNECTION_BUDGET_MS,
       oauthStorageDir: join(core.activeOptions.dataDir, 'mcp-oauth'),
+      catalogCachePath: join(core.activeOptions.dataDir, 'mcp-catalog-cache.json'),
       ...(oauthEncryptor ? { oauthEncryptor } : {})
     }),
-    SkillRuntime.create(skillsConfigForRuntime(core.activeOptions))
-  ])
+    () => SkillRuntime.create(skillsConfigForRuntime(core.activeOptions)),
+    () => buildComputerUseToolProviders(core.activeOptions.capabilities?.computerUse)
+  )
   let instructionRuntime = new InstructionRuntime(core.activeOptions.capabilities?.instructions)
   const migrationMaintenance = new ScopedMigrationMaintenanceLock()
   let attachmentStore: AttachmentStore | undefined
@@ -171,15 +190,17 @@ export async function createRuntimeServices(
     nowIso
   })
   const harnesses = createHarnessComposition(() => core.activeOptions, {
-    // P4-12: custom-agent `secretEnv` refs resolve against the credential
+    // custom-agent `secretEnv` refs resolve against the credential
     // store at spawn/probe time; values never reach config or logs.
     revision: () => core.optionsRevision,
+    readinessProofStorePath: join(core.activeOptions.dataDir, 'harness-readiness.json'),
+    modelCatalogStorePath: join(core.activeOptions.dataDir, 'harness-model-catalogs.json'),
     resolveProviderCredential: model.resolveLegacyRequestCredentials,
     resolveGatewayAliases: async (binding) => freezeHarnessGatewayAliases(await model.modelConnections.snapshot(), binding),
     resolveSecretEnv: harnessSecretRefResolver(model.extensionCredentials)
   })
   // Per-turn `kun-tools` grants + http/stdio MCP descriptors for ACP sessions
-  // (P3-08). One provider is shared across every delegated-runtime build so
+  //. One provider is shared across every delegated-runtime build so
   // revocation stays consistent no matter which runtime built the turn.
   const kunToolsMcp = new KunToolsMcpProvider({
     tokens: harnesses.tokens,
@@ -187,7 +208,7 @@ export async function createRuntimeServices(
     command: kunCommandParts
   })
   // Per-turn `kun-gateway` grants + generated per-harness provider config for
-  // ACP children (P3-10). One resolver shared by every delegated-runtime build.
+  // ACP children. One resolver shared by every delegated-runtime build.
   const acpCredentialEnv = createAcpCredentialEnv({
     tokens: harnesses.tokens,
     endpoint: () => harnesses.gatewayEndpoint.baseUrl,
@@ -275,6 +296,7 @@ export async function createRuntimeServices(
   )
   const supplyChainTrust = new InMemoryPublisherTrustStore()
   backgroundShellRuntime.bindStopHandler(stopBashSessionById)
+  backgroundShellRuntime.bindStdinHandler(async (id, input) => (await writeBashSessionStdin(id, input, 1)) !== null)
   const backgroundShellTool = createBackgroundShellTool({
     listBackgroundSessions: (threadId) => backgroundShellRuntime.listSessions(threadId)
   })
@@ -353,6 +375,7 @@ export async function createRuntimeServices(
     pruneAttachments: maintenanceSlices.runAttachmentSlice,
     inspectThreads: maintenanceSlices.runGuardianSlice,
     rebuildEventIndex: maintenanceSlices.runEventIndexSlice,
+    completions: createMaintenanceCompletionLog(core.activeOptions.dataDir),
     onError: (task, error) => {
       console.warn(`[kun] background ${task} failed:`, error)
     }
@@ -438,7 +461,6 @@ export async function createRuntimeServices(
 	    resolveCredential: resolveCapabilityProviderCredential,
 	    proxyUrl: core.activeOptions.modelProxyUrl
 	  })
-	  let computerUseProviders = await buildComputerUseToolProviders(core.activeOptions.capabilities?.computerUse)
 	  let browserUseProviders = buildBrowserUseToolProviders(core.activeOptions.capabilities?.browserUse)
   const designCanvasProvider = {
     id: 'design-canvas',
@@ -462,27 +484,7 @@ export async function createRuntimeServices(
       ...buildPptBoardLocalTools()
     ]
   }
-  const pptAgentProvider = {
-    id: PPT_AGENT_LOCAL_PROVIDER_ID,
-    kind: 'built-in' as const,
-    enabled: true,
-    available: true,
-    effects: {
-      network: false,
-      externalWrite: false,
-      processExecution: true,
-      guiAutomation: false
-    },
-    tools: [
-      ...buildPptAgentLocalTools({
-        enabled: () => core.activeOptions.lab?.pptAgent?.enabled !== false,
-        toolchainDirectory: () => process.env.KUN_PPT_TOOLCHAIN_DIR,
-        governanceDirectory: () => join(core.activeOptions.dataDir, 'ppt-governance'),
-        resolveSourceRequest: async (context) =>
-          (await turnService.getTurn(context.threadId, context.turnId))?.prompt
-      })
-    ]
-  }
+  const pptDeckProvider = buildPptDeckRuntimeProvider(() => core.activeOptions, () => imageGenProviders.available)
   const officeCliProviders = buildOfficeCliToolProviders({
     binaryPath: process.env.KUN_OFFICECLI_BINARY,
     profileDir: join(core.activeOptions.dataDir, 'officecli-profile'),
@@ -500,6 +502,8 @@ export async function createRuntimeServices(
     }, artifactStore),
     races: new FileRaceStore(core.activeOptions.dataDir, nowIso)
   }
+  await restoreWorkerActivityRows({ teams: adeStores.teams, dispatches: adeStores.dispatches,
+    threads: threadStore, activity: core.activityStore, taskWorkspaces: core.taskWorkspaces })
   await reconcileWorkerReviewActivity(
     adeStores.dispatches, core.activityStore, adeStores.teams, core.taskWorkspaces
   )
@@ -527,6 +531,9 @@ export async function createRuntimeServices(
   const hookWriter = (unitId: string, hooks: { kind: string; events: string[] }) =>
     writeHookConfig(core.activeOptions.dataDir, unitId, hooks, kunHookCommand())
 	  let baseToolProviders = [
+    buildGmailToolProvider(gmail, core.threadStore, model.gmailDataPolicy),
+    ...(model.githubApp ? [buildGitHubAppProvider(model.githubApp.service, core.threadStore, model.githubApp.mcp)] : []),
+    ...(model.figma ? [buildFigmaToolProvider(model.figma.service, model.figma.state)] : []),
     { id: 'execution-tasks', kind: 'built-in' as const, enabled: true, available: true,
       tools: buildExecutionTaskLocalTools(threadService.executionTasks) },
     {
@@ -580,7 +587,7 @@ export async function createRuntimeServices(
     ...musicGenProviders.providers,
     ...videoGenProviders.providers,
     ...officeCliProviders,
-    pptAgentProvider,
+    pptDeckProvider,
     designCanvasProvider,
     // NOTE: computer_use is intentionally NOT in baseToolProviders — host
     // control must not be delegable to subagents. browser_use follows the
@@ -595,6 +602,7 @@ export async function createRuntimeServices(
 	  ]
 	  let childRegistry = new CapabilityRegistry(baseToolProviders)
   const childToolHost = new LocalToolHost({
+    threadStore,
     registry: childRegistry,
     readTracker: true,
     ...(executionLeases ? { leaseAuthority: executionLeases } : {}),
@@ -605,7 +613,9 @@ export async function createRuntimeServices(
   const defaultIsCursorSdk = process.env.KUN_RUNTIME_PROVIDER_KIND === 'cursor-sdk'
   return {
     model,
+    gmail,
     agentDispatchService,
+    taskSuggestionService,
     migrationMaintenance,
     executionLeases,
     turnService,
@@ -629,6 +639,7 @@ export async function createRuntimeServices(
     memoryDistillation,
     designCanvasProvider,
     officeCliProviders,
+    officeCli: { runner: officeCliRunner, providers: officeCliProviders },
     childToolHost,
     adeStores,
     attribution,

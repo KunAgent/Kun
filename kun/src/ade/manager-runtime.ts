@@ -58,19 +58,21 @@ export type WorkerCreateResult = {
   dispatched?: boolean
   deliveryPending?: DeliverOutcome['pendingReason']
   route?: HarnessRoute
-  /** Selector decision when `agent` was omitted (10 §3.2/§3.3). */
+  /** Selector decision when `agent` was omitted. */
   selection?: WorkerRecord['selection'] & { profileId?: string }
   permissionMode?: { requested?: string; effective: string; downgraded: boolean }
   admission?: AdmissionResult
   refusal?: 'worker_limit' | 'admission' | 'escalation_declined' | 'invalid_agent' | 'workspace_unavailable' | 'budget_exceeded' | 'collaboration_disabled'
   userReport: string
+  /** Model-facing note while a saved dispatch card has no worker yet. */
+  followUp?: string
 }
 
 type RaceServiceDepsWithIds =
   import('./race.js').RaceServiceDeps & { ids: { next(prefix: string): string } }
 
 /**
- * The ADE manager control plane (09 §4): worker creation with route
+ * The ADE manager control plane: worker creation with route
  * resolution, permission clamp, harness admission, user-only escalation,
  * task workspace provisioning, and exactly-once dispatch delivery.
  */
@@ -78,13 +80,13 @@ export class ManagerRuntime {
   private readonly lifecycle: ManagerWorkerLifecycle
   private readonly workerCreator: ManagerWorkerCreator
   private readonly workerDispatch: ManagerWorkerDispatch
-  /** Control operations (09 §4.1/§9) — worker/dispatch tools + team routes. */
+  /** Control operations — worker/dispatch tools + team routes. */
   readonly controls: ManagerControls
   readonly teamControls: TeamControls
-  /** Quality verdicts + cross-review (10 §4/§5). */
+  /** Quality verdicts + cross-review. */
   readonly verdicts: QualityVerdicts
   readonly reviews: ReviewRequests
-  /** User-approved workspace integration (11 §7.2). */
+  /** User-approved workspace integration. */
   readonly workspaces: WorkspaceIntegrations
 
   constructor(private readonly deps: ManagerRuntimeDeps) {
@@ -102,7 +104,7 @@ export class ManagerRuntime {
     return newManagerWorkRefusal(this.deps, managerThreadId, turnId)
   }
 
-  /** Race tool/route deps (10 §6); undefined without a race store. */
+  /** Race tool/route deps; undefined without a race store. */
   get raceServiceDeps(): RaceServiceDepsWithIds | undefined {
     if (!this.deps.races) return undefined
     return {
@@ -113,7 +115,7 @@ export class ManagerRuntime {
     }
   }
 
-  /** Check-runner deps (10 §4.2); undefined without approved-checks wiring. */
+  /** Check-runner deps; undefined without approved-checks wiring. */
   get checkRunnerDeps(): import('./check-runner.js').WorkspaceCheckRunnerDeps | undefined {
     if (!this.deps.checks) return undefined
     return {
@@ -128,7 +130,7 @@ export class ManagerRuntime {
   }
 
   /**
-   * The worker's immutable security ceiling (09 §7.1): the manager turn's
+   * The worker's immutable security ceiling: the manager turn's
    * snapshot, narrowed to the task workspace as the only write root.
    */
   workerSecurity(
@@ -147,13 +149,13 @@ export class ManagerRuntime {
   /** Host-only admission used after the shared dispatch decision is claimed. */
   createWorkerNow(
     ctx: ManagerToolContext, rawInput: unknown, toolContext: Parameters<typeof childSecurity>[0],
-    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string }
+    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string; reasoningEffort?: WorkerRecord['reasoningEffort'] }
   ): Promise<WorkerCreateResult> {
     return this.workerCreator.create(ctx, rawInput, toolContext, allocation)
   }
 
   /**
-   * `worker_create_batch` (09 §4.4): items run in order; the first
+   * `worker_create_batch`: items run in order; the first
    * worker_limit/batch-level failure marks the rest `skipped`. The invariant
    * `requested = created + failed + skipped` is asserted by tests.
    */
@@ -172,6 +174,7 @@ export class ManagerRuntime {
     dispatched: number
     items: Array<{ index: number; label: string; result: WorkerCreateResult | 'skipped' }>
     userReport: string
+    followUp?: string
   }> {
     if (this.deps.agentDispatchService && toolContext.activeToolCallId) {
       return this.workerDispatch.createBatch(ctx, rawInput, toolContext)
@@ -276,7 +279,7 @@ export class ManagerRuntime {
   }
 
   /**
-   * Task-workspace change hook (09 §5): when a worker's workspace reaches
+   * Task-workspace change hook: when a worker's workspace reaches
    * `ready`, retry its queued dispatch; a `failed` workspace fails it.
    */
   async handleWorkspaceChange(record: TaskWorkspaceRecord): Promise<void> {
@@ -297,7 +300,7 @@ export class ManagerRuntime {
   }
 
   /**
-   * Activity hibernation gate (docs/ade/06 §7.2 conditions 2-3): unfinished
+   * Activity hibernation gate: unfinished
    * dispatches or unanswered questions for this worker.
    */
   hasOpenWork(workerId: string): Promise<boolean> {
@@ -305,8 +308,7 @@ export class ManagerRuntime {
   }
 
   /**
-   * Runtime-event observer hook (09 §5 turnId backfill + §6.1 terminal
-   * hook). Wired onto the RuntimeEventRecorder's observer list.
+   * Runtime-event observer hook. Wired onto the RuntimeEventRecorder's observer list.
    */
   handleRuntimeEvent(event: RuntimeEvent): void {
     this.lifecycle.handleRuntimeEvent(event)
@@ -327,7 +329,7 @@ export class ManagerRuntime {
   }
 
   /**
-   * Worker turn terminal hook (09 §6.1) — dispatched from the runtime-event
+   * Worker turn terminal hook — dispatched from the runtime-event
    * observer and replayed by startup reconciliation.
    */
   async handleWorkerTurnTerminal(
@@ -340,7 +342,7 @@ export class ManagerRuntime {
   }
 
   /**
-   * Startup reconciliation (09 §5): re-resolve stuck `delivering`/`uncertain`
+   * Startup reconciliation: re-resolve stuck `delivering`/`uncertain`
    * dispatches against the worker thread's turns, then replay the terminal
    * hook for `accepted` dispatches whose turns ended while the app was off.
    */
@@ -349,7 +351,7 @@ export class ManagerRuntime {
   }
 
   /** Manager context for tool execution — built from host-side records. */
-  /** GUI-originated worker create — see `manager-gui-worker.ts` (11 §4.4). */
+  /** GUI-originated worker create — see `manager-gui-worker.ts`. */
   guiCreateWorker(
     workspace: TaskWorkspaceRecord,
     input: { label: string; task: string; harnessId?: string },

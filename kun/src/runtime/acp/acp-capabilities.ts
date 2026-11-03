@@ -1,7 +1,8 @@
 /**
  * Derive HarnessCapabilities v2 from the ACP `initialize` result plus facts
- * observed on a session (docs/ade/03 §10). ACP gives no fork/rewind/steer
- * methods, so those stay upstream-unsupported; sandbox facts come from the
+ * observed on a session. ACP gives no fork/rewind methods, so those stay
+ * upstream-unsupported; guidance is delivered live or deferred (see
+ * acp-live-steering.ts); sandbox facts come from the
  * harness catalog declaration since fs/terminal mediation is Kun-provided but
  * never guaranteed to be exercised by the agent.
  */
@@ -30,7 +31,7 @@ export type AcpSessionFacts = {
   sawUsageTokens?: boolean
   /**
    * Which Kun Tools MCP transport descriptor was actually delivered with
-   * session/new (P3-09). 'none' or absent means the agent runs tool-less and
+   * session/new. 'none' or absent means the agent runs tool-less and
    * `kunTools` must not report supported.
    */
   kunToolsDescriptor?: 'http' | 'stdio' | 'none'
@@ -46,7 +47,7 @@ function hasConfigCategory(
 export function capabilitiesFromAcp(
   initResult: AcpInitializeResult | undefined,
   session: AcpSessionFacts,
-  facts: { sandbox: 'host' | 'native' | 'none' }
+  facts: { sandbox: 'host' | 'native' | 'none'; liveSteering?: boolean }
 ): HarnessCapabilities {
   const agent = initResult?.agentCapabilities
   const statuses: HarnessCapabilityStatuses = {
@@ -56,7 +57,10 @@ export function capabilitiesFromAcp(
     structuredStreaming: SUPPORTED,
     reasoningStream: SUPPORTED,
     abort: SUPPORTED,
-    sameTurnSteer: unsupported('upstream'),
+    // ACP has no steer method; an engine whose concurrent session/prompt joins
+    // the running loop (ProviderAcpHooks.liveSteering) is steered that way,
+    // every other one gets guidance as a follow-up prompt in the same turn.
+    sameTurnSteer: SUPPORTED,
     switchModelMidSession: hasConfigCategory(session.configOptions, 'model')
       ? SUPPORTED
       : unsupported('upstream'),
@@ -70,7 +74,7 @@ export function capabilitiesFromAcp(
       : unsupported('upstream'),
     planMode: unsupported('upstream'),
     manualCompact: unsupported('upstream'),
-    // Honest declaration (P3-09): kunTools counts only when a descriptor was
+    // Honest declaration: kunTools counts only when a descriptor was
     // actually delivered on a transport the agent accepts.
     kunTools:
       session.kunToolsDescriptor === 'http' || session.kunToolsDescriptor === 'stdio'
@@ -99,8 +103,8 @@ export function capabilitiesFromAcp(
       (session.modes?.availableModes?.length ?? 0) > 0
         ? SUPPORTED
         : unsupported('upstream'),
-    // Form elicitation bridges to the user_input gate / ask_manager (P2-10),
-    // but only when the agent declares it supports elicitation (P3-09).
+    // Form elicitation bridges to the user_input gate / ask_manager,
+    // but only when the agent declares it supports elicitation.
     userInput: capabilityFlagOn(agent?.elicitation) ? SUPPORTED : unsupported('upstream')
   }
   return {
@@ -108,7 +112,8 @@ export function capabilitiesFromAcp(
     facts: {
       sandbox: facts.sandbox,
       usageReporting: session.sawUsageTokens ? 'exact' : 'none',
-      compactionOwner: 'harness'
+      compactionOwner: 'harness',
+      steering: facts.liveSteering ? 'live' : 'deferred'
     }
   }
 }

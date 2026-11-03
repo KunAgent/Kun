@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { paperReadingQuestion, usePaperReadingRequest } from './paper-reading-request'
+import { PAPER_READING_PURPOSES, paperReadingQuestion } from './paper-reading-request'
 
 const input = { background: 'ML researcher', goal: 'Small-model code search', question: 'Does it preserve negation?', limited: false }
 describe('bounded paper reading purposes', () => {
@@ -16,10 +16,7 @@ describe('bounded paper reading purposes', () => {
     expect(paperReadingQuestion('reproduction-prep', input)).toContain('Do not execute or download anything')
     expect(paperReadingQuestion('review-critique', input)).toContain('author-reported statements from your inferences')
   })
-  it('closing a dialog clears only the pending request and performs no submission', () => {
-    usePaperReadingRequest.getState().open({ workspaceRoot: '/w', unitDir: 'papers/a', meta: { version: 2, slug: 'a', title: 'A', authors: [], importedAt: '2026-10-05' } })
-    expect(usePaperReadingRequest.getState().request?.unitDir).toBe('papers/a')
-    usePaperReadingRequest.getState().close()
-    expect(usePaperReadingRequest.getState().request).toBeNull()
+  it('lists every purpose once, in menu order', () => {
+    expect(PAPER_READING_PURPOSES).toEqual(['quick-screen', 'method-deep-read', 'reproduction-prep', 'review-critique'])
   })
 })

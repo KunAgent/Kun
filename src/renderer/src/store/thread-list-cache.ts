@@ -17,7 +17,9 @@ export type CacheThreadEntry = {
   workspace?: string
   pinned?: boolean
   status?: string
-  relation?: 'primary' | 'fork' | 'side'
+  relation?: 'primary' | 'fork' | 'side' | 'task'
+  parentThreadId?: string
+  taskOrigin?: NormalizedThread['taskOrigin']
   planBuildRunId?: string
   model: string
   mode: string
@@ -64,6 +66,8 @@ export function saveThreadListCache(threads: NormalizedThread[]): void {
       pinned: thread.pinned,
       status: thread.status,
       relation: thread.relation,
+      ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
+      ...(thread.taskOrigin ? { taskOrigin: thread.taskOrigin } : {}),
       planBuildRunId: thread.planBuildRunId,
       model: thread.model,
       mode: thread.mode,
@@ -94,6 +98,8 @@ export function cacheEntriesToThreads(entries: CacheThreadEntry[]): NormalizedTh
     pinned: entry.pinned,
     status: entry.status,
     relation: entry.relation,
+    ...(entry.parentThreadId ? { parentThreadId: entry.parentThreadId } : {}),
+    ...(entry.taskOrigin ? { taskOrigin: entry.taskOrigin } : {}),
     planBuildRunId: entry.planBuildRunId,
     model: entry.model,
     mode: entry.mode ?? '',

@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { AgentIcon, agentIconAssetUrl } from './agent-icon'
+import { rememberAgentIconAliases } from '../lib/agent-icon-aliases'
 
 describe('AgentIcon', () => {
   it('maps stable harness IDs and keeps custom IDs neutral', () => {
@@ -11,6 +12,13 @@ describe('AgentIcon', () => {
     expect(agentIconAssetUrl('arbitrary-provider-name')).toBeUndefined()
     expect(renderToStaticMarkup(createElement(AgentIcon, { harnessId: 'arbitrary-provider-name' })))
       .toContain('data-agent-icon="unknown"')
+  })
+
+  it('shows a derived Agent with its base engine icon', () => {
+    rememberAgentIconAliases([{ definition: { id: 'devin-beta', derivedFrom: 'devin' } }])
+    expect(renderToStaticMarkup(createElement(AgentIcon, { harnessId: 'devin-beta' }))).toContain('data-agent-icon="devin"')
+    rememberAgentIconAliases([{ definition: { id: 'devin-beta' } }])
+    expect(renderToStaticMarkup(createElement(AgentIcon, { harnessId: 'devin-beta' }))).toContain('data-agent-icon="unknown"')
   })
 
   it('uses the Devin vector mark keyed by the harness identity', () => {

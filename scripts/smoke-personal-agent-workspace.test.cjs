@@ -68,7 +68,40 @@ test('diagnostic redaction remains bounded and removes credentials nested in err
   assert(result.output.long.length < 17000)
 })
 
-const { dragSidebar, sidebarGeometryIssues } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+const { dragSidebar, sidebarGeometryIssues, captureCodeSidebarBaseline } = require('./smoke-personal-agent-workspace-sidebar.cjs')
+
+test('Code baseline waits for a file treeitem rather than its overridden button role', async () => {
+  const workspaceRoot = '/synthetic/workspace', ready = new Error('file tree ready')
+  const evaluations = [true, { id: 'code-test' }, { route: 'chat', activeThreadId: 'code-test', workspaceRoot }]
+  const selected = []
+  const page = {
+    evaluate: async () => evaluations.shift(),
+    locator: (selector) => ({
+      waitFor: async () => {},
+      getByRole: (role, options = {}) => {
+        if (selector === '.ds-workbench-side-rail:visible') {
+          assert.equal(role, 'button'); assert.equal(options.name, 'Files')
+          return { click: async () => {} }
+        }
+        assert.equal(selector, '[data-workbench-right-panel]:visible')
+        assert.equal(role, 'tree', 'file rows live inside an explicit tree container')
+        return {
+          getByRole: (innerRole, { name, exact }) => {
+            assert.equal(innerRole, 'treeitem', 'file rows have an explicit treeitem role')
+            assert.equal(name, 'baseline.txt'); assert.equal(exact, true)
+            return { waitFor: async () => selected.push('baseline.txt') }
+          }
+        }
+      }
+    })
+  }
+  await assert.rejects(captureCodeSidebarBaseline({ page, workspaceRoot,
+    fixture: { snapshot: () => ({ real: false, mainCalls: 0 }) },
+    poll: async (predicate) => assert(await predicate()),
+    sidebar: { codeCapture: async () => { throw ready } }
+  }), error => error === ready)
+  assert.deepEqual(selected, ['baseline.txt'])
+})
 const { readFileSync } = require('node:fs')
 const { join } = require('node:path')
 const bounds = (x, y, width, height) => ({ x, y, width, height, right: x + width, bottom: y + height })
@@ -192,7 +225,7 @@ test('Code conversation readiness waits for the rendered private recipient and i
   const page = { locator: makeLocator }
   await waitForPrivateRoomSurface(page, 'room-current')
   assert.deepEqual(events, [root, root + ' .rooms-composer .rooms-rich-input',
-    root + ' .rooms-workbench-rail [data-room-tool="browser"]'].map((selector) => ({
+    '.rooms-workbench-rail [data-room-tool="browser"]'].map((selector) => ({
     selector, options: { state: 'visible', timeout: 15000 }
   })))
   const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
@@ -387,6 +420,20 @@ test('native smoke measures stopped and restart recovery controls wide and narro
   assert.doesNotMatch(recovery, /\.click\(|dispatchEvent\(|force:/)
 })
 
+test('restart recovery geometry precedes reload suppression of the acknowledged failure', () => {
+  const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
+  const acknowledged = smoke.indexOf('renderer acknowledged the interrupted request before recovery geometry')
+  const wide = smoke.indexOf("await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay'")
+  const narrow = smoke.indexOf("await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow'")
+  const reload = smoke.indexOf("await page.reload({ waitUntil: 'domcontentloaded' })")
+  const hidden = smoke.indexOf('Reload must not raise an already acknowledged failure again')
+  assert(acknowledged >= 0 && acknowledged < wide && wide < narrow && narrow < reload && reload < hidden)
+  assert.match(smoke.slice(smoke.lastIndexOf("if (recovered.status === 'failed')", acknowledged), wide),
+    /item.id === restarting.requestId\)\?\.failureAcknowledged === true/)
+  assert.match(smoke.slice(reload, hidden), /Runtime restart and renderer reload must not replay an interrupted request/)
+  assert.match(smoke.slice(reload, hidden), /Runtime restart destroys transient browser authority/)
+})
+
 test('recovery action row wins span flex specificity and wraps labels within its container', () => {
   const css = readFileSync(join(__dirname, '../src/renderer/src/components/rooms/rooms-direct.css'), 'utf8')
   const row = css.match(/\.direct-failed\s*>\s*\.direct-failed-actions\s*\{([^}]+)\}/)?.[1]
@@ -448,4 +495,129 @@ test('approval smoke asserts the personal default and deliberately changes it th
   assert.equal(mode, 'ask-for-approval')
   assert(actions.includes('wait:[data-permission-mode="full-access"]'))
   assert(actions.includes('wait:[data-permission-mode="ask-for-approval"]'))
+})
+
+
+test('Code baseline selects the exact accessible tree item rather than a button or recent-file duplicate', () => {
+  const helper = readFileSync(join(__dirname, 'smoke-personal-agent-workspace-sidebar.cjs'), 'utf8')
+  assert(helper.includes("panel.getByRole('tree').getByRole('treeitem', { name: 'baseline.txt', exact: true })"))
+  assert.doesNotMatch(helper, /getByRole\('button', \{ name: \/\^baseline/)
+  const rows = readFileSync(join(__dirname, '../src/renderer/src/components/chat/ChatFileTreeRowViews.tsx'), 'utf8')
+  assert.match(rows, /<button\s+type="button"\s+role="treeitem"/)
+})
+
+
+test('long selected sidebar tabs fit their scroll viewport at both normal and compact caps', () => {
+  const css = readFileSync(join(__dirname, '../src/renderer/src/components/workbench/code-right-tabs.css'), 'utf8')
+  const rules = [...css.matchAll(/\.ds-right-tab\s*\{([^}]+)\}/g)].map((match) => match[1])
+  assert.equal(rules.length, 2, 'cover both default and compact-container tab widths')
+  for (const rule of rules) {
+    assert.match(rule, /max-width:\s*min\((?:180|150)px,\s*100%\)/,
+      'a fixed cap alone can exceed the narrow tablist, so scrolling cannot reveal the entire selected tab')
+  }
+})
+
+
+const { allowWorkspaceTool } = require('./smoke-workspace-tool-consent.cjs')
+
+function fixture() {
+  const expected = { toolName: 'write', arguments: { path: 'workspace-evidence.txt', content: 'fixture\n' } }
+  const approval = { id: 'approval-1', threadId: 'thread-1', turnId: 'turn-1', status: 'pending',
+    toolName: expected.toolName, action: { arguments: expected.arguments } }
+  const state = { approval, active: { id: 'request-1', runId: 'run-1', threadId: 'thread-1', turnId: 'turn-1' },
+    clicks: 0, synthetic: 0, captures: [], cards: 1, directReads: 0 }
+  let listener
+  state.emit = (status) => listener({ streamId: state.streamId, events: [{ ...copy(state.approval),
+    approvalId: state.approval.id, kind: status === 'pending' ? 'approval_requested' : 'approval_resolved',
+    status, seq: status === 'pending' ? 1 : 2, approvalReviewer: 'user' }] })
+  const browser = { kunGui: {
+    onSseEvent: (handler) => { listener = handler; return () => {} }, onSseError: () => () => {}, onSseEnd: () => () => {},
+    startSse: async (_thread, _since, streamId) => { state.streamId = streamId; state.emit('pending') },
+    stopSse: async () => { state.closed = true }
+  } }
+  const evaluate = async (fn, arg) => {
+    const prior = global.window; global.window = browser
+    try { return structuredClone(await fn(arg)) } finally { global.window = prior }
+  }
+  const copy = (value) => structuredClone(value)
+  const allow = { waitFor: async () => {}, evaluate: async (fn) => fn({ click: () => { state.synthetic++ } }),
+    click: async () => { state.clicks++; state.approval.status = 'allowed'; state.emit('allowed') } }
+  const card = { count: async () => state.cards, locator: () => ({ innerText: async () => JSON.stringify(expected.arguments) }),
+    getByRole: (_role, options) => { assert.equal(options.name, 'Review and allow'); return allow } }
+  const options = { page: { locator: () => card, evaluate }, roomId: 'room-1', expected, label: 'consent',
+    request: async (_page, path) => {
+      if (path === '/v1/rooms/room-1/direct') {
+        state.directReads++
+        return copy({ approvals: [state.approval], active: state.active })
+      }
+      if (path === '/v1/rooms/room-1/runs/run-1') return copy({ run: {
+        id: 'run-1', roomId: 'room-1', requestId: state.active.id, threadId: 'thread-1', turnId: 'turn-1' } })
+      assert.fail('Unexpected runtime request: ' + path)
+    }, poll: async (check) => assert(await check()), capture: async (name) => state.captures.push(name) }
+  return { state, options, allow }
+}
+
+test('workspace consent uses one trusted inline click, rejects repeated synthetic clicks and records exact identity', async () => {
+  const { state, options } = fixture()
+  const result = await allowWorkspaceTool(options)
+  assert.equal(state.synthetic, 2)
+  assert.equal(state.clicks, 1)
+  assert.deepEqual(state.captures, ['consent'])
+  assert.deepEqual(result, { label: 'consent', approvalId: 'approval-1', requestId: 'request-1', runId: 'run-1',
+    threadId: 'thread-1', turnId: 'turn-1', toolName: 'write', syntheticClicksRejected: true, status: 'allowed' })
+})
+
+for (const mismatch of ['tool', 'arguments', 'thread', 'turn', 'cards', 'request', 'approval', 'synthetic']) {
+  test(`workspace consent fails closed before a trusted click for ${mismatch} mismatch`, async () => {
+    const { state, options, allow } = fixture()
+    if (mismatch === 'tool') state.approval.toolName = 'exec'
+    if (mismatch === 'arguments') state.approval.action.arguments = { command: 'unexpected' }
+    if (mismatch === 'thread') state.approval.threadId = 'other-thread'
+    if (mismatch === 'turn') state.approval.turnId = 'other-turn'
+    if (mismatch === 'cards') state.cards = 2
+    if (['request', 'approval', 'synthetic'].includes(mismatch)) allow.evaluate = async () => {
+      if (mismatch === 'request') state.active.id = 'replacement-request'
+      if (mismatch === 'approval') state.approval.id = 'replacement-approval'
+      if (mismatch === 'synthetic') state.approval.status = 'allowed'
+    }
+    await assert.rejects(allowWorkspaceTool(options))
+    assert.equal(state.clicks, 0)
+  })
+}
+
+test('a denied result never passes as allowed consent', async () => {
+  const { state, options, allow } = fixture()
+  allow.click = async () => { state.approval.status = 'denied'; state.emit('denied') }
+  await assert.rejects(allowWorkspaceTool(options), /not allowed/)
+})
+
+
+test('late workspace recovery switches mutually exclusive Code and Chats sidebars before selecting their rows', () => {
+  const tabs = readFileSync(join(__dirname, '../src/renderer/src/components/chat/WorkspaceModeTabs.tsx'), 'utf8')
+  assert.match(tabs, /id: 'chat' as const, label: t\('code'\)/)
+  assert.match(tabs, /data-workspace-mode=\{id\}/)
+  const smoke = readFileSync(join(__dirname, 'smoke-personal-agent-workspace.cjs'), 'utf8')
+  const start = smoke.indexOf('// Projects and conversations have mutually exclusive sidebars')
+  assert(start >= 0)
+  const recovery = smoke.slice(start, smoke.indexOf('sidebar.assertSharedChrome()', start))
+  const steps = [
+    `await page.locator('[role="tab"][data-workspace-mode="chat"]').click()`,
+    "await page.getByRole('button', { name: /^Code sidebar comparison/ }).first().click()",
+    ".route === 'chat'",
+    `await page.locator('[role="tab"][data-workspace-mode="chats"]').click()`,
+    'await sidebarRow(entry.roomId).click()',
+    'await waitForPrivateRoomSurface(page, entry.roomId)',
+    'assert.equal((await roomWorkbenchSnapshot(page)).conversationRoomId, entry.roomId)',
+    'assert.equal(await editor().innerText(), draft)'
+  ]
+  let previous = -1
+  for (const step of steps) {
+    const index = recovery.indexOf(step)
+    assert(index > previous, 'Required navigation/assertion in order: ' + step)
+    previous = index
+  }
+  const sidebar = readFileSync(join(__dirname, '../src/renderer/src/components/chat/Sidebar.tsx'), 'utf8')
+  assert.match(sidebar, /const chatsScope = useChatStore\(\(state\) => state.route === 'agent-chat'\)/)
+  assert.match(sidebar, /\{chatsScope \? \(\s*<SidebarAgentChatsSection/)
+  assert.match(sidebar, /\{!chatsScope \? \(\s*<SidebarProjectsSection/)
 })

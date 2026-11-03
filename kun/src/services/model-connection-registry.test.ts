@@ -11,6 +11,13 @@ import {
 } from './model-connection-registry.js'
 import { CodexOAuthCredentialRefresher } from './codex-oauth-credential-refresher.js'
 
+// These fixtures isolate account discovery; background public catalog enrichment
+// has separate tests and must not outlive this fixture's temporary data directory.
+vi.mock('./provider-public-catalog.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./provider-public-catalog.js')>(),
+  publicCatalogService: () => ({ fetch: async () => ({ status: 'unavailable', models: [] }) })
+}))
+
 const roots: string[] = []
 
 afterEach(async () => {
@@ -309,8 +316,8 @@ describe('ModelConnectionRegistry', () => {
         select: false
       })
 
-      await expect(value.probe('custom-full-endpoint')).resolves.toEqual({
-        ok: true,
+      await expect(value.probe('custom-full-endpoint')).resolves.toMatchObject({
+        ok: true, source: 'manual', lastAttemptStatus: 'success',
         models: ['configured-model']
       })
       expect(fetchMock).not.toHaveBeenCalled()
@@ -373,8 +380,8 @@ describe('ModelConnectionRegistry', () => {
         select: false
       })
 
-      await expect(value.probe('codex')).resolves.toEqual({
-        ok: true,
+      await expect(value.probe('codex')).resolves.toMatchObject({
+        ok: true, source: 'provider', lastAttemptStatus: 'success',
         models: ['gpt-6-astra']
       })
       expect(fetchMock).toHaveBeenCalledWith(
@@ -408,8 +415,8 @@ describe('ModelConnectionRegistry', () => {
         select: true
       })
 
-      await expect(value.probe('anthropic')).resolves.toEqual({
-        ok: true,
+      await expect(value.probe('anthropic')).resolves.toMatchObject({
+        ok: true, source: 'provider', lastAttemptStatus: 'success',
         models: ['claude-sonnet-4-5']
       })
       expect(fetchMock).toHaveBeenCalledWith('https://api.anthropic.com/v1/models', expect.objectContaining({

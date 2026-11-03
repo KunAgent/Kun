@@ -4,10 +4,11 @@ import { harnessUpdateCompatible } from './harness-update-compatibility.js'
 import { harnessIntegrationInfo, resolveHarnessIntegrationTarget } from './harness-integration.js'
 import type { HarnessIntegrationInfo, HarnessIntegrationOpenRequest, HarnessIntegrationTarget } from '../contracts/harness-integration.js'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
+import { harnessCommandOverride, harnessProviderOverrides } from '../config/kun-config-harness-providers.js'
 import { HarnessReadinessService } from './harness-readiness.js'
-import { dirname, join } from 'node:path'
-import { createRequire } from 'node:module'
 import type { HarnessDefinition } from '../contracts/harness.js'
+import type { HarnessModelCatalog } from '../contracts/harness-models.js'
+import { PROVIDER_MODULES, providerModule } from './providers/registry.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
 import type { KunServeRuntimeOptions } from '../server/runtime-factory-types.js'
 import { HarnessCatalog } from './harness-catalog.js'
@@ -15,53 +16,60 @@ import { HarnessDetector, spawnCaptured } from './harness-detector.js'
 import { probeHarnessLogin } from './harness-login-probes.js'
 import { AcpModelProbe } from './acp-model-probe.js'
 import { PiModelProbe } from './pi-model-probe.js'
+import { AntigravityModelProbe } from './antigravity-model-probe.js'
 import { CodexModelProbe } from './codex-model-probe.js'
 import { AgentSdkModelProbe } from './agent-sdk-model-probe.js'
 import { HarnessTokenService } from './harness-token-service.js'
 import type { HarnessSecretRefResolver } from './harness-secret-env.js'
+import { ExtensionAgentProviderSource } from './extension-agent-providers.js'
+import { HarnessModelCatalogStore, harnessModelCatalogIdentity } from './harness-model-catalog-store.js'
+import { clearCursorSubscriptionCatalog, loadCursorSubscriptionCatalog, type CursorSubscriptionCatalogSource } from './cursor-subscription-catalog.js'
 
-const runtimeRequire = createRequire(import.meta.url)
-
-function bundledClaudeCode(): { version?: string; command?: string } | undefined {
-  try {
-    const pkgPath = join(dirname(runtimeRequire.resolve('@anthropic-ai/claude-agent-sdk')), 'package.json')
-    const version = (runtimeRequire(pkgPath) as { version?: string }).version
-    let command: string | undefined
-    try { command = runtimeRequire.resolve(`@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}/${process.platform === 'win32' ? 'claude.exe' : 'claude'}`) } catch { /* SDK resolves its own platform package for model/account control requests. */ }
-    return { version, command }
-  } catch {
-    return undefined
-  }
-}
-
-function bundledRuntime(def: HarnessDefinition): { version?: string; command?: string } | undefined {
-  if (def.id === 'claude-code') return bundledClaudeCode()
-  return undefined
+/** Executable override from the engine's environment variable (e.g. a dev build). */
+function binaryEnvOverride(id: string): string | undefined {
+  const key = providerModule(id)?.binaryEnv
+  return key ? process.env[key] : undefined
 }
 
 export type HarnessRuntimeComposition = {
   catalog: HarnessCatalog
   readiness: HarnessReadinessService
   detector: HarnessDetector
-  /** ACP `session/new` model probing for `modelSource: 'probe'` harnesses. */
+  /** ACP catalogs observed on real native-login sessions. */
   acpModels: AcpModelProbe
   /** Agent SDK `supportedModels()` probing for `modelSource: 'probe'` harnesses. */
   agentSdkModels: AgentSdkModelProbe
-  /** Codex app-server `model/list` probing (P6-07). */
+  /** Codex app-server `model/list` probing. */
   codexModels: CodexModelProbe
   piModels: PiModelProbe
+  /** `agy models` for the Antigravity CLI transport. */
+  antigravityModels: AntigravityModelProbe
+  /** Cursor SDK account catalog for the provider credential mode. */
+  cursorModels: CursorSubscriptionCatalogSource
   updates: HarnessUpdates
   integration(id: string): Promise<HarnessIntegrationInfo | undefined>
   resolveIntegration(request: HarnessIntegrationOpenRequest): Promise<HarnessIntegrationTarget | undefined>
   invalidateModels(id: string): void
   installNetwork?: () => import('../contracts/native-agent-network.js').NativeAgentNetworkPolicy | undefined
   /**
-   * Spawn-free read of the freshest probed model list, dispatched by
-   * transport; `undefined` means no fresh successful probe is cached.
+   * Spawn-free model list: this process's fresh probe, else the catalog the
+   * Agent listed before a restart while its identity is unchanged;
+   * `undefined` means neither is known.
    */
   probedModels: (definition: HarnessDefinition) => string[] | undefined
-  /** Process-local scoped bearer tokens for spawned harnesses (04 §4). */
+  /** Spawn-free read of this process's fresh probe only, dispatched by transport. */
+  liveProbedModels: (definition: HarnessDefinition) => string[] | undefined
+  /** Catalogs kept across restarts (display-only, identity-checked); `flush` at shutdown. */
+  modelCatalogs: Pick<HarnessModelCatalogStore, 'get' | 'flush'>
+  /**
+   * Discovery's model listing: a known catalog is served as is; otherwise the
+   * Agent is probed in a queue that starts one CLI at a time.
+   */
+  probeModelsInBackground: (definition: HarnessDefinition) => Promise<string[]>
+  /** Process-local scoped bearer tokens for spawned harnesses. */
   tokens: HarnessTokenService
+  /** Agents declared by enabled extensions; the runtime sets the loader. */
+  extensionAgents: ExtensionAgentProviderSource
   /**
    * Loopback `kun serve` endpoint for harness gateway env injection. The
    * serve layer fills `baseUrl` after the listener binds; absent means this
@@ -69,7 +77,7 @@ export type HarnessRuntimeComposition = {
    */
   gatewayEndpoint: { baseUrl?: string }
   /**
-   * Resolves `launch.secretEnv` credential-store refs (P4-12); undefined when
+   * Resolves `launch.secretEnv` credential-store refs; undefined when
    * the runtime has no credential store. Exposed for `probe-definition`.
    */
   resolveSecretEnv?: HarnessSecretRefResolver
@@ -83,12 +91,17 @@ export type HarnessRuntimeComposition = {
 export function createHarnessComposition(
   options: () => Pick<KunServeRuntimeOptions, 'providers' | 'harnesses' | 'dataDir' | 'nativeAgentNetwork' | 'apiKey' | 'baseUrl' | 'model' | 'credentialSourceId'> &
     Partial<Pick<KunServeRuntimeOptions, 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'routePools'>>,
-  deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null> } = {}
+  deps: { resolveGatewayAliases?: (binding: HarnessGatewayBinding) => Promise<HarnessGatewayAliasGrant[]>; revision?: () => number; resolveSecretEnv?: HarnessSecretRefResolver; resolveProviderCredential?: (sourceId: string) => Promise<{ apiKey: string } | null>
+    /** Persist display readiness proofs here (the live Runtime only, never a probe composition). */
+    readinessProofStorePath?: string
+    /** Persist Agent model catalogs here (the live Runtime only, never a probe composition). */
+    modelCatalogStorePath?: string } = {}
 ): HarnessRuntimeComposition {
+  const extensionAgents = new ExtensionAgentProviderSource()
   const catalog = new HarnessCatalog({
-    custom: () => options().harnesses?.custom ?? [],
+    providers: () => harnessProviderOverrides(options().harnesses),
+    extensionAgents: () => extensionAgents.list(),
     nativeAgentNetwork: () => options().nativeAgentNetwork,
-    terminalAgents: () => options().harnesses?.terminalAgents ?? [],
     enabledProfiles: () => options().harnesses?.enabledProfiles ?? [],
     disabled: () => options().harnesses?.disabledIds ?? [],
     transportOverrides: () => options().harnesses?.transportOverrides ?? {},
@@ -98,15 +111,18 @@ export function createHarnessComposition(
     definitions: () => catalog.list(),
     overrides: () => {
       const binaryPaths = {
-        ...(process.env.KUN_CLAUDE_BINARY ? { 'claude-code': process.env.KUN_CLAUDE_BINARY } : {}),
-        ...(process.env.KUN_ANTIGRAVITY_BINARY ? { antigravity: process.env.KUN_ANTIGRAVITY_BINARY } : {}),
-        ...options().harnesses?.binaryPaths
+        ...Object.fromEntries(PROVIDER_MODULES.flatMap((module) => {
+          const path = binaryEnvOverride(module.definition.id)
+          return path ? [[module.definition.id, path]] : []
+        })),
+        ...Object.fromEntries(Object.entries(harnessProviderOverrides(options().harnesses))
+          .flatMap(([id, override]) => override.command ? [[id, override.command]] : []))
       }
       return Object.fromEntries(
         Object.entries(binaryPaths).map(([id, binaryPath]) => [id, { binaryPath }])
       )
     },
-    bundled: bundledRuntime,
+    bundled: (def) => providerModule(def.id)?.bundled?.(),
     spawnCaptured,
     // Discovery is metadata-only. Explicit Check & enable owns protocol startup,
     // so merely opening Agent settings cannot bootstrap a disabled agent.
@@ -118,40 +134,99 @@ export function createHarnessComposition(
     nowMs: () => Date.now(),
     nowIso: () => new Date().toISOString()
   })
+  // Every executable a model probe may start for this Agent, for the persisted catalog identity.
+  const catalogExecutables = (definition: HarnessDefinition): Array<string | undefined> => {
+    const override = harnessCommandOverride(options().harnesses, definition.id)
+    const engine = providerModule(definition.id)
+    return [override, engine?.sdkExecutable?.(override), engine?.bundled?.()?.command, binaryEnvOverride(definition.id),
+      definition.launch?.command, definition.detect?.command]
+  }
+  const modelCatalogs = new HarnessModelCatalogStore({
+    ...(deps.modelCatalogStorePath ? { path: deps.modelCatalogStorePath } : {}),
+    identity: (definition) => harnessModelCatalogIdentity(definition, catalogExecutables(definition))
+  })
+  const onCatalog = (definition: HarnessDefinition, catalog: HarnessModelCatalog): void =>
+    modelCatalogs.record(definition, catalog)
   const acpModels = new AcpModelProbe({
-    binaryPath: (id) => options().harnesses?.binaryPaths?.[id],
-    resolveSecretEnv: deps.resolveSecretEnv
+    binaryPath: (id) => harnessCommandOverride(options().harnesses, id), onCatalog
   })
   const agentSdkModels = new AgentSdkModelProbe({
-    binaryPath: (id) =>
-      options().harnesses?.binaryPaths?.[id] ?? process.env.KUN_CLAUDE_BINARY
+    onCatalog,
+    // An engine with its own SDK executable choice (Claude Code falls back to
+    // the user's installation) starts what the detector reported.
+    binaryPath: (id) => {
+      const override = harnessCommandOverride(options().harnesses, id)
+      const engine = providerModule(id)
+      return engine?.sdkExecutable ? engine.sdkExecutable(override) : override ?? binaryEnvOverride(id)
+    }
   })
   const codexModels = new CodexModelProbe({
-    binaryPath: (id) => options().harnesses?.binaryPaths?.[id],
-    resolveSecretEnv: deps.resolveSecretEnv
+    binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
+    resolveSecretEnv: deps.resolveSecretEnv, onCatalog
   })
-  const piModels = new PiModelProbe({ binaryPath: (id) => options().harnesses?.binaryPaths?.[id], resolveSecretEnv: deps.resolveSecretEnv })
-  const probedModels = (definition: HarnessDefinition): string[] | undefined =>
+  const piModels = new PiModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id), resolveSecretEnv: deps.resolveSecretEnv, onCatalog })
+  const antigravityModels = new AntigravityModelProbe({ binaryPath: (id) => harnessCommandOverride(options().harnesses, id) ?? binaryEnvOverride(id), onCatalog })
+  const liveProbedModels = (definition: HarnessDefinition): string[] | undefined =>
     definition.transport === 'acp'
       ? acpModels.peek(definition)
       : definition.transport === 'agent-sdk'
         ? agentSdkModels.peek(definition)
         : definition.transport === 'pi-rpc' ? piModels.peek(definition)
+        : definition.transport === 'antigravity-cli' ? antigravityModels.peek(definition)
         : definition.transport === 'codex-app-server'
           ? codexModels.peek(definition)
           : undefined
+  const probedModels = (definition: HarnessDefinition): string[] | undefined =>
+    liveProbedModels(definition) ?? modelCatalogs.get(definition)?.catalog.models ??
+      (definition.transport === 'acp' && definition.staticModels.length === 0 ? ['default'] : undefined)
+  // Discovery never holds one Agent's probe process while starting the next.
+  const probeLive = (definition: HarnessDefinition): Promise<string[]> =>
+    definition.transport === 'acp' ? acpModels.probe(definition)
+      : definition.transport === 'agent-sdk' ? agentSdkModels.probe(definition)
+        : definition.transport === 'codex-app-server' ? codexModels.probe(definition)
+          : definition.transport === 'pi-rpc' ? piModels.probe(definition)
+            : definition.transport === 'antigravity-cli' ? antigravityModels.probe(definition) : Promise.resolve([])
+  let backgroundTail: Promise<unknown> = Promise.resolve()
+  const backgroundProbes = new Map<string, Promise<string[]>>()
+  const probeModelsInBackground = (definition: HarnessDefinition): Promise<string[]> => {
+    const known = probedModels(definition)
+    if (known?.length) return Promise.resolve(known)
+    const queued = backgroundProbes.get(definition.id)
+    if (queued) return queued
+    // An earlier queued probe (or a picker) may have listed this Agent meanwhile.
+    const run = backgroundTail.then(() => probedModels(definition) ?? probeLive(definition))
+      .catch(() => [] as string[])
+      .finally(() => { if (backgroundProbes.get(definition.id) === run) backgroundProbes.delete(definition.id) })
+    backgroundTail = run
+    backgroundProbes.set(definition.id, run)
+    return run
+  }
   const readiness = new HarnessReadinessService({ options, catalog, detector, revision: deps.revision,
     resolveSecretEnv: deps.resolveSecretEnv, resolveProviderCredential: deps.resolveProviderCredential,
     resolveGatewayAliases: deps.resolveGatewayAliases,
-    sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal) })
+    sdkHandshake: (definition, env, signal) => agentSdkModels.probeReadiness(definition, env, signal),
+    ...(deps.readinessProofStorePath ? { proofStorePath: deps.readinessProofStorePath } : {}),
+    onCatalog: (definition, catalog) => {
+      if (definition.transport === 'acp') acpModels.seed(definition, catalog)
+      else if (definition.transport === 'antigravity-cli') {
+        antigravityModels.seed(definition, catalog)
+        modelCatalogs.record(definition, catalog)
+      }
+    } })
   // Refreshing one Agent must not discard another Agent's catalog.
   const invalidateModels = (id: string): void => {
     const transport = catalog.get(id)?.transport
-    if (!transport) { agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate(); return }
+    if (!transport) {
+      agentSdkModels.invalidate(); acpModels.invalidate(); codexModels.invalidate(); piModels.invalidate(); antigravityModels.invalidate()
+      clearCursorSubscriptionCatalog()
+      return
+    }
     if (transport === 'acp') acpModels.invalidate(id)
     else if (transport === 'agent-sdk') agentSdkModels.invalidate()
     else if (transport === 'codex-app-server') codexModels.invalidate()
     else if (transport === 'pi-rpc') piModels.invalidate()
+    else if (transport === 'antigravity-cli') antigravityModels.invalidate()
+    else if (transport === 'cursor-sdk') clearCursorSubscriptionCatalog()
   }
   const updates = new HarnessUpdates({
     definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),
@@ -172,9 +247,9 @@ export function createHarnessComposition(
     verify: async (id, path, signal) => {
       const original = options()
       const override = { ...original, harnesses: HarnessesConfigSchema.parse({
-        ...original.harnesses, binaryPaths: { ...original.harnesses?.binaryPaths, [id]: path }
+        ...original.harnesses, providers: { ...original.harnesses?.providers, [id]: { ...original.harnesses?.providers?.[id], command: path } }
       }) }
-      const probe = createHarnessComposition(() => override, deps)
+      const probe = createHarnessComposition(() => override, { ...deps, readinessProofStorePath: undefined, modelCatalogStorePath: undefined })
       const definition = probe.catalog.get(id)
       if (!definition) throw new Error('Agent definition is unavailable')
       const status = await probe.detector.status(id, { force: true, signal })
@@ -189,11 +264,11 @@ export function createHarnessComposition(
   return {
     integration: async (id) => {
       const definition = catalog.get(id)
-      return definition ? harnessIntegrationInfo(definition, { binaryPath: options().harnesses?.binaryPaths?.[id] }) : undefined
+      return definition ? harnessIntegrationInfo(definition, { binaryPath: harnessCommandOverride(options().harnesses, id) }) : undefined
     },
     resolveIntegration: async (request) => {
       const definition = catalog.get(request.harnessId)
-      return definition ? resolveHarnessIntegrationTarget(definition, request, { binaryPath: options().harnesses?.binaryPaths?.[request.harnessId] }) : undefined
+      return definition ? resolveHarnessIntegrationTarget(definition, request, { binaryPath: harnessCommandOverride(options().harnesses, request.harnessId) }) : undefined
     },
     updates, invalidateModels,
     catalog,
@@ -203,9 +278,28 @@ export function createHarnessComposition(
     agentSdkModels,
     codexModels,
     piModels,
+    antigravityModels,
+    cursorModels: {
+      async list({ providerId, refresh, signal }) {
+        const provider = options().providers?.[providerId]
+        if (!provider || provider.kind !== 'cursor-sdk') return undefined
+        const direct = provider.apiKey?.trim()
+        const resolved = !direct && provider.credentialSourceId && deps.resolveProviderCredential
+          ? (await deps.resolveProviderCredential(provider.credentialSourceId).catch(() => null))?.apiKey?.trim()
+          : undefined
+        const apiKey = direct || resolved
+        if (!apiKey) return undefined
+        const proxyUrl = provider.useProxy ? provider.modelProxyUrl?.trim() : undefined
+        return loadCursorSubscriptionCatalog({ apiKey, refresh, signal, ...(proxyUrl ? { proxyUrl } : {}) })
+      }
+    },
     installNetwork: () => options().nativeAgentNetwork?.installer,
     probedModels,
+    liveProbedModels,
+    modelCatalogs,
+    probeModelsInBackground,
     tokens: new HarnessTokenService(),
+    extensionAgents,
     gatewayEndpoint: {},
     ...(deps.resolveSecretEnv ? { resolveSecretEnv: deps.resolveSecretEnv } : {})
   }

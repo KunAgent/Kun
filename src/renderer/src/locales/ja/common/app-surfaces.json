@@ -1,0 +1,21 @@
+{
+  "appSurfaceDesktopOnly": "インタラクティブページは Kun デスクトップアプリで利用できます。",
+  "appSurfaceRetry": "再試行",
+  "appSurfacePageError": "ページのエラー: {{message}}",
+  "appSurfaceWidgetAria": "インタラクティブウィジェット: {{title}}",
+  "appSurfaceCopyImage": "画像としてコピー",
+  "appSurfaceCopied": "コピーしました",
+  "appSurfaceExpand": "App パネルで開く",
+  "appSurfaceOpenInPanel": "App パネルに表示中です。クリックすると再度開きます。",
+  "appSurfaceFollowUpConfirm": "「{{app}}」からこのメッセージを送信しますか?",
+  "appSurfaceOpenLinkConfirm": "「{{app}}」がこのリンクをブラウザーで開こうとしています。",
+  "appSurfaceToolConsent": "この会話で「{{app}}」が自身のツールを実行することを許可しますか?",
+  "appSurfaceToolConsentDetail": "ページは自身の MCP サーバーのツールを呼び出せます(例: 自身のドキュメントの保存や変更)。他のサーバー、ファイル、会話履歴にはアクセスできません。",
+  "appSurfaceWidgetStateChip": "{{title}} の状態",
+  "appSurfaceWidgetStateSummary": "インタラクティブウィジェットに保存された選択",
+  "appSurfaceAppContextChip": "{{title}} のコンテキスト",
+  "appSurfaceAppContextSummary": "アプリで選択したコンテキスト",
+  "appSurfaceDownloadConfirm": "「{{app}}」がファイルをコンピューターに保存しようとしています。",
+  "appSurfacePanelTab": "アプリ",
+  "appSurfacePanelEmpty": "開いているアプリはありません。会話のインタラクティブカードから開いてください。"
+}

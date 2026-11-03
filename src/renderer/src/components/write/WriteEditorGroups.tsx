@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, type MutableRefObject, type ReactElement, type RefObject } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { saveWorkDocumentExplicitly } from '../../product-analytics/work'
 import { useTranslation } from 'react-i18next'
 import type { WriteInlineCompletionSettingsV1 } from '@shared/app-settings'
 import { isWriteWorkspaceFilePath } from '@shared/write-text-file'
@@ -154,11 +155,10 @@ export function WriteEditorGroups({
   const [creatingWhiteboard, setCreatingWhiteboard] = useState(false)
   const splitActive = isWriteEditorLayoutSplit(editorLayout)
   const remoteMobile = useRemoteMobileLayout()
-  const workSurface = useWriteWorkspaceStore((state) => state.workSurface)
-  // Paper mode: a full-page view (library / discover) owns the whole center;
-  // the other group (the paper's NOTES) stays mounted but hidden until a
-  // reader tab is focused again.
-  const expandedGroupId = workSurface === 'papers' && splitActive && activePaperViewId(editorLayout)
+  // A full-page view (library / discover) owns the whole center; the other
+  // group (a paper's NOTES) stays mounted but hidden until a reader or
+  // document tab is focused again.
+  const expandedGroupId = splitActive && activePaperViewId(editorLayout)
     ? editorLayout.focusedGroupId
     : null
   const quickOpenFiles = useMemo(() => {
@@ -287,7 +287,7 @@ export function WriteEditorGroups({
             />
             {paperView ? (
               <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-                <PaperViewSurface view={paperView} />
+                <PaperViewSurface view={paperView} groupId={group.id} />
               </div>
             ) : (
               <>
@@ -341,7 +341,7 @@ export function WriteEditorGroups({
                     else clearPresentationViewForGroup(group.id, source)
                   }}
                   onSaveShortcut={() => {
-                    if (path) void saveDocument(workspaceRoot, path, { resolveExternalConflict: 'keep-local' })
+                    if (path) void saveWorkDocumentExplicitly(() => saveDocument(workspaceRoot, path, { resolveExternalConflict: 'keep-local' }))
                   }}
                   onImagePasteSaved={() => { setFileError(null); void refreshWorkspace(workspaceRoot) }}
                   onImagePasteError={setFileError}

@@ -1,0 +1,21 @@
+{
+  "composerQueue": {
+    "caption_one": "キュー {{count}} 件 · このターンの後に順番に送信",
+    "caption_other": "キュー {{count}} 件 · このターンの後に順番に送信",
+    "dragHint": "ドラッグして並べ替え",
+    "showMore_one": "さらに {{count}} 件",
+    "showMore_other": "さらに {{count}} 件",
+    "showLess": "折りたたむ",
+    "now": "今すぐ",
+    "nowLabel": "今すぐ挿入",
+    "pausedTitle": "返信を停止したため、キューを一時停止しています",
+    "pausedCount_one": "{{count}} 件のメッセージ",
+    "pausedCount_other": "{{count}} 件のメッセージ",
+    "resume": "再開",
+    "resumeHint": "キュー内のメッセージを順番に送信します",
+    "images_one": "画像 {{count}} 件",
+    "images_other": "画像 {{count}} 件",
+    "files_one": "ファイル {{count}} 件",
+    "files_other": "ファイル {{count}} 件"
+  }
+}

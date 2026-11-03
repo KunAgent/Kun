@@ -33,6 +33,10 @@ const {
   resolvePackagedRuntimeExecutable
 } = require('./smoke-packaged-extensions.cjs')
 const {
+  argumentValue,
+  requiredPath,
+  optionalPath,
+  positiveIntegerArgument,
   CHAT_MARKER,
   NEGATIVE_SCENARIOS,
   POSITIVE_SCENARIOS,
@@ -69,6 +73,7 @@ const FAILED_PREFIX = 'KUN_UPDATE_HANDOFF_SMOKE_FAILED '
 
 async function main() {
   const resourcesDir = requiredPath('--resources')
+  require('./smoke-windows-startup-helpers.cjs').smokeWindowsStartupHelpers(resourcesDir)
   const oldResourcesDir = optionalPath('--old-resources')
   const timeoutMs = positiveIntegerArgument('--timeout-ms', DEFAULT_TIMEOUT_MS)
   const candidateRuntimeExecutable = resolvePackagedRuntimeExecutable(
@@ -583,7 +588,7 @@ async function waitForCurrentOwners(input) {
 async function assertChatRoundTrip(runtime, workspaceRoot, timeoutMs) {
   const thread = await createSmokeThread(runtime, workspaceRoot, 'candidate chat round-trip')
   const turn = await startSmokeTurn(runtime, thread.id, 'return the deterministic fixture response')
-  await waitForTurn(
+  const settled = await waitForTurn(
     runtime,
     thread.id,
     turn.turnId,
@@ -591,8 +596,20 @@ async function assertChatRoundTrip(runtime, workspaceRoot, timeoutMs) {
     timeoutMs
   )
   const snapshot = await runtimeJson(runtime, `/v1/threads/${encodeURIComponent(thread.id)}`)
-  if (!JSON.stringify(snapshot).includes(CHAT_MARKER)) {
-    throw new Error('Candidate Runtime health passed but its chat round-trip did not complete')
+  const snapshotText = JSON.stringify(snapshot)
+  if (!snapshotText.includes(CHAT_MARKER)) {
+    const timeline = await runtimeJson(
+      runtime,
+      `/v1/threads/${encodeURIComponent(thread.id)}/timeline?turnId=${encodeURIComponent(turn.turnId)}`
+    )
+    const timelineText = JSON.stringify(timeline)
+    if (!timelineText.includes(CHAT_MARKER)) {
+      throw new Error(
+        `Candidate Runtime health passed but its chat round-trip did not complete ` +
+        `(status=${settled.status}, error=${settled.error ?? 'none'}, ` +
+        `snapshot=${snapshotText.slice(0, 2000)}, timeline=${timelineText.slice(0, 2000)})`
+      )
+    }
   }
 }
 
@@ -641,34 +658,8 @@ async function cleanupProfile(root) {
     return
   }
   await makeTreeWritable(root.temporaryRoot).catch(() => undefined)
-  await rm(root.temporaryRoot, { recursive: true, force: true })
-}
-
-function argumentValue(name) {
-  const index = process.argv.indexOf(name)
-  if (index < 0) return undefined
-  const value = process.argv[index + 1]
-  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`)
-  return value
-}
-
-function requiredPath(name) {
-  const value = argumentValue(name)
-  if (!value) throw new Error(`${name} is required`)
-  return resolve(value)
-}
-
-function optionalPath(name) {
-  const value = argumentValue(name)
-  return value ? resolve(value) : undefined
-}
-
-function positiveIntegerArgument(name, fallback) {
-  const value = argumentValue(name)
-  if (value === undefined) return fallback
-  const number = Number(value)
-  if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`${name} must be a positive integer`)
-  return number
+  const retry = process.platform === 'win32' ? { maxRetries: 40, retryDelay: 250 } : {}
+  await rm(root.temporaryRoot, { recursive: true, force: true, ...retry })
 }
 
 module.exports = {

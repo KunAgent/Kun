@@ -1,5 +1,6 @@
 import type { BackgroundShellRuntime } from '../../services/background-shell-runtime.js'
 import { jsonResponse, type JsonResponse } from '../response.js'
+import { readJsonBody } from '../read-json-body.js'
 import { ERRORS } from './runtime-error.js'
 
 export async function backgroundShellList(
@@ -37,6 +38,26 @@ export async function backgroundShellStop(
   if (!sessionId.trim()) return ERRORS.validation('sessionId is required', [])
   const stopped = await runtime.stopSession(sessionId)
   return jsonResponse({ sessionId, stopped })
+}
+
+export const MAX_BACKGROUND_SHELL_STDIN_CHARS = 16 * 1024
+
+export async function backgroundShellStdin(
+  runtime: BackgroundShellRuntime | undefined,
+  sessionId: string,
+  request: Request
+): Promise<JsonResponse> {
+  if (!runtime) return ERRORS.unavailable('background shell runtime is unavailable')
+  if (!sessionId.trim()) return ERRORS.validation('sessionId is required', [])
+  const body = await readJsonBody(request, 64 * 1024)
+  if (!body.ok) return body.response
+  const input = (body.value as { input?: unknown } | null)?.input
+  if (typeof input !== 'string' || !input || input.length > MAX_BACKGROUND_SHELL_STDIN_CHARS) {
+    return ERRORS.validation('input must be a non-empty string', [])
+  }
+  if (!runtime.getSession(sessionId)) return ERRORS.notFound(`background shell not found: ${sessionId}`)
+  const written = await runtime.writeStdin(sessionId, input)
+  return jsonResponse({ sessionId, written })
 }
 
 export { ERRORS as BackgroundShellErrors }

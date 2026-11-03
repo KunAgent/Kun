@@ -1,3 +1,4 @@
+import type { UserAttentionRequest } from './user-attention'
 import type {
   AppSettingsPatch,
   AppSettingsV1,
@@ -36,6 +37,7 @@ import type {
 import type { DesktopStartupStatePayload } from './desktop-startup-state'
 import type { EditorListResult, EditorOpenResult, OpenEditorPathOptions } from './editor'
 import type { GitBranchesResult, GitBranchWorktreesResult, GitWorktreeCheckoutResult } from './git-branches'
+import type { GitFileStatusResult } from './git-file-status'
 import type { GitCheckpointCreateResult, GitCheckpointRestoreResult } from './git-checkpoint'
 import type { MergeResult, SyncResult, WorktreeChanges, WorktreeInfo, WorktreePoolStatus } from './worktree'
 import type {
@@ -45,6 +47,7 @@ import type {
   GuiUpdateInstallResult,
   GuiUpdateState
 } from './gui-update'
+import type { ReleaseNotice, ReleaseNoticeRequest } from './release-notice'
 import type {
   BrowserUseControlInput,
   BrowserUseDecisionInput,
@@ -53,6 +56,7 @@ import type {
   BrowserUseViewState
 } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
+import type { StorageCleanupApi } from './storage-cleanup'
 import type { UninstallApi } from './uninstall'
 import type { RuntimeRequestIpcApi } from './kun-gui-api-runtime-request'
 import type { RuntimeDataRecoveryApi } from './runtime-data-recovery'
@@ -90,6 +94,8 @@ import type {
   WorkspaceFileOpenResult,
   WorkspaceFileRevealTarget,
   WorkspaceFileResolveResult,
+  WorkspaceFileListResult,
+  WorkspaceFileReadPayload,
   WorkspaceFileTarget,
   WorkspaceFileWatchPayload,
   WorkspaceFileWatchResult,
@@ -150,6 +156,8 @@ import type {
   WriteRichClipboardResult
 } from './write-export'
 import type {
+  ConversationExportBatchPayload,
+  ConversationExportBatchResult,
   ConversationExportPayload,
   ConversationExportResult
 } from './conversation-export'
@@ -164,14 +172,7 @@ import type {
   RemoteAccessStatus,
   RemoteTailscaleInfo
 } from './remote-access'
-import type {
-  TerminalCreatePayload,
-  TerminalCreateResult,
-  TerminalDataPayload,
-  TerminalExitPayload,
-  TerminalResizePayload,
-  TerminalWritePayload
-} from './terminal'
+import type { KunGuiTerminalApi } from './kun-gui-api-terminal'
 import type { ExtensionIpcApi } from './extension-ipc'
 import type {
   RuntimeImageAttachmentUploadRequest,
@@ -243,10 +244,17 @@ import {
   WorkspacePickResult
 } from './kun-gui-api-contracts'
 import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi &
+import type { KunGuiMarketApi } from './market/kun-gui-api-market'
+export type KunGuiApi = KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
+  import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi & import('./terminal-dock').KunGuiTerminalDockApi &
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
+  import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi & import('./artifact-thumbnail').KunGuiArtifactThumbnailApi &
   import('./ade-collaboration-settings').AdeCollaborationSettingsBridge & import('./ade-project-defaults').AdeProjectDefaultsBridge & {
+  productAnalytics?: import('./product-analytics').ProductAnalyticsApi
   platform: string
+  /** Native Kun account, unavailable in the remote browser client. */
+  kunArt?: import('./kun-art').KunArtApi
+  kunAccount?: import('./kun-account').KunAccountApi
   /** True only in the browser Remote build served by the Remote gateway. */
   isRemoteWeb?: boolean
   /** Immutable mode selected before the BrowserWindow and renderer are created. */
@@ -269,6 +277,8 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   }
   /** Windows production storage-root relocation and recovery surface. */
   storageRelocation: StorageRelocationApi
+  /** Settings storage page: usage scan, consented auto cleanup, trash. */
+  storageCleanup: StorageCleanupApi
   /** In-app uninstall: optional full local-data removal and app self-removal. */
   uninstall: UninstallApi
   /** One-time, path-opaque Runtime migration recovery surface. */
@@ -289,6 +299,9 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   claudeSubscriptionProbe: (token?: string, providerId?: string) => Promise<ClaudeSubscriptionProbeResult>
   /** List Claude models available to the subscription (via the SDK's supportedModels). */
   claudeSubscriptionModels: (token?: string, providerId?: string) => Promise<string[]>
+  claudeSubscriptionModelCatalog?: (token?: string, providerId?: string) => Promise<Array<{
+    id: string; displayName?: string; aliases?: string[]; inferredModelId?: string; profile?: Partial<ModelProviderModelProfileV1>
+  }>>
   /** Whether the on-demand Claude Code binary is present + any in-flight download. */
   claudeSubscriptionSdkStatus: () => Promise<{
     installed: boolean
@@ -319,7 +332,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
     credentialSource?: 'keychain' | 'file'
   }>
   /** Concrete models routed through the Gemini CLI Code Assist API contract. */
-  geminiCliSubscriptionModels: () => Promise<string[]>
+  geminiCliSubscriptionModels: (providerId?: string) => Promise<string[]>
   /** Validate a Cursor API key and list models visible to that Cursor account. */
   cursorSubscriptionDiscover: (apiKey?: string, providerId?: string) => Promise<{
     account: {
@@ -339,6 +352,8 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   openGatewayMiddlewareFolder: () => Promise<{ ok: boolean; message?: string }>
   gatewayCredential: (action: 'status' | 'ensure' | 'copy' | 'rotate' | 'revoke') => Promise<GatewayCredentialResult>
   getRuntimeSettingsSyncStatus: () => Promise<KunRuntimeSettingsSyncStatusPayload>
+  mobileLink?: import('./mobile-link').MobileLinkApi
+  assistantMailbox?: import('./assistant-mailbox').AssistantMailboxApi
   remoteAccessGetStatus: () => Promise<RemoteAccessStatus>
   remoteAccessSetConfig: (patch: RemoteAccessConfigPatch) => Promise<RemoteAccessStatus>
   remoteAccessSetPassword: (password: string) => Promise<RemoteAccessStatus>
@@ -376,6 +391,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   listProviderQuotas: (payload?: { forceRefresh?: boolean }) => Promise<ProviderQuotaListResult>
   fetchModelsDevCatalog: (payload: ModelsDevCatalogRequest) => Promise<ModelsDevCatalogResult>
   optimizePrompt: (payload: PromptOptimizationRequest) => Promise<PromptOptimizationResult>
+  cancelPromptOptimization: (payload: { requestId: string }) => Promise<void>
   getClawStatus: () => Promise<ClawRuntimeStatus>
   runClawTask: (taskId: string) => Promise<ClawRunResult>
   getScheduleStatus: () => Promise<ScheduleRuntimeStatus>
@@ -447,7 +463,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   activateUiPluginTheme: (id: string) => Promise<UiPluginThemeActivateIpcResult>
   deactivateUiPluginTheme: () => Promise<UiPluginThemeDeactivateIpcResult>
   getKunConfigFile: () => Promise<DeepseekConfigFileResult>
-  setKunConfigFile: (content: string) => Promise<DeepseekConfigSaveResult>
+  setKunConfigFile: (content: string, baseContent: string) => Promise<DeepseekConfigSaveResult>
   preflightBuiltinGitHubMcpAuthorization: (host?: string) => Promise<BuiltinGitHubMcpAuthorizationPreflight>
   startBuiltinGitHubMcpLogin: (host?: string) => Promise<BuiltinGitHubMcpLoginResult>
   disableBuiltinGitHubMcp: () => Promise<{ disabled: true }>
@@ -464,6 +480,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   ) => Promise<KunProjectConfigFileResult>
   openKunProjectConfigDir: (workspaceRoot: string) => Promise<PathOpenResult>
   getGitBranches: (workspaceRoot: string) => Promise<GitBranchesResult>
+  getGitFileStatus: (workspaceRoot: string) => Promise<GitFileStatusResult>
   getWorkspaceCreationTimes: (workspaceRoots: string[]) => Promise<WorkspaceCreationTimeEntry[]>
   switchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
   createAndSwitchGitBranch: (workspaceRoot: string, branch: string) => Promise<GitBranchesResult>
@@ -523,10 +540,11 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   listEditors: () => Promise<EditorListResult>
   openEditorPath: (options: OpenEditorPathOptions) => Promise<EditorOpenResult>
   listWorkspaceDirectory: (options: WorkspaceDirectoryTarget) => Promise<WorkspaceDirectoryListResult>
+  listWorkspaceFiles: (options: { workspaceRoot: string }) => Promise<WorkspaceFileListResult>
   resolveWorkspaceFile: (options: WorkspaceFileTarget) => Promise<WorkspaceFileResolveResult>
   openWorkspaceFileInSystem: (options: WorkspaceFileTarget) => Promise<WorkspaceFileOpenResult>
   revealWorkspaceFileInFolder: (options: WorkspaceFileRevealTarget) => Promise<WorkspaceFileOpenResult>
-  readWorkspaceFile: (options: WorkspaceFileTarget) => Promise<WorkspaceFileReadResult>
+  readWorkspaceFile: (options: WorkspaceFileReadPayload) => Promise<WorkspaceFileReadResult>
   lintProjectDesignMd: (content: string) => Promise<ProjectDesignMdOfficialLintResult>
   readWorkspaceImage: (options: WorkspaceFileTarget) => Promise<WorkspaceImageReadResult>
   readWorkspacePdf: (options: WorkspaceFileTarget) => Promise<WorkspacePdfReadResult>
@@ -594,6 +612,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   clearWriteInlineCompletionDebugEntries: () => Promise<boolean>
   exportWriteDocument: (payload: WriteExportPayload) => Promise<WriteExportResult>
   exportConversation: (payload: ConversationExportPayload) => Promise<ConversationExportResult>
+  exportConversationBatch: (payload: ConversationExportBatchPayload) => Promise<ConversationExportBatchResult>
   exportMemoryMarkdown: (payload: MemoryMarkdownExportSavePayload) => Promise<MemoryMarkdownExportSaveResult>
   exportDesignPrototype: (payload: DesignExportPayload) => Promise<DesignExportResult>
   copyWriteDocumentAsRichText: (
@@ -648,22 +667,21 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   /** Main shows allowance reminders itself; a click asks the renderer to open provider settings. */
   onQuotaReminderClicked: (handler: () => void) => () => void
   setAppBadgeCount: (count: number) => Promise<AppBadgeCountResult>
+  /** Notification + Dock bounce + badge while Kun is in the background. */
+  requestUserAttention: (request: UserAttentionRequest) => Promise<{ shown: boolean }>
   getAppVersion: () => Promise<string>
   getGuiUpdateState: () => Promise<GuiUpdateState>
   checkGuiUpdate: (channel?: GuiUpdateChannel) => Promise<GuiUpdateInfo>
   downloadGuiUpdate: (channel?: GuiUpdateChannel) => Promise<GuiUpdateDownloadResult>
   installGuiUpdate: () => Promise<GuiUpdateInstallResult>
   onGuiUpdateState: (handler: (payload: GuiUpdateState) => void) => () => void
+  /** The post-update "what's new" notice that is due, or the running version's with `current`. */
+  getReleaseNotice: (request?: ReleaseNoticeRequest) => Promise<ReleaseNotice | null>
+  acknowledgeReleaseNotice: (version: string) => Promise<void>
   onProviderMutationFlushRequest: (handler: ProviderMutationFlushRequestHandler) => () => void
   logError: (category: string, message: string, detail?: unknown) => Promise<void>
   getLogPath: () => Promise<string>
   openLogDir: () => Promise<{ ok: boolean; message?: string }>
-  createTerminal: (payload: TerminalCreatePayload) => Promise<TerminalCreateResult>
-  writeToTerminal: (payload: TerminalWritePayload) => Promise<boolean>
-  resizeTerminal: (payload: TerminalResizePayload) => Promise<boolean>
-  disposeTerminal: (sessionId: string) => Promise<boolean>
-  onTerminalData: (handler: (payload: TerminalDataPayload) => void) => () => void
-  onTerminalExit: (handler: (payload: TerminalExitPayload) => void) => () => void
   pets: import('./pets').PetDesktopBridge
 }
 

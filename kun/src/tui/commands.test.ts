@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CombinedAutocompleteProvider } from '@earendil-works/pi-tui'
 import { parseTuiCommand, TUI_COMMAND_DEFINITIONS } from './commands.js'
-import { TUI_SLASH_COMMANDS } from './pi-app.js'
+import { SlashPathAutocompleteProvider } from './autocomplete.js'
+import { TUI_SLASH_COMMANDS } from './commands.js'
 
 describe('TUI slash commands', () => {
   it('parses lifecycle commands and leaves prompts alone', () => {
@@ -58,7 +58,7 @@ describe('TUI slash commands', () => {
     expect(parseTuiCommand('/queue')).toEqual({ kind: 'queue' })
   })
 
-  it('offers canonical commands and compatibility aliases through pi-tui autocomplete', async () => {
+  it('offers canonical commands and compatibility aliases through composer autocomplete', async () => {
     const names = TUI_SLASH_COMMANDS.map((command) => command.name)
     expect(names).toEqual(expect.arrayContaining([
       'sessions', 'resume', 'continue', 'clear', 'title', 'models', 'provider', 'usage', 'quota', 'summarize', 'q',
@@ -66,7 +66,7 @@ describe('TUI slash commands', () => {
       'timeline', 'jump', 'subagents', 'tasks', 'plan', 'graph', 'agent', 'goal', 'skills', 'editor', 'add-dir',
       'btw', 'context', 'queue', 'variants', 'thinking', 'mouse', 'paste', 'redo'
     ]))
-    const provider = new CombinedAutocompleteProvider(TUI_SLASH_COMMANDS, '/tmp', null)
+    const provider = new SlashPathAutocompleteProvider(TUI_SLASH_COMMANDS, '/tmp')
     const suggestions = await provider.getSuggestions(['/pro'], 0, 4, { signal: new AbortController().signal })
     expect(suggestions?.items.map((item) => item.value)).toContain('provider')
   })
@@ -78,7 +78,8 @@ describe('TUI slash commands', () => {
     }
     expect(new Set(TUI_COMMAND_DEFINITIONS.map((definition) => definition.id)).size).toBe(TUI_COMMAND_DEFINITIONS.length)
     expect(TUI_COMMAND_DEFINITIONS).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'details', keyAction: 'tool_details_toggle' }),
+      expect.objectContaining({ id: 'details', slash: 'details', keyAction: 'tool_details_toggle' }),
+      expect.objectContaining({ id: 'sidebar', slash: 'sidebar', keyAction: 'sidebar_toggle' }),
       expect.objectContaining({ id: 'mouse', keyAction: 'pointer_mode_toggle' }),
       expect.objectContaining({ id: 'editor', keyAction: 'input_editor' }),
       expect.objectContaining({ id: 'steer', keyAction: 'input_steer' }),
@@ -108,7 +109,7 @@ describe('TUI slash commands', () => {
       'sessions', 'new', 'open', 'timeline', 'jump', 'rename', 'archive', 'archives', 'fork',
       'compact', 'export', 'status', 'copy', 'undo', 'redo', 'connect', 'model',
       'usage', 'quota',
-      'variants', 'thinking', 'mouse', 'details', 'permission', 'plan', 'graph', 'agent', 'subagents', 'tasks', 'goal',
+      'variants', 'thinking', 'mouse', 'details', 'sidebar', 'permission', 'plan', 'graph', 'agent', 'subagents', 'tasks', 'goal',
       'attach', 'paste', 'memory', 'shells', 'extensions', 'queue', 'skills', 'mcp', 'init', 'import', 'editor', 'add-dir', 'btw', 'context',
       'capabilities', 'theme', 'share', 'unshare', 'console', 'diff', 'terminal', 'update', 'help', 'quit'
     ]))

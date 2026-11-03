@@ -285,6 +285,9 @@ describe('CursorSdkEventMapper', () => {
       turns: 1
     })
 
+    // The SDK's own total counts cache reads twice (input already has them).
+    expect(mapCursorUsage({ ...usage, totalTokens: 170 }, 'cursor-subscription', 'auto').totalTokens).toBe(120)
+
     const subject = mapper()
     expect(subject.map({
       type: 'usage',

@@ -1,5 +1,5 @@
 /**
- * Pi rpc handshake probe for `POST /v1/harnesses/:id/test` (P6-11): pi has no
+ * Pi rpc handshake probe for `POST /v1/harnesses/:id/test`: pi has no
  * protocol `initialize`; the `get_state` response doubles as the handshake —
  * it proves the rpc channel is alive and reports the active session/model.
  */

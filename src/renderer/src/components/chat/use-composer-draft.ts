@@ -15,7 +15,7 @@ type UseComposerDraftOptions = {
   input: string
   canCompose: boolean
   /**
-   * ADE manager thread id (09 §6.2): while the composer is focused with a
+   * ADE manager thread id: while the composer is focused with a
    * non-empty draft, renew a server-side worker-notice hold every 30 s so a
    * wake-up turn never interrupts typing; notices ride the user's send.
    */

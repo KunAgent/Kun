@@ -18,6 +18,7 @@ import type { NormalizedThread } from '../../agent/types'
 import { getProvider } from '../../agent/registry'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
+import { useSidebarBackgroundActivity } from './useSidebarBackgroundActivity'
 import { rememberCodeWorkspaceRoots } from '../../store/chat-store-helpers'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { removedWorkspaceIdentityKeys } from '../../lib/removed-code-workspaces'
@@ -122,6 +123,9 @@ import {
   type SidebarVirtualFolder
 } from './sidebar-folders'
 import { createSidebarProjectThreadActions } from './sidebar-project-thread-actions'
+import { splitSidebarTaskThreads } from './sidebar-task-threads'
+import { hiddenScheduledTaskThreadCount, withoutScheduledTaskThreads } from './scheduled-task-threads'
+import { SidebarTaskThreadsProvider } from './SidebarTaskThreads'
 import {
   createSidebarProjectDragActions,
   type FolderDropTarget,
@@ -189,6 +193,8 @@ type SidebarProjectsSectionProps = {
   onDeleteThread: (threadId: string) => Promise<void>
   onRestoreThread: (threadId: string) => Promise<void>
   onSearchQueryChange: (query: string) => void
+  /** Opens the Automation view, where scheduled-run sessions are listed. */
+  onOpenSchedule: () => void
   t: (k: string, opts?: Record<string, unknown>) => string
 }
 
@@ -258,6 +264,7 @@ export function SidebarProjectsSection({
   onDeleteThread,
   onRestoreThread,
   onSearchQueryChange,
+  onOpenSchedule,
   t
 }: SidebarProjectsSectionProps): ReactElement {
   const orderTracker = useRef(createSidebarThreadOrderTracker()).current
@@ -293,11 +300,7 @@ export function SidebarProjectsSection({
     setRegisteredThreadWorktrees(readThreadWorktreeRegistry().worktrees)
   }, [activeThreadId, threadWorkspaceIdentityKey, workspaceRootsIdentityKey])
 
-  const worktreeDiscoveryKey = sidebarWorktreeDiscoveryKey(
-    threads,
-    workspaceRoot,
-    workspaceRoots
-  )
+  const worktreeDiscoveryKey = sidebarWorktreeDiscoveryKey(threads, workspaceRoot, workspaceRoots)
   const discoveredThreadWorktrees = useSidebarWorktreeDiscovery(worktreeDiscoveryKey)
 
   const threadWorktrees = useMemo(() => ({
@@ -308,26 +311,34 @@ export function SidebarProjectsSection({
   const workspaceCreationTimes = useSidebarWorkspaceCreationTimes(
     sidebarWorkspaceResolutionCandidates({ workspaceRoot, workspaceRoots, threadWorktrees, threads })
   )
+  // Scheduled runs own their sessions; the project lists only get a pointer to Automation.
+  const visibleThreads = useMemo(() => withoutScheduledTaskThreads(threads, {
+    revealAll: Boolean(searchQuery.trim()), keepThreadId: activeThreadId
+  }), [threads, searchQuery, activeThreadId])
+  const scheduledThreadCount = useMemo(() => hiddenScheduledTaskThreadCount(threads, {
+    searching: Boolean(searchQuery.trim()), showArchived, keepThreadId: activeThreadId
+  }), [threads, searchQuery, showArchived, activeThreadId])
 
   useRemovedWorkspaceDiscoveredAliases(discoveredThreadWorktrees, removedCodeWorkspaces)
 
+  const backgroundActivityByThread = useSidebarBackgroundActivity()
   const sidebarThreadActivityContext = {
     activeThreadId,
     busy,
     watchTurnCompletion,
     unreadThreadIds,
     scheduledThreadActivities,
-    awaitingUserInputThreadIds
+    awaitingUserInputThreadIds,
+    backgroundActivityByThread
   }
 
-  const removedProjectKeys = useMemo(
-    () => removedWorkspaceIdentityKeys(removedCodeWorkspaces),
-    [removedCodeWorkspaces]
-  )
+  const removedProjectKeys = useMemo(() => removedWorkspaceIdentityKeys(removedCodeWorkspaces), [removedCodeWorkspaces])
 
+  // Task sessions nest under their parent row instead of listing as their own rows.
+  const taskSplit = useMemo(() => splitSidebarTaskThreads(visibleThreads, { searching: Boolean(searchQuery.trim()) }), [visibleThreads, searchQuery])
   const groups = useMemo(() => {
     return buildSidebarWorkspaceGroups({
-      threads,
+      threads: taskSplit.rest,
       searchQuery,
       showArchived,
       workspaceRoot,
@@ -337,13 +348,13 @@ export function SidebarProjectsSection({
       removedProjectKeys,
       workspaceCreatedAt: workspaceCreationTimes
     })
-  }, [searchQuery, showArchived, threadWorktrees, threads, workspaceRoot, workspaceRoots, conversationRoot, removedProjectKeys, workspaceCreationTimes])
+  }, [searchQuery, showArchived, threadWorktrees, taskSplit, workspaceRoot, workspaceRoots, conversationRoot, removedProjectKeys, workspaceCreationTimes])
 
   const allProjectGroups = useMemo(() => {
     const byWorkspace = new Map<string, [string, NormalizedThread[]]>()
     for (const archived of [false, true]) {
       const nextGroups = buildSidebarWorkspaceGroups({
-        threads,
+        threads: visibleThreads,
         searchQuery: '',
         showArchived: archived,
         workspaceRoot,
@@ -361,7 +372,7 @@ export function SidebarProjectsSection({
       }
     }
     return [...byWorkspace.values()]
-  }, [conversationRoot, threadWorktrees, threads, workspaceRoot, workspaceRoots, removedProjectKeys, workspaceCreationTimes])
+  }, [conversationRoot, threadWorktrees, visibleThreads, workspaceRoot, workspaceRoots, removedProjectKeys, workspaceCreationTimes])
 
   const allThreadIdsByScope = useMemo(() => {
     return Object.fromEntries(allProjectGroups.map(([workspacePath, items]) => [
@@ -430,25 +441,19 @@ export function SidebarProjectsSection({
     ))
   }
 
-  const persistSidebarOrder = (
-    update: (current: SidebarOrderRegistry) => SidebarOrderRegistry
-  ): void => {
+  const persistSidebarOrder = (update: (current: SidebarOrderRegistry) => SidebarOrderRegistry): void => {
     const next = update(readSidebarOrderRegistry())
     saveSidebarOrderRegistry(next)
     setSidebarOrder(next)
   }
 
-  const persistSidebarFolders = (
-    update: (current: SidebarFolderRegistry) => SidebarFolderRegistry
-  ): void => {
+  const persistSidebarFolders = (update: (current: SidebarFolderRegistry) => SidebarFolderRegistry): void => {
     const next = update(readSidebarFolderRegistry())
     saveSidebarFolderRegistry(next)
     setSidebarFolders(next)
   }
 
-  const persistSidebarCollapse = (
-    update: (current: SidebarCollapseRegistry) => SidebarCollapseRegistry
-  ): void => {
+  const persistSidebarCollapse = (update: (current: SidebarCollapseRegistry) => SidebarCollapseRegistry): void => {
     const next = update(readSidebarCollapseRegistry())
     saveSidebarCollapseRegistry(next)
     setSidebarCollapse(next)
@@ -663,7 +668,8 @@ export function SidebarProjectsSection({
     onRemoveWorkspace,
     onArchiveThread
   })
-  return <SidebarProjectsContent {...{
+  return <SidebarTaskThreadsProvider value={{ childrenByParent: taskSplit.childrenByParent, activityOf: (thread) => sidebarThreadActivity(thread, sidebarThreadActivityContext), activeThreadId,
+    onSelect: onSelectThread, onContextMenu: openThreadContextMenu, onArchive: handleArchiveThread, onDelete: handleDeleteThread }}><SidebarProjectsContent {...{
     t, runtimeReady, workspaceRoot, searchQuery, showArchived, allGroupsCollapsed, searchVisible,
     busy, activeView, activeThreadId, locale, displayGroups, sidebarCollapse, sidebarOrder, orderTracker,
     threadListStatus, threadListError, onRetryThreads, onLoadMoreThreads, threadListCursorByWorkspace,
@@ -686,6 +692,7 @@ export function SidebarProjectsSection({
     handleDeleteThread, handleRestoreThread, openWorkspaceInSystem, handleArchiveWorkspaceThreads,
     handleRemoveWorkspace, archivableWorkspaceThreads, closeRenameThreadDialog,
     submitRenameThreadDialog, closeMoveThreadDialog, confirmThreadWorkspaceMove,
-    submitMoveThreadDialog, closeActionDialog, submitActionDialog
-  }} />
+    submitMoveThreadDialog, closeActionDialog, submitActionDialog,
+    scheduledThreadCount, onOpenSchedule
+  }} /></SidebarTaskThreadsProvider>
 }

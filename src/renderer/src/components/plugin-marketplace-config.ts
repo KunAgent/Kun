@@ -33,6 +33,24 @@ export type MarketplaceItem = {
   oauth?: OAuthConnectorInfo
   supplyChain?: SupplyChainInfo
   skillInstructions?: string
+  /** Set on items that come from (or were installed from) a remote market. */
+  market?: MarketItemInfo
+  /** Category ids (market taxonomy) used by the discover rail. */
+  categories?: string[]
+}
+
+export type MarketItemInfo = {
+  sourceId: string
+  sourceLabel: string
+  version?: string
+  /** MCP servers: environment variables the server needs. */
+  requiredEnvKeys?: string[]
+  optionalEnvKeys?: string[]
+  /** How the market launches it (`npx -y pkg@latest` or a URL), before pinning. */
+  launch?: string
+  author?: string
+  originLabel?: string
+  originUrl?: string
 }
 
 export type JsonRecord = Record<string, unknown>
@@ -89,6 +107,13 @@ export function saveInstalledPlugins(ids: string[]): void {
 
 export function storageKey(kind: PluginKind, id: string): string {
   return `${kind}:${id}`
+}
+
+/** Unique per card: two markets may publish the same id. */
+export function itemKey(item: Pick<MarketplaceItem, 'kind' | 'id' | 'market'>): string {
+  return item.market
+    ? `${item.market.sourceId}:${storageKey(item.kind, item.id)}`
+    : storageKey(item.kind, item.id)
 }
 
 export function normalizeSkillId(id: string): string {

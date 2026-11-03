@@ -118,6 +118,10 @@ export class ContextCompactor {
       promptTokens ?? 0,
       finiteNonNegative(options?.requestInputTokens)
     )
+    if (inputPressure > (options?.requestMaxInputTokens ?? Infinity)) return {
+      mode: 'force', keepRecent: 1,
+      reason: `request input ${inputPressure} exceeds ${options!.requestMaxInputTokens}-token maximum input`
+    }
     const outputBudgetTokens = finiteNonNegative(options?.outputBudgetTokens)
     const requestHardCapTokens = finiteNonNegative(options?.requestHardCapTokens)
     // Budget-driven force compaction: the send-time guard rejects any request

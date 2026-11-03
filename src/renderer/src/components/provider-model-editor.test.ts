@@ -38,8 +38,8 @@ function chatForm(
 }
 
 describe('provider-model-editor', () => {
-  it('defaults new chat models to the conservative 32k context window', () => {
-    expect(newProviderModelForm('chat', provider()).contextWindowTokens).toBe(32_000)
+  it('keeps new-model context unknown instead of saving the runtime estimate', () => {
+    expect(newProviderModelForm('chat', provider()).contextWindowTokens).toBeNull()
   })
 
   it('derives the reasoning protocol from the provider connection', () => {

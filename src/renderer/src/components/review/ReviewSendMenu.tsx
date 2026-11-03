@@ -13,7 +13,7 @@ import { buildReviewRequestAttachment } from '../../agent/review-composer-contex
 type TargetChoice = 'worker' | 'manager' | 'new-worker'
 
 /**
- * "N 条待发送 · 发送给…" header control (docs/ade/11 §4.4): batches all
+ * "N 条待发送 · 发送给…" header control: batches all
  * unresolved comments into one revision request — to the worker that owns
  * the workspace, the manager thread's composer, or a fresh worker reusing
  * the same task workspace.
@@ -88,7 +88,7 @@ export function ReviewSendMenu({
       setOpen(false)
       setNote('')
       // Manager target: pin the rendered request on the owner thread's composer
-      // so it attaches to the user's next message as a review card (11 §4.4).
+      // so it attaches to the user's next message as a review card.
       if (response.composerContext) {
         const chat = useChatStore.getState()
         const workspaceRoot = chat.threads.find((thread) => thread.id === binding.ownerThreadId)?.workspace ?? binding.sourceRoot

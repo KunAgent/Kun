@@ -3,7 +3,6 @@ import type { ModelToolSpec } from '../ports/model-client.js'
 import type { TurnItem } from '../contracts/items.js'
 import { makeErrorItem } from '../domain/item.js'
 import { repairModelHistoryItemsForModel } from '../domain/model-history-repair.js'
-import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
 import {
   DESIGN_SVG_ANIMATE_TOOL_NAME,
   DESIGN_SVG_EDIT_TOOL_NAME,
@@ -76,7 +75,6 @@ import {
   planningTeamContextBlocks,
   hasSuccessfulToolResult,
   knowledgeBaseContextBlocks,
-  pptWorkflowCompletionToolGate,
   kunContextBlock,
   modelHistoryRoutesByTurnId,
   outputTruncationRecoveryBlocks,
@@ -298,6 +296,8 @@ export abstract class ModelStepPreparationService {
       instructionResolution,
       memories,
       memoryDirectives,
+      memoryReferenceBlocks,
+      memoryRelationContext,
       activeGoalInstruction,
       goalRecoveryInstruction,
       activeTodoInstruction,
@@ -387,7 +387,7 @@ export abstract class ModelStepPreparationService {
       await this.deps.turns.updateTurnMetadata(threadId, turnId, {
         activeSkillIds: skillResolution.activeSkillIds,
         skillInjectionBytes: skillResolution.injectedBytes,
-        ...memoryInjectionMetadata({ memories, directives: memoryDirectives }),
+        ...memoryInjectionMetadata({ memories, directives: memoryDirectives, relationContext: memoryRelationContext }),
         injectedInstructionSources: instructionResolution.sources,
         instructionInjectionBytes: instructionResolution.injectedBytes,
         toolCatalogFingerprint: toolCatalog.fingerprint,
@@ -408,31 +408,20 @@ export abstract class ModelStepPreparationService {
       ? svgArtifactCompletionState(historyItems, turnId)
       : null
     const workflowGate = requiredWorkflowToolGate(
-      turn, toolContext.pptWorkflowScope, historyItems, turnId,
+      turn, historyItems, turnId,
       svgCompletion?.mutationSucceeded && !svgCompletion.validationAfterMutation
         ? DESIGN_SVG_VALIDATE_TOOL_NAME
         : undefined
     )
     const hardRequiredToolName = workflowGate.requiredToolName
-    const pptCompletionToolName = pptWorkflowCompletionToolGate(
-      toolContext.pptWorkflowScope,
-      historyItems,
-      turnId
-    ).expectedToolName
-    // Plan creation is deliberately a soft completion condition. A Plan turn
-    // may investigate, ask for user input, or stop on a genuine clarification
-    // before its prose is materialized through create_plan.
+    // Plan-mode turns never require create_plan: the model decides whether a
+    // request needs a saved plan, so a question answered in prose just ends
+    // the turn instead of being written to .kunsdd/plan.
     const softRequiredToolName =
-      pptCompletionToolName && toolSpecs.some((tool) => tool.name === pptCompletionToolName)
-        ? pptCompletionToolName
-        : turn.orchestration === 'graph' &&
+      turn.orchestration === 'graph' &&
       !graphCreateSatisfied &&
       toolSpecs.some((tool) => tool.name === GRAPH_DEFINE_PLAN_TOOL_NAME)
         ? GRAPH_DEFINE_PLAN_TOOL_NAME
-        : planTurnActive &&
-      !createPlanSatisfied &&
-      toolSpecs.some((tool) => tool.name === CREATE_PLAN_TOOL_NAME)
-        ? CREATE_PLAN_TOOL_NAME
         : undefined
     const suggestVerification =
       !planTurnActive &&
@@ -519,8 +508,8 @@ export abstract class ModelStepPreparationService {
       ...(runtimeContextInstruction
         ? [kunContextBlock('runtime-context', 'runtime', runtimeContextInstruction)]
         : []),
-      ...await planningTeamContextBlocks(turn.orchestration, graphCreateSatisfied,
-        thread, threadId, this.deps.graphHarnessSummary, this.deps.adeManagerContext),
+      ...await planningTeamContextBlocks(turn, graphCreateSatisfied,
+        thread, threadId, this.deps.graphHarnessSummary, this.deps.adeManagerContext, this.deps.taskSuggestionContext, this.deps.delegationContext),
       ...turnDynamicContext.blocks.filter((block) => block.authority === 'runtime'),
       ...(workflowGate.subagentResumeInstruction
         ? [kunContextBlock(
@@ -590,7 +579,7 @@ export abstract class ModelStepPreparationService {
         workspace: thread?.workspace ?? '',
         tools: requestToolSpecs
       }).map((content) => kunContextBlock('attachment-reference', 'reference', content)),
-      ...memoryContextBlocks({ memories, directives: memoryDirectives }),
+      ...memoryContextBlocks({ memories, directives: memoryDirectives, referenceBlocks: memoryReferenceBlocks }),
       ...turnDynamicContext.blocks.filter((block) => block.authority === 'user'),
       ...(turn.designProfile
         ? [kunContextBlock(

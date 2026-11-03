@@ -1,3 +1,9 @@
+import { scopeBuiltInModelCapability } from '../loop/model-provider-profile-scope.js'
+import { MODEL_CONTEXT_PROFILES, resolveModelContextProfile } from '../loop/model-context-profile.js'
+import { resolveModelMetadata, withModelObservation } from '../services/model-metadata-resolver.js'
+import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
+import { withModelVerification } from '../services/model-verification-client.js'
+import type { ModelConnectionRegistry } from '../services/model-connection-registry-core.js'
 import {
   CompatModelClient,
   GeminiCliApiModelClient,
@@ -22,6 +28,7 @@ import { subscriptionBillingKind } from '../shared/subscription-billing.js'
 import { isRetiredOpenCodeFreeConnection } from '../services/model-connection-registry-usability.js'
 import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 import { providerCredentialLease } from '../adapters/model/provider-credential-lease.js'
+import { withDispatchIdentity } from '../adapters/model/model-dispatch-identity.js'
 
 export async function hydrateLegacyCredentialOptions(
   options: KunServeRuntimeOptions,
@@ -85,7 +92,8 @@ export function buildModelClientRouterInput(
     headers?: Record<string, string>
     geminiAuth?: GeminiCodeAssistCredential
     refreshable: boolean
-  }>
+  }>,
+  getRegistry?: () => ModelConnectionRegistry | undefined
 ): { default: ModelClient; providers: Map<string, ModelClient>; gatewayClients: Map<string, ModelClient>;
   defaultProviderId: string; admission: Map<string, { accountId: string; limits: import('../contracts/provider-configuration.js').ProviderAdmission }> } {
   const streamIdleOverride =
@@ -100,7 +108,7 @@ export function buildModelClientRouterInput(
     : options.modelProxyUrl
   const defaultModelCapabilities = providerScopedModelCapabilities(
     activeProviderId,
-    activeProvider,
+    activeProvider ?? { apiKey: options.apiKey, baseUrl: options.baseUrl, endpointFormat: options.endpointFormat },
     modelCapabilities
   )
   const defaultBillingKind = subscriptionBillingKind({
@@ -132,6 +140,7 @@ export function buildModelClientRouterInput(
       : process.env.KUN_RUNTIME_PROVIDER_KIND === 'gemini-cli-api'
       ? new GeminiCliApiModelClient({
           model: options.model,
+          modelCapabilities: defaultModelCapabilities,
           modelProxyUrl: defaultModelProxyUrl,
           retry: options.retry,
           ...(llmDebug ? { debugSink: llmDebug } : {})
@@ -200,6 +209,7 @@ export function buildModelClientRouterInput(
       : kind === 'gemini-cli-api'
       ? new GeminiCliApiModelClient({
           model: options.model,
+          modelCapabilities: scopedModelCapabilities,
           modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl')
             ? provider.modelProxyUrl
             : options.modelProxyUrl,
@@ -234,15 +244,43 @@ export function buildModelClientRouterInput(
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           ...streamIdleOverride
         })
-    providerClients.set(trimmedId, client)
+    const observedClient = withDispatchIdentity(withModelVerification(client, trimmedId, getRegistry, (model) => kind !== 'http' ? kind :
+      verificationProtocol(scopedModelCapabilities(model).endpointFormat ?? provider.endpointFormat ?? options.endpointFormat, provider.customEndpointProtocol),
+      (model) => verificationScopes(provider.modelCapabilities, model)), {
+      slot: 'provider', providerId: trimmedId, provider: providerDispatchFields(provider), model: options.model,
+      baseUrl: provider.baseUrl ?? options.baseUrl, endpointFormat: provider.endpointFormat ?? options.endpointFormat,
+      modelProxyUrl: Object.prototype.hasOwnProperty.call(provider, 'modelProxyUrl') ? provider.modelProxyUrl : options.modelProxyUrl
+    })
+    providerClients.set(trimmedId, observedClient)
     if (provider.admission) admission.set(trimmedId.toLowerCase(), {
       accountId: provider.accountId ?? trimmedId, limits: provider.admission
     })
     if (exposableProvider({ kind, authType: provider.authType ?? 'api-key',
       configured: provider.authType === 'none' || Boolean(provider.apiKey.trim() || provider.credentialSourceId),
-      credentialStatus: provider.authType === 'none' ? 'not-required' : 'ready' })) gatewayClients.set(trimmedId, client)
+      credentialStatus: provider.authType === 'none' ? 'not-required' : 'ready' })) gatewayClients.set(trimmedId, observedClient)
   }
-  return { default: defaultClient, providers: providerClients, gatewayClients, admission, defaultProviderId: activeProviderId.toLowerCase() }
+  const defaultIdentity = {
+    slot: 'default', providerId: activeProviderId, provider: providerDispatchFields(activeProvider), model: options.model,
+    kind: options.modelConnectionSelectionRequired && !options.activeProviderId ? 'unavailable'
+      : process.env.KUN_RUNTIME_PROVIDER_KIND ?? 'http',
+    baseUrl: options.baseUrl, endpointFormat: options.endpointFormat, modelProxyUrl: defaultModelProxyUrl,
+    apiKey: options.apiKey, headers: options.headers, credentialSourceId: options.credentialSourceId, geminiAuth: options.geminiAuth
+  }
+  return { default: withDispatchIdentity(withModelVerification(defaultClient, activeProviderId, getRegistry, (model) =>
+    verificationProtocol(defaultModelCapabilities(model).endpointFormat ?? options.endpointFormat, activeProvider?.customEndpointProtocol),
+    (model) => verificationScopes(activeProvider?.modelCapabilities, model)), defaultIdentity),
+  providers: providerClients, gatewayClients, admission, defaultProviderId: activeProviderId.toLowerCase() }
+}
+
+/**
+ * Catalog metadata, retry tuning and admission limits shape or schedule a
+ * request; every other provider field decides where it goes and with which
+ * credential, so an unknown future field conservatively counts as a change.
+ */
+const NON_DISPATCH_PROVIDER_FIELDS = new Set(['modelCapabilities', 'modelProfiles', 'models', 'selectedModel', 'retry', 'admission'])
+
+function providerDispatchFields(provider: ServeProviderConfig | undefined): Record<string, unknown> | undefined {
+  return provider && Object.fromEntries(Object.entries(provider).filter(([key]) => !NON_DISPATCH_PROVIDER_FIELDS.has(key)))
 }
 
 export function modelContextProfilesByProvider(
@@ -252,9 +290,10 @@ export function modelContextProfilesByProvider(
   for (const [providerId, provider] of Object.entries(providers ?? {})) {
     const normalized = providerId.trim().toLowerCase()
     if (!normalized) continue
-    out.set(normalized, modelContextProfilesFromConfig({
-      models: { profiles: provider.modelProfiles ?? {} }
-    }))
+    const declared = { ...provider.modelProfiles, ...provider.modelCapabilities }
+    const names = new Set(Object.keys(declared).map((name) => name.trim().toLowerCase()))
+    out.set(normalized, modelContextProfilesFromConfig({ models: { profiles: declared } })
+      .filter((profile) => names.has(profile.canonicalModel)))
   }
   return out
 }
@@ -278,36 +317,22 @@ export function providerScopedModelCapabilities(
       providerId,
       presetSource: provider?.presetSource ?? providerId,
       baseUrl: provider?.baseUrl,
+      endpointFormat: provider?.endpointFormat, endpoints: provider?.endpoints,
       kind: provider?.kind,
       model
     })
     if (explicit) {
-      const requestedReasoning = shouldUpgradeProviderReasoning(
-        providerId,
-        provider?.endpointFormat,
-        model,
-        explicit.reasoning,
-        providerFallback.reasoning
-      )
-        ? providerFallback.reasoning
-        : explicit.reasoning ?? providerFallback.reasoning
-      const reasoning = safeProviderReasoningCapability({
-        providerId,
-        presetSource: provider?.presetSource ?? providerId,
-        baseUrl: provider?.baseUrl,
-        kind: provider?.kind,
-        model
-      }, requestedReasoning)
-      return {
-        ...explicit,
-        id: model,
-        ...((reasoning ?? explicit.reasoning) ? { reasoning: reasoning ?? explicit.reasoning } : {}),
-        ...(explicit.serviceTiers ?? providerFallback.serviceTiers
-          ? { serviceTiers: [...(explicit.serviceTiers ?? providerFallback.serviceTiers ?? [])] }
-          : {})
-      }
+      const resolved = resolveModelMetadata(withModelObservation(explicit, {
+        id: 'runtime-adapter', source: 'adapter', values: providerFallback,
+        evidence: providerFallback.evidence ?? metadataEvidence(providerFallback, 'adapter'), match: 'exact'
+      }))
+      const reasoning = safeProviderReasoningCapability({ providerId, presetSource: provider?.presetSource,
+        baseUrl: provider?.baseUrl, kind: provider?.kind, model }, resolved.reasoning)
+      return { ...resolved, id: model, ...(reasoning ? { reasoning } : {}) }
     }
-    const base = fallback(model, providerId)
+    const base = scopeBuiltInModelCapability({ providerId, presetSource: provider?.presetSource,
+      baseUrl: provider?.baseUrl, kind: provider?.kind, endpointFormat: provider?.endpointFormat, endpoints: provider?.endpoints, model }, fallback(model, providerId),
+      Boolean(resolveModelContextProfile(model, MODEL_CONTEXT_PROFILES)))
     return {
       ...base,
       ...(providerFallback.reasoning ? { reasoning: providerFallback.reasoning } : {}),
@@ -591,4 +616,13 @@ export function modelConnectionAuthType(
     // Plain API keys are intentionally not JSON.
   }
   return 'api-key'
+}
+
+function verificationProtocol(format: string | undefined, customProtocol?: string): string {
+  return format === 'custom_endpoint' ? customProtocol ?? 'chat_completions' : format ?? 'chat_completions'
+}
+
+function verificationScopes(capabilities: ServeProviderConfig['modelCapabilities'], model: string): string[] {
+  const profile = capabilities?.[model] ?? capabilities?.[model.toLowerCase()]
+  return profile?.metadata?.observations.flatMap((observation) => observation.scope ? [observation.scope] : []) ?? []
 }

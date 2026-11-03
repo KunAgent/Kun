@@ -1,8 +1,11 @@
+import { registerAgentLifecycleRoutes } from './register-agent-lifecycle-routes.js'
 import { registerAgentWorkRoutes } from './register-agent-work-routes.js'
+import { registerAssistantContinuationRoutes } from './register-assistant-continuation-routes.js'
 import { registerRoomResultInboxRoutes } from './register-room-result-inbox-routes.js'
 import { registerRoomPermissionRoutes } from './register-room-permission-routes.js'
 import { registerAgentChatRoutes } from './register-agent-chat-routes.js'
 import { registerRoomProfileRoutes } from './register-room-profile-routes.js'
+import { registerRoomWardrobeRoutes } from './register-room-wardrobe-routes.js'
 import { registerAgentHandoffRoutes } from './register-agent-handoff-routes.js'
 import { registerAgentIdentityRoutes } from './register-agent-identity-routes.js'
 import { z } from 'zod'
@@ -41,6 +44,8 @@ import { registerRoomImConnectionRoutes } from './register-room-im-connection-ro
 import { registerRoomAppConnectionRoutes } from './register-room-app-connection-routes.js'
 import { registerWorkbenchLinkRoutes } from './register-workbench-link-routes.js'
 import type { RoomWorkspace } from '../../rooms/room-runtime-types.js'
+import { RoomWardrobeError } from '../../rooms/room-wardrobe-service.js'
+import { RoomWardrobeAccountError } from '../../rooms/room-wardrobe-account.js'
 
 const PageSchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -74,6 +79,7 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
       return result instanceof Response ? result : jsonResponse(result)
     } catch (error) {
       if (error instanceof RoomBodyError) return error.response
+      if (error instanceof RoomWardrobeError || error instanceof RoomWardrobeAccountError) return ERRORS.conflict(error.message)
       if (error instanceof z.ZodError) return ERRORS.validation('invalid room request', error.issues)
       if (error instanceof MemoryNotFoundError) return ERRORS.notFound(error.message)
       if (error instanceof MemoryErasureIncompleteError) return ERRORS.unavailable(error.message)
@@ -96,8 +102,11 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
   registerAgentChatRoutes(add, runtime)
   registerAgentWorkRoutes(add)
   registerRoomResultInboxRoutes(add)
+  registerAssistantContinuationRoutes(add)
   registerRoomProfileRoutes(add, runtime)
+  registerRoomWardrobeRoutes(add)
   registerAgentIdentityRoutes(add)
+  registerAgentLifecycleRoutes(add)
   registerAgentHandoffRoutes(add)
   registerRoomEvidenceRoutes(add)
   registerRoomRunRoutes(add, runtime)
@@ -227,6 +236,10 @@ export function registerRoomRoutes(router: Router, runtime: ServerRuntime): void
     const result = await rooms.exclusive(() => roomRequestAction(rooms.deps, rooms.service, params.roomId, params.requestId, action, input))
     rooms.wake()
     return result
+  })
+  add('POST', '/v1/rooms/:roomId/requests/:requestId/acknowledge', async (rooms, request, { params }) => {
+    const input = z.object({ clientRequestId: RoomIdSchema }).parse(await body(request))
+    return rooms.exclusive(() => rooms.product.acknowledgeRequestFailure(params.roomId, params.requestId, input.clientRequestId))
   })
   add('POST', '/v1/rooms/:roomId/requests/:requestId/retry', async (rooms, request, context) => {
     const input = RoomTaskActionSchema.parse(await body(request))

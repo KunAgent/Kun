@@ -91,6 +91,7 @@ export const turnServicePruneOperations = {
       const cutoffTurnId = await this['withThreadMutation'](input.threadId, async () => {
         const current = await this['deps'].threadStore.get(input.threadId)
         if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        if (current.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         if (current.turns.some(isActiveTurn)) throw new TurnConflictError('thread has an active turn')
         if (
           input.request.expectedThreadRevision !== undefined &&
@@ -219,6 +220,7 @@ export const turnServicePruneOperations = {
       if (!store) throw new Error('thread snapshot store is unavailable')
       const current = await this['deps'].threadStore.get(input.threadId)
       if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        if (current.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
       if (current.turns.some(isActiveTurn)) throw new TurnConflictError('thread has an active turn')
       if (!(await store.verify(input.threadId, input.snapshotId))) {
         throw new Error(`snapshot verification failed: ${input.snapshotId}`)

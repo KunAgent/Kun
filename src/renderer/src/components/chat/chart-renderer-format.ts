@@ -1,6 +1,6 @@
 import type { RendererChartFormat, RendererChartSeries, RendererChartSpec } from '../../agent/chart-spec-adapter'
 
-export const CHART_ACTION_CLASS = 'inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-ds-muted transition-colors hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ds-focus'
+export const CHART_ACTION_CLASS = 'inline-flex min-h-9 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-ds-muted transition-colors hover:bg-ds-hover hover:text-ds-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ds-focus-ring)]'
 export const CHART_COLORS = [
   'var(--ds-accent)',
   'var(--ds-success)',

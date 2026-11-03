@@ -19,8 +19,10 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   assert.equal(fixture.snapshot().mainCalls, 0, 'Initialization must not call a model')
   assert.equal(await page.locator('.rooms-init-banner').count(), 0)
   assert.equal(await page.locator('.agent-collaboration-strip').count(), 0)
-  assert.equal(await page.locator('.rooms-composer select').count(), 1, 'Private composer has one explicit model selector')
-  const composerModel = page.locator('.rooms-composer').getByRole('combobox', { name: 'Model for this conversation', exact: true })
+  assert.equal(await page.locator('.rooms-composer select').count(), 0, 'Private composer has no native select')
+  assert.equal(await page.locator('.rooms-composer [data-room-model-picker] [data-composer-model-trigger]').count(), 1,
+    'Private composer has one model · effort pill, like the Code composer')
+  const composerModel = page.locator('.rooms-composer [data-room-model-picker] [data-composer-model-trigger]')
   await poll(() => composerModel.isEnabled(), 10000, 'private composer model metadata loaded')
   await capture('01-empty-kun')
   // Code conversations keep composer tools in the "+" menu, like the Code task composer.
@@ -127,11 +129,18 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
   const openRoleModels = async () => {
     await page.locator('.direct-header').getByRole('button', { name: 'More actions', exact: true }).click()
     await page.getByRole('button', { name: 'Model settings', exact: true }).click()
-    await models.getByRole('combobox', { name: 'Main model', exact: true }).waitFor()
+    await models.getByLabel('Main model', { exact: true }).waitFor()
+  }
+  // Role models use a searchable listbox picker; options carry the exact provider/account/model key.
+  const chooseRoleModel = async (role, key) => {
+    await models.getByLabel(role, { exact: true }).click()
+    const list = page.getByRole('listbox', { name: role, exact: true })
+    await list.locator(`[role="option"][data-agent-model-option='${key}']`).click()
+    await list.waitFor({ state: 'hidden' })
   }
   await openRoleModels()
   await capture('06-model-settings')
-  assert((await models.innerText()).includes('Effective'))
+  assert((await models.innerText()).includes('Inherited default'), 'role models show where the effective model comes from')
   await models.getByRole('button', { name: 'Close', exact: true }).click()
   if (!real) {
     await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
@@ -151,13 +160,13 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     const other = options.options.find((item) => item.available && item.fastAvailable && item.model !== options.main.model)
     assert(other, 'A second configured model is available')
     const key = JSON.stringify([other.providerId, other.accountId, other.model])
-    await models.getByRole('combobox', { name: 'Main model', exact: true }).selectOption(key)
+    await chooseRoleModel('Main model', key)
     await poll(async () => {
       const saved = (await request(page, `/v1/agents/${newAgent.id}/models`)).agent.modelRef
       return JSON.stringify([saved?.providerId, saved?.accountId, saved?.model]) === key &&
-        await models.getByRole('combobox', { name: 'Lightweight model', exact: true }).isEnabled()
+        await models.getByLabel('Lightweight model', { exact: true }).isEnabled()
     }, 10000, 'main model saved immediately before lightweight selection')
-    await models.getByRole('combobox', { name: 'Lightweight model', exact: true }).selectOption(key)
+    await chooseRoleModel('Lightweight model', key)
     await poll(async () => {
       const saved = (await request(page, `/v1/agents/${newAgent.id}/models`)).agent
       return [saved.modelRef, saved.fastModelRef].every((ref) => JSON.stringify([ref?.providerId, ref?.accountId, ref?.model]) === key)
@@ -171,6 +180,11 @@ async function exerciseDirectChat({ page, request, poll, capture, fixture, appli
     const switched = await settle(conversation.id, previous.id)
     const switchedRun = await request(page, `/v1/rooms/${conversation.id}/runs/${switched.runId}`)
     assert.equal(switchedRun.run.model, other.model)
+    // Setup interviews never steer, and the offline fixture never finishes one,
+    // so end the interview before exercising busy-message steering.
+    await page.getByRole('button', { name: 'Skip interview', exact: true }).first().click()
+    await poll(async () => (await request(page, '/v1/agents')).agents.find((agent) => agent.id === newAgent.id)?.setup?.status === 'skipped',
+      10000, 'setup interview skipped')
     await send('HOLD_RESPONSE 请等待。')
     await poll(() => fixture.holding() && page.getByRole('button', { name: 'Stop response', exact: true }).isVisible(), 15000, 'active response')
     // A message sent while the reply is running steers into the live turn

@@ -232,7 +232,7 @@ export function buildGatewayMessagesCurlExample(baseUrl: string, modelId: string
   }, true)
 }
 
-function buildGatewayResponsesCurlExample(baseUrl: string, modelId: string, t: TFunction): string {
+export function buildGatewayResponsesCurlExample(baseUrl: string, modelId: string, t: TFunction): string {
   return gatewayJsonCurl(baseUrl, '/responses', {
     model: modelId, input: t('modelRoutes.exampleResponsesPrompt'), stream: false
   })

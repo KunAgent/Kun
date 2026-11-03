@@ -298,6 +298,11 @@ function outputUncertainties(toolName: 'grep' | 'glob' | 'read', output: unknown
     uncertainties.push(`${prefix} result was truncated; more source data may be available.`)
   }
   if (value.scan_byte_limit_reached === true) uncertainties.push(`${prefix} scan hit its byte limit; results may be incomplete.`)
+  if (value.candidate_files_truncated === true) uncertainties.push(`${prefix} stopped at its candidate-file limit; ranking may have missed files.`)
+  if (value.scope === 'definition_scope') {
+    const searched = text(record(value.scope_hint)?.searched)
+    uncertainties.push(`${prefix} covered only ${searched || 'the defining package'}, where the identifier is defined; references elsewhere were not searched.`)
+  }
   return uncertainties.map((entry) => compact(entry, 360))
 }
 

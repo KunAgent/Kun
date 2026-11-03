@@ -1,5 +1,5 @@
 /**
- * Applies AcpEventMapper drafts to the durable timeline (docs/ade/03 §6):
+ * Applies AcpEventMapper drafts to the durable timeline:
  * deltas go through `applyAssistantDelta` with a cumulative running item (the
  * mapper's draft item carries only the chunk), `item_created` persists the
  * item (which emits its own event), started/finished milestones persist the
@@ -15,6 +15,9 @@ import {
   makeAssistantReasoningItem,
   makeAssistantTextItem
 } from '../../domain/item.js'
+import { isExternalSubagentThreadId } from '../../contracts/external-subagent.js'
+import type { ExternalSubagentRouting } from '../external-subagent-routing.js'
+import { DelegatedItemTimes } from '../delegated-item-times.js'
 
 export type AcpDraftEmitterDeps = {
   turns: Pick<
@@ -22,6 +25,8 @@ export type AcpDraftEmitterDeps = {
     'applyItem' | 'applyAssistantDelta' | 'updateItem'
   >
   events: Pick<RuntimeEventRecorder, 'record'>
+  /** Mirrors external subagents into their side threads (external-subagent-store). */
+  subagents?: ExternalSubagentRouting
 }
 
 export class AcpDraftEmitter {
@@ -31,6 +36,7 @@ export class AcpDraftEmitter {
   private readonly textAccums = new Map<string, string>()
   private readonly reasoningAccums = new Map<string, string>()
   private readonly materializedItems = new Set<string>()
+  private readonly itemTimes = new DelegatedItemTimes()
 
   constructor(
     private readonly deps: AcpDraftEmitterDeps,
@@ -48,9 +54,17 @@ export class AcpDraftEmitter {
     for (const draft of drafts) await this.emit(draft)
   }
 
-  async emit(draft: RuntimeEventDraft): Promise<void> {
-    if (draft.kind === 'usage' && this.options.gatewayMetered) return
-    const item = 'item' in draft ? (draft.item as TurnItem | undefined) : undefined
+  async emit(input: RuntimeEventDraft): Promise<void> {
+    if (input.kind === 'usage' && this.options.gatewayMetered) return
+    if (this.deps.subagents && isExternalSubagentThreadId(input.threadId)) {
+      // A subagent's own step: persisted on its side thread, never this turn.
+      if ('item' in input && input.item) await this.deps.subagents.store.apply(input)
+      else await this.deps.subagents.store.record(input)
+      return
+    }
+    const drafted = 'item' in input ? (input.item as TurnItem | undefined) : undefined
+    const item = drafted ? this.itemTimes.stamp(drafted) : undefined
+    const draft = item ? { ...input, item } as RuntimeEventDraft : input
     switch (draft.kind) {
       case 'assistant_text_delta':
       case 'assistant_reasoning_delta': {
@@ -99,6 +113,7 @@ export class AcpDraftEmitter {
         if (item) {
           await this.deps.turns.applyItem(this.threadId, item)
           this.materializedItems.add(item.id)
+          await this.deps.subagents?.store.syncParentItem(item)
           return
         }
         await this.deps.events.record(draft)
@@ -108,6 +123,7 @@ export class AcpDraftEmitter {
         if (item) {
           await this.deps.turns.applyItem(this.threadId, item)
           this.materializedItems.add(item.id)
+          await this.deps.subagents?.store.syncParentItem(item)
         }
         await this.deps.events.record(draft)
         return
@@ -119,6 +135,7 @@ export class AcpDraftEmitter {
             // create): append it so the timeline never loses the call.
             await this.deps.turns.applyItem(this.threadId, item)
           }
+          await this.deps.subagents?.store.syncParentItem(item)
           return
         }
         await this.deps.events.record(draft)

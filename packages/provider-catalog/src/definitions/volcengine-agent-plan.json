@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "volcengine-agent-plan",
   "name": "Volcano Ark Agent Plan",
   "category": "subscription",
@@ -15,5 +15,10 @@
     "doubao-seed-2.0-mini"
   ],
   "docsUrl": "https://www.volcengine.com/docs/82379/2366394",
-  "credentialUrl": "https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&OpenModelVisible=false&advancedActiveKey=agentPlan"
+  "credentialUrl": "https://console.volcengine.com/ark/region:ark+cn-beijing/openManagement?LLM=%7B%7D&OpenModelVisible=false&advancedActiveKey=agentPlan",
+  "discovery": {
+    "strategy": "preset",
+    "sourceUrl": "https://www.volcengine.com/docs/82379/2366394",
+    "checkedAt": "2026-10-08"
+  }
 }

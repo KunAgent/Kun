@@ -1,3 +1,5 @@
+import { withModelObservation } from '../../../../kun/src/services/model-metadata-resolver.js'
+import { metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import type {
   AppSettingsPatch,
   ImageGenerationProtocol,
@@ -85,38 +87,27 @@ export const VIDEO_GENERATION_PROTOCOL_LABEL_KEYS: Record<VideoGenerationProtoco
 }
 
 export type ProviderTaskTab = 'connection' | 'models' | 'capabilities' | 'reliability' | 'advanced'
-export type ProviderWorkspaceMode = 'providers' | 'routes'
 export type ProviderCapability = 'image' | 'speech' | 'tts' | 'music' | 'video'
 export type SubscriptionRegionFilter = 'all' | ModelProviderSubscriptionRegion
 
 export function antigravityProviderCatalogPatch(
   catalog: AntigravitySubscriptionModelCatalog,
-  existingProfiles: Readonly<Record<string, ModelProviderModelProfileV1>> = {}
+  existingProfiles: Readonly<Record<string, ModelProviderModelProfileV1>> = {},
+  currentModels: readonly string[] = Object.keys(existingProfiles)
 ): Pick<ModelProviderProfileV1, 'models' | 'modelProfiles'> {
-  const models = catalog.models.map((model) => model.id)
-  const modelProfiles = Object.fromEntries(catalog.models.map((model) => {
-    const existing = existingProfiles[model.id]
-    const supportsImageInput = /^(?:gemini|claude)-/i.test(model.id)
-    return [
-      model.id,
-      {
-        ...existing,
-        inputModalities: existing?.inputModalities ?? (
-          supportsImageInput ? ['text', 'image'] : ['text']
-        ),
-        outputModalities: existing?.outputModalities ?? ['text'],
-        supportsToolCalling: existing?.supportsToolCalling ?? true,
-        messageParts: existing?.messageParts ?? (
-          supportsImageInput ? ['text', 'image_url'] : ['text']
-        ),
-        reasoning: {
-          supportedEfforts: [...model.supportedEfforts],
-          defaultEffort: model.defaultEffort,
-          requestProtocol: 'none'
-        }
-      } satisfies ModelProviderModelProfileV1
-    ]
-  }))
+  const models = [...new Set([...currentModels, ...catalog.models.map((model) => model.id)])]
+  const modelProfiles = { ...existingProfiles }
+  for (const model of catalog.models) {
+    const existing = existingProfiles[model.id] ?? {
+      inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true,
+      messageParts: ['text'], evidence: metadataEvidence({}, 'adapter')
+    } satisfies ModelProviderModelProfileV1
+    modelProfiles[model.id] = withModelObservation(existing, {
+      id: 'antigravity-official-cli', source: 'provider', match: 'exact', observedAt: new Date().toISOString(),
+      values: { supportsReasoning: true, reasoning: { supportedEfforts: [...model.supportedEfforts],
+        defaultEffort: model.defaultEffort, requestProtocol: 'none' } }
+    })
+  }
   return { models, modelProfiles }
 }
 
@@ -161,7 +152,8 @@ export function geminiCliApiCatalogPatch(
       outputModalities: ['text'],
       supportsToolCalling: true,
       messageParts: ['text', 'image_url'],
-      reasoning: { ...GEMINI_CLI_API_REASONING }
+      reasoning: { ...GEMINI_CLI_API_REASONING },
+      evidence: metadataEvidence({}, 'adapter')
     } satisfies ModelProviderModelProfileV1]
   }))
   return { models: merged, modelProfiles }
@@ -280,9 +272,6 @@ export function modelProviderDeletionKunPatch(input: {
   }
   if (matches(currentKun.fastContext?.providerId)) {
     patch.fastContext = { providerId: '', model: '' }
-  }
-  if (matches(currentKun.lab?.pptAgent?.providerId)) {
-    patch.lab = { pptAgent: { providerId: '', model: '' } }
   }
   if (
     currentKun.graph?.workerModel.mode === 'fixed' &&

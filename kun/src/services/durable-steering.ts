@@ -1,12 +1,14 @@
+import { PolicyMutationRejected } from '../domain/remote-policy-revision.js'
 import { createHash } from 'node:crypto'
 import type { TurnService } from './turn-service-core.js'
 import { TurnConflictError } from './turn-service-core.js'
-import type { Turn } from '../contracts/turns.js'
+import type { SteeringEntry, Turn } from '../contracts/turns.js'
 import { makeUserItem } from '../domain/item.js'
 import { finishTurn } from '../domain/turn.js'
 import { validateAndBindImageSteeringAttachments } from '../loop/turn-steering-attachments.js'
 
 export type DurableSteerInput = {
+  requiredClientSurface?: 'api'
   threadId: string; turnId: string; operationId: string; sourceTurnId?: string
   text: string; displayText?: string; attachmentIds?: string[]
 }
@@ -35,6 +37,8 @@ export async function admitDurableSteering(service: TurnService, input: DurableS
         const thread = await service['deps'].threadStore.get(input.threadId)
         const target = thread?.turns.find((turn) => turn.id === input.turnId)
         if (!thread || !target) throw new TurnConflictError('steering_target_missing')
+        if (input.requiredClientSurface && target.clientSurface !== input.requiredClientSurface)
+          throw new PolicyMutationRejected('INVALID_REQUEST')
         const existing = target.steeringDeliveries?.find((entry) => entry.operationId === input.operationId)
         if (existing) {
           if (existing.fingerprint !== fingerprint) throw new TurnConflictError('steering_operation_conflict')
@@ -86,10 +90,17 @@ export async function admitDurableSteering(service: TurnService, input: DurableS
   } finally { release() }
 }
 
-/** Replaying a receipt uses the same item id; session stores upsert by id. */
-export async function flushDurableSteering(service: TurnService, threadId: string, turnId: string): Promise<void> {
+/**
+ * Replaying a receipt uses the same item id; session stores upsert by id.
+ * Returns the guidance this call delivered, in admission order.
+ */
+export async function flushDurableSteering(service: TurnService, threadId: string, turnId: string): Promise<SteeringEntry[]> {
+  const delivered: SteeringEntry[] = []
   await service['withQueueDataMutation'](threadId, async () => {
-    const thread = await service['deps'].threadStore.get(threadId)
+    // Every settle checks this; only steering fields are read, so avoid
+    // hydrating (and over Manager HTTP, downloading) the whole item history.
+    const store = service['deps'].threadStore
+    const thread = await (store.getMetadata?.(threadId) ?? store.get(threadId))
     const turn = thread?.turns.find((entry) => entry.id === turnId)
     if (!thread || !turn) { service['deps'].steering.clearDurablePending(turnId); return }
     for (const entry of turn.steeringDeliveries ?? []) {
@@ -98,6 +109,8 @@ export async function flushDurableSteering(service: TurnService, threadId: strin
         displayText: entry.displayText, attachmentIds: entry.attachmentIds }), createdAt: entry.createdAt }
       await service['deps'].sessionStore.appendItem(threadId, item)
       await service['deps'].events.record({ kind: 'item_created', threadId, turnId, itemId: item.id, item })
+      delivered.push({ text: entry.text, ...(entry.displayText ? { displayText: entry.displayText } : {}),
+        ...(entry.attachmentIds?.length ? { attachmentIds: [...entry.attachmentIds] } : {}) })
     }
     if (turn.steeringDeliveries?.some((entry) => !entry.delivered)) {
       const deliveredIds = new Set(turn.steeringDeliveries.filter((entry) => !entry.delivered).map((entry) => entry.itemId))
@@ -114,4 +127,5 @@ export async function flushDurableSteering(service: TurnService, threadId: strin
     }
     service['deps'].steering.clearDurablePending(turnId)
   })
+  return delivered
 }

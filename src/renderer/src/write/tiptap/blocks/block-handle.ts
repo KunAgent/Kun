@@ -22,7 +22,7 @@ const MENU_HOVER_CLOSE_MS = 200
 const TOUCH_PRESS_MS = 500
 
 /**
- * Notion-style block handle (implementation §9.1): a `+` and a grip button
+ * Notion-style block handle: a `+` and a grip button
  * parked in the left gutter next to the hovered top-level block (list items
  * count as blocks). `+` inserts an empty paragraph after the block and
  * opens the slash menu; the grip opens the block menu and starts drag-moves.

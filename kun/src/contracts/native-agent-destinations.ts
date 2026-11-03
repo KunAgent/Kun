@@ -1,7 +1,6 @@
 /** Public vendor destinations used only to resolve desktop PAC policy for native CLIs. */
 const modelApis = ['https://api.openai.com/', 'https://api.anthropic.com/', 'https://generativelanguage.googleapis.com/', 'https://openrouter.ai/']
 export const NATIVE_CLI_DESTINATIONS: Readonly<Record<string, readonly string[]>> = {
-  'gemini-cli': ['https://cloudcode-pa.googleapis.com/', 'https://oauth2.googleapis.com/', 'https://generativelanguage.googleapis.com/'],
   'cursor-cli': ['https://api2.cursor.sh/', 'https://cursor.com/'],
   copilot: ['https://api.github.com/', 'https://api.githubcopilot.com/', 'https://github.com/login/'],
   kimi: ['https://api.kimi.com/', 'https://auth.kimi.com/'],

@@ -157,12 +157,14 @@ export class LegacyModelConnectionTransport implements ModelConnectionTransport 
 
   async subscribeModelConnections(input: Parameters<ModelConnectionTransport['subscribeModelConnections']>[0]): Promise<void> {
     let revision = Math.max(0, input.sinceRevision)
+    let metadataRevision = Math.max(0, input.sinceMetadataRevision ?? 0)
     const sleep = input.sleep ?? abortableDelay
     while (!input.signal.aborted && !this.closed) {
       try {
         const snapshot = await this.registry.snapshot()
-        if (snapshot.revision > revision) {
+        if (snapshot.revision > revision || (snapshot.metadataRevision ?? 0) > metadataRevision) {
           revision = snapshot.revision
+          metadataRevision = snapshot.metadataRevision ?? 0
           await input.onSnapshot(snapshot)
         }
       } catch (error) {

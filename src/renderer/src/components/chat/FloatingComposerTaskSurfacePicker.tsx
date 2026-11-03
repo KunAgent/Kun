@@ -266,11 +266,12 @@ export function FloatingComposerTaskSurfacePicker({
           onKeyDown={handleTriggerKeyDown}
           className="inline-flex h-8 items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-card px-2.5 text-[13px] font-medium text-ds-ink transition-colors hover:bg-ds-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-55"
           title={selectedOption.label}
+          aria-label={selectedOption.label}
         >
           <SelectedIcon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} aria-hidden />
           <span className="ds-composer-task-surface-label">{selectedOption.label}</span>
           <ChevronDown
-            className={`h-3.5 w-3.5 shrink-0 text-ds-faint transition-transform ${open ? 'rotate-180' : ''}`}
+            className={`ds-composer-agent-chevron h-3.5 w-3.5 shrink-0 text-ds-faint transition-transform ${open ? 'rotate-180' : ''}`}
             strokeWidth={1.8}
             aria-hidden
           />

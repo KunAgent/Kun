@@ -1,6 +1,6 @@
 import { lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
-import sharp from 'sharp'
+import { loadSharp } from './lazy-sharp'
 import {
   UI_PLUGIN_BACKGROUND_SLOTS,
   UI_PLUGIN_BACKGROUND_THEMES,
@@ -344,7 +344,7 @@ export async function validateAssetBytes(
   try {
     // libvips 会完整展开首帧像素流并以 Promise 失败报告损坏输入。
     // 不使用 @napi-rs/canvas.loadImage：部分截断 VP8 会令该原生路径直接崩溃主进程。
-    const decodedDimensions = await sharp(bytes, {
+    const decodedDimensions = await (await loadSharp())(bytes, {
       failOn: 'error',
       limitInputPixels: kind === 'figure'
         ? UI_PLUGIN_LIMITS.figureMaxPixels
@@ -587,7 +587,7 @@ export async function buildPortraitPreviewDataUrl(asset: ValidatedAsset): Promis
   if (validateStaticFigureUsage(asset)) return null
   try {
     for (const quality of [72, 50, 32, 20]) {
-      const thumbnailBytes = await sharp(asset.bytes, {
+      const thumbnailBytes = await (await loadSharp())(asset.bytes, {
         failOn: 'error',
         limitInputPixels: UI_PLUGIN_LIMITS.figureMaxPixels
       })

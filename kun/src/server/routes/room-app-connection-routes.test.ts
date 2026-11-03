@@ -85,7 +85,7 @@ describe('Room app connection resolution', () => {
   })
 
   it('blocks completion of historical Google cards but still lets the user skip', async () => {
-    const f = await fixture('google_gmail')
+    const f = await fixture('google_drive')
     f.authorize(); f.connect()
     await expect(f.call('complete')).rejects.toThrow('unavailable in private Rooms')
     expect((await f.store.get<RoomMessage>('message', 'card-1'))!.value.appConnection?.status).toBe('requested')
@@ -93,10 +93,24 @@ describe('Room app connection resolution', () => {
   })
 
   it('resumes an already resolved Google card without offering its tools', async () => {
-    const f = await fixture('google_gmail')
+    const f = await fixture('google_drive')
     await setRoomAppConnectionStatus(f.store, f.room.id, 'card-1', 'connected')
     const result = await f.call('complete') as { message: RoomMessage }
     expect(result.message.appConnection).toMatchObject({ status: 'connected', resumed: true })
     expect(f.dispatch).toHaveBeenCalledWith(expect.objectContaining({ prompt: expect.stringContaining('unavailable') }))
+  })
+
+  it('does not substitute MCP authorization for native Gmail and still permits skipping', async () => {
+    const f = await fixture('google_gmail')
+    f.authorize(); f.connect()
+    await expect(f.call('complete')).rejects.toThrow('Gmail is unavailable in Kun')
+    expect(f.dispatch).not.toHaveBeenCalled()
+    expect((await f.store.get<RoomMessage>('message', 'card-1'))!.value.appConnection?.status).toBe('requested')
+    const result = await f.call('skip') as { message: RoomMessage; resumed: boolean }
+    expect(result).toMatchObject({ resumed: true, message: { appConnection: { status: 'skipped' } } })
+    expect(f.dispatch).toHaveBeenCalledTimes(1)
+    expect(f.dispatch).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: expect.stringContaining('without that app. Do not claim access')
+    }))
   })
 })

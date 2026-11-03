@@ -30,6 +30,7 @@ export function subagentProfilesForRuntime(
   const candidate = {
     enabled: subagents.enabled !== false,
     useExistingAgents: subagents.useExistingAgents !== false,
+    ...(subagents.honorEngineBinding === false ? { honorEngineBinding: false } : {}),
     maxParallel: validMaxParallel(subagents.maxParallel) ? subagents.maxParallel : 256,
     proactiveRetry: {
       enabled: subagents.proactiveRetry?.enabled !== false,
@@ -52,6 +53,7 @@ export function subagentProfilesForRuntime(
   return SubagentsCapabilityConfig.parse({
     enabled: candidate.enabled,
     useExistingAgents: candidate.useExistingAgents,
+    ...(candidate.honorEngineBinding === false ? { honorEngineBinding: false } : {}),
     maxParallel: candidate.maxParallel,
     proactiveRetry: candidate.proactiveRetry,
     ...(subagents.defaultToolPolicy ? { defaultToolPolicy: subagents.defaultToolPolicy } : {})
@@ -82,7 +84,7 @@ function stripBlankProfileFields(profile: Record<string, unknown>): Record<strin
     }
     next[key] = value
   }
-  // ADE harness binding (10 §3.1): invalid ids/modes drop individually so one
+  // ADE harness binding: invalid ids/modes drop individually so one
   // malformed profile can never fail the whole roster parse.
   if (next.harnessId !== undefined && !HarnessIdSchema.safeParse(next.harnessId).success) {
     delete next.harnessId
@@ -99,6 +101,9 @@ function stripBlankProfileFields(profile: Record<string, unknown>): Record<strin
   ) {
     delete next.delegationNotes
   }
+  if (next.owns !== undefined && (typeof next.owns !== 'string' || next.owns.trim().length > 300)) {
+    delete next.owns
+  }
   if (next.credentialMode !== undefined && next.harnessId === undefined) {
     // A credential path only applies to a bound harness; kun keeps 'provider'.
     if (next.credentialMode !== 'provider') delete next.credentialMode
@@ -111,7 +116,7 @@ function stripBlankProfileFields(profile: Record<string, unknown>): Record<strin
     // Legacy settings allowed either field independently. Drop the ambiguous
     // override as a pair so the profile stays valid and inherits the active
     // session's coherent model/provider selection. A bare model is valid when
-    // the profile binds a harness that owns its model list (10 §3.1).
+    // the profile binds a harness that owns its model list.
     delete next.model
     delete next.providerId
   }

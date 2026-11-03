@@ -45,7 +45,7 @@ export async function startTurn(
   request: Request,
   onStarted?: (response: StartTurnResponse) => void,
   graphModeEnabled?: () => boolean,
-  /** ADE (09 §6.2): ack worker notices attached to this user send. */
+  /** ADE: ack worker notices attached to this user send. */
   ackWorkerNotices?: (threadId: string, noticeIds: readonly string[]) => Promise<unknown>
 ): Promise<JsonResponse | Response> {
   const body = await readJsonBody(request)

@@ -25,6 +25,7 @@ let abort: AbortController | null = null
 let timer: ReturnType<typeof setTimeout> | null = null
 let wakeSleep: (() => void) | null = null
 let revision = 0
+let metadataRevision = 0
 let lastSnapshot: SharedModelConnectionsSnapshot | null = null
 let failureDelayMs = MODEL_CONNECTION_WATCH_FAILURE_RETRY_MIN_MS
 
@@ -81,6 +82,7 @@ function stopWatch(): void {
   wakeSleep?.()
   wakeSleep = null
   revision = 0
+  metadataRevision = 0
   lastSnapshot = null
   failureDelayMs = MODEL_CONNECTION_WATCH_FAILURE_RETRY_MIN_MS
 }
@@ -98,11 +100,12 @@ async function runLoop(generation: number): Promise<void> {
         if (controller.signal.aborted || generation !== loopGeneration) return
         continue
       }
-      const snapshot = revision === 0
+      const snapshot = lastSnapshot === null
         ? await fetchSnapshot(controller.signal)
-        : await fetchEvent(revision, controller.signal)
+        : await fetchEvent(revision, metadataRevision, controller.signal)
       if (generation !== loopGeneration) return
       revision = snapshot.revision
+      metadataRevision = snapshot.metadataRevision ?? 0
       lastSnapshot = snapshot
       await notifyListeners(snapshot)
     } catch (error) {
@@ -114,7 +117,7 @@ async function runLoop(generation: number): Promise<void> {
     if (generation !== loopGeneration || listeners.size === 0) return
     const next = nextModelConnectionWatchDelayMs({
       failed,
-      hasRevision: revision > 0,
+      hasRevision: lastSnapshot !== null,
       failureDelayMs
     })
     failureDelayMs = next.nextFailureDelayMs
@@ -135,10 +138,11 @@ async function fetchSnapshot(signal: AbortSignal): Promise<SharedModelConnection
 
 async function fetchEvent(
   sinceRevision: number,
+  sinceMetadataRevision: number,
   signal: AbortSignal
 ): Promise<SharedModelConnectionsSnapshot> {
   const result = await rendererRuntimeClient.runtimeRequest(
-    `${KUN_MODEL_CONNECTION_EVENTS_TEMPLATE}?since_revision=${sinceRevision}&wait_ms=${MODEL_CONNECTION_WATCH_WAIT_MS}`,
+    `${KUN_MODEL_CONNECTION_EVENTS_TEMPLATE}?since_revision=${sinceRevision}&since_metadata_revision=${sinceMetadataRevision}&wait_ms=${MODEL_CONNECTION_WATCH_WAIT_MS}`,
     'GET',
     undefined,
     { signal, priority: 'background' }

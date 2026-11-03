@@ -360,7 +360,7 @@ function BrowserEmptyState({
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center">
       {icon === 'loading'
-        ? <Loader2 className="h-10 w-10 animate-spin text-ds-accent motion-reduce:animate-none" />
+        ? <Loader2 className="h-10 w-10 animate-spin text-accent motion-reduce:animate-none" />
         : icon === 'alert'
           ? <ShieldAlert className="h-12 w-12 text-red-500" />
           : <ShieldCheck className="h-12 w-12 text-ds-faint" />}

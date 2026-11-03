@@ -1,7 +1,9 @@
 import { isQueueExecutionBlocked } from '../domain/queue-execution-state.js'
 import type { TurnService } from '../services/turn-service.js'
 import type { ThreadStore } from '../ports/thread-store.js'
+import { readThreadMetadata, scanThreadMetadata, scannedThreadMetadata, type ThreadMetadataScan } from '../services/thread-metadata-scan.js'
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
+import { runWithoutManagerDataMutexContext } from '../manager/data-mutex-context.js'
 
 /**
  * Runtime-level fair scheduler for durable queued turns.
@@ -65,14 +67,21 @@ export class QueuedTurnDispatcher {
     this.wake()
   }
 
-  /** Restart sweep: schedule every thread that still owns a queued turn. */
-  async drainAllQueued(): Promise<number> {
-    const summaries = await this.input.threadStore.list({ includeSide: true })
+  /**
+   * Restart sweep: schedule every thread that still owns a queued turn.
+   * A shared startup scan is only a prefilter, since earlier restart sweeps
+   * may have paused queues; `recheck` names threads those sweeps touched,
+   * which are read fresh whatever the scan says.
+   */
+  async drainAllQueued(input: { scan?: ThreadMetadataScan; recheck?: Iterable<string> } = {}): Promise<number> {
+    const store = this.input.threadStore
+    const scan = input.scan ?? await scanThreadMetadata(store)
+    const recheck = new Set(input.recheck ?? [])
     let queuedThreads = 0
-    for (const summary of summaries) {
-      const metadata = await (
-        this.input.threadStore.getMetadata?.(summary.id) ?? this.input.threadStore.get(summary.id)
-      ).catch(() => null)
+    for (const summary of scan.summaries) {
+      const scanned = await scannedThreadMetadata(store, scan, summary.id)
+      if (!recheck.has(summary.id) && !scanned?.turns.some((turn) => turn.status === 'queued')) continue
+      const metadata = input.scan ? await readThreadMetadata(store, summary.id) : scanned
       if (!metadata || isQueueExecutionBlocked(metadata) || !metadata.turns.some((turn) => turn.status === 'queued')) continue
       queuedThreads += 1
       this.markReady(summary.id)
@@ -102,7 +111,7 @@ export class QueuedTurnDispatcher {
   private ensurePass(): void {
     if (this.disposed || this.passInFlight || this.readyIds.length === 0) return
     this.passInFlight = true
-    this.passPromise = runWithoutTurnMutationFence(() => this.runPass())
+    this.passPromise = runWithoutManagerDataMutexContext(() => runWithoutTurnMutationFence(() => this.runPass()))
       .catch((error) => {
         console.warn(
           '[kun] queued-turn dispatcher pass failed: ' +

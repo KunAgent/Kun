@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { EventEmitter } from 'node:events'
 import type { AppSessionOwner } from '../contracts/app-session-owner.js'
 import type { RuntimeRegistration } from '../contracts/runtime-flavor.js'
 import {
+  armOwnerLossExitDeadline,
   drainManagerAfterOwnerLoss,
+  monitorManagerOwner,
   ownedManagerRuntimes,
   stopManagerAfterOwnerLoss
 } from './manager-owner-channel.js'
@@ -89,5 +92,70 @@ describe('manager owner-loss drain', () => {
       fetchImpl: (async () => new Response(null, { status: 204 })) as typeof fetch
     })
     expect(manager.close).toHaveBeenCalledOnce()
+  })
+})
+
+describe('manager owner-loss exit deadline', () => {
+  it('arms the deadline when the parent disconnects during an already requested stop', async () => {
+    vi.useFakeTimers()
+    const channel = Object.assign(new EventEmitter(), { connected: true, send: vi.fn() })
+    const exit = vi.fn()
+    const monitor = monitorManagerOwner(owner, { channel: channel as never, exit, deadlineMs: 1_000 })
+    try {
+      channel.emit('message', { type: 'kun-manager-stop', owner })
+      await monitor.stopRequested
+      channel.emit('disconnect')
+      await monitor.disconnected
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(exit).toHaveBeenCalledWith(75)
+    } finally {
+      monitor.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('covers startup that is still waiting when the owner exits', async () => {
+    vi.useFakeTimers()
+    const channel = Object.assign(new EventEmitter(), { connected: true, send: vi.fn() })
+    const exit = vi.fn()
+    const monitor = monitorManagerOwner(owner, { channel: channel as never, exit, deadlineMs: 1_000 })
+    try {
+      channel.emit('disconnect')
+      await expect(monitor.startGranted).resolves.toBe(false)
+      await vi.advanceTimersByTimeAsync(1_000)
+      expect(exit).toHaveBeenCalledWith(75)
+    } finally {
+      monitor.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it('exits when owner-loss cleanup stalls past the deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      const exit = vi.fn()
+      const log = vi.fn()
+      armOwnerLossExitDeadline(exit, { deadlineMs: 1_000, log })
+      await vi.advanceTimersByTimeAsync(999)
+      expect(exit).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(exit).toHaveBeenCalledWith(75)
+      expect(log).toHaveBeenCalledWith(expect.stringContaining('did not finish within 1000ms'))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not exit once cleanup finished and the deadline was cancelled', async () => {
+    vi.useFakeTimers()
+    try {
+      const exit = vi.fn()
+      const cancel = armOwnerLossExitDeadline(exit, { deadlineMs: 1_000, log: vi.fn() })
+      cancel()
+      await vi.advanceTimersByTimeAsync(5_000)
+      expect(exit).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

@@ -40,45 +40,52 @@ export function buildPublicItemHistoryPage(
 
   selected.reverse()
 
-  // A running turn can emit more process items than the page budget. Without
-  // an anchor its opening user message would land on an older page while the
-  // renderer refuses to page back during a busy turn, hiding the active
-  // request. Keep the first real user_message of the anchor turn pinned in
-  // front and trim the continuous window from the oldest side so the page
-  // still honors the item/byte budget.
-  let anchorIndex = -1
-  if (!options.before && options.anchorTurnId) {
-    anchorIndex = publicItems.findIndex(
-      (item) => item.turnId === options.anchorTurnId && item.kind === 'user_message'
-    )
-    if (anchorIndex >= 0 && anchorIndex < windowStartIndex) {
-      const anchorItem = timelineSafeItem(publicItems[anchorIndex]!, maxBytes)
-      const anchorBytes = serializedBytes(anchorItem)
-      while (
-        selected.length > 0 &&
-        (selected.length + 1 > maxItems || itemBytes + anchorBytes > maxBytes)
-      ) {
-        const dropped = selected.shift()!
-        itemBytes -= serializedBytes(dropped)
-        windowStartIndex += 1
-      }
-      selected.unshift(anchorItem)
-      itemBytes += anchorBytes
-    } else {
-      anchorIndex = -1
+  // A turn can emit more process items than the page budget. Without pins the
+  // newest page would hold only tool traffic: the running turn's opening user
+  // message (anchor) and the latest turn's closing assistant text would land
+  // on older pages while the renderer refuses to page back during a busy turn
+  // or shows "no reply" for a finished one. Keep both pinned in front and trim
+  // the continuous window from the oldest side so the page still honors the
+  // item/byte budget.
+  const pinIndexes: number[] = []
+  if (!options.before) {
+    if (options.anchorTurnId) {
+      const anchorIndex = publicItems.findIndex(
+        (item) => item.turnId === options.anchorTurnId && item.kind === 'user_message'
+      )
+      if (anchorIndex >= 0) pinIndexes.push(anchorIndex)
     }
+    const replyIndex = latestAssistantReplyIndex(publicItems)
+    if (replyIndex >= 0 && !pinIndexes.includes(replyIndex)) pinIndexes.push(replyIndex)
+  }
+  const pins = pinIndexes
+    .filter((index) => index < windowStartIndex)
+    .sort((left, right) => left - right)
+    .map((index) => ({ index, item: timelineSafeItem(publicItems[index]!, maxBytes) }))
+  if (pins.length > 0) {
+    const pinBytes = pins.reduce((sum, pin) => sum + serializedBytes(pin.item), 0)
+    while (
+      selected.length > 0 &&
+      (selected.length + pins.length > maxItems || itemBytes + pinBytes > maxBytes)
+    ) {
+      const dropped = selected.shift()!
+      itemBytes -= serializedBytes(dropped)
+      windowStartIndex += 1
+    }
+    selected.unshift(...pins.map((pin) => pin.item))
+    itemBytes += pinBytes
   }
 
   // The cursor is the boundary item of the retained continuous window (the
-  // anchor's own position only when the window was fully trimmed), so the
-  // next older page covers the anchor and any items between it and the
-  // window. The renderer deduplicates by item id, so the anchor is never
+  // first pin's own position only when the window was fully trimmed), so the
+  // next older page covers the pins and any items between them and the
+  // window. The renderer deduplicates by item id, so pins are never
   // duplicated in the merged transcript.
-  const anchored = anchorIndex >= 0
-  const cursorItem = anchored && selected.length > 1 ? selected[1] : selected[0]
-  const boundaryIndex = anchored && selected.length > 1
+  const pinned = pins.length > 0
+  const cursorItem = pinned && selected.length > pins.length ? selected[pins.length] : selected[0]
+  const boundaryIndex = pinned && selected.length > pins.length
     ? windowStartIndex
-    : (anchored ? anchorIndex : windowStartIndex)
+    : (pinned ? pins[0]!.index : windowStartIndex)
   const hasMore = boundaryIndex > 0
   return {
     items: selected,
@@ -86,6 +93,18 @@ export function buildPublicItemHistoryPage(
     hasMore,
     itemBytes
   }
+}
+
+/** Closing assistant text of the newest turn; -1 when that turn said nothing. */
+export function latestAssistantReplyIndex(items: readonly TurnItem[]): number {
+  const turnId = items.at(-1)?.turnId
+  if (!turnId) return -1
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]!
+    if (item.turnId !== turnId) return -1
+    if (item.kind === 'assistant_text' && item.text.trim()) return index
+  }
+  return -1
 }
 
 /**

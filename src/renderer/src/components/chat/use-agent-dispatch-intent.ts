@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import type { AgentDispatchAction, AgentDispatchIntentView } from '@shared/agent-dispatch'
+import type { AgentDispatchAction, AgentDispatchIntentView, AgentDispatchRecommendationEdit } from '@shared/agent-dispatch'
 import { agentDispatchCache, agentDispatchClient, publishAgentDispatchIntent } from '../../agent/agent-dispatch-client'
 
 export function useAgentDispatchIntent(intentId: string, initial?: AgentDispatchIntentView) {
   const intent = useSyncExternalStore(agentDispatchCache.subscribe,
     () => agentDispatchCache.get(intentId) ?? initial)
-  const [error, setError] = useState('')
+  // A refused action keeps its reason until the next action; reloads only own the load error.
+  const [loadError, setLoadError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const refresh = useCallback(async () => {
-    try { publishAgentDispatchIntent(await agentDispatchClient.get(intentId)); setError('') }
-    catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)) }
+    try { publishAgentDispatchIntent(await agentDispatchClient.get(intentId)); setLoadError('') }
+    catch (cause) { setLoadError(cause instanceof Error ? cause.message : String(cause)) }
   }, [intentId])
   useEffect(() => { void refresh() }, [refresh])
   const intentState = intent?.state
@@ -22,20 +24,20 @@ export function useAgentDispatchIntent(intentId: string, initial?: AgentDispatch
     return () => clearInterval(timer)
   }, [intentState, refresh])
   const act = useCallback(async (action: AgentDispatchAction,
-    changes?: { recommendation?: Partial<AgentDispatchIntentView['recommendation']> }): Promise<AgentDispatchIntentView | undefined> => {
+    changes?: { recommendation?: AgentDispatchRecommendationEdit }): Promise<AgentDispatchIntentView | undefined> => {
     if (!intent || busyRef.current) return undefined
     busyRef.current = true
     setBusy(true)
-    setError('')
+    setActionError('')
     try {
       const next = await agentDispatchClient.act(intent, action, changes)
       publishAgentDispatchIntent(next)
       return next
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause))
+      setActionError(cause instanceof Error ? cause.message : String(cause))
       await refresh()
       return undefined
     } finally { busyRef.current = false; setBusy(false) }
   }, [intent, refresh])
-  return { intent, error, busy, act, refresh }
+  return { intent, error: actionError || loadError, busy, act, refresh }
 }

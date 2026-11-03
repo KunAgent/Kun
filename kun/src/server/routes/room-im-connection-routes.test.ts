@@ -14,6 +14,7 @@ import type { RouteContext } from '../router.js'
 import { bindRoomContinuationDispatcher } from '../../rooms/room-continuation-dispatch.js'
 import { registerRoomImConnectionRoutes } from './register-room-im-connection-routes.js'
 import type { RoomRequestState } from '../../rooms/room-runtime-types.js'
+import { bindGmailThreadDataProtection } from '../../gmail/thread-data-state.js'
 
 const cleanup: Array<() => Promise<void>> = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
@@ -67,10 +68,30 @@ async function fixture(serverId = 'im.feishu') {
   const send = (overrides = {}) => call('im-connections/:connectionId/messages', {
     senderId: 'owner-1', chatId: 'dm-1', messageId: 'event-1', text: 'Do this task', ...overrides })
   cleanup.push(async () => { unbind(); await store.close(); await rm(directory, { recursive: true, force: true }) })
-  return { store, service, room, call, connect, send, approvals, inputs }
+  return { store, service, room, call, connect, send, approvals, inputs, threads }
 }
 
 describe('private Agent IM runtime boundary', () => {
+  it('does not add an external messaging connection to a Gmail-sensitive conversation', async () => {
+    const f = await fixture()
+    bindGmailThreadDataProtection(f.threads, { hasGoogleData: async (id) => id === 'room:private-room',
+      captureModelSharingFence: () => () => undefined,
+      markGoogleData: async () => {}, status: async () => ({ configured: true, connected: true,
+        reconnectRequired: false, scopes: [], allowModelSharing: true }) })
+    await expect(f.connect()).rejects.toThrow('contains Gmail data')
+    expect(await f.store.list('agent_im_connection')).toEqual([])
+  })
+
+  it('blocks legacy external IM delivery when a conversation already contains Gmail data', async () => {
+    const f = await fixture()
+    await f.connect()
+    bindGmailThreadDataProtection(f.threads, { hasGoogleData: async (id) => id === 'room:private-room',
+      captureModelSharingFence: () => () => undefined,
+      markGoogleData: async () => {}, status: async () => ({ configured: true, connected: true,
+        reconnectRequired: false, scopes: [], allowModelSharing: true }) })
+    await expect(f.call('im-connections/:connectionId/delivery', undefined, {}, '?cursor=0'))
+      .rejects.toThrow('cannot be delivered')
+  })
   it('binds the existing private identity without creating another Agent or conversation', async () => {
     const f = await fixture()
     expect(await f.call('im-cards/:messageId')).toMatchObject({ agentId: 'agent-1', provider: 'feishu', status: 'requested' })

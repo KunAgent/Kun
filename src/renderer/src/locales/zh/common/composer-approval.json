@@ -1,0 +1,43 @@
+{
+  "composerApproval": {
+    "header": "需要你的批准",
+    "kind": {
+      "command": "运行命令",
+      "edit": "修改文件",
+      "email": "发送邮件",
+      "tool": "调用 {{name}}",
+      "toolUnnamed": "调用工具"
+    },
+    "question": {
+      "edit": "修改 {{file}}？",
+      "editFiles_other": "修改这 {{count}} 个文件？"
+    },
+    "preview": {
+      "terminal": "终端",
+      "email": "邮件",
+      "awaiting": "等待批准",
+      "files_other": "{{count}} 个文件",
+      "diffStats": "新增 {{added}} 行，删除 {{removed}} 行",
+      "clipped": "改动较长，其余部分未显示",
+      "truncated": "参数较长，预览只显示了一部分",
+      "moreInput_other": "另有 {{count}} 个参数"
+    },
+    "option": {
+      "allow": "允许",
+      "allowAlways": "始终允许",
+      "deny": "拒绝",
+      "denyAlways": "始终拒绝",
+      "once": "仅这一次",
+      "denyOnce": "这次先拒绝",
+      "alwaysSession": "本次会话里不再询问",
+      "alwaysScoped": "本次会话里 {{scope}} 不再询问",
+      "alwaysScopedEdit": "本次会话里修改 {{scope}} 不再询问",
+      "denyAlwaysSession": "本次会话里同类操作都直接拒绝"
+    },
+    "feedbackPlaceholder": "告诉 Kun 换个做法，会随拒绝一起发送…",
+    "feedbackEmailPlaceholder": "告诉 Kun 要怎么改，会随拒绝一起发送…",
+    "feedbackLabel": "随拒绝一起发送的说明",
+    "hint": "按 1–{{last}} 直接选择，↑↓ 移动后回车确认",
+    "confirm": "确认"
+  }
+}

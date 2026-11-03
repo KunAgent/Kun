@@ -1,3 +1,4 @@
+import { contextGeneration } from './agent-lifecycle-state.js'
 import { z } from 'zod'
 import { stopDirectRequest } from './agent-direct-cancellation.js'
 import { privateExecutionBinding } from './agent-direct-execution.js'
@@ -6,7 +7,7 @@ import { AgentArtifactQuery } from '../contracts/agent-artifacts.js'
 import { artifactReference } from './agent-artifact-library.js'
 import { freezeAgentPermissions } from './agent-permission-snapshot.js'
 import { realpath, stat } from 'node:fs/promises'
-import { relative, isAbsolute } from 'node:path'
+import { relative, isAbsolute, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { RoomRuntime } from '../rooms/room-runtime.js'
 import type { Room } from '../contracts/rooms.js'
@@ -30,9 +31,11 @@ export async function directActivity(rooms: RoomRuntime, roomId: string) {
   const activeRows = await rooms.deps.store.list<RoomRequestState>('request', { roomId, status: ['running', 'pending', 'stopping', 'recovery_required'], order: 'asc', limit: 1000 })
   const requestSummary = (row: typeof rows[number]) => ({ id: row.id, revision: row.revision, status: row.value.status,
     runId: row.value.privateRunId, threadId: row.value.turnId ? row.value.threadId : undefined, turnId: row.value.turnId,
-    clientRequestId: row.value.message.clientRequestId, steer: row.value.steer, error: row.value.error })
+    clientRequestId: row.value.message.clientRequestId, steer: row.value.steer, error: row.value.error,
+    failureAcknowledged: row.value.status === 'failed' && row.value.failureAcknowledgedRevision === row.revision })
   const requests = rows.filter((row) => row.value.privateProtocol).map(requestSummary)
-  const activeRow = activeRows.find((row) => row.value.privateProtocol)
+  const activeRow = activeRows.find((row) => row.value.privateProtocol &&
+    (contextGeneration(row.value.roomSnapshot) === contextGeneration(room) || row.value.cancellationRequested))
   const active = activeRow ? requestSummary(activeRow) : undefined
   const run = activeRow?.value.privateRunId
     ? await rooms.deps.store.get<RoomRunRecord>('room_run', activeRow.value.privateRunId) : null
@@ -80,8 +83,9 @@ export async function updateDirectWorkspace(rooms: RoomRuntime, roomId: string, 
     const agent = await rooms.agents.active(room.members[0].participantAgentId!)
     if (workspace && agent.allowedRepositoryRoots && !agent.allowedRepositoryRoots.includes(workspace)) throw new Error('Project is outside this Agent\'s allowed directories')
     if (workspace) {
-      const rel = relative(rooms.deps.dataDir, workspace)
-      if (!isAbsolute(rel) && rel !== '..' && !rel.startsWith('../')) throw new Error('Select a project outside Kun private data')
+      const dataRoot = await realpath(rooms.deps.dataDir)
+      const rel = relative(dataRoot, workspace)
+      if (!isAbsolute(rel) && rel !== '..' && !rel.startsWith('..' + sep)) throw new Error('Select a project outside Kun private data')
     }
   }
   await store.commit({ requestId: key, fingerprint: hash, checks: [{ kind: 'room', id: roomId, expectedRevision: input.expectedRevision }],
@@ -106,7 +110,9 @@ export async function controlDirectRequest(rooms: RoomRuntime, roomId: string, r
   if (!['failed', 'cancelled'].includes(value.status) || value.admissionAttempted && (!turn || ['queued', 'running'].includes(turn.status))) throw new RoomStoreConflictError('Reconcile the original execution before retrying')
   const currentRoom = await rooms.service.get(roomId)
   const id = 'request-' + randomUUID(), snapshot = await rooms.agents.freeze({ ...value.roomSnapshot,
-    privateModelRef: currentRoom.privateModelRef, privateExecutionPolicy: currentRoom.privateExecutionPolicy })
+    privateModelRef: currentRoom.privateModelRef, privateReasoningEffort: currentRoom.privateReasoningEffort,
+    privateExecutorModel: currentRoom.privateExecutorModel,
+    privateExecutionPolicy: currentRoom.privateExecutionPolicy })
   await freezeAgentPermissions(rooms.agents, snapshot)
   const request: RoomRequestState = { privateModel: await rooms.service.directBinding(snapshot), clientSurface: value.clientSurface, imConnectionId: value.imConnectionId, id, roomId, privateProtocol: 'direct-v1', status: 'pending', rootRequestId: id,
     sourceMessageId: value.sourceMessageId, roomSnapshot: snapshot, message: value.message, threadId: 'private-pending-' + id }

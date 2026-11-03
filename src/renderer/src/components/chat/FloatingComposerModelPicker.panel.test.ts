@@ -6,10 +6,10 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import i18n from '../../i18n'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
 import {
-  composerReasoningLevelAfterAuto,
   composerReasoningLevels,
   initialExpandedModelGroups
 } from './floating-composer-model-panel'
+import { resolveComposerReasoningSelection } from './floating-composer-model-picker-logic'
 
 const CODEX: ModelProviderModelGroup = {
   providerId: 'codex-2',
@@ -22,7 +22,12 @@ const CODEX: ModelProviderModelGroup = {
     'gpt-6-astra': { inputModalities: ['text', 'image'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text', 'image_url'], serviceTiers: [] }
   }
 }
-const DEEPSEEK: ModelProviderModelGroup = { providerId: 'deepseek', label: 'DeepSeek', modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash'] }
+const DEEPSEEK: ModelProviderModelGroup = { providerId: 'deepseek', label: 'DeepSeek', modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash'],
+  modelProfiles: Object.fromEntries(['deepseek-v4-pro', 'deepseek-v4-flash'].map((id) => [id, {
+    inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+    reasoning: { supportedEfforts: ['off', 'low', 'medium', 'high', 'max'], defaultEffort: 'high', requestProtocol: 'deepseek-chat-completions' }
+  }])) }
+
 const numbered = (prefix: string, count: number): string[] => Array.from({ length: count }, (_, index) => `${prefix}-${index + 1}`)
 
 let host: HTMLDivElement
@@ -63,6 +68,113 @@ const buttonWithText = (text: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] button')].find((button) => button.textContent?.trim() === text)
 
 describe('composer model and reasoning control', () => {
+  it('keeps a task picker open across model and reasoning changes until Done', async () => {
+    const onModel = vi.fn()
+    const onReasoning = vi.fn()
+    const onOpen = vi.fn()
+    const trigger = await renderPicker({ reasoningScope: 'task', composerReasoningEffort: undefined,
+      onComposerModelChange: onModel, onComposerReasoningEffortChange: onReasoning, onOpenChange: onOpen })
+    expect(onReasoning).not.toHaveBeenCalled()
+    expect(trigger.textContent).toContain('Task default')
+    await act(async () => trigger.click())
+    expect(document.querySelector('[data-dispatch-model-footer]')?.textContent).toContain('Only applies to this task')
+    expect(document.querySelector('[data-composer-reasoning-inherited]')).not.toBeNull()
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-composer-model-panel] button[data-reasoning-effort="high"]')?.click())
+    expect(onReasoning).toHaveBeenLastCalledWith('high')
+    const nextModel = document.querySelector<HTMLButtonElement>('[data-model-nav][title="deepseek-v4-flash"]')
+    expect(nextModel).not.toBeNull()
+    await act(async () => nextModel!.click())
+    expect(onModel).toHaveBeenLastCalledWith('deepseek-v4-flash', 'deepseek')
+    expect(panel()).not.toBeNull()
+    expect(onOpen).toHaveBeenLastCalledWith(true)
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-dispatch-model-footer] button')?.click())
+    expect(panel()).toBeNull()
+    expect(onOpen).toHaveBeenLastCalledWith(false)
+    expect(document.activeElement).toBe(trigger)
+  })
+
+  it.each(['unknown', 'unsupported'] as const)('explains a task model with %s reasoning instead of hiding the section', async (availability) => {
+    const groups: ModelProviderModelGroup[] = [{ providerId: 'provider', label: 'Provider', modelIds: ['plain-model'],
+      modelProfiles: availability === 'unsupported' ? { 'plain-model': { inputModalities: ['text'], outputModalities: ['text'],
+        supportsToolCalling: true, messageParts: ['text'], supportsReasoning: false } } : {} }]
+    const onReasoning = vi.fn()
+    const trigger = await renderPicker({ reasoningScope: 'task', composerModel: 'plain-model', composerProviderId: 'provider',
+      composerModelGroups: groups, onComposerReasoningEffortChange: onReasoning })
+    await act(async () => trigger.click())
+    expect(document.querySelector(`[data-composer-reasoning-unavailable="${availability}"]`)).not.toBeNull()
+    expect(document.querySelectorAll('button[data-reasoning-effort]')).toHaveLength(0)
+    expect(onReasoning).not.toHaveBeenCalled()
+    expect(trigger.textContent).toContain(availability === 'unsupported' ? 'Not adjustable' : 'Task default')
+  })
+
+  it('normalizes only to reported model levels and intersects native transport capabilities', () => {
+    const group: ModelProviderModelGroup = { ...DEEPSEEK, modelProfiles: { 'deepseek-v4-flash': {
+      inputModalities: ['text'], outputModalities: ['text'], supportsToolCalling: true, messageParts: ['text'],
+      reasoning: { supportedEfforts: ['off', 'high', 'max'], defaultEffort: 'max', requestProtocol: 'deepseek-chat-completions' } } } }
+    const known = resolveComposerReasoningSelection({ groups: [group], model: 'deepseek-v4-flash', providerId: 'deepseek',
+      effort: 'low', requireReportedLevels: true })
+    expect(known.options.map((option) => option.id)).toEqual(['off', 'high', 'max'])
+    expect(known.current).toBe('max')
+    const native: ModelProviderModelGroup[] = [{ providerId: 'native', label: 'Native', modelIds: ['native-model'], nativeHarnessId: 'codex',
+      modelInfo: { 'native-model': { id: 'native-model', displayName: 'Native model', reasoningEfforts: ['low', 'high', 'xhigh'], defaultReasoningEffort: 'high' } } }]
+    const limited = resolveComposerReasoningSelection({ groups: native, model: 'native-model', providerId: 'native',
+      effort: 'xhigh', requireReportedLevels: true, allowedEfforts: ['auto', 'high', 'xhigh'] })
+    expect(limited.options.map((option) => option.id)).toEqual(['auto', 'high', 'xhigh'])
+    expect(limited.current).toBe('xhigh')
+    expect(resolveComposerReasoningSelection({ groups: [], model: 'unreported', requireReportedLevels: true }).availability).toBe('unknown')
+  })
+
+  it('offers every reasoning level for an Agent model whose levels were not reported', async () => {
+    // CodeMaker/OpenCode report levels only for the model their probe session selected.
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'CodeMaker account', nativeHarnessId: 'codemaker',
+      modelIds: ['openai/gpt-6.1-sol', 'openai/gpt-6-luna'], modelInfo: { 'openai/gpt-6.1-sol': { id: 'openai/gpt-6.1-sol', displayName: 'GPT 6.1 Sol' },
+        'openai/gpt-6-luna': { id: 'openai/gpt-6-luna', displayName: 'GPT 6 Luna', reasoningEfforts: ['low', 'high'] } } }
+    const trigger = await renderPicker({ composerModel: 'openai/gpt-6.1-sol', composerProviderId: group.providerId, composerModelGroups: [group], composerReasoningEffort: 'auto' })
+    await act(async () => trigger.click())
+    expect([...document.querySelectorAll<HTMLButtonElement>('[role="radiogroup"] [role="radio"]')].map((segment) => segment.textContent))
+      .toEqual(['Auto', 'Off', 'Low', 'Med', 'High', 'Ultra'])
+    expect(document.querySelector('[data-composer-model-panel] button[data-reasoning-effort="auto"][aria-checked="true"]')).not.toBeNull()
+  })
+
+  it('groups a provider-qualified Agent catalog by provider and shows short names', async () => {
+    const ids = ['openai/gpt-6-luna', 'openai/gpt-6-sol', 'opencode/big-pickle', 'opencode/exo-free']
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'OpenCode account', nativeHarnessId: 'opencode',
+      agentIconId: 'opencode', modelIds: ids, modelInfo: Object.fromEntries(ids.map((id) => [id, { id,
+        displayName: id.startsWith('openai') ? `OpenAI/${id.slice(7).toUpperCase()}` : `OpenCode Zen/${id.slice(9)}` }])) }
+    const trigger = await renderPicker({ composerModel: 'opencode/big-pickle', composerProviderId: group.providerId, composerModelGroups: [group] })
+    expect(trigger.textContent).toContain('big-pickle')
+    expect(trigger.textContent).not.toContain('OpenCode Zen')
+    expect(trigger.querySelector('[data-model-source-icon="agent-account"] [data-agent-icon="opencode"]')).not.toBeNull()
+    await act(async () => trigger.click())
+    const sections = [...document.querySelectorAll('[data-model-provider-section]')].map((node) => node.getAttribute('aria-label'))
+    expect(sections).toEqual(['OpenAI', 'OpenCode Zen'])
+    // Control for the group test below: provider sections do carry a brand mark.
+    expect(document.querySelectorAll('[data-model-provider-section] [data-provider-icon]').length).toBeGreaterThan(0)
+    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent)).toEqual(['GPT-6-LUNA', 'GPT-6-SOL', 'big-pickle', 'exo-free'])
+    expect(document.querySelector('[role="menuitemradio"][aria-checked="true"]')?.getAttribute('title')).toBe('OpenCode Zen/big-pickle (opencode/big-pickle)')
+  })
+
+  it('groups an Agent catalog by its own option groups so same-named models stay distinguishable', async () => {
+    const route = (name: string, model: string) => `["${name}","${model}"]`
+    const rows = [
+      [route('deepseek-official', 'deepseek-v4-flash'), 'deepseek-v4-flash', 'DeepSeek'],
+      [route('deepseek-official', 'deepseek-flash'), 'DeepSeek-V4.1-Flash', 'DeepSeek'],
+      [route('deepseek-account', 'deepseek-flash'), 'DeepSeek-V4.1-Flash', 'DeepSeek Account'],
+      [route('deepseek-account', 'deepseek-v4-pro'), 'DeepSeek-V4-Pro', 'DeepSeek Account']
+    ] as const
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'DeepSeek Harness account', nativeHarnessId: 'deepseek-harness',
+      modelIds: rows.map(([id]) => id), modelInfo: Object.fromEntries(rows.map(([id, displayName, section]) => [id, { id, displayName, group: section }])) }
+    const trigger = await renderPicker({ composerModel: rows[2][0], composerProviderId: group.providerId, composerModelGroups: [group] })
+    await act(async () => trigger.click())
+    expect([...document.querySelectorAll('[data-model-provider-section]')].map((node) => node.getAttribute('aria-label'))).toEqual(['DeepSeek', 'DeepSeek Account'])
+    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent)).toEqual(rows.map(([, name]) => name))
+    // Group headings carry no provider brand mark: they are routes, not providers.
+    expect(document.querySelectorAll('[data-model-provider-section] [data-provider-icon]')).toHaveLength(0)
+    const selected = document.querySelectorAll('[role="menuitemradio"][aria-checked="true"]')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]!.closest('[data-model-provider-section]')?.getAttribute('aria-label')).toBe('DeepSeek Account')
+  })
+
   it('opens one panel with reasoning segments above the model list', async () => {
     const onReasoning = vi.fn()
     const trigger = await renderPicker({ onComposerReasoningEffortChange: onReasoning })
@@ -77,7 +189,7 @@ describe('composer model and reasoning control', () => {
     expect(onReasoning).toHaveBeenCalledWith('low')
     // Changing the effort keeps the panel open for a model pick.
     expect(panel()).not.toBeNull()
-    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent)).toEqual(['deepseek-v4-pro', 'deepseek-v4-flash'])
+    expect([...document.querySelectorAll('[role="menuitemradio"]')].map((row) => row.getAttribute('title'))).toEqual(['deepseek-v4-pro', 'deepseek-v4-flash'])
   })
 
   it('moves the effort with arrow keys', async () => {
@@ -89,21 +201,35 @@ describe('composer model and reasoning control', () => {
     expect(onReasoning).toHaveBeenLastCalledWith('max')
   })
 
-  it('keeps adaptive reasoning as its own switch', async () => {
+  it('leads the reasoning rail with Auto, left of the levels', async () => {
     const onReasoning = vi.fn()
     const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'codex',
       modelIds: ['gpt'], modelInfo: { gpt: { id: 'gpt', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'low' } } }
     const trigger = await renderPicker({ composerModel: 'gpt', composerProviderId: group.providerId, composerModelGroups: [group],
       composerReasoningEffort: 'auto', onComposerReasoningEffortChange: onReasoning })
-    expect(trigger.textContent).toContain('Adaptive')
+    expect(trigger.textContent).toContain('Auto')
     await act(async () => trigger.click())
-    const auto = document.querySelector<HTMLButtonElement>('[data-composer-model-panel] button[data-reasoning-effort="auto"]')!
-    expect(auto.getAttribute('aria-pressed')).toBe('true')
-    expect(document.querySelector('[role="radio"][aria-checked="true"]')).toBeNull()
-    await act(async () => auto.click())
+    const segments = [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] [role="radiogroup"] [role="radio"]')]
+    expect(segments.map((segment) => segment.textContent)).toEqual(['Auto', 'Low', 'Med', 'High'])
+    expect(segments.filter((segment) => segment.getAttribute('aria-checked') === 'true').map((segment) => segment.dataset.reasoningEffort)).toEqual(['auto'])
+    // Auto is already selected, so it does not fire again; picking a level leaves Auto.
+    await act(async () => segments[0]!.click())
+    expect(onReasoning).not.toHaveBeenCalled()
+    await act(async () => segments[3]!.click())
     expect(onReasoning).toHaveBeenLastCalledWith('high')
     expect(composerReasoningLevels([{ id: 'auto', labelKey: '' }, { id: 'max', labelKey: '' }, { id: 'off', labelKey: '' }])).toEqual(['off', 'max'])
-    expect(composerReasoningLevelAfterAuto(['low', 'medium'])).toBe('medium')
+  })
+
+  it('walks between Auto and the levels with arrow keys', async () => {
+    const onReasoning = vi.fn()
+    const group: ModelProviderModelGroup = { providerId: 'ade-cred:native-login', label: 'Native sign-in', nativeHarnessId: 'codex',
+      modelIds: ['gpt'], modelInfo: { gpt: { id: 'gpt', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'low' } } }
+    const trigger = await renderPicker({ composerModel: 'gpt', composerProviderId: group.providerId, composerModelGroups: [group],
+      composerReasoningEffort: 'low', onComposerReasoningEffortChange: onReasoning })
+    await act(async () => trigger.click())
+    const radios = document.querySelector<HTMLElement>('[data-composer-model-panel] [role="radiogroup"]')!
+    await act(async () => radios.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
+    expect(onReasoning).toHaveBeenLastCalledWith('auto')
   })
 
   it('shows Fast on the trigger and toggles it inside the panel', async () => {

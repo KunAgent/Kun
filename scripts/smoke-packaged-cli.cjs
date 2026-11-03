@@ -116,6 +116,11 @@ function runPackagedCliSmoke(resourcesDirectory, options = {}) {
     }
     const help = run(['--help'])
     assertSuccessfulHelp(help, `${platform} packaged Kun CLI`)
+    // `--help` and `--version` return before the agent command module loads, so
+    // they never exercise the terminal UI graph. It is the part of the packaged
+    // runtime that most often loses a dependency, because it is the only entry
+    // the installer's file list and the GUI health probe do not touch.
+    assertTerminalUiGraphLoads(run(['tui', '--help']), `${platform} packaged Kun terminal UI`)
     if (options.expectedVersion) {
       const version = run(['--version'])
       assertSuccessfulVersion(
@@ -203,6 +208,26 @@ function assertSuccessfulHelp(result, label) {
   }
   if (!String(result.stdout).includes(CLI_HELP_SENTINEL)) {
     throw new Error(`${label} did not print the Kun CLI help banner.`)
+  }
+}
+
+// The terminal UI runs on its own Node interpreter. A packaged runtime that is
+// missing one of its packages fails here, with the module-resolution error
+// reports from `--help` never reaching.
+function assertTerminalUiGraphLoads(result, label) {
+  const stderr = String(result.stderr ?? '')
+  if (result.status === 69 && /node was not found on PATH/u.test(stderr)) {
+    // The Windows launcher runs the terminal UI on system Node; without one the
+    // graph cannot be exercised here at all. The integrity manifest still
+    // covers the files, so record the gap instead of failing the installer.
+    process.stderr.write(`${label}: skipped, no system Node on PATH for the TUI launcher.\n`)
+    return
+  }
+  if (result.error || result.status !== 0) {
+    throw new Error(`${label} failed: ${result.error?.message ?? stderr ?? `exit ${result.status}`}`)
+  }
+  if (!String(result.stdout).includes('kun [tui options]')) {
+    throw new Error(`${label} did not load its terminal UI dependencies.`)
   }
 }
 

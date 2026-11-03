@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs'
 import { lstat, stat } from 'node:fs/promises'
 import { dirname, extname, resolve } from 'node:path'
 import { resolvePathThroughSymlinks, sameFilesystemPath } from './workspace-path.js'
+import { repairPptxPresentationChildOrder } from './office-pptx-presentation-order.js'
 
 export const OFFICECLI_MAX_OPERATIONS = 200
 const OFFICECLI_FORMATS = new Set(['.docx', '.xlsx', '.pptx'])
@@ -240,6 +241,99 @@ export function abortError(): Error {
 
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/**
+ * `officecli validate` reports failures in its JSON payload; older builds still
+ * exit non-zero, but the payload is the contract that must not be ignored.
+ */
+export function assertOfficeCliValidationSuccess(
+  result: OfficeCliRunResult,
+  fallback: string
+): void {
+  assertOfficeCliSuccess(result, fallback)
+  const parsed = parseOfficeCliOutput(result.stdout)
+  if (
+    parsed &&
+    typeof parsed === 'object' &&
+    (parsed as Record<string, unknown>).success === false
+  ) {
+    throw new Error(`${fallback}: ${officeCliFailureDetail(result)}`)
+  }
+}
+
+export function officeCliFailureDetail(result: OfficeCliRunResult): string {
+  const messages = officeCliDiagnosticMessages(parseOfficeCliOutput(result.stdout))
+  if (messages.length > 0) return messages.join(' | ')
+  return truncateDetail(result.stderr.trim() || result.stdout.trim()) || 'no diagnostic output'
+}
+
+const MAX_DIAGNOSTIC_MESSAGES = 5
+const MAX_DIAGNOSTIC_CHARS = 400
+const MAX_DIAGNOSTIC_FIELD_CHARS = 200
+
+/**
+ * OfficeCLI reports the same failure shape in two places depending on the
+ * build: top-level `warnings` (older) and `data.errors` (current). Both are
+ * bounded here so a large validation report cannot flood the tool result.
+ */
+function officeCliDiagnosticMessages(value: unknown): string[] {
+  if (!value || typeof value !== 'object') return []
+  const record = value as Record<string, unknown>
+  const messages: string[] = []
+  const push = (item: unknown): void => {
+    if (messages.length >= MAX_DIAGNOSTIC_MESSAGES) return
+    if (typeof item === 'string') {
+      const text = truncateDetail(item)
+      if (text) messages.push(text)
+      return
+    }
+    if (!item || typeof item !== 'object') return
+    const entry = item as Record<string, unknown>
+    const text = truncateDetail(
+      [entry.message, entry.description, entry.path, entry.part]
+        .filter((field): field is string => typeof field === 'string' && field.trim().length > 0)
+        // Each field is clipped before joining so a long description cannot
+        // push the part and path - the actionable part of the report - out.
+        .map((field) => truncateDetail(field, MAX_DIAGNOSTIC_FIELD_CHARS))
+        .join(' ')
+    )
+    if (text) messages.push(text)
+  }
+  push(record.message)
+  const sources = [record, record.data]
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue
+    for (const key of ['warnings', 'errors']) {
+      const list = (source as Record<string, unknown>)[key]
+      if (Array.isArray(list)) list.forEach(push)
+    }
+  }
+  return messages
+}
+
+function truncateDetail(value: string, limit = MAX_DIAGNOSTIC_CHARS): string {
+  const normalized = value.replace(/\s+/g, ' ').trim()
+  return normalized.length > limit ? `${normalized.slice(0, limit)}…` : normalized
+}
+
+/**
+ * Repairs known, schema-only defects that block every edit of an existing deck.
+ * Unknown structures stay untouched and fail the edit instead of being guessed.
+ */
+export async function repairOfficeSourceStructure(
+  filePath: string,
+  format: 'docx' | 'xlsx' | 'pptx'
+): Promise<string[]> {
+  if (format !== 'pptx') return []
+  try {
+    const repairs = await repairPptxPresentationChildOrder(filePath)
+    return repairs.map((repair) => `${repair.action} in ${repair.part}`)
+  } catch (error) {
+    throw new Error(
+      `Office source document has an unsupported structure and was not edited: ${errorMessage(error)}`
+    )
+  }
 }
 
 export function boundedLogValue(value: string): string {

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
 import { HarnessCatalog } from './harness-catalog.js'
 import type { HarnessStatus } from '../contracts/harness.js'
-import { HarnessReadinessService, type HarnessReadinessDeps } from './harness-readiness.js'
+import { HarnessReadinessService, type HarnessReadinessDeps, PROOF_TTL_MS } from './harness-readiness.js'
 import type { ReadinessOptions } from './harness-readiness-profile.js'
 
 const route = { harnessId: 'opencode', credentialMode: 'kun-gateway' as const, providerId: 'account-a', model: 'model-a' }
@@ -77,7 +77,7 @@ describe('parallel readiness admission', () => {
     const signature = f.service.configurationSignature(route)
     await f.service.prepareTurn('thread-a', 'turn', route, signature, signal)
     // Nearly expired: the next admission re-validates instead of reusing.
-    clock += 5 * 60_000 - 5_000
+    clock += PROOF_TTL_MS - 5_000
     let finish!: () => void
     f.handshake.mockImplementationOnce(() => new Promise((resolve) => {
       finish = () => resolve({ ok: true, supported: true, protocol: 'acp' })
@@ -124,7 +124,7 @@ describe('parallel readiness admission', () => {
     const f = await fixture(() => clock); f.enable()
     const signal = new AbortController().signal
     await f.service.prepareTurn('thread', 'turn', route, f.service.configurationSignature(route), signal)
-    clock += 5 * 60_000 - 5_000
+    clock += PROOF_TTL_MS - 5_000
     let finish!: () => void
     f.handshake.mockImplementationOnce(() => new Promise((resolve) => {
       finish = () => resolve({ ok: true, supported: true, protocol: 'acp' })

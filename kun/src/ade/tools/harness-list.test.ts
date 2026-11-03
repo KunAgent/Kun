@@ -21,8 +21,8 @@ const NOW = '2026-09-28T00:00:00.000Z'
 const catalog = {
   get: (id: string) => BUILTIN_HARNESSES.find((def) => def.id === id),
   list: () => BUILTIN_HARNESSES,
-  isDisabled: (id: string) => id === 'gemini-cli',
-  isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId !== 'gemini-cli'
+  isDisabled: (id: string) => id === 'devin',
+  isProfileEnabled: (route: Pick<HarnessRoute, 'harnessId'>) => route.harnessId !== 'devin'
 }
 
 function readyStatus(harnessId: string): HarnessStatus {
@@ -105,7 +105,7 @@ describe('listHarnessesForManager', () => {
     const opencode = out.agents.find((entry) => entry.harnessId === 'opencode')!
     // No static list and no probe cache: no model entries.
     expect(opencode.models).toEqual([])
-    expect(out.agents.find((entry) => entry.harnessId === 'gemini-cli')).toBeUndefined()
+    expect(out.agents.find((entry) => entry.harnessId === 'devin')).toBeUndefined()
   })
 
   it('caps each group at 8 models and reports the overflow', async () => {
@@ -124,6 +124,15 @@ describe('listHarnessesForManager', () => {
     expect(gateway).toHaveLength(8)
     expect(gateway.every((entry) => entry.providerId === 'deepseek')).toBe(true)
     expect(claude.modelsTruncated).toBe(3)
+  })
+
+  it('lets pickers raise the per-group cap so every provider stays listed', async () => {
+    const providers: HarnessProviderModelGroup[] = [{ providerId: 'deepseek', kind: 'http', gatewayExportable: true,
+      models: Array.from({ length: 11 }, (_, index) => `m${index}`) }]
+    const out = await listHarnessesForManager(deps({ providers: async () => providers }), undefined, { modelsPerGroup: 64 })
+    const claude = out.agents.find((entry) => entry.harnessId === 'claude-code')!
+    expect(claude.models.filter((entry) => entry.credentialMode === 'kun-gateway')).toHaveLength(11)
+    expect(claude.modelsTruncated).toBeUndefined()
   })
 
   it('filters provider-mode groups to the harness connection kind', async () => {
@@ -167,7 +176,7 @@ describe('listHarnessesForManager', () => {
     expect(out.agents.every((entry) => entry.ready)).toBe(true)
   })
 
-  it('P4-13: terminal agents are listed as terminal-only, never dispatchable', async () => {
+  it('terminal agents are listed as terminal-only, never dispatchable', async () => {
     const terminalDef = HarnessDefinitionSchema.parse(
       terminalAgentToDefinition({
         id: 'zed-shell',

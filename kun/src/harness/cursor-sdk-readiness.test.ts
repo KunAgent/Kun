@@ -3,6 +3,7 @@ import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { HarnessReadinessService } from './harness-readiness.js'
 import { HarnessCatalog } from './harness-catalog.js'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
+import { normalizeCursorModel } from '../runtime/cursor/cursor-sdk-runtime-support.js'
 
 const api = vi.hoisted(() => ({ create: vi.fn(), resume: vi.fn(), store: vi.fn(), installation: vi.fn(async () => '1.0.24') }))
 vi.mock('@cursor/sdk', () => ({ Agent: { create: api.create, resume: api.resume }, JsonlLocalAgentStore: api.store }))
@@ -56,6 +57,11 @@ describe('Cursor SDK local readiness', () => {
     expect((await service.test(catalog.get('cursor')!, {
       level: 'handshake', ...profile, model: 'not-configured'
     })).ok).toBe(false)
+    // "Agent default model" and an unselected model defer to the provider's
+    // own default instead of Kun's main model.
+    expect((await service.test(catalog.get('cursor')!, { level: 'handshake', ...profile, model: 'default' })).ok).toBe(true)
+    expect(service.route(catalog.get('cursor')!, profile).model).toBe('default')
+    expect((await service.test(catalog.get('cursor')!, { level: 'handshake', ...profile })).ok).toBe(true)
     expect((await service.test(catalog.get('cursor')!, {
       level: 'handshake', ...profile, providerId: 'http-account', model: 'auto'
     })).ok).toBe(false)
@@ -66,5 +72,11 @@ describe('Cursor SDK local readiness', () => {
     options.providers['cursor-account'].apiKey = ''
     expect((await service.test(catalog.get('cursor')!, { level: 'handshake', ...profile, model: 'auto' })).ok).toBe(false)
     await expect(service.assertReady({ ...profile, providerId: 'unenabled', model: 'auto' })).rejects.toThrow('disabled')
+  })
+
+  it('maps the Agent default model to Cursor auto', () => {
+    expect(normalizeCursorModel('default')).toBe('auto')
+    expect(normalizeCursorModel(undefined)).toBe('auto')
+    expect(normalizeCursorModel(' composer-2 ')).toBe('composer-2')
   })
 })

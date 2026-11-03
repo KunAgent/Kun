@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join } from 'node:path'
 import { isSameOrInside } from '../skills/skill-runtime-support.js'
 import { workspaceGit } from './workspace-git.js'
 
-/** Environment fill for host-created task worktrees (docs/ade/07 §6). */
+/** Environment fill for host-created task worktrees. */
 
 export type EnvShareMode = 'symlink' | 'clone'
 export type EnvFillEntryMode = EnvShareMode | 'copy'
@@ -12,7 +12,7 @@ export type EnvFillEntryMode = EnvShareMode | 'copy'
 export type EnvFillSkipReason =
   | 'missing'        // path does not exist in the source checkout
   | 'tracked'        // git-tracked (already present in the worktree)
-  | 'not_ignored'    // exists but is not gitignored (rule 2, 07 §6)
+  | 'not_ignored'    // exists but is not gitignored (rule 2)
   | 'unsafe_path'    // `..` traversal, absolute path, or out-of-repo symlink
   | 'exists'         // destination already populated; never overwrite
   | 'error'
@@ -50,7 +50,7 @@ function normalizeRel(rel: string): string {
   return rel.replaceAll('\\', '/').replace(/^\.?\//, '').replace(/\/+$/g, '')
 }
 
-/** Path safety + ignore-state check (docs/ade/07 §6 rules 1-3). */
+/** Path safety + ignore-state check. */
 export async function environmentFillEligibility(
   repoRoot: string,
   rel: string,

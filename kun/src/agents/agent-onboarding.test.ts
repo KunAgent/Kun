@@ -7,12 +7,21 @@ import { AgentIdentityService } from './agent-identity-service.js'
 import { agentOnboardingState, updateAgentOnboarding } from './agent-onboarding.js'
 import { DEFAULT_AGENT_TEMPLATES } from './agent-defaults.js'
 import { RoomService } from '../rooms/room-service.js'
+import { AgentIdentitySchema } from '../contracts/agent-identities.js'
 
 const resources: Array<{ dir: string; store: SqliteRoomStore }> = []
 async function fixture() {
   const dir = await mkdtemp(join(tmpdir(), 'kun-onboarding-')), store = new SqliteRoomStore({ path: join(dir, 'rooms.sqlite') })
   resources.push({ dir, store }); const agents = new AgentIdentityService(store, () => ({}))
   return { store, agents }
+}
+async function seedDefaults(store: SqliteRoomStore) {
+  const now = new Date().toISOString()
+  for (const { examples: _examples, ...fields } of DEFAULT_AGENT_TEMPLATES) {
+    const id = 'agent-default-' + fields.templateId
+    await store.commit({ requestId: 'seed:' + id, checks: [{ kind: 'agent_identity', id, expectedRevision: null }],
+      puts: [{ kind: 'agent_identity', id, value: AgentIdentitySchema.parse({ ...fields, schemaVersion: 1, id, revision: 0, createdAt: now, updatedAt: now }) }] })
+  }
 }
 afterEach(async () => { for (const { dir, store } of resources.splice(0)) { await store.close(); await rm(dir, { recursive: true, force: true }) } })
 it('atomically seeds distinct identities and empty conversations without work or memory', async () => {
@@ -58,16 +67,14 @@ it('recovers a failed atomic commit and rejects reuse of changed request bodies'
   expect((await updateAgentOnboarding(agents, request)).completed).toBe(true)
   await expect(updateAgentOnboarding(agents, { ...request, action: 'dismiss' })).rejects.toThrow('changed')
 })
-it('gives templates with the same execution role different room memberships', async () => {
+it('starts new groups with 小 Kun only instead of seeding role presets', async () => {
   const { agents, store } = await fixture()
-  await agents.defaultMembers([])
-  const state = await agentOnboardingState(agents)
-  expect(state.fresh).toBe(false)
-  expect(new Set(state.slots.map((slot) => slot.agent?.id)).size).toBe(5)
+  const members = await agents.defaultMembers([])
+  expect(members.map((member) => member.participantAgentId)).toEqual(['agent-default-kun'])
+  expect((await store.list('agent_identity')).map((row) => row.id)).toEqual(['agent-default-kun'])
   const service = new RoomService(store, () => {}); service.setAgentDirectory(agents)
   const room = (await service.create({ clientRequestId: 'group', name: 'Team' })).room
-  expect(new Set(room.members.map((member) => member.id)).size).toBe(5)
-  expect(new Set(room.members.map((member) => member.participantAgentId)).size).toBe(5)
+  expect(room.members.map((member) => member.participantAgentId)).toEqual(['agent-default-kun'])
 })
 it('concurrent identical initialization returns the same completed team', async () => {
   const { agents, store } = await fixture()
@@ -79,7 +86,7 @@ it('concurrent identical initialization returns the same completed team', async 
 })
 it('does not restore archived defaults and rejects a changed selected profile before writing', async () => {
   const { agents, store } = await fixture()
-  await agents.defaultMembers([])
+  await seedDefaults(store)
   const state = await agentOnboardingState(agents)
   const developer = state.slots.find((slot) => slot.templateId === 'developer')!.agent!
   await agents.update(developer.id, { clientRequestId: 'archive', expectedRevision: developer.revision, archived: true })

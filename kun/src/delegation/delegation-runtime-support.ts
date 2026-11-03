@@ -28,7 +28,6 @@ import {
 import type { EventBus } from '../ports/event-bus.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import { loadWorkspaceAgentProfiles } from './workspace-agents.js'
 import type { SubagentRoutingDocument } from './subagent-router.js'
 import { BUILTIN_SUBAGENT_PROFILES } from './builtin-profiles.js'
@@ -46,28 +45,6 @@ import {
 } from './delegation-runtime-contracts.js'
 import type { MaterializedChildResult } from './child-result-materializer.js'
 import { hasResumableChildSnapshot } from './delegation-proactive-retry.js'
-
-export function childPptWorkflowSnapshot(scope: PptWorkflowScope): {
-  workflowId: string
-  stage: 'direction' | 'review' | 'build'
-  previewMode: 'image-first' | 'editable'
-  directionGate?: NonNullable<PptWorkflowScope['directionGate']>
-} {
-  const stage = scope.stage ?? (
-    scope.action === 'approve_and_build'
-      ? 'build'
-      : scope.action === 'revise_directions' || scope.directionGate?.required === true
-        ? 'direction'
-        : 'review'
-  )
-  return {
-    workflowId: scope.workflowId,
-    stage,
-    previewMode: scope.previewMode,
-    ...(scope.directionGate ? { directionGate: scope.directionGate } : {})
-  }
-}
-
 
 export function resolveChildModelSelection(input: {
   explicitModel?: string
@@ -253,12 +230,6 @@ export function buildFailedChildRecord(
   }
 ): ChildRunRecord {
   const childResult = input.childResult
-  const ownedDirectionBundle = ownedPptChildBundle(childResult?.directionBundle, input.childId)
-    ? childResult?.directionBundle
-    : undefined
-  const ownedReviewBundle = ownedPptChildBundle(childResult?.reviewBundle, input.childId)
-    ? childResult?.reviewBundle
-    : undefined
   return ChildRunRecord.parse({
     ...current,
     status: input.runtimeRestart ? 'failed' : input.signal.aborted ? 'aborted' : 'failed',
@@ -273,18 +244,6 @@ export function buildFailedChildRecord(
       resultRef: childResult.resultRef,
       resultUnavailableReason: childResult.resultUnavailableReason
     } : {}),
-    ...(ownedDirectionBundle !== undefined ? {
-      directionBundle: ownedDirectionBundle,
-      directionBundleParentTurnId: input.parentTurnId
-    } : {}),
-    ...(ownedReviewBundle !== undefined ? {
-      reviewBundle: ownedReviewBundle,
-      reviewBundleParentTurnId: input.parentTurnId
-    } : {}),
-    ...(childResult?.deckArtifact !== undefined ? {
-      deckArtifact: childResult.deckArtifact,
-      deckArtifactParentTurnId: input.parentTurnId
-    } : {}),
     ...(childResult?.evidencePack !== undefined ? { evidencePack: childResult.evidencePack } : {}),
     // Failed/aborted children keep the usage they accrued before failure
     // (issue #1155); a child that never reached a model request reports zero.
@@ -294,11 +253,6 @@ export function buildFailedChildRecord(
     durationMs: (current.durationMs ?? 0) + Math.max(0, Date.parse(input.finishedAt) - Date.parse(input.startedAt)),
     updatedAt: input.finishedAt
   })
-}
-
-function ownedPptChildBundle(value: unknown, childId: string): boolean {
-  return typeof value === 'object' && value !== null && !Array.isArray(value) &&
-    (value as Record<string, unknown>).childId === childId
 }
 
 const COMPLETED_STATUS_MARKERS = [
@@ -495,46 +449,6 @@ export function addChildUsage(
     ...(add('tokenEconomySavingsCny') !== undefined ? { tokenEconomySavingsCny: add('tokenEconomySavingsCny') } : {}),
     cacheHitRate: next.cacheHitRate ?? previous.cacheHitRate
   })
-}
-
-export function persistedReviewIdentityError(
-  value: unknown,
-  childId: string,
-  workflowId: string
-): string {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return `child run ${childId} has no persisted PPT review workflow`
-  }
-  const bundle = value as Record<string, unknown>
-  if (bundle.childId !== childId) return `child run ${childId} has a mismatched PPT review owner`
-  if (bundle.workflowId !== workflowId) return `child run ${childId} does not own PPT workflow ${workflowId}`
-  return ''
-}
-
-export function persistedPptWorkflowIdentityError(
-  reviewBundle: unknown,
-  directionBundle: unknown,
-  childId: string,
-  workflowId: string,
-  persistedWorkflowId?: string
-): string {
-  if (persistedWorkflowId) {
-    return persistedWorkflowId === workflowId
-      ? ''
-      : `child run ${childId} does not own PPT workflow ${workflowId}`
-  }
-  const bundles = [reviewBundle, directionBundle].filter((value) =>
-    value !== undefined && value !== null)
-  if (bundles.length === 0) return `child run ${childId} has no persisted PPT workflow`
-  for (const value of bundles) {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return `child run ${childId} has an invalid persisted PPT workflow`
-    }
-    const bundle = value as Record<string, unknown>
-    if (bundle.childId !== childId) return `child run ${childId} has a mismatched PPT workflow owner`
-    if (bundle.workflowId !== workflowId) return `child run ${childId} does not own PPT workflow ${workflowId}`
-  }
-  return ''
 }
 
 export function subtractChildUsage(

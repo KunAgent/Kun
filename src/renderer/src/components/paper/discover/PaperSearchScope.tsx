@@ -1,34 +1,39 @@
 import type { ReactElement } from 'react'
-import { Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
-/** Agent research / quick search switch shown on both search views. */
+/**
+ * Agent research / quick search switch: two text tabs above the search box
+ * (the active one underlined) and a one-line note on what the mode does.
+ */
 export function PaperSearchTabs({
   tab,
-  onChange,
-  compact = false
+  onChange
 }: {
   tab: 'direct' | 'agent'
   onChange: (tab: 'direct' | 'agent') => void
-  compact?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   return (
-    <div className={`flex shrink-0 items-center rounded-lg border border-ds-border-muted bg-ds-subtle p-0.5 ${compact ? 'h-8' : 'h-10'}`}>
+    <div role="tablist" aria-label={t('paperSearchModeLabel')} className="flex items-end gap-5 px-2">
       {(['agent', 'direct'] as const).map((value) => (
         <button
           key={value}
           type="button"
-          aria-pressed={tab === value}
+          role="tab"
+          aria-selected={tab === value}
           onClick={() => onChange(value)}
-          className={`inline-flex items-center gap-1 rounded-md px-3 text-[12.5px] transition ${compact ? 'h-6' : 'h-8'} ${
-            tab === value ? 'bg-ds-main font-medium text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'
+          className={`h-8 border-b-2 px-0.5 text-[14px] transition ${
+            tab === value
+              ? 'border-ds-ink font-semibold text-ds-ink'
+              : 'border-transparent font-medium text-ds-faint hover:text-ds-ink'
           }`}
         >
-          {value === 'agent' ? <Sparkles className="h-3.5 w-3.5" strokeWidth={1.9} /> : null}
           {t(value === 'direct' ? 'writePaperSearchTabDirect' : 'writePaperSearchTabAgent')}
         </button>
       ))}
+      <span className="min-w-0 flex-1 truncate pb-2 text-right text-[12px] text-ds-faint">
+        {t(tab === 'agent' ? 'paperSearchModeHint_agent' : 'paperSearchModeHint_direct')}
+      </span>
     </div>
   )
 }

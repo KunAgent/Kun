@@ -1,0 +1,23 @@
+{
+  "composerTrayGraph": {
+    "segmentLabel": "Graph · {{titles}}",
+    "segmentLabelStatus": "Graph · {{status}}",
+    "titleSeparator": "、",
+    "segmentAria": "Graph 编排：已验收 {{accepted}} / {{total}} 个节点，{{running}} 个运行中",
+    "segmentAriaQuiet": "Graph 编排：已验收 {{accepted}} / {{total}} 个节点。有运行中的节点一段时间没有动静",
+    "segmentAriaAsking": "Graph 编排：已验收 {{accepted}} / {{total}} 个节点。有节点在等你回答",
+    "segmentAriaAwaiting": "Graph 编排：已验收 {{accepted}} / {{total}} 个节点。编排在等你处理",
+    "segmentAriaFlagged": "Graph 编排：已验收 {{accepted}} / {{total}} 个节点。有节点需要处理",
+    "sheetTitle": "Graph 编排",
+    "acceptedSummary": "已验收 {{accepted}} / {{total}} 个节点",
+    "runningSummary_other": "{{count}} 个运行中",
+    "nodeRetry": "重试 {{number}}",
+    "lastActivitySeconds": "最后活动 {{seconds}} 秒前",
+    "lastActivityAgo": "最后活动 {{ago}}",
+    "stillWaiting": "仍在等待模型/工具响应",
+    "elapsedTitle": "已运行 {{duration}}",
+    "correctionAria": "Graph 规划已暂停：计划需要你的补充",
+    "correctionNote": "草稿已保存。在对话中补充要求后继续规划。",
+    "correctionMore_other": "还有 {{count}} 项问题"
+  }
+}

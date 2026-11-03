@@ -1,8 +1,10 @@
 import type { AgentProvider } from '../agent/types'
+import { bindWorkAnalyticsTurn, noteWorkSubmissionOutcome } from '../product-analytics/work'
 import { confirmQueueAdmission } from './queue-admission-recovery'
 import { queueAdmissionPending } from './queue-admission-fence'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { describeRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
+import { threadHasBoundTaskWorkspace, threadWorkspaceBlocksSend } from './task-workspace-store'
 import type { ChatState, ChatStoreGet, ChatStoreSet, QueuedUserMessage } from './chat-store-types'
 import {
   rememberTurnModel,
@@ -176,6 +178,9 @@ export async function drainBackgroundQueuedMessage(
     }
     saveQueuedMessagesForThread(threadId, messages)
     if (!next) return { status: 'none' }
+    if (threadWorkspaceBlocksSend(threadId, get())) return { status: 'none' }
+    if ((next.taskWorkspace || next.planBuild) && !threadHasBoundTaskWorkspace(threadId, get(), next.taskWorkspace)) return { status: 'none' }
+    if (next.expectedThreadId && next.expectedThreadId !== threadId) return { status: 'none' }
 
     const clientRequestId = next.clientRequestId?.trim() || createClientTurnRequestId()
     next = { ...next, clientRequestId }
@@ -227,6 +232,8 @@ export async function drainBackgroundQueuedMessage(
           claw: Boolean(channel)
         }), enqueueIfBusy: true }
       ) })
+      noteWorkSubmissionOutcome(clientRequestId, 'accepted')
+      bindWorkAnalyticsTurn(clientRequestId, threadId, accepted.turnId)
       if (accepted.retired) {
         saveQueuedMessagesForThread(threadId, queuedMessagesForThread(threadId).filter((row) => row.id !== submission.id))
         set((current) => current.activeThreadId === threadId
@@ -282,6 +289,7 @@ export async function drainBackgroundQueuedMessage(
         }
         return { status: 'busy' }
       }
+      noteWorkSubmissionOutcome(clientRequestId, turnAdmissionOutcomeMayBeUnknown(error) ? 'unknown' : 'failed')
       if (turnAdmissionOutcomeMayBeUnknown(error) && scheduleRetry(input, next)) {
         return { status: 'none' }
       }

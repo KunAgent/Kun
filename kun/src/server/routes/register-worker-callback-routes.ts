@@ -3,7 +3,7 @@ import type { ServerRuntime } from './server-runtime.js'
 import { workerCallbackResponse } from './worker-callbacks.js'
 
 /**
- * Worker callback routes (05 §5.2). These authenticate with scoped `kgw_`
+ * Worker callback routes. These authenticate with scoped `kgw_`
  * grants verified inside the handler — never the ordinary runtime token —
  * so they intentionally skip `authorize`.
  */

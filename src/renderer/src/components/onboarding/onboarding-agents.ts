@@ -10,7 +10,6 @@ import {
 export const ONBOARDING_FEATURED_AGENT_IDS = [
   'claude-code',
   'codex',
-  'gemini-cli',
   'opencode',
   'cursor-cli',
   'devin',

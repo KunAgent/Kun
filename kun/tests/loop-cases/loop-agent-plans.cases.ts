@@ -332,15 +332,55 @@ describe('AgentLoop', () => {
     }
   })
 
-  it('materializes assistant plan text when a GUI plan turn misses create_plan', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-missing-tool-'))
+  it('answers a plan-mode question in prose without saving a plan', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-question-'))
     try {
+      let modelCalls = 0
       const h = makeHarness(
         {
           provider: 'planner',
           model: 'planner',
           async *stream(): AsyncIterable<ModelStreamChunk> {
-            yield { kind: 'assistant_text_delta', text: '## Plan\nImplement auth.\n' }
+            modelCalls += 1
+            yield { kind: 'assistant_text_delta', text: '我可以用 read、grep、glob 和 web_fetch 等只读工具。' }
+            yield { kind: 'completed', stopReason: 'stop' }
+          }
+        },
+        { tools: buildDefaultLocalTools() }
+      )
+      await bootstrapThread(h, {
+        workspace,
+        request: { prompt: '你有什么工具', mode: 'plan' }
+      })
+
+      const status = await h.loop.runTurn(h.threadId, h.turnId)
+      const items = await h.sessionStore.loadItems(h.threadId)
+
+      expect(status).toBe('completed')
+      expect(modelCalls).toBe(1)
+      expect(items.some((item) =>
+        (item.kind === 'tool_call' || item.kind === 'tool_result') && item.toolName === CREATE_PLAN_TOOL_NAME
+      )).toBe(false)
+      expect(items.some((item) => item.kind === 'error')).toBe(false)
+      expect(items.some((item) => item.kind === 'assistant_text' && /read、grep/.test(item.text ?? ''))).toBe(true)
+      await expect(readFile(join(workspace, '.kunsdd/plan/你有什么工具.md'), 'utf8')).rejects.toThrow()
+    } finally {
+      await rm(workspace, { recursive: true, force: true })
+    }
+  })
+
+  it('leaves a reserved GUI plan untouched when the model answers without create_plan', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-reserved-prose-'))
+    const existingPlan = '## Steps\n1. Add the login route.\n2. Hash passwords.\n3. Add the session cookie.\n'
+    try {
+      await mkdir(join(workspace, '.kunsdd/plan'), { recursive: true })
+      await writeFile(join(workspace, '.kunsdd/plan/auth.md'), existingPlan)
+      const h = makeHarness(
+        {
+          provider: 'planner',
+          model: 'planner',
+          async *stream(): AsyncIterable<ModelStreamChunk> {
+            yield { kind: 'assistant_text_delta', text: '## Answer\nStep 3 adds the session cookie.\n' }
             yield { kind: 'completed', stopReason: 'stop' }
           }
         },
@@ -349,9 +389,9 @@ describe('AgentLoop', () => {
       await bootstrapThread(h, {
         workspace,
         request: {
-          prompt: 'Plan auth',
+          prompt: 'What does step 3 of the auth plan do?',
           guiPlan: {
-            operation: 'draft',
+            operation: 'refine',
             workspaceRoot: workspace,
             relativePath: '.kunsdd/plan/auth.md',
             planId: `${workspace}:.kunsdd/plan/auth.md`,
@@ -364,56 +404,11 @@ describe('AgentLoop', () => {
       const items = await h.sessionStore.loadItems(h.threadId)
 
       expect(status).toBe('completed')
-      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).resolves.toBe(
-        '## Plan\nImplement auth.'
-      )
       expect(items.some((item) =>
-        item.kind === 'tool_result' &&
-        item.toolName === CREATE_PLAN_TOOL_NAME &&
-        item.isError !== true
-      )).toBe(true)
-    } finally {
-      await rm(workspace, { recursive: true, force: true })
-    }
-  })
-
-  it('materializes assistant plan text for plan-mode turns without a reserved context', async () => {
-    const workspace = await mkdtemp(join(tmpdir(), 'kun-loop-plan-free-form-text-'))
-    try {
-      const h = makeHarness(
-        {
-          provider: 'planner',
-          model: 'planner',
-          async *stream(): AsyncIterable<ModelStreamChunk> {
-            yield { kind: 'assistant_text_delta', text: '## Plan\nPolish the sidebar footer.\n' }
-            yield { kind: 'completed', stopReason: 'stop' }
-          }
-        },
-        { tools: buildDefaultLocalTools() }
-      )
-      await bootstrapThread(h, {
-        workspace,
-        request: {
-          prompt: 'Plan sidebar footer polish',
-          mode: 'plan'
-        }
-      })
-
-      const status = await h.loop.runTurn(h.threadId, h.turnId)
-      const items = await h.sessionStore.loadItems(h.threadId)
-      const planResult = items.find((item) =>
-        item.kind === 'tool_result' && item.toolName === CREATE_PLAN_TOOL_NAME
-      )
-
-      expect(status).toBe('completed')
-      expect(planResult?.kind === 'tool_result' && planResult.isError).not.toBe(true)
-      expect(
-        planResult?.kind === 'tool_result' &&
-        (planResult.output as { relative_path?: string }).relative_path
-      ).toBe('.kunsdd/plan/plan-sidebar-footer-polish.md')
-      await expect(readFile(join(workspace, '.kunsdd/plan/plan-sidebar-footer-polish.md'), 'utf8')).resolves.toBe(
-        '## Plan\nPolish the sidebar footer.'
-      )
+        (item.kind === 'tool_call' || item.kind === 'tool_result') && item.toolName === CREATE_PLAN_TOOL_NAME
+      )).toBe(false)
+      await expect(readFile(join(workspace, '.kunsdd/plan/auth.md'), 'utf8')).resolves.toBe(existingPlan)
+      await expect(readFile(join(workspace, '.kunsdd/plan/thr-1.md'), 'utf8')).rejects.toThrow()
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
@@ -522,9 +517,7 @@ describe('AgentLoop', () => {
       expect(writeResult?.kind === 'tool_result' ? JSON.stringify(writeResult.output) : '')
         .toContain('not advertised by active tool policy')
       await expect(readFile(join(workspace, 'forbidden.txt'), 'utf8')).rejects.toThrow()
-      await expect(readFile(join(workspace, '.kunsdd/plan/plan-a-safe-change.md'), 'utf8')).resolves.toBe(
-        '## Plan\nStay read-only until build mode.'
-      )
+      expect(items.some((item) => item.kind === 'assistant_text' && /Stay read-only/.test(item.text ?? ''))).toBe(true)
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }
@@ -577,9 +570,7 @@ describe('AgentLoop', () => {
       expect(bashResult?.kind === 'tool_result' ? JSON.stringify(bashResult.output) : '')
         .toContain('not advertised by active tool policy')
       await expect(readFile(join(workspace, 'forbidden.txt'), 'utf8')).rejects.toThrow()
-      await expect(readFile(join(workspace, '.kunsdd/plan/plan-without-shell-mutations.md'), 'utf8')).resolves.toBe(
-        '## Plan\nUse read-only inspection only.'
-      )
+      expect(items.some((item) => item.kind === 'assistant_text' && /read-only inspection/.test(item.text ?? ''))).toBe(true)
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }

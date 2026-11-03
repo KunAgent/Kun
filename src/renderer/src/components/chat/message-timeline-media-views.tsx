@@ -156,7 +156,7 @@ export function MediaPreviewTile({
       : undefined
     return (
       <figure
-        className={`${figureClass}${revealClass} relative`}
+        className={`${figureClass}${revealClass} kun-media-figure relative`}
         style={figureStyle}
         title={title}
         {...extensionAttachmentContext}

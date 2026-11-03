@@ -48,6 +48,14 @@ describe('version-bound region capture admission', () => {
     expect(save).not.toHaveBeenCalled()
   })
 
+  it('keeps a global-reader capture source-bound when Work switches to another root', async () => {
+    useWriteWorkspaceStore.setState({ workspaceRoot: '/unrelated-work' })
+    tree = await render(createElement(Hook, { ...input, independentWorkspace: true }))
+    await act(async () => capture(2, rect))
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ workspaceRoot: '/library', unitDir: entry.unitDir }))
+    expect(usePaperMarksStore.getState().cards[mark.id]).toMatchObject(mark)
+  })
+
   it('coalesces simultaneous captures and saves the exact viewer version once', async () => {
     const pending = deferred<unknown>()
     crop.mockImplementation(() => pending.promise)

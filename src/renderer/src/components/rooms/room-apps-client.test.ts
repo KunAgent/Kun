@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ROOM_APP_CATALOG, isHiddenRoomGoogleApp } from '@shared/rooms-api'
 import { addRoomApp, authorizeRoomApp, listRoomApps } from './room-apps-client'
 
 const { runtimeRequest } = vi.hoisted(() => ({ runtimeRequest: vi.fn() }))
@@ -10,15 +11,21 @@ describe('Rooms app connections', () => {
   it('joins the safe config inventory with live connection and OAuth status', async () => {
     runtimeRequest.mockImplementation(async (path: string) => ({ ok: true, status: 200, body: JSON.stringify(
       path === '/v1/mcp/config' ? { servers: [
-        { id: 'google_gmail', enabled: true, transport: 'streamable-http', target: 'https://gmailmcp.googleapis.com/mcp/v1', oauth: false },
+        { id: 'google_drive', enabled: true, transport: 'streamable-http', target: 'https://drive.example.com/mcp', oauth: false },
         { id: 'notion', enabled: true, transport: 'streamable-http', target: 'https://example.com/mcp', oauth: true }] }
         : path === '/v1/runtime/tools' ? { mcpServers: [
-          { id: 'google_gmail', status: 'authorization_required' }, { id: 'notion', status: 'connected' }] }
-          : { servers: [{ serverId: 'google_gmail', status: 'empty' }, { serverId: 'notion', status: 'authorized' }] }
+          { id: 'google_drive', status: 'authorization_required' }, { id: 'notion', status: 'connected', lastError: 'PRIVATE_DIAGNOSTIC' }] }
+          : { servers: [{ serverId: 'google_drive', status: 'empty' }, { serverId: 'notion', status: 'authorized', authorizationUrl: 'PRIVATE_OAUTH_URL', accessToken: 'PRIVATE_TOKEN' }] }
     ) }))
-    await expect(listRoomApps()).resolves.toEqual({
+    const inventory = await listRoomApps()
+    expect(inventory).toEqual({
       servers: [expect.objectContaining({ id: 'notion' })], statuses: { notion: 'connected' }, oauth: { notion: 'authorized' }
     })
+    for (const value of ['google_drive', 'PRIVATE_DIAGNOSTIC', 'PRIVATE_OAUTH_URL', 'PRIVATE_TOKEN'])
+      expect(JSON.stringify(inventory)).not.toContain(value)
+    expect(runtimeRequest.mock.calls.map(([path, method]) => [path, method])).toEqual([
+      ['/v1/mcp/config', 'GET'], ['/v1/runtime/tools', 'GET'], ['/v1/mcp/oauth', 'GET']
+    ])
   })
 
   it('sends a user-trusted HTTPS MCP endpoint through the authenticated bridge', async () => {
@@ -37,8 +44,17 @@ describe('Rooms app connections', () => {
   })
 
   it('does not install or authorize hidden Google Room apps', async () => {
-    await expect(addRoomApp('google_gmail', 'https://gmailmcp.googleapis.com/mcp/v1')).rejects.toThrow('unavailable')
-    await expect(authorizeRoomApp('google_drive')).rejects.toThrow('unavailable')
+    for (const id of ['google_drive', 'google_calendar', 'google_chat', 'google_people', 'drive', 'calendar', 'mcp:google_drive', ' GOOGLE_CALENDAR ']) {
+      await expect(addRoomApp(id, 'https://example.com/mcp')).rejects.toThrow('unavailable')
+      await expect(authorizeRoomApp(id)).rejects.toThrow('unavailable')
+    }
+    expect(runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('keeps native Gmail separate from unavailable Google MCP app fixtures', () => {
+    expect(ROOM_APP_CATALOG.google_gmail).toEqual({ name: 'Gmail', connectionKind: 'native_gmail' })
+    expect(isHiddenRoomGoogleApp('google_gmail')).toBe(false)
+    expect(isHiddenRoomGoogleApp('gmail')).toBe(false)
     expect(runtimeRequest).not.toHaveBeenCalled()
   })
 

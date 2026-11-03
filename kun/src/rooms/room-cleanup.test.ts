@@ -9,6 +9,9 @@ import type { RoomTaskExecution, RoomWorkspace } from './room-runtime-types.js'
 import { RoomTaskRunner } from './room-task-runner.js'
 import { RoomService } from './room-service.js'
 
+// These tests run real git subprocesses; the default 5s is too tight when the whole suite runs in parallel.
+vi.setConfig({ testTimeout: 30_000 })
+
 const fixtures: Awaited<ReturnType<typeof productGitFixture>>[] = []
 afterEach(async () => { for (const f of fixtures.splice(0)) await f.close() })
 async function fixture() { const f = await productGitFixture(); fixtures.push(f); return f }

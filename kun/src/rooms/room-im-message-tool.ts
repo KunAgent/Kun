@@ -193,7 +193,10 @@ export function roomImMessageTool(threads: ThreadStore): LocalTool {
             messageId,
             text,
             phase: input.phase,
-            files: files.map(fileOutput)
+            files: files.map(fileOutput),
+            // Models that keep re-checking after a final answer republish it as
+            // duplicate bubbles; tell them the answer already landed.
+            ...(input.phase === 'final' ? { instruction: 'This reply is visible to the user. If it completes the request, finish this turn now; do not re-check, repeat, or resend it.' } : {})
           }
         }
       }

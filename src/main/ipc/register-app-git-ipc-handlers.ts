@@ -30,6 +30,7 @@ import {
   removeGitBranchWorktree,
   switchGitBranch
 } from '../services/git-service'
+import { getGitFileStatus } from '../services/git-file-status'
 import {
   createGitCheckpoint,
   failGitCheckpointGate,
@@ -80,6 +81,9 @@ export function registerAppGitIpcHandlers(options: RegisterAppIpcHandlersOptions
   })
   ipcMain.handle('git:branches', async (_, workspaceRoot: unknown) =>
     getGitBranches(parseIpcPayload('git:branches', workspaceRootSchema, workspaceRoot))
+  )
+  ipcMain.handle('git:status-files', async (_, workspaceRoot: unknown) =>
+    getGitFileStatus(parseIpcPayload('git:status-files', workspaceRootSchema, workspaceRoot))
   )
   ipcMain.handle(
     'git:switch-branch',

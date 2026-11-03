@@ -1,3 +1,5 @@
+import { resolveRegistryProfileMetadata } from './registry-model-metadata.js'
+import { isInsideAnyOAuthRefresh } from './oauth-refresh-scope.js'
 import { readProviderGeneratedHeaders } from './provider-protected-headers.js'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
@@ -48,7 +50,8 @@ async materializeDocument(this: ModelConnectionRegistry,
     const providers = new Map<string, ServeProviderConfig>()
     let selected: MaterializedModelConnections['selected']
     for (const rawProfile of Object.values(document.profiles)) {
-      const resolved = effectiveProviderConfiguration(rawProfile, document.configuration)
+      const metadataProfile = await resolveRegistryProfileMetadata(this, rawProfile, !document.credentialTransactions[rawProfile.id])
+      const resolved = effectiveProviderConfiguration(metadataProfile, document.configuration)
       const profile = resolved.profile
       if (!resolved.enabled) continue
       const credentialReplacementPending = Boolean(
@@ -269,6 +272,17 @@ async retireDeletedLegacyCredentialSource(this: ModelConnectionRegistry, provide
   },
 
 async changed(this: ModelConnectionRegistry, _document: RegistryDocument): Promise<void> {
+    // An OAuth refresh runs inside the apply that is waiting for it (the apply
+    // resolves credentials to read the model catalog). Waiting for a newer apply
+    // from here would queue behind that very apply, so re-apply after it settles.
+    if (isInsideAnyOAuthRefresh()) {
+      void this['applyLatest']().catch((error: unknown) => {
+        console.warn('[kun] Deferred Registry apply after a credential refresh failed.', {
+          message: error instanceof Error ? error.message : String(error)
+        })
+      })
+      return
+    }
     await this['applyLatest']()
   },
 }

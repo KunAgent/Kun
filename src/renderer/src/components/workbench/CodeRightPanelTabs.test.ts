@@ -39,7 +39,7 @@ describe('CodeRightPanelTabs', () => {
       act(() => { resize() })
       expect(scroll).toHaveBeenCalledOnce()
       const tab = renderer!.root.findByProps({ role: 'tab', 'aria-label': 'long-saved-artifact-name.txt' })
-      expect(tab.parent!.props.style).toEqual({ minWidth: 'min(7rem, 100%)', maxWidth: 'min(15rem, 100%)' })
+      expect(tab.parent!.props.className).toContain('ds-right-tab')
       act(() => { renderer!.unmount() })
       expect(disconnect).toHaveBeenCalledOnce()
       scroll.mockClear()
@@ -80,6 +80,61 @@ describe('CodeRightPanelTabs', () => {
     expect(onActivate).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.browser)
     act(() => tabs[0].props.onKeyDown({ key: 'ArrowRight', preventDefault: vi.fn() }))
     expect(onActivate).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+  })
+
+  it('draws one tab per open file and routes select, close and the context menu to the preview', () => {
+    let state = openCodeRightTab(emptyCodeRightTabsState(), BUILTIN_RIGHT_PANEL_IDS.changes)
+    state = openCodeRightTab(state, BUILTIN_RIGHT_PANEL_IDS.file)
+    const readme = { path: '/repo/README.md', workspaceRoot: '/repo' }
+    const deck = { path: '/repo/slides/deck.pptx', workspaceRoot: '/repo' }
+    const actions = { select: vi.fn(), requestClose: vi.fn(), openMenu: vi.fn(), openInEditor: vi.fn() }
+    const onActivate = vi.fn()
+    const onClose = vi.fn()
+    let renderer: ReactTestRenderer
+    act(() => {
+      renderer = create(createElement(CodeRightPanelTabs, {
+        state,
+        domIdPrefix: 'file-tabs',
+        titles: { [BUILTIN_RIGHT_PANEL_IDS.file]: 'deck.pptx' },
+        sideConversationCount: 0,
+        sideConversationRunningCount: 0,
+        extensionItems: [],
+        onActivate,
+        onClose,
+        onCollapse: vi.fn(),
+        fileTabs: {
+          activeKey: 'deck',
+          tabs: [
+            { key: 'readme', target: readme, label: 'README.md', title: 'README.md', dirty: true, pinned: false },
+            { key: 'deck', target: deck, label: 'deck.pptx', title: 'slides/deck.pptx', dirty: false, pinned: true }
+          ]
+        },
+        fileTabActions: { current: actions }
+      }))
+    })
+
+    const tabs = renderer!.root.findAll((node) => node.props.role === 'tab')
+    expect(tabs.map((tab) => tab.props['aria-label'])).toEqual(['Changes', 'README.md', 'deck.pptx'])
+    expect(tabs.map((tab) => tab.props['aria-selected'])).toEqual([false, false, true])
+    expect(tabs[2]!.props.id).toBe('file-tabs-tab-builtin-right-panel-file')
+    expect(tabs[1]!.props.id).not.toBe(tabs[2]!.props.id)
+    expect(tabs[1]!.parent!.props['data-kind']).toBe('file')
+    expect(tabs[1]!.findAllByProps({ className: 'ds-right-tab__dirty' })).toHaveLength(1)
+
+    act(() => tabs[1]!.props.onClick())
+    expect(onActivate).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.file)
+    expect(actions.select).toHaveBeenLastCalledWith(readme)
+    act(() => tabs[2]!.props.onKeyDown({ key: 'ArrowRight', preventDefault: vi.fn() }))
+    expect(onActivate).toHaveBeenLastCalledWith(BUILTIN_RIGHT_PANEL_IDS.changes)
+    act(() => tabs[2]!.props.onContextMenu({ preventDefault: vi.fn() }))
+    expect(actions.openMenu).toHaveBeenCalledWith(expect.anything(), deck)
+
+    const closeReadme = renderer!.root.findByProps({ 'aria-label': 'Close README.md' })
+    act(() => closeReadme.props.onClick({ stopPropagation: vi.fn() }))
+    expect(actions.requestClose).toHaveBeenCalledWith(readme, true)
+    expect(onClose).not.toHaveBeenCalled()
+    act(() => renderer!.root.findByProps({ 'aria-label': 'Close Changes' }).props.onClick({ stopPropagation: vi.fn() }))
+    expect(onClose).toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.changes)
   })
 
   it('omits the redundant add-tool menu and keeps the collapse control', () => {

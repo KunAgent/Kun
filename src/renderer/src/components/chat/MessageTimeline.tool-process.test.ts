@@ -383,7 +383,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('&lt;!-- --&gt;')
   })
 
-  it('uses the latest completed tool as the live fallback action', () => {
+  it('keeps the latest tool path in process details but not in the live fallback', () => {
     const html = renderToStaticMarkup(
       createElement(ConversationTurn, {
         turn: {
@@ -410,7 +410,10 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       })
     )
 
-    expect((html.match(/\/tmp\/project\/src\/current\.ts/g) ?? [])).toHaveLength(2)
+    expect((html.match(/\/tmp\/project\/src\/current\.ts/g) ?? [])).toHaveLength(1)
+    const liveStatus = html.slice(html.indexOf('data-turn-live-status-owner="generic"'))
+    expect(liveStatus).not.toContain('/tmp/project/src/current.ts')
+    expect(liveStatus).toContain('ds-shiny-text')
   })
 
   it('keeps same-batch tool calls collapsed by default', () => {
@@ -535,7 +538,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('ds-work-stack')
     expect(html).toContain('What should we eat tonight?')
     expect(html).not.toContain('Noodles')
-    expect(html).toContain('Complete this above the input box')
+    expect(html).toContain('Answer below')
     expect(html).not.toContain('read detail should stay tucked away')
   })
 
@@ -573,6 +576,33 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('read detail should stay tucked away')
   })
 
+  it('renders one terminal action per command in an expanded process group', () => {
+    const html = renderToStaticMarkup(
+      createElement(ProcessSectionRow, {
+        section: {
+          id: 'execution-batch', kind: 'execution', blocks: [
+            toolBlock({
+              id: 'command', toolKind: 'command_execution',
+              summary: 'bash: npm run typecheck', detail: 'Typecheck passed',
+              meta: { toolName: 'bash', command: 'npm run typecheck' }
+            }),
+            {
+              kind: 'approval', id: 'pending-approval', approvalId: 'approval',
+              status: 'pending', toolName: 'edit', summary: 'Edit source file'
+            }
+          ]
+        },
+        processing: true,
+        singleReasoningSection: false,
+        workspaceRoot: '/tmp/project',
+        viewportRef: { current: null }
+      })
+    )
+
+    expect(html).toContain('ds-work-stack')
+    expect(html.match(/lucide-square-terminal/g) ?? []).toHaveLength(1)
+  })
+
   it('renders automatic review rationale without manual Allow or Deny controls', () => {
     const reviewBlock: ChatBlock = {
       kind: 'approval_review',
@@ -600,4 +630,60 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('approvalDeny')
   })
 
+  it('never shows a success check for a failed automatic review', () => {
+    const html = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: {
+          kind: 'approval_review',
+          id: 'approval-review-failed',
+          reviewId: 'review_failed',
+          approvalId: 'approval_failed',
+          status: 'failed-closed',
+          toolName: 'acp:execute',
+          summary: 'Review command action acp:execute',
+          rationale:
+            'Automatic review denied because its configured model route is unavailable: model_not_found'
+        }
+      })
+    )
+    expect(html).toContain('Review failed closed')
+    expect(html).toContain('lucide-triangle-alert')
+    expect(html).not.toContain('lucide-check')
+    expect(html).toContain('[overflow-wrap:anywhere]')
+  })
+
+  it('shows the resolved review model and hides an empty route', () => {
+    const withRoute = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: {
+          kind: 'approval_review',
+          id: 'approval-review-approved',
+          reviewId: 'review_approved',
+          approvalId: 'approval_approved',
+          status: 'approved',
+          toolName: 'exec_command',
+          summary: 'Run tests',
+          reviewModelRoute: { providerId: 'deepseek', model: 'deepseek-chat' }
+        }
+      })
+    )
+    expect(withRoute).toContain('Review model: deepseek/deepseek-chat')
+    expect(withRoute).toContain('lucide-check')
+    expect(withRoute).not.toContain('lucide-triangle-alert')
+
+    const emptyRoute = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: {
+          kind: 'approval_review',
+          id: 'approval-review-empty',
+          reviewId: 'review_empty',
+          approvalId: 'approval_empty',
+          status: 'in-progress',
+          summary: 'Reviewing',
+          reviewModelRoute: { model: '  ' }
+        }
+      })
+    )
+    expect(emptyRoute).not.toContain('Review model')
+  })
 })

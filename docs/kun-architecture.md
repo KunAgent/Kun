@@ -141,12 +141,20 @@ inflight cleanup、steering queue、context compaction、usage/cache telemetry�
   初始化失败的 finally 中按先 Runtime 后 Manager 的顺序清理。`--url` 和
   `--no-start` 仅连接外部服务，不能停止或延长目标 owner 的生命周期。
 - 同一 canonical `dataDir`、settingsPath 已有 live/starting 应用 session 时，
-  第二个正常 GUI/TUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  第二个正常 GUI 返回 ownership conflict，不能 attach、steal 或 silent kill。
+  第二个 TUI 同样不能 steal 或 kill，但在 owner 的 Runtime 经 discovery 验证存活
+  且 build 一致时附着到它（`attached`，不持有生命周期，重连强制 `noStart`）；
+  验证失败则保持原 ownership conflict。
   production/development 不能共享同一数据 owner；并行实例必须显式隔离
   dataDir、Manager controlDir 和 settingsPath，不能自动换历史目录。
 - GUI Runtime 重启只替换本次 Runtime，Manager 保持本次 session。Manager
   崩溃恢复由应用 owner 决定：先停旧 Runtime 与消费者，再启动下一 generation
   并统一重绑。app-owned Runtime 不能因 Manager 断连自行 ensure 或 re-election。
+- 启动失败页的 Recover 在确认旧应用已退出、三个规范化 profile 的所有权与
+  进程登记一致后，先停止残留 Runtime，确认退出后再停止 Manager。每次发送
+  信号及升级终止都重新核对登记和进程出生身份；未知归属或 PID 复用不能成为
+  终止依据。恢复保留原有会话与设置，不能只清理 Manager 而让残留 Runtime
+  永久阻塞恢复按钮。
 - 旧版常驻实例只有在认证身份、规范化目录、原子冻结新接入和空闲状态均可证明时
   才允许退休。discovery、PID、endpoint、owner 或 Manager registration 存在歧义，
   或旧协议不能证明无活跃外部工作时，必须停止接管并提示关闭旧应用。同版本
@@ -337,6 +345,19 @@ body），也可按精确 ID 显式选择，并出现在设置页与工作台右
 全局并发位，同时仍受独立 Fast Context lane 串行约束。provider-native runtime 若声明
 `kunTools: false`（当前 Antigravity CLI）则整个回合都没有 Kun 独占工具，不会静默换模型。
 
+Fast Context 检索按大仓库成本设计。父侧启动 child 前校验 `hintPaths`（父代理已知相关的
+文件或目录），并从缓存的工作区文件索引（打包 rg `--files`；无 rg 时用 `git ls-files`，再退到
+有界遍历；家目录和文件系统根不建索引）生成约 2 KB 的目录概览写入 child prompt。grep 先用
+`rg --count` 找候选文件，按路径词、任务词、定义位置和 hint 打分，只对前 12 个文件取匹配行；
+省略 path 时依次限定在 hint 路径和定义该标识符的包目录，显式 `path: "."` 才搜全仓。所有
+rg/git 进程低优先级运行，受每线程 4 路和全进程 4 路（`KUN_FAST_CONTEXT_PROCESS_SLOTS`）
+并发上限约束；递归遍历剪枝依赖、构建、缓存目录，跳过二进制和 1 MB 以上文件，并读取工作区
+`.kunignore`。工作区超过 50,000 个文件，或同一次检索已超时两次时，无 path/glob 的根目录
+grep 以 `fast_context_scope_required` 拒绝。定义索引由一次低优先级 rg 提取，持久化在 runtime
+data 目录并按 git diff 增量刷新，只用于排序和限定范围，结果总由实际搜索复核。同一次检索中
+相同的 grep/glob/read 调用复用首次结果。`npm --prefix kun run bench:fast-context` 对比旧的
+单遍 grep 与当前排序检索的命中位置和 CPU。
+
 Subagent 目录按产品 surface 分层。`shared` 是 Code、Work、Design 强制继承的
 基础池，其余 profile 可以属于一个或多个 `code` / `write` / `design` surface；
 空 surface 列表表示不参与派发。Renderer 在每个 turn 持久化 `agentSurface`，旧 turn
@@ -376,6 +397,9 @@ model/provider/reasoning 选择。升级前已经持久化的 `custom:*` child r
 custom agent 都禁用 Skills 自动激活。child record 持久化 route method、Top 5、
 选择理由、置信度及临时角色快照；router usage 计入父 thread。
 
+所有派活入口（`delegate_task`、`worker_create`、Graph 任务的 `profile`、`suggest_tasks`、对话成员）共用一份Agent 名册（`kun/src/delegation/agent-roster.ts`，只读接口 `GET /v1/agent-roster`）：角色 + 引擎绑定 + 各档准入状态。
+角色绑定的引擎在每一档都兑现（`capabilities.subagents.honorEngineBinding` 可关闭 `delegate_task` 的兑现），跑不了就在选人时按统一原因码拒绝，不静默退回原生 loop。名册只出现在工具结果和动态上下文里，设计与实现记录见 [agent-roster-dispatch-ladder.zh-CN.md](./agent-roster-dispatch-ladder.zh-CN.md)。
+
 下一阶段仍值得推进的缓存能力：
 
 - 工具集合 mutation gate：新增工具允许 append，编辑、重排、删除工具时要求
@@ -395,8 +419,7 @@ custom agent 都禁用 Skills 自动激活。child record 持久化 route method
 
 Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 
-- 不恢复切换运行时的 Agent 切换器；harness 选择器选择的是 turn 引擎
-  （见 `docs/ade/01-harness-routing.md`）。
+- 不恢复切换运行时的 Agent 切换器；harness 选择器选择的是 turn 引擎。
 - 顶部连接状态条和 runtime 诊断按钮：不再把运行时检测作为用户入口。
 - Runtime insights/right panel：右侧面板可以展示只读 Kun 用量与 provider
   订阅额度，但不恢复 runtime 诊断、切换或控制台。
@@ -427,6 +450,9 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
 - `startSse/stopSse`：按 `threadId + sinceSeq` 转发 Kun SSE。
 
 ## Settings / Migration
+
+供应商模型发现、能力来源、用户限制与运行预算的规则见
+[`provider-model-metadata.md`](./provider-model-metadata.md)。
 
 保存后的 settings 结构只应有：
 
@@ -468,8 +494,35 @@ Renderer 只应展示 Kun。需要删除或保持删除的 UI 面包括：
   provider。同一 Code-owned 会话可为每个下一回合选择 Code 或 Design；
   admission 把意图固定在当前 turn/user item，不改变 thread ownership。首个被接纳的
   Design 回合只锁定设计文档、产物介质、目标与风格 profile；后续 Code 回合仍然有效。
-- Design 任务：与 Code 任务共用工作台、会话列表、输入框、模型、权限和工作区控制；
-  设计稿、原型和设计流程图落在 `.kun-design/`，在右侧白板中预览和迭代。
+- 会话正文缓存由应用级后台同步维护，不依赖消息组件挂载。最近访问和后台运行的会话
+  使用有容量限制的快照；元数据变化触发更新，运行中定期检查，前台恢复优先。后台读取
+  只更新展示数据，不发送消息、不执行审批，也不重复产生完成通知。运行时断线、历史
+  来源变更、删除或归档必须使相应请求失效，过期响应不得覆盖新选择的会话。
+- 切回会话先展示可信缓存；落后较多时读取最新累计消息页，一次替换，再从响应的安全
+  事件水位续接 SSE。不能用侧边栏的最新序号替代快照水位，也不能绕过子代理状态核对
+  失败时的回放要求。文本 offset 和 replay barrier 继续负责去重及就绪状态。
+- 长回合的过程记录按视口挂载，仍使用消息时间线的同一个滚动容器。上翻阅读、查找跳转、
+  待审批/待输入卡片和已展开记录的状态必须在虚拟行回收后保持正确；会话身份仍隔离。
+  首次显示和窗口恢复直接呈现已收到的文本，只有前台新增文本参与有时限的平滑显示。
+- 原生工具和外部 harness 的详情共用 `ToolPresentation` 展示数据，独立保存输入、输出、
+  错误和资源；历史 call/result 合并不得用结果覆盖输入，也不得让迟到的运行事件覆盖
+  已结束状态。展示元数据有总预算与截断标记，不替代原始工具结果，不进入模型上下文。
+  取消状态使用中性呈现；单工具停止只在运行时确实注册取消句柄后开放，不能从 ACP 的
+  整轮取消能力推断单工具可停止。文件统计按已知路径去重，工具调用次数保持独立。
+- ACP 审批从冻结 action envelope 取 optionId/取消选择，连同决定进入签名及运行时校验。
+  Code/Room 卡片单击提交；Main 复核快照、sender、choice，不再具有原生复核的 DOM 隔离。
+  自动批准与旧版二选一请求仅限一次，不得隐式永久授权；审批详情只用脱敏数据。
+- 工具图片可使用保留的本地栅格数据，音频、资源下载和外部链接要求显式点击；SVG/HTML
+  不得作为活动内容执行，本地资源仍经过工作区文件验证。外部子代理只有真实 childThreadId
+  才开放会话下钻；审批和停止操作按实际归属显示，不从普通工具输出猜测可控制的会话。
+- 输入框的上下文弹层可附加 Claude Code / Codex 官方订阅额度，显示剩余比例和真实窗口的
+  重置时间；额度与上下文 token 占用分开。只查询当前发送路线对应的原生登录或精确命名
+  账号，不按模型名或供应商 preset 猜账号，不将 API 余额当成订阅额度。没有可靠额度时
+  不显示该区域；只有额度、没有上下文数据时仍可单独打开。每次打开重新确认账号，
+  切换路线立即移除旧值。探测是只读的，不启动 Agent，也不替模型登录刷新或改写凭据。
+- Design：Code 会话的能力而不是输入框模式。Code agent 用 `design_open` 提交设计需求，
+  本轮回复结束后工作台在同一会话里启动一次 Design pass；设计稿、原型和设计流程图落在
+  `.kun-design/`，在右侧白板中预览和迭代。
 - Work：办公助手和 inline completion 读取同一份 Kun API key /
   base URL 配置。内部 Write thread registry 只把办公线程识别为 Kun
   thread，不再区分旧运行时会话。白板只缓存其绑定 thread 的 session title：
@@ -589,8 +642,7 @@ agent。
 
 Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：一对一
 会话可以跑在 Kun 原生 loop 或某个外部 harness 上；具备 Kun 工具桥的主 Agent（Kun 或第三方）可以
-拆任务、派 worker、盯进度、验收、汇报。完整设计与实施拆解见
-[`docs/ade/README.md`](./ade/README.md)。不变量：
+拆任务、派 worker、盯进度、验收、汇报。不变量：
 
 - 外部 agent 只能以 `kun serve` 内部的 `DelegatedTurnRuntime` 身份进入；
   GUI 永远只和 `kun serve` 通信。唯一例外是终端 agent：PTY 由主进程持有，
@@ -609,8 +661,7 @@ Kun 的 Code 模式可以升级为 ADE（Agentic Development Environment）：�
 - Code 与历史 ADE 根任务使用统一服务端分页和搜索；旧 `ade` 路由重定向 Code，
   原 thread ID 和持久字段保留。worker 预览与审查目标不修改主会话选择。
 
-普通对话派工的三档权限、60 秒干预窗口、持久化恢复与卡片控制见
-[`docs/ade/16-conversation-agent-dispatch.md`](./ade/16-conversation-agent-dispatch.md)。
+普通对话派工使用三档权限、可配置的无人响应窗口（`ade.dispatch`，默认 60 秒，0 为一直等待，可覆盖需要审批的卡片）、持久化恢复与卡片控制；启动前可逐个 worker 切换 Agent 与模型。
 新 Code 任务默认可派工，高级协作开关继续控制赛马等高级能力；用户显式限制和历史不明设置仍保留。
 
 ## 验证清单

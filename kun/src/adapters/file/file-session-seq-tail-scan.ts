@@ -1,5 +1,5 @@
 import { open, type FileHandle } from 'node:fs/promises'
-import { parseReplayEventRecord } from './file-session-jsonl.js'
+import { DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES, parseReplayEventRecord } from './file-session-jsonl.js'
 
 /**
  * Fast tail scan for the highest committed event seq.
@@ -24,24 +24,24 @@ export type TailScanResult =
  * Read newline-terminated lines from the end of a JSONL file backwards and
  * return the highest `seq` among them.
  *
- * Chunk boundaries split lines on both sides. `carry` holds the end-fragment
- * of a line whose beginning lies in the next-older chunk: chunk text is
- * older, so `text + carry` restores file order and the final split element
- * is a complete line. Only the very first (newest) read can end with a torn
- * in-flight append after its last newline; that fragment never becomes a
- * carry and is never treated as malformed.
+ * Read chunks and event records have independent limits: a valid event can
+ * span many chunks. Keep bounded byte fragments in reverse order and decode
+ * only complete lines so a split UTF-8 character is preserved. Discard the
+ * uncommitted suffix as it is read instead of accumulating a torn append.
  */
 export async function scanHighestSeqFromTail(options: {
   path: string
   fileSize: number
   chunkBytes?: number
   maxChunkBytes?: number
+  maxRecordBytes?: number
   maxLines?: number
 }): Promise<TailScanResult> {
-  const chunkBytes = Math.min(
+  const chunkBytes = Math.max(1, Math.min(
     options.chunkBytes ?? DEFAULT_TAIL_SCAN_CHUNK_BYTES,
     options.maxChunkBytes ?? DEFAULT_TAIL_SCAN_MAX_CHUNK_BYTES
-  )
+  ))
+  const maxRecordBytes = options.maxRecordBytes ?? DEFAULT_EVENT_REPLAY_MAX_RECORD_BYTES
   if (options.fileSize <= 0) return { ok: true, highestSeq: 0 }
   let handle: FileHandle
   try {
@@ -52,7 +52,6 @@ export async function scanHighestSeqFromTail(options: {
   try {
     let highest = 0
     let linesSeen = 0
-    let budgetExhausted = false
     const maxLines = options.maxLines ?? 1_024
     const observe = (seq: number): void => {
       if (seq > highest) highest = seq
@@ -60,49 +59,51 @@ export async function scanHighestSeqFromTail(options: {
     }
     const parseStrict = (line: string): boolean => {
       if (!line.trim()) return true
-      const event = parseReplayEventRecord(line, options.maxChunkBytes ?? DEFAULT_TAIL_SCAN_MAX_CHUNK_BYTES)
+      const event = parseReplayEventRecord(line, maxRecordBytes)
       if (!event) return false
       observe(event.seq)
       return true
     }
-    let carry = ''
-    let newest = true
+    let fragments: Buffer[] = []
+    let pendingBytes = 0
+    const appendFragment = (fragment: Buffer): void => {
+      pendingBytes += fragment.length
+      if (pendingBytes > maxRecordBytes) {
+        throw new Error(`event replay record exceeds ${maxRecordBytes} bytes`)
+      }
+      if (fragment.length > 0) fragments.push(fragment)
+    }
+    const finishLine = (): boolean => {
+      const line = Buffer.concat(fragments.reverse(), pendingBytes).toString('utf8')
+      fragments = []
+      pendingBytes = 0
+      return parseStrict(line)
+    }
+    let skippingUncommittedTail = true
     let end = options.fileSize
-    while (end > 0 && !budgetExhausted) {
+    while (end > 0 && linesSeen < maxLines) {
       const start = Math.max(0, end - chunkBytes)
       const length = end - start
       const buffer = Buffer.alloc(length)
       const { bytesRead } = await handle.read(buffer, 0, length, start)
       if (bytesRead !== length) return { ok: false, reason: 'short-file' }
-      const combined = buffer.toString('utf-8') + carry
-      if (start === 0) {
-        const parts = combined.split('\n')
-        // The final split part is an unterminated append fragment. Ignore it
-        // even if JSON.parse would accept it; no commit marker has arrived.
-        const lastIndex = newest ? parts.length - 1 : parts.length
-        for (let i = 0; i < lastIndex; i++) {
-          if (!parseStrict(parts[i])) return { ok: false, reason: 'malformed-tail' }
+      let cursor = length
+      while (cursor > 0) {
+        const newline = buffer.lastIndexOf(0x0a, cursor - 1)
+        if (skippingUncommittedTail) {
+          if (newline < 0) break
+          skippingUncommittedTail = false
+        } else {
+          appendFragment(buffer.subarray(newline + 1, cursor))
+          if (newline < 0) break
+          if (!finishLine()) return { ok: false, reason: 'malformed-tail' }
+          if (linesSeen >= maxLines) return { ok: true, highestSeq: highest }
         }
-        return { ok: true, highestSeq: highest }
+        cursor = newline
       }
-      const firstNewline = combined.indexOf('\n')
-      if (firstNewline < 0) {
-        // The whole window is one line's end-fragment; defer to older bytes.
-        carry = combined
-        end = start
-        continue
+      if (start === 0 && !skippingUncommittedTail && !finishLine()) {
+        return { ok: false, reason: 'malformed-tail' }
       }
-      carry = combined.slice(0, firstNewline)
-      const lastNewline = combined.lastIndexOf('\n')
-      // On the newest window, bytes after the last newline are uncommitted.
-      const body = newest
-        ? (lastNewline > firstNewline ? combined.slice(firstNewline + 1, lastNewline) : '')
-        : combined.slice(firstNewline + 1)
-      for (const line of body ? body.split('\n') : []) {
-        if (!parseStrict(line)) return { ok: false, reason: 'malformed-tail' }
-      }
-      if (linesSeen >= maxLines) budgetExhausted = true
-      newest = false
       end = start
     }
     return { ok: true, highestSeq: highest }

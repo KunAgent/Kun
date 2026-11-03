@@ -1,0 +1,27 @@
+{
+  "composerTrayTodo": {
+    "title": "タスク",
+    "segmentAria": "タスク：{{step}} · ステップ {{current}}/{{total}}",
+    "fromPlan": "由来",
+    "outlineLabel": "プラン概要",
+    "outlineSteps_one": "{{count}} ステップ",
+    "outlineSteps_other": "{{count}} ステップ",
+    "outlineNote": "Graph オーケストレーションを実行中です。これはプラン概要であり、リアルタイムの実行進捗ではありません。",
+    "inProgress": "進行中",
+    "inProgressFor": "進行中 · {{duration}}",
+    "upNext": "次に実行",
+    "foldDone_one": "{{count}} 件完了",
+    "foldDone_other": "{{count}} 件完了",
+    "foldEarlier_one": "前の {{count}} 件",
+    "foldEarlier_other": "前の {{count}} 件",
+    "foldRemaining_one": "残り {{count}} 件",
+    "foldRemaining_other": "残り {{count}} 件",
+    "foldLater_one": "後の {{count}} 件",
+    "foldLater_other": "後の {{count}} 件",
+    "blockedCount_one": "{{count}} 件がブロック中",
+    "blockedCount_other": "{{count}} 件がブロック中",
+    "failedCount_one": "{{count}} 件が失敗",
+    "failedCount_other": "{{count}} 件が失敗",
+    "ownerTitle": "担当：{{name}}"
+  }
+}

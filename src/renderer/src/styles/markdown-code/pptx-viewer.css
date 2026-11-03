@@ -1,0 +1,185 @@
+/* Slide deck viewer: slides on a soft desk beside a numbered thumbnail rail. */
+.kun-pptx__body > .rpv-root {
+  --rpv-ink: var(--ds-text);
+  --rpv-paper: var(--kun-office-desk);
+  --rpv-panel: var(--kun-office-rail);
+  --rpv-rule: var(--kun-office-rule);
+  --rpv-accent: var(--ds-accent);
+  position: absolute;
+  inset: 0;
+  border: 0;
+  color: var(--ds-text);
+  background: var(--kun-office-desk);
+  font: 500 12px/1.4 inherit;
+}
+
+.kun-pptx .rpv-workspace {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+}
+
+.kun-pptx .rpv-filmstrip {
+  width: 152px;
+  flex: 0 0 152px;
+  padding: 14px 12px 28px 6px;
+  border-right: 1px solid var(--kun-office-rule);
+  background: var(--kun-office-rail);
+  scrollbar-width: thin;
+}
+
+.kun-pptx .rpv-thumbnail {
+  padding: 0 0 14px 26px;
+}
+
+.kun-pptx .rpv-thumbnail__number {
+  top: 1px;
+  left: 0;
+  display: block;
+  width: 19px;
+  color: var(--kun-office-number);
+  font-size: 10.5px;
+  text-align: right;
+}
+
+.kun-pptx .rpv-thumbnail[data-active] .rpv-thumbnail__number {
+  color: var(--ds-accent);
+  font-weight: 600;
+}
+
+.kun-pptx .rpv-thumbnail__canvas {
+  min-height: 63px;
+  border: 0;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--kun-office-thumb-ring);
+  transition:
+    transform 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 160ms ease-out;
+}
+
+.kun-pptx .rpv-thumbnail[data-thumbnail-state='pending'] .rpv-thumbnail__canvas {
+  aspect-ratio: 16 / 9;
+  background: color-mix(in srgb, var(--kun-office-rule) 60%, var(--kun-office-rail));
+}
+
+.kun-pptx .rpv-thumbnail:hover .rpv-thumbnail__canvas {
+  transform: translateY(-1px);
+  box-shadow: 0 0 0 1px var(--kun-office-thumb-ring), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.kun-pptx .rpv-thumbnail[data-active] .rpv-thumbnail__canvas {
+  border: 0;
+  box-shadow: 0 0 0 2px var(--ds-accent);
+}
+
+.kun-pptx .rpv-thumbnail:focus-visible {
+  outline: none;
+}
+
+.kun-pptx .rpv-thumbnail:focus-visible .rpv-thumbnail__canvas {
+  box-shadow:
+    0 0 0 2px var(--ds-accent),
+    0 0 0 5px color-mix(in srgb, var(--ds-accent) 25%, transparent);
+}
+
+.kun-pptx-deck__changed {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ds-accent);
+  box-shadow: 0 0 0 2px var(--kun-office-rail);
+}
+
+.kun-pptx .rpv-stage {
+  background: var(--kun-office-desk);
+}
+
+.kun-pptx .rpv-viewport {
+  padding: 24px;
+  scrollbar-width: thin;
+}
+
+.kun-pptx .rpv-viewport .rpv-normalized-slide {
+  border-radius: 2px;
+  box-shadow: var(--kun-office-slide-shadow);
+}
+
+.kun-pptx .rpv-status {
+  background: var(--kun-office-desk);
+  color: var(--ds-text-muted);
+}
+
+.kun-pptx-deck__status {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 44ch;
+  font-size: 12px;
+  text-align: center;
+}
+
+.kun-pptx-deck__status strong {
+  color: var(--ds-text);
+  font-size: 13px;
+}
+
+.kun-pptx-deck__spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--kun-office-rule);
+  border-top-color: var(--ds-accent);
+  border-radius: 50%;
+  animation: rpv-spin 0.8s linear infinite;
+}
+
+.kun-pptx__placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  background: var(--kun-office-desk);
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+.kun-pptx[data-pptx-fullscreen='true'] .rpv-root,
+.kun-pptx[data-pptx-fullscreen='true'] .rpv-stage {
+  background: #000;
+}
+
+.kun-pptx[data-pptx-fullscreen='true'] .rpv-viewport {
+  padding: 0;
+}
+
+.kun-pptx[data-pptx-fullscreen='true'] .rpv-viewport .rpv-normalized-slide {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.kun-pptx-deck__state {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 32px;
+  background: var(--kun-office-desk);
+  color: var(--ds-text-muted);
+}
+
+/* A re-render of an already parsed deck takes a frame or two; only a slow one shows the spinner. */
+.kun-pptx .rpv-status:not(.rpv-status--error) {
+  animation: kun-pptx-status-in 160ms ease-out 220ms both;
+}
+
+@keyframes kun-pptx-status-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

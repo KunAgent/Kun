@@ -1,13 +1,15 @@
 import { createHash } from 'node:crypto'
 import { createReadStream, type BigIntStats } from 'node:fs'
 import { stat } from 'node:fs/promises'
+import { platform } from 'node:os'
 import { resolve } from 'node:path'
 
 export type SanottsAssetIntegrity = { sizeBytes: number; sha256: string }
 
-// Speech readiness is checked for every chunk. Hash once per file version, but
-// include ctime and inode so same-length replacements with restored mtime cannot
-// inherit an earlier successful check. Bound the cache across profile changes.
+// Speech readiness is checked for every chunk. On POSIX, reuse successful hashes
+// while the full fingerprint matches. Windows metadata may not distinguish a
+// same-length rewrite with restored mtime, so always hash there. Bound the cache
+// across profile changes.
 const verifiedAssets = new Map<string, string>()
 const MAX_VERIFIED_ASSETS = 256
 
@@ -35,6 +37,7 @@ export async function readVerifiedAssetSize(
 ): Promise<number | null> {
   signal?.throwIfAborted()
   const absolutePath = resolve(path)
+  const useMetadataCache = platform() !== 'win32'
   try {
     const before = await stat(absolutePath, { bigint: true })
     signal?.throwIfAborted()
@@ -43,18 +46,20 @@ export async function readVerifiedAssetSize(
       return null
     }
     const key = fingerprint(absolutePath, before, expected)
-    if (verifiedAssets.get(absolutePath) === key) return expected.sizeBytes
+    if (useMetadataCache && verifiedAssets.get(absolutePath) === key) return expected.sizeBytes
     verifiedAssets.delete(absolutePath)
     const digest = await fileSha256(absolutePath, signal)
     const after = await stat(absolutePath, { bigint: true })
     signal?.throwIfAborted()
-    // Do not cache or accept a file that changed while it was being hashed.
+    // Reject a digest mismatch or an observed fingerprint change while hashing.
     if (digest !== expected.sha256 || fingerprint(absolutePath, after, expected) !== key) return null
-    if (verifiedAssets.size >= MAX_VERIFIED_ASSETS) {
-      const oldestPath = verifiedAssets.keys().next().value
-      if (oldestPath !== undefined) verifiedAssets.delete(oldestPath)
+    if (useMetadataCache) {
+      if (verifiedAssets.size >= MAX_VERIFIED_ASSETS) {
+        const oldestPath = verifiedAssets.keys().next().value
+        if (oldestPath !== undefined) verifiedAssets.delete(oldestPath)
+      }
+      verifiedAssets.set(absolutePath, key)
     }
-    verifiedAssets.set(absolutePath, key)
     return expected.sizeBytes
   } catch (error) {
     verifiedAssets.delete(absolutePath)

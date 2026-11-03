@@ -1,86 +1,32 @@
-import { useEffect, useRef, type ReactElement, type ReactNode } from 'react'
-
-export const COMPOSER_FLOATING_STATUS_HEIGHT_PROPERTY = '--ds-composer-floating-status-height'
-
-export function publishComposerFloatingStatusHeight(
-  floatingStack: HTMLElement,
-  height: number
-): HTMLElement | null {
-  const chatStack = floatingStack.closest<HTMLElement>('.ds-chat-main-stack')
-  if (!chatStack) return null
-  const normalizedHeight = Number.isFinite(height) ? Math.max(0, Math.ceil(height)) : 0
-  chatStack.style.setProperty(COMPOSER_FLOATING_STATUS_HEIGHT_PROPERTY, `${normalizedHeight}px`)
-  return chatStack
-}
+import type { ReactElement, ReactNode } from 'react'
 
 type Props = {
-  attachedDock?: ReactNode
-  floatingStatuses?: ReactNode
+  /** Activity tray (segments, sheet, queue). Must be last: it tucks behind the input slot. */
+  tray?: ReactNode
+  /** Larger panels that keep their own normal-flow space above the tray. */
   flowPanels?: ReactNode
 }
 
 /**
- * Owns the persistent surfaces above the composer.
+ * Owns the persistent surfaces directly above the composer input slot.
  *
- * Compact summaries float over the conversation. Larger or expanding panels
- * keep normal-flow space so their controls never cover message content.
+ * Everything here is in normal flow, so the composer dock grows with it and
+ * the timeline above shrinks instead of being covered: no overlay height has
+ * to be published for the last message to stay clear of the dock.
  */
 export function FloatingComposerAboveInputStack({
-  attachedDock,
-  floatingStatuses,
+  tray,
   flowPanels
 }: Props): ReactElement {
-  const floatingStackRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    const floatingStack = floatingStackRef.current
-    if (!floatingStack) return
-    let chatStack: HTMLElement | null = null
-    const updateHeight = (): void => {
-      const nextChatStack = publishComposerFloatingStatusHeight(
-        floatingStack,
-        floatingStack.offsetHeight
-      )
-      if (chatStack && chatStack !== nextChatStack) {
-        chatStack.style.removeProperty(COMPOSER_FLOATING_STATUS_HEIGHT_PROPERTY)
-      }
-      chatStack = nextChatStack
-    }
-    const clearHeight = (): void => {
-      chatStack?.style.removeProperty(COMPOSER_FLOATING_STATUS_HEIGHT_PROPERTY)
-    }
-
-    updateHeight()
-    if (typeof ResizeObserver === 'undefined') return clearHeight
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(floatingStack)
-    return () => {
-      observer.disconnect()
-      clearHeight()
-    }
-  }, [])
-
   return (
     <>
-      <div
-        data-composer-attached-dock-stack
-        className="relative z-20 flex w-full flex-col items-center empty:hidden"
-      >
-        {attachedDock}
-      </div>
-      <div
-        ref={floatingStackRef}
-        data-composer-floating-status-stack
-        className="pointer-events-none absolute inset-x-0 bottom-full z-30 flex w-full flex-col items-center gap-2 empty:hidden"
-      >
-        {floatingStatuses}
-      </div>
       <div
         data-composer-flow-panel-stack
         className="mb-2 flex w-full flex-col items-center gap-2 empty:hidden"
       >
         {flowPanels}
       </div>
+      {tray}
     </>
   )
 }

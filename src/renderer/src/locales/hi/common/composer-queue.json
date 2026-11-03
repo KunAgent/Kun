@@ -1,0 +1,21 @@
+{
+  "composerQueue": {
+    "caption_one": "{{count}} कतार में · इस दौर के बाद भेजा जाएगा",
+    "caption_other": "{{count}} कतार में · इस दौर के बाद क्रम से भेजे जाएँगे",
+    "dragHint": "क्रम बदलने के लिए खींचें",
+    "showMore_one": "{{count}} और",
+    "showMore_other": "{{count}} और",
+    "showLess": "कम दिखाएँ",
+    "now": "अभी",
+    "nowLabel": "अभी डालें",
+    "pausedTitle": "आपने जवाब रोका, इसलिए कतार रुकी हुई है",
+    "pausedCount_one": "{{count}} संदेश",
+    "pausedCount_other": "{{count}} संदेश",
+    "resume": "जारी रखें",
+    "resumeHint": "कतार के संदेश क्रम से भेजें",
+    "images_one": "{{count}} इमेज",
+    "images_other": "{{count}} इमेज",
+    "files_one": "{{count}} फ़ाइल",
+    "files_other": "{{count}} फ़ाइलें"
+  }
+}

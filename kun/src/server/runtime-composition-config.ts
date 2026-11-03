@@ -1,5 +1,8 @@
+import { buildGitHubAppProvider } from '../adapters/tool/github-app-provider.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildThreadHistoryToolProviders } from '../adapters/tool/thread-history-tool-provider.js'
+import { buildGmailToolProvider } from '../adapters/tool/gmail-tool-provider.js'
+import { buildFigmaToolProvider } from '../adapters/tool/figma-tool-provider.js'
 import {
   join,
   isDeepStrictEqual,
@@ -19,13 +22,12 @@ import {
   buildDiagramVisualizationToolProvider,
   buildConversationVisualizationToolProvider,
   buildChartToolProvider,
+  buildGenUiToolProvider,
   buildWebToolProviders,
   buildImageGenToolProviders,
   protocolSupportsImageEdit,
   buildComputerUseToolProviders,
   buildBrowserUseToolProviders,
-  buildOfficeCliToolProviders,
-  createConfiguredOfficeCliRunner,
   buildMusicGenToolProviders,
   buildSpeechGenToolProviders,
   buildVideoGenToolProviders,
@@ -39,7 +41,6 @@ import {
   buildBuiltinHooks,
   mergeBuiltinSubagentProfiles,
   buildFastContextToolProvider,
-  buildPptAgentToolProvider,
   type RuntimeConfigApplyRequest,
   type RuntimeConfigApplyResponse,
   type RuntimeConfigApplyRejectedSection,
@@ -53,8 +54,9 @@ import type { createRuntimeExtensionComposition } from './runtime-composition-ex
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { composeDelegatedTurnRuntimes } from '../runtime/delegated-turn-runtime.js'
 import {
-  buildPptAgentRuntimeProvider,
+  buildPptDeckRuntimeProvider,
   builtinToolOptionsForOptions,
+  applyMcpServersUpdate,
   contextWindowModeFor,
   llmDebugCaptureEnabled,
   localModelGatewayApplyIssue,
@@ -64,7 +66,8 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { stageBrowserUseHostBinding } from './runtime-browser-use-binding.js'
-import { buildModelClientRouterInput, hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { isNativeNetworkOnlyApply, isUnchangedNativeNetworkApply, OfficeCliRunnerReuse, reusableMcpProviders } from './runtime-config-apply-reuse.js'
+import { hydrateLegacyCredentialOptions, modelContextProfilesByProvider } from './runtime-factory-model.js'
 import { createPersistentAttachmentStore, createPersistentMemoryStore, createReadyPersistentMemoryFeedback } from './runtime-factory-storage.js'
 import { delegationRuntimeConfigView } from './runtime-delegation-config-view.js'
 
@@ -89,7 +92,6 @@ export function createRuntimeConfigController(
   const { core } = model
   const {
     nowIso,
-    llmDebug,
     threadService,
     graphRuntime,
     graphToolsProvider,
@@ -101,16 +103,14 @@ export function createRuntimeConfigController(
     extensionModelProviders,
     legacyCredentialMigration,
     modelConnections,
-    resolveLegacyRequestCredentials,
     migrateLegacyProviderCredentials,
     buildApprovalReviewClients,
+    buildGmailAwareModelClients,
     directModelClient,
     approvalReviewModelClient,
     modelClient,
     timedModelClient,
     subagentRouter,
-    antigravityProviderIds,
-    cursorSdkProviderIds,
     resolveCapabilityProviderCredential,
     gatewayCredentials,
     oauthEncryptor
@@ -121,9 +121,7 @@ export function createRuntimeConfigController(
     reviewService,
     pruneUnsentAttachments,
     designCanvasProvider,
-    childToolHost,
-    defaultIsAntigravity,
-    defaultIsCursorSdk
+    childToolHost
   } = services
   const { delegationRuntime } = registryComposition
   const {
@@ -241,18 +239,26 @@ export function createRuntimeConfigController(
 	    }
 	  })
 	  const startedAt = activeOptions.startedAt ?? nowIso()
+  const officeCliReuse = new OfficeCliRunnerReuse()
+  officeCliReuse.seed(process.env.KUN_OFFICECLI_BINARY, join(activeOptions.dataDir, 'officecli-profile'), services.officeCli)
 	  const rebuildCapabilities = (): typeof capabilities => buildCapabilities(capabilitySnapshot())
-	  let applyConfigQueue: Promise<RuntimeConfigApplyResponse> = Promise.resolve({ ok: true })
-	  const applyConfig = (request: RuntimeConfigApplyRequest): Promise<RuntimeConfigApplyResponse> => {
-	    const task = applyConfigQueue
-	      .catch(() => ({ ok: true }) as RuntimeConfigApplyResponse)
-	      .then(() => applyConfigOnce(request))
-	    applyConfigQueue = task
+	  let applyConfigQueue: Promise<void> = Promise.resolve()
+	  const withConfigLock = <T>(operation: (apply: typeof applyConfigOnce) => Promise<T>): Promise<T> => {
+	    const task = applyConfigQueue.then(() => operation(applyConfigOnce))
+	    applyConfigQueue = task.then(() => undefined, () => undefined)
 	    return task
 	  }
+	  const applyConfig = (request: RuntimeConfigApplyRequest): Promise<RuntimeConfigApplyResponse> =>
+	    withConfigLock((apply) => apply(request))
 	  const applyConfigOnce = async (
 	    request: RuntimeConfigApplyRequest
 	  ): Promise<RuntimeConfigApplyResponse> => {
+	    if (isNativeNetworkOnlyApply(request)) {
+	      if (isUnchangedNativeNetworkApply(request, activeOptions)) return { ok: true }
+	      activeOptions = { ...activeOptions, nativeAgentNetwork: request.nativeAgentNetwork }
+	      core.activeOptions = activeOptions
+	      return { ok: true }
+	    }
 	    if (
 	      request.serve?.observability !== undefined &&
 	      !isDeepStrictEqual(request.serve.observability, activeOptions.observability ?? {})
@@ -264,6 +270,10 @@ export function createRuntimeConfigController(
 	      }
 	    }
 	    const mergedOptions = mergeRuntimeConfigApplyOptions(activeOptions, request)
+	    const mcpUpdate = applyMcpServersUpdate(activeOptions, mergedOptions, request.mcpServers)
+	    if (mcpUpdate.conflict) {
+	      return { ok: false, code: 'invalid_config', message: mcpUpdate.conflict }
+	    }
 	    if (llmDebugCaptureEnabled(mergedOptions) !== llmDebugCaptureEnabled(activeOptions)) {
 	      return {
 	        ok: false,
@@ -272,7 +282,7 @@ export function createRuntimeConfigController(
 	      }
 	    }
 	    let nextOptions = await hydrateLegacyCredentialOptions(
-	      mergedOptions,
+	      mcpUpdate.options,
 	      legacyCredentialMigration
 	    )
 	    const nextSubagentsEnabled = nextOptions.capabilities?.subagents.enabled === true
@@ -297,8 +307,8 @@ export function createRuntimeConfigController(
 	      ? extensionCredentialKeyProvider.encryptor
 	      : undefined
 	    const [nextMcpProviders, nextSkillRuntime] = await Promise.all([
-	      buildMcpToolProviders(nextOptions.capabilities?.mcp, {
-	        oauthStorageDir: join(activeOptions.dataDir, 'mcp-oauth'),
+	      reusableMcpProviders(mcpProviders, activeOptions, nextOptions) ?? buildMcpToolProviders(nextOptions.capabilities?.mcp, {
+	        oauthStorageDir: join(activeOptions.dataDir, 'mcp-oauth'), catalogCachePath: join(activeOptions.dataDir, 'mcp-catalog-cache.json'),
 	        ...(nextOAuthEncryptor ? { oauthEncryptor: nextOAuthEncryptor } : {})
 	      }),
       SkillRuntime.create(skillsConfigForRuntime(nextOptions))
@@ -334,20 +344,13 @@ export function createRuntimeConfigController(
 	    })
 	    const nextComputerUseProviders = await buildComputerUseToolProviders(nextOptions.capabilities?.computerUse)
 	    const nextBrowserUseProviders = buildBrowserUseToolProviders(nextOptions.capabilities?.browserUse)
-    const nextPptAgentProvider = buildPptAgentRuntimeProvider(nextOptions, turnService)
+    const nextPptDeckProvider = buildPptDeckRuntimeProvider(() => nextOptions, () => nextImageGenProviders.available)
 	    const nextResolvedHooks = [
 	      ...buildBuiltinHooks({ quality: nextOptions.quality ?? DEFAULT_QUALITY_CONFIG }),
 	      ...resolveConfiguredHooks(nextOptions.hooks)
 	    ]
-	    const nextOfficeCliRunner = createConfiguredOfficeCliRunner({
-	      binaryPath: process.env.KUN_OFFICECLI_BINARY,
-	      profileDir: join(nextOptions.dataDir, 'officecli-profile')
-	    })
-	    const nextOfficeCliProviders = buildOfficeCliToolProviders({
-	      binaryPath: process.env.KUN_OFFICECLI_BINARY,
-	      profileDir: join(nextOptions.dataDir, 'officecli-profile'),
-	      ...(nextOfficeCliRunner ? { runner: nextOfficeCliRunner } : {})
-	    })
+	    const { runner: nextOfficeCliRunner, providers: nextOfficeCliProviders } =
+	      officeCliReuse.resolve(process.env.KUN_OFFICECLI_BINARY, join(nextOptions.dataDir, 'officecli-profile'))
 	    const nextSubagentConfig = nextOptions.capabilities?.subagents
 	      ? mergeBuiltinSubagentProfiles(nextOptions.capabilities.subagents)
 	      : undefined
@@ -356,6 +359,9 @@ export function createRuntimeConfigController(
 	      nextSubagentConfig
 	    )
 	    const nextBaseToolProviders = [
+	      buildGmailToolProvider(services.gmail, core.threadStore, model.gmailDataPolicy),
+        ...(model.githubApp ? [buildGitHubAppProvider(model.githubApp.service, core.threadStore, model.githubApp.mcp)] : []),
+        ...(model.figma ? [buildFigmaToolProvider(model.figma.service, model.figma.state)] : []),
 	      builtinProvider('execution-tasks', buildExecutionTaskLocalTools(threadService.executionTasks)),
 	      builtinProvider('builtin', withBackgroundShellTools(
 	        buildDefaultLocalTools({}, builtinToolOptionsForOptions(nextOptions)),
@@ -379,12 +385,12 @@ export function createRuntimeConfigController(
 	      ...nextMusicGenProviders.providers,
 	      ...nextVideoGenProviders.providers,
 	      ...nextOfficeCliProviders,
-      nextPptAgentProvider,
+      nextPptDeckProvider,
 	      designCanvasProvider
 	    ]
 	    const nextChildRegistry = new CapabilityRegistry(nextBaseToolProviders)
     const nextRegistry = new CapabilityRegistry([
-      agent.managerToolProvider,
+      agent.managerToolProvider, agent.taskSuggestionToolProvider, agent.agentDispatchToolProvider,
       buildHistoryReferenceToolProvider(services.model.core.historyReferences),
       roomResultProvider(services.model.core.threadStore),
 	      ...nextBaseToolProviders,
@@ -396,20 +402,6 @@ export function createRuntimeConfigController(
 	        nextDelegationRuntime,
 	        () => activeOptions.fastContext
 	      ),
-	      ...buildPptAgentToolProvider(
-	        nextDelegationRuntime,
-	        () => ({
-	          ...nextOptions.lab?.pptAgent,
-	          imageGenAvailable: nextImageGenProviders.available,
-	          imageGenReason: nextImageGenProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason,
-	          imageGenSupportsReferenceEdit: protocolSupportsImageEdit(nextOptions.capabilities?.imageGen?.protocol),
-	          toolIncompatibleProviderIds: [
-	            ...new Set([...antigravityProviderIds, ...cursorSdkProviderIds])
-	          ],
-	          defaultProviderLacksManagedTools: defaultIsAntigravity || defaultIsCursorSdk
-	        }),
-	        turnService
-	      ),
 	      ...buildComponentDesignToolProviders(delegationRuntime),
 	      ...buildDiagramVisualizationToolProvider(
 	        () => activeOptions.lab?.conversationVisualization,
@@ -419,6 +411,7 @@ export function createRuntimeConfigController(
 	        () => activeOptions.lab?.conversationVisualization
 	      ),
 	      ...buildChartToolProvider(() => activeOptions.lab?.conversationVisualization),
+	      ...buildGenUiToolProvider(() => core.genUiStore),
 	      ...buildPaperSearchToolProvider({
 	        proxyUrl: () => activeOptions.modelProxyUrl,
 	        enabledSources: () => activeOptions.capabilities?.paperSearch?.enabledSources,
@@ -458,7 +451,7 @@ export function createRuntimeConfigController(
             }
             // The Registry owns the gateway section even with zero providers.
             nextOptions = { ...nextOptions, localModelGateway: materializedConnections.localModelGateway }
-            // Segmented gateway validation (P4-04): a missing key or
+            // Segmented gateway validation: a missing key or
             // non-loopback host rejects only the localModelGateway section.
             const gatewayIssue = localModelGatewayApplyIssue(nextOptions, gatewayCredentials)
             if (gatewayIssue) {
@@ -466,11 +459,9 @@ export function createRuntimeConfigController(
               nextOptions = { ...nextOptions, localModelGateway: { ...nextOptions.localModelGateway!, enabled: false } }
             }
             await migrateLegacyProviderCredentials(nextOptions)
-	    const nextModelClients = buildModelClientRouterInput(
+	    const nextModelClients = await buildGmailAwareModelClients(
 	      nextOptions,
-	      (model) => modelCapabilitiesForModel(model, nextModelProfiles),
-	      llmDebug,
-	      resolveLegacyRequestCredentials
+	      (model) => modelCapabilitiesForModel(model, nextModelProfiles)
 	    )
             for (const [providerId, client] of extensionModelProviders.clientMap()) {
               nextModelClients.providers.set(providerId, client)
@@ -534,6 +525,7 @@ export function createRuntimeConfigController(
 	    tokenEconomy = nextTokenEconomy
     core.modelProfiles = modelProfiles
     core.providerModelProfiles = providerModelProfiles
+    modelConnections.invalidateSnapshotCache?.() // Registry projections derive capabilities from these profiles.
     core.tokenEconomy = tokenEconomy
 	    refreshDelegatedProviderIds()
 	    directModelClient.replace(nextModelClients)
@@ -659,7 +651,7 @@ export function createRuntimeConfigController(
 	    }).catch((error) => {
 	      console.warn('[kun] MCP background reconnect failed after config apply:', error)
 	    })
-	    void previousMcpProviders.close().catch(() => undefined)
+	    if (previousMcpProviders !== mcpProviders) void previousMcpProviders.close().catch(() => undefined)
 	    return {
 	      ok: true,
 	      ...(Object.keys(rejectedSections).length ? { rejectedSections } : {})
@@ -679,13 +671,14 @@ export function createRuntimeConfigController(
 	      }
 	    } finally {
 	      stagedBrowserUseBinding.rollback()
-	      if (!stagedGenerationCommitted) {
+	      if (!stagedGenerationCommitted && nextMcpProviders !== mcpProviders) {
 	        await nextMcpProviders.close().catch(() => undefined)
 	      }
 	    }
 	  }
   return {
     applyConfig,
+    withConfigLock,
     rebuildCapabilities,
     startedAt,
     get activeOptions() { return activeOptions },

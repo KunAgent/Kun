@@ -1,23 +1,90 @@
+import type { ArtPartsCatalog } from './kun-art-types.js'
 /** Pure avatar metadata shared by the runtime and renderer; never imports image files. */
 export type KunAvatarLabel = { zh: string; en: string }
+export type KunAvatarRarity = 'common' | 'rare' | 'epic' | 'legendary'
+export type KunAvatarCollectible = { rarity: KunAvatarRarity; set: string; flavor: KunAvatarLabel }
 export type KunAvatarCrest = 'normal' | 'tucked' | 'hidden'
 export type KunAvatarAccessoryCategory = 'headwear' | 'glasses' | 'outfit' | 'prop'
 export type KunAvatarExclusion = `${KunAvatarAccessoryCategory}:${string}`
-export type KunAvatarAccessoryMetadata = {
+export type KunAvatarAccessoryMetadata = KunAvatarCollectible & {
   crest: KunAvatarCrest
   hidesCrest: boolean
   hasBack: boolean
   excludes: readonly KunAvatarExclusion[]
 }
 
-function accessory<const Id extends string>(id: Id, zh: string, en: string,
-  options: Partial<Omit<KunAvatarAccessoryMetadata, 'hidesCrest'>> = {}) {
+const collectible = (rarity: KunAvatarRarity, set: string, zh: string, en: string): KunAvatarCollectible =>
+  ({ rarity, set, flavor: { zh, en } })
+
+const equipment = {
+  headset: collectible('common', 'coordinator', '让每个声音都被听见。', 'Every voice has a place.'),
+  'detective-hat': collectible('epic', 'detective', '帽檐之下，线索悄悄相连。', 'Clues connect beneath the brim.'),
+  beret: collectible('rare', 'designer', '今天也有新的颜色。', 'A new color for a new idea.'),
+  'hard-hat': collectible('rare', 'architect', '稳稳托住下一个构想。', 'A solid start for the next idea.'),
+  'baseball-cap': collectible('common', 'operations', '随时准备出发。', 'Ready to go at a moment’s notice.'),
+  'astronaut-helmet': collectible('legendary', 'astronaut', '把好奇心带到星星之间。', 'Take your curiosity to the stars.'),
+  'pilot-cap': collectible('epic', 'pilot', '云层之上，方向依然清楚。', 'A clear course above the clouds.'),
+  'sailor-hat': collectible('rare', 'navigator', '听见远方海浪的回信。', 'Hear the answer in distant waves.'),
+  headphones: collectible('rare', 'musician', '把灵感调到喜欢的音量。', 'Turn inspiration up to your favorite volume.'),
+  'straw-hat': collectible('rare', 'gardener', '留一片阴凉给新芽。', 'A patch of shade for something new.'),
+  'chef-hat': collectible('rare', 'chef', '好点子正在慢慢炖煮。', 'Good ideas are simmering.'),
+  'nurse-cap': collectible('rare', 'medic', '认真照顾每一个小细节。', 'Care lives in the little details.'),
+  'sports-headband': collectible('common', 'athlete', '再往前一步。', 'One more step forward.'),
+  beanie: collectible('common', 'explorer', '温暖陪着好奇心上路。', 'Warmth for a curious journey.'),
+  hood: collectible('epic', 'storyteller', '藏着还没讲完的故事。', 'There is always another story.'),
+  'wizard-hat': collectible('legendary', 'magician', '帽尖收藏着一点星光。', 'A little starlight at the tip.'),
+  'newsboy-cap': collectible('common', 'barista', '带着晨间咖啡的香气。', 'A hint of morning coffee.'),
+  'welding-goggles': collectible('epic', 'maker', '在火花里找到新办法。', 'Find a new idea in the sparks.'),
+  laurel: collectible('legendary', 'strategist', '每片叶子记下一次坚持。', 'Each leaf remembers a little persistence.'),
+  square: collectible('common', 'coder', '把复杂问题看清楚。', 'Bring a complex problem into focus.'),
+  round: collectible('rare', 'reviewer', '换个角度，也许就有答案。', 'A new perspective may hold the answer.'),
+  lab: collectible('epic', 'scientist', '保护眼前的小小发现。', 'Keep a small discovery in sight.'),
+  rectangular: collectible('common', 'data', '整齐的线条里也有惊喜。', 'Surprises hide between tidy lines.'),
+  'cat-eye': collectible('rare', 'librarian', '书页之间，一眼找到宝藏。', 'Spot a treasure between the pages.'),
+  'black-hoodie': collectible('common', 'coder', '舒舒服服，把想法写出来。', 'Settle in and bring an idea to life.'),
+  'mint-hoodie': collectible('common', 'data', '给忙碌的一天一点清新。', 'A fresh note for a busy day.'),
+  'cream-shirt': collectible('common', 'reviewer', '认真，也可以很柔软。', 'Thoughtfulness can be soft.'),
+  cardigan: collectible('rare', 'librarian', '适合翻开下一本书。', 'Just right for the next chapter.'),
+  'lab-coat': collectible('epic', 'scientist', '口袋里装着待验证的猜想。', 'Pockets full of hypotheses.'),
+  'security-jacket': collectible('epic', 'security', '小小徽章，大大的安心。', 'A small badge, a steady guard.'),
+  'blue-scarf': collectible('common', 'architect', '像蓝图一样清楚而轻盈。', 'As clear and light as a blueprint.'),
+  'red-scarf': collectible('common', 'writer', '为下一句话添点热情。', 'A warm start to the next sentence.'),
+  'cream-scarf': collectible('common', 'explorer', '把旅途的风轻轻收好。', 'Keep the journey’s breeze close.'),
+  'night-scarf': collectible('epic', 'night-thinker', '月亮扣住了深夜的灵感。', 'A moon clasp holds a midnight thought.'),
+  spacesuit: collectible('legendary', 'astronaut', '下一站，尚未命名的星球。', 'Next stop: a world without a name.'),
+  'pilot-jacket': collectible('epic', 'pilot', '飞过的云都记得你。', 'The clouds remember your journey.'),
+  'sailor-shirt': collectible('rare', 'navigator', '把海风穿在身上。', 'Carry the sea breeze with you.'),
+  overalls: collectible('rare', 'gardener', '口袋里有泥土和希望。', 'Pockets full of soil and hope.'),
+  'chef-coat': collectible('rare', 'chef', '红领巾系住一份用心。', 'A red neckerchief, tied with care.'),
+  'nurse-uniform': collectible('epic', 'medic', '温柔，也是可靠的力量。', 'Kindness is a steady strength.'),
+  'camera-shirt': collectible('rare', 'photographer', '为值得记住的一刻准备。', 'Ready for a moment worth keeping.'),
+  'sports-vest': collectible('rare', 'athlete', '轻装出发，尽兴而归。', 'Travel light and enjoy the run.'),
+  'storyteller-cape': collectible('legendary', 'storyteller', '每一道褶皱都是故事的开头。', 'Every fold begins another tale.'),
+  'wizard-cape': collectible('legendary', 'magician', '星光沿着衣角悄悄流动。', 'Starlight follows every fold.'),
+  'coffee-apron': collectible('rare', 'barista', '把日常冲泡得香一点。', 'Brew a little comfort into the day.'),
+  'tool-apron': collectible('rare', 'maker', '让双手自由，让想法落地。', 'Free your hands to make an idea real.'),
+  mailbag: collectible('rare', 'courier', '装得下远方的好消息。', 'Room for good news from afar.'),
+  robe: collectible('epic', 'strategist', '从容地走向下一步。', 'Take the next step with calm.'),
+  magnifier: collectible('epic', 'detective', '答案有时只差仔细一看。', 'Sometimes the answer needs a closer look.'),
+  paintbrush: collectible('rare', 'designer', '第一笔，世界就不一样了。', 'The first brushstroke changes everything.'),
+  flask: collectible('epic', 'scientist', '下一次发现正在冒泡。', 'The next discovery is bubbling up.'),
+  quill: collectible('rare', 'writer', '轻轻一划，让故事起飞。', 'A light stroke lets a story take flight.'),
+  notebook: collectible('common', 'researcher', '先记下来，灵感会长大。', 'Write it down and let the idea grow.'),
+  wrench: collectible('rare', 'operations', '转一转，让事情顺起来。', 'A small turn keeps things running.'),
+  book: collectible('common', 'librarian', '一扇可以随身带走的门。', 'A door you can carry with you.'),
+  leaf: collectible('common', 'gardener', '小小叶片，也有自己的方向。', 'Even a small leaf finds its way.'),
+  camera: collectible('rare', 'photographer', '把此刻留给以后的自己。', 'Save this moment for your future self.')
+} satisfies Record<string, KunAvatarCollectible>
+
+function accessory<const Id extends keyof typeof equipment>(id: Id, zh: string, en: string,
+  options: Partial<Pick<KunAvatarAccessoryMetadata, 'crest' | 'hasBack' | 'excludes'>> = {}):
+  { id: Id; label: KunAvatarLabel } & KunAvatarAccessoryMetadata {
   const crest = options.crest ?? 'normal'
-  return { id, label: { zh, en }, crest, hidesCrest: crest === 'hidden',
+  return { id, label: { zh, en }, ...equipment[id], crest, hidesCrest: crest === 'hidden',
     hasBack: options.hasBack ?? false, excludes: options.excludes ?? [] }
 }
 
-export const KUN_AVATAR_CATALOG = {
+export const KUN_AVATAR_CATALOG: ArtPartsCatalog = {
   color: [
     { id: 'sky', label: { zh: '天空蓝', en: 'Sky' }, hex: '#95cbf6' },
     { id: 'teal', label: { zh: '薄荷青', en: 'Teal' }, hex: '#7cdadb' },
@@ -26,7 +93,11 @@ export const KUN_AVATAR_CATALOG = {
   ],
   face: [
     { id: 'normal', label: { zh: '默认', en: 'Default' } },
-    { id: 'happy', label: { zh: '眯眼笑', en: 'Happy' } }
+    { id: 'happy', label: { zh: '眯眼笑', en: 'Happy' } },
+    { id: 'surprised', label: { zh: '惊喜', en: 'Surprised' } },
+    { id: 'wink', label: { zh: '眨眼', en: 'Wink' } },
+    { id: 'focused', label: { zh: '认真', en: 'Focused' } },
+    { id: 'sleepy', label: { zh: '困', en: 'Sleepy' } }
   ],
   headwear: [
     accessory('headset', '带麦耳机', 'Headset'),
@@ -94,7 +165,27 @@ export const KUN_AVATAR_CATALOG = {
     accessory('leaf', '树叶', 'Leaf'),
     accessory('camera', '相机', 'Camera')
   ]
-} as const
+}
+
+export const KUN_AVATAR_SCENES: { id: string; label: KunAvatarLabel }[] = [
+  { id: 'sunset-bay', label: { zh: '海湾日落', en: 'Sunset bay' } },
+  { id: 'night-study', label: { zh: '深夜书房', en: 'Night study' } },
+  { id: 'star-deck', label: { zh: '星空甲板', en: 'Star deck' } },
+  { id: 'cafe', label: { zh: '咖啡馆', en: 'Cafe' } },
+  { id: 'laboratory', label: { zh: '实验室', en: 'Laboratory' } },
+  { id: 'forest-cabin', label: { zh: '林间小屋', en: 'Forest cabin' } }
+]
+export type KunAvatarScene = (typeof KUN_AVATAR_SCENES)[number]['id']
+export const KUN_AVATAR_SMALL_HEADWEAR: string[] = ['wizard-hat', 'beanie', 'headphones', 'hard-hat']
+export const KUN_AVATAR_RARITIES: readonly KunAvatarRarity[] = ['common', 'rare', 'epic', 'legendary']
+export const KUN_AVATAR_RARITY_LABELS: Record<KunAvatarRarity, KunAvatarLabel> = {
+  common: { zh: '普通', en: 'Common' }, rare: { zh: '稀有', en: 'Rare' },
+  epic: { zh: '史诗', en: 'Epic' }, legendary: { zh: '传说', en: 'Legendary' }
+}
+
+export function kunAvatarScene(bg: string): KunAvatarScene | undefined {
+  return KUN_AVATAR_SCENES.find(({ id }) => bg === `scene:${id}`)?.id
+}
 
 export type KunAvatarColor = (typeof KUN_AVATAR_CATALOG.color)[number]['id']
 export type KunAvatarFace = (typeof KUN_AVATAR_CATALOG.face)[number]['id']
@@ -109,6 +200,7 @@ export type KunAvatarParts = {
   glasses?: KunAvatarGlasses
   outfit?: KunAvatarOutfit
   prop?: KunAvatarProp
+  /** Hex color, transparent, or a registered scene:<id> background. */
   bg: string
 }
 export type KunAvatarCategory = keyof KunAvatarParts
@@ -166,13 +258,16 @@ export function updateKunAvatarPart<Category extends KunAvatarCategory>(parts: K
   return { parts: next, removed }
 }
 
-export function randomKunAvatarParts(random: () => number = Math.random): KunAvatarParts {
+/** Random looks only reach into the allowed part of the wardrobe when a filter is given. */
+export function randomKunAvatarParts(random: () => number = Math.random,
+  allowed?: (category: KunAvatarAccessoryCategory, id: string) => boolean): KunAvatarParts {
   const pick = <Value>(choices: readonly Value[]): Value =>
     choices[Math.min(choices.length - 1, Math.max(0, Math.floor(random() * choices.length)))]!
   let parts = normalizeKunAvatarParts({ color: pick(KUN_AVATAR_CATALOG.color).id,
     face: pick(KUN_AVATAR_CATALOG.face).id })
   for (const category of KUN_AVATAR_ACCESSORY_CATEGORIES) {
-    const id = pick([undefined, ...KUN_AVATAR_CATALOG[category].map((part) => part.id)])
+    const ids = KUN_AVATAR_CATALOG[category].map((part) => part.id).filter((id) => !allowed || allowed(category, id))
+    const id = pick([undefined, ...ids])
     parts = updateKunAvatarPart(parts, category, id).parts
   }
   return parts
@@ -184,20 +279,67 @@ export function canonicalKunAvatarKey(parts: KunAvatarParts): string {
     normalized.glasses ?? null, normalized.outfit ?? null, normalized.prop ?? null, normalized.bg])
 }
 
-/** Stable, full-canvas layer keys used by both the renderer and asset QA tooling. */
-export function kunAvatarLayerKeys(parts: KunAvatarParts): string[] {
+export function kunAvatarRarity(parts: KunAvatarParts): KunAvatarRarity {
+  return KUN_AVATAR_ACCESSORY_CATEGORIES.reduce<KunAvatarRarity>((rarity, category) => {
+    const next = KUN_AVATAR_CATALOG[category].find(({ id }) => id === parts[category])?.rarity ?? 'common'
+    return KUN_AVATAR_RARITIES.indexOf(next) > KUN_AVATAR_RARITIES.indexOf(rarity) ? next : rarity
+  }, 'common')
+}
+
+/** Portrait: the whole square picture, as the editor shows it. Face: the compact crop. */
+export type KunAvatarFraming = 'portrait' | 'face'
+export type KunAvatarRenderOptions = { size?: number; effects?: boolean; framing?: KunAvatarFraming }
+
+// The base painting includes resting wings. Sleeved garments paint their own
+// shoulders; keeping both silhouettes leaves blue wedges above their seams.
+export const SLEEVED_OUTFITS: KunAvatarOutfit[] = [
+  'black-hoodie', 'mint-hoodie', 'cream-shirt', 'cardigan', 'lab-coat', 'security-jacket',
+  'spacesuit', 'pilot-jacket', 'sailor-shirt', 'overalls', 'chef-coat', 'nurse-uniform',
+  'camera-shirt', 'storyteller-cape', 'wizard-cape', 'coffee-apron', 'robe'
+]
+const CLOTHED_BODY_CLIP = [
+  [0, 0], [1024, 0], [1024, 772], [842, 772], [824, 790], [784, 806],
+  [768, 818], [768, 1024], [256, 1024], [256, 818], [240, 806],
+  [200, 790], [182, 772], [0, 772]
+] as const
+
+/** Only clips the body layer, before the face, garment and gripping wing.
+ * Points use the common 1024px canvas, including when rendering a face crop. */
+export function kunAvatarBodyClip(parts: KunAvatarParts): readonly (readonly [number, number])[] | undefined {
+  return parts.outfit && SLEEVED_OUTFITS.includes(parts.outfit) ? CLOTHED_BODY_CLIP : undefined
+}
+
+/** Every avatar is the same square picture; only avatars smaller than 28 CSS px zoom to the face. */
+export const KUN_AVATAR_FACE_FRAMING_BELOW = 28
+export function kunAvatarFraming(size: number): KunAvatarFraming {
+  return size < KUN_AVATAR_FACE_FRAMING_BELOW ? 'face' : 'portrait'
+}
+
+/** Stable layer keys shared with asset QA; size means CSS pixels, independently of DPR. */
+export function kunAvatarLayerKeys(parts: KunAvatarParts, options: KunAvatarRenderOptions = {}): string[] {
   const headwear = KUN_AVATAR_CATALOG.headwear.find((part) => part.id === parts.headwear)
   const outfit = KUN_AVATAR_CATALOG.outfit.find((part) => part.id === parts.outfit)
   const crest = headwear?.crest ?? 'normal'
+  const framing = options.framing ?? (options.size === undefined ? 'portrait' : kunAvatarFraming(options.size))
+  // Only the face crop hides props and needs the lowered hats; small portraits keep the whole look.
+  const compact = framing === 'face'
+  const simplified = options.size !== undefined && options.size <= 48
+  const small = options.size !== undefined && options.size <= 34
+  const scene = kunAvatarScene(parts.bg)
+  const rarity = kunAvatarRarity(parts)
+  const effects = options.effects && (options.size ?? 0) >= 96 && (rarity === 'epic' || rarity === 'legendary')
   return [
+    scene ? `scene/${scene}${simplified ? '.small' : ''}` : '',
+    effects ? `fx/${rarity}.back` : '',
     outfit?.hasBack ? `outfit/${outfit.id}.back` : '',
     headwear?.hasBack ? `headwear/${headwear.id}.back` : '',
     crest === 'hidden' ? '' : `crest/${crest === 'tucked' ? 'tucked-' : ''}${parts.color}`,
     `base/${parts.color}`, `face/${parts.face}`,
     parts.outfit ? `outfit/${parts.outfit}` : '',
-    parts.glasses ? `glasses/${parts.glasses}` : '',
-    parts.headwear ? `headwear/${parts.headwear}` : '',
-    parts.prop ? `prop/${parts.prop}` : '',
-    parts.prop ? `wing/${parts.color}` : ''
+    parts.glasses ? `glasses/${parts.glasses}${small ? '.small' : ''}` : '',
+    parts.headwear ? `headwear/${parts.headwear}${compact && KUN_AVATAR_SMALL_HEADWEAR.includes(parts.headwear) ? '.small' : ''}` : '',
+    !compact && parts.prop ? `prop/${parts.prop}` : '',
+    !compact && parts.prop ? `wing/${parts.color}` : '',
+    effects ? `fx/${rarity}` : ''
   ].filter(Boolean)
 }

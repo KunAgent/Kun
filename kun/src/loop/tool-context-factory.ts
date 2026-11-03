@@ -1,5 +1,5 @@
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
-import type { PptWorkflowScope, ToolHostContext } from '../ports/tool-host.js'
+import type { ToolHostContext } from '../ports/tool-host.js'
 import type { ToolDispatchInput } from './turn-execution-types.js'
 import type { InteractiveToolBridge } from './interactive-tool-bridge.js'
 
@@ -13,7 +13,6 @@ export type ToolExecutionContextFactoryDeps = {
   allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
-  pptWorkflowScope?: PptWorkflowScope
   blockedProviderIds?: readonly string[]
   blockedToolNames?: readonly string[]
   blockedSkillIds?: readonly string[]
@@ -37,6 +36,7 @@ export function createToolExecutionContext(
     threadId: input.threadId,
     turnId: input.turnId,
     workspace: input.workspace,
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: input.attachmentAliases } : {}),
     ...(input.workspaceCheckpointRequestId
       ? { workspaceCheckpointRequestId: input.workspaceCheckpointRequestId }
       : {}),
@@ -53,6 +53,7 @@ export function createToolExecutionContext(
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
     ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(input.guiDesignMode ? { guiDesignMode: true } : {}),
+    ...(input.designPreviewOnly ? { designPreviewOnly: true } : {}),
     agentSurface: input.agentSurface ?? 'code',
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
     ...(input.imContext ? { imContext: true } : {}),
@@ -89,7 +90,6 @@ export function createToolExecutionContext(
     ...(deps.allowHostReads ? { allowHostReads: true } : {}),
     ...(deps.allowedWritePaths ? { allowedWritePaths: deps.allowedWritePaths } : {}),
     ...(deps.allowedArtifactIds ? { allowedArtifactIds: deps.allowedArtifactIds } : {}),
-    ...(deps.pptWorkflowScope ? { pptWorkflowScope: deps.pptWorkflowScope } : {}),
     ...(deps.blockedProviderIds ? { blockedProviderIds: deps.blockedProviderIds } : {}),
     ...(deps.blockedToolNames ? { blockedToolNames: deps.blockedToolNames } : {}),
     ...(deps.blockedSkillIds ? { blockedSkillIds: deps.blockedSkillIds } : {}),

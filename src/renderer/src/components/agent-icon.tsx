@@ -4,7 +4,6 @@ import antigravityUrl from '../assets/provider-icons/antigravity.svg?url'
 import claudeUrl from '../assets/provider-icons/claude.svg?url'
 import codexUrl from '../assets/provider-icons/codex.svg?url'
 import cursorUrl from '../assets/provider-icons/cursor.svg?url'
-import geminiUrl from '../assets/provider-icons/gemini.svg?url'
 import kunUrl from '../../../asset/img/kun_tray_mac.svg?url'
 import openCodeLightUrl from '../assets/agent-icons/opencode-logo-light-square.svg?url'
 import openCodeDarkUrl from '../assets/agent-icons/opencode-logo-dark-square.svg?url'
@@ -26,6 +25,7 @@ import grokUrl from '../assets/provider-icons/grok.svg?url'
 import kimiUrl from '../assets/provider-icons/kimi.svg?url'
 import minimaxUrl from '../assets/provider-icons/minimax.svg?url'
 import zaiUrl from '../assets/provider-icons/zai.svg?url'
+import { agentIconId } from '../lib/agent-icon-aliases'
 
 /** Agent identity is keyed by the trusted harness ID, never by model/provider. */
 const AGENT_ASSETS: Readonly<Record<string, string>> = {
@@ -33,7 +33,6 @@ const AGENT_ASSETS: Readonly<Record<string, string>> = {
   'claude-code': claudeUrl,
   cursor: cursorUrl,
   antigravity: antigravityUrl,
-  'gemini-cli': geminiUrl,
   codex: codexUrl,
   devin: devinUrl,
   droid: factoryDroidUrl,
@@ -66,6 +65,7 @@ const AGENT_ASSETS: Readonly<Record<string, string>> = {
  */
 const AGENT_MONOGRAMS: Readonly<Record<string, string>> = {
   omp: 'OMP',
+  codemaker: 'CM',
   aside: 'A',
   omo: 'OmO',
   crush: 'C',
@@ -105,11 +105,12 @@ export function agentIconAssetUrl(harnessId: string): string | undefined {
 }
 
 export function AgentIcon({
-  harnessId,
+  harnessId: agentId,
   size = 16,
   className = '',
   label
 }: AgentIconProps): ReactElement {
+  const harnessId = agentIconId(agentId)
   const style: CSSProperties = { width: size, height: size, flex: 'none' }
   const accessibility = label
     ? { role: 'img' as const, 'aria-label': label }

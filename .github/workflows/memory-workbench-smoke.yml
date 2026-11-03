@@ -5,6 +5,8 @@ on:
     paths:
       - '.github/workflows/memory-workbench-smoke.yml'
       - 'scripts/smoke-memory-lifecycle.mjs'
+      - 'scripts/smoke-url-assets.mjs'
+      - 'scripts/smoke-url-assets.test.mjs'
       - 'scripts/fixtures/memory-lifecycle.tsx'
       - 'scripts/fixtures/memory-lifecycle-backend.ts'
       - 'scripts/memory-lifecycle-backend.test.mjs'
@@ -55,6 +57,7 @@ jobs:
         run: >-
           npx vitest run
           src/renderer/src/components/rooms/AgentMemoryPanel.test.ts
+          src/renderer/src/components/rooms/AgentMemoryCandidates.test.ts
           src/renderer/src/components/memory/ProjectKnowledgePanel.test.ts
           src/renderer/src/components/memory/MemoryHistory.test.ts
           src/shared/project-memory-interoperability.test.ts
@@ -65,7 +68,7 @@ jobs:
           src/renderer/src/agent/kun-runtime-memory-lifecycle.test.ts
           src/renderer/src/agent/kun-runtime-memory-feedback.test.ts
       - name: Verify real isolated store lifecycle and anti-replay
-        run: node --test scripts/memory-lifecycle-backend.test.mjs scripts/memory-cjk-fonts.test.mjs
+        run: node --test scripts/memory-lifecycle-backend.test.mjs scripts/memory-cjk-fonts.test.mjs scripts/smoke-url-assets.test.mjs
       - name: Exercise real memory components and stores in isolated native Electron
         env:
           KUN_MEMORY_EVIDENCE: dist/memory-workbench
@@ -91,6 +94,15 @@ jobs:
           const persistence = JSON.parse(readFileSync(`${directory}/persistence-report.json`, 'utf8'))
           assert.deepEqual(persistence.erasure, { fileExists: false, retainedHistory: false, replayRecreated: false,
             unrelatedProjectRetained: true, sourceConversationRetained: true, sourceMessageRetained: true })
+          const approval = JSON.parse(readFileSync(`${directory}/targetless-approval-report.json`, 'utf8'))
+          assert.equal(approval.status, 'completed')
+          assert.equal(approval.createdCount, 1)
+          assert.equal(approval.locked, true)
+          assert.equal(approval.conversationId, approval.expectedConversationId)
+          assert.equal(approval.taskId, 'fixture-task')
+          assert.equal(approval.handoffId, 'fixture-handoff')
+          assert.equal(approval.visibleInTask, true)
+          assert.equal(approval.visibleOutsideTask, false)
           assert.ok(readdirSync(directory).filter(name => name.startsWith('electron-') && name.endsWith('.png')).length >= 8)
           NODE
       - name: Upload native screenshots and interaction report

@@ -1,3 +1,5 @@
+import { fetchPublicModelCatalog } from '../../services/provider-public-catalog.js'
+import { recordProviderInferenceEvidence } from '../../services/provider-catalog-operations.js'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import {
@@ -304,7 +306,12 @@ async function inferenceProbe(
     })
   }
   try {
-    return await run()
+    const response = await run()
+    const result = JSON.parse(response.body) as { ok?: boolean; reason?: string }
+    await recordProviderInferenceEvidence(registry, providerId, probeModelName, snapshot.revision,
+      { success: result.ok === true, reason: result.reason,
+        protocol: (profile.modelCapabilities?.[probeModelName]?.endpointFormat ?? profile.endpointFormat) === 'custom_endpoint' ? undefined : profile.modelCapabilities?.[probeModelName]?.endpointFormat ?? profile.endpointFormat }).catch(() => undefined)
+    return response
   } finally {
     clearTimeout(timeoutTimer)
     abort.abort()
@@ -335,12 +342,20 @@ export async function detectModelConnectionProtocols(
 
 export async function getModelConnectionCatalog(
   registry: ModelConnectionRegistry | undefined,
-  providerId: string
+  providerId: string,
+  request?: Request
 ): Promise<JsonResponse> {
   if (!registry) return ERRORS.unavailable('model connection registry is unavailable')
   const catalog = await registry.catalog(providerId)
   if (!catalog) return jsonResponse({ cached: false })
-  return jsonResponse({ cached: true, ...catalog })
+  const query = request ? new URL(request.url).searchParams : undefined
+  const offset = Number(query?.get('offset') ?? 0), limit = Number(query?.get('limit') ?? 2000)
+  if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 2000) return ERRORS.validation('Invalid catalog pagination')
+  const models = catalog.models.slice(offset, offset + limit)
+  const select = <T>(values: Record<string, T> | undefined) => values && Object.fromEntries(models.filter((id) => id in values).map((id) => [id, values[id]]))
+  return jsonResponse({ cached: true, ...catalog, models, modelProfiles: select(catalog.modelProfiles), modelDetails: select(catalog.modelDetails), catalogProfiles: select(catalog.catalogProfiles), effectiveProfiles: select(catalog.effectiveProfiles),
+    suggestions: catalog.suggestions?.filter((model) => models.includes(model.id)), total: catalog.models.length,
+    ...(offset + limit < catalog.models.length ? { nextOffset: offset + limit } : {}) })
 }
 
 export async function getModelConnectionCustomHeaders(
@@ -363,9 +378,12 @@ export async function modelConnectionEvents(
 ): Promise<Response | JsonResponse> {
   if (!registry) return ERRORS.unavailable('model connection registry is unavailable')
   const since = Number(new URL(request.url).searchParams.get('since_revision') ?? '0')
-  if (!Number.isInteger(since) || since < 0) return ERRORS.validation('invalid since_revision')
+  if (!Number.isSafeInteger(since) || since < 0) return ERRORS.validation('invalid since_revision')
+  const rawMetadata = new URL(request.url).searchParams.get('since_metadata_revision')
+  const sinceMetadata = rawMetadata === null ? undefined : Number(rawMetadata)
+  if (sinceMetadata !== undefined && (!Number.isSafeInteger(sinceMetadata) || sinceMetadata < 0)) return ERRORS.validation('invalid since_metadata_revision')
   if (request.headers.get('accept')?.includes('text/event-stream')) {
-    return modelConnectionEventStream(registry, request, since)
+    return modelConnectionEventStream(registry, request, since, sinceMetadata)
   }
   const waitRaw = new URL(request.url).searchParams.get('wait_ms')
   const waitMs = waitRaw === null ? 0 : Number(waitRaw)
@@ -373,15 +391,16 @@ export async function modelConnectionEvents(
     return ERRORS.validation('invalid wait_ms')
   }
   const snapshot = waitMs > 0
-    ? await registry.waitForRevision(since, request.signal, waitMs)
+    ? await registry.waitForRevision(since, request.signal, waitMs, sinceMetadata)
     : await registry.snapshot()
-  return jsonResponse({ changed: snapshot.revision > since, snapshot })
+  return jsonResponse({ changed: snapshot.revision > since || (sinceMetadata !== undefined && (snapshot.metadataRevision ?? 0) > sinceMetadata), snapshot })
 }
 
 function modelConnectionEventStream(
   registry: ModelConnectionRegistry,
   request: Request,
-  sinceRevision: number
+  sinceRevision: number,
+  sinceMetadataRevision?: number
 ): Response {
   const encoder = new TextEncoder()
   let unsubscribe: (() => void) | undefined
@@ -402,11 +421,13 @@ function modelConnectionEventStream(
         try { controller.close() } catch { /* consumer already closed */ }
       }
       const send = (snapshot: Awaited<ReturnType<ModelConnectionRegistry['snapshot']>>): void => {
-        if (closed || snapshot.revision <= sinceRevision) return
+        if (closed || (snapshot.revision <= sinceRevision && (sinceMetadataRevision === undefined || (snapshot.metadataRevision ?? 0) <= sinceMetadataRevision))) return
         try {
           controller.enqueue(encoder.encode(
-            `id: ${snapshot.revision}\nevent: model_connections\ndata: ${JSON.stringify(snapshot)}\n\n`
+            `id: ${snapshot.revision}:${snapshot.metadataRevision ?? 0}\nevent: model_connections\ndata: ${JSON.stringify(snapshot)}\n\n`
           ))
+          sinceRevision = snapshot.revision
+          if (sinceMetadataRevision !== undefined) sinceMetadataRevision = snapshot.metadataRevision ?? 0
         } catch {
           close()
         }
@@ -542,4 +563,12 @@ async function readJson(request: Request): Promise<unknown> {
 
 function hasCredentialOperationToken(value: unknown): value is { operationToken: unknown } {
   return typeof value === 'object' && value !== null && 'operationToken' in value
+}
+
+export async function getPublicModelCatalog(registry: ModelConnectionRegistry | undefined, request: Request): Promise<JsonResponse> {
+  if (!registry) return ERRORS.unavailable('model connection registry is unavailable')
+  const schema = z.object({ providerId: z.string().max(128), baseUrl: z.string().max(2048), forceRefresh: z.boolean().optional(),
+    catalogSources: z.array(z.string().min(1).max(128)).max(8).optional(),
+    modelHints: z.array(z.object({ id: z.string().max(512), aliases: z.array(z.string().max(512)).max(32).optional() }).strict()).max(2000).optional() }).strict()
+  return mutate(registry, async () => fetchPublicModelCatalog(registry, schema.parse(await readJson(request))))
 }

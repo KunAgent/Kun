@@ -147,6 +147,17 @@ async function registry(
 }
 
 describe('ModelConnectionRegistry', () => {
+  it('reads credentials without rewriting the Registry when no transaction is pending', async () => {
+    const { dataDir, manager, a } = await sharedManagerRegistryPair()
+    await a.connect(deepseekConnection())
+    const path = join(dataDir, 'model-connections.v2.json')
+    const before = manager.documents.get(path)!.revision
+    for (let index = 0; index < 3; index += 1) {
+      await expect(a.credentialStateForInternalConsumer('deepseek')).resolves.toMatchObject({ authoritative: true })
+    }
+    expect(manager.documents.get(path)!.revision).toBe(before)
+  })
+
   it('carries client generation high-water across delete and same-id re-add', async () => {
       const { a, b } = await sharedManagerRegistryPair()
       const connected = await a.connect(deepseekConnection())

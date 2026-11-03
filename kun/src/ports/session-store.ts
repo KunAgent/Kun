@@ -1,4 +1,5 @@
 import type { AgentSession } from '../domain/session.js'
+import type { ContextSnapshotEvent } from '../contracts/context-snapshot.js'
 import type { RuntimeEvent } from '../contracts/events.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { UsageSnapshot } from '../contracts/usage.js'
@@ -22,7 +23,7 @@ export type SessionUsageRecord = {
   model?: string
   providerId?: string
   relation?: ThreadRelation
-  /** Origin of the record (docs/ade/04 §6); absent means native loop usage. */
+  /** Origin of the record; absent means native loop usage. */
   source?: 'native' | 'harness-gateway' | 'harness-reported' | 'public-gateway' | 'utility'
   harnessId?: string
   completedAt: string
@@ -156,6 +157,8 @@ export type ItemTextSearchOptions = {
  * JSONL and keep a small in-memory window for fast access.
  */
 export interface SessionStore {
+  /** Stable across appends; changes when canonical history is replaced or deleted. */
+  itemHistoryVersion?(threadId: string): Promise<string>
   /**
    * Atomically reserve the next durable event sequence number.
    *
@@ -228,6 +231,8 @@ export interface SessionStore {
   runEventIndexRebuildSlice?(): Promise<boolean>
   /** Register the wake callback used to pull an idle rebuild to now. */
   setEventIndexRebuildWake?(wake: () => void): void
+  /** Latest main-agent context telemetry at the hydration replay boundary. */
+  loadLatestContextSnapshot?(threadId: string, maxSeq: number): Promise<ContextSnapshotEvent | null>
   loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]>
   /** Bounded replay page used by cross-process stores and long backlogs. */
   loadEventPage?(threadId: string, options: EventHistoryPageOptions): Promise<EventHistoryPage>

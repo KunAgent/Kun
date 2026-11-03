@@ -15,7 +15,7 @@ Inspect and atomically edit existing DOCX, XLSX, and PPTX files with hash-protec
 | `office_inspect` | Inspect source structure and obtain SHA-256. |
 | `office_edit` | Apply atomic validated operations. |
 | `office_preview` | Preview the edited result. |
-| `ppt_agent` | Use the governed workflow for presentation tasks beyond bounded structural edits. |
+| `slides` skill | New decks, rebuilt decks, or presentation work beyond bounded structural edits. |
 
 ## Workflow
 1. Identify the file format and exact requested changes.
@@ -27,7 +27,7 @@ Inspect and atomically edit existing DOCX, XLSX, and PPTX files with hash-protec
 ## Completion gates
 - Never edit from a stale hash.
 - Preserve unrelated content and relationships.
-- For presentations, use ppt_agent whenever the task is a presentation workflow rather than a bounded Office patch.
+- For presentations, switch to the `slides` skill (PPTD source plus `ppt_preview` / `ppt_export`) whenever the task is building or redesigning a deck rather than a bounded Office patch.
 
 ## Boundaries
 - Do not use binary search-and-replace on Office packages.

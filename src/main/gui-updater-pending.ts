@@ -78,6 +78,8 @@ export type PendingUpdateResult = {
 
 /** On-disk shape of the installer-owned `<guid>-update.json` transaction. */
 export type InstallerUpdateTransaction = {
+  installerPid?: number
+  installerProcessIdentity?: string
   transactionPath: string
   schemaVersion: number
   phase: string
@@ -397,6 +399,9 @@ export async function readInstallerUpdateTransaction(
     if (!journalPath) continue
 
     return {
+      ...(Number.isSafeInteger(record.InstallerPid) && Number(record.InstallerPid) > 0 &&
+          typeof record.InstallerProcessIdentity === 'string' && /^win32-v1:\d{4}-.*Z$/u.test(record.InstallerProcessIdentity)
+        ? { installerPid: Number(record.InstallerPid), installerProcessIdentity: record.InstallerProcessIdentity } : {}),
       transactionPath,
       schemaVersion: Number(record.SchemaVersion ?? 0),
       phase: String(record.Phase ?? ''),

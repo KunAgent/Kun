@@ -18,7 +18,7 @@ export const ModelRouteStrategySchema = z.enum([
 export const NESTED_ROUTE_PROVIDER_ID = '@route'
 export const MAX_NESTED_ROUTE_DEPTH = 3
 
-const RouteEffortSchema = z.enum(['off', 'low', 'medium', 'high', 'max', 'auto'])
+const RouteEffortSchema = z.enum(['off', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'])
 export type ModelRouteStrategy = z.infer<typeof ModelRouteStrategySchema>
 
 export const ModelRouteTargetConfigSchema = z.object({
@@ -206,6 +206,8 @@ export type ModelFailureMetadata = {
   reason?: ModelFailureReason
   /** True only when the provider supplied an HTTP or protocol-level error response. */
   responseReceived?: boolean
+  /** False only when this failed attempt stopped before invoking the transport. */
+  requestSent?: boolean
   httpStatus?: number
   providerCode?: string
   retryAfterMs?: number

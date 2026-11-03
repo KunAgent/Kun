@@ -131,15 +131,9 @@ describe('Fast Context settings', () => {
     })
   })
 
-  it('keeps lab.pptAgent defaults and merging', () => {
+  it('ignores the retired lab.pptAgent switch while preserving image defaults', () => {
     const lab = defaultKunRuntimeSettings().lab
-    expect(lab.pptAgent).toEqual({
-      enabled: true,
-      model: '',
-      providerId: '',
-      fast: false,
-      imageFirst: true
-    })
+    expect(lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
 
     const next = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       lab: {
@@ -148,56 +142,27 @@ describe('Fast Context settings', () => {
         }
       }
     })
-    expect(next.lab.pptAgent).toEqual({
-      enabled: false,
-      model: '',
-      providerId: '',
-      fast: false,
-      imageFirst: true
-    })
+    expect(next.lab.pptAgent).toEqual({ enabled: true, imageAssets: true })
+  })
 
-    const configured = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
-      lab: {
-        pptAgent: {
-          model: 'gpt-5.4',
-          providerId: 'codex-2',
-          reasoningEffort: 'high',
-          fast: true
+  it('drops the retired Gen UI and MCP Apps Lab switches during normalization', () => {
+    const defaults = defaultKunRuntimeSettings()
+    const legacy = {
+      agents: {
+        kun: {
+          ...defaults,
+          lab: {
+            ...defaults.lab,
+            genUi: { enabled: false },
+            mcpApps: { enabled: false }
+          }
         }
       }
-    })
-    expect(configured.lab.pptAgent).toEqual({
-      enabled: true,
-      model: 'gpt-5.4',
-      providerId: 'codex-2',
-      reasoningEffort: 'high',
-      fast: true,
-      imageFirst: true
-    })
+    } as unknown as Parameters<typeof normalizeAppSettings>[0]
 
-    // Half-configured model override falls back to follow-main.
-    const half = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
-      lab: {
-        pptAgent: {
-          model: 'gpt-5.4',
-          providerId: ''
-        }
-      }
-    })
-    expect(half.lab.pptAgent.model).toBe('')
-    expect(half.lab.pptAgent.providerId).toBe('')
-
-    // Invalid reasoning effort is ignored.
-    const bad = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
-      lab: {
-        pptAgent: {
-          model: 'gpt-5.4',
-          providerId: 'codex-2',
-          reasoningEffort: 'bogus' as never
-        }
-      }
-    })
-    expect(bad.lab.pptAgent.reasoningEffort).toBeUndefined()
+    const normalized = normalizeAppSettings(legacy)
+    expect(normalized.agents.kun.lab).not.toHaveProperty('genUi')
+    expect(normalized.agents.kun.lab).not.toHaveProperty('mcpApps')
   })
 
   it('defaults and merges GUI-only Automatic plan-build settings independently', () => {

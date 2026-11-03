@@ -103,6 +103,8 @@ it('uses themed keyboard-accessible popovers for profile and permission choices'
   await click('[data-agent-setting-option="native"]')
   expect(onChange).not.toHaveBeenCalled()
   await click('[data-agent-profile-mode]')
+  // Opening focuses the selected option on the next frame; let that land before moving focus.
+  await act(async () => { await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined))) })
   const first = document.querySelector<HTMLButtonElement>('[data-agent-setting-option="native"]')!
   first.focus()
   await act(async () => first.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
@@ -110,4 +112,42 @@ it('uses themed keyboard-accessible popovers for profile and permission choices'
   await click('[data-agent-setting-option="gateway"]')
   expect(onChange).toHaveBeenCalledWith('gateway')
   expect(document.querySelector('[data-agent-settings-listbox]')).toBeNull()
+})
+
+describe('Agent settings model picker with Agent option groups', () => {
+  const route = (name: string, model: string) => `["${name}","${model}"]`
+  const grouped: NonNullable<AdeHarnessModels['modelInfo']> = [
+    { id: route('deepseek-official', 'deepseek-flash'), displayName: 'DeepSeek-V4.1-Flash', group: 'DeepSeek' },
+    { id: route('deepseek-official', 'deepseek-v4-pro'), displayName: 'DeepSeek-V4-Pro', group: 'DeepSeek' },
+    { id: route('deepseek-account', 'deepseek-flash'), displayName: 'DeepSeek-V4.1-Flash', group: 'DeepSeek Account' },
+    { id: route('deepseek-account', 'deepseek-v4-pro'), displayName: 'DeepSeek-V4-Pro', group: 'DeepSeek Account' }
+  ]
+  const open = (value = '') => render(value, { harnessId: 'deepseek-harness', modelIds: grouped.map((model) => model.id), modelInfo: grouped })
+  const headings = () => [...document.querySelectorAll('[data-agent-model-group]')].map((node) => node.getAttribute('aria-label'))
+
+  it('files same-named models under their group and marks the selected route', async () => {
+    const { onChange } = await open(grouped[2]!.id)
+    await click('[data-agent-profile-model]')
+    expect(headings()).toEqual(['DeepSeek', 'DeepSeek Account'])
+    expect([...document.querySelectorAll('[data-agent-model-option]')].map((row) => row.textContent))
+      .toEqual(['DeepSeek-V4.1-Flash', 'DeepSeek-V4-Pro', 'DeepSeek-V4.1-Flash', 'DeepSeek-V4-Pro'])
+    const selected = document.querySelectorAll('[data-agent-model-option][aria-checked="true"]')
+    expect(selected).toHaveLength(1)
+    expect(selected[0]!.closest('[data-agent-model-group]')?.getAttribute('aria-label')).toBe('DeepSeek Account')
+    await click(`[data-agent-model-option='${grouped[1]!.id}']`)
+    expect(onChange).toHaveBeenCalledExactlyOnceWith(grouped[1]!.id)
+  })
+  it('keeps the heading of a group while a search narrows the list to it', async () => {
+    await open()
+    await click('[data-agent-profile-model]')
+    await input('[data-agent-settings-model-menu] input[type="search"]', 'account')
+    expect(headings()).toEqual(['DeepSeek Account'])
+    expect(document.querySelectorAll('[data-agent-model-option]')).toHaveLength(2)
+  })
+  it('stays a flat list for a single group', async () => {
+    await render('', { harnessId: 'deepseek-harness', modelIds: [grouped[0]!.id, grouped[1]!.id], modelInfo: grouped.slice(0, 2) })
+    await click('[data-agent-profile-model]')
+    expect(headings()).toEqual([])
+    expect(document.querySelectorAll('[data-agent-model-option]')).toHaveLength(2)
+  })
 })

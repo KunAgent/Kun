@@ -25,8 +25,7 @@ type ComposerPickerPopover = {
 
 /**
  * Positions a composer picker menu portaled to document.body so it cannot be
- * clipped by `overflow: hidden` ancestors (12 §7 pickers sit inside
- * `.ds-composer-toolbar-actions`, which hides overflow for narrow layouts).
+ * clipped by `overflow: hidden` ancestors (which hides overflow for narrow layouts).
  * Handles outside-pointer-down close, Escape close with focus return, and
  * resize/scroll repositioning.
  */

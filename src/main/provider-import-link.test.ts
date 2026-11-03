@@ -36,7 +36,28 @@ describe('findProviderImportLinkArg', () => {
     expect(findProviderImportLinkArg(['kun://other?x=1', '--inspect'])).toBeNull()
     expect(findProviderImportLinkArg([])).toBeNull()
   })
+
+  it('finds a Magpie provider import on a cold start', () => {
+    const raw = magpieLink()
+    expect(findProviderImportLinkArg(['--flag', `"${raw}"`])).toBe(raw)
+  })
 })
+
+function magpieLink(port = 3425): string {
+  const gateway = `http://127.0.0.1:${port}`
+  const body = {
+    kind: 'custom',
+    id: 'magpie',
+    name: 'Magpie',
+    auth: { method: 'apiKey', apiKey: 'magpie-kun' },
+    endpoints: [
+      { protocol: 'openai-chat', baseUrl: `${gateway}/v1`, targets: ['kun'], modelsUrl: `${gateway}/v1/models` },
+      { protocol: 'openai-responses', baseUrl: `${gateway}/v1`, targets: ['kun'], modelsUrl: `${gateway}/v1/models` },
+      { protocol: 'anthropic-messages', baseUrl: gateway, targets: ['kun'], modelsUrl: `${gateway}/v1/models` }
+    ]
+  }
+  return `kun://provider/import?v=1&data=${Buffer.from(JSON.stringify(body)).toString('base64url')}`
+}
 
 describe('stageProviderImportLink + commitProviderImportLink', () => {
   it('stages a preset link without exposing the key, then resolves on commit', () => {
@@ -65,6 +86,49 @@ describe('stageProviderImportLink + commitProviderImportLink', () => {
   it('rejects malformed links before staging', () => {
     expect(stageProviderImportLink('kun://import').ok).toBe(false)
     expect(stageProviderImportLink('https://example.com/x').ok).toBe(false)
+  })
+
+  it('creates a Magpie profile from the local gateway and does not overwrite one that already exists', () => {
+    const staged = stageProviderImportLink(magpieLink(4000))
+    expect(staged.ok).toBe(true)
+    if (!staged.ok) return
+    const created = commitProviderImportLink(staged.staged.token, settings())
+    expect(created.ok).toBe(true)
+    if (!created.ok) return
+    expect(created.unchanged).toBeUndefined()
+    expect(created.profile).toMatchObject({
+      id: 'magpie',
+      name: 'Magpie',
+      apiKey: 'magpie-kun',
+      baseUrl: 'http://127.0.0.1:4000/v1',
+      endpointFormat: 'chat_completions',
+      endpoints: {
+        chat_completions: 'http://127.0.0.1:4000/v1',
+        responses: 'http://127.0.0.1:4000/v1',
+        messages: 'http://127.0.0.1:4000'
+      },
+      models: []
+    })
+
+    const again = stageProviderImportLink(magpieLink(3425))
+    expect(again.ok).toBe(true)
+    if (!again.ok) return
+    const current = settings()
+    const existing = {
+      ...created.profile,
+      name: 'Renamed Magpie',
+      apiKey: 'user-key',
+      models: ['keep-me']
+    }
+    const skipped = commitProviderImportLink(again.staged.token, {
+      ...current,
+      provider: { ...current.provider, providers: [...current.provider.providers, existing] }
+    })
+    expect(skipped).toMatchObject({
+      ok: true,
+      unchanged: true,
+      profile: { id: 'magpie', name: 'Renamed Magpie', apiKey: 'user-key', models: ['keep-me'] }
+    })
   })
 
   it('rejects a token after the staging TTL expires', () => {

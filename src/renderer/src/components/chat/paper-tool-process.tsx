@@ -3,15 +3,12 @@ import { AlertCircle, ChevronDown, ChevronUp, FileText, Quote } from 'lucide-rea
 import { useTranslation } from 'react-i18next'
 import type { ToolBlock } from '../../agent/types'
 import {
-  paperCardImportInput,
   paperCardUrl,
   parseRendererPaperSearchMeta,
   type RendererPaperCard,
   type RendererPaperDetails,
   type RendererPaperSearchMeta
 } from '../../agent/paper-list-adapter'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { ImportButton } from '../paper/discover/PaperDiscoverParts'
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string
 
@@ -106,9 +103,8 @@ export function paperToolProcessDetail(block: ToolBlock, name: PaperToolName): P
   return null
 }
 
-function PaperRow({ paper, workspaceRoot, t }: { paper: RendererPaperCard; workspaceRoot: string; t: Translate }): ReactElement {
+function PaperRow({ paper, t }: { paper: RendererPaperCard; t: Translate }): ReactElement {
   const url = paperCardUrl(paper)
-  const input = paperCardImportInput(paper)
   const meta = [paper.year ? String(paper.year) : '', paper.venue ?? ''].filter(Boolean).join(' · ')
   return (
     <li className="flex items-start gap-2 border-t border-ds-border-muted py-1.5 first:border-t-0">
@@ -137,18 +133,16 @@ function PaperRow({ paper, workspaceRoot, t }: { paper: RendererPaperCard; works
           {paper.sources.length > 1 ? <span className="shrink-0">{t('paperToolSourceCount', { count: paper.sources.length })}</span> : null}
         </span>
       </div>
-      {input ? <ImportButton input={input} workspaceRoot={workspaceRoot} t={t} /> : null}
     </li>
   )
 }
 
 function PaperRows({ papers, t }: { papers: RendererPaperCard[]; t: Translate }): ReactElement {
-  const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const [expanded, setExpanded] = useState(false)
   const shown = expanded ? papers : papers.slice(0, COLLAPSED_ROWS)
   return (
     <>
-      <ul>{shown.map((paper) => <PaperRow key={paper.id} paper={paper} workspaceRoot={workspaceRoot} t={t} />)}</ul>
+      <ul>{shown.map((paper) => <PaperRow key={paper.id} paper={paper} t={t} />)}</ul>
       {papers.length > COLLAPSED_ROWS ? (
         <button
           type="button"
@@ -169,6 +163,9 @@ export function PaperToolDetailView({ block, detail }: { block: ToolBlock; detai
   const newCounts = useContext(PaperToolPoolContext)
   if (detail.kind === 'paper-details') return <PaperRows papers={detail.papers} t={t} />
   const fresh = newCounts?.[block.id]
+  // In a research session the papers live in the pool (and the report card);
+  // the process only reports numbers.
+  const inResearch = newCounts !== null
   return (
     <div className="space-y-1.5">
       <div className="flex flex-wrap items-center gap-1">
@@ -189,7 +186,11 @@ export function PaperToolDetailView({ block, detail }: { block: ToolBlock; detai
           <span className="ml-auto text-[11px] text-ds-faint">{t('paperToolNewInPool', { count: fresh })}</span>
         ) : null}
       </div>
-      {detail.meta.papers.length ? (
+      {inResearch && detail.meta.papers.length ? (
+        <p className="text-[12px] text-ds-muted">
+          {t('paperToolInPool', { count: detail.meta.papers.length, fresh: fresh ?? 0 })}
+        </p>
+      ) : detail.meta.papers.length ? (
         <PaperRows papers={detail.meta.papers} t={t} />
       ) : (
         <p className="text-[12px] text-ds-faint">{t('writePaperSearchNoResults')}</p>

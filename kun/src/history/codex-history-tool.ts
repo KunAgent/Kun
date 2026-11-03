@@ -18,6 +18,7 @@ export interface ReadSourceHistoryResult {
   nextContentOffset?: number
   status: HistorySourceStatus
   warnings: string[]
+  googleWorkspaceData?: true
 }
 const MAX_RESULT_CHARS = 24_000
 const RECORD_CHARS = 6_000
@@ -84,6 +85,7 @@ export async function readSourceHistory(
     let contentOffset = continuation.contentOffset ?? Math.max(0, Math.floor(options.contentOffset ?? 0))
     const results: string[] = []
     let chars = 0
+    let googleWorkspaceData = false
     let nextPosition: number | undefined
     let nextContentOffset: number | undefined
     const positions = new Map(all.map((pointer, position) => [pointer.id, position]))
@@ -106,6 +108,7 @@ export async function readSourceHistory(
         return undefined
       }
       results.push(entry)
+      if (item.kind === 'tool_result' && !item.isError && ['gmail_read', 'gmail_search', 'gmail_send'].includes(item.toolName)) googleWorkspaceData = true
       chars += entry.length
       if (options.operation !== 'search' && contentOffset + RECORD_CHARS < raw.length) {
         nextPosition = position
@@ -130,7 +133,8 @@ export async function readSourceHistory(
       text: results.join('\n\n') || 'No matching history records within this branch reference.',
       ...(nextCursor ? { nextCursor, nextOperation } : {}),
       ...(nextContentOffset === undefined ? {} : { nextContentOffset }),
-      status: index.warnings.length ? 'partial' : 'available', warnings: index.warnings
+      status: index.warnings.length ? 'partial' : 'available', warnings: index.warnings,
+      ...(googleWorkspaceData ? { googleWorkspaceData: true as const } : {})
     }
   } catch (error) {
     const status = error instanceof HistorySourceError ? error.status

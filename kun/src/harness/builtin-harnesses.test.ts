@@ -46,7 +46,7 @@ describe('BUILTIN_HARNESSES', () => {
     }
   })
 
-  // P4-07: Agent Center cards are data-driven from `setup` — locally
+  // Agent Center cards are data-driven from `setup` — locally
   // installable harnesses must declare install or login guidance, and the
   // entries must pass schema validation with no stray keys.
   it('locally installable builtins carry setup metadata', () => {
@@ -66,9 +66,6 @@ describe('BUILTIN_HARNESSES', () => {
   it('setup snapshots pin the commands the terminal prefill shows', () => {
     const byId = new Map(BUILTIN_HARNESSES.map((def) => [def.id, def]))
     expect(byId.get('claude-code')?.setup?.login).toMatchObject({ command: 'claude' })
-    expect(byId.get('gemini-cli')?.setup?.login).toMatchObject({
-      command: 'gemini', args: []
-    })
     expect(byId.get('codex')?.setup).toMatchObject({
       login: { command: 'codex', args: ['login'] }
     })

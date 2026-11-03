@@ -1,4 +1,6 @@
 import { useTranslation } from 'react-i18next'
+import { ApprovalActions } from '../../components/chat/ApprovalActions'
+import { ApprovalDetails } from '../../components/chat/ApprovalDetails'
 import type { ChatBlock } from '../../agent/types'
 import { MobileUserInput } from './MobileUserInput'
 import { selectLivePendingUserInput } from '../../components/chat/user-input-panel-logic'
@@ -32,7 +34,8 @@ export function MobilePendingActions({ blocks, resolveApproval, resolveUserInput
   return <section className="kun-mobile-approval" aria-label={t('approvalTitle')}>
     <strong>{approval.toolName || t('approvalTitle')}</strong>
     <p>{approval.summary}</p>
-    <div><button type="button" disabled={disabled} onClick={() => void resolveApproval(approval.id, 'deny')}>{t('approvalDeny')}</button>
-      <button type="button" disabled={disabled} onClick={() => void resolveApproval(approval.id, 'allow')}>{t('approvalAllow')}</button></div>
+    <ApprovalDetails action={approval.action} />
+    <ApprovalActions options={approval.action?.permissionOptions} submitting={disabled} t={t}
+      onDecide={(decision, choice) => void resolveApproval(approval.id, decision, ...(choice ? [choice] as const : []))} />
   </section>
 }

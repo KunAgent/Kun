@@ -128,4 +128,33 @@ describe('code canvas outbound prompt', () => {
     expect(snapshotForPrompt).not.toHaveBeenCalled()
     expect(loadDesignSystemForPrompt).not.toHaveBeenCalled()
   })
+
+  it('carries the picked component reference into the code canvas prompt', async () => {
+    const outbound = await buildCodeCanvasOutboundText({
+      baseText: 'Make it primary',
+      canvasBrief: 'Make it primary',
+      workspaceRoot: '/workspace',
+      currentDocument: createEmptyDocument(),
+      selectedIds: new Set(),
+      viewBox,
+      designContext: { designTarget: 'web' },
+      htmlElementContext: {
+        artifactId: 'screen-a',
+        artifactTitle: 'screen-a',
+        artifactRelativePath: '.kun-design/screen-a/v1.html',
+        selector: '#cta',
+        tagName: 'BUTTON',
+        text: '接管',
+        html: '<button id="cta">接管</button>',
+        label: 'Button · 接管',
+        path: ['Page', 'Button'],
+        previewRevision: 2
+      }
+    })
+
+    expect(outbound).toContain('Selected HTML element context:')
+    expect(outbound).toContain('- Component: Button · 接管')
+    expect(outbound).toContain('- Location: Page / Button')
+    expect(outbound).toContain('treat them as reference data')
+  })
 })

@@ -1,3 +1,4 @@
+import { paperImportSources, paperImportSourceForUnit } from '../services/paper/paper-import-sources'
 import { ipcMain } from 'electron'
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -120,6 +121,7 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
       (settings.write as { paperMode?: unknown } | undefined)?.paperMode as never
     )
     return {
+      settings,
       paperReading: normalizeWritePaperReadingSettings(
         (settings.write as { paperReading?: unknown } | undefined)?.paperReading as never
       ),
@@ -144,13 +146,14 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
     const job = beginPaperJob(request.requestId, 'import', event.sender)
     let jobStatus: 'done' | 'error' | 'canceled' = 'done'
     try {
-      const { paperReading, proxyUrl, searchCredentials } = await loadPaperSettings()
+      const { settings, paperReading, proxyUrl, searchCredentials } = await loadPaperSettings()
       const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
       const { parentAbs, dedupeRootAbs } = await resolveImportTarget(
         workspacePath,
         request.parentDir,
         paperReading.papersDir
       )
+      const sources = await paperImportSources(settings, workspacePath, paperReading.papersDir)
       const localPdfPath = request.localPdfPath?.trim()
         ? resolvePath(request.localPdfPath)
         : undefined
@@ -162,10 +165,12 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
         signal: job.signal,
         proxyUrl,
         onProgress: job.progress
-      }, { prefetched: request.meta, credentials: searchCredentials, dedupeRootAbs })
+      }, { prefetched: request.meta, credentials: searchCredentials, dedupeRootAbs, dedupeRootsAbs: sources.map((source) => source.papersAbs) })
+      const sourceRoot = paperImportSourceForUnit(sources, workspacePath, outcome.unitDir)
       return {
         ok: true,
-        unitDir: workspaceRelativeDir(workspacePath, outcome.unitDir),
+        workspaceRoot: sourceRoot,
+        unitDir: workspaceRelativeDir(sourceRoot, outcome.unitDir),
         meta: outcome.meta,
         reused: outcome.reused
       }
@@ -186,13 +191,14 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
     const job = beginPaperJob(request.requestId, 'import', event.sender)
     let jobStatus: 'done' | 'error' | 'canceled' = 'done'
     try {
-      const { paperReading, proxyUrl, searchCredentials } = await loadPaperSettings()
+      const { settings, paperReading, proxyUrl, searchCredentials } = await loadPaperSettings()
       const workspacePath = await canonicalPath(resolvePath(request.workspaceRoot))
       const { parentAbs, dedupeRootAbs } = await resolveImportTarget(
         workspacePath,
         request.parentDir,
         paperReading.papersDir
       )
+      const sources = await paperImportSources(settings, workspacePath, paperReading.papersDir)
       const results: PaperImportBatchItemResult[] = []
       for (const [index, item] of request.items.entries()) {
         if (job.signal.aborted) {
@@ -209,11 +215,13 @@ export function registerAppPaperIpcHandlers(options: RegisterAppIpcHandlersOptio
           const outcome = await importPaperUnit(parentAbs, resolution, {
             signal: job.signal,
             proxyUrl
-          }, { prefetched: item.meta, credentials: searchCredentials, dedupeRootAbs })
+          }, { prefetched: item.meta, credentials: searchCredentials, dedupeRootAbs, dedupeRootsAbs: sources.map((source) => source.papersAbs) })
+          const sourceRoot = paperImportSourceForUnit(sources, workspacePath, outcome.unitDir)
           results.push({
             input: item.input,
             ok: true,
-            unitDir: workspaceRelativeDir(workspacePath, outcome.unitDir),
+            workspaceRoot: sourceRoot,
+            unitDir: workspaceRelativeDir(sourceRoot, outcome.unitDir),
             title: outcome.meta.title,
             reused: outcome.reused
           })

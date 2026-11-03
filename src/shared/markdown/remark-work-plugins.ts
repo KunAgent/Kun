@@ -1,6 +1,6 @@
 /**
  * Work-profile remark plugins shared by the renderer editor and the main
- * process export pipeline (implementation §3.1, §7):
+ * process export pipeline:
  *
  * - `remarkCallout`: `> [!type] title` blockquotes → `callout` nodes
  *   (ported from Agentero `src/lib/markdown/callout.ts`).

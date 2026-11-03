@@ -44,12 +44,12 @@ export function AgentInfoBoard({ room, agent, models, activity, onEditProfile, o
       <InfoStatus status={status} label={t('conversationStatus_' + status)} />
       <InfoQuickActions actions={[
         { id: 'profile', icon: SquarePen, label: t('conversationInfoEditProfile'), onClick: onEditProfile },
-        ...(agent?.executor ? [] : [{ id: 'models', icon: Cpu, label: t('conversationInfoChangeModel'), onClick: onModels, disabled: archived }]),
+        { id: 'models', icon: Cpu, label: t('conversationInfoChangeModel'), onClick: onModels, disabled: archived },
         { id: 'context', icon: Eraser, label: t('conversationInfoNewContext'), onClick: onNewContext, disabled: archived }
       ]} />
     </section>
     <InfoSection title={t('conversationInfoModels')}>
-      {agent?.executor ? <CodingAgentEngineCard agent={agent} /> : <div className="conversation-info-models">
+      {agent?.executor ? <CodingAgentEngineCard agent={agent} model={models?.roomOverride?.model} /> : <div className="conversation-info-models">
         <InfoModelCard label={t('conversationInfoMainModel')} binding={models?.main} available={models?.mainAvailable}
           source={models?.mainSource as InfoModelSource | undefined} verifiedAt={models?.mainVerifiedAt} options={models?.options} />
         <InfoModelCard compact label={t('conversationInfoFastModel')} binding={models?.fast} available={models?.fastAvailable}

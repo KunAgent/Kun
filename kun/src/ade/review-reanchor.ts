@@ -7,7 +7,7 @@ import { reanchorComment } from './review-anchor.js'
 import type { FileReviewStore } from './review-store.js'
 
 /**
- * Post-capture re-anchor (11 §4.3): every unresolved comment on the
+ * Post-capture re-anchor: every unresolved comment on the
  * workspace is re-located against the freshly captured file version and its
  * `line`/`outdated` written back. Runs from TaskWorkspaceService.onChange.
  */

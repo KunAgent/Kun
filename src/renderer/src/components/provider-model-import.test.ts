@@ -8,11 +8,16 @@ import {
   buildProviderModelImportEntries,
   defaultSelectedProviderModelImportKeys,
   enrichCursorProviderModelProfiles,
-  enrichProviderModelProfiles,
+  enrichProviderModelProfiles as enrichProfiles,
   mergeProviderModelIdsCaseInsensitive,
   providerModelImportEntryKey,
   providerModelImportResult
 } from './provider-model-import'
+
+// These fixture rows represent exact provider catalog matches unless overridden.
+function enrichProviderModelProfiles(...args: Parameters<typeof enrichProfiles>) {
+  return enrichProfiles(args[0], args[1], args[2].map((model) => ({ ...model, matchSpecificity: model.matchSpecificity ?? 'exact' })), args[3])
+}
 
 function provider(overrides: Partial<ModelProviderProfileV1> = {}): ModelProviderProfileV1 {
   return {
@@ -322,7 +327,7 @@ describe('models.dev profile enrichment', () => {
     expect(next['vision-model']).not.toHaveProperty('description')
   })
 
-  it('refreshes catalog limits on an existing profile and preserves behavior fields', () => {
+  it('preserves explicit limits while recording fresh automatic capabilities', () => {
     const explicitProfile: ModelProviderModelProfileV1 = {
       aliases: ['writer'],
       maxOutputTokens: 4_096,
@@ -350,13 +355,14 @@ describe('models.dev profile enrichment', () => {
     expect(next['Model-A']).toMatchObject({
       ...explicitProfile,
       contextWindowTokens: 1_000_000,
-      maxOutputTokens: 128_000
+      maxOutputTokens: 4_096
     })
+    expect(next['Model-A'].metadata?.observations.some((row) => row.values.maxOutputTokens === 128_000)).toBe(true)
   })
 
   it('retains unknown tool capability when public metadata omits it', () => {
     const next = enrichProviderModelProfiles(provider({ modelProfiles: {} }), ['unlisted'], [{ id: 'unlisted', inputModalities: ['text'], outputModalities: ['text'] }])
-    expect(next.unlisted.evidence?.supportsToolCalling).toEqual({ source: 'catalog', status: 'unknown' })
+    expect(next.unlisted.evidence?.supportsToolCalling).toMatchObject({ status: 'unknown' })
     expect(next.unlisted.evidence?.contextWindowTokens?.status).toBe('unknown')
   })
 
@@ -366,10 +372,10 @@ describe('models.dev profile enrichment', () => {
       inputModalities: ['text'], outputModalities: ['text'], parallelTools: false, structuredOutput: true, observedAt }])
     expect(next.declared).toMatchObject({ parallelTools: false, structuredOutput: true })
     expect(next.declared.streaming).toBeUndefined()
-    expect(next.declared.evidence?.parallelTools).toEqual({ source: 'catalog', status: 'declared', observedAt })
+    expect(next.declared.evidence?.parallelTools).toMatchObject({ source: 'catalog', status: 'declared', observedAt })
     expect(next.declared.evidence?.streaming?.status).toBe('unknown')
   })
-  it('returns the original profile map when catalog limits are unchanged', () => {
+  it('records new observations without changing existing user limits', () => {
     const profile: ModelProviderModelProfileV1 = {
       contextWindowTokens: 128_000,
       maxOutputTokens: 8_000,
@@ -386,7 +392,7 @@ describe('models.dev profile enrichment', () => {
       contextWindowTokens: 128_000,
       maxOutputTokens: 8_000,
       toolCalling: false
-    }])).toBe(target.modelProfiles)
+    }])['model-a']).toMatchObject(profile)
   })
 
   it('refreshes catalog pricing on an existing profile when it differs', () => {
@@ -418,7 +424,7 @@ describe('models.dev profile enrichment', () => {
       outputModalities: ['text'],
       contextWindowTokens: 128_000,
       maxOutputTokens: 8_000
-    }])).toBe(target.modelProfiles)
+    }])['model-a']).toMatchObject(profile)
   })
 
   it('hydrates existing unprofiled models with current models.dev capabilities', () => {

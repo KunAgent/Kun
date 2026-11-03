@@ -1,4 +1,5 @@
 import { app } from 'electron'
+import { relaunchApp } from './relaunch-app'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { JsonSettingsStore } from './settings-store'
@@ -399,7 +400,7 @@ export async function runRuntimeDataRecoveryMaintenance(): Promise<void> {
       releaseRuntimeDataRecoveryMigrationLock()
       relaunchScheduled = true
       const relaunch = (): void => {
-        app.relaunch()
+        relaunchApp()
         app.exit(0)
       }
       if (delayMs <= 0) relaunch()
@@ -480,7 +481,7 @@ export async function runStorageRelocationMaintenance(productionSettingsPath: st
     if (relaunchScheduled) return
     relaunchScheduled = true
     setTimeout(() => {
-      app.relaunch()
+      relaunchApp()
       app.exit(0)
     }, 750).unref?.()
   }

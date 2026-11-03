@@ -1,3 +1,4 @@
-@import './tray-provider-quota/shell-and-overview.css';
+@import './tray-provider-quota/shell.css';
+@import './usage-panel/quota.css';
+@import './usage-panel/quota-lists.css';
 @import './tray-provider-quota/details-and-accessibility.css';
-@import './tray-provider-quota/local-cost.css';

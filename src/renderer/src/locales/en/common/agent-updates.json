@@ -1,5 +1,6 @@
 {
   "agentUpdate": {
+    "nativePermissionFullAccessRequired": "{{agent}}: custom mode {{mode}} requires Full access. Clear it in Agent settings to follow composer permissions.",
     "title": "Agent version",
     "unchecked": "Not checked",
     "checking": "Checking for updates…",
@@ -66,6 +67,7 @@
     "usageBilledByAgent": "Billed by Agent",
     "usageBilledByAgentTitle": "Token counts are reported by the Agent. It bills through its own account or subscription, so Kun shows no local price.",
     "settingsChanged": "Agent selection changed while updating; check again.",
+    "installationChanged": "The Agent installation changed during the check, so Kun checked again. Review the version and path above, then try once more.",
     "rollback": "Restore previous version",
     "nativePermission": "{{agent}} runs in: {{mode}}",
     "nativePermissionReadOnly": "{{agent}} runs in: {{mode}} (read-only, will not change files)",
@@ -85,6 +87,24 @@
       "danger-full-access": "Full access",
       "build": "Build"
     },
-    "usageReportedByAgent": "Reported by the Agent"
+    "usageReportedByAgent": "Reported by the Agent",
+    "usageTimingByAgent": "Average time-to-first-token (TTFT) and streaming speed, measured by Kun on this Agent's output stream: TTFT runs from handing over the prompt to the first streamed text, tok/s counts only the time text was flowing",
+    "progress": {
+      "wait": "Wait for this Agent's current turn",
+      "install": "Download and install {{version}}",
+      "installLocal": "Read the local version {{version}}",
+      "verify": "Verify the new version starts",
+      "activate": "Switch to the new version",
+      "elapsed": "{{time}} elapsed",
+      "waitHint": "running chats are not interrupted",
+      "verifyHint": "one handshake, no prompt is sent",
+      "activateHint": "saves the command path and re-checks the connection"
+    },
+    "upToDate": "Up to date",
+    "newVersion": "Version {{version}} is available",
+    "newLocal": "A newer local version {{version}} was found",
+    "updateTo": "Update to {{version}}",
+    "starting": "Starting…",
+    "retained": "The previous version is kept for rollback."
   }
 }

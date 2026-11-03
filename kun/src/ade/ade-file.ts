@@ -8,7 +8,7 @@ import { applyPosixMode } from '../security/posix-permissions.js'
 /**
  * Shared helpers for the per-team ADE JSON files. Reads are schema-validated;
  * a corrupt file is logged and treated as absent so a damaged control-plane
- * file can never wedge the manager thread itself (P1-10 acceptance).
+ * file can never wedge the manager thread itself (acceptance).
  */
 export async function readAdeJson<S extends z.ZodType, F = null>(
   path: string,

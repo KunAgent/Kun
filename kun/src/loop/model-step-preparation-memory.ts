@@ -1,4 +1,5 @@
 import type { MemoryRecord } from '../contracts/memory.js'
+import type { MemoryRelationAnnotation, MemoryRelationContextResult } from '../contracts/memory-working-context.js'
 import type { KunTurnContextBlock } from '../prompt/kun-prompt-context.js'
 import { memoryPreview } from '../shared/memory-preview.js'
 import { kunContextBlock } from './model-step-preparation-helpers.js'
@@ -15,11 +16,12 @@ import {
 export function memoryContextBlocks(input: {
   directives: readonly MemoryRecord[]
   memories: readonly MemoryRecord[]
+  referenceBlocks?: readonly string[]
 }, nowMs = Date.now()): KunTurnContextBlock[] {
   return [
     ...memoryDirectiveInstructions(input.directives)
       .map((content) => kunContextBlock('memory-directives', 'user', content)),
-    ...memoryInstructions(input.memories, nowMs)
+    ...(input.referenceBlocks ?? memoryInstructions(input.memories, nowMs))
       .map((content) => kunContextBlock('memory', 'reference', content))
   ]
 }
@@ -28,13 +30,16 @@ export function memoryContextBlocks(input: {
 export function memoryInjectionMetadata(input: {
   memories: readonly MemoryRecord[]
   directives: readonly MemoryRecord[]
+  relationContext?: MemoryRelationContextResult
 }): {
   injectedMemoryIds: string[]
   injectedMemorySummaries: { id: string; content: string }[]
   injectedDirectiveIds: string[]
   injectedDirectiveSummaries: { id: string; content: string }[]
+  injectedMemoryRelations?: MemoryRelationAnnotation[]
 } {
   return {
+    injectedMemoryRelations: input.relationContext?.annotations ?? [],
     injectedMemoryIds: input.memories.map((memory) => memory.id),
     injectedMemorySummaries: input.memories.map((memory) => ({
       id: memory.id,

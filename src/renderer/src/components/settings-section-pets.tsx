@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FolderOpen, RefreshCw } from 'lucide-react'
-import { petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSpriteVersion, type PetSummary } from '@shared/pets'
+import { PET_CELL_HEIGHT, PET_CELL_WIDTH, PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSummary } from '@shared/pets'
 import { staticFrame } from '../pets/pet-animation'
 import { settingsButtonClass } from './settings-button'
 import './settings-pets.css'
@@ -137,20 +137,23 @@ export function PetsSettingsSection(): ReactElement {
 
 function PetPreview({ pet, pose, large = false }: { pet: PetSummary; pose: 'idle' | 'waiting'; large?: boolean }): ReactElement {
   const frame = staticFrame(pose, pet.spriteVersionNumber)
+  const width = large ? 72 : 42
+  const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
+  const rows = petSheetRowsForVersion(pet.spriteVersionNumber)
   return (
-    <span
-      aria-hidden
-      className="pet-static-preview"
-      style={previewStyle(pet.spritesheetUrl ?? '', pet.spriteVersionNumber, frame.backgroundPosition, large)}
-    />
+    <span aria-hidden className="pet-static-preview" style={{ width, height }}>
+      <img
+        alt=""
+        src={pet.spritesheetUrl}
+        draggable={false}
+        style={{
+          width: width * PET_SHEET_COLUMNS,
+          height: height * rows,
+          maxWidth: 'none',
+          maxHeight: 'none',
+          transform: `translate(${-frame.column * width}px, ${-frame.row * height}px)`
+        }}
+      />
+    </span>
   )
-}
-
-function previewStyle(url: string, version: PetSpriteVersion, position: string, large: boolean): React.CSSProperties {
-  return {
-    width: large ? 72 : 42,
-    backgroundImage: `url("${url}")`,
-    backgroundSize: `${8 * 100}% ${petSheetRowsForVersion(version) * 100}%`,
-    backgroundPosition: position
-  }
 }

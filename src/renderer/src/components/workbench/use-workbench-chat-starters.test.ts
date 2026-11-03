@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useChatStore } from '../../store/chat-store'
 import type { ChatState } from '../../store/chat-store-types'
+import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
 import { useWorkbenchChatStarters, type WorkbenchChatStarterDeps } from './use-workbench-chat-starters'
 
@@ -115,5 +116,60 @@ describe('ADE chat starters', () => {
     } finally {
       window.removeEventListener(OPEN_WORKERS_PANEL_EVENT, opened)
     }
+  })
+})
+
+describe('Code chat starters from a project row', () => {
+  const userBlock = { kind: 'user', id: 'u1', text: 'hi' } as unknown as ChatState['blocks'][number]
+  const listed = (id: string, workspace: string) => ({
+    id, title: id, workspace, mode: 'agent', model: 'm', updatedAt: '2026-10-23T00:00:00.000Z'
+  } as unknown as ChatState['threads'][number])
+
+  it('shows the blank page for the clicked project before the runtime round trips', async () => {
+    useChatStore.setState({
+      runtimeConnection: 'ready', activeThreadId: 'thr_old', threads: [listed('thr_old', '/projects/a')],
+      blocks: [userBlock], busy: false, queuedMessages: [], threadLoadingId: null, watchTurnCompletion: {},
+      workspaceRoot: '/projects/a', workspaceRootLocal: false, workspaceLabel: 'a'
+    })
+    let guard: (() => boolean) | undefined
+    createThread.mockImplementation(async (options: { activationGuard?: () => boolean }) => {
+      guard = options.activationGuard
+      return 'created'
+    })
+    const creation = starters.startNewChatInWorkspace('/projects/b')
+    expect(createThread).toHaveBeenCalledWith(expect.objectContaining({ workspaceRoot: '/projects/b', agentSurface: 'code' }))
+    expect(useChatStore.getState()).toMatchObject({
+      activeThreadId: null, blocks: [], workspaceRoot: '/projects/b', workspaceRootLocal: true,
+      workspaceLabel: workspaceLabelFromPath('/projects/b')
+    })
+    expect(guard?.()).toBe(true)
+    // A message sent from the blank page meanwhile owns the view.
+    useChatStore.setState({ activeThreadId: 'thr_sent' })
+    expect(guard?.()).toBe(false)
+    await expect(creation).resolves.toBe('created')
+  })
+
+  it('keeps an empty conversation of the same project, which the runtime reuses', async () => {
+    useChatStore.setState({
+      runtimeConnection: 'ready', activeThreadId: 'thr_old', threads: [listed('thr_old', '/projects/a')],
+      blocks: [], busy: false, queuedMessages: [], threadLoadingId: null,
+      workspaceRoot: '/projects/a', workspaceRootLocal: false
+    })
+    await starters.startNewChatInWorkspace('/projects/a')
+    expect(useChatStore.getState()).toMatchObject({
+      activeThreadId: 'thr_old', workspaceRoot: '/projects/a', workspaceRootLocal: false
+    })
+    expect(createThread).toHaveBeenCalledTimes(1)
+  })
+
+  it('switches an existing blank page to the clicked project', async () => {
+    useChatStore.setState({
+      runtimeConnection: 'ready', activeThreadId: null, threads: [], blocks: [],
+      workspaceRoot: '/projects/a', workspaceRootLocal: false
+    })
+    await starters.startNewChatInWorkspace('/projects/b')
+    expect(useChatStore.getState()).toMatchObject({
+      activeThreadId: null, workspaceRoot: '/projects/b', workspaceRootLocal: true
+    })
   })
 })

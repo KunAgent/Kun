@@ -62,4 +62,18 @@ describe('awaiting-input sidebar activity', () => {
     }
     expect(sidebarThreadActivity(thread('thr_running'), context)).toBe('running')
   })
+
+  it('keeps a thread active while its background work still runs', () => {
+    const context: SidebarThreadActivityContext = {
+      ...baseContext,
+      backgroundActivityByThread: { thr_bg: 'running', thr_wait: 'waiting' }
+    }
+    // The turn's own reply may already be finished: only the background rows
+    // keep this row marked as active.
+    expect(sidebarThreadActivity(thread('thr_bg'), context)).toBe('running')
+    // A background child waiting on the user is a genuine input wait.
+    expect(sidebarThreadActivity(thread('thr_wait'), context)).toBe('awaiting-input')
+    // Threads with nothing in the background are untouched.
+    expect(sidebarThreadActivity(thread('thr_idle'), context)).toBe('read')
+  })
 })

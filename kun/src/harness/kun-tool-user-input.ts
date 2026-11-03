@@ -1,6 +1,6 @@
 /**
- * Bridges Kun's `user_input` tool to the active client for delegated harnesses
- * (docs/ade/05 §3.2): persist the request item, publish the events clients
+ * Bridges Kun's `user_input` tool to the active client for delegated harnesses:
+ * persist the request item, publish the events clients
  * render, wait on the gate, then mark it resolved. Shared by the Agent SDK MCP
  * adapter, the Cursor SDK custom-tools adapter, and the Kun Tools MCP server.
  */

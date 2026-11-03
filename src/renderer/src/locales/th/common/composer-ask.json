@@ -1,0 +1,31 @@
+{
+  "composerAsk": {
+    "cardLabel": "คำถามจาก Kun",
+    "previousQuestion": "คำถามก่อนหน้า",
+    "nextQuestion": "คำถามถัดไป",
+    "freeTextPlaceholder": "พิมพ์คำตอบของคุณเอง…",
+    "otherPlaceholder": "อื่นๆ — พิมพ์คำตอบของคุณเอง…",
+    "ruleAny": "เลือกกี่ข้อก็ได้",
+    "ruleMax_one": "เลือกได้ไม่เกิน {{count}} ข้อ",
+    "ruleMax_other": "เลือกได้ไม่เกิน {{count}} ข้อ",
+    "ruleMin_one": "เลือกอย่างน้อย {{count}} ข้อ",
+    "ruleMin_other": "เลือกอย่างน้อย {{count}} ข้อ",
+    "ruleExact_one": "เลือก {{count}} ข้อ",
+    "ruleExact_other": "เลือก {{count}} ข้อ",
+    "ruleRange": "เลือก {{min}}–{{max}} ข้อ",
+    "hintSingle": "↑↓ หรือปุ่มตัวเลขเพื่อเลือก, Enter {{enter}}, Esc {{escape}}",
+    "hintMulti": "↑↓ เพื่อเลื่อน, Space เพื่อเลือกหรือยกเลิก, Enter {{enter}}",
+    "hintText": "Enter {{enter}}, Shift+Enter ขึ้นบรรทัดใหม่",
+    "hintTextOnly": "Enter {{enter}}, Shift+Enter ขึ้นบรรทัดใหม่, Esc {{escape}}",
+    "hintEnterSubmit": "เพื่อส่งคำตอบ",
+    "hintEnterNext": "เพื่อไปข้อถัดไป",
+    "hintEscapeSkip": "เพื่อข้าม",
+    "hintEscapeBack": "เพื่อย้อนกลับ",
+    "skip": "ข้าม",
+    "submit": "ส่งคำตอบ",
+    "next": "ถัดไป",
+    "submitting": "กำลังส่ง…",
+    "submitFailed": "คำตอบยังไม่ถูกส่ง: {{message}}",
+    "submitFailedGeneric": "คำตอบยังไม่ถูกส่ง กรุณาลองอีกครั้ง"
+  }
+}

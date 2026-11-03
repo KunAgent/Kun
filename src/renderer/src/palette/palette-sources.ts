@@ -11,6 +11,7 @@ import {
   FolderOpen,
   GitFork,
   LayoutGrid,
+  LibraryBig,
   ListTodo,
   MessageCircleMore,
   MessageSquare,
@@ -26,12 +27,12 @@ import {
   Search,
   SearchCode,
   Settings,
+  Shirt,
   Smartphone,
   Sparkles,
   Target,
   Workflow,
-  type LucideIcon
-} from 'lucide-react'
+  type LucideIcon, Layers } from 'lucide-react'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { NormalizedThread } from '../agent/types'
 import type { AppRoute, SettingsRouteSection } from '../store/chat-store-types'
@@ -101,6 +102,7 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   chat: 'code',
   'agent-chat': 'sidebarConversations',
   write: 'write',
+  papers: 'workSidebarPapersNav',
   design: 'design',
   settings: 'settings',
   plugins: 'plugins',
@@ -109,7 +111,9 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   board: 'projectBoardNav',
   schedule: 'schedule',
   workflow: 'workflowCreate',
-  ade: 'workspaceModeAdeLabel'
+  ade: 'workspaceModeAdeLabel',
+  wardrobe: 'roomsWardrobeMine',
+  artifacts: 'artifactsNav'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
@@ -117,6 +121,7 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   chat: Code2,
   'agent-chat': MessageSquare,
   write: PencilLine,
+  papers: LibraryBig,
   design: Palette,
   settings: Settings,
   plugins: LayoutGrid,
@@ -125,7 +130,9 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   board: Columns3,
   schedule: Clock3,
   workflow: Workflow,
-  ade: Network
+  ade: Network,
+  wardrobe: Shirt,
+  artifacts: Layers
 }
 
 /**
@@ -136,57 +143,78 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
  */
 const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   general: 'general',
-  providers: 'providers',
+  appearance: 'settingsIaAppearance',
+  notifications: 'settingsIaNotifications',
+  providers: 'settingsIaProviders',
+  gateway: 'settingsIaGateway',
   extensions: 'extensions',
   write: 'write',
+  paper: 'settingsIaPaper',
   design: 'design',
   imageGeneration: 'mediaGeneration',
   mediaGeneration: 'mediaGeneration',
   speak: 'mediaGeneration',
-  speechToText: 'settingsNavSpeech',
-  agents: 'settingsNavAssistant',
-  agentsHarnesses: 'adeSettings.harnessesTitle',
-  agentsCollaboration: 'adeSettings.collaborationTitle',
-  laboratory: 'agentsQuickLaboratory',
+  speechToText: 'settingsIaSpeechInput',
+  agents: 'settingsIaAssistant',
+  agentsHarnesses: 'settingsIaHarnesses',
+  agentsCollaboration: 'settingsIaCollaboration',
+  projects: 'settingsIaProjects',
+  agentRuntime: 'settingsIaRuntime',
+  laboratory: 'settingsIaLabs',
   subagents: 'subagents',
   archives: 'settingsNavArchives',
-  worktree: 'worktree',
+  code: 'settingsIaCode',
+  worktree: 'settingsIaCodeWorktreeTab',
   memory: 'memory',
-  permissions: 'permissions',
-  skill: 'skill',
-  mcp: 'mcp',
+  permissions: 'settingsIaPermissions',
+  skill: 'settingsIaSkills',
+  mcp: 'settingsIaMcp',
   shortcuts: 'keyboardShortcuts',
-  easterEgg: 'settingsNavAppearance',
+  easterEgg: 'settingsIaAvatar',
   claw: 'settingsNavPhone',
   updates: 'settingsNavUpdates',
   terminal: 'terminal',
-  debug: 'debug',
+  debug: 'settingsIaDiagnostics',
   storage: 'storageRelocation',
+  storageCleanup: 'storageCleanup',
   dataMigration: 'settingsNavMigration'
 }
 
 const SETTINGS_SECTION_DESCRIPTION_KEYS: Partial<Record<SettingsRouteSection, string>> = {
-  general: 'subtitle',
+  general: 'settingsIaGeneralDesc',
+  appearance: 'settingsIaAppearanceDesc',
+  notifications: 'settingsIaNotificationsDesc',
   providers: 'providersDesc',
+  gateway: 'settingsIaGatewayDesc',
   extensions: 'extensionsDesc',
   write: 'writeDesc',
+  paper: 'settingsIaPaperDesc',
   design: 'designDesc',
   imageGeneration: 'mediaGenerationDesc',
   mediaGeneration: 'mediaGenerationDesc',
   speechToText: 'speechToTextEnabledDesc',
-  agents: 'kunProviderDesc',
-  laboratory: 'laboratorySettingsDesc',
+  agents: 'settingsIaAssistantDesc',
+  agentsHarnesses: 'settingsIaHarnessesDesc',
+  agentsCollaboration: 'settingsIaCollaborationDesc',
+  projects: 'settingsIaProjectsDesc',
+  agentRuntime: 'settingsIaRuntimeDesc',
+  laboratory: 'settingsIaLabsDesc',
   subagents: 'subagentsSettingsIntro',
   archives: 'archivesOverviewDesc',
+  code: 'settingsIaCodeDesc',
   worktree: 'worktreeOverviewDesc',
   memory: 'memoryOverviewDesc',
+  permissions: 'settingsIaPermissionsDesc',
+  skill: 'settingsIaSkillsDesc',
+  mcp: 'settingsIaMcpDesc',
   shortcuts: 'shortcutsDesc',
   easterEgg: 'uiModeWorkshopDesc',
   claw: 'clawEnabledDesc',
   updates: 'guiUpdateDesc',
-  debug: 'llmDebugDesc',
-  terminal: 'terminalColorModeDesc',
+  debug: 'settingsIaDiagnosticsDesc',
+  terminal: 'settingsIaTerminalDesc',
   storage: 'storageRelocationSubtitle',
+  storageCleanup: 'storageCleanupDesc',
   dataMigration: 'dataMigrationSubtitle'
 }
 

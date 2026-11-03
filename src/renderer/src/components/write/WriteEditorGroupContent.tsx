@@ -19,7 +19,9 @@ import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import type { WriteEditorSelectionState, WriteMarkdownEditorHandle } from './WriteMarkdownEditor'
 import { WriteWorkspaceDocumentPane } from './WriteWorkspaceDocumentPane'
 import { WorkWhiteboardSurface } from './WorkWhiteboardSurface'
+import { WorkWhiteboardUnavailable } from './WorkWhiteboardUnavailable'
 import { isMarkdownFile } from './write-workspace-view-utils'
+import { boardIdFromWriteTabKey } from '../../write/work-whiteboard'
 
 type Props = {
   document: WriteDocumentSession | undefined
@@ -158,7 +160,7 @@ export function WriteEditorGroupContent({
 
   if (whiteboard) {
     return (
-      <div className="min-h-0 min-w-0 flex-1" onPointerDown={onFocus}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
         <WorkWhiteboardSurface
           workspaceRoot={whiteboard.workspaceRoot || workspaceRoot}
           boardId={whiteboard.id}
@@ -180,8 +182,17 @@ export function WriteEditorGroupContent({
     )
   }
 
+  const unavailableBoardId = boardIdFromWriteTabKey(requestedPath)
+  if (unavailableBoardId) {
+    return (
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
+        <WorkWhiteboardUnavailable boardId={unavailableBoardId} workspaceRoot={workspaceRoot} />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-0 min-w-0 flex-1" onPointerDown={onFocus}>
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
       <WriteWorkspaceDocumentPane
         activeFilePath={path}
         documentEpoch={document?.documentEpoch ?? 0}

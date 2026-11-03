@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Room } from '../contracts/rooms.js'
+import type { Room, RoomMessage, SendRoomMessage } from '../contracts/rooms.js'
 import type { RoomStore, RoomStoreCommit, RoomStoredDocument } from './room-store.js'
 import type { RoomPeerInboxItem, RoomPeerMemberState, RoomPeerTopic } from './room-peer-types.js'
 
@@ -38,6 +38,42 @@ export function peerMessageRecipients(room: Pick<Room, 'members'>, candidateIds:
   const quiet = new Set(room.members.filter((member) => member.attention === 'mentions')
     .map((member) => member.id))
   return [...new Set(candidateIds)].filter((id) => designated.has(id) || !quiet.has(id))
+}
+
+/**
+ * A human message to the whole group (no structured mention, no task
+ * reference, not an explicit execution request) asks every recipient to answer
+ * for itself. A participation check on it could only say yes, so recipients
+ * respond directly; the response turn can still skip. Members in 'mentions'
+ * attention mode never receive it as a plain message.
+ */
+export function peerOpenFloor(message: Pick<SendRoomMessage, 'mentionMemberIds' | 'taskId' | 'executionIntent'>): boolean {
+  return !message.mentionMemberIds.length && !message.taskId && message.executionIntent !== 'execute'
+}
+
+/**
+ * Newer updates a draft may ignore: other members' answers to the same user
+ * message. Members answering one question in parallel are not stale to each
+ * other; a task event, an invitation, a reply to anything else or a mention of
+ * this member still sends the draft back for a fresh look. Returns the
+ * sibling bodies (so an exact repeat can be dropped), or null when stale. The
+ * siblings stay unhandled, so a participation check can still catch a
+ * correction.
+ */
+export async function peerParallelAnswers(store: RoomStore, topic: RoomPeerTopic, memberId: string,
+  seenThroughSeq: number, replyToMessageId?: string): Promise<string[] | null> {
+  if (!replyToMessageId) return null
+  const target = await store.get<RoomMessage>('message', replyToMessageId)
+  if (!target || target.roomId !== topic.roomId || target.value.authorKind !== 'user') return null
+  const bodies: string[] = []
+  for (const item of await peerInboxRows(store, topic.rootRequestId, memberId, seenThroughSeq, topic.generation)) {
+    if (item.value.sourceKind !== 'message' || !item.value.authorMemberId) return null
+    const source = await store.get<RoomMessage>('message', item.value.sourceId)
+    if (!source || source.value.replyToMessageId !== replyToMessageId ||
+      source.value.mentionMemberIds.includes(memberId)) return null
+    bodies.push(source.value.body.trim())
+  }
+  return bodies
 }
 
 /** Inbox identity binds the immutable source revision, never the SSE transport cursor. */

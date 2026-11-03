@@ -1,23 +1,10 @@
-import { create } from 'zustand'
-import type { PaperUnitMeta } from '@shared/paper/paper-meta-v2'
-
 export type PaperReadingPurpose = 'quick-screen' | 'method-deep-read' | 'reproduction-prep' | 'review-critique'
-export type PaperReadingRequest = {
-  workspaceRoot: string
-  unitDir: string
-  meta: PaperUnitMeta
-  selection?: { text: string; page: number; pdfSha256?: string }
-  question?: string
-  synthesis?: 'compare' | 'related-work'
-  papers?: { unitDir: string; meta: PaperUnitMeta }[]
-}
-export const usePaperReadingRequest = create<{ request: PaperReadingRequest | null; revision: number; open: (request: PaperReadingRequest) => void; close: () => void }>((set) => ({
-  request: null,
-  revision: 0,
-  open: (request) => set((state) => ({ request, revision: state.revision + 1 })),
-  close: () => set({ request: null })
-}))
 
+export const PAPER_READING_PURPOSES: readonly PaperReadingPurpose[] = [
+  'quick-screen', 'method-deep-read', 'reproduction-prep', 'review-critique'
+]
+
+/** Bounded single-request reading instructions (batch interpretation). */
 export function paperReadingQuestion(purpose: PaperReadingPurpose, input: {
   background: string; goal: string; question: string; limited: boolean
 }): string {

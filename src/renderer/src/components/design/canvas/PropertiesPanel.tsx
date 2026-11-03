@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react'
+import { memo, useCallback, useMemo, type ReactElement } from 'react'
 import {
   AlignHorizontalJustifyCenter,
   AlignHorizontalJustifyEnd,
@@ -7,13 +7,10 @@ import {
   AlignVerticalJustifyEnd,
   AlignVerticalJustifyStart,
   Columns3,
-  Monitor,
+  MousePointerClick,
   PenLine,
-  Play,
   Rows3,
-  Smartphone,
   Sparkles,
-  Tablet,
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -31,14 +28,12 @@ import {
   isRunningAppFrame,
   type Arrowhead,
   type CanvasShape,
-  type DevicePreset,
   type Fill,
   type Stroke,
   type StrokeDash
 } from '../../../design/canvas/canvas-types'
 import { executeOps } from '../../../design/canvas/shape-ops'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
-import type { DesignArtifact } from '../../../design/design-types'
 import {
   DASH_OPTIONS,
   HexInput,
@@ -53,22 +48,14 @@ import {
   commitUpdate,
   reduceField
 } from './properties-panel/primitives'
-import {
-  PropertiesPanelShell,
-  PropertiesPanelTrigger
-} from './properties-panel/shell'
 import { MotionKeyframeControls } from './properties-panel/MotionKeyframeControls'
 import { useCanvasMotionStore } from '../../../design/motion/canvas-motion-store'
 import { evaluateMotionTarget } from '../../../design/motion/evaluator'
 import type { CanvasSurface } from '../../../design/canvas/canvas-surface'
 import { isDesignCanvasSurface } from '../../../design/canvas/canvas-surface'
 
-export { propertiesPanelShellClass, propertiesPanelTriggerClass } from './properties-panel/shell'
-
 type Props = {
   surface?: CanvasSurface
-  onImplementDesign?: (artifact: DesignArtifact) => void
-  onRequestModify?: (promptSeed: string) => void
 }
 
 export function shouldShowImageAnnotationAction(
@@ -76,17 +63,6 @@ export function shouldShowImageAnnotationAction(
   filledImageSelected: boolean
 ): boolean {
   return Boolean(surface && filledImageSelected)
-}
-
-export function nextInspectorOpenForSelection(
-  previousSelectionKey: string,
-  nextSelectionKey: string,
-  currentOpen: boolean,
-  pinned: boolean
-): boolean {
-  if (!nextSelectionKey) return false
-  if (previousSelectionKey === nextSelectionKey) return currentOpen
-  return pinned
 }
 
 export function shouldPromoteHtmlFrameInspectorUpdateToManual(
@@ -132,9 +108,7 @@ export function buildScreenModifyPrompt(title: string): string {
 }
 
 function PropertiesPanelInner({
-  surface = 'design',
-  onImplementDesign,
-  onRequestModify
+  surface = 'design'
 }: Props): ReactElement | null {
   const { t } = useTranslation('common')
   const selectedIds = useCanvasSelectionStore((s) => s.selectedIds)
@@ -142,11 +116,6 @@ function PropertiesPanelInner({
   const motionOpen = useCanvasMotionStore((state) => state.open)
   const motionFrameId = useCanvasMotionStore((state) => state.activeFrameId)
   const motionTimeMs = useCanvasMotionStore((state) => state.currentTimeMs)
-  const pinned = useDesignWorkspaceStore((s) => s.canvasInspectorPinned)
-  const setPinned = useDesignWorkspaceStore((s) => s.setCanvasInspectorPinned)
-  const setDesignIntentMode = useDesignWorkspaceStore((s) => s.setDesignIntentMode)
-  const [inspectorOpen, setInspectorOpen] = useState(false)
-  const lastSelectionKeyRef = useRef('')
 
   const ids = useMemo(
     () => filterEditableShapeIds(document, selectedIds),
@@ -175,22 +144,6 @@ function PropertiesPanelInner({
     })
     return [{ ...shape, ...projection }]
   }, [document.motion, motionFrameId, motionOpen, motionTimeMs, shapes, surface])
-  const selectionKey = useMemo(() => ids.slice().sort().join('\u0000'), [ids])
-
-  useEffect(() => {
-    if (!selectionKey) {
-      lastSelectionKeyRef.current = ''
-      setInspectorOpen(false)
-      return
-    }
-    if (lastSelectionKeyRef.current === selectionKey) return
-    const previousSelectionKey = lastSelectionKeyRef.current
-    lastSelectionKeyRef.current = selectionKey
-    setInspectorOpen((open) =>
-      nextInspectorOpenForSelection(previousSelectionKey, selectionKey, open, pinned)
-    )
-  }, [pinned, selectionKey])
-
   const updateAll = useCallback(
     (label: string, patch: Partial<CanvasShape>) => commitInspectorUpdate(surface, label, ids, patch),
     [ids, surface]
@@ -214,34 +167,14 @@ function PropertiesPanelInner({
     [rootIds]
   )
 
-  if (shapes.length === 0) return null
-
-  const triggerLabel = t('canvasInspectorTitle', 'Properties')
-
-  if (!inspectorOpen) {
+  if (shapes.length === 0) {
     return (
-      <PropertiesPanelTrigger
-        count={shapes.length}
-        label={triggerLabel}
-        surface={surface}
-        onOpen={() => setInspectorOpen(true)}
-      />
+      <div className="flex h-full min-h-[120px] flex-col items-center justify-center gap-2 px-6 text-center text-[12px] text-ds-faint">
+        <MousePointerClick className="h-5 w-5" strokeWidth={1.6} />
+        {t('canvasInspectorEmptySelection')}
+      </div>
     )
   }
-
-  const renderShell = (children: ReactNode): ReactElement => (
-    <PropertiesPanelShell
-      count={shapes.length}
-      pinned={pinned}
-      pinLabel={t('canvasInspectorPin')}
-      surface={surface}
-      title={t('canvasInspectorTitle', 'Properties')}
-      unpinLabel={t('canvasInspectorUnpin')}
-      onTogglePinned={() => setPinned(!pinned)}
-    >
-      {children}
-    </PropertiesPanelShell>
-  )
 
   const x = reduceField(positionShapes, (s) => s.x)
   const y = reduceField(positionShapes, (s) => s.y)
@@ -278,21 +211,11 @@ function PropertiesPanelInner({
   // fills and strokes; only geometry, corner radius, opacity, and portal
   // controls have a visible canvas effect.
   const singleArtifactFrame = shapes.length === 1 && isArtifactFrame(shapes[0]) ? shapes[0] : null
-  const linkedArtifact = singleHtmlFrame
-    ? useDesignWorkspaceStore.getState().artifacts.find((a) => a.id === singleHtmlFrame.htmlArtifactId)
-    : null
   // A single filled picture can be annotated → the agent re-edits it (image-to-image).
   const singleFilledImage =
     shapes.length === 1 && shapes[0].type === 'image' && Boolean(shapes[0].imageUrl)
       ? shapes[0]
       : null
-
-  const requestScreenModify = (): void => {
-    if (!singleHtmlFrame) return
-    setDesignIntentMode('modify')
-    const title = linkedArtifact?.title || singleHtmlFrame.name
-    onRequestModify?.(t('canvasModifyScreenPrompt', buildScreenModifyPrompt(title), { title }))
-  }
 
   // AI image holder: only fillable boxes (image/frame/rect) can be a slot the
   // agent fills. The marking flows into the AI snapshot so "fill this" resolves.
@@ -305,12 +228,6 @@ function PropertiesPanelInner({
   // Empty boxes are implicit slots: the agent fills a selected empty box on
   // request automatically, so no manual marking is needed for the common case.
   const allEmptySlots = canBeHolder && shapes.every(isImplicitImageSlot)
-
-  const DEVICE_PRESETS: { id: DevicePreset; icon: typeof Monitor; w: number; h: number }[] = [
-    { id: 'mobile', icon: Smartphone, w: 390, h: 844 },
-    { id: 'tablet', icon: Tablet, w: 768, h: 1024 },
-    { id: 'desktop', icon: Monitor, w: 1280, h: 800 }
-  ]
 
   const ALIGN_ACTIONS: { axis: AlignAxis; icon: typeof AlignHorizontalJustifyStart; label: string }[] = [
     { axis: 'left', icon: AlignHorizontalJustifyStart, label: t('canvasAlignLeft') },
@@ -325,8 +242,11 @@ function PropertiesPanelInner({
     { axis: 'vertical', icon: Rows3, label: t('canvasDistributeV') }
   ]
 
-  return renderShell(
-    <div className="space-y-4 pt-1">
+  return (
+    <div
+      className="columns-[232px] gap-x-8 px-4 pb-4 pt-3 text-[12px] text-ds-ink [&>*]:mb-5 [&>*]:break-inside-avoid"
+      data-canvas-properties-count={shapes.length}
+    >
       {/* Position & size */}
       <Section title={t('canvasInspectorPosition', 'Position & size')}>
         <div className="grid grid-cols-2 gap-x-1 gap-y-0.5">
@@ -387,61 +307,6 @@ function PropertiesPanelInner({
               ))}
             </div>
           ) : null}
-        </Section>
-      )}
-
-      {isDesignCanvasSurface(surface) && singleHtmlFrame && (
-        <Section title={t('canvasInspectorScreen', 'Screen')}>
-          <div className="flex items-center gap-1 rounded-[10px] bg-ds-hover/35 p-0.5 dark:bg-white/5">
-            {DEVICE_PRESETS.map(({ id, icon: Icon, w: dw, h: dh }) => {
-              const active = singleHtmlFrame.devicePreset === id
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  onClick={() =>
-                    updateAll('set-device-preset', { devicePreset: id, width: dw, height: dh })
-                  }
-                  title={id}
-                  className={`flex h-7 flex-1 items-center justify-center rounded-[8px] transition ${
-                    active
-                      ? 'bg-white text-ds-ink shadow-[0_1px_2px_rgba(15,23,42,0.08)] dark:bg-white/12'
-                      : 'text-ds-muted hover:text-ds-ink'
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={1.8} />
-                </button>
-              )
-            })}
-          </div>
-          {linkedArtifact && (
-            <div className="rounded-[8px] bg-ds-hover/40 px-2 py-1.5 text-[11px] text-ds-muted">
-              <div className="truncate font-medium text-ds-ink">{linkedArtifact.title}</div>
-              <div className="mt-0.5 truncate text-ds-faint">{linkedArtifact.relativePath}</div>
-            </div>
-          )}
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              onClick={requestScreenModify}
-              disabled={!onRequestModify}
-              className="flex h-8 items-center justify-center gap-1.5 rounded-[8px] bg-ds-hover/35 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <PenLine className="h-3.5 w-3.5" strokeWidth={1.8} />
-              {t('designProjectModify')}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (linkedArtifact) onImplementDesign?.(linkedArtifact)
-              }}
-              disabled={!linkedArtifact || !onImplementDesign}
-              className="flex h-8 items-center justify-center gap-1.5 rounded-[8px] bg-ds-hover/35 text-[11.5px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45"
-            >
-              <Play className="h-3.5 w-3.5" strokeWidth={1.8} />
-              {t('designImplement')}
-            </button>
-          </div>
         </Section>
       )}
 

@@ -2,7 +2,7 @@ import type { ReactElement } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Activity, ChevronRight, CircleHelp, FileText, Folder, GitBranch, GitFork } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useChatStore } from '../store/chat-store'
+import { useActiveThreadMayHaveUsage, useChatStore } from '../store/chat-store'
 import { hasLivePendingUserInput } from '../store/chat-store-runtime-helpers'
 import { formatRelativeTime } from '../lib/format-relative-time'
 import { GIT_BRANCH_STATUS_CHANGED_EVENT } from '../lib/git-branch-status-event'
@@ -146,9 +146,10 @@ export function SessionHeader({
   const [draftTitle, setDraftTitle] = useState('')
   // Usage stats are no longer shown in compact mode (the composer footer
   // already shows them in the chat route), so skip fetching there.
+  const activeThreadMayHaveUsage = useActiveThreadMayHaveUsage()
   const restThreadUsage = useThreadUsage(
     activeThreadId,
-    runtimeConnection === 'ready' && !compact,
+    runtimeConnection === 'ready' && !compact && activeThreadMayHaveUsage,
     `${active?.updatedAt ?? ''}:${busy ? 'busy' : 'idle'}`
   )
   const threadUsage = mergeLiveThreadUsage(restThreadUsage, liveThreadUsage)

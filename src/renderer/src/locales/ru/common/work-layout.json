@@ -5,7 +5,6 @@
   "workRailReviewCount": "Правки · ожидают проверки: {{count}}",
   "workRailReferences": "Ссылки и материалы",
   "workRailReferencesCount": "Ссылки и материалы · {{count}}",
-  "workRailHistory": "История бесед",
   "workOutlineSummary": "Заголовков: {{count}}",
   "workOutlineEmpty": "Заголовков пока нет. Начните раздел с #, и структура появится здесь.",
   "workOutlineUnavailable": "Структура доступна в режиме редактирования документа.",
@@ -24,6 +23,5 @@
   "workReferencesClear": "Очистить",
   "workReferencesPage": "Стр. {{page}}",
   "workReferencesLines": "Строки {{start}}–{{end}}",
-  "workHistoryNoResource": "Откройте файл или доску, чтобы увидеть здесь их беседы.",
   "workAssistantSelectionChip": "Выделение · {{count}} симв."
 }

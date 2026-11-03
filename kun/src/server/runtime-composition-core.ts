@@ -1,3 +1,5 @@
+import { modelContextProfilesForProvider } from '../loop/model-context-profile.js'
+import { GenUiStore } from '../gen-ui/gen-ui-store.js'
 import {
   mkdir,
   join,
@@ -22,7 +24,6 @@ import {
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
   modelContextProfilesFromConfig,
-  contextThresholdsForModel,
   DEFAULT_GRAPH_RUNTIME_CONFIG,
   type GraphRuntimeConfig,
   createAgentObservabilityRecorder,
@@ -81,11 +82,13 @@ import {
   tokenEconomyConfigForOptions
 } from './runtime-factory-config.js'
 import { modelContextProfilesByProvider } from './runtime-factory-model.js'
+import { delegatedContextProfile as resolveDelegatedContextProfile } from './delegated-context-profile.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { createPersistentStores } from './runtime-factory-storage.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 import { HistoryReferenceService } from '../history/history-reference-service.js'
 import { consumeNativeAgentNetworkEnvironment } from '../contracts/native-agent-network.js'
+import { mergeModelContextProfiles } from '../loop/model-context-profile-merge.js'
 
 export async function createRuntimeCore(
   options: KunServeRuntimeOptions,
@@ -128,9 +131,28 @@ export async function createRuntimeCore(
     models: activeOptions.models
   })
   let providerModelProfiles = modelContextProfilesByProvider(activeOptions.providers)
-  const profilesForProvider = (providerId?: string) => providerId
-    ? providerModelProfiles.get(providerId.trim().toLowerCase()) ?? modelProfiles
-    : modelProfiles
+  // Explicit provider profiles win; global preferences fill missing models.
+  // Built-in vendor facts are scoped to the actual endpoint before budgeting.
+  let mergedProfiles = new Map<string, ReturnType<typeof mergeModelContextProfiles>>()
+  let mergedFor: [typeof providerModelProfiles, typeof modelProfiles, number] | undefined
+  const profilesForProvider = (providerId?: string) => {
+    if (mergedFor?.[0] !== providerModelProfiles || mergedFor[1] !== modelProfiles || mergedFor[2] !== optionsRevision) {
+      mergedProfiles = new Map()
+      mergedFor = [providerModelProfiles, modelProfiles, optionsRevision]
+    }
+    const key = (providerId ?? activeOptions.activeProviderId ?? '').trim().toLowerCase()
+    let merged = mergedProfiles.get(key)
+    if (!merged) {
+      const provider = Object.entries(activeOptions.providers ?? {}).find(([id]) => id.toLowerCase() === key)?.[1]
+      const scoped = providerModelProfiles.get(key)
+      merged = modelContextProfilesForProvider({ providerId: key, presetSource: provider?.presetSource, kind: provider?.kind,
+        endpointFormat: provider?.endpointFormat, endpoints: provider?.endpoints,
+        baseUrl: provider?.baseUrl ?? (!providerId || key === activeOptions.activeProviderId?.toLowerCase() ? activeOptions.baseUrl : undefined) },
+      scoped ? mergeModelContextProfiles(scoped, modelProfiles) : modelProfiles)
+      mergedProfiles.set(key, merged)
+    }
+    return merged
+  }
   const compactor = new ContextCompactor({
     contextCompaction: activeOptions.contextCompaction,
     models: activeOptions.models,
@@ -161,7 +183,7 @@ export async function createRuntimeCore(
     threadMetadata: (id) => threadStore.getMetadata?.(id) ?? Promise.resolve(null),
     facts: activityFacts,
     // Graph attempt rows are keyed by attemptId while event.child carries the
-    // worker child thread id (P1-25); resolved lazily at event time.
+    // worker child thread id; resolved lazily at event time.
     unitIdForChild: (childId: string): string | undefined =>
       graphRuntime.workerSessions.get(childId)?.attemptId
   })
@@ -193,7 +215,7 @@ export async function createRuntimeCore(
     nowIso
   })
   // Rebuild activity rows for recently-active threads from durable turn
-  // state before live events start flowing (docs/ade/06 §8), then reapply
+  // state before live events start flowing, then reapply
   // the persisted per-unit user facts.
   await activityStore.hydrate(threadStore)
   for (const [unitId, fact] of Object.entries(activityFacts.all())) {
@@ -271,6 +293,7 @@ export async function createRuntimeCore(
   const acpClientHost = new AcpClientHost()
   const acpSessionManager = new AcpSessionManager({ coordinator: delegatedSessions })
   const teamStoreForAdmission = new FileTeamStore(activeOptions.dataDir, nowIso)
+  const genUiStore = new GenUiStore(join(options.dataDir, 'gen-ui'), nowIso)
   const threadService: ThreadService = new ThreadService({
     legacyTaskGraphRoot: join(activeOptions.dataDir, 'task-graphs'),
     threadStore,
@@ -313,6 +336,7 @@ export async function createRuntimeCore(
       await Promise.all([
         ...(llmDebug ? [llmDebug.deleteThread(threadId)] : []),
         delegatedSessions.invalidate(threadId),
+        genUiStore.deleteThreadState(threadId),
         contextWindows.deleteThreadData(threadId),
         contextWindowState.deleteThreadData(threadId),
         historyReferences.cleanupDeletedThread(threadId, historyRefId)
@@ -322,6 +346,7 @@ export async function createRuntimeCore(
     onForked: (sourceThreadId, targetThreadId) =>
       Promise.all([
         handleGraphThreadFork?.(sourceThreadId, targetThreadId),
+        genUiStore.copyThreadState(sourceThreadId, targetThreadId),
         contextWindows.forkThreadData(sourceThreadId, targetThreadId)
       ]).then(() => undefined)
   })
@@ -437,25 +462,26 @@ export async function createRuntimeCore(
       providerId: profile?.id,
       presetSource: profile?.presetSource,
       baseUrl: profile?.baseUrl,
+      endpointFormat: profile?.endpointFormat, endpoints: profile?.endpoints,
       kind: profile?.kind,
       model
     }, modelProfiles)
-  const delegatedContextProfile = (model: string) => {
-    const thresholds = contextThresholdsForModel(model, {
-      softThreshold:
-        activeOptions.contextCompaction?.defaultSoftThreshold ??
-        DEFAULT_CONTEXT_THRESHOLDS.softThreshold,
-      hardThreshold:
-        activeOptions.contextCompaction?.defaultHardThreshold ??
-        DEFAULT_CONTEXT_THRESHOLDS.hardThreshold
-    }, modelProfiles)
-    return {
-      contextWindowTokens: modelCapabilities(model).contextWindowTokens ??
-        Math.max(thresholds.softThreshold, thresholds.hardThreshold),
-      softThresholdTokens: thresholds.softThreshold,
-      hardThresholdTokens: thresholds.hardThreshold
-    }
-  }
+  const delegatedContextProfile = (model: string, providerId?: string) =>
+    resolveDelegatedContextProfile({
+      model,
+      ...(providerId ? { providerId } : {}),
+      defaults: {
+        softThreshold:
+          activeOptions.contextCompaction?.defaultSoftThreshold ??
+          DEFAULT_CONTEXT_THRESHOLDS.softThreshold,
+        hardThreshold:
+          activeOptions.contextCompaction?.defaultHardThreshold ??
+          DEFAULT_CONTEXT_THRESHOLDS.hardThreshold
+      },
+      providers: activeOptions.providers,
+      profilesForProvider,
+      modelCapabilities
+    })
   return {
     options,
     dataDirLease,
@@ -501,6 +527,7 @@ export async function createRuntimeCore(
     projectBoardStore,
     historyReferences,
     projectBoardService,
+    genUiStore,
     artifactStore,
     graphConfig,
     graphRuntime,
@@ -510,7 +537,10 @@ export async function createRuntimeCore(
     registryModelCapabilities,
     delegatedContextProfile,
     get activeOptions() { return activeOptions },
-    set activeOptions(value: KunServeRuntimeOptions) { activeOptions = value; optionsRevision += 1 },
+    set activeOptions(value: KunServeRuntimeOptions) {
+      if (value.providers !== activeOptions.providers) providerModelProfiles = modelContextProfilesByProvider(value.providers)
+      activeOptions = value; optionsRevision += 1
+    },
     get optionsRevision() { return optionsRevision },
     get modelProfiles() { return modelProfiles },
     set modelProfiles(value: typeof modelProfiles) { modelProfiles = value },

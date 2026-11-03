@@ -1,0 +1,80 @@
+{
+  "workersEmptyTitle": "अभी कोई सदस्य नहीं",
+  "workersUnavailableTitle": "टीम की जानकारी अभी नहीं मिल रही",
+  "workersRetry": "फिर से कोशिश करें",
+  "workersHeader": {
+    "members": "{{n}} सदस्य",
+    "usageTitle": "पूरी टीम के टोकन",
+    "success": "पूर्ण",
+    "running": "चल रहे",
+    "warning": "आपकी प्रतीक्षा",
+    "danger": "विफल"
+  },
+  "workersSection": {
+    "needs-you": "आपकी ज़रूरत",
+    "working": "चल रहे",
+    "done": "समाप्त"
+  },
+  "workersStatus": {
+    "question": "आपके उत्तर की प्रतीक्षा",
+    "approval": "स्वीकृति की प्रतीक्षा",
+    "waiting": "प्रतीक्षा में",
+    "failed": "विफल",
+    "working": "चल रहा है",
+    "done": "पूर्ण",
+    "released": "मुक्त",
+    "idle": "निष्क्रिय"
+  },
+  "workersTool": {
+    "read": "फ़ाइलें पढ़ रहा है",
+    "edit": "फ़ाइलें बदल रहा है",
+    "search": "कोड खोज रहा है",
+    "command": "कमांड चला रहा है",
+    "web": "वेब पर खोज रहा है",
+    "delegate": "उप-कार्य सौंप रहा है",
+    "other": "{{tool}} चला रहा है"
+  },
+  "workersPhase": {
+    "investigating": "जाँच रहा है",
+    "implementing": "लागू कर रहा है",
+    "verifying": "सत्यापित कर रहा है",
+    "blocked": "रुका हुआ",
+    "compacting": "संदर्भ संक्षिप्त कर रहा है"
+  },
+  "workersTime": {
+    "justNow": "अभी",
+    "minutes": "{{n}} मिनट पहले",
+    "hours": "{{n}} घंटे पहले",
+    "days": "{{n}} दिन पहले"
+  },
+  "workersRow": {
+    "files": "{{n}} फ़ाइलें"
+  },
+  "workersAction": {
+    "openInMain": "मुख्य दृश्य में खोलें",
+    "more": "और कार्रवाइयाँ"
+  },
+  "workersQuestion": {
+    "waitingOn": "{{name}} आपके उत्तर की प्रतीक्षा में है",
+    "otherAnswer": "या दूसरा उत्तर लिखें…",
+    "answer": "उत्तर दें",
+    "answerPlaceholder": "या अपना उत्तर लिखें…",
+    "answerHint": "उत्तर देने से नियंत्रण नहीं लिया जाता"
+  },
+  "workerTab": {
+    "fallbackTitle": "सदस्य",
+    "loadingConversation": "बातचीत लोड हो रही है…",
+    "noConversation": "अभी कोई बातचीत नहीं।",
+    "missing": "यह सदस्य अब टीम में नहीं है।",
+    "childReadOnly": "यह एजेंट मैनेजर चलाता है; यहाँ बातचीत केवल पढ़ने के लिए है।",
+    "releasedReadOnly": "यह सदस्य मुक्त हो गया; बातचीत केवल पढ़ने के लिए है।"
+  },
+  "workerComposer": {
+    "managed": "मैनेजर के नियंत्रण में",
+    "handBack": "आपके नियंत्रण में · वापस दें",
+    "takeOverTitle": "मैनेजर से यह सदस्य अपने नियंत्रण में लें",
+    "handBackTitle": "नियंत्रण मैनेजर को लौटाएँ",
+    "takeOverHint": "भेजते ही नियंत्रण आपके पास आ जाएगा; कभी भी लौटा सकते हैं।"
+  },
+  "assignmentCardTask": "कार्य"
+}

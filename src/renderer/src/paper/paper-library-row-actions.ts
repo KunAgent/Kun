@@ -13,11 +13,7 @@ function activeLibraryRoot(): string {
   return normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
 }
 
-/**
- * Rows now come from every configured workspace, so every action takes the
- * root of the tree the row lives in. Falling back to the mounted root keeps
- * legacy single-library callers (library table, dialogs) unchanged.
- */
+/** Row actions run against the space the row belongs to (the mounted one by default). */
 function rowRoot(libraryRoot?: string): string {
   return normalizePath(libraryRoot ?? '') || activeLibraryRoot()
 }

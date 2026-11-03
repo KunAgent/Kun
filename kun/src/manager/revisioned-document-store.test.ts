@@ -81,4 +81,19 @@ describe('revisioned manager documents', () => {
       value: '{"a":2}\n'
     })).rejects.toBeInstanceOf(RevisionConflictError)
   })
+
+  it('answers conditional reads with only the etag while the bytes are unchanged', async () => {
+    const { store, settingsPath } = await fixture('{"version":1}\n')
+    const full = await store.readIfChanged('settings')
+    expect(full).toMatchObject({ revision: 1, value: '{"version":1}\n' })
+    const etag = full.etag
+    expect(await store.readIfChanged('settings', etag)).toEqual({ revision: 1, etag, unchanged: true })
+
+    await writeFile(settingsPath, '{"version":1,"theme":"dark"}\n', 'utf8')
+    const changed = await store.readIfChanged('settings', etag)
+    expect(changed).toMatchObject({ revision: 2, value: '{"version":1,"theme":"dark"}\n' })
+    expect(changed.etag).not.toBe(etag)
+  })
+
 })
+

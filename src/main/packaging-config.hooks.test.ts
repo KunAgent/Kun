@@ -193,6 +193,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
       touch(join(unpackedRoot, relativePath))
     }
     touch(join(unpackedRoot, 'kun/node_modules/@cursor/sdk-darwin-arm64/package.json'))
+    touch(join(unpackedRoot, 'kun/node_modules/@opentui/core-darwin-arm64/package.json'))
     touch(join(unpackedRoot, 'node_modules/better-sqlite3/package.json'))
 
     expect(() => afterPack._internals.validateBundledKunRuntime(context)).not.toThrow()
@@ -258,10 +259,26 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     })
   })
 
+  it('extracts every Windows installer migration helper into the NSIS plugins directory', () => {
+    const helpers = readdirSync(join(process.cwd(), 'build')).filter((fileName) =>
+      /^windows-installer-migration-.+\.ps1$/.test(fileName)
+    )
+    expect(helpers).toContain('windows-installer-migration-runtime-integrity.ps1')
+    for (const nshFile of ['installer.nsh', 'installer-process-check.nsh']) {
+      const script = readFileSync(join(process.cwd(), 'build', nshFile), 'utf8')
+      for (const helper of helpers) {
+        expect(script, `${nshFile} must extract ${helper}`).toContain(
+          `File /oname=$PLUGINSDIR\\${helper} "\${PROJECT_DIR}\\build\\${helper}"`
+        )
+      }
+    }
+  })
+
   it('migrates Windows install roots without changing identity or touching user data', () => {
     const installerScript = [
       'installer.nsh',
       'installer-manual-upgrade.nsh',
+      'installer-update-scope.nsh',
       'installer-process-check.nsh'
     ].map((fileName) =>
       readFileSync(join(process.cwd(), 'build', fileName), 'utf8').replace(/\r\n/g, '\n')
@@ -457,7 +474,7 @@ it('passes the nested OfficeCLI executable through the Windows signing manager',
     expect(installerScript).toContain('KUN_INSTALLER_SECONDARY_SOURCE_STALE')
     expect(installerScript).not.toContain('Stop-Process -Id')
 
-    expect(migrationScript).toContain("'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'SwitchUpdatePayload'")
+    expect(migrationScript).toContain("'ResolveRecoveryExecutable', 'RecoverUpdateTransaction', 'RecoverInstallerUpdateTransaction', 'ValidateUpdateRollback', 'PrepareUpdateTransaction', 'StageExtractedUpdatePayload', 'SwitchUpdatePayload'")
     expect(migrationScript).toContain("'CleanupInPlaceLeftovers', 'CleanupJournal', 'UpdatePath'")
     expect(migrationScript).toContain('function Invoke-CleanupInPlaceLeftovers')
     expect(migrationScript).toContain('function Test-RetainedInPlaceKnownEntry')

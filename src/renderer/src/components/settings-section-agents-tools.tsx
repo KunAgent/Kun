@@ -1,4 +1,5 @@
 import { settingsButtonClass } from './settings-button'
+import { defaultKunLabSettings } from '@shared/app-settings'
 import type {
   SkillRootListItem
 } from '@shared/kun-gui-api'
@@ -17,19 +18,16 @@ import {
   SettingsCard,
   Toggle
 } from './settings-controls'
-import {
-  skillRootShortLabel
-} from './settings-section-agents-utils'
+import { PptSkillSettingsPanel } from './settings-section-agents-ppt'
+import { skillRootShortLabel } from './settings-section-agents-utils'
 
 export function AgentsToolsSettingsPanels({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, tCommon, form, update, selectControlClass, compactHomePath, compactHomePathList, expandHomePathList, skillSectionRef, mcpSectionRef, skillRoots, skillRootsLoading, toggleSkillRoot, skillNotice, openSkillRoot, openPlugins, mcpConfigPath, mcpConfigExists, mcpConfigText, setMcpConfigText, mcpLoading, mcpBusy, mcpNotice, saveMcpConfig, loadMcpConfig, openMcpConfigDir, runtimeInfo, toolDiagnostics, splitSettingsList, mcpSearch, mcpRawMode, setMcpRawMode, activePanel, skillPermissionSummary, mcpPermissionSummary, updateMcpSearch } = view
+  const { t, tCommon, form, update, kun, updateKun, selectControlClass, compactHomePath, compactHomePathList, expandHomePathList, skillSectionRef, mcpSectionRef, skillRoots, skillRootsLoading, toggleSkillRoot, skillNotice, openSkillRoot, openPlugins, mcpConfigPath, mcpConfigExists, mcpConfigText, setMcpConfigText, mcpLoading, mcpBusy, mcpNotice, saveMcpConfig, loadMcpConfig, openMcpConfigDir, runtimeInfo, toolDiagnostics, splitSettingsList, mcpSearch, mcpRawMode, setMcpRawMode, activePanel, skillPermissionSummary, mcpPermissionSummary, updateMcpSearch } = view
   return (
     <>
               <div
                 id="agents-settings-panel-skills"
                 ref={skillSectionRef}
-                role="tabpanel"
-                aria-labelledby="agents-settings-tab-skills"
                 className={activePanel === 'skills' ? '' : 'hidden'}
               >
                 <SettingsCard title={t('skill')}>
@@ -167,13 +165,22 @@ export function AgentsToolsSettingsPanels({ view }: { view: Record<string, any> 
                     }
                   />
                 </SettingsCard>
+                <PptSkillSettingsPanel
+                  t={t}
+                  value={kun.lab ?? defaultKunLabSettings()}
+                  imageGen={runtimeInfo?.capabilities?.imageGen
+                    ? {
+                        available: runtimeInfo.capabilities.imageGen.available === true,
+                        ...(runtimeInfo.capabilities.imageGen.reason ? { reason: runtimeInfo.capabilities.imageGen.reason } : {})
+                      }
+                    : undefined}
+                  onChange={(patch) => updateKun({ lab: patch })}
+                />
               </div>
 
               <div
                 id="agents-settings-panel-tools"
                 ref={mcpSectionRef}
-                role="tabpanel"
-                aria-labelledby="agents-settings-tab-tools"
                 className={activePanel === 'tools' ? '' : 'hidden'}
               >
                 <SettingsCard title={t('mcp')}>

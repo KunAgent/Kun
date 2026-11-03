@@ -1,10 +1,4 @@
-import {
-  isKeyRelease,
-  isKeyRepeat,
-  matchesKey,
-  type KeyEventType,
-  type KeyId
-} from '@earendil-works/pi-tui'
+import { keyEventType, matchesKey, type TuiKeyEvent, type TuiKeyEventType } from './keys.js'
 import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -31,6 +25,14 @@ export type TuiKeyAction =
   | 'session_sibling_next'
   | 'session_sibling_previous'
   | 'messages_copy'
+  | 'messages_page_up'
+  | 'messages_page_down'
+  | 'messages_line_up'
+  | 'messages_line_down'
+  | 'messages_half_page_up'
+  | 'messages_half_page_down'
+  | 'messages_first'
+  | 'messages_last'
   | 'model_list'
   | 'model_provider_list'
   | 'model_favorite_toggle'
@@ -67,6 +69,9 @@ export type TuiKeyAction =
   | 'session_quick_7'
   | 'session_quick_8'
   | 'session_quick_9'
+
+type KeyId = string
+type KeyEventType = TuiKeyEventType
 
 export type TuiKeyBinding = {
   keys: readonly KeyId[]
@@ -115,6 +120,16 @@ const DEFAULT_BINDINGS: Record<TuiKeyAction, string | readonly string[]> = {
   session_sibling_next: '<leader>right',
   session_sibling_previous: '<leader>left',
   messages_copy: '<leader>y',
+  // Home/End stay with the composer's cursor; the conversation uses the
+  // modified forms.
+  messages_page_up: ['pageup', 'ctrl+alt+b'],
+  messages_page_down: ['pagedown', 'ctrl+alt+f'],
+  messages_line_up: 'ctrl+alt+y',
+  messages_line_down: 'ctrl+alt+e',
+  messages_half_page_up: 'ctrl+alt+u',
+  messages_half_page_down: 'ctrl+alt+d',
+  messages_first: ['ctrl+home', 'alt+home'],
+  messages_last: ['ctrl+end', 'ctrl+alt+g'],
   model_list: '<leader>m',
   model_provider_list: 'ctrl+a',
   model_favorite_toggle: 'ctrl+f',
@@ -140,7 +155,7 @@ const DEFAULT_BINDINGS: Record<TuiKeyAction, string | readonly string[]> = {
       : ['ctrl+v', 'ctrl+shift+v', 'alt+v', 'super+v', '<leader>v'],
   input_newline: ['shift+return', 'ctrl+return', 'alt+return', 'ctrl+j'],
   input_clear: 'ctrl+c',
-  sidebar_toggle: 'none',
+  sidebar_toggle: '<leader>b',
   theme_list: 'none',
   session_share: 'none',
   session_unshare: 'none',
@@ -162,13 +177,6 @@ const DEFAULT_BINDINGS: Record<TuiKeyAction, string | readonly string[]> = {
 
 const ACTIONS = new Set<TuiKeyAction>(Object.keys(DEFAULT_BINDINGS) as TuiKeyAction[])
 
-// Kun intentionally leaves chat paging to the terminal's native scrollback in
-// inline mode. Accept the OpenCode names so a shared tui.json stays portable,
-// but report these two actions as unavailable instead of installing no-ops.
-const UNAVAILABLE_OPENCODE_ACTIONS = new Set([
-  'messages_page_up', 'messages_page_down'
-])
-
 const VALID_SYMBOL_KEYS = new Set([
   '`', '-', '=', '[', ']', '\\', ';', "'", ',', '.', '/', '!', '@', '#', '$',
   '%', '^', '&', '*', '(', ')', '_', '+', '|', '~', '{', '}', ':', '<', '>', '?'
@@ -183,25 +191,25 @@ export class TuiKeymap {
     this.leaderTimeoutMs = leaderTimeoutMs
   }
 
-  matches(action: TuiKeyAction, data: string): boolean {
+  matches(action: TuiKeyAction, data: TuiKeyEvent): boolean {
     return Boolean(this.match(action, data))
   }
 
-  match(action: TuiKeyAction, data: string): TuiKeyBinding | undefined {
+  match(action: TuiKeyAction, data: TuiKeyEvent): TuiKeyBinding | undefined {
     return (this.bindings.get(action) ?? []).find((binding) =>
       binding.keys.length === 1 && eventMatches(binding.event, data) && matchesKey(data, binding.keys[0]!)
     )
   }
 
-  matchesLeader(data: string): boolean {
+  matchesLeader(data: TuiKeyEvent): boolean {
     return this.matches('leader', data)
   }
 
-  leaderAction(data: string): TuiKeyAction | undefined {
+  leaderAction(data: TuiKeyEvent): TuiKeyAction | undefined {
     return this.leaderMatch(data)?.action
   }
 
-  leaderMatch(data: string): { action: TuiKeyAction; binding: TuiKeyBinding } | undefined {
+  leaderMatch(data: TuiKeyEvent): { action: TuiKeyAction; binding: TuiKeyBinding } | undefined {
     for (const [action, bindings] of this.bindings) {
       if (action === 'leader') continue
       const binding = bindings.find((binding) =>
@@ -276,11 +284,7 @@ export function parseTuiKeymapConfig(input: unknown): Omit<TuiKeymapLoadResult, 
 
   for (const name of Object.keys(requested)) {
     if (ACTIONS.has(name as TuiKeyAction)) continue
-    if (UNAVAILABLE_OPENCODE_ACTIONS.has(name)) {
-      warnings.push(`Keybind ${name} is recognized but unavailable in Kun.`)
-    } else {
-      warnings.push(`Unknown keybind action ${name} was ignored.`)
-    }
+    warnings.push(`Unknown keybind action ${name} was ignored.`)
   }
 
   return { keymap: new TuiKeymap(bindings, leaderTimeoutMs), warnings }
@@ -342,10 +346,8 @@ function normalizeEvent(value: unknown, action: string, warnings: string[]): Key
   return 'press'
 }
 
-function eventMatches(event: KeyEventType, data: string): boolean {
-  if (event === 'release') return isKeyRelease(data)
-  if (event === 'repeat') return isKeyRepeat(data)
-  return !isKeyRelease(data) && !isKeyRepeat(data)
+function eventMatches(event: KeyEventType, data: TuiKeyEvent): boolean {
+  return keyEventType(data) === event
 }
 
 function firstEnabledKey(value: unknown): string | undefined {
@@ -367,7 +369,7 @@ function normalizeKey(input: string): KeyId | undefined {
   const modifiers = parts.slice(0, -1)
   if (new Set(modifiers).size !== modifiers.length || modifiers.some((part) => !['ctrl', 'shift', 'alt', 'super'].includes(part))) return undefined
   const canonicalKey = key.toLowerCase() === 'pageup' ? 'pageUp' : key.toLowerCase() === 'pagedown' ? 'pageDown' : key.toLowerCase()
-  return [...modifiers, canonicalKey].join('+') as KeyId
+  return [...modifiers, canonicalKey].join('+')
 }
 
 function formatKey(key: KeyId): string {

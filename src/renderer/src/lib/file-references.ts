@@ -11,12 +11,16 @@ export type FileReferenceMatch = {
   target: FileReferenceTarget
 }
 
+type HastPoint = { line?: number; column?: number; offset?: number }
+type HastPosition = { start: HastPoint; end: HastPoint }
+
 type HastNode = {
   type?: string
   value?: string
   tagName?: string
   properties?: Record<string, unknown>
   children?: HastNode[]
+  position?: HastPosition
 }
 
 const FILE_REFERENCE_SCHEME = 'deepseek-file:'
@@ -182,6 +186,25 @@ export function parseFileReferenceHref(href: string | undefined): FileReferenceT
   }
 }
 
+/**
+ * Source position of `text.slice(from, to)` when the node maps 1:1 onto its
+ * source span; the streaming fade locates characters through these offsets.
+ */
+function slicePosition(node: HastNode, from: number, to: number): HastPosition | undefined {
+  const start = node.position?.start.offset
+  const end = node.position?.end.offset
+  if (typeof start !== 'number' || typeof end !== 'number') return undefined
+  if (end - start !== (node.value ?? '').length) return undefined
+  return { start: { offset: start + from }, end: { offset: start + to } }
+}
+
+function textSlice(node: HastNode, text: string, from: number, to: number): HastNode {
+  const position = slicePosition(node, from, to)
+  return position
+    ? { type: 'text', value: text.slice(from, to), position }
+    : { type: 'text', value: text.slice(from, to) }
+}
+
 function linkifyTextNode(node: HastNode): HastNode[] {
   const text = node.value ?? ''
   const matches = findFileReferences(text)
@@ -191,7 +214,7 @@ function linkifyTextNode(node: HastNode): HastNode[] {
   let cursor = 0
   for (const match of matches) {
     if (match.start > cursor) {
-      next.push({ type: 'text', value: text.slice(cursor, match.start) })
+      next.push(textSlice(node, text, cursor, match.start))
     }
     next.push({
       type: 'element',
@@ -203,12 +226,12 @@ function linkifyTextNode(node: HastNode): HastNode[] {
           ? `${match.target.path}:${match.target.line}`
           : match.target.path
       },
-      children: [{ type: 'text', value: match.text }]
+      children: [textSlice(node, text, match.start, match.end)]
     })
     cursor = match.end
   }
   if (cursor < text.length) {
-    next.push({ type: 'text', value: text.slice(cursor) })
+    next.push(textSlice(node, text, cursor, text.length))
   }
   return next
 }

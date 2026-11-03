@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  CREDENTIAL_STATES_CACHE_MS,
   connectionCredentialStateById,
+  fetchSharedModelConnectionCredentialStates,
+  resetSharedModelConnectionCredentialStatesCache,
   providerHasUsableCredential,
   sharedModelConnectionHasUsableCredential,
   shouldWarnMissingProviderCredential
@@ -72,5 +75,38 @@ describe('provider credential readiness', () => {
       provider: { id: 'grok-subscription', apiKey: '' },
       connectionCredentials: null
     })).toBe(false)
+  })
+})
+
+describe('shared credential state reads', () => {
+  const body = JSON.stringify({ schemaVersion: 1, providers: [{ id: 'stt', configured: true, credentialStatus: 'ready' }] })
+  afterEach(() => {
+    resetSharedModelConnectionCredentialStatesCache()
+    vi.unstubAllGlobals()
+  })
+
+  it('shares one request between concurrent callers and reuses it briefly', async () => {
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body }))
+    vi.stubGlobal('window', { kunGui: { runtimeRequest } })
+    const [first, second] = await Promise.all([
+      fetchSharedModelConnectionCredentialStates(),
+      fetchSharedModelConnectionCredentialStates()
+    ])
+    await fetchSharedModelConnectionCredentialStates()
+    expect(runtimeRequest).toHaveBeenCalledTimes(1)
+    expect(first).toEqual(second)
+    expect(connectionCredentialStateById(first, 'stt')).toMatchObject({ credentialStatus: 'ready' })
+  })
+
+  it('reads again for Settings and after the cache window', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body }))
+    vi.stubGlobal('window', { kunGui: { runtimeRequest } })
+    await fetchSharedModelConnectionCredentialStates()
+    await fetchSharedModelConnectionCredentialStates({ fresh: true })
+    vi.setSystemTime(Date.now() + CREDENTIAL_STATES_CACHE_MS + 1)
+    await fetchSharedModelConnectionCredentialStates()
+    expect(runtimeRequest).toHaveBeenCalledTimes(3)
+    vi.useRealTimers()
   })
 })

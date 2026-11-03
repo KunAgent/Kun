@@ -290,7 +290,7 @@ describe('syncGuiManagedKunConfig', () => {
       }
     })
     expect(parsed.models.profiles['deepseek-v4-flash']).toMatchObject({
-      aliases: ['deepseek-chat', 'deepseek-reasoner'],
+      aliases: ['deepseek-flash', 'deepseek-chat', 'deepseek-reasoner'],
       contextWindowTokens: 1_000_000,
       contextCompaction: {
         softThreshold: 980_000,

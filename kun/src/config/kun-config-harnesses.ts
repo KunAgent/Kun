@@ -1,10 +1,14 @@
 import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
+import { HarnessPermissionModePreferenceSchema } from '../contracts/harness-permission-preference.js'
 import { z } from 'zod'
 import {
   HarnessCredentialModeSchema,
   HarnessIdSchema,
   HarnessTransportSchema
 } from '../contracts/harness.js'
+import { HarnessProviderOverrideSchema } from './kun-config-harness-providers.js'
+
+export { HarnessProviderOverrideSchema, type HarnessProviderOverride } from './kun-config-harness-providers.js'
 
 /** User-defined external harness entry (ACP/terminal transports launch it). */
 export const HarnessCustomEntrySchema = z
@@ -16,7 +20,7 @@ export const HarnessCustomEntrySchema = z
     /** Non-sensitive variables only; credentials are injected via credentialMode. */
     env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).default({}),
     /**
-     * Secret variables bound by credential-store reference (p4 §3.7, P4-12).
+     * Secret variables bound by credential-store reference.
      * Only the opaque ref is persisted; the value resolves at spawn time.
      */
     secretEnv: z
@@ -31,7 +35,7 @@ export const HarnessCustomEntrySchema = z
 export type HarnessCustomEntry = z.infer<typeof HarnessCustomEntrySchema>
 
 /**
- * Per-harness default selection (p4 §3.6): applied when a composer pick,
+ * Per-harness default selection: applied when a composer pick,
  * one-to-one creation, or a `worker_create` pin does not specify the field.
  */
 export const HarnessDefaultsEntrySchema = z
@@ -41,14 +45,14 @@ export const HarnessDefaultsEntrySchema = z
     /** Provider connection id; meaningful for `provider`/`kun-gateway`. */
     providerId: z.string().min(1).max(128).optional(),
     model: z.string().min(1).max(512).optional(),
-    /** A permissionModes[].id on the harness definition. */
-    permissionMode: z.string().min(1).max(64).optional(),
+    /** A declared native mode, or an ACP custom mode requiring full access. */
+    permissionMode: HarnessPermissionModePreferenceSchema,
     isolation: z.enum(['local', 'worktree']).optional()
   }).strict()
 export type HarnessDefaultsEntry = z.infer<typeof HarnessDefaultsEntrySchema>
 
 /**
- * Terminal-only agent (p4 §3.8, P4-13): an interactive CLI the desktop
+ * Terminal-only agent: an interactive CLI the desktop
  * launches inside a Kun terminal tab. It joins the catalog as
  * `transport: 'terminal'` and can never host a delegated turn.
  */
@@ -79,10 +83,16 @@ export const HarnessesConfigSchema = z
     enabledProfiles: z.array(HarnessEnabledProfileSchema).max(128).default([]),
     /** Builtin harnesses the user turned off; they stay out of pickers. */
     disabledIds: z.array(HarnessIdSchema).max(64).default([]),
-    /** Per-harness binary path overrides (settings override > bundled > PATH). */
+    /**
+     * Per-Agent launch overrides and user Agents. The GUI
+     * writes only this; `binaryPaths`, `custom` and `terminalAgents` remain
+     * accepted for hand-written config and fold in where it names nothing.
+     */
+    providers: z.record(HarnessIdSchema, HarnessProviderOverrideSchema).default({}),
+    /** Legacy per-harness binary path overrides (settings override > bundled > PATH). */
     binaryPaths: z.record(HarnessIdSchema, z.string().min(1).max(4_096)).default({}),
     /**
-     * Hidden per-harness transport pin (P6-07): maps a builtin harness id to
+     * Hidden per-harness transport pin: maps a builtin harness id to
      * one of its declared `variants` — e.g. `{codex: 'acp'}` keeps the ACP
      * adapter while codex defaults to `codex-app-server`. Not user-facing;
      * unknown ids/transports are ignored by the catalog.
@@ -91,15 +101,15 @@ export const HarnessesConfigSchema = z
       .record(HarnessIdSchema, HarnessTransportSchema)
       .default({}),
     /**
-     * Hidden pre-GA opt-ins (P6-09): builtin harnesses declared `prerelease`
+     * Hidden pre-GA opt-ins: builtin harnesses declared `prerelease`
      * stay out of the catalog unless their id is listed here. Removed once
-     * the P6-12 acceptance matrix lands.
+     * the acceptance matrix lands.
      */
     experimentalIds: z.array(HarnessIdSchema).max(64).default([]),
-    /** User-defined ACP harnesses; ids colliding with builtins are dropped. */
+    /** Legacy user-defined ACP harnesses (now `providers` with `extends: 'acp'`). */
     custom: z.array(HarnessCustomEntrySchema).max(32).default([]),
     /**
-     * Legacy pre-P4-11 map; superseded by `defaults[*].permissionMode`.
+     * Legacy map; superseded by `defaults[*].permissionMode`.
      * Still accepted so hand-written config files keep working.
      */
     defaultPermissionMode: z.record(HarnessIdSchema, z.string().min(1).max(64)).default({}),
@@ -107,9 +117,9 @@ export const HarnessesConfigSchema = z
     defaults: z.record(HarnessIdSchema, HarnessDefaultsEntrySchema).default({}),
     /** Default harness for new one-to-one ADE conversations. */
     defaultHarnessId: HarnessIdSchema.default('kun'),
-    /** Ordered user preference for the ADE worker selector (10 §3.2). */
+    /** Ordered user preference for the ADE worker selector. */
     agentOrder: z.array(HarnessIdSchema).max(16).default([]),
-    /** Terminal-only agents (p4 §3.8); join the catalog as `transport: 'terminal'`. */
+    /** Legacy terminal-only agents (now `providers` with `extends: 'terminal'`). */
     terminalAgents: z.array(HarnessTerminalAgentSchema).max(32).default([])
   })
   .strict()

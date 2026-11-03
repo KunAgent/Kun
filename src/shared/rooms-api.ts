@@ -1,7 +1,8 @@
 // Type-only aliases keep the desktop and HTTP contracts in sync without
 // bundling runtime implementation code in the renderer.
 export * from '../../kun/src/contracts/kun-avatar-catalog'
-export { KUN_AVATAR_PRESETS, ROOM_BUILTIN_AVATAR_IDS } from '../../kun/src/contracts/kun-avatar-presets'
+export * from '../../kun/src/contracts/kun-wardrobe'
+export { KUN_AVATAR_PRESETS, KUN_AVATAR_CARD_SCENES, ROOM_BUILTIN_AVATAR_IDS } from '../../kun/src/contracts/kun-avatar-presets'
 export type { KunAvatarPresetId } from '../../kun/src/contracts/kun-avatar-presets'
 export type { RoomContentReference, RoomAvatarReference, RoomContentResult,
   RoomContentOpenTarget, RoomArtifactSourceTarget, RoomLinkPreview, RoomPreviewImage } from '../../kun/src/contracts/room-content'
@@ -15,7 +16,7 @@ export type { RoomNotificationPreference, RoomPreferenceDetail, RoomSearchQuery,
   RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../../kun/src/contracts/room-experience'
 export type {
   RoomRunDetail, RoomRunAvailability, RoomRunContentPage, RoomRunItemsPage,
-  RoomRunListPage, RoomMessageRunSource, RoomRunEvent
+  RoomRunListPage, RoomMessageRunSource, RoomRunEvent, RoomRunStep, RoomRunSteps
 } from '../../kun/src/contracts/room-run-query'
 export type {
   Room,

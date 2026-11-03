@@ -1,6 +1,6 @@
 import { runWithoutTurnMutationFence } from '../manager/turn-mutation-context.js'
 import { createHash } from 'node:crypto'
-import type { WorkerNotice } from '../contracts/ade.js'
+import type { DispatchRecord, WorkerNotice } from '../contracts/ade.js'
 import type { StartTurnResponse } from '../contracts/turns.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { TurnService } from '../services/turn-service.js'
@@ -10,15 +10,48 @@ import { kunToolPermissionModeFromSettings, type KunToolPermissionSettings } fro
 import { intersectDispatchPolicy } from './worker-dispatch-security.js'
 import type { FileDispatchStore } from './dispatch-store.js'
 import { renderWorkerUpdates } from './notice-render.js'
+import { replacedWorkerIds } from './worker-dispatch-ids.js'
 
 type RunTurn = (threadId: string, turnId: string) => Promise<unknown>
 
 export const WORKER_NOTICE_MERGE_WINDOW_MS = 3_000
 export const WORKER_NOTICE_MAX_HOLD_MS = 60_000
 const MAX_RETRY_DELAY_MS = 30_000
+/**
+ * Facts the manager need not act on (a release 30 s after completion, a user
+ * takeover or cancellation). They never start a turn on their own; they ride
+ * the next wake-up or the user's next message.
+ */
+const QUIET_NOTICE_KINDS: ReadonlySet<WorkerNotice['kind']> = new Set([
+  'worker_released', 'worker_detached', 'worker_taken_over', 'dispatch_cancelled'
+])
 
 /**
- * Manager wake-up coordinator (09 §6.2). Wraps the notice store so every
+ * Completion notices whose dispatch already carries a host-recorded handling
+ * credential. The association must be complete: a missing dispatch, a worker
+ * or terminal-state mismatch, or an absent credential never counts as handled.
+ */
+function handledCompletionNoticeIds(
+  managerThreadId: string,
+  pending: readonly WorkerNotice[],
+  reads: ReadonlyMap<string, DispatchRecord | null>
+): string[] {
+  const handled: string[] = []
+  for (const notice of pending) {
+    if (notice.kind !== 'dispatch_completed' && notice.kind !== 'dispatch_failed') continue
+    if (notice.teamId !== managerThreadId || !notice.dispatchId) continue
+    const dispatch = reads.get(notice.dispatchId)
+    if (!dispatch?.completionHandledAt) continue
+    if (dispatch.teamId !== managerThreadId || dispatch.workerId !== notice.workerId) continue
+    const terminal = notice.kind === 'dispatch_completed' ? 'completed' : 'failed'
+    if (dispatch.state !== terminal) continue
+    handled.push(notice.noticeId)
+  }
+  return handled
+}
+
+/**
+ * Manager wake-up coordinator. Wraps the notice store so every
  * enqueue also schedules delivery: notices arriving inside a 3-second merge
  * window collapse into a single worker_update turn keyed by a deterministic
  * batch clientRequestId (same pending set → same key → idempotent replay).
@@ -52,12 +85,12 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
 
   async enqueue(notice: WorkerNotice): Promise<WorkerNotice> {
     const stored = await this.options.notices.enqueue(notice)
-    this.scheduleMerge(stored.teamId)
+    if (!QUIET_NOTICE_KINDS.has(stored.kind)) this.scheduleMerge(stored.teamId)
     return stored
   }
 
   /**
-   * Composer hold (09 §6.2): the renderer renews while the user is typing so
+   * Composer hold: the renderer renews while the user is typing so
    * a wake-up never interrupts composition; pending notices ride the user's
    * next message instead. Hold expiry is capped at 60 s.
    */
@@ -142,11 +175,14 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
       const intentId = notice.dispatchIntentId ?? worker?.dispatchIntentId
       const intent = intentId ? await this.options.agentDispatchService?.get(intentId) : undefined
       const completion = notice.kind === 'dispatch_completed' || notice.kind === 'dispatch_failed'
-      if (completion && (worker?.control === 'user' || intent?.takenOver || intent?.cancellationRequested)) suppressed.push(notice.noticeId)
-      else pending.push(notice)
+      // A failure the card already rerouted to another Agent needs nothing from the manager.
+      const rerouted = notice.kind === 'dispatch_failed' && Boolean(intent && replacedWorkerIds(intent).includes(notice.workerId))
+      if (rerouted || (completion && (worker?.control === 'user' || intent?.takenOver || intent?.cancellationRequested))) {
+        suppressed.push(notice.noticeId)
+      } else pending.push(notice)
     }
     if (suppressed.length) await this.options.notices.ack(managerThreadId, suppressed)
-    if (!pending.length) return
+    if (!pending.some((notice) => !QUIET_NOTICE_KINDS.has(notice.kind))) return
     const thread = await this.options.threads.get(managerThreadId).catch(() => null)
     if (!thread) {
       await this.options.notices.ack(managerThreadId, pending.map((entry) => entry.noticeId))
@@ -164,14 +200,39 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
       )
       return
     }
+    // Read the latest dispatch rows only after the manager is known to be idle,
+    // so a verdict written during the busy backoff is visible here. A read
+    // failure keeps every notice pending and retries instead of delivering (or
+    // silently consuming) a result whose handling state is unknown.
+    let reads: Map<string, DispatchRecord | null>
+    try {
+      reads = await this.readDispatches(managerThreadId, pending)
+    } catch (error) {
+      await this.recordRetry(managerThreadId, pending, error)
+      return
+    }
+    let remaining = pending
+    const handled = handledCompletionNoticeIds(managerThreadId, pending, reads)
+    if (handled.length) {
+      try {
+        await this.options.notices.ack(managerThreadId, handled)
+      } catch (error) {
+        await this.recordRetry(managerThreadId, pending, error)
+        return
+      }
+      const consumed = new Set(handled)
+      remaining = pending.filter((notice) => !consumed.has(notice.noticeId))
+      // Only releases and other quiet facts left: they ride the next wake-up.
+      if (!remaining.some((notice) => !QUIET_NOTICE_KINDS.has(notice.kind))) return
+    }
     const batchId = `wnb_${createHash('sha256')
-      .update(pending.map((entry) => entry.noticeId).join(','))
+      .update(remaining.map((entry) => entry.noticeId).join(','))
       .digest('hex')
       .slice(0, 24)}`
-    const rendered = renderWorkerUpdates(pending, this.options.language?.())
-    const originating = this.options.dispatches ? await Promise.all(pending.map((notice) => notice.dispatchId
-      ? this.options.dispatches!.get(managerThreadId, notice.dispatchId) : Promise.resolve(null))) : []
-    const sourceTurnId = pending.find((notice) => notice.parentTurnId)?.parentTurnId ?? originating.find(Boolean)?.parentTurnId
+    const rendered = renderWorkerUpdates(remaining, this.options.language?.())
+    const originating = remaining.map((notice) => notice.dispatchId
+      ? reads.get(notice.dispatchId) ?? null : null)
+    const sourceTurnId = remaining.find((notice) => notice.parentTurnId)?.parentTurnId ?? originating.find(Boolean)?.parentTurnId
     const sourceTurn = thread.turns.find((turn) => turn.id === sourceTurnId) ??
       (sourceTurnId ? await this.options.turns.getTurn?.(managerThreadId, sourceTurnId).catch(() => null) : null)
     const execution = thread.pendingExecutionConfig ?? thread.executionConfig
@@ -210,6 +271,7 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
         ...(sourceTurn?.accountId ? { accountId: sourceTurn.accountId } : {}),
         ...(sourceTurn?.clientSurface ? { clientSurface: sourceTurn.clientSurface } : {}),
         ...(sourceTurn?.reasoningEffort ? { reasoningEffort: sourceTurn.reasoningEffort } : {}),
+        ...(sourceTurn?.harnessSettings ? { harnessSettings: sourceTurn.harnessSettings } : {}),
         ...(sourceTurn?.serviceTier ? { serviceTier: sourceTurn.serviceTier } : {}),
         ...authority
       }
@@ -220,14 +282,37 @@ export class WorkerNoticeCoordinator implements WorkerNoticeSink {
       if (admittedTurnId) {
         void this.options.runTurn()?.(managerThreadId, admittedTurnId).catch(() => undefined)
       }
-      await this.options.notices.ack(managerThreadId, pending.map((entry) => entry.noticeId))
+      await this.options.notices.ack(managerThreadId, remaining.map((entry) => entry.noticeId))
     }, async (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error)
-      await this.options.notices
-        .markAttempt(managerThreadId, pending.map((entry) => entry.noticeId), message)
-        .catch(() => undefined)
-      this.scheduleRetry(managerThreadId, Math.max(...pending.map((entry) => entry.attempts)) + 1)
+      await this.recordRetry(managerThreadId, remaining, error)
     })
+  }
+
+  private async readDispatches(
+    managerThreadId: string,
+    pending: readonly WorkerNotice[]
+  ): Promise<Map<string, DispatchRecord | null>> {
+    const reads = new Map<string, DispatchRecord | null>()
+    const store = this.options.dispatches
+    if (!store) return reads
+    for (const notice of pending) {
+      if (!notice.dispatchId || reads.has(notice.dispatchId)) continue
+      reads.set(notice.dispatchId, await store.get(managerThreadId, notice.dispatchId))
+    }
+    return reads
+  }
+
+  /** Persist a failed pass so backoff and restart replay retry the same IDs. */
+  private async recordRetry(
+    managerThreadId: string,
+    pending: readonly WorkerNotice[],
+    error: unknown
+  ): Promise<void> {
+    const message = error instanceof Error ? error.message : String(error)
+    await this.options.notices
+      .markAttempt(managerThreadId, pending.map((entry) => entry.noticeId), message)
+      .catch(() => undefined)
+    this.scheduleRetry(managerThreadId, Math.max(...pending.map((entry) => entry.attempts)) + 1)
   }
 
   private nowMs(): number {

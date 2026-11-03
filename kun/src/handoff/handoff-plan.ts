@@ -2,7 +2,7 @@ import type { TurnItem } from '../contracts/items.js'
 import type { DelegatedSessionPreparation } from '../runtime/delegated-session-binding.js'
 import type { HandoffReason } from './handoff-types.js'
 
-/** What the delegated runtime should prepend to this turn (docs/ade/08 §4). */
+/** What the delegated runtime should prepend to this turn. */
 export type HandoffPlan =
   | { mode: 'full'; reason: HandoffReason }
   | { mode: 'delta'; sinceTurnId: string }

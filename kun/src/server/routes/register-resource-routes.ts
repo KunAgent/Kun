@@ -1,4 +1,6 @@
 import { memoryHistory, memoryLifecycle } from './memory-lifecycle.js'
+import { memoryRelations } from './memory-relations.js'
+import { previewMemoryWorkingContext } from './memory-working-context.js'
 import type { Router } from '../router.js'
 import { buildWorkspaceStatusResponse } from './workspace.js'
 import { refreshSkills, setSkillsEnabled } from './skills.js'
@@ -32,6 +34,7 @@ import {
 import {
   backgroundShellGet,
   backgroundShellList,
+  backgroundShellStdin,
   backgroundShellStop
 } from './background-shells.js'
 import { auditSupplyChainPackage, checkSupplyChainUpdate } from './supply-chain.js'
@@ -83,6 +86,18 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
   router.add('GET', '/v1/memory', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return listMemories(runtime.memoryStore, request)
+  })
+  router.add('POST', '/v1/memory/relations', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return memoryRelations(runtime, request, false)
+  })
+  router.add('POST', '/v1/memory/context/preview', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return previewMemoryWorkingContext(runtime, request)
+  })
+  router.add('POST', '/v1/memory/relations/analyze', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return memoryRelations(runtime, request, true)
   })
   router.add('POST', '/v1/memory', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -155,6 +170,10 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
   router.add('POST', '/v1/background-shells/:sessionId/stop', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return backgroundShellStop(runtime.backgroundShellRuntime, ctx.params.sessionId)
+  })
+  router.add('POST', '/v1/background-shells/:sessionId/stdin', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return backgroundShellStdin(runtime.backgroundShellRuntime, ctx.params.sessionId, request)
   })
   router.add('GET', '/v1/workspace/status', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

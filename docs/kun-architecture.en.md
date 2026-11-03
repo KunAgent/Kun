@@ -100,6 +100,12 @@ Pre-existing usage events persisted before optimization cannot be rewritten beca
 provider-native cache fields were not recorded then; they only reflect old behavior and
 should not be treated as evidence that current hit rates are lower.
 
+Every dispatch entry (`delegate_task`, `worker_create`, a Graph task `profile`, `suggest_tasks`, conversation members) reads one
+agent roster (`kun/src/delegation/agent-roster.ts`, read-only `GET /v1/agent-roster`): a role, its engine binding, and per-lane admission.
+A role's bound engine is honored on every lane (`capabilities.subagents.honorEngineBinding` turns it off for `delegate_task`); a lane
+that cannot run the role refuses at selection with a shared reason code instead of silently using the native loop. The roster
+appears only in tool results and dynamic context. Design and implementation notes: `docs/agent-roster-dispatch-ladder.zh-CN.md`.
+
 Cache capabilities still worth pursuing next:
 
 - Tool-collection mutation policy: adding tools should be append-only; edit/reorder/remove
@@ -122,7 +128,7 @@ Renderer should only expose Kun. The UI sections listed below should be removed 
 kept removed:
 
 - Agent switcher: no runtime-switching `AgentSwitcher` returns; the harness picker
-  chooses the per-turn engine (see `docs/ade/01-harness-routing.md`).
+  chooses the per-turn engine.
 - Top connection status + runtime diagnostics entry: runtime detection is no longer the
   user entrypoint.
 - Runtime insights / right panel: retain only `Changes`, `Preview`, `Plan`, and GUI workspace
@@ -299,8 +305,7 @@ and only then add renderer wiring if needed (not both).
 Kun's Code mode can run as an ADE (Agentic Development Environment): one-to-one
 sessions may run on the Kun native loop or an external harness; a manager (the Kun
 native loop) can split tasks, dispatch workers, track progress, accept results, and
-report. The full design and implementation breakdown lives in
-[`docs/ade/README.md`](./ade/README.md). Invariants:
+report. Invariants:
 
 - External agents enter only as a `DelegatedTurnRuntime` inside `kun serve`; the
   GUI always talks to `kun serve`. The only exception is the terminal agent: its

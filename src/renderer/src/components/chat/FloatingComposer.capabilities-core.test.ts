@@ -160,24 +160,34 @@ describe('FloatingComposer capability controls', () => {
     })
   })
 
-  it('keeps enabled composer actions available and gives narrow toolbars a second row', async () => {
+  it('keeps composer actions available and scopes wrapping to compact layouts', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
-    const [composerSource, css] = await Promise.all([
+    const [composerSource, enhanceSource, css] = await Promise.all([
       readFile(new URL('./FloatingComposerSurfaceView.tsx', import.meta.url), 'utf8'),
+      readFile(new URL('./ComposerPromptEnhance.tsx', import.meta.url), 'utf8'),
       readStylesheetBundle(new URL('../../styles/base-shell.css', import.meta.url))
     ])
 
     expect(composerSource).toContain('ds-composer-voice-action')
-    expect(composerSource).toContain('ds-composer-prompt-optimize-action')
+    expect(composerSource).toContain('<ComposerPromptEnhanceButton')
+    expect(enhanceSource).toContain('ds-composer-optional-action ds-composer-prompt-optimize-action')
+    expect(composerSource).toContain('ref={side ? undefined : composerToolbarFitRef}')
     expect(css).not.toMatch(/\.ds-composer-optional-action\s*\{[^}]*display:\s*none/)
-    expect(css).toMatch(/@container \(max-width: 640px\)[\s\S]*?\.ds-composer-toolbar\s*\{[^}]*flex-direction:\s*column/s)
-    expect(css).toMatch(/\.ds-composer-toolbar > div\s*\{[^}]*width:\s*100%/s)
+    expect(css).not.toMatch(/(?:^|\n)\s*\.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/)
+    expect(css).toMatch(/\[data-composer-variant='side'\] \.ds-composer-toolbar\s*\{[^}]*flex-wrap:\s*wrap/s)
+    expect(css).toMatch(/\.ds-composer-toolbar\[data-fit-7\]\s*\{[^}]*flex-wrap:\s*wrap/s)
+    expect(css).not.toContain('--ds-composer-model-min')
+    // Words give way level by level (composer-toolbar-fit.ts sets data-fit-N), never the actions.
+    expect(css).toMatch(/\[data-fit-1\] \.ds-composer-context-control,[\s\S]*?\.ds-composer-agent-picker[^{]*\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-2\] \.ds-composer-task-surface-label\s*\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-3\] \.ds-composer-model-trigger-model,[\s\S]*?\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-4\] \.ds-composer-model-trigger-dot,[\s\S]*?\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/\[data-fit-5\] \.ds-composer-model-trigger-chevron,[\s\S]*?\{[^}]*display:\s*none/s)
+    expect(css).toMatch(/@container \(max-width: 640px\)[\s\S]*?\.ds-composer-model-trigger-provider,/s)
     expect(css).toContain('@container (max-width: 700px)')
     expect(css).toContain('.ds-composer-mode-label,')
     expect(css).toContain('.ds-composer-permission-label,')
-    expect(css).toContain('.ds-composer-context-control,')
-    expect(css).toContain('.ds-composer-agent-picker')
   })
 
   it('shows the issue #1364 local Whisper configuration without cloud credentials', () => {

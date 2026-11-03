@@ -24,6 +24,8 @@ import '../styles/onboarding/frame.css'
 import '../styles/onboarding/steps.css'
 import '../styles/onboarding/model.css'
 import '../styles/onboarding/agents-ready.css'
+import '../styles/onboarding/account.css'
+import { useKunAccount } from './account/useKunAccount'
 import {
   canCloseInitialSetup,
   commitInitialSetupRegistryCredentials,
@@ -55,6 +57,7 @@ import {
   initialSetupPermissionPatch,
   withStoredExecutionSettings
 } from './initial-setup-permission'
+import { OnboardingAccountStep } from './onboarding/OnboardingAccountStep'
 import { OnboardingAgentsStep } from './onboarding/OnboardingAgentsStep'
 import { OnboardingModelConfigure } from './onboarding/OnboardingModelConfigure'
 import { OnboardingModelPicker, type OnboardingPickerState } from './onboarding/OnboardingModelPicker'
@@ -105,6 +108,8 @@ export function InitialSetupDialog(): ReactElement {
   const openCode = useChatStore((s) => s.openCode)
   const openSettings = useChatStore((s) => s.openSettings)
   const harnessRows = useHarnessStore((s) => s.rows)
+  const account = useKunAccount()
+  const accountUser = account.state.user
 
   const [form, setForm] = useState<AppSettingsV1 | null>(null)
   const [drafts, setDrafts] = useState<InitialSetupDrafts | null>(null)
@@ -423,6 +428,7 @@ export function InitialSetupDialog(): ReactElement {
     model: step === 'welcome' || (step === 'model' && modelPhase === 'pick') ? t('onboarding.steps.model.detail') : providerName,
     permission: step === 'ready' || step === 'agents' ? permissionLabel : t('onboarding.steps.permission.detail'),
     agents: connectedAgents.length ? t('onboarding.agents.connectedCount', { count: connectedAgents.length }) : t('onboarding.steps.agents.detail'),
+    account: accountUser?.email || t('onboarding.steps.account.detail'),
     ready: t('onboarding.steps.ready.detail')
   }
 
@@ -432,7 +438,10 @@ export function InitialSetupDialog(): ReactElement {
         : step === 'agents'
           ? t(agentLists.installed.length === 0 && !agentLists.detecting ? 'onboarding.bubble.agentsEmpty'
             : connectedAgents.length >= 2 ? 'onboarding.bubble.agentsMany' : 'onboarding.bubble.agents')
-          : t('onboarding.bubble.ready')
+          : step === 'account'
+            ? t(accountUser ? 'onboarding.bubble.accountSignedIn' : account.state.status === 'authorizing' ? 'onboarding.bubble.accountWaiting' : 'onboarding.bubble.account',
+              { name: accountUser?.name || accountUser?.email })
+            : t('onboarding.bubble.ready')
 
   const back = (): void => {
     if (step === 'model' && modelPhase === 'configure') {
@@ -452,7 +461,8 @@ export function InitialSetupDialog(): ReactElement {
       if (modelPhase === 'pick') openConfigure()
       else finishModelStep()
     } else if (step === 'permission') void handleSave()
-    else if (step === 'agents') goTo('ready')
+    else if (step === 'agents') goTo('account')
+    else if (step === 'account') goTo('ready')
     else finish()
   }
 
@@ -607,6 +617,19 @@ export function InitialSetupDialog(): ReactElement {
         </div>
       </>
     )
+  } else if (step === 'account') {
+    title = t(accountUser ? 'onboarding.account.titleSignedIn' : 'onboarding.account.title')
+    subtitle = t('onboarding.account.subtitle')
+    body = <OnboardingAccountStep state={account.state} busy={account.busy} platform={window.kunGui?.platform ?? ''} onAction={(action) => { void account.run(action) }} />
+    footer = (
+      <>
+        {backButton()}
+        <div className="kun-onb-foot-end">
+          <span className="kun-onb-foot-hint">{t('onboarding.account.footHint')}</span>
+          {primaryButton(t(accountUser ? 'onboarding.next' : 'onboarding.account.skipNext'))}
+        </div>
+      </>
+    )
   } else {
     title = t('onboarding.ready.title')
     subtitle = t('onboarding.ready.subtitle')
@@ -615,6 +638,7 @@ export function InitialSetupDialog(): ReactElement {
         provider={{ presetId: custom ? null : entry?.presetId ?? DEFAULT_MODEL_PROVIDER_ID, name: providerName, model: getKunRuntimeSettings(form).model }}
         permissionMode={selection.permissionMode}
         agents={connectedAgents}
+        account={accountUser ? { name: accountUser.name, email: accountUser.email } : null}
         localeLabel={localeLabel}
         themeLabel={themeLabel}
         onEdit={(target) => {
@@ -645,7 +669,7 @@ export function InitialSetupDialog(): ReactElement {
       bubble={bubble}
       title={title}
       subtitle={subtitle}
-      optional={step === 'agents'}
+      optional={step === 'agents' || step === 'account'}
       skipLabel={t(isPreview ? 'onboarding.close' : saved ? 'onboarding.skipRest' : 'onboarding.skip')}
       skipDisabled={busy}
       onSkip={closeAllowed && step !== 'ready' ? handleClose : undefined}

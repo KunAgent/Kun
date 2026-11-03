@@ -5,6 +5,7 @@ import {
   type PptDirectionBundle
 } from './ppt-direction-board'
 import { isPptReviewBundle, pptReviewBoardOps, type PptReviewBundle } from './ppt-review-board'
+import { isPptBoardToolName, pptToolOutputPath } from './ppt-tool-results'
 import { applyCanvasOpBlocks } from './apply-shape-ops'
 import { useCanvasSelectionStore } from './canvas-selection-store'
 import { useCanvasShapeStore } from './canvas-shape-store'
@@ -48,13 +49,10 @@ export function resolvePptCanvasProjection(
   expectedWorkflowId?: string,
   expectedChildId?: string
 ): PptCanvasProjection | null {
-  if (toolName !== 'ppt_agent' || !isRecord(value)) return null
+  if (!isPptBoardToolName(toolName) || !isRecord(value)) return null
   const reviewBundle = value.reviewBundle
   const directionBundle = value.directionBundle
-  const deckArtifact = isRecord(value.deckArtifact) ? value.deckArtifact : null
-  const outputPath = typeof deckArtifact?.output === 'string' && deckArtifact.output.trim()
-    ? deckArtifact.output.trim()
-    : undefined
+  const outputPath = pptToolOutputPath(toolName, value)
   const projection: Exclude<PptCanvasProjection, { kind: 'filtered' }> | null =
     isPptReviewBundle(reviewBundle)
       ? {
@@ -187,9 +185,14 @@ function shouldRejectPptProjection(
     return incomingRevision < currentRevision
   }
 
-  const incomingRevision = Math.max(...(bundle as PptReviewBundle).slides.map((slide) => slide.revision))
-  const currentRevision = Math.max(-1, ...reviewRefs.map((ref) => ref.revision))
-  return incomingRevision < currentRevision
+  // Slide revisions are per slide, and a deck can gain or lose pages between
+  // reviews. A bundle is stale only when one of its own slides is already on
+  // the board at a newer revision.
+  const boardRevisions = new Map<string, number>()
+  for (const ref of reviewRefs) {
+    if ('slideId' in ref) boardRevisions.set(ref.slideId, Math.max(ref.revision, boardRevisions.get(ref.slideId) ?? -1))
+  }
+  return (bundle as PptReviewBundle).slides.some((slide) => slide.revision < (boardRevisions.get(slide.slideId) ?? -1))
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

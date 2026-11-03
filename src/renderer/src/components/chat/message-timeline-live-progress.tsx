@@ -13,10 +13,10 @@ import {
 } from './AnimatedWorkLogo'
 import type { UiPluginLabelKey } from '@shared/ui-plugin'
 import { useUiPluginWorkLabel } from '../../store/ui-plugin-store'
-import { summarizeToolBlock } from './message-timeline-process'
+import { summarizeToolLiveAction } from './message-timeline-tool-action'
 import { liveTurnProgressClass } from './message-timeline-jump-preview'
 import { formatDuration } from './message-timeline-tools'
-import { LiveElapsedText } from './LiveElapsedText'
+import { LiveElapsedText, LiveSilenceText } from './LiveElapsedText'
 
 /**
  * The live "working" row under the active turn. The elapsed suffix is a
@@ -30,7 +30,8 @@ export function LiveTurnProgressRow({
   activityLabel,
   awaitingUserInput = false,
   durationMs,
-  liveStartedAtMs
+  liveStartedAtMs,
+  threadId
 }: {
   tool?: Extract<ChatBlock, { kind: 'tool' }>
   thinking: boolean
@@ -38,6 +39,7 @@ export function LiveTurnProgressRow({
   awaitingUserInput?: boolean
   durationMs?: number
   liveStartedAtMs?: number
+  threadId?: string
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const swimMode = useWorkLogoSwimMode(true)
@@ -61,7 +63,7 @@ export function LiveTurnProgressRow({
     : thinking
       ? t('thinkingNow')
       : tool
-        ? t('workingToolAction', { action: summarizeToolBlock(tool, t) })
+        ? t('workingToolAction', { action: summarizeToolLiveAction(tool, t) })
         : ikunModeOn
           ? t(IKUN_WORK_LOGO_VARIANT_LABEL_KEYS[ikunVariant])
           : pluginLabel ?? t(swimLabelKey)
@@ -74,6 +76,7 @@ export function LiveTurnProgressRow({
     <LiveTurnActivityRow
       label={label}
       liveStartedAtMs={liveStartedAtMs}
+      threadId={threadId}
       ikunVariant={ikunVariant}
       swimMode={swimMode}
       awaitingUserInput={awaitingUserInput}
@@ -86,10 +89,12 @@ function LiveTurnActivityRow({
   liveStartedAtMs,
   ikunVariant,
   swimMode,
-  awaitingUserInput = false
+  awaitingUserInput = false,
+  threadId
 }: {
   label: string
   liveStartedAtMs?: number
+  threadId?: string
   ikunVariant?: IkunWorkLogoVariant
   swimMode?: WorkLogoSwimMode
   awaitingUserInput?: boolean
@@ -108,16 +113,19 @@ function LiveTurnActivityRow({
           <AnimatedWorkLogo active ikunVariant={ikunVariant} mode={swimMode} phase="trail" size="sm" />
         </span>
       )}
-      <span className={awaitingUserInput ? 'font-medium text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}>
+      <span className={`min-w-0 [overflow-wrap:anywhere] ${awaitingUserInput ? 'font-medium text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}`}>
         {label}
       </span>
       {typeof liveStartedAtMs === 'number' ? (
         <span
-          className={`tabular-nums ${awaitingUserInput ? 'text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}`}
+          className={`whitespace-nowrap tabular-nums ${awaitingUserInput ? 'text-amber-600 dark:text-amber-300' : 'ds-shiny-text'}`}
         >
           {' · '}
           <LiveElapsedText sinceMs={liveStartedAtMs} />
         </span>
+      ) : null}
+      {typeof liveStartedAtMs === 'number' && threadId && !awaitingUserInput ? (
+        <LiveSilenceText threadId={threadId} sinceMs={liveStartedAtMs} />
       ) : null}
     </div>
   )

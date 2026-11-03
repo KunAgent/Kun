@@ -30,6 +30,11 @@
       "deepseek-v4.1-flash",
       "deepseek-v4-flash"
     ],
-    "credentialUrl": "https://console.huaweicloud.com/modelarts/?#/model-studio/authmanage"
+    "credentialUrl": "https://console.huaweicloud.com/modelarts/?#/model-studio/authmanage",
+    "discovery": {
+      "strategy": "live-with-fallback",
+      "sourceUrl": "https://support.huaweicloud.com/usermanual-maas/maas_01_0001.html",
+      "checkedAt": "2026-10-08"
+    }
   }
 }

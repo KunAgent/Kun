@@ -1,0 +1,22 @@
+{
+  "designAgentCardPending": "デザインの要件を整理しています…",
+  "designAgentCardQueued": "この返信の完了後に開始します",
+  "designAgentCardStarting": "デザインキャンバスを開いています…",
+  "designAgentCardDesigning": "キャンバスでデザイン中…",
+  "designAgentCardReady": "キャンバスで完成",
+  "designAgentCardNotStarted": "未開始",
+  "designAgentCardStartFailed": "デザインを開始できませんでした",
+  "designAgentCardStartFailedDetail": "開始できませんでした: {{error}}",
+  "designAgentCardSuperseded": "新しいデザインリクエストに置き換えられました",
+  "designAgentCardFailed": "デザインリクエストに失敗しました",
+  "designAgentCardFailedDetail": "デザインリクエストに失敗しました: {{error}}",
+  "designAgentCardScreens_one": "{{count}} 画面",
+  "designAgentCardScreens_other": "{{count}} 画面",
+  "designAgentCardTargetWeb": "Web",
+  "designAgentCardTargetApp": "アプリ",
+  "designAgentCardOpen": "開く",
+  "designAgentCardOpenAria": "{{title}} のデザインキャンバスを開く",
+  "designAgentCardStart": "デザインを開始",
+  "designAgentCardRetry": "再試行",
+  "toolBuiltinDesignOpen": "デザインキャンバスを開く"
+}

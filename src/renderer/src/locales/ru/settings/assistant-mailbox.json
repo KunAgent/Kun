@@ -1,0 +1,5 @@
+{
+  "labAssistantMailboxTitle": "Личные ассистенты",
+  "labAssistantMailboxDescription": "Kun поручает задачи личным ассистентам (Cue, Grok Bot, Muse, dots) через почтовый ящик со сквозным шифрованием. Ассистентов добавляют на панели «Удалённый доступ».",
+  "labAssistantMailboxEnabled": "Включить личных ассистентов"
+}

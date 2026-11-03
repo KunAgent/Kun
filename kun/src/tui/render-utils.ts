@@ -1,150 +1,8 @@
-import {
-  Editor,
-  Input,
-  Markdown,
-  ProcessTerminal,
-  TUI,
-  decodeKittyPrintable,
-  matchesKey,
-  truncateToWidth,
-  visibleWidth,
-  type Component,
-  type EditorTheme,
-  type Focusable,
-  type MarkdownTheme,
-  type OverlayHandle,
-  type SelectListTheme,
-  type SlashCommand
-} from '@earendil-works/pi-tui'
-import {
-  providerCatalogEntries,
-  type ProviderCatalogAuthFlow,
-  type ProviderCatalogAuthType,
-  type ProviderCatalogKind
-} from '@kun/provider-catalog'
-import { spawn } from 'node:child_process'
-import { mkdir, unlink, writeFile } from 'node:fs/promises'
-import { homedir } from 'node:os'
-import { basename, join, sep } from 'node:path'
-import { stdin as processStdin, stdout as processStdout } from 'node:process'
-import { redactSecrets, redactSecretText } from '../config/secret-redaction.js'
-import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-lease.js'
-import type { AttachmentMetadata } from '../contracts/attachments.js'
+import { redactSecrets } from '../config/secret-redaction.js'
 import type { TurnItem } from '../contracts/items.js'
-import type { ModelReasoningEffort } from '../contracts/capabilities.js'
-import {
-  KUN_TOOL_PERMISSION_MODES,
-  kunToolPermissionModeFromSettings,
-  kunToolPermissionModeSettings,
-  type ApprovalPolicy,
-  type ApprovalReviewer,
-  type KunToolPermissionMode,
-  type SandboxMode
-} from '../contracts/policy.js'
-import {
-  isModelConnectionProfileUsable,
-  type ClaudeSdkInstallStatus,
-  type ModelConnectionOAuthStatus,
-  type ModelConnectionProfile,
-  type ModelConnectionSnapshot
-} from '../contracts/model-connections.js'
-import type { TuiCommand, TuiCommandDefinition } from './commands.js'
-import { parseTuiCommand, TUI_COMMAND_DEFINITIONS, TUI_SLASH_COMMANDS } from './commands.js'
-import { runSelfUpdateCommand } from '../cli/self-update.js'
-import {
-  activityFrame,
-  formatContextGauge,
-  formatTokenCount,
-  type ActivityVisualKind
-} from './activity.js'
-import { parseTuiKeymapConfig, type TuiKeyAction, type TuiKeymap } from './keymap.js'
-import { TuiClientError, type KunTuiClient, type SkillsSnapshot } from './client.js'
-import type { TuiControllerState } from './controller.js'
-import { TuiController } from './controller.js'
-import {
-  sanitizeTerminalText as stripTerminalControls,
-  wrapText
-} from './layout.js'
-import { codeFenceLanguage, highlightTerminalCode, terminalAssistantMarkdown } from './markdown-code.js'
-import {
-  contextualFooter,
-  pageFrame,
-  sectionLabel,
-  selectionRow,
-  statusGlyph,
-  visual,
-  visualDensity
-} from './visual-system.js'
-import { InlineStreamTerminal, ScrollbackPreservingTerminal } from './pi-terminal.js'
-import { ProviderQuotaDialog } from './provider-quota.js'
-import { UsageDialog } from './usage-report.js'
-import {
-  installAntigravityCli,
-  resolveAntigravityCliCommand,
-  resolveGeminiCliCommand,
-  type OfficialProviderCliId
-} from '../services/official-provider-cli.js'
-import {
-  copyWithSystemClipboard,
-  editTextInExternalEditor,
-  lastAssistantText,
-  osc52ClipboardSequence,
-  renderThreadMarkdown,
-  runInteractiveProviderCli,
-  writeThreadExport
-} from './operations.js'
-import {
-  applyRuntimeEvent,
-  hydrateProjectedChildRuns,
-  matchingRequestContextSnapshot,
-  projectThreadSnapshot,
-  type ProjectedApprovalReview,
-  type ProjectedChildRun,
-  type ProjectedTurnActivity,
-  type ThreadProjection
-} from './state.js'
-import type { TerminalInput, TerminalOutput } from './pi-terminal.js'
-import {
-  latestTuiGraphRun,
-  moveTuiGraphBoardSelection,
-  projectTuiGraphBoard,
-  type TuiGraphBoardNode,
-  type TuiGraphBoardProjection,
-  summarizeTuiGraphRun
-} from './graph-mode.js'
-import {
-  answerCurrentUserInputWithText,
-  confirmCurrentUserInput,
-  createUserInputSession,
-  currentUserInputQuestion,
-  isUserInputSessionComplete,
-  moveUserInputOption,
-  orderedUserInputAnswers,
-  selectedUserInputLabels,
-  toggleCurrentUserInputOption,
-  type UserInputSession
-} from './user-input.js'
-import {
-  ClipboardImageError,
-  clipboardImageEmptyHint,
-  readClipboardImage,
-  type ClipboardImage
-} from './clipboard-image.js'
-import { WorkspaceFileAutocompleteProvider } from './file-mentions.js'
-import { bold, dim, blue, cyan, green, yellow, red, magenta, italic, isCancelInput, EXIT_CONFIRM_WINDOW_MS, UNDO_ESCAPE_WINDOW_MS, TOTAL_ELAPSED_MIN_START_GAP_MS, BRACKETED_PASTE_START, BRACKETED_PASTE_END, ENABLE_MOUSE_TRACKING, DISABLE_MOUSE_TRACKING, DIRECT_SEMANTIC_ACTIONS, sanitizeTerminalText, selectTheme, editorTheme, markdownTheme, parseSgrMouseEvent, writeLocalShareSnapshot, removeLocalShareSnapshot, type SgrMouseEvent, type ExclusiveRouteHandle } from './pi-common.js'
-import type { ExplorationEntry, ExplorationStage, ToolCallItem, ToolResultItem } from './transcript-exploration.js'
-
-export function popupFrame(title: string, body: string[], width: number): string[] {
-  const safeWidth = Math.max(12, width)
-  const inner = safeWidth - 4
-  const topTitle = ` ${sanitizeTerminalText(title)} `
-  const top = `┌${topTitle}${'─'.repeat(Math.max(0, safeWidth - visibleWidth(topTitle) - 2))}┐`
-  const lines = body.flatMap((entry) => String(entry).split('\n')).map((entry) => {
-    const clipped = truncateToWidth(entry, inner)
-    return `│ ${clipped}${' '.repeat(Math.max(0, inner - visibleWidth(clipped)))} │`
-  })
-  return [top, ...lines, `└${'─'.repeat(safeWidth - 2)}┘`]
-}
+import { truncateToWidth } from './ansi-text.js'
+import { sanitizeTerminalText } from './safe-text.js'
+import type { ThreadProjection } from './state.js'
 
 export function plainLines(value: string, width: number, padding: number): string[] {
   const safe = sanitizeTerminalText(value || '')
@@ -297,24 +155,6 @@ export function toolResultSummary(value: unknown): string {
   return conciseToolResultSummary(value) ?? outputText(value)
 }
 
-export function toolTreeSection(
-  label: string,
-  value: string,
-  width: number,
-  maxLines: number,
-  terminal: boolean,
-  tone: (value: string) => string
-): string[] {
-  const safeLabel = sanitizeTerminalText(label).slice(0, 12)
-  const prefixWidth = safeLabel ? safeLabel.length + 7 : 6
-  const lines = plainLines(value, Math.max(1, width - prefixWidth), 0).slice(0, maxLines)
-  return lines.map((line, index) => {
-    const marker = index === 0 ? (terminal ? '└' : '├') : '│'
-    const labelPrefix = index === 0 && safeLabel ? `${safeLabel}  ` : ' '.repeat(safeLabel ? safeLabel.length + 2 : 0)
-    return truncateToWidth(tone(`   ${marker} ${labelPrefix}${line}`), width)
-  })
-}
-
 export function conciseToolResultSummary(value: unknown): string | undefined {
   if (typeof value === 'string') return value.trim() || undefined
   if (value && typeof value === 'object') {
@@ -350,9 +190,3 @@ export function oneLine(value: string): string {
 }
 
 /** Decode plain and Kitty printable input without treating escape sequences as text. */
-export function printableInput(data: string): string | undefined {
-  const kitty = decodeKittyPrintable(data)
-  if (kitty) return kitty
-  if (!data.includes('\x1b') && Array.from(data).every((value) => value.codePointAt(0)! >= 0x20)) return data
-  return undefined
-}

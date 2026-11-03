@@ -1,5 +1,5 @@
 /**
- * Lazy, serialized Mermaid rendering (implementation §7.2).
+ * Lazy, serialized Mermaid rendering.
  *
  * - `mermaid` is loaded on first use; renders are queued because
  *   `mermaid.render` mutates a global element id.

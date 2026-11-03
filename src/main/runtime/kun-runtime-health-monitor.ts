@@ -7,6 +7,7 @@ const KUN_STARTUP_TIMEOUT_CEILING_MS = 600_000
 const STDERR_TAIL_MAX_CHARS = 32_768
 
 export type KunStartupHealthOptions = {
+  signal?: AbortSignal
   timeoutMs?: number
   healthPollMs?: number
   healthRequestTimeoutMs?: number
@@ -29,13 +30,15 @@ export class KunRuntimeHealthMonitor<Settings> {
 
   constructor(private readonly deps: KunRuntimeHealthMonitorDeps<Settings>) {}
 
-  async waitForHealthy(settings: Settings, timeoutMs: number): Promise<boolean> {
+  async waitForHealthy(settings: Settings, timeoutMs: number, signal?: AbortSignal): Promise<boolean> {
     const base = this.deps.runtimeBaseUrl(settings)
-    const deadline = Date.now() + timeoutMs
+    const deadline = performance.now() + timeoutMs
     let lastError = ''
-    while (Date.now() <= deadline) {
-      const remaining = Math.max(1, deadline - Date.now())
-      const result = await this.probeOnce(settings, base, remaining)
+    while (performance.now() <= deadline) {
+      signal?.throwIfAborted()
+      const remaining = Math.max(1, Math.ceil(deadline - performance.now()))
+      const result = await this.probeOnce(settings, base, remaining, signal)
+      signal?.throwIfAborted()
       if (result.healthy) return true
       if (result.error !== lastError) {
         lastError = result.error
@@ -50,7 +53,8 @@ export class KunRuntimeHealthMonitor<Settings> {
   probeOnce(
     settings: Settings,
     base = this.deps.runtimeBaseUrl(settings),
-    remainingMs = 1_000
+    remainingMs = 1_000,
+    signal?: AbortSignal
   ): Promise<KunRuntimeHealthProbeResult> {
     const existing = this.inFlight.get(base)
     if (existing) return existing
@@ -59,7 +63,8 @@ export class KunRuntimeHealthMonitor<Settings> {
       try {
         const response = await (this.deps.fetch ?? fetch)(`${base}/health`, {
           headers: this.deps.runtimeHeaders(settings),
-          signal: AbortSignal.timeout(Math.max(250, Math.min(1_000, remainingMs)))
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(Math.max(1, Math.min(1_000, remainingMs)))])
+            : AbortSignal.timeout(Math.max(1, Math.min(1_000, remainingMs)))
         })
         const healthy = response.ok && isKunHealthResponseBody(await response.text())
         return { healthy, error: healthy ? '' : `unexpected status ${response.status}` }
@@ -99,6 +104,7 @@ export async function waitForKunStartup(
   port?: number,
   options: KunStartupHealthOptions = {}
 ): Promise<void> {
+  options.signal?.throwIfAborted()
   const timeoutMs = options.timeoutMs ?? resolveKunStartupTimeoutMs(process.platform, process.env)
   const healthPollMs = options.healthPollMs ?? 500
   const probeHealth = options.probeHealth ?? ((targetPort) => probeKunHealth(
@@ -144,6 +150,7 @@ export async function waitForKunStartup(
       startedChild.removeListener('error', onError)
       startedChild.stdout?.removeListener('data', onStdout)
       startedChild.stderr?.removeListener('data', onStderr)
+      options.signal?.removeEventListener('abort', onAbort)
     }
     const tryParseReady = (): boolean => {
       const markerIndex = stdoutBuffer.indexOf(KUN_READY_PREFIX)
@@ -187,10 +194,13 @@ export async function waitForKunStartup(
       cleanup()
       reject(error)
     }
+    const onAbort = (): void => onError(options.signal!.reason)
     startedChild.stdout?.on('data', onStdout)
     startedChild.stderr?.on('data', onStderr)
     startedChild.once('exit', onExit)
     startedChild.once('error', onError)
+    options.signal?.addEventListener('abort', onAbort, { once: true })
+    if (options.signal?.aborted) onAbort()
   })
 }
 

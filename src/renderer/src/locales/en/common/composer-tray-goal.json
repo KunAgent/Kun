@@ -1,0 +1,20 @@
+{
+  "composerTrayGoal": {
+    "label": "Goal",
+    "segmentAria": "Goal ({{status}}): {{objective}}",
+    "status": {
+      "active": "Active",
+      "paused": "Paused",
+      "blocked": "Blocked",
+      "usageLimited": "Usage limited",
+      "budgetLimited": "Budget limited",
+      "complete": "Done"
+    },
+    "edit": "Edit",
+    "elapsed": "Elapsed",
+    "tokens": "tokens",
+    "tokensOfBudget": "tokens / budget",
+    "panelHintEmpty": "Type a goal in the composer below, then choose Set as goal.",
+    "panelHintReplace": "Type a new goal in the composer below to replace this one."
+  }
+}

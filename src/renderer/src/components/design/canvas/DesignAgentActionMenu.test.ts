@@ -13,21 +13,20 @@ const action: DesignAgentAction = {
 }
 
 describe('DesignAgentActionMenu', () => {
-  it('opens toward the canvas instead of the right rail', () => {
+  it('drops down under the top toolbar button', () => {
     const html = renderToStaticMarkup(
       createElement(DesignAgentActionMenu, {
         open: true,
         actions: [action],
         buttonClassName: 'button-base',
-        buttonActiveClassName: 'button-active',
-        buttonInactiveClassName: 'button-inactive',
         onToggle: () => {},
         onSelect: () => {}
       })
     )
 
-    expect(html).toContain('right-12')
-    expect(html).not.toContain('left-12')
+    expect(html).toContain('top-full')
+    expect(html).toContain('role="menu"')
+    expect(html).not.toContain('right-12')
     expect(html).toContain('designAgentActionExploreDirections')
   })
 })

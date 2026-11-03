@@ -52,7 +52,7 @@ export function createReferenceBranch(input: ReferenceBranchInput): Promise<{
   return historyRequest('/v1/threads/reference-branches', input)
 }
 
-/** Rebind a freshly-branched thread onto the selected harness (01 §8). */
+/** Rebind a freshly-branched thread onto the selected harness. */
 export async function updateThreadHarness(threadId: string, harnessId: string): Promise<void> {
   const response = await rendererRuntimeClient.runtimeRequest(
     `/v1/threads/${encodeURIComponent(threadId)}`, 'PATCH', JSON.stringify({ harnessId })

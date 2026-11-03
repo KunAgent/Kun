@@ -1,9 +1,13 @@
+import { ModelMetadataStateSchema, ModelMetadataResolutionSchema, ModelCapabilityFactsSchema, ModelReasoningCapabilityMetadata } from '../../../../kun/src/contracts/capabilities-core.js'
 import { ModelMetadataEvidenceSchema } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import { HarnessGatewayBindingSchema } from '../../../../kun/src/contracts/harness-gateway-binding.js'
+import { HarnessProviderOverrideSchema } from '../../../../kun/src/config/kun-config-harness-providers.js'
 import { z } from 'zod'
 import { GatewayMiddlewareSchema } from '../../../../kun/src/contracts/gateway-middleware.js'
 import { routePoolPatchesSchema } from './settings-route-pools'
 import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
+import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from '../../../shared/ade-collaboration-settings'
+import { dispatchPreferencesSchema } from '../dispatch-preferences-schema'
 import {
   APP_LOCALES,
   IMAGE_GENERATION_QUALITIES,
@@ -23,6 +27,7 @@ import {
   MIN_KUN_LOCAL_PORT,
   KUN_CONTEXT_COMPACTION_DEFAULTS_VERSION,
   KUN_RUNTIME_TUNING_DEFAULTS_VERSION,
+  KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION,
   MODEL_REQUEST_RETRY_DEFAULTS_VERSION,
   PROVIDER_PROXY_ROUTING_VERSION,
   SCHEDULE_MODEL_IDS,
@@ -156,6 +161,11 @@ const modelReasoningEffortSchema = z.enum(MODEL_REASONING_EFFORTS)
 const modelReasoningRequestProtocolSchema = z.enum(MODEL_REASONING_REQUEST_PROTOCOLS)
 const modelServiceTierSchema = z.enum(MODEL_SERVICE_TIERS)
 const modelProfilePatchShape = {
+  metadata: ModelMetadataStateSchema.optional(),
+  metadataResolution: ModelMetadataResolutionSchema.optional(),
+  maxInputTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
+  supportsReasoning: z.boolean().optional(),
+  conditionalCapabilities: ModelCapabilityFactsSchema.shape.conditionalCapabilities,
   aliases: z.array(modelIdSchema).max(50).optional(),
   contextWindowTokens: z.number().int().positive().max(MAX_MODEL_CONTEXT_WINDOW_TOKENS).optional(),
   maxOutputTokens: z.number().int().positive().max(MAX_MODEL_OUTPUT_TOKENS).optional(),
@@ -168,7 +178,10 @@ const modelProfilePatchShape = {
   reasoning: z.object({
     supportedEfforts: z.array(modelReasoningEffortSchema).min(1).max(8),
     defaultEffort: modelReasoningEffortSchema,
-    requestProtocol: modelReasoningRequestProtocolSchema
+    requestProtocol: modelReasoningRequestProtocolSchema,
+    nativeEfforts: ModelReasoningCapabilityMetadata.shape.nativeEfforts,
+    nativeDefaultEffort: ModelReasoningCapabilityMetadata.shape.nativeDefaultEffort,
+    effortMapping: ModelReasoningCapabilityMetadata.shape.effortMapping
   }).strict().optional(),
   pricing: z.object({
     inputUsdPerMillion: z.number().nonnegative().max(1_000_000),
@@ -315,6 +328,7 @@ const subagentProfilePatchSchema = z
     credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
     gatewayBinding: HarnessGatewayBindingSchema.optional(),
     delegationNotes: z.string().max(1_000).optional(),
+    owns: z.string().max(300).optional(),
     builtin: z.boolean().optional()
   })
   .passthrough()
@@ -323,6 +337,7 @@ const subagentsPatchSchema = z
   .object({
     enabled: z.boolean().optional(),
     useExistingAgents: z.boolean().optional(),
+    honorEngineBinding: z.boolean().optional(),
     maxParallel: z.number().int().positive().max(256).optional(),
     proactiveRetry: z.object({
       enabled: z.boolean().optional(),
@@ -499,7 +514,8 @@ export const kunRuntimePatchSchema = z.object({
     providerId: z.string().trim().max(64).optional(),
     model: optionalModelIdSchema,
     prompt: z.string().trim().max(MAX_BODY_BYTES).optional(),
-    timeoutMs: z.number().int().positive().max(600_000).optional()
+    timeoutMs: z.number().int().positive().max(600_000).optional(),
+    defaultsVersion: z.number().int().positive().max(KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION).optional()
   }).strict().optional(),
   musicGeneration: z.object({
     enabled: z.boolean().optional(),
@@ -550,6 +566,7 @@ export const kunRuntimePatchSchema = z.object({
   memoryEnabled: z.boolean().optional(),
   memoryDistillationEnabled: z.boolean().optional(),
   memoryDirectivesEnabled: z.boolean().optional(),
+  memoryRelationContextEnabled: z.boolean().optional(),
   instructions: z.object({
     enabled: z.boolean().optional()
   }).strict().optional(),
@@ -587,18 +604,8 @@ export const kunRuntimePatchSchema = z.object({
       providerId: z.string().trim().min(1).max(128).optional()
     }).strict()).max(128).optional(),
     disabledIds: z.array(z.string().trim().min(1).max(128)).max(64).optional(),
-    binaryPaths: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(4_096)).optional(),
-    custom: z.array(z.object({
-      id: z.string().trim().min(1).max(128),
-      displayName: z.string().trim().min(1).max(128).optional(),
-      command: z.string().trim().min(1).max(4_096),
-      args: z.array(z.string().max(1_024)).max(32).optional(),
-      env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/), z.string().max(1_024)).optional(),
-      secretEnv: z.array(z.object({
-        name: z.string().regex(/^[A-Z][A-Z0-9_]{0,63}$/),
-        secretRef: z.string().trim().min(1).max(256)
-      }).strict()).max(32).optional()
-    }).strict()).max(32).optional(),
+    // Launch overrides and user Agents; normalize validates each entry.
+    providers: z.record(z.string().trim().min(1).max(128), HarnessProviderOverrideSchema).optional(),
     defaults: z.record(z.string().trim().min(1).max(128), z.object({
       credentialMode: z.enum(['native-login', 'provider', 'kun-gateway']).optional(),
     gatewayBinding: HarnessGatewayBindingSchema.optional(),
@@ -607,21 +614,11 @@ export const kunRuntimePatchSchema = z.object({
       permissionMode: z.string().trim().min(1).max(64).optional(),
       isolation: z.enum(['local', 'worktree']).optional()
     }).strict()).optional(),
-    // Legacy pre-P4-11 shape; still accepted so old writers do not lose the
+    // Legacy shape; still accepted so old writers do not lose the
     // value — normalize folds it into `defaults[*].permissionMode`.
     defaultPermissionMode: z.record(z.string().trim().min(1).max(128), z.string().min(1).max(64)).optional(),
     defaultHarnessId: z.string().trim().min(1).max(128).optional(),
-    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional(),
-    // Terminal-only agents for the "new agent tab" menu (p4 §3.8, P4-13).
-    terminalAgents: z.array(z.object({
-      id: z.string().trim().min(1).max(128),
-      displayName: z.string().trim().min(1).max(128).optional(),
-      command: z.string().trim().min(1).max(4_096),
-      args: z.array(z.string().max(1_024)).max(32).optional(),
-      taskFlag: z.string().trim().min(1).max(64).optional(),
-      resumeArgs: z.array(z.string().max(1_024)).max(32).optional(),
-      hooks: z.enum(['none', 'claude-settings']).optional()
-    }).strict()).max(32).optional()
+    agentOrder: z.array(z.string().trim().min(1).max(64)).max(16).optional()
   }).strict().optional(),
   ade: z.object({
     enabled: z.boolean().optional(),
@@ -649,6 +646,17 @@ export const kunRuntimePatchSchema = z.object({
     stall: z.object({
       structuredMinutes: z.number().int().min(1).max(240).optional(),
       terminalMinutes: z.number().int().min(1).max(480).optional()
+    }).strict().optional(),
+    dispatch: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
+      autoStartWhenConfirmationRequired: z.boolean().optional(),
+      preferencePrompt: z.string().max(ADE_DISPATCH_PREFERENCE_MAX_CHARS).optional(),
+      preferences: dispatchPreferencesSchema.optional()
+    }).strict().optional(),
+    tasks: z.object({
+      autoStartSeconds: z.number().int().min(0).max(3_600).optional(),
+      worktree: z.boolean().optional(),
+      inheritContext: z.boolean().optional()
     }).strict().optional(),
     notifications: z.object({
       waiting: z.boolean().optional(),

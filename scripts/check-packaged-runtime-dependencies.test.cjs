@@ -1,11 +1,15 @@
 'use strict'
 
 const assert = require('node:assert/strict')
+const { mkdirSync, mkdtempSync, rmSync, writeFileSync } = require('node:fs')
+const { tmpdir } = require('node:os')
+const { join } = require('node:path')
 const test = require('node:test')
 const {
   packageNameFromSpecifier,
   sourceSpecifiers,
   isProductionPackage,
+  checkKunRuntimeDependencies,
   RENDERER_BUNDLED_ONLY_PACKAGES,
   rendererBundledOnlyFailures,
   formatRendererBundledOnlyError
@@ -104,4 +108,75 @@ test('flags renderer-bundled-only packages that regress to production dependenci
   assert.equal(failures[0].reason, 'listed as a production dependency')
   const message = formatRendererBundledOnlyError(failures)
   assert.ok(message.includes(`${firstName} (listed as a production dependency)`))
+})
+
+function writeTree(root, relativePath, contents) {
+  const path = join(root, ...relativePath.split('/'))
+  mkdirSync(join(path, '..'), { recursive: true })
+  writeFileSync(path, contents)
+}
+
+function createKunRoot({ installed = true } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'kun-runtime-deps-'))
+  writeTree(
+    root,
+    'kun/dist/cli/serve-entry.js',
+    "import { omega } from 'omega'\nexport * from './serve.js'\n"
+  )
+  writeTree(root, 'kun/dist/cli/serve.js', 'export const serve = 1\n')
+  writeTree(root, 'kun/dist/cli/agent-cli.js', 'export const run = 1\n')
+  writeTree(root, 'kun/dist/cli/index.js', 'export const cli = 1\n')
+  writeTree(root, 'kun/dist/manager/manager-entry.js', 'export const manager = 1\n')
+  if (installed) writeTree(root, 'kun/node_modules/omega/package.json', '{"name":"omega"}')
+  return root
+}
+
+test('resolves every package the compiled Kun runtime imports', () => {
+  const root = createKunRoot()
+  try {
+    const result = checkKunRuntimeDependencies({ root })
+    assert.deepEqual(result.packages, ['omega'])
+    assert.ok(result.reachableFiles >= 5)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('accepts root-hoisted packages that after-pack keeps on disk', () => {
+  const root = createKunRoot({ installed: false })
+  try {
+    writeTree(root, 'node_modules/omega/package.json', '{"name":"omega"}')
+    assert.deepEqual(checkKunRuntimeDependencies({ root }).packages, ['omega'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('fails when the compiled Kun runtime imports an uninstalled package', () => {
+  const root = createKunRoot({ installed: false })
+  try {
+    assert.throws(() => checkKunRuntimeDependencies({ root }), /not installed:\n- omega/u)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('fails when a compiled module imports a file that was not emitted', () => {
+  const root = createKunRoot()
+  try {
+    rmSync(join(root, 'kun', 'dist', 'cli', 'serve.js'))
+    assert.throws(() => checkKunRuntimeDependencies({ root }), /were not emitted/u)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+test('ignores test-support modules that the runtime never loads', () => {
+  const root = createKunRoot()
+  try {
+    writeTree(root, 'kun/dist/server/unused-test-support.js', "import { vi } from 'vitest'\n")
+    assert.deepEqual(checkKunRuntimeDependencies({ root }).packages, ['omega'])
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
 })

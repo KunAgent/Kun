@@ -124,6 +124,27 @@ it('atomically rejects a publication already in flight when Stop wins the commit
   } finally { held.resolve(); await publication }
 })
 
+it('rechecks publication after an unrelated room revision changes without losing the reply', async () => {
+  const f = await fixture(), held = deferred(), entered = deferred()
+  const commit = f.store.commit.bind(f.store)
+  let delayed = false
+  vi.spyOn(f.store, 'commit').mockImplementation(async (input) => {
+    if (!delayed && input.puts?.some((put) => put.kind === 'message' && (put.value as RoomMessage).body === 'Still publish.')) {
+      delayed = true; entered.resolve(); await held.promise
+    }
+    return commit(input)
+  })
+  const publication = f.publish('Still publish.')
+  try {
+    await entered.promise
+    const room = (await f.store.get<import('../contracts/rooms.js').Room>('room', f.created.roomId))!
+    await putRoomDocument(f.store, 'room', room.id, room.id, { ...room.value, name: 'Renamed while replying' }, room)
+    held.resolve()
+    expect((await publication).isError).not.toBe(true)
+    expect(await f.messages()).toEqual(['Still publish.'])
+  } finally { held.resolve(); await publication }
+})
+
 it.each(['stopping', 'cancelled', 'recovery_required'] as const)('rejects a new private publication while request is %s', async (status) => {
   const f = await fixture(), row = await f.row()
   await putRoomDocument(f.store, 'request', row.id, row.roomId!, { ...row.value, status }, row)
@@ -331,3 +352,25 @@ it.each([new Error('interrupt persistence failed'), new TurnConflictError('targe
     expect((await f.row()).value.status).toBe('stopping')
     expect((await f.h.threads.getMetadata(f.request.threadId))?.turns.find((turn) => turn.id === f.request.turnId)?.status).toBe('running')
   })
+
+it('settles Stop and admits the queued message through the room tick while memory capture keeps failing', async () => {
+  const f = await fixture()
+  await f.stop()
+  expect((await f.row()).value.status).toBe('stopping')
+  const next = await f.runtime.service.send(f.created.roomId, { clientRequestId: 'after-stop', body: 'Why did it not stop?' })
+  vi.spyOn(f.runtime['memoryCapture'], 'tick').mockRejectedValue(new Error(
+    'Kun Service Manager request failed with HTTP 400: invalid memory-store request'))
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const driver = f.runtime as unknown as { stopped: boolean; tick(): Promise<{ active: boolean }> }
+  let memoryWarnings: unknown[][] = []
+  driver.stopped = false
+  try {
+    await driver.tick()
+    await driver.tick()
+    memoryWarnings = warn.mock.calls.filter((call) => call[0] === '[kun] room memory capture:')
+  } finally { driver.stopped = true; warn.mockRestore() }
+  expect((await f.row()).value.status).toBe('cancelled')
+  expect((await f.row(next.requestId)).value.turnId).toBeDefined()
+  // The second identical failure is throttled instead of logged on every tick.
+  expect(memoryWarnings).toHaveLength(1)
+})

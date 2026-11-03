@@ -94,7 +94,7 @@ it('keeps a paged conversation list stable when a new Agent chat opens', async (
     entries.push(...next.entries); cursor = next.nextCursor
   }
   expect(entries.map((entry) => entry.id)).toEqual(allBefore.entries.map((entry) => entry.id))
-  expect(new Set(entries.map((entry) => entry.id)).size).toBe(25)
+  expect(new Set(entries.map((entry) => entry.id)).size).toBe(26) // 25 groups + 小 Kun's own chat, seeded as the default member
 })
 it('pages mixed empty private and group conversations without unused Agent catalog or pair rooms', async () => {
   const { store, agents, service, a, b } = await fixture()
@@ -131,9 +131,21 @@ it('retains queued work and integration attention, excluding cancelled integrati
   ] })
   const entry = (await store.sidebarPage({ attentionOnly: true })).entries[0]
   expect(entry.roomId).toBe(room.id); expect(entry.attentionCount).toBe(1); expect(entry.runningCount).toBe(1)
+  expect(entry.taskRunningCount).toBe(1)
   await store.commit({ requestId: 'cancelled-integration', checks: [{ kind: 'integration', id: 'integration', expectedRevision: 0 }],
     puts: [{ kind: 'integration', id: 'integration', roomId: room.id, value: { taskId: 'done', status: 'failed', cancelRequested: true } }] })
   expect((await store.sidebarPage({ attentionOnly: true })).entries).toEqual([])
+})
+it('counts a live group discussion as running work but never as a task', async () => {
+  const { store, agents, service, a, b } = await fixture()
+  const group = (await service.create({ clientRequestId: 'discussing', name: 'Discussing team',
+    members: [agents.asMember(a), agents.asMember(b)] })).room
+  await store.commit({ requestId: 'participation-check', checks: [{ kind: 'room_run', id: 'run-triage', expectedRevision: null }],
+    puts: [{ kind: 'room_run', id: 'run-triage', roomId: group.id, value: { id: 'run-triage', roomId: group.id,
+      memberId: group.defaultMemberId, memberLabel: 'Alpha', phase: 'triage', attempt: 1, clientRequestId: 'check-1',
+      input: '', attachmentIds: [], status: 'running', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() } }] })
+  const entry = (await store.sidebarPage({ kind: 'group' })).entries.find((value) => value.roomId === group.id)!
+  expect(entry).toMatchObject({ runningCount: 1, taskRunningCount: 0 })
 })
 it('shows only the latest private request as needing attention', async () => {
   const { store, agents, service, a } = await fixture()
@@ -226,6 +238,17 @@ it('surfaces a group room avatar without replacing a private agent portrait', as
   const entries = (await store.sidebarPage({})).entries
   expect(entries.find((entry) => entry.kind === 'group')?.avatar).toEqual({ kind: 'builtin', id: 'scientist' })
   expect(entries.find((entry) => entry.agentId === agent.id)?.avatar).toEqual({ kind: 'builtin', id: 'explorer' })
+})
+
+it('shows group members with their current Agent name and avatar after an Agent changes', async () => {
+  const { store, agents, service, a, b } = await fixture()
+  await service.create({ clientRequestId: 'mosaic', name: 'Team', members: [agents.asMember(a), agents.asMember(b)] })
+  const changed = { kind: 'composed', version: 1, parts: { color: 'teal', face: 'happy', headwear: 'beret', bg: '#eaf6ef' } } as const
+  await agents.update(a.id, { clientRequestId: 'dress-alpha', expectedRevision: a.revision, name: 'Alpha Prime', avatar: changed })
+  const group = (await store.sidebarPage({})).entries.find((entry) => entry.kind === 'group')
+  const alpha = group?.members.find((member) => member.participantAgentId === a.id)
+  expect(alpha).toMatchObject({ displayName: 'Alpha Prime', avatar: changed })
+  expect(group?.members.find((member) => member.participantAgentId === b.id)?.displayName).toBe('Beta')
 })
 
 it('includes mute state without changing unread or attention semantics', async () => {

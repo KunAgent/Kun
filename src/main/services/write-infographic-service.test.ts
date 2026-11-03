@@ -170,6 +170,9 @@ describe('write infographic service', () => {
         headers: init?.headers as Record<string, string>,
         body: String(init?.body)
       })
+      if (init?.method === 'GET') {
+        return Response.json({ models: [{ slug: 'gpt-5.4' }] })
+      }
       return new Response(`data: ${JSON.stringify({
         type: 'response.output_item.done',
         item: { type: 'image_generation_call', result: PNG_BYTES.toString('base64') }
@@ -190,16 +193,23 @@ describe('write infographic service', () => {
       workspaceRoot: workspace
     })
 
-    expect(result.ok).toBe(true)
-    expect(requests).toHaveLength(1)
-    expect(requests[0].url).toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(result).toMatchObject({ ok: true })
+    expect(requests).toHaveLength(2)
+    expect(new URL(requests[0].url).pathname).toBe('/backend-api/codex/models')
     expect(requests[0].headers).toMatchObject({
+      Authorization: 'Bearer codex-access-token',
+      'ChatGPT-Account-Id': 'acct_123'
+    })
+    const generation = requests[1]
+    expect(JSON.parse(generation.body).model).toBe('gpt-5.4')
+    expect(generation.url).toBe('https://chatgpt.com/backend-api/codex/responses')
+    expect(generation.headers).toMatchObject({
       Authorization: 'Bearer codex-access-token',
       'ChatGPT-Account-Id': 'acct_123',
       originator: 'codex_cli_rs',
       'OpenAI-Beta': 'responses=experimental'
     })
-    expect(JSON.parse(requests[0].body).tools[0]).toMatchObject({
+    expect(JSON.parse(generation.body).tools[0]).toMatchObject({
       type: 'image_generation',
       action: 'generate',
       quality: 'auto',
@@ -208,7 +218,7 @@ describe('write infographic service', () => {
       partial_images: 1,
       model: 'gpt-image-2'
     })
-    expect(JSON.parse(requests[0].body).tool_choice).toMatchObject({
+    expect(JSON.parse(generation.body).tool_choice).toMatchObject({
       type: 'allowed_tools',
       mode: 'required',
       tools: [{ type: 'image_generation' }]

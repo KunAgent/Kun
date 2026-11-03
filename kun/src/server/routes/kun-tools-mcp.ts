@@ -1,3 +1,4 @@
+import { projectAnthropicToolInputSchema } from '../../adapters/model/anthropic-tool-schema-projection.js'
 import { KUN_VERSION } from '../../version.js'
 import type { HarnessTokenGrant } from '../../harness/harness-token-service.js'
 import { mapKunResultToSdkContent } from '../../runtime/agent-sdk/sdk-tool-bridge.js'
@@ -8,7 +9,7 @@ import type { ServerRuntime } from './server-runtime.js'
 
 /**
  * Minimal streamable-HTTP MCP server exposing Kun's bridged tools to spawned
- * harnesses (docs/ade/05 §3.3). No MCP SDK dependency: the surface is the
+ * harnesses. No MCP SDK dependency: the surface is the
  * JSON-RPC subset a harness needs to enumerate and call Kun tools. Execution
  * goes through the shared KunToolBridgeHost — and therefore through the
  * canonical ToolHost — so approval, sandbox, skill, and plan semantics are
@@ -79,7 +80,8 @@ function mcpToolList(
     tools: tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      inputSchema: tool.inputSchema
+      // Downstream gateways (Anthropic-format) reject top-level oneOf/anyOf/allOf.
+      inputSchema: projectAnthropicToolInputSchema(tool.inputSchema)
     }))
   }
 }

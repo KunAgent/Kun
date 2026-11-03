@@ -1,3 +1,5 @@
+import { stat } from 'node:fs/promises'
+import type { WorkerNoticeSink } from './worker-notice-store.js'
 import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type {
   ChildRunRecord,
@@ -24,6 +26,7 @@ import { withAdeTeamMutex } from './ade-file.js'
 
 export type DeliverOutcome = {
   accepted: boolean
+  failureReason?: string
   pendingReason?: 'workspace' | 'worker-busy' | 'user-control'
 }
 
@@ -37,15 +40,16 @@ type RunChildInput = {
   workspace?: string
   model?: string
   providerId?: string
-  /** Resolved subagent profile id applied to the child's role (10 §3.1). */
+  reasoningEffort?: WorkerRecord['reasoningEffort']
+  /** Resolved subagent profile id applied to the child's role. */
   profile?: string
-  /** Selector decision metadata recorded on the child run (10 §3.3). */
+  /** Selector decision metadata recorded on the child run. */
   routing?: ChildRoutingMetadata
   security?: ChildSecuritySnapshot
   harnessId?: WorkerRecord['route']['harnessId']
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: WorkerRecord['route']['credentialMode']
-  /** Read-only policy/sandbox ceiling for reviewer workers (10 §5). */
+  /** Read-only policy/sandbox ceiling for reviewer workers. */
   toolPolicyCeiling?: 'readOnly'
   sandboxMode?: SandboxMode
   approvalPolicy?: ApprovalPolicy
@@ -73,7 +77,7 @@ type ResumeChildInput = {
   signal: AbortSignal
 }
 
-/** The delegation-runtime surface the deliverer needs (09 §5). */
+/** The delegation-runtime surface the deliverer needs. */
 export type DelivererDelegation = {
   runChild(input: RunChildInput): Promise<ChildRunRecord>
   resumeChild(input: ResumeChildInput): Promise<ChildRunRecord>
@@ -82,6 +86,7 @@ export type DelivererDelegation = {
 }
 
 export type DispatchDelivererDeps = {
+  notices?: WorkerNoticeSink
   agentDispatchService?: Pick<import('../delegation/agent-dispatch-service.js').AgentDispatchService, 'get'>
   teams: FileTeamStore
   dispatches: FileDispatchStore
@@ -98,7 +103,7 @@ export type DispatchDelivererDeps = {
 }
 
 /**
- * Exactly-once dispatch delivery (09 §5). A dispatch row is persisted before
+ * Exactly-once dispatch delivery. A dispatch row is persisted before
  * the worker turn exists; `clientRequestId = dispatchId` makes the turn
  * admission idempotent so a restart or double-fire can never spawn a second
  * turn for the same dispatch.
@@ -140,7 +145,7 @@ export class DispatchDeliverer {
   }
 
   /**
-   * `worker_stop` (09 §4.1): abort the detached run's controller and interrupt
+   * `worker_stop`: abort the detached run's controller and interrupt
    * any active/queued turn. The turn-terminal hook marks the dispatch
    * cancelled; queued dispatches stay pending for the next free slot.
    */
@@ -165,9 +170,13 @@ export class DispatchDeliverer {
    * a workspace becomes ready). Other workers' pending rows are untouched.
    */
   async tryDeliverNext(teamId: string, workerId: string): Promise<void> {
-    const next = (await this.deps.dispatches.listByWorker(teamId, workerId))
-      .find((entry) => entry.state === 'pending' || entry.state === 'uncertain')
-    if (next) await this.tryDeliver(teamId, next.dispatchId)
+    const queued = (await this.deps.dispatches.listByWorker(teamId, workerId))
+      .filter((entry) => entry.state === 'pending' || entry.state === 'uncertain')
+    for (const next of queued) {
+      await this.tryDeliver(teamId, next.dispatchId)
+      const state = (await this.deps.dispatches.get(teamId, next.dispatchId))?.state
+      if (state !== 'failed' && state !== 'cancelled') break
+    }
   }
 
   /** Fire a `tryDeliver` when a task workspace reaches `ready`. */
@@ -184,12 +193,30 @@ export class DispatchDeliverer {
     })
   }
 
-  private async fail(teamId: string, dispatch: DispatchRecord, reason: string): Promise<void> {
-    await this.deps.dispatches.update(teamId, dispatch.dispatchId, {
+  private async fail(teamId: string, dispatch: DispatchRecord, reason: string): Promise<DeliverOutcome> {
+    const failed = await this.deps.dispatches.update(teamId, dispatch.dispatchId, {
       state: 'failed',
       failureReason: reason
-    }).catch((error) => {
-      console.warn(`[kun] ade dispatch ${dispatch.dispatchId} fail write failed:`, error)
+    })
+    if (failed) await this.notifyFailure(failed)
+    return { accepted: false, failureReason: reason }
+  }
+
+  private async notifyFailure(dispatch: DispatchRecord): Promise<void> {
+    if (!dispatch.failureReason) return
+    const worker = await this.deps.teams.worker(dispatch.teamId, dispatch.workerId)
+    if (worker && (worker.control === 'user' || worker.state !== 'active')) return
+    await this.deps.notices?.enqueue({
+      noticeId: `ntc_${dispatch.dispatchId}`,
+      teamId: dispatch.teamId,
+      workerId: dispatch.workerId,
+      parentTurnId: dispatch.parentTurnId,
+      dispatchId: dispatch.dispatchId,
+      kind: 'dispatch_failed',
+      title: dispatch.title,
+      detail: dispatch.failureReason,
+      attempts: 0,
+      createdAt: dispatch.updatedAt
     })
   }
 
@@ -197,19 +224,18 @@ export class DispatchDeliverer {
     const dispatch = await this.deps.dispatches.get(teamId, dispatchId)
     if (!dispatch) return { accepted: false }
     if (dispatch.state !== 'pending' && dispatch.state !== 'uncertain') {
-      return { accepted: dispatch.state === 'accepted' }
+      return { accepted: dispatch.state === 'accepted', ...(dispatch.failureReason ? { failureReason: dispatch.failureReason } : {}) }
     }
     const team = await this.deps.teams.get(teamId)
     const worker = await this.deps.teams.worker(teamId, dispatch.workerId)
     if (!team || !worker) {
-      await this.fail(teamId, dispatch, 'team or worker record missing')
-      return { accepted: false }
+      return this.fail(teamId, dispatch, 'team or worker record missing')
     }
     if (await this.intentBlocked(worker, dispatch)) {
       return { accepted: false, pendingReason: 'user-control' }
     }
     if (worker.control === 'user') {
-      // User takeover (09 §9) holds the queue instead of destroying it —
+      // User takeover holds the queue instead of destroying it —
       // hand-back resumes delivery through tryDeliverNext.
       return { accepted: false, pendingReason: 'user-control' }
     }
@@ -217,15 +243,33 @@ export class DispatchDeliverer {
       await this.cancel(teamId, dispatch, 'worker released')
       return { accepted: false }
     }
+    // Admission may be persisted before its turn exists. Let terminal recovery
+    // settle that dispatch before assigning the same child another task.
+    const priorDispatches = await this.deps.dispatches.listByWorker(teamId, worker.workerId)
+    if (priorDispatches.some((entry) => entry.dispatchId !== dispatch.dispatchId &&
+      (entry.state === 'accepted' || entry.state === 'delivering' || entry.state === 'uncertain'))) {
+      if (dispatch.mode === 'queue' || !await this.workerBusy(worker.workerId)) {
+        return { accepted: false, pendingReason: 'worker-busy' }
+      }
+    }
     const workspace = worker.taskWorkspaceId && this.deps.taskWorkspaces
       ? this.deps.taskWorkspaces.get(worker.taskWorkspaceId) ?? null
       : null
-    if (workspace && workspace.state !== 'ready') {
-      if (workspace.state === 'failed') {
-        await this.fail(teamId, dispatch, `workspace failed: ${workspace.lastError ?? 'unknown'}`)
-        return { accepted: false }
+    if (worker.taskWorkspaceId && !workspace) {
+      return this.fail(teamId, dispatch, 'task workspace record missing')
+    }
+    if (workspace) {
+      if (workspace.state === 'creating' || workspace.state === 'setting-up') {
+        return { accepted: false, pendingReason: 'workspace' }
       }
-      return { accepted: false, pendingReason: 'workspace' }
+      // Capture preserves the checkout; review/rework must reuse those changes.
+      if (workspace.state !== 'ready' && workspace.state !== 'captured') {
+        return this.fail(teamId, dispatch, `workspace ${workspace.state}: ${workspace.lastError ?? 'not executable'}`)
+      }
+      const directory = await stat(workspace.path).catch(() => null)
+      if (!directory?.isDirectory()) {
+        return this.fail(teamId, dispatch, 'task workspace directory missing or inaccessible')
+      }
     }
     const busy = await this.workerBusy(dispatch.workerId)
     if (busy && dispatch.mode === 'queue') {
@@ -240,8 +284,7 @@ export class DispatchDeliverer {
       }
     }
     if (!this.deps.delegation) {
-      await this.fail(teamId, dispatch, 'delegation runtime is not enabled')
-      return { accepted: false }
+      return this.fail(teamId, dispatch, 'delegation runtime is not enabled')
     }
     const latestWorker = await this.deps.teams.worker(teamId, worker.workerId)
     if (latestWorker?.control === 'user' || await this.intentBlocked(worker, dispatch)) {
@@ -253,8 +296,7 @@ export class DispatchDeliverer {
     try {
       run = this.startRun(team, dispatch, worker, workspace ?? null, prior ?? null)
     } catch (error) {
-      await this.fail(teamId, dispatch, error instanceof Error ? error.message : String(error))
-      return { accepted: false }
+      return this.fail(teamId, dispatch, error instanceof Error ? error.message : String(error))
     }
     // `runChild`/`resumeChild` resolve at admission (detached worker turns
     // keep running in the background); a rejection means the start failed —
@@ -263,9 +305,9 @@ export class DispatchDeliverer {
       await run
     } catch (error) {
       await this.classifyFailure(teamId, dispatch.dispatchId, error)
-      return { accepted: false }
+      return { accepted: false, failureReason: error instanceof Error ? error.message : String(error) }
     }
-    // turnId backfills from the admitted turn's clientRequestId (09 §5).
+    // turnId backfills from the admitted turn's clientRequestId.
     await this.deps.dispatches.update(teamId, dispatch.dispatchId, { state: 'accepted' })
     return { accepted: true }
   }
@@ -317,18 +359,20 @@ export class DispatchDeliverer {
       label: worker.label,
       childId: dispatch.workerId,
       // Reviewers hold no task-workspace record; their sandboxRoot is the
-      // reviewed worker's workspace (10 §5 local semantics).
+      // reviewed worker's workspace.
       workspace: workspace?.path ?? (worker.reviewOf ? worker.securitySnapshot.sandboxRoot : undefined),
       model: worker.route.model,
       providerId: worker.route.providerId,
-      // Reviewers run under the host read-only ceiling (10 §5); resumeChild
+      ...(worker.reasoningEffort ? { reasoningEffort: worker.reasoningEffort } : {}),
+      // Reviewers run under the host read-only ceiling; resumeChild
       // inherits the policy from the stored run record automatically.
       ...(worker.reviewOf
         ? { toolPolicyCeiling: 'readOnly' as const, sandboxMode: 'read-only' as const }
         : {}),
+      // An explicitly chosen roster role applies with or without selector rationale.
+      ...(worker.profileId ? { profile: worker.profileId } : {}),
       ...(worker.selection
         ? {
-            ...(worker.profileId ? { profile: worker.profileId } : {}),
             routing: {
               method: 'worker-selector' as const,
               selectedKind: (worker.profileId ? 'profile' : 'harness') as 'profile' | 'harness',
@@ -379,15 +423,20 @@ export class DispatchDeliverer {
   }
 
   /**
-   * Classify a rejected run (09 §5): errors proving the turn never started
+   * Classify a rejected run: errors proving the turn never started
    * (validation, resume fences) mark the dispatch `failed`; anything that may
    * have reached admission becomes `uncertain` for startup reconciliation.
    */
   private async classifyFailure(teamId: string, dispatchId: string, error: unknown): Promise<void> {
     const started = await this.dispatchTurnExists(teamId, dispatchId)
     const message = error instanceof Error ? error.message : String(error)
+    if (!started) {
+      const dispatch = await this.deps.dispatches.get(teamId, dispatchId)
+      if (dispatch) await this.fail(teamId, dispatch, message.slice(0, 2_000))
+      return
+    }
     await this.deps.dispatches.update(teamId, dispatchId, {
-      state: started ? 'uncertain' : 'failed',
+      state: 'uncertain',
       failureReason: message.slice(0, 2_000)
     }).catch((updateError) => {
       console.warn(`[kun] ade dispatch ${dispatchId} track update failed:`, updateError)
@@ -403,7 +452,7 @@ export class DispatchDeliverer {
   }
 
   /**
-   * Startup reconciliation (09 §5): `delivering`/`uncertain` dispatches are
+   * Startup reconciliation: `delivering`/`uncertain` dispatches are
    * looked up by `clientRequestId` on the worker thread. Found → `accepted`
    * with `turnId` backfilled; missing → redelivered under the same key so
    * exactly one turn ever exists per dispatch.
@@ -428,6 +477,14 @@ export class DispatchDeliverer {
           .catch(() => undefined)
       }
       await this.tryDeliver(teamId, dispatch.dispatchId)
+    }
+    const pending = await this.deps.dispatches.listByState(teamId, ['pending'])
+    for (const workerId of new Set(pending.map((entry) => entry.workerId))) {
+      await this.tryDeliverNext(teamId, workerId)
+    }
+    // Recover a crash between persisting a pre-admission failure and its notice.
+    for (const failed of await this.deps.dispatches.listByState(teamId, ['failed'])) {
+      if (!failed.turnId && !failed.outcome) await this.notifyFailure(failed)
     }
   }
 

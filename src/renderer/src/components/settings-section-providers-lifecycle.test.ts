@@ -241,9 +241,8 @@ describe('provider mutation lifecycle across settings remounts', () => {
     for (const button of actions.findAllByType('button')) {
       expect(button.props.className).toContain('whitespace-nowrap')
     }
-    const tabs = renderer.root.findAllByProps({ role: 'tablist' })
-      .find((tablist) => tablist.props['aria-label'] === 'providers')
-    expect(tabs).toBeTruthy()
+    // The local gateway has its own page, so the header carries no mode tabs.
+    expect(renderer.root.findAllByProps({ role: 'tablist', 'aria-label': 'providers' })).toHaveLength(0)
   })
 
   it('shows a wired API key input when adding a custom provider', async () => {

@@ -1,6 +1,6 @@
-import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
+import { manualApprovalResolution, type ApprovalRequest, type ApprovalResolution } from '../domain/approval.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
-import type { ApprovalReviewPort } from '../ports/approval-review.js'
+import type { ApprovalReviewPort, ApprovalReviewModelRoute } from '../ports/approval-review.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { ActingTurnModelRoute } from '../contracts/turns.js'
 import {
@@ -31,6 +31,7 @@ export function makeDelegatedAwaitApproval(
     sandboxMode: SandboxMode | undefined
     approvalReviewer: ApprovalReviewer
     actingModelRoute: ActingTurnModelRoute
+    reviewSource?: ApprovalReviewModelRoute['source']
     /** Bounded excerpt of the initiating user's intent for review context. */
     intent: string
     signal: AbortSignal
@@ -38,6 +39,7 @@ export function makeDelegatedAwaitApproval(
 ): (approval: ApprovalRequest) => Promise<'allow' | 'deny' | ApprovalResolution> {
   const { approvalPolicy, sandboxMode, approvalReviewer, actingModelRoute, intent, signal } = input
   return async (approval) => {
+    if (signal.aborted) return 'deny'
     const requiresUserDecision =
       approval.action?.requiresUserDecision === true ||
       approval.action?.reviewerRequirement === 'user'
@@ -55,14 +57,16 @@ export function makeDelegatedAwaitApproval(
       }
       return deps.approvalReview.review({
         approval,
-        route: actingModelRoute,
+        // Unknown historical delegated callers must not borrow the default provider.
+        route: { ...actingModelRoute, source: input.reviewSource ?? { harnessId: 'unknown' } },
         intent,
         signal
       })
     }
     const gate = deps.approvalGate
     if (approvalPolicy === 'never' || !gate) return 'deny'
-    const pending = gate.request(approval)
+    const pending = gate.requestResolution ? gate.requestResolution(approval)
+      : gate.request(approval).then((decision) => manualApprovalResolution(decision))
 
     // Arm cancellation before publishing approval_requested. The recorder may
     // block on durable storage or synchronous observers, but a cancelled turn
@@ -148,11 +152,11 @@ export function makeDelegatedAwaitApproval(
         () => {
           if (settled) return
           pending.then(
-            (decision) => {
+            (resolution) => {
               if (settled) return
               settled = true
               cleanup()
-              resolve(requiresUserDecision ? { decision, reviewer: 'user' } : decision)
+              resolve(requiresUserDecision || resolution.choice ? resolution : resolution.decision)
             },
             (error) => {
               if (settled) return

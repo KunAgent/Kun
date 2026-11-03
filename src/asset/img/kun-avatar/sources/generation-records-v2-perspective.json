@@ -1,0 +1,26 @@
+{
+  "created": "2026-10-08",
+  "sources": [
+    {
+      "prompt": "Redraw the THREE attached isolated Kun wardrobe inventory icons with corrected perspectives, preserving their EXACT object identities, palettes and friendly painted game illustration style. Produce a single wide sprite sheet with THREE equal square cells in ONE horizontal row. TRUE TRANSPARENT background, including all holes; no black/white/checkerboard background, ground shadows, glow, text, labels, border, bird, people or body. Each object occupies only 70% of its cell with generous transparent gutters, fully inside its own cell. ORGANIC navy #0e2f66 exterior outline, equivalent to 11 pixels on final512px icon; interior seams about half as thick. Two clean cel-shaded tones plus one modest upper-left highlight; no airbrush gradients, no realistic3D. LEFT CELL: the cobalt BLUE headset WITH microphone from first reference, preserve blue headband and earcup shells, charcoal/navy soft cushions, blue curved boom and charcoal microphone tip. Important change: show LEFT-FRONT THREE-QUARTER view FROM SLIGHTLY ABOVE, headband tilted about15 degrees counterclockwise, left earcup closer and visibly larger, right earcup narrower behind; clearly see top surface of arched headband. Anatomically plausible connected boom emerges from nearer earcup and bends forward across low foreground without closing the open center. Do NOT make front-symmetric headset. MIDDLE CELL: the WHITE puffed chef toque from second reference, broad white folded cuff and five soft puffy lobes with gray-blue cel shadows, no insignia. Important change: LEFT-FRONT THREE-QUARTER view looking DOWN from above30degrees with slight15degree counterclockwise tilt; see the rounded white fabric TOP and near/left side of band, do NOT show a dark opening in underside and do NOT look up from below. Hat is an upright soft volume viewed from upper-left, not flat front elevation. RIGHT CELL: the charcoal BLACK compact CAMERA with large BLUE glass lens from third reference, preserve raised flash hump with small pale flash, top shutter dial, small round silver front button, no logo or strap. Show from upper RIGHT at30degree angle with clear TOP plane and right side visible, front lens receding as an ellipse, camera rotated slightly counterclockwise so its long axis rises toward upper-right; clear three-dimensional perspective rather than a front elevation. Keep camera simple, two-tone charcoal casing, dark navy contour, cobalt lens and one pale small lens highlight. All three icons must share same bold friendly hand-painted style and similar visual weight. Perspective changes, not redesigns; no other objects.",
+      "referencedImages": [
+        "v2-perspective-reference-headset.png",
+        "v2-perspective-reference-chef-hat.png",
+        "v2-perspective-reference-camera.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "F9: headset and chef hat use left-front three-quarter views from above; camera shows upper-right three-quarter perspective with visible top and right side. Reference snapshots retain exact tool inputs before replacement.",
+      "sha256": "9c4a1d84e61c9abeb18b7a0d5ca93d1683ad8c840df0dededf6aea8bdcfeb500",
+      "referenceHashes": {
+        "v2-perspective-reference-headset.png": "77d4fd8a1aad38e8b196aa57189f04fe397b1535a02f8f3734999e88c347e112",
+        "v2-perspective-reference-chef-hat.png": "5f64fb85f6155cf56986918e9efa9705df3cf294d501f862226087189d51c4ba",
+        "v2-perspective-reference-camera.png": "85ab447397525166185840a05c733359c69d1da005fe5011b370df2018e0e334"
+      },
+      "file": "v2-perspective-icons.png",
+      "width": 2172,
+      "height": 724
+    }
+  ]
+}

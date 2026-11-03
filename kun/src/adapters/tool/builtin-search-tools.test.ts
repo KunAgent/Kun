@@ -160,7 +160,8 @@ describe('Fast Context source search bounds', () => {
 
       const fast = await tool.execute({ pattern: '*.ts', limit: 20 }, context(workspace, true))
       expect(fast.output).toMatchObject({
-        backend: 'scan',
+        backend: 'index',
+        index_backend: 'scan',
         fast_context: true,
         matches: [expect.objectContaining({ relative_path: 'src/keep.ts' })]
       })
@@ -202,33 +203,46 @@ describe('Fast Context source search bounds', () => {
     }
   })
 
-  it('reports rg output truncation and timeout as Fast Context uncertainty', async () => {
+  it('reports index truncation and live rg timeouts as Fast Context uncertainty', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'kun-fast-context-glob-command-'))
     try {
-      const captureCalls: Array<{ maxOutputBytes?: number; timeoutMs?: number }> = []
+      const captureCalls: Array<{ args: string[]; options: Record<string, unknown> }> = []
       const cappedGlob = createGlobLocalTool({
         fdExecutableCandidates: [],
         rgExecutableCandidates: [process.execPath],
         fastContext: { maxOutputBytes: 512, timeoutMs: 1_000 },
-        operations: { spawnCapture: async (_file, _args, command) => {
-          captureCalls.push(command)
+        operations: { spawnCapture: async (_file, args, command) => {
+          captureCalls.push({ args, options: command })
           return { stdout: 'a.ts\n', stderr: '', exitCode: null, outputTruncated: true, timedOut: false }
         } }
       })
+      // The workspace index is built once from a truncated listing; the glob
+      // still answers from it and reports the truncation.
       const capped = await cappedGlob.execute({ pattern: '*.ts' }, context(workspace, true))
-      expect(capped.output).toMatchObject({ backend: 'rg', command_output_truncated: true, command_timed_out: false })
+      expect(capped.output).toMatchObject({
+        backend: 'rg',
+        index_backend: 'rg',
+        matches: [expect.objectContaining({ relative_path: 'a.ts' })],
+        command_output_truncated: true,
+        command_timed_out: false
+      })
       const timedOutGlob = createGlobLocalTool({
         fdExecutableCandidates: [],
         rgExecutableCandidates: [process.execPath],
         fastContext: { maxOutputBytes: 512, timeoutMs: 100 },
-        operations: { spawnCapture: async (_file, _args, command) => {
-          captureCalls.push(command)
+        operations: { spawnCapture: async (_file, args, command) => {
+          captureCalls.push({ args, options: command })
           return { stdout: '', stderr: '', exitCode: null, outputTruncated: false, timedOut: true }
         } }
       })
+      // No indexed file matches, so a live, scoped rg listing runs and times out.
       const timedOut = await timedOutGlob.execute({ pattern: 'slow' }, context(workspace, true))
       expect(timedOut.output).toMatchObject({ backend: 'rg', command_output_truncated: false, command_timed_out: true })
-      expect(captureCalls).toEqual([{ maxOutputBytes: 512, timeoutMs: 1_000, cwd: workspace, signal: expect.any(AbortSignal) }, { maxOutputBytes: 512, timeoutMs: 100, cwd: workspace, signal: expect.any(AbortSignal) }])
+      const indexBuild = captureCalls.find((call) => call.args[0] === '--files' && call.args.includes('--threads'))
+      expect(indexBuild?.options).toMatchObject({ cwd: workspace, lowPriority: true, maxLines: expect.any(Number) })
+      const live = captureCalls.filter((call) => call.args.includes('slow'))
+      expect(live.at(-1)?.options).toMatchObject({ cwd: workspace, maxOutputBytes: 512, timeoutMs: 100, lowPriority: true })
+      expect(live.at(-1)?.args).toEqual(expect.arrayContaining(['--max-filesize', '-g', '!node_modules/']))
     } finally {
       await rm(workspace, { recursive: true, force: true })
     }

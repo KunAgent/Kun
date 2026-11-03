@@ -25,6 +25,7 @@ export function transitionCodeRightTabsForThread(
   registry: ThreadRightPanelExpansionRegistry
 ): CodeRightTabsState {
   let next = closeCodeRightTab(state, BUILTIN_RIGHT_PANEL_IDS.browser)
+  next = closeCodeRightTab(next, BUILTIN_RIGHT_PANEL_IDS.canvas)
   next = closeCodeRightTab(next, BUILTIN_RIGHT_PANEL_IDS.sideConversations)
   next = closeCodeRightTab(next, BUILTIN_RIGHT_PANEL_IDS.plan)
   return applyThreadRightPanelExpansion(next, threadId, registry)

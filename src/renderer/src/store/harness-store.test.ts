@@ -4,11 +4,13 @@ import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import {
   loadHarnesses,
   loadHarnessModels,
+  receiveHarnessSessionState,
   loadHarnessProviderGroups,
   resetHarnessPolling,
   applyHarnessEnablementSettings,
   harnessIdsWithChangedLaunchSettings,
   HARNESS_CATALOG_TTL_MS,
+  HARNESS_DETECTING_POLL_MS,
   nextReadinessPoll,
   READINESS_REFRESH_AHEAD_MS,
   useHarnessStore
@@ -63,7 +65,7 @@ function resetStore(): void {
   })
 }
 
-describe('harness-store loadHarnesses polling (P4-02)', () => {
+describe('harness-store loadHarnesses polling', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     provider.listHarnesses.mockReset()
@@ -89,7 +91,8 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     await loadHarnesses()
     for (let open = 0; open < 5; open++) await loadHarnesses()
     expect(provider.listHarnesses).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(HARNESS_CATALOG_TTL_MS + 1)
+    // Age only the catalog; readiness-expiry timers have their own coverage below.
+    vi.setSystemTime(Date.now() + HARNESS_CATALOG_TTL_MS + 1)
     let finish!: (rows: AdeHarnessRow[]) => void
     provider.listHarnesses.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const refresh = loadHarnesses()
@@ -110,8 +113,8 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     let finish!: (rows: AdeHarnessRow[]) => void
     provider.listHarnesses.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
     const refresh = loadHarnesses(true)
-    applyHarnessEnablementSettings({ disabledIds: ['devin'], enabledProfiles: [], defaults: {}, custom: [], binaryPaths: {},
-      defaultHarnessId: 'kun', agentOrder: [], terminalAgents: [] }, true)
+    applyHarnessEnablementSettings({ disabledIds: ['devin'], enabledProfiles: [], defaults: {}, providers: {},
+      defaultHarnessId: 'kun', agentOrder: [] }, true)
     expect(useHarnessStore.getState().rowsLoadedAt).toBeUndefined()
     expect(useHarnessStore.getState().rows[0]?.readyProfiles).toEqual([])
     finish([cached])
@@ -123,9 +126,9 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
   })
 
   it('editing one Agent drops only that Agent\'s readiness proof', () => {
-    const before = { disabledIds: [], defaults: {}, custom: [], binaryPaths: {}, defaultHarnessId: 'kun', agentOrder: [], terminalAgents: [],
+    const before = { disabledIds: [], defaults: {}, providers: {}, defaultHarnessId: 'kun', agentOrder: [],
       enabledProfiles: [{ harnessId: 'claude-code', credentialMode: 'native-login' as const }, { harnessId: 'devin', credentialMode: 'native-login' as const }] }
-    const after = { ...before, defaults: { 'claude-code': { model: 'opus' } }, binaryPaths: { codex: '/opt/codex' } }
+    const after = { ...before, defaults: { 'claude-code': { model: 'opus' } }, providers: { codex: { command: '/opt/codex' } } }
     expect(harnessIdsWithChangedLaunchSettings(before, after).sort()).toEqual(['claude-code', 'codex'])
     expect(harnessIdsWithChangedLaunchSettings(before, { ...before })).toEqual([])
     useHarnessStore.setState({ rows: [row('claude-code'), row('devin')] })
@@ -139,7 +142,8 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     const cached = row('devin')
     provider.listHarnesses.mockResolvedValueOnce([cached]).mockRejectedValueOnce(new Error('offline'))
     await loadHarnesses()
-    await vi.advanceTimersByTimeAsync(HARNESS_CATALOG_TTL_MS + 1)
+    // Age only the catalog; readiness-expiry timers have their own coverage below.
+    vi.setSystemTime(Date.now() + HARNESS_CATALOG_TTL_MS + 1)
     await loadHarnesses()
     expect(useHarnessStore.getState()).toMatchObject({ rows: [cached], rowsLoading: false, rowsError: 'offline' })
   })
@@ -151,7 +155,7 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
     await loadHarnesses(true)
     expect(provider.listHarnesses).toHaveBeenCalledTimes(1)
 
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(HARNESS_DETECTING_POLL_MS)
     expect(provider.listHarnesses).toHaveBeenCalledTimes(2)
     expect(useHarnessStore.getState().rows[0]?.status.installed).toBe('yes')
 
@@ -165,7 +169,7 @@ describe('harness-store loadHarnesses polling (P4-02)', () => {
       .mockResolvedValueOnce([row('fake-cli', { installed: 'unknown', login: 'unknown' })])
       .mockResolvedValueOnce([row('fake-cli')])
     await loadHarnesses(true)
-    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.advanceTimersByTimeAsync(HARNESS_DETECTING_POLL_MS)
     expect(provider.listHarnesses).toHaveBeenCalledTimes(2)
     expect(useHarnessStore.getState().rows[0]?.status.installed).toBe('yes')
   })
@@ -279,7 +283,7 @@ describe('harness model cache identity', () => {
   })
 })
 
-describe('harnessRowUnavailableCode (P4-05)', () => {
+describe('harnessRowUnavailableCode', () => {
   it('prefers the wire reasonCode and honors the detecting sentinel', async () => {
     const { harnessRowUnavailableCode } = await import('./harness-store')
     expect(harnessRowUnavailableCode(detectingRow())).toBe('detecting')
@@ -305,7 +309,7 @@ describe('harnessRowUnavailableCode (P4-05)', () => {
   })
 })
 
-describe('harnessRowRunsTurns (P4-13)', () => {
+describe('harnessRowRunsTurns', () => {
   it('excludes terminal-only rows from turn pickers', async () => {
     const { harnessRowRunsTurns } = await import('./harness-store')
     const terminalRow = row('zed-shell')
@@ -315,6 +319,36 @@ describe('harnessRowRunsTurns (P4-13)', () => {
     const kunRow = row('kun')
     kunRow.definition.transport = 'native-loop'
     expect(harnessRowRunsTurns(kunRow)).toBe(true)
+  })
+})
+
+describe('session-backed ACP model catalog', () => {
+  beforeEach(() => { resetStore(); provider.listHarnessModels.mockReset() })
+
+  it('refreshes the fallback after a real session publishes its catalog', async () => {
+    useHarnessStore.setState({ rows: [row('devin')] })
+    provider.listHarnessModels.mockResolvedValueOnce({ harnessId: 'devin', models: ['default'],
+      catalogStatus: { source: 'fallback', fetchedAt: 'x' } })
+      .mockResolvedValueOnce({ harnessId: 'devin', models: ['native-model'],
+        catalogStatus: { source: 'cache', fetchedAt: 'y' } })
+    await loadHarnessModels('devin')
+    expect(useHarnessStore.getState().models.devin?.models).toEqual(['default'])
+    receiveHarnessSessionState({ threadId: 'thread', harnessId: 'devin' })
+    await vi.waitFor(() => expect(useHarnessStore.getState().models.devin?.models).toEqual(['native-model']))
+    expect(provider.listHarnessModels).toHaveBeenCalledTimes(2)
+  })
+
+  it('refreshes after an in-flight fallback resolves when the session arrives first', async () => {
+    useHarnessStore.setState({ rows: [row('devin')] })
+    let finish!: (value: unknown) => void
+    provider.listHarnessModels.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+      .mockResolvedValueOnce({ harnessId: 'devin', models: ['native-model'], catalogStatus: { source: 'cache', fetchedAt: 'y' } })
+    const pending = loadHarnessModels('devin')
+    receiveHarnessSessionState({ threadId: 'thread', harnessId: 'devin' })
+    finish({ harnessId: 'devin', models: ['default'], catalogStatus: { source: 'fallback', fetchedAt: 'x' } })
+    await pending
+    await vi.waitFor(() => expect(useHarnessStore.getState().models.devin?.models).toEqual(['native-model']))
+    expect(provider.listHarnessModels).toHaveBeenCalledTimes(2)
   })
 })
 

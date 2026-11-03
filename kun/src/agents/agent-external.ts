@@ -9,8 +9,8 @@ import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
 /** Room steps an external coding Agent may run; Kun keeps coordination, execution and review. */
 export const EXTERNAL_AGENT_ROOM_KINDS = ['conversation', 'discussion'] as const
 
-export function externalAgentBinding(executor: AgentExecutor) {
-  return { model: executor.model, ...(executor.providerId ? { providerId: executor.providerId } : {}),
+export function externalAgentBinding(executor: AgentExecutor, model = executor.model) {
+  return { model, ...(executor.providerId ? { providerId: executor.providerId } : {}),
     ...(executor.accountId ? { accountId: executor.accountId } : {}) }
 }
 

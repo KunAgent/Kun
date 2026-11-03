@@ -1,0 +1,38 @@
+{
+  "composerTray": {
+    "regionLabel": "Текущая активность",
+    "queueLabel": "Сообщения в очереди",
+    "collapse": "Свернуть",
+    "stop": "Остановить",
+    "duration": {
+      "seconds": "{{seconds}} с",
+      "minutes": "{{minutes}} мин",
+      "minutesSeconds": "{{minutes}} мин {{seconds}} с",
+      "hours": "{{hours}} ч",
+      "hoursMinutes": "{{hours}} ч {{minutes}} мин",
+      "underMinute": "<1 мин",
+      "minutesRounded": "{{minutes}} мин",
+      "hoursRounded": "{{hours}} ч",
+      "hoursMinutesRounded": "{{hours}} ч {{minutes}} мин",
+      "justNow": "только что",
+      "ago": "{{duration}} назад"
+    }
+  },
+  "composerInterrupt": {
+    "previous": "Назад",
+    "next": "Далее",
+    "pagerPosition": "{{index}} из {{total}}",
+    "countdown": "{{seconds}} с",
+    "countdownTitle": "Через {{seconds}} с Kun продолжит сам",
+    "deciding": "Kun принимает решение сам…",
+    "recommended": "Рекомендуется",
+    "optionsLabel": "Варианты",
+    "freeTextLabel": "Свой ответ"
+  },
+  "composerDock": {
+    "runningPlaceholder": "Продолжайте печатать, чтобы поставить правки в очередь…",
+    "queueMessage": "В очередь",
+    "stopWithShortcut": "Остановить (Esc)",
+    "enterToQueue": "Enter — в очередь"
+  }
+}

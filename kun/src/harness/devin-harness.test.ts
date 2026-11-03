@@ -7,13 +7,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { BUILTIN_HARNESSES } from './builtin-harnesses.js'
 import { HarnessDetector } from './harness-detector.js'
 import { AcpModelProbe } from './acp-model-probe.js'
+import { acpSessionCatalog } from './acp-model-catalog.js'
 import { probeAcpHandshake } from './acp-handshake-probe.js'
 import { checkHarnessAdmission, resolvePermissionMode } from './harness-admission.js'
 import { AcpConnection } from '../runtime/acp/acp-connection.js'
 import { startAcpProcess, type AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import { AcpSessionManager } from '../runtime/acp/acp-session-manager.js'
 import { applyDevinSessionPermission } from '../runtime/acp/devin-session-permissions.js'
-import { AcpError } from '../runtime/acp/acp-schema.js'
+import { AcpError, AcpNewSessionResultSchema } from '../runtime/acp/acp-schema.js'
 import { mapAcpFailure } from '../runtime/acp/acp-runtime-support.js'
 import { DelegatedSessionCoordinator, FileDelegatedSessionBindingStore } from '../runtime/delegated-session-binding.js'
 import type { TurnItem } from '../contracts/items.js'
@@ -49,6 +50,15 @@ async function fixtureDefinition(scenarioOverride?: Record<string, unknown>) {
       launch: { ...definition.launch!, env: { FAKE_ACP_SCENARIO: path, FAKE_ACP_JOURNAL: journal } }
     }
   }
+}
+
+async function realSessionCatalog(f: Awaited<ReturnType<typeof fixtureDefinition>>) {
+  const proc = await startAcpProcess({ command: 'devin', args: ['acp'], env: f.definition.launch.env, spawn: spawnFixture })
+  const conn = AcpConnection.start({ process: proc, identity: 'fixture-real-session' })
+  connections.push(conn)
+  await conn.initialize()
+  const session = AcpNewSessionResultSchema.parse(await conn.rpc.request('session/new', { cwd: f.dir, mcpServers: [] }))
+  return acpSessionCatalog(f.definition, session)
 }
 
 describe('Devin ACP integration', () => {
@@ -90,15 +100,15 @@ describe('Devin ACP integration', () => {
     expect(checkHarnessAdmission({ ...input, workspace: { isolated: true } })).toMatchObject({ ok: true })
   })
 
-  it('preserves advertised login choices and probes actual session models without authentication or prompts', async () => {
+  it('preserves advertised login choices without creating a session during detection', async () => {
     const f = await fixtureDefinition()
     const handshake = await probeAcpHandshake(f.definition, 'devin', { spawn: spawnFixture })
     expect(handshake).toMatchObject({ ok: true, authMethods: [{ id: 'browser' }] })
     expect(handshake.authRequired).toBeUndefined()
-    const probe = new AcpModelProbe({ spawn: spawnFixture })
-    expect(await probe.probe(f.definition)).toEqual(['available-model'])
+    const probe = new AcpModelProbe()
+    expect(await probe.probe(f.definition)).toEqual([])
     const methods = (await f.journal()).filter((entry) => entry.dir === 'in').map((entry) => entry.frame.method)
-    expect(methods).toContain('session/new')
+    expect(methods).not.toContain('session/new')
     expect(methods).not.toContain('authenticate')
     expect(methods).not.toContain('session/prompt')
   })
@@ -108,10 +118,10 @@ describe('Devin ACP integration', () => {
       currentModelId: 'unlisted-default',
       availableModels: [{ modelId: 'legacy-model', name: 'Legacy model' }]
     } } })
-    expect(await new AcpModelProbe({ spawn: spawnFixture }).probe(f.definition)).toEqual(['legacy-model'])
+    expect((await realSessionCatalog(f)).models).toEqual(['legacy-model'])
   })
 
-  it('queries selected model options without sending prompts or changing the native default', async () => {
+  it('reads reasoning options for the model selected in an actual session', async () => {
     const f = await fixtureDefinition({ newSession: { configOptions: [
       { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: 'native-default', options: [
         { value: 'native-default', name: 'Native Default' }, { value: 'selected-model', name: 'Selected Model' }
@@ -119,12 +129,11 @@ describe('Devin ACP integration', () => {
       { id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: 'medium',
         options: [{ value: 'medium', name: 'Medium' }, { value: 'high', name: 'High' }] }
     ] } })
-    const result = await new AcpModelProbe({ spawn: spawnFixture }).probeCatalog(f.definition, 'selected-model')
-    expect(result.modelInfo).toMatchObject([{ id: 'native-default', isDefault: true },
-      { id: 'selected-model', displayName: 'Selected Model', reasoningEfforts: ['medium', 'high'] }])
+    const result = await realSessionCatalog(f)
+    expect(result.modelInfo).toMatchObject([{ id: 'native-default', isDefault: true, reasoningEfforts: ['medium', 'high'] },
+      { id: 'selected-model', displayName: 'Selected Model' }])
     const requests = (await f.journal()).filter((entry) => entry.dir === 'in').map((entry) => entry.frame)
-    expect(requests).toContainEqual(expect.objectContaining({ method: 'session/set_config_option',
-      params: expect.objectContaining({ value: 'selected-model' }) }))
+    expect(requests.some((entry) => entry.method === 'session/set_config_option')).toBe(false)
     expect(requests.some((entry) => entry.method === 'session/prompt')).toBe(false)
   })
 
@@ -137,8 +146,7 @@ describe('Devin ACP integration', () => {
       models: { availableModels: [{ modelId: 'shared' }, { modelId: 'legacy-model' },
         { modelId: 42 }, null, {}, { modelId: ' ' }] }
     } })
-    expect(await new AcpModelProbe({ spawn: spawnFixture }).probe(f.definition))
-      .toEqual(['shared', 'config-model'])
+    expect((await realSessionCatalog(f)).models).toEqual(['shared', 'config-model'])
   })
 
   it('reuses a live native session and reapplies its safe mode after reconnecting', async () => {
@@ -197,7 +205,7 @@ describe('Devin ACP integration', () => {
 
   it('surfaces a real authentication rejection while preserving other failure classes', async () => {
     const f = await fixtureDefinition({ newSession: { error: { code: -32000, message: 'Authentication required' } } })
-    expect(await new AcpModelProbe({ spawn: spawnFixture }).probe(f.definition)).toEqual([])
+    await expect(realSessionCatalog(f)).rejects.toMatchObject({ code: 'agent_error' })
     expect(mapAcpFailure(new AcpError('agent_error', 'Authentication required', { rpcCode: -32000 }), true)).toMatchObject({ code: 'harness_not_ready', message: expect.stringContaining('sign in') })
     expect(mapAcpFailure(new AcpError('agent_error', 'Authentication required', { rpcCode: -32000 }), true, 'devin'))
       .toMatchObject({ code: 'harness_not_ready', message: expect.stringContaining('devin auth login') })

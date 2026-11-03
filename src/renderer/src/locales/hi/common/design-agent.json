@@ -1,0 +1,22 @@
+{
+  "designAgentCardPending": "डिज़ाइन ब्रीफ़ तैयार हो रहा है…",
+  "designAgentCardQueued": "यह जवाब पूरा होने पर शुरू होगा",
+  "designAgentCardStarting": "डिज़ाइन कैनवास खुल रहा है…",
+  "designAgentCardDesigning": "कैनवास पर डिज़ाइन हो रहा है…",
+  "designAgentCardReady": "कैनवास पर तैयार",
+  "designAgentCardNotStarted": "शुरू नहीं हुआ",
+  "designAgentCardStartFailed": "डिज़ाइन शुरू नहीं हो सका",
+  "designAgentCardStartFailedDetail": "शुरू नहीं हो सका: {{error}}",
+  "designAgentCardSuperseded": "नए डिज़ाइन अनुरोध से बदला गया",
+  "designAgentCardFailed": "डिज़ाइन अनुरोध विफल",
+  "designAgentCardFailedDetail": "डिज़ाइन अनुरोध विफल: {{error}}",
+  "designAgentCardScreens_one": "{{count}} स्क्रीन",
+  "designAgentCardScreens_other": "{{count}} स्क्रीन",
+  "designAgentCardTargetWeb": "वेब",
+  "designAgentCardTargetApp": "ऐप",
+  "designAgentCardOpen": "खोलें",
+  "designAgentCardOpenAria": "{{title}} का डिज़ाइन कैनवास खोलें",
+  "designAgentCardStart": "डिज़ाइन शुरू करें",
+  "designAgentCardRetry": "फिर कोशिश करें",
+  "toolBuiltinDesignOpen": "डिज़ाइन कैनवास खोलें"
+}

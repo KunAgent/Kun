@@ -1,4 +1,5 @@
-import type { ReactElement } from 'react'
+import { useEffect, type ReactElement } from 'react'
+import { loadKatexCopyTex } from '../../lib/katex-copy-tex'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -25,6 +26,9 @@ export function PassiveAssistantMarkdown({
   text: string
   className?: string
 }): ReactElement {
+  useEffect(() => {
+    void loadKatexCopyTex()
+  }, [])
   return (
     <div className={['ds-passive-markdown', className].filter(Boolean).join(' ')}>
       <ReactMarkdown

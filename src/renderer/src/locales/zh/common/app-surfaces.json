@@ -1,0 +1,21 @@
+{
+  "appSurfaceDesktopOnly": "交互页面仅在 Kun 桌面端可用。",
+  "appSurfaceRetry": "重试",
+  "appSurfacePageError": "页面出错：{{message}}",
+  "appSurfaceWidgetAria": "交互组件：{{title}}",
+  "appSurfaceCopyImage": "复制为图片",
+  "appSurfaceCopied": "已复制",
+  "appSurfaceExpand": "在 App 面板中打开",
+  "appSurfaceOpenInPanel": "已在 App 面板中显示，点击可再次打开。",
+  "appSurfaceFollowUpConfirm": "要以「{{app}}」的名义发送这条消息吗？",
+  "appSurfaceOpenLinkConfirm": "「{{app}}」想在浏览器中打开这个链接。",
+  "appSurfaceToolConsent": "允许「{{app}}」在本对话中调用它的工具吗？",
+  "appSurfaceToolConsentDetail": "页面可以调用它自己的 MCP 服务提供的工具，例如保存或修改它的文档。它无法访问其他服务、文件或对话历史。",
+  "appSurfaceWidgetStateChip": "{{title}} 状态",
+  "appSurfaceWidgetStateSummary": "交互组件中保存的选择",
+  "appSurfaceAppContextChip": "{{title}} 上下文",
+  "appSurfaceAppContextSummary": "在应用中选择的上下文",
+  "appSurfaceDownloadConfirm": "「{{app}}」想把一个文件保存到你的电脑。",
+  "appSurfacePanelTab": "App",
+  "appSurfacePanelEmpty": "暂无打开的应用。可从对话中的交互卡片打开。"
+}

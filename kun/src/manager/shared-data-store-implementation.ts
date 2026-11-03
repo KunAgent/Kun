@@ -1,3 +1,7 @@
+import { writeThreadMetadata } from './thread-metadata-write.js'
+import { MemoryRelationCommand } from '../contracts/memory-relations.js'
+import { MemoryRelationContextRequest } from '../contracts/memory-working-context.js'
+import { rewriteSessionHistory } from './session-history-rewrite.js'
 import { executeMemoryLifecycleOperation } from './memory-lifecycle-owner.js'
 import { AgentMemoryAccessSchema } from '../memory/agent-memory-scope.js'
 import { PendingMemoryCandidate } from '../contracts/memory-distillation-runtime.js'
@@ -113,7 +117,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     if (threadId && isThreadMutation(operation)) {
       return this.enqueueMutation(threadId, () => {
         assertCurrent?.()
-        return this.executeThreadNow(operation, value)
+        return this.executeThreadNow(operation, value, assertCurrent)
       })
     }
     return this.executeThreadNow(operation, value)
@@ -121,7 +125,8 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
 
   private async executeThreadNow(
     operation: ManagerThreadStoreOperation,
-    value: unknown
+    value: unknown,
+    assertCurrent?: () => void
   ): Promise<unknown> {
     switch (operation) {
       case 'list': {
@@ -151,14 +156,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         return this.threadStore.touch?.(body.threadId, body.updatedAt) ?? false
       }
       case 'upsert':
-        return this.threadStore.upsert(ThreadSchema.parse(z.object({ thread: z.unknown() }).parse(value).thread))
-      case 'upsertIfRevision': {
-        const body = z.object({
-          thread: z.unknown(),
-          expectedRevision: z.number().int().nonnegative()
-        }).strict().parse(value)
-        return this.threadStore.upsertIfRevision!(ThreadSchema.parse(body.thread), body.expectedRevision)
-      }
+      case 'upsertIfRevision':
+        return writeThreadMetadata(
+          this.threadStore, this.sessionStore, value, operation === 'upsertIfRevision', assertCurrent
+        )
       case 'delete': {
         const { threadId } = parseThreadId(value)
         this.seqFloors.delete(threadId)
@@ -191,7 +192,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     return executeArtifactStoreOperation(this.artifactStore, operation, value)
   }
 
-  async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown): Promise<unknown> {
+  async executeMemory(operation: ManagerMemoryStoreOperation, value: unknown, signal?: AbortSignal): Promise<unknown> {
     if (operation === 'distillationPending') {
       const body = z.object({ value: z.unknown() }).strict().parse(value)
       const run = this.memoryQueue.catch(() => undefined)
@@ -211,6 +212,12 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
     const store = this.memoryStore(body.config)
     const run = this.memoryQueue.catch(() => undefined).then(async () => {
       switch (operation) {
+        case 'relationContext':
+          if (!store.relationContext) throw new Error('Memory relation context is unavailable')
+          return store.relationContext(MemoryRelationContextRequest.parse(body.value), body.config)
+        case 'relations':
+          if (!store.relations) throw new Error('Memory relations are unavailable')
+          return store.relations(MemoryRelationCommand.parse(body.value), signal)
         case 'erasureReceipt':
         case 'history':
         case 'isForgotten': return executeMemoryLifecycleOperation(store, operation, body.value)
@@ -292,7 +299,7 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             project: z.string().optional(), projectIdentity: z.string().optional(),
             limit: z.number().int().positive(),
             promptCharacterBudget: z.number().int().nonnegative().optional(), agent: AgentMemoryAccessSchema.optional(),
-            purpose: z.enum(['injection', 'tool']).optional(),
+            purpose: z.enum(['injection', 'tool', 'preview']).optional(),
             filter: z.object({
               scope: MemoryScope.optional(),
               type: MemoryType.optional(),
@@ -431,6 +438,9 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
             request.expiresBeforeIso
           ) ?? { deleted: 0, released: 0 }
         }
+        case 'expiredLeaseCandidates':
+          return store.expiredLeaseCandidates?.(z.object({ expiresBeforeIso: z.string() }).strict()
+            .parse(body.value).expiresBeforeIso) ?? []
         case 'replaceMetadata': {
           await store.replaceMetadata?.(AttachmentMetadata.parse(body.value))
           return null
@@ -510,22 +520,16 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         await this.sessionStore.rewriteItems(body.threadId, body.items)
         return null
       }
+      case 'itemHistoryVersion': {
+        const { threadId } = parseThreadId(value)
+        return this.sessionStore.itemHistoryVersion?.(threadId) ?? 'legacy'
+      }
       case 'loadItemSnapshot': {
         const { threadId } = parseThreadId(value)
         return this.sessionStore.loadItemSnapshot(threadId)
       }
-      case 'rewriteItemsIfRevision': {
-        const body = z.object({
-          threadId: ThreadIdSchema,
-          expectedRevision: z.number().int().nonnegative(),
-          items: z.array(TurnItem)
-        }).strict().parse(value)
-        return this.sessionStore.rewriteItemsIfRevision(
-          body.threadId,
-          body.expectedRevision,
-          body.items
-        )
-      }
+      case 'rewriteItemsIfRevision':
+        return rewriteSessionHistory(this.sessionStore, value, assertCurrent)
       case 'updateItem': {
         const body = z.object({
           threadId: ThreadIdSchema,
@@ -557,6 +561,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
           sinceSeq: z.number().int().min(-1)
         }).strict().parse(value)
         return this.sessionStore.loadEventsSince(body.threadId, body.sinceSeq)
+      }
+      case 'loadLatestContextSnapshot': {
+        const body = z.object({ threadId: ThreadIdSchema, maxSeq: z.number().int().nonnegative() }).strict().parse(value)
+        return this.sessionStore.loadLatestContextSnapshot?.(body.threadId, body.maxSeq) ?? null
       }
       case 'loadEventPage': {
         const body = z.object({

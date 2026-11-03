@@ -16,6 +16,7 @@ async function decodeLayer(url: string): Promise<DecodedLayer> {
   }
   const image = new Image()
   image.decoding = 'async'
+  if (url.startsWith('kun-asset:')) image.crossOrigin = 'anonymous'
   await new Promise<void>((resolve, reject) => {
     image.onload = () => resolve()
     image.onerror = () => { image.removeAttribute('src'); reject(new Error('Avatar layer could not decode')) }
@@ -58,6 +59,7 @@ export async function renderAvatarComposition(urls: string[], options: {
   pixels: number
   canvas: number
   crop?: readonly number[]
+  layerClips?: Readonly<Record<number, readonly (readonly [number, number])[]>>
   bg: string
 }): Promise<AvatarCompositionResource> {
   const { pixels, canvas, bg } = options
@@ -77,11 +79,25 @@ export async function renderAvatarComposition(urls: string[], options: {
     const [left, top, right, bottom] = options.crop ?? [0, 0, canvas, canvas]
     context.imageSmoothingEnabled = true
     context.imageSmoothingQuality = 'high'
-    for (const layer of layers) {
+    for (const [index, layer] of layers.entries()) {
       const scaleX = layer.width / canvas
       const scaleY = layer.height / canvas
+      const clip = options.layerClips?.[index]
+      if (clip?.length) {
+        context.save()
+        context.beginPath()
+        for (const [pointIndex, [x, y]] of clip.entries()) {
+          const px = (x - left) / (right - left) * pixels
+          const py = (y - top) / (bottom - top) * pixels
+          if (pointIndex === 0) context.moveTo(px, py)
+          else context.lineTo(px, py)
+        }
+        context.closePath()
+        context.clip()
+      }
       context.drawImage(layer.source, left * scaleX, top * scaleY,
         (right - left) * scaleX, (bottom - top) * scaleY, 0, 0, pixels, pixels)
+      if (clip?.length) context.restore()
     }
     const blob = await surface.encode()
     const url = URL.createObjectURL(blob)

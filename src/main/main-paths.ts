@@ -19,6 +19,7 @@ export type NamedPreloadName =
   | 'tray-quota'
   | 'pet-overlay'
   | 'protected-room-dialog'
+  | 'app-sandbox-shell'
 
 export function resolvePreloadPath(
   appPath: string,

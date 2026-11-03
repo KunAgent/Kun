@@ -1,0 +1,10 @@
+{
+  "approvalOption_allow_once": "Allow once",
+  "approvalOption_allow_always": "Always allow",
+  "approvalOption_reject_once": "Deny once",
+  "approvalOption_reject_always": "Always deny",
+  "approvalCancelRequest": "Cancel request",
+  "externalSubagentControlsAtSource": "Independent stop is managed in {{agent}}.",
+  "externalSubagentSourceApproval": "Approve in {{agent}}",
+  "externalSubagentKunApproval": "Approval is pending in the parent conversation."
+}

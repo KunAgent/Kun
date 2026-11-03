@@ -1,5 +1,5 @@
 /**
- * CodexSession (P6-05): one Codex app-server thread bound to a Kun turn flow.
+ * CodexSession: one Codex app-server thread bound to a Kun turn flow.
  * Owns the per-turn notification subscription, approval/user-input routing
  * through `HarnessTurnSink`, and turn completion via `turn/completed` —
  * worker self-reports never end a turn.
@@ -14,6 +14,7 @@ import type {
 import { HarnessTransportError } from '../../session/harness-session.js'
 import type { CodexClient } from './codex-client.js'
 import { CodexEventMapper } from './codex-event-mapper.js'
+import { isKunToolsElicitation } from './codex-kun-tools.js'
 import {
   CODEX_NOTIFICATIONS,
   CODEX_SERVER_REQUESTS,
@@ -48,6 +49,9 @@ export class CodexSession implements HarnessSession {
   private readonly router: CodexRequestRouter
   private readonly disposers: (() => void)[] = []
   private activeCodexTurnId: string | undefined
+  /** Settles when the run in flight has a Codex turn id, or fails to start. */
+  private turnStarted: Promise<string> | undefined
+  private runs = 0
   private detached = false
 
   constructor(
@@ -76,6 +80,11 @@ export class CodexSession implements HarnessSession {
       model: input.model
     })
 
+    // A follow-up run inside one Kun turn must not match the previous run's id.
+    this.activeCodexTurnId = undefined
+    let started!: { resolve(id: string): void; reject(error: unknown): void }
+    this.turnStarted = new Promise<string>((resolve, reject) => { started = { resolve, reject } })
+    this.turnStarted.catch(() => undefined)
     // Notifications are filtered by codex threadId inside the mapper.
     const unsubscribe = this.subscribeNotifications(mapper, sink)
     const turnDone = this.waitForTurnCompletion(sink)
@@ -83,6 +92,7 @@ export class CodexSession implements HarnessSession {
 
     const wireInput = toCodexUserInput(input)
     let turn: CodexTurn
+    const run = ++this.runs
     try {
       turn = await this.client.turnStart({
         threadId: this.providerSessionId,
@@ -95,14 +105,17 @@ export class CodexSession implements HarnessSession {
           input.sandboxMode,
           input.workspacePath
         ),
-        clientUserMessageId: this.input.turnId
+        clientUserMessageId: run === 1 ? this.input.turnId : `${this.input.turnId}:${run}`
       })
     } catch (error) {
       unsubscribe()
+      started.reject(error)
+      this.turnStarted = undefined
       if (signal.aborted) return { status: 'cancelled' }
       throw error
     }
     this.activeCodexTurnId = turn.id
+    started.resolve(turn.id)
 
     const onAbort = (): void => {
       void this.interrupt().catch((error) =>
@@ -121,6 +134,11 @@ export class CodexSession implements HarnessSession {
       return result
     } finally {
       signal.removeEventListener('abort', onAbort)
+      // A guidance sent from here on must fail, not target a finished turn.
+      this.activeCodexTurnId = undefined
+      this.turnStarted = undefined
+      // A follow-up run of this turn must not feed this run's mapper too.
+      unsubscribe()
     }
   }
 
@@ -135,11 +153,11 @@ export class CodexSession implements HarnessSession {
   }
 
   /**
-   * Mid-turn user message (`turn/steer`). The shared runtime does not yet
-   * deliver mid-turn input to sessions; this is ready for when it does.
+   * Mid-turn user message (`turn/steer`). Waits for a turn that is still
+   * starting; rejects when none is running.
    */
   async steer(text: string): Promise<void> {
-    const turnId = this.activeCodexTurnId
+    const turnId = this.activeCodexTurnId ?? await this.turnStarted?.catch(() => undefined)
     if (!turnId) {
       throw new HarnessTransportError(
         'harness_not_ready',
@@ -183,7 +201,10 @@ export class CodexSession implements HarnessSession {
       CODEX_NOTIFICATIONS.itemCompleted,
       CODEX_NOTIFICATIONS.turnPlanUpdated,
       CODEX_NOTIFICATIONS.threadTokenUsageUpdated,
-      CODEX_NOTIFICATIONS.turnDiffUpdated
+      CODEX_NOTIFICATIONS.turnDiffUpdated,
+      // Only spawned subagents' turns map to anything (codex-subagent-tracker).
+      CODEX_NOTIFICATIONS.turnStarted,
+      CODEX_NOTIFICATIONS.turnCompleted
     ]) {
       subscribe(method)
     }
@@ -319,6 +340,13 @@ export class CodexSession implements HarnessSession {
         return {
           decision: response.decision === 'accept' ? 'accept' : 'decline'
         }
+      }
+      case CODEX_SERVER_REQUESTS.mcpServerElicitation: {
+        if (!isKunToolsElicitation(params)) {
+          throw new HarnessTransportError('harness_protocol_error', `unsupported codex server request ${method}`)
+        }
+        // Kun's ToolHost applies the turn's approval policy to the call itself.
+        return { action: 'accept', content: {} }
       }
       case CODEX_SERVER_REQUESTS.toolRequestUserInput: {
         const p = CodexToolRequestUserInputParamsSchema.parse(params)

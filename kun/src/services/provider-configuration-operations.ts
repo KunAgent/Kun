@@ -1,3 +1,6 @@
+import { setModelMetadataOverride, clearModelMetadataOverride } from './model-metadata-resolver.js'
+import { metadataEvidence, type ModelMetadataField } from '../contracts/model-metadata-evidence.js'
+import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import { configurationAfterLegacyPatch } from './provider-legacy-patch.js'
 import { createHash, randomUUID } from 'node:crypto'
 import { ProviderConfigurationPreviewRequestSchema, ProviderConfigurationCommitRequestSchema,
@@ -21,6 +24,22 @@ export function applyOperations(document: RegistryDocument, operations: Provider
   const deleted: string[] = []
   for (const operation of operations) {
     switch (operation.kind) {
+      case 'set-model-overrides':
+      case 'clear-model-overrides': {
+        const connection = next.profiles[operation.connectionId]
+        if (!connection || !connection.models.includes(operation.modelId)) throw new Error('Model override requires a configured model')
+        let capability: ModelCapabilityMetadata = connection.modelCapabilities?.[operation.modelId] ?? {
+          id: operation.modelId, inputModalities: ['text'], outputModalities: ['text'], messageParts: ['text'],
+          supportsToolCalling: true, evidence: metadataEvidence({}, 'adapter')
+        }
+        if (operation.kind === 'set-model-overrides') {
+          for (const [field, value] of Object.entries(operation.values)) capability = setModelMetadataOverride(capability, field as ModelMetadataField, value)
+        } else {
+          for (const field of operation.fields) capability = clearModelMetadataOverride(capability, field)
+        }
+        connection.modelCapabilities = { ...connection.modelCapabilities, [operation.modelId]: capability }
+        break
+      }
       case 'remove-connection': {
         const profile = next.profiles[operation.connectionId]
         if (!profile) throw new Error('Connection does not exist')
@@ -149,6 +168,7 @@ export const providerConfigurationOperations = {
     const snapshot = await this['projectWithCredentialHealth'](document)
     const { commits: _commits, ...configuration } = document.configuration
     return { schemaVersion: 2 as const, revision: document.revision, activeRevision: this['lastAppliedRevision'],
+      metadataRevision: snapshot.metadataRevision,
       defaultProviderId: document.defaultProviderId, defaultAccountId: document.defaultAccountId, defaultModel: document.defaultModel,
       configuration, connections: snapshot.providers, routePools: document.routePools,
       connectionOverrides: Object.fromEntries(Object.values(document.profiles).map((profile) => [profile.id,

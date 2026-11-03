@@ -1,0 +1,20 @@
+{
+  "composerPromptEnhance": "プロンプトを改善",
+  "composerPromptEnhanceHint": "プロンプトを改善 · {{model}} で下書きを書き直します",
+  "composerPromptEnhanceHintDefault": "プロンプトを改善 · Kun の既定モデルで下書きを書き直します",
+  "composerPromptEnhanceCancel": "改善をキャンセル",
+  "composerPromptEnhanceCancelHint": "改善をキャンセル（Esc）",
+  "composerPromptEnhanceRunning": "{{model}} で改善中… 下書きは読み取り専用です。ボタンをもう一度クリックするか Esc でキャンセルできます",
+  "composerPromptEnhanceRunningDefault": "改善中… 下書きは読み取り専用です。ボタンをもう一度クリックするか Esc でキャンセルできます",
+  "composerPromptEnhanceDone": "{{model}} で改善し、下書きを置き換えました",
+  "composerPromptEnhanceUndo": "元に戻す",
+  "composerPromptEnhanceUndoHint": "改善前の下書きに戻します",
+  "composerPromptEnhanceDismiss": "閉じる",
+  "composerPromptEnhanceEmpty": "先に改善したいプロンプトを入力してください",
+  "composerPromptEnhanceUnsupportedAgent": "現在のモデルは {{agent}} 自身のサインインを使うため、Kun から直接呼び出せません。Kun のプロバイダーモデルに切り替えるか、設定で改善用のモデルを指定してください。",
+  "composerPromptEnhanceUnsupported": "現在のモデルはプロンプトの改善に使えません。Kun のプロバイダーモデルに切り替えるか、設定で改善用のモデルを指定してください。",
+  "composerPromptEnhanceOpenSettings": "設定を開く",
+  "composerPromptEnhanceFailed": "改善に失敗しました：{{message}} 下書きは変更されていません。",
+  "composerPromptEnhanceTimeout": "改善がタイムアウトしました。下書きは変更されていません。再試行するか、設定でタイムアウトを延ばしてください。",
+  "composerPromptEnhanceDisabled": "プロンプトの改善は設定でオフになっています。"
+}

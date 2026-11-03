@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createEmptyDocument, createHtmlFrameShape } from './canvas-types'
-import { computePrototypeFlowEdges } from './prototype-flow'
+import { computePrototypeFlowEdges, prototypeFlowSegmentBlocked } from './prototype-flow'
 import type { DesignArtifact } from '../design-types'
 
 const createdAt = '2026-06-29T00:00:00.000Z'
@@ -20,6 +20,45 @@ function artifact(id: string, title: string, extra: Partial<DesignArtifact> = {}
 }
 
 describe('computePrototypeFlowEdges', () => {
+  it('marks authored links, reading-order guesses, and whether a straight connector is clear', () => {
+    const doc = createEmptyDocument()
+    const home = createHtmlFrameShape('Home', 0, 0, 'home', 'desktop')
+    const pricing = createHtmlFrameShape('Pricing', 1500, 0, 'pricing', 'desktop')
+    const signup = createHtmlFrameShape('Signup', 3000, 0, 'signup', 'desktop')
+    for (const frame of [home, pricing, signup]) doc.objects[frame.id] = { ...frame, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...doc.objects[doc.rootId], children: [home.id, pricing.id, signup.id] }
+    const edges = computePrototypeFlowEdges([
+      artifact('home', 'Home', { prototypeLinks: [{ targetTitle: 'Signup', targetArtifactId: 'signup', label: 'Start' }] }),
+      artifact('pricing', 'Pricing'),
+      artifact('signup', 'Signup')
+    ], doc.objects)
+    const byPair = (source: string, target: string) => edges.find((item) => (
+      item.sourceArtifactId === source && item.targetArtifactId === target
+    ))
+
+    expect(byPair('home', 'signup')).toMatchObject({ kind: 'explicit', direct: false })
+    expect(byPair('pricing', 'signup')).toMatchObject({ kind: 'fallback', direct: true })
+    expect(prototypeFlowSegmentBlocked([{ x: 10, y: 0, width: 5, height: 5 }], 0, 2, 20, 2)).toBe(true)
+    expect(prototypeFlowSegmentBlocked([{ x: 30, y: 0, width: 5, height: 5 }], 0, 2, 20, 2)).toBe(false)
+  })
+
+  it('lifts top lanes clear of the board label row', () => {
+    const doc = createEmptyDocument()
+    const homeFrame = createHtmlFrameShape('Home', 0, 0, 'home', 'desktop')
+    const signupFrame = createHtmlFrameShape('Signup', 1500, 0, 'signup', 'desktop')
+    doc.objects[homeFrame.id] = { ...homeFrame, parentId: doc.rootId }
+    doc.objects[signupFrame.id] = { ...signupFrame, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...doc.objects[doc.rootId], children: [homeFrame.id, signupFrame.id] }
+    const artifacts = [artifact('home', 'Home'), artifact('signup', 'Signup')]
+
+    const plain = computePrototypeFlowEdges(artifacts, doc.objects)
+    const cleared = computePrototypeFlowEdges(artifacts, doc.objects, { topClearance: 400 })
+    const forward = (edges: typeof plain) => edges.find((edge) => edge.sourceArtifactId === 'home')
+    const back = (edges: typeof plain) => edges.find((edge) => edge.sourceArtifactId === 'signup')
+    expect(forward(cleared)?.controlY).toBe((forward(plain)?.controlY ?? 0) - 400)
+    expect(back(cleared)?.controlY).toBe(back(plain)?.controlY)
+  })
+
   it('connects visible HTML frames from persisted prototype links', () => {
     const doc = createEmptyDocument()
     const homeFrame = createHtmlFrameShape('Home', 0, 0, 'home', 'desktop')

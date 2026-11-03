@@ -167,6 +167,9 @@ export function mapCursorUsage(
   providerId: string,
   model: string
 ): UsageSnapshot {
+  // Cursor's `inputTokens` already includes cache reads (a two-call turn of a
+  // ~16k context reports ~33k input with ~32k read), but the SDK's
+  // `totalTokens` adds the cache reads again; the total is recomputed here.
   const promptTokens = Math.max(0, Math.trunc(usage.inputTokens))
   const completionTokens = Math.max(0, Math.trunc(usage.outputTokens))
   const cacheHitTokens = Math.max(0, Math.trunc(usage.cacheReadTokens))
@@ -177,10 +180,7 @@ export function mapCursorUsage(
     ...(usage.reasoningTokens === undefined
       ? {}
       : { reasoningTokens: Math.max(0, Math.trunc(usage.reasoningTokens)) }),
-    totalTokens: Math.max(
-      promptTokens + completionTokens,
-      Math.max(0, Math.trunc(usage.totalTokens))
-    ),
+    totalTokens: promptTokens + completionTokens,
     cachedTokens: cacheHitTokens,
     cacheHitTokens,
     cacheMissTokens: Math.max(0, promptTokens - cacheHitTokens),

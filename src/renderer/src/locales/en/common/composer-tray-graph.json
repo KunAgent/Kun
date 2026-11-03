@@ -1,0 +1,25 @@
+{
+  "composerTrayGraph": {
+    "segmentLabel": "Graph · {{titles}}",
+    "segmentLabelStatus": "Graph · {{status}}",
+    "titleSeparator": ", ",
+    "segmentAria": "Graph run: {{accepted}} of {{total}} nodes accepted, {{running}} running",
+    "segmentAriaQuiet": "Graph run: {{accepted}} of {{total}} nodes accepted. A running node has gone quiet",
+    "segmentAriaAsking": "Graph run: {{accepted}} of {{total}} nodes accepted. A node is waiting for your answer",
+    "segmentAriaAwaiting": "Graph run: {{accepted}} of {{total}} nodes accepted. The run is waiting for you",
+    "segmentAriaFlagged": "Graph run: {{accepted}} of {{total}} nodes accepted. A node needs attention",
+    "sheetTitle": "Graph run",
+    "acceptedSummary": "{{accepted}} of {{total}} nodes accepted",
+    "runningSummary_one": "{{count}} running",
+    "runningSummary_other": "{{count}} running",
+    "nodeRetry": "Retry {{number}}",
+    "lastActivitySeconds": "Last activity {{seconds}}s ago",
+    "lastActivityAgo": "Last activity {{ago}}",
+    "stillWaiting": "Still waiting for a model or tool response",
+    "elapsedTitle": "Running for {{duration}}",
+    "correctionAria": "Graph planning paused: the plan needs your input",
+    "correctionNote": "The draft is saved. Add guidance in chat, then continue planning.",
+    "correctionMore_one": "{{count}} more issue",
+    "correctionMore_other": "{{count}} more issues"
+  }
+}

@@ -1,3 +1,4 @@
+import { privateRequestCanRun } from '../agents/agent-lifecycle-state.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import { discussionAgentLane } from '../agents/agent-discussion-scope.js'
 import type { RoomRuntimeDeps, RoomRequestState } from './room-runtime-types.js'
@@ -22,6 +23,7 @@ export async function roomDiscussionBusy(deps: RoomRuntimeDeps, includePeer = fa
       status: ['running', 'pending', 'stopping', 'recovery_required'], order: 'asc', limit: 1000, afterSeq
     })
     for (const row of rows) {
+      if (row.value.privateProtocol && !row.value.cancellationRequested && !await privateRequestCanRun(deps.store, row.value)) continue
       const target = roomRequestDiscussionTarget(row.value)
       if (!target || !target.turnId && !target.admissionAttempted) continue
       const agent = await discussionAgentLane(deps, row.value.roomId, target.memberId, row.value.roomSnapshot)
@@ -53,6 +55,10 @@ export async function roomDiscussionBusy(deps: RoomRuntimeDeps, includePeer = fa
       order: 'asc', afterSeq: runCursor, limit: 100, summaryOnly: true })
     for (const row of rows) {
       if (!['discussion', 'coordination', 'conversation'].includes(row.value.phase)) continue
+      if (row.value.phase === 'conversation' && row.value.requestId) {
+        const request = await deps.store.get<RoomRequestState>('request', row.value.requestId)
+        if (request?.value.privateProtocol && !request.value.cancellationRequested && !await privateRequestCanRun(deps.store, request.value)) continue
+      }
       if (!includePeer && row.value.phase === 'discussion' && !row.value.handoffId) {
         // Active peer reservations are counted by the peer runner itself.
         const topic = row.value.rootRequestId ? await deps.store.get('peer_topic', row.value.rootRequestId) : null

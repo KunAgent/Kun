@@ -1,13 +1,12 @@
 import { z } from 'zod'
-import { createHash, randomUUID } from 'node:crypto'
-import { RoomContentReferenceSchema, type RoomAvatarReference } from '../../contracts/room-content.js'
+import { RoomContentReferenceSchema } from '../../contracts/room-content.js'
 import type { RoomMessage } from '../../contracts/rooms.js'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
 import { resolveRoomContent } from '../../rooms/room-content-service.js'
 import { listRoomContentOptions } from '../../rooms/room-content-options.js'
 import { firstRoomBodyUrl, RoomLinkPreviewService } from '../../rooms/room-link-preview.js'
 import { roomPreviewImage } from '../../rooms/room-preview-image.js'
-import { getRoomAvatarImage, recordRoomAvatarAsset, validateRoomMemberAvatars } from '../../rooms/room-avatar-service.js'
+import { getRoomAvatarImage, saveRoomAvatarImage, validateRoomMemberAvatars } from '../../rooms/room-avatar-service.js'
 import type { ServerRuntime } from './server-runtime.js'
 import type { RouteContext } from '../router.js'
 import { readJsonBody } from '../read-json-body.js'
@@ -73,13 +72,7 @@ export function registerRoomContentRoutes(add: Add, runtime: ServerRuntime): voi
     } catch {
       return new Response(JSON.stringify({ code: 'validation_error', message: 'unsupported or oversized avatar image' }), { status: 400 })
     }
-    const normalized = Buffer.from(image.dataBase64, 'base64')
-    const leaseId = `room-avatar:${randomUUID()}`
-    const attachment = await runtime.attachmentStore.create({ name: `rooms-avatar-${createHash('sha256').update(normalized).digest('hex').slice(0, 12)}.jpg`,
-      data: normalized, mimeType: image.mimeType, leaseId })
-    await recordRoomAvatarAsset(rooms.deps.store, attachment)
-    if (runtime.attachmentStore.releaseLease) await runtime.attachmentStore.releaseLease(attachment.id, leaseId, true).catch(() => undefined)
-    return { avatar: { kind: 'uploaded', attachmentId: attachment.id } satisfies RoomAvatarReference, image }
+    return saveRoomAvatarImage(rooms.deps.store, runtime.attachmentStore, image)
   })
   add('GET', '/v1/rooms/avatars/:attachmentId', async (rooms, _request, { params }) => {
     const id = AvatarId.parse(params.attachmentId)

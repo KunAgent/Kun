@@ -76,7 +76,7 @@ export type McpClientLike = {
     cacheMode?: 'use' | 'refresh' | 'bypass'
   }): Promise<{ tools: McpToolDescriptor[]; nextCursor?: string }>
   callTool(
-    input: { name: string; arguments: Record<string, unknown> },
+    input: { name: string; arguments: Record<string, unknown>; _meta?: Record<string, unknown> },
     options?: McpCallOptions
   ): Promise<unknown>
   listResources?(options?: {
@@ -104,6 +104,8 @@ export type McpClientLike = {
   ): Promise<unknown>
   close(): Promise<void>
   setLifecycleHandlers?(handlers: McpClientLifecycleHandlers): void
+  /** Deferred clients connect here, before a request is considered sent. */
+  ready?(): Promise<void>
 }
 
 export type McpServerDiagnostic = {

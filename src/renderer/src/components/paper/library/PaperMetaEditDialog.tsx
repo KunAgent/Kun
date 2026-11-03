@@ -34,7 +34,7 @@ function formFromEntry(entry: PaperLibraryEntry): Form {
   }
 }
 
-/** Only fields the user changed go into the patch (plan §PM2 patch semantics). */
+/** Only fields the user changed go into the patch. */
 function patchFromForm(before: Form, after: Form): PaperLibraryMetaPatch {
   const patch: PaperLibraryMetaPatch = {}
   const text = (key: 'year' | 'venue' | 'doi' | 'arxivId' | 'abstract'): void => {

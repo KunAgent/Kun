@@ -9,6 +9,8 @@ import type { ModelStreamLimits } from './model-stream-resource-budget.js'
 import type { CompatChatMessage } from './compat-request-codecs.js'
 
 export type CompatModelClientConfig = {
+  /** Host-minted account evidence; absent for ordinary model requests and public configuration. */
+  googleWorkspaceAccountEvidence?: import('../../gmail/deepseek-account-evidence.js').DeepSeekAccountEvidenceProof
   /** Stable configured provider identity retained in durable usage. */
   providerId?: string
   /** Stable built-in preset identity (e.g. `opencode-go`). */

@@ -16,6 +16,7 @@ let ownerLostAt;
 let channelGone = false;
 const now = () => Date.now();
 let processSnapshot;
+let processSnapshotError;
 function identity(pid) {
   try {
     if (process.platform === 'linux') {
@@ -29,12 +30,18 @@ function identity(pid) {
   } catch { return null; }
 }
 function members(group) {
+  if (processSnapshotError) throw processSnapshotError;
   if (!processSnapshot) {
     let listing;
     try {
       listing = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,pgid=,stat=,lstart='],
-        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 1000 });
-    } catch { throw new Error('Could not verify owned process group'); }
+        { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 1000, maxBuffer: 4 * 1024 * 1024 });
+    } catch (error) {
+      const reason = error.code === 'ETIMEDOUT' ? 'process listing timed out' :
+        error.code === 'ENOBUFS' ? 'process listing exceeded its buffer' : 'process listing failed';
+      processSnapshotError = new Error('Could not verify owned process group: ' + reason);
+      throw processSnapshotError;
+    }
     processSnapshot = [];
     for (const line of listing.split('\n')) {
       const [pidText, ppidText, pgidText, state, ...birth] = line.trim().split(/\s+/);
@@ -88,11 +95,20 @@ function reply(id, error) {
   process.send({ id, ...(error ? { error: String(error.message || error) } : {}) }, () => {});
 }
 function beginStop(group, graceMs, timeoutMs, id) {
+  // A completed, failed stop is retryable. Do not reuse its expired deadline,
+  // but never extend an in-flight stop or the owner's final loss deadline.
+  if (!disconnected && group.waiters.length === 0) {
+    group.deadline = undefined;
+    group.forceAt = undefined;
+    group.error = undefined;
+  }
   if (id !== undefined) group.waiters.push(id);
   const deadline = now() + timeoutMs;
   group.deadline = Math.min(group.deadline ?? Infinity, deadline);
   group.forceAt = Math.min(group.forceAt ?? Infinity, now() + graceMs);
-  try { signal(group, graceMs > 0 ? 'SIGTERM' : 'SIGKILL'); }
+  group.termAt = now();
+  group.termSent = false;
+  try { signal(group, graceMs > 0 ? 'SIGTERM' : 'SIGKILL'); group.termSent = true; }
   catch (error) { group.error = error; }
 }
 function finish(group, error) {
@@ -124,6 +140,7 @@ function ownerDead() {
 }
 function tick() {
   processSnapshot = undefined;
+  processSnapshotError = undefined;
   if (!disconnected && ownerDead()) ownerLost();
   // The group sweep walks a full process listing and is the expensive half
   // of a tick. Every deadline enforced here is on the order of seconds, so
@@ -135,10 +152,11 @@ function tick() {
   for (const group of groups.values()) {
     try {
       if (members(group).length === 0) { finish(group); continue; }
+      group.error = undefined;
       if (group.forceAt !== undefined && now() >= group.forceAt) signal(group, 'SIGKILL');
       else if (group.termAt !== undefined && now() >= group.termAt && !group.termSent) {
-        group.termSent = true;
         signal(group, 'SIGTERM');
+        group.termSent = true;
       }
       if (group.deadline !== undefined && now() >= group.deadline) {
         finish(group, group.error ?? new Error('Owned process group did not exit before deadline'));
@@ -147,8 +165,13 @@ function tick() {
         if (disconnected) process.exitCode = 1;
       }
     } catch (error) {
-      finish(group, error);
-      if (disconnected) process.exitCode = 1;
+      // An inconclusive inspection is not proof that containment failed or
+      // that a group is gone. Keep its waiters and retry within the stop budget.
+      group.error = error;
+      if (group.deadline !== undefined && now() >= group.deadline) {
+        finish(group, error);
+        if (disconnected) process.exitCode = 1;
+      }
     }
   }
   if (disconnected && [...groups.values()].every((group) => now() >= group.deadline)) {
@@ -166,6 +189,7 @@ function tick() {
 }
 process.on('message', (message) => {
   processSnapshot = undefined;
+  processSnapshotError = undefined;
   if (!message || typeof message !== 'object') return;
   if (message.type === 'register') {
     if (disconnected || shutdownRequested) { reply(message.id, new Error('Owner is stopping')); return; }

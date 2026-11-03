@@ -44,7 +44,7 @@
   display: grid;
   place-items: center;
   width: 80px;
-  aspect-ratio: 192 / 208;
+  height: 87px;
   overflow: hidden;
   background: transparent;
 }
@@ -177,15 +177,24 @@
 .pet-static-preview {
   display: block;
   width: 42px;
-  aspect-ratio: 192 / 208;
+  height: 45px;
+  overflow: hidden;
   background-color: transparent;
-  background-repeat: no-repeat;
-  background-position: 0% 0%;
-  image-rendering: auto;
+  /* Default uiFontScale applies body zoom; custom-scheme sprites do not paint until it is canceled. */
+  zoom: calc(1 / var(--ds-ui-scale, 1));
+}
+
+.pet-static-preview img {
+  display: block;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  user-select: none;
 }
 
 .pets-settings-preview .pet-static-preview {
   width: 72px;
+  height: 78px;
 }
 
 .pets-settings-item-warning {

@@ -1,0 +1,20 @@
+{
+  "composerPromptEnhance": "प्रॉम्प्ट बेहतर करें",
+  "composerPromptEnhanceHint": "प्रॉम्प्ट बेहतर करें · {{model}} से ड्राफ़्ट दोबारा लिखें",
+  "composerPromptEnhanceHintDefault": "प्रॉम्प्ट बेहतर करें · Kun के डिफ़ॉल्ट मॉडल से ड्राफ़्ट दोबारा लिखें",
+  "composerPromptEnhanceCancel": "सुधार रद्द करें",
+  "composerPromptEnhanceCancelHint": "सुधार रद्द करें (Esc)",
+  "composerPromptEnhanceRunning": "{{model}} से सुधार हो रहा है… ड्राफ़्ट अभी केवल पढ़ने के लिए है; रद्द करने के लिए बटन फिर से दबाएँ या Esc दबाएँ",
+  "composerPromptEnhanceRunningDefault": "सुधार हो रहा है… ड्राफ़्ट अभी केवल पढ़ने के लिए है; रद्द करने के लिए बटन फिर से दबाएँ या Esc दबाएँ",
+  "composerPromptEnhanceDone": "{{model}} से सुधारा गया, ड्राफ़्ट बदल दिया गया",
+  "composerPromptEnhanceUndo": "पूर्ववत करें",
+  "composerPromptEnhanceUndoHint": "सुधार से पहले वाला ड्राफ़्ट वापस लाएँ",
+  "composerPromptEnhanceDismiss": "बंद करें",
+  "composerPromptEnhanceEmpty": "पहले सुधारने के लिए प्रॉम्प्ट लिखें",
+  "composerPromptEnhanceUnsupportedAgent": "मौजूदा मॉडल {{agent}} के अपने साइन-इन का उपयोग करता है, इसलिए Kun इसे सीधे नहीं बुला सकता। Kun प्रदाता मॉडल पर जाएँ, या सेटिंग्स में सुधार के लिए एक मॉडल तय करें।",
+  "composerPromptEnhanceUnsupported": "मौजूदा मॉडल से प्रॉम्प्ट सुधारा नहीं जा सकता। Kun प्रदाता मॉडल पर जाएँ, या सेटिंग्स में सुधार के लिए एक मॉडल तय करें।",
+  "composerPromptEnhanceOpenSettings": "सेटिंग्स खोलें",
+  "composerPromptEnhanceFailed": "सुधार विफल: {{message}} ड्राफ़्ट नहीं बदला गया।",
+  "composerPromptEnhanceTimeout": "सुधार का समय समाप्त हो गया। ड्राफ़्ट नहीं बदला गया; फिर से कोशिश करें या सेटिंग्स में टाइमआउट बढ़ाएँ।",
+  "composerPromptEnhanceDisabled": "प्रॉम्प्ट सुधार सेटिंग्स में बंद है।"
+}

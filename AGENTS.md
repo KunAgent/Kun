@@ -26,7 +26,7 @@ This guide is for AI agents working in this repository. It collects the project 
   - `src/renderer/src/agent/kun-mapper.ts`
   - `kun/src/server/runtime-factory.ts`
   - `kun/src/server/routes/`
-- Do not recreate old runtime paths, provider switchers, runtime diagnostics panels, CodeWhale/Reasonix adapters, process managers, or RPC bridges. Legacy provider fields should only be read during settings migration and folded into `agents.kun`. External agent harnesses are the documented exception and must follow `docs/ade/`.
+- Do not recreate old runtime paths, provider switchers, runtime diagnostics panels, CodeWhale/Reasonix adapters, process managers, or RPC bridges. Legacy provider fields should only be read during settings migration and folded into `agents.kun`. External agent harnesses are the exception.
 - Connect phone code may still use the internal `claw` name for compatibility. That name does not mean there should be a separate Claw runtime.
 
 ## Providers And Model Requests
@@ -96,7 +96,7 @@ This guide is for AI agents working in this repository. It collects the project 
 
 - Start with `git status --short --branch`. If the checkout is detached, create a named branch before committing.
 - For feature fixes, sync to the latest `upstream/develop` first when the worktree baseline is suspicious. Old worktree diffs may already be upstream.
-- New branches should use the `codex/` prefix, for example `codex/fix-provider-endpoint`.
+- New branches should use the `kun/` prefix, for example `kun/fix-provider-endpoint`.
 - Use Angular-style commit messages such as `fix(scope): ...`, `feat(scope): ...`, or `docs(agents): ...`. Keep the title outcome-focused and do not include `[codex]`.
 - DeepSeek-GUI/Kun PRs should target `develop` explicitly. Do not rely on the GitHub default branch, and do not accidentally open PRs against `master`.
 - Before creating a PR, verify the canonical repository slug and the issue repository. Remote names can be misleading; prefer `gh repo view --json nameWithOwner,defaultBranchRef` or `gh api repos/<owner>/<repo>`.
@@ -115,6 +115,7 @@ gh pr create --base develop --head <branch> --title "<title>" --body-file <file>
 
 - Provider URL or request body issue: inspect every model consumer, then list URL and body behavior separately for chat, write-inline, scheduled task detection, model list, and provider probe.
 - Settings save/runtime behavior issue: inspect `src/shared/app-settings-provider.ts`, `src/shared/app-settings-kun.ts`, settings store migration, and the renderer settings section.
+- Skill/MCP market issue (Youdao market or a new source): read `docs/market-sources.md`, then trace `use-market-catalogs.ts` -> `src/preload/market-api.ts` -> `register-app-market-ipc-handlers.ts` -> `src/main/services/market/`.
 - SSE/event/OOM issue: inspect `runtime-factory`, `RuntimeEventRecorder`, `FileSessionStore.highestSeq()`, `events.jsonl`, and events route replay.
 - `/new`, session resume, fork, archive/search issue: trace the full path from renderer command/store to Kun routes instead of changing only the UI command.
 - Clipboard/image fallback issue: inspect `webUtils.getPathForFile`, temporary file persistence, the `localFilePath` contract, attachment store, and model client fallback.
@@ -123,6 +124,8 @@ gh pr create --base develop --head <branch> --title "<title>" --body-file <file>
 ## Repository Hygiene
 
 - Keep every tracked authored text file at or below 700 physical lines. Split files by cohesive feature or operation before they cross the limit; do not bypass the gate with generated formatting or line compaction.
+- Name maintained modules, contracts, fixtures, and tests after their feature or operation, not delivery phases or numbered fragments such as `p1`, `p2`, or `part3`. Mixed feature dispatchers must be separated by responsibility, not hidden behind renamed phase buckets.
+- Keep only protocol archives currently referenced by the root and `kun/` manifests and lockfiles in `vendor/kun-remote/`. Verify installation and active script/test references before removing superseded versions; preserve needed history outside the checkout instead of accumulating release artifacts here.
 - Do not commit build artifacts, extracted apps, temporary logs, or local investigation notes.
 - Keep changes local to the requested area. Do not reformat the whole repository, reorder unrelated files, or remove existing comments as drive-by cleanup.
 - New content should stay ASCII unless the surrounding file or user-facing requirement clearly needs otherwise.

@@ -1,12 +1,16 @@
 import { lazy, Suspense, useMemo, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from './WorkbenchConversationStage'
 import { normalizeWorkbenchRoute } from './workbench-route'
-import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { PaperNoticeToast } from '../paper/PaperNoticeToast'
 import { WriteSideRail } from '../write/WriteSideRail'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
-import { useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
+import { useWorkAssistantSwapped, useWorkConversationStage, WorkStageChromeContext } from '../../write/work-conversation-stage'
 import { useAgentChatPicker } from '../rooms/agent-chat-picker'
+import { closeAddAssistantDialog, openAssistantConversation, useAssistantNavigationStore } from '../assistants/assistant-navigation'
+import { closeWardrobePage } from '../wardrobe/wardrobe-route'
+import { useArtifactLibraryStore } from '../../artifacts/artifact-library-store'
+import { WorkTabStrip } from '../write/WorkTabStrip'
+import '../write/work-tabs.css'
 
 const PluginMarketplaceView = lazy(() =>
   import('../PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -26,14 +30,26 @@ const WorkflowRunPanel = lazy(() =>
 const WriteWorkspaceView = lazy(() =>
   import('../write/WriteWorkspaceView').then((module) => ({ default: module.WriteWorkspaceView }))
 )
-const PaperWorkspaceView = lazy(() =>
-  import('../paper/PaperWorkspaceView').then((module) => ({ default: module.PaperWorkspaceView }))
+const WorkPaperHost = lazy(() =>
+  import('../write/WorkPaperHost').then((module) => ({ default: module.WorkPaperHost }))
 )
 const AgentChatStage = lazy(() =>
   import('../rooms/AgentChatStage').then((module) => ({ default: module.AgentChatStage }))
 )
 const AgentChatPickerHost = lazy(() =>
   import('../rooms/AgentChatPickerHost').then((module) => ({ default: module.AgentChatPickerHost }))
+)
+const AddAssistantDialog = lazy(() =>
+  import('../assistants/AddAssistantDialog').then((module) => ({ default: module.AddAssistantDialog }))
+)
+const WardrobePageView = lazy(() =>
+  import('../wardrobe/WardrobePageView').then((module) => ({ default: module.WardrobePageView }))
+)
+const ArtifactsPage = lazy(() =>
+  import('../../artifacts/ArtifactsPage').then((module) => ({ default: module.ArtifactsPage }))
+)
+const PapersSurface = lazy(() =>
+  import('../paper/PapersSurface').then((module) => ({ default: module.PapersSurface }))
 )
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
@@ -47,7 +63,7 @@ type WriteStageProps = {
   input: string
   setInput: (value: string) => void
   onSubmitPrompt?: (value: string) => void
-  /** Attach a base64 image to the composer (papers surface only). */
+  /** Attach a base64 image to the composer (paper reader region capture). */
   onAttachImage?: (input: { dataBase64: string; name: string }) => Promise<boolean>
   onOpenAgentSettings?: () => void
   rightPanel: ReactNode
@@ -77,59 +93,61 @@ function WorkbenchPaneFallback(): ReactElement {
 }
 
 /**
- * Write stage: docs surface renders the ordinary workspace; the papers
- * surface swaps in the paper workbench (library/discover + reader) without
- * changing the route (§3.1 D2).
+ * Work stage: sessions, documents and the two libraries share one tab strip.
+ * Paper and artifact data keep their own scopes while the shell stays in Work.
  */
-function WriteStage({ write }: { write: WriteStageProps }): ReactElement {
-  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
-  // The Work rail sits right of the panel on both surfaces; phone-sized remote
-  // layouts keep the tab-bar assistant toggle instead.
+function WriteStage({ write, route, chat }: {
+  write: WriteStageProps
+  route: 'write' | 'papers' | 'artifacts'
+  chat: WorkbenchConversationStageProps['chat']
+}): ReactElement {
+  // The Work rail sits right of the panel; phone-sized remote layouts keep the
+  // tab-bar assistant toggle instead.
   const remoteMobile = useRemoteMobileLayout()
   const rightPanel = <>{write.rightPanel}{remoteMobile ? null : <WriteSideRail />}</>
-  if (workSurface === 'papers') {
-    return (
-      <PaperWorkspaceView
-        leftSidebarCollapsed={write.leftSidebarCollapsed}
-        onToggleLeftSidebar={write.onToggleLeftSidebar}
-        input={write.input}
-        setInput={write.setInput}
-        onSubmitPrompt={write.onSubmitPrompt}
-        onAttachImage={write.onAttachImage}
-        onOpenAgentSettings={write.onOpenAgentSettings}
-        rightPanel={rightPanel}
-      />
-    )
-  }
-  return <WriteDocsStage write={write} rightPanel={rightPanel} />
-}
-
-/**
- * Documents surface. With nothing open the empty editor steps aside (kept
- * mounted for its lifecycle effects) and the assistant fills the center.
- */
-function WriteDocsStage({ write, rightPanel }: { write: WriteStageProps; rightPanel: ReactNode }): ReactElement {
   const conversationStage = useWorkConversationStage()
+  const swapped = useWorkAssistantSwapped()
   const chrome = useMemo(() => ({
     leftSidebarCollapsed: write.leftSidebarCollapsed,
     onToggleLeftSidebar: write.onToggleLeftSidebar
   }), [write.leftSidebarCollapsed, write.onToggleLeftSidebar])
   return (
     <WorkStageChromeContext.Provider value={chrome}>
-    <div className={`flex min-h-0 flex-1${conversationStage ? ' work-stage-conversation' : ''}`}
-      data-work-stage={conversationStage ? 'conversation' : 'documents'}>
-      <div className={conversationStage ? 'hidden' : 'flex min-h-0 min-w-0 flex-1'}>
-        <WriteWorkspaceView
-          leftSidebarCollapsed={write.leftSidebarCollapsed}
-          onToggleLeftSidebar={write.onToggleLeftSidebar}
-          input={write.input}
-          setInput={write.setInput}
-          onSubmitPrompt={write.onSubmitPrompt}
-          onOpenAgentSettings={write.onOpenAgentSettings}
-        />
+      <div className={`work-tab-host flex min-h-0 min-w-0 flex-1 flex-col${remoteMobile ? '' : ' has-tab-strip'}`}>
+        {remoteMobile ? null : <WorkTabStrip />}
+        {route === 'papers' ? (
+          <PapersSurface leftSidebarCollapsed={write.leftSidebarCollapsed} onToggleLeftSidebar={write.onToggleLeftSidebar}
+            onSubmitPrompt={write.onSubmitPrompt} onAttachImage={write.onAttachImage} embedded={!remoteMobile} />
+        ) : route === 'artifacts' ? (
+          <ArtifactsPage leftSidebarCollapsed={write.leftSidebarCollapsed} onToggleLeftSidebar={write.onToggleLeftSidebar}
+            chat={chat} embedded={!remoteMobile} />
+        ) : (<>
+          {write.runtimeBanner}
+          <WorkPaperHost
+            leftSidebarCollapsed={write.leftSidebarCollapsed}
+            onToggleLeftSidebar={write.onToggleLeftSidebar}
+            input={write.input}
+            setInput={write.setInput}
+            onSubmitPrompt={write.onSubmitPrompt}
+            onAttachImage={write.onAttachImage}
+            conversationStage={conversationStage}
+            swapped={swapped}
+            rightPanel={rightPanel}
+          >
+            {(submitPrompt) => (
+              <WriteWorkspaceView
+                leftSidebarCollapsed={write.leftSidebarCollapsed}
+                onToggleLeftSidebar={write.onToggleLeftSidebar}
+                input={write.input}
+                setInput={write.setInput}
+                onSubmitPrompt={submitPrompt}
+                onOpenAgentSettings={write.onOpenAgentSettings}
+              />
+            )}
+          </WorkPaperHost>
+          <PaperNoticeToast />
+        </>)}
       </div>
-      {rightPanel}
-    </div>
     </WorkStageChromeContext.Provider>
   )
 }
@@ -148,7 +166,10 @@ export function WorkbenchStageRouter({
   extensions
 }: WorkbenchStageRouterProps): ReactElement {
   const normalizedRoute = normalizeWorkbenchRoute(route)
+  const artifactsFromWork = useArtifactLibraryStore((state) => state.source === 'work')
+  const remoteMobile = useRemoteMobileLayout()
   const agentChatDialogOpen = useAgentChatPicker((state) => state.dialog !== null)
+  const addingAssistant = useAssistantNavigationStore((state) => state.connecting)
   return (
     <main
       className={`ds-drag ds-stage-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
@@ -158,8 +179,11 @@ export function WorkbenchStageRouter({
       <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {normalizedRoute === 'agent-chat' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            <AgentChatStage onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins}
-              onToggleLeftSidebar={onToggleLeftSidebar} />
+            {/* The 对话 tour points at the whole conversation area, whichever kind is open. */}
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col" data-agent-chat-stage>
+              <AgentChatStage onOpenThread={onOpenThread} onOpenPlugins={onOpenPlugins}
+                onToggleLeftSidebar={onToggleLeftSidebar} />
+            </div>
           </Suspense>
         ) : normalizedRoute === 'extensions' ? (
           <Suspense fallback={<div className="h-full bg-ds-main" />}>
@@ -203,11 +227,17 @@ export function WorkbenchStageRouter({
               onOpenThread={onOpenThread}
             />
           </Suspense>
-        ) : normalizedRoute === 'write' ? (
+        ) : normalizedRoute === 'wardrobe' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            {write.runtimeBanner}
-            <WriteStage write={write} />
-            <PaperNoticeToast />
+            <WardrobePageView leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} onClose={closeWardrobePage} />
+          </Suspense>
+        ) : normalizedRoute === 'write' || normalizedRoute === 'papers' || (normalizedRoute === 'artifacts' && artifactsFromWork && !remoteMobile) ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <WriteStage write={write} route={normalizedRoute} chat={conversation.chat} />
+          </Suspense>
+        ) : normalizedRoute === 'artifacts' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <ArtifactsPage leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={conversation.chat} />
           </Suspense>
         ) : (
           <WorkbenchConversationStage {...conversation} route={normalizedRoute} />
@@ -216,6 +246,11 @@ export function WorkbenchStageRouter({
       {imageAnnotationHost}
       {planOverlay}
       {agentChatDialogOpen ? <Suspense fallback={null}><AgentChatPickerHost /></Suspense> : null}
+      {addingAssistant ? <Suspense fallback={null}><AddAssistantDialog onClose={closeAddAssistantDialog}
+        onCreated={(enrollmentId) => {
+          closeAddAssistantDialog()
+          openAssistantConversation({ kind: 'enrollment', id: enrollmentId })
+        }} /></Suspense> : null}
       {normalizedRoute === 'chat' ? (
         <Suspense fallback={null}>
           <WorkflowRunPanel enabled />

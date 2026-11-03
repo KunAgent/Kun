@@ -404,9 +404,9 @@ html[data-theme='dark'] .ds-markdown .ds-code-block-html > pre span {
 }
 
 html[data-theme='dark'] .ds-code-sidebar {
-  --ds-code-sidebar-editor-bg: #151c2e;
-  --ds-code-sidebar-gutter-bg: #1b2338;
-  --ds-code-sidebar-active-line-bg: rgba(111, 176, 232, 0.18);
+  --ds-code-sidebar-editor-bg: color-mix(in srgb, var(--ds-bg-main) 96%, white);
+  --ds-code-sidebar-gutter-bg: color-mix(in srgb, var(--ds-bg-main) 93%, white);
+  --ds-code-sidebar-active-line-bg: rgba(143, 178, 239, 0.14);
 }
 
 .ds-code-sidebar-topbar {
@@ -478,24 +478,38 @@ html[data-theme='dark'] .ds-code-sidebar {
   flex: 0 0 auto;
   height: 30px;
   align-items: center;
-  gap: 0.55rem;
-  border: 1px solid var(--ds-border-muted);
+  gap: 0.25rem;
+  border: 1px solid transparent;
   border-radius: 8px;
-  background: var(--ds-card-muted);
-  padding: 0 0.75rem 0 0.45rem;
-  color: var(--ds-text);
+  background: transparent;
+  padding: 0 0.2rem 0 0.6rem;
+  color: var(--ds-text-muted);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-  box-shadow: var(--ds-shadow-chip);
+  font-size: 12.5px;
+  font-weight: 500;
+  transition:
+    background 140ms ease,
+    color 140ms ease;
+}
+
+.ds-code-sidebar-tab:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
 }
 
 .ds-code-sidebar-tab.is-active {
-  border-color: var(--ds-border-strong);
+  border-color: var(--ds-border);
   background: var(--ds-card-strong);
+  color: var(--ds-text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(20, 30, 50, 0.06);
 }
 
-.ds-code-sidebar-tab:focus-within {
+html[data-theme='dark'] .ds-code-sidebar-tab.is-active {
+  box-shadow: none;
+}
+
+.ds-code-sidebar-tab:has(:focus-visible) {
   outline: 2px solid color-mix(in srgb, var(--ds-accent) 58%, transparent);
   outline-offset: 1px;
 }
@@ -540,11 +554,17 @@ html[data-theme='dark'] .ds-code-sidebar {
   background: transparent;
   color: var(--ds-text-faint);
   cursor: pointer;
-  opacity: 0.82;
+  opacity: 0;
   transition:
     background 140ms ease,
     color 140ms ease,
     opacity 140ms ease;
+}
+
+.ds-code-sidebar-tab:hover .ds-code-sidebar-tab-close,
+.ds-code-sidebar-tab.is-active .ds-code-sidebar-tab-close,
+.ds-code-sidebar-tab-close:focus-visible {
+  opacity: 0.82;
 }
 
 .ds-code-sidebar-tab-close:hover {

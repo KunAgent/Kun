@@ -13,7 +13,7 @@ import { scholarSearchByTitle } from './scholar-client'
 import { PaperFetchError, paperFetchText, PAPER_HTML_MAX_BYTES } from './paper-http'
 
 /**
- * Discovery/import enrichment (plan §6.4): RSS 2.0 / Atom / JSON Feed
+ * Discovery/import enrichment: RSS 2.0 / Atom / JSON Feed
  * fetching for user subscriptions, arXiv category "today" RSS with a per-day
  * disk cache, `citation_*` meta extraction for
  * publisher pages, and the parallel S2+arXiv title search.

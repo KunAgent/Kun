@@ -1,5 +1,5 @@
 /**
- * BM25 lexical relevance scoring (plan §6.4 `paper-recommend`): score an
+ * BM25 lexical relevance scoring: score an
  * arXiv-today / feed item against the local library corpus. Pure and cheap —
  * titles+abstracts only, no embeddings.
  */

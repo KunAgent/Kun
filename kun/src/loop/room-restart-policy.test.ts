@@ -20,7 +20,8 @@ describe('room task restart ownership', () => {
     const startTurn = vi.fn()
     const runTurn = vi.fn()
     const deps = { threadStore, turns: { startTurn, finishTurn: vi.fn() },
-      events: { record: vi.fn() }, nowIso: () => now, nowMs: () => Date.parse(now), runTurn }
+      events: { record: vi.fn() }, nowIso: () => now, nowMs: () => Date.parse(now), runTurn,
+      loadSessionItems: async () => [] as never }
     const interrupted = new InterruptedTurnCoordinator(deps)
     const goals = new GoalTurnCoordinator(deps)
     const sources = [{ threadId: thread.id, turnId: 'failed_turn' }]

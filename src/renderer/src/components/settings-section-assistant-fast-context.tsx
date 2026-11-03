@@ -28,6 +28,7 @@ const REASONING_EFFORT_LABEL_KEYS: Record<ModelReasoningEffort, string> = {
   low: 'graphSettingsReasoningLow',
   medium: 'graphSettingsReasoningMedium',
   high: 'graphSettingsReasoningHigh',
+  xhigh: 'graphSettingsReasoningXhigh',
   max: 'graphSettingsReasoningMax'
 }
 

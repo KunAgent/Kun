@@ -1,0 +1,32 @@
+{
+  "composerRecords": {
+    "waiting": "Kun 在等你回答",
+    "waitingCount_other": "Kun 在等你回答 · {{count}} 个问题",
+    "answerBelow": "在下方作答",
+    "answeredCount_other": "你回答了 {{count}} 个问题",
+    "answerSeparator": "、",
+    "noAnswer": "未作答",
+    "skipped": "你跳过了提问",
+    "timedOut": "没有回答，Kun 自动继续了",
+    "notDelivered": "回答没有送达：{{message}}",
+    "notDeliveredGeneric": "回答没有送达",
+    "yourAnswer": "你的回答：{{answer}}",
+    "approvalWaiting": "等待你的批准",
+    "approvalHandleBelow": "在下方处理",
+    "allowedRun": "已允许运行",
+    "allowedEdit": "已允许修改",
+    "allowedSend": "已允许发送",
+    "allowed": "已允许",
+    "deniedRun": "已拒绝运行",
+    "deniedEdit": "已拒绝修改",
+    "deniedSend": "已拒绝发送",
+    "denied": "已拒绝",
+    "expired": "这一轮已结束，审批已过期",
+    "failed": "审批没有送达",
+    "denyNote": "附言：{{note}}",
+    "showDetails": "展开详情",
+    "hideDetails": "收起详情",
+    "pendingSteer": "等待插入当前回合…",
+    "pendingSteerHint": "Kun 下一步就会看到这条消息"
+  }
+}

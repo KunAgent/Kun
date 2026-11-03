@@ -40,7 +40,7 @@
   animation: kun-mobile-loading-in .28s ease-out forwards;
 }
 .kun-mobile-chat-skeleton-row[data-side='end'] { justify-content: flex-end; }
-.kun-mobile-chat-skeleton-avatar { width: 38px; height: 38px; flex-shrink: 0; border-radius: 50%; background: var(--ds-surface-subtle); }
+.kun-mobile-chat-skeleton-avatar { width: 38px; height: 38px; flex-shrink: 0; border-radius: 10px; background: var(--ds-surface-subtle); }
 .kun-mobile-chat-skeleton-bubble {
   display: flex;
   width: 68%;

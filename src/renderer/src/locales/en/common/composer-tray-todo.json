@@ -1,0 +1,27 @@
+{
+  "composerTrayTodo": {
+    "title": "Tasks",
+    "segmentAria": "Tasks: {{step}} · step {{current}} of {{total}}",
+    "fromPlan": "from",
+    "outlineLabel": "Plan outline",
+    "outlineSteps_one": "{{count}} step",
+    "outlineSteps_other": "{{count}} steps",
+    "outlineNote": "Graph orchestration is running — this is the plan outline, not live execution progress.",
+    "inProgress": "In progress",
+    "inProgressFor": "In progress · {{duration}}",
+    "upNext": "Up next",
+    "foldDone_one": "{{count}} done",
+    "foldDone_other": "{{count}} done",
+    "foldEarlier_one": "{{count}} earlier",
+    "foldEarlier_other": "{{count}} earlier",
+    "foldRemaining_one": "{{count}} remaining",
+    "foldRemaining_other": "{{count}} remaining",
+    "foldLater_one": "{{count}} more",
+    "foldLater_other": "{{count}} more",
+    "blockedCount_one": "{{count}} blocked",
+    "blockedCount_other": "{{count}} blocked",
+    "failedCount_one": "{{count}} failed",
+    "failedCount_other": "{{count}} failed",
+    "ownerTitle": "Owner: {{name}}"
+  }
+}

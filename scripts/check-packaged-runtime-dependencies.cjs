@@ -3,6 +3,7 @@
 const { builtinModules } = require('node:module')
 const { existsSync, readFileSync, readdirSync, statSync } = require('node:fs')
 const { join, relative, resolve } = require('node:path')
+const { RUNTIME_ENTRY_MODULES, runtimePackages } = require('./packaged-runtime-integrity.cjs')
 
 const BUILTIN_MODULES = new Set(
   builtinModules.flatMap((name) => [name, name.replace(/^node:/u, '')])
@@ -22,8 +23,9 @@ const KNOWN_DYNAMIC_RUNTIME_SPECIFIERS = [
 const RENDERER_BUNDLED_ONLY_PACKAGES = [
   '@univerjs/presets',
   '@univerjs/preset-sheets-core',
-  'pptx-preview',
-  'docx-preview',
+  '@extend-ai/react-pptx',
+  '@extend-ai/react-docx',
+  '@extend-ai/react-xlsx',
   '@tanstack/react-virtual'
 ]
 
@@ -156,10 +158,48 @@ function checkPackagedRuntimeDependencies(options = {}) {
   return { packages, lockfilePath: relative(root, lockfilePath) }
 }
 
+// The main/preload bundles are checked above, but the Kun child process runs
+// its own compiled output out of kun/dist. A package that kun/dist imports but
+// neither kun/node_modules nor the root node_modules provides fails only at
+// runtime, inside the packaged app, after the installer already succeeded.
+function checkKunRuntimeDependencies(options = {}) {
+  const root = resolve(options.root ?? join(__dirname, '..'))
+  const distDir = join(root, 'kun', 'dist')
+  if (!existsSync(distDir)) {
+    throw new Error('The compiled Kun runtime is missing. Run the Kun build first.')
+  }
+  const scan = runtimePackages(distDir, RUNTIME_ENTRY_MODULES)
+  if (scan.missingRelative.length > 0) {
+    throw new Error(
+      `Compiled Kun runtime imports files that were not emitted:\n` +
+        scan.missingRelative.map((entry) => `- ${entry}`).join('\n')
+    )
+  }
+  const moduleRoots = [join(root, 'kun', 'node_modules'), join(root, 'node_modules')]
+  const unresolved = scan.packages.filter(
+    (name) =>
+      !moduleRoots.some((modules) =>
+        existsSync(join(modules, ...name.split('/'), 'package.json'))
+      )
+  )
+  if (unresolved.length > 0) {
+    throw new Error(
+      `Compiled Kun runtime imports packages that are not installed:\n` +
+        unresolved.map((name) => `- ${name}`).join('\n')
+    )
+  }
+  return { packages: scan.packages, reachableFiles: scan.reachableFiles }
+}
+
 if (require.main === module) {
   const result = checkPackagedRuntimeDependencies()
   console.log(
     `[packaged-runtime-deps] ${result.packages.length} external packages are present in the production dependency graph.`
+  )
+  const kun = checkKunRuntimeDependencies()
+  console.log(
+    `[packaged-runtime-deps] ${kun.packages.length} Kun runtime packages resolve across ` +
+      `${kun.reachableFiles} reachable compiled modules.`
   )
 }
 
@@ -173,5 +213,6 @@ module.exports = {
   isProductionPackage,
   rendererBundledOnlyFailures,
   formatRendererBundledOnlyError,
-  checkPackagedRuntimeDependencies
+  checkPackagedRuntimeDependencies,
+  checkKunRuntimeDependencies
 }

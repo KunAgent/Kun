@@ -6,8 +6,14 @@ import { ROOM_APP_CATALOG, isHiddenRoomGoogleApp, type RoomMessage } from '@shar
 import { addRoomApp, authorizeRoomApp, listRoomApps } from './room-apps-client'
 import { roomRequestId, roomsRequest } from './rooms-client'
 import './rooms-app-connections.css'
+import { RoomGitHubConnectionCard } from './RoomGitHubConnectionCard'
+import { RoomGmailConnectionCard } from './RoomGmailConnectionCard'
 
 export function RoomAppConnectionCard({ message }: { message: RoomMessage }) {
+  if (message.appConnection?.serverId === 'google_gmail' || message.appConnection?.serverId === 'gmail') {
+    return <RoomGmailConnectionCard message={message} />
+  }
+  if (message.appConnection?.serverId === 'github') return <RoomGitHubConnectionCard message={message} />
   return message.appConnection?.serverId === 'im.feishu' || message.appConnection?.serverId === 'im.weixin'
     ? <RoomImConnectionCard message={message} /> : <RoomMcpConnectionCard message={message} />
 }
@@ -33,7 +39,7 @@ function RoomMcpConnectionCard({ message }: { message: RoomMessage }) {
         const inventory = await listRoomApps()
         const configured = inventory.servers.find((server) => server.id === serverId)
         if (!configured) {
-          if (!builtIn) throw new Error(t('roomsAppNotConfigured'))
+          if (!builtIn?.url) throw new Error(t('roomsAppNotConfigured'))
           await addRoomApp(serverId, builtIn.url)
         } else if (!configured.enabled) throw new Error(t('roomsAppDisabled'))
         else if (!configured.oauth && inventory.statuses[serverId] !== 'connected') throw new Error(t('roomsAppOAuthNotConfigured'))

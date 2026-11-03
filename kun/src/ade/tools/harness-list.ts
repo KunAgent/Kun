@@ -37,7 +37,7 @@ export type HarnessListEntry = {
   modelsTruncated?: number
   admission: { managerWorker: boolean; missing?: string[] }
   /**
-   * Terminal-only agent (p4 §3.8): launches inside a Kun terminal tab;
+   * Terminal-only agent: launches inside a Kun terminal tab;
    * dispatch works only through the `kun worker` callback the agent itself
    * chooses to call — never as an automatic worker pick.
    */
@@ -60,14 +60,15 @@ export type HarnessListDeps = {
   gatewayAliasModel?: (binding: HarnessGatewayBinding) => string | undefined
   catalog: HarnessCatalog
   readiness?: Pick<import('../../harness/harness-readiness.js').HarnessReadinessService, 'readyProfiles' | 'warmProfiles'>
-  detector: Pick<HarnessDetector, 'status'>
+  /** `cachedStatus` (optional) lets discovery reuse a fresh identity-checked verdict without spawning. */
+  detector: Pick<HarnessDetector, 'status'> & Partial<Pick<HarnessDetector, 'cachedStatus'>>
   /** The composition-time runtime map; absent entries mean definition-only. */
   runtimes?: HarnessRuntimeMap
   /** Last successful model probe per harness (spawn-free); statics otherwise. */
   probedModels?: (definition: HarnessDefinition) => string[] | undefined
   /** Configured providers with their model pools, for gateway/provider modes. */
   providers?: () => Promise<HarnessProviderModelGroup[]>
-  /** Kun profiles the manager can name in `agent` (10 §2 `profiles`). */
+  /** Kun profiles the manager can name in `agent`. */
   profiles?: () => Array<{
     name: string
     model?: string
@@ -76,11 +77,11 @@ export type HarnessListDeps = {
   }>
 }
 
-/** Per-source cap so the tool result stays bounded (P3-06); overflow is counted. */
+/** Per-source cap so the tool result stays bounded; overflow is counted. */
 const MODELS_PER_GROUP = 8
 
 /**
- * `harness_list` (10 §2): what the manager can dispatch onto. Models are
+ * `harness_list`: what the manager can dispatch onto. Models are
  * listed per credential mode — native (probe result preferred over the static
  * table) and provider-backed (`kun-gateway` entries in `kun/<p>/<m>` form,
  * `provider` entries bare). Results are a dynamic tool output — never part of
@@ -88,12 +89,20 @@ const MODELS_PER_GROUP = 8
  */
 export async function listHarnessesForManager(
   deps: HarnessListDeps,
-  currentModel?: string
+  currentModel?: string,
+  /** UI pickers need every model; the tool result keeps the small default cap. */
+  options: {
+    modelsPerGroup?: number
+    /** Lists (and detects) only these engines; a picker never pays for engines it hides. */
+    only?: (harnessId: string) => boolean
+  } = {}
 ): Promise<HarnessListOutput> {
+  const perGroup = options.modelsPerGroup ?? MODELS_PER_GROUP
   const rules = ADMISSION_RULES['manager-worker']
   const runtimeMap = deps.runtimes?.get() ?? {}
   const providers = await deps.providers?.().catch(() => undefined) ?? []
-  const agents = await Promise.all(deps.catalog.list().filter((def) => !deps.catalog.isDisabled(def.id)).map(async (def) => {
+  const agents = await Promise.all(deps.catalog.list().filter((def) => !deps.catalog.isDisabled(def.id) &&
+    (options.only?.(def.id) ?? true)).map(async (def) => {
     const terminalOnly = def.transport === 'terminal'
     const status = await deps.detector.status(def.id).catch(() => undefined)
     deps.readiness?.warmProfiles(def.id)
@@ -106,9 +115,9 @@ export async function listHarnessesForManager(
     const missing = rules.required.filter((key) => !effective.statuses[key].supported)
     let truncated = 0
     const cap = (entries: HarnessListModel[]): HarnessListModel[] => {
-      if (entries.length <= MODELS_PER_GROUP) return entries
-      truncated += entries.length - MODELS_PER_GROUP
-      return entries.slice(0, MODELS_PER_GROUP)
+      if (entries.length <= perGroup) return entries
+      truncated += entries.length - perGroup
+      return entries.slice(0, perGroup)
     }
     const models: HarnessListModel[] = []
     if (def.credentialModes.includes('native-login')) {
@@ -152,7 +161,7 @@ export async function listHarnessesForManager(
       displayName: def.displayName,
       ready,
       ...(ready ? {} : {
-        // P4-05: stable code first for the manager; the raw message stays
+        // stable code first for the manager; the raw message stays
         // diagnostic detail in parentheses.
         notReadyReason: status?.reasonCode
           ? `${status.reasonCode}${status?.message ? ` (${status.message})` : ''}`

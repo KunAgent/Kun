@@ -20,6 +20,7 @@ import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-s
 import { buildCodeCanvasSendOverrides } from '../../../design/design-turn-dispatch'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 import { buildCodeCanvasOutboundText } from '../../../design/canvas/code-canvas-outbound'
+import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 
 export type CodeCanvasSendMessage = (
   text: string,
@@ -35,6 +36,8 @@ export type CodeCanvasPromptControllerOptions = {
   composerReasoningEffort: ComposerReasoningEffort
   sendMessage: CodeCanvasSendMessage
   setError: (error: string | null) => void
+  /** Component picked inside an HTML board on the Code whiteboard. */
+  htmlElementContext?: DesignHtmlElementContext | null
 }
 
 export type CodeCanvasOutboundPromptInput = {
@@ -49,7 +52,8 @@ export function useCodeCanvasPromptController({
   activeThreadId,
   composerReasoningEffort,
   sendMessage,
-  setError
+  setError,
+  htmlElementContext
 }: CodeCanvasPromptControllerOptions) {
   const { t } = useTranslation()
 
@@ -68,6 +72,7 @@ export function useCodeCanvasPromptController({
       selectedIds: useCanvasSelectionStore.getState().selectedIds,
       viewBox: useCanvasViewportStore.getState().vbox,
       designContext: useDesignWorkspaceStore.getState().designContext,
+      htmlElementContext,
       peekLastErrors: peekLastCanvasOpErrors
     })
   }

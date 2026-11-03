@@ -241,13 +241,10 @@ describe('SubagentSettingsEditor', () => {
     expect(baseChip).toBeDefined()
     expect(baseChip!.findAllByType('span').some((span) => span.children.includes('8'))).toBe(true)
 
-    const modeSwitch = renderer.root.findByProps({
-      role: 'switch',
-      'aria-label': 'Use existing agents'
-    })
-    expect(modeSwitch.props['aria-checked']).toBe(true)
+    const modes = renderer.root.findAllByProps({ role: 'radio' })
+    expect(modes.map((mode) => mode.props['aria-checked'])).toEqual([true, false])
     await act(async () => {
-      modeSwitch.props.onClick()
+      modes[1]!.props.onClick()
     })
     expect((onPatch.mock.calls.at(-1)?.[0] as KunRuntimeSettingsPatchV1).subagents)
       .toMatchObject({ useExistingAgents: false })

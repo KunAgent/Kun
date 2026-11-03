@@ -40,7 +40,7 @@ import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-le
 
 import { ServiceManagerHttpError, ServiceManagerTransportError } from './usage-errors.js'
 import type { ServiceManagerConnection } from './manager-client.js'
-import { managerClientRequestSignal } from './manager-client-lifetime.js'
+import { openManagerRequestSignal } from './manager-client-lifetime.js'
 
 export type ManagerRequestOptions = {
   method?: string
@@ -50,6 +50,8 @@ export type ManagerRequestOptions = {
   signal?: AbortSignal
   /** Explicitly read-only RPCs may retry after an ambiguous socket failure. */
   retrySafe?: boolean
+  /** Bounded transport attempts, only useful for reads or deduplicated writes. */
+  maxAttempts?: number
 }
 
 export async function requestManagerJson(
@@ -57,7 +59,7 @@ export async function requestManagerJson(
   path: string,
   options: ManagerRequestOptions
 ): Promise<unknown> {
-  return performManagerRequest(manager, path, options, requireManagerJson)
+  return performManagerRequest(manager, path, options, requireManagerJson, true)
 }
 
 export async function requestManagerResponse(
@@ -65,21 +67,45 @@ export async function requestManagerResponse(
   path: string,
   options: ManagerRequestOptions
 ): Promise<Response> {
-  return performManagerRequest(manager, path, options, async (response) => response)
+  // The caller still reads this body, so its signal stays linked until the
+  // request timeout instead of being released when the headers arrive.
+  return performManagerRequest(manager, path, options, async (response) => response, false)
 }
 
 async function performManagerRequest<T>(
   manager: ServiceManagerConnection,
   path: string,
   options: ManagerRequestOptions,
-  consume: (response: Response) => Promise<T>
+  consume: (response: Response) => Promise<T>,
+  releaseOnSuccess: boolean
 ): Promise<T> {
   const fetchImpl = options.fetch ?? fetch
   const method = (options.method ?? 'GET').toUpperCase()
   const retrySafe = options.retrySafe === true || method === 'GET' || method === 'HEAD'
   // All attempts share the original budget. A cancelled request never retries.
-  const signal = managerClientRequestSignal(options.signal, options.timeoutMs ?? 5_000)
+  const request = openManagerRequestSignal(options.signal, options.timeoutMs ?? 5_000)
+  try {
+    const result = await performManagerAttempts(manager, path, method, retrySafe, options, consume, request.signal, fetchImpl)
+    if (releaseOnSuccess) request.dispose()
+    return result
+  } catch (error) {
+    request.dispose()
+    throw error
+  }
+}
+
+async function performManagerAttempts<T>(
+  manager: ServiceManagerConnection,
+  path: string,
+  method: string,
+  retrySafe: boolean,
+  options: ManagerRequestOptions,
+  consume: (response: Response) => Promise<T>,
+  signal: AbortSignal,
+  fetchImpl: typeof fetch
+): Promise<T> {
   const body = options.body === undefined ? undefined : JSON.stringify(options.body)
+  const maxAttempts = Math.min(5, Math.max(1, Math.floor(options.maxAttempts ?? 3)))
   for (let attempt = 0; ; attempt += 1) {
     signal.throwIfAborted()
     let receivedResponse = false
@@ -97,11 +123,11 @@ async function performManagerRequest<T>(
       return await consume(response)
     } catch (error) {
       const failure = classifyManagerTransportError(error)
-      if (signal.aborted || attempt >= 2 || !(failure instanceof ServiceManagerTransportError) ||
+      if (signal.aborted || attempt + 1 >= maxAttempts || !(failure instanceof ServiceManagerTransportError) ||
         (!retrySafe && (receivedResponse || failure.kind !== 'connection_refused'))) throw failure
       // Stay on the authenticated Manager instance. A new Manager requires
       // ownership/lease recovery, never a blind data-plane endpoint swap.
-      await delayRequestRetry(100 * (attempt + 1), undefined, { signal })
+      await delayRequestRetry(100 * (2 ** attempt), undefined, { signal })
     }
   }
 }

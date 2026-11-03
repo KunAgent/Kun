@@ -36,7 +36,6 @@ describe('SessionExportMenu', () => {
     expect(available).toContain('aria-label="Export conversation"')
     expect(available).toContain('aria-haspopup="menu"')
     expect(available).not.toContain('disabled=""')
-    expect(empty).toContain('disabled=""')
     expect(empty).toContain('There is no completed conversation to export')
   })
 
@@ -66,9 +65,10 @@ describe('SessionExportMenu', () => {
     act(() => trigger.props.onClick())
 
     const items = renderer!.root.findAll((node) => node.type === 'button' && node.props.role === 'menuitem')
-    expect(items).toHaveLength(2)
+    expect(items).toHaveLength(3)
     expect(JSON.stringify(renderer!.toJSON())).toContain('Markdown (.md)')
     expect(JSON.stringify(renderer!.toJSON())).toContain('PDF (.pdf)')
+    expect(JSON.stringify(renderer!.toJSON())).toContain('Export multiple conversations')
 
     act(() => items[0].props.onClick())
     await act(async () => {

@@ -1,6 +1,6 @@
 import type { TurnItem } from '../contracts/items.js'
 
-/** One conversation turn distilled for the handoff brief (docs/ade/08 §3.2). */
+/** One conversation turn distilled for the handoff brief. */
 export type ConversationTurn = {
   turnId: string
   /**

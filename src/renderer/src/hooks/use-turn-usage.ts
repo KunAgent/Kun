@@ -51,6 +51,9 @@ export type TurnUsageSummary = {
   models: string[]
   /** Record origins; 'harness-gateway' marks requests routed via the local Kun gateway. */
   sources?: string[]
+  /** Average model timing the runtime stamped when the turn settled. */
+  avgTtftMs?: number | null
+  avgTokensPerSecond?: number | null
 }
 
 export type TurnUsageState = {
@@ -121,7 +124,9 @@ export function parseTurnUsageResponse(
       models: stringArray(value.models),
       ...(Array.isArray(value.sources) && value.sources.length
         ? { sources: stringArray(value.sources) }
-        : {})
+        : {}),
+      ...('avg_ttft_ms' in value ? { avgTtftMs: nullableAmount(value.avg_ttft_ms) } : {}),
+      ...('avg_tokens_per_second' in value ? { avgTokensPerSecond: nullableAmount(value.avg_tokens_per_second) } : {})
     })
   }
   return byTurnId

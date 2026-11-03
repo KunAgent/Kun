@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import { HarnessIdSchema } from './harness.js'
+import { ChildLauncherSchema } from './runtime-event-base.js'
 
 /**
  * One Activity row tracks a single execution unit: a conversation thread,
  * a manager-dispatched worker, a side chat, a graph attempt, or a
- * tier-0 terminal agent. See docs/ade/06-activity-store.md.
+ * tier-0 terminal agent.
  */
 export const ExecutionUnitKindSchema = z.enum([
   'thread',
@@ -78,6 +79,7 @@ export const ActivityRowSchema = z
     metadataPending: z.boolean().optional(),
     /** Parent thread for worker / side-chat / graph-attempt units. */
     parentThreadId: z.string().optional(),
+    childLauncher: ChildLauncherSchema.optional(),
     teamId: z.string().optional(),
     harnessId: HarnessIdSchema,
     title: z.string().max(200),
@@ -142,6 +144,7 @@ export const RegisterUnitSchema = z
     roomId: z.string().min(1).optional(),
     metadataPending: z.boolean().optional(),
     parentThreadId: z.string().optional(),
+    childLauncher: ChildLauncherSchema.optional(),
     teamId: z.string().optional(),
     harnessId: HarnessIdSchema,
     title: z.string().max(200),

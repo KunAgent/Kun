@@ -27,6 +27,12 @@ export function routeComposerContexts(
   pending: readonly ComposerContextAttachment[]
 ): ComposerContextAttachment[] {
   if (route === 'chat') return mergeTurnComposerContexts(primary, pending)
+  // The artifact chat panel sends the open file and its view/selection the way Work does.
+  if (route === 'artifacts') {
+    const currentView = primary.find(isWorkspaceOfficeViewPositionAttachment)
+    const references = primary.filter(isWriteTurnReferenceAttachment)
+    return mergeTurnComposerContexts([...references, ...(currentView ? [currentView] : [])], [])
+  }
   if (route === 'write') {
     const currentView = primary.find(isWorkspaceOfficeViewPositionAttachment)
     const references = primary.filter(isWriteTurnReferenceAttachment)

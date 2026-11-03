@@ -1,5 +1,8 @@
+import { RemoteForkSchema, RemoteRewindSchema } from './remote-history.js'
+import { ThreadTaskOriginSchema } from './thread-task-origin.js'
 import { HarnessGatewayBindingSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
+import { ContextSnapshotEvent } from './context-snapshot.js'
 import { RoomThreadContextSchema } from './thread-room-context.js'
 import { ExecutionTaskStateSchema } from './execution-tasks.js'
 import { ThreadTodoListSchema, ThreadTodoSourceSchema, ThreadTodoStatus, MAX_THREAD_TODOS, MAX_THREAD_TODO_CONTENT_CHARS } from './thread-todos.js'
@@ -30,6 +33,7 @@ import {
   ThreadCollaborationRequestSchema
 } from './thread-workbench.js'
 import { ThreadExecutionConfigSchema } from './thread-execution-config.js'
+import { TurnReasoningEffortSchema } from './turn-reasoning.js'
 export * from './thread-timeline.js'
 export * from './thread-knowledge.js'
 export * from './thread-workbench.js'
@@ -160,8 +164,9 @@ export type ResumeSessionMetadata = z.infer<typeof ResumeSessionMetadataSchema>
  * - `side`: a "by-the-way" side conversation that inherits a one-time
  *   snapshot of its parent and runs in parallel. Excluded from the
  *   default thread listing.
+ * - `task`: a session started from a suggestion card; listed, nested under its parent.
  */
-export const ThreadRelation = z.enum(['primary', 'fork', 'side'])
+export const ThreadRelation = z.enum(['primary', 'fork', 'side', 'task'])
 export type ThreadRelation = z.infer<typeof ThreadRelation>
 
 export const ThreadGoalStatus = z.enum([
@@ -258,6 +263,8 @@ export const ThreadSchemaBase = z.object({
   roomContext: RoomThreadContextSchema.optional(),
   /** Host-written: this Code/Work thread was started by a bot Agent. Never accepted from a request. */
   workbenchOrigin: ThreadWorkbenchOriginSchema.optional(),
+  /** Host-written: the suggestion card task this `task` thread runs. */
+  taskOrigin: ThreadTaskOriginSchema.optional(),
   /** Read-only external history; never part of the native session stream. */
   historyRefId: z.string().min(1).optional(),
   id: z.string().min(1),
@@ -292,7 +299,7 @@ export const ThreadSchemaBase = z.object({
   /** Host-resolved task defaults and source information for new Code work. */
   executionConfig: ThreadExecutionConfigSchema.optional(),
   pendingExecutionConfig: ThreadExecutionConfigSchema.optional(),
-  /** Host-managed task workspace bound to this thread (07 §5); counts as isolated (02 §6). */
+  /** Host-managed task workspace bound to this thread; counts as isolated. */
   taskWorkspaceId: z.string().min(1).optional(),
   /** Stable owner derived from the authenticated Extension Host session. */
   ownerExtensionId: z.string().min(1).optional(),
@@ -329,8 +336,10 @@ export const ThreadSchemaBase = z.object({
   costBudgetWarningSent: z.boolean().optional(),
   relation: ThreadRelation.default('primary'),
   parentThreadId: z.string().optional(),
+  remoteFork: RemoteForkSchema.optional(),
+  remoteRewind: RemoteRewindSchema.optional(),
   /**
-   * ADE execution-unit identity (09 §3.1). Host-written only: worker threads
+   * ADE execution-unit identity. Host-written only: worker threads
    * carry their team/manager binding here so stores, tools, and completion
    * hooks can resolve the owning manager without trusting caller input.
    * Never exposed on `CreateThreadRequest`.
@@ -350,6 +359,8 @@ export const ThreadSchemaBase = z.object({
   forkedFromTurnCount: z.number().int().nonnegative().optional(),
   forkedFromTurnId: z.string().min(1).optional(),
   goal: ThreadGoalSchema.optional(),
+  /** Monotonic manual goal policy generation; survives clear/recreate to prevent stale ABA writes. */
+  goalPolicyRevision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   todos: ThreadTodoListSchema.optional(),
   executionTasks: ExecutionTaskStateSchema.optional(),
   retentionPolicy: ThreadRetentionPolicySchema.optional(),
@@ -377,6 +388,7 @@ export const ThreadSchemaReadable = ThreadSchemaBase
 export type ThreadRecord = z.infer<typeof ThreadSchema>
 
 export const ThreadTimelineResponseSchema = ThreadSchemaReadable.extend({
+  contextSnapshot: ContextSnapshotEvent.nullable().optional(),
   latestSeq: z.number().int().nonnegative(),
   activeTurn: TurnSchema.omit({ items: true }).nullable().optional(),
   latestTurn: TurnSchema.omit({ items: true }).nullable(),
@@ -427,6 +439,7 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   parentThreadId: true,
   executionUnit: true,
   workbenchOrigin: true,
+  taskOrigin: true,
   planBuildRunId: true,
   planBuildAdmissionFingerprint: true,
   planBuildAdmissionCapabilityHash: true,
@@ -445,7 +458,9 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   /** First accepted Code/Design mode, derived from durable turn history. */
   lockedTaskSurface: ThreadAgentSurface.optional(),
   /** Rebuildable event-log high-water mark used by lean activity observers. */
-  latestSeq: z.number().int().nonnegative().optional()
+  latestSeq: z.number().int().nonnegative().optional(),
+  /** Accepted turns; lets New task find an empty thread without loading its timeline. */
+  turnCount: z.number().int().nonnegative().optional()
 })
 export type ThreadSummary = z.infer<typeof ThreadSummarySchema>
 
@@ -478,6 +493,8 @@ export const CreateThreadRequest = z.object({
   harnessId: HarnessIdSchema.optional(),
   credentialMode: HarnessCredentialModeSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
+  /** Task reasoning depth stored on an explicit route; new turns inherit it. */
+  reasoningEffort: TurnReasoningEffortSchema.optional(),
   /**
    * Owning workspace mode ('code' | 'ade'). Written by the creating client;
    * absent and legacy threads count as 'code'.
@@ -492,7 +509,7 @@ export const CreateThreadRequest = z.object({
   /** CAS of the displayed project defaults; omitted by legacy clients. */
   projectDefaultsRevision: z.string().regex(/^ade-project-v1:[a-f0-9]{64}$/).optional(),
   executionConfig: z.never().optional(),
-  /** Bind a host-managed task workspace to this thread (07 §5). */
+  /** Bind a host-managed task workspace to this thread. */
   taskWorkspaceId: z.string().min(1).optional(),
   /** Opaque core-managed account reference for the selected provider. */
   accountId: z.string().min(1).optional(),
@@ -518,7 +535,8 @@ export type CreateThreadRequest = z.infer<typeof CreateThreadRequest>
  */
 export const ForkThreadRequest = z
   .object({
-    relation: ThreadRelation.default('fork'),
+    // Task sessions come only from a suggestion card, never from this route.
+    relation: ThreadRelation.exclude(['task']).default('fork'),
     title: z.string().optional(),
     turnId: z.string().trim().min(1).optional(),
     /** Exclude turnId itself, allowing a faithful undo branch before turn one. */
@@ -605,9 +623,9 @@ export const UpdateThreadRequest = z
     /** Marks the new title as auto/provisional (true) or user-set/locked (false). */
     titleAuto: z.boolean().optional(),
     workspace: z.string().min(1).optional(),
-    /** Bind a host-managed task workspace once it reaches `ready` (07 §5); set-only. */
+    /** Bind a host-managed task workspace once it reaches `ready`; set-only. */
     taskWorkspaceId: z.string().min(1).optional(),
-    /** Rebind the harness (01 §8); refused while the thread is running. */
+    /** Rebind the harness; refused while the thread is running. */
     harnessId: HarnessIdSchema.optional(),
     /** Effective on the next turn; updates are refused while a turn is running. */
     collaboration: ThreadCollaborationRequestSchema.optional(),
@@ -657,8 +675,8 @@ export type UpdateThreadRequest = z.infer<typeof UpdateThreadRequest>
 
 export const ListThreadsResponse = z.object({
   threads: z.array(ThreadSummarySchema),
-  /** Echo for clients negotiating the combined Code inventory. */
-  workbenchScope: z.literal('code').optional(),
+  /** Echo for clients negotiating a workbench inventory. */
+  workbenchScope: z.enum(['code', 'work']).optional(),
   nextCursor: z.string().optional(),
   hasMore: z.boolean().optional(),
   total: z.number().int().nonnegative().optional(),

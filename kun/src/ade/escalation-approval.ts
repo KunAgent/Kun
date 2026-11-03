@@ -31,7 +31,7 @@ export type EscalationRequest = {
 
 /**
  * Ask the user — and only the user — to widen a worker's permission past the
- * manager's authority (docs/ade/09 §7.2). The envelope is an external-effect
+ * manager's authority. The envelope is an external-effect
  * action pinned to `reviewerRequirement: 'user'`, so the auto policy, hooks,
  * and the agent reviewer all skip it. Abort, timeout, denial, or a broken
  * channel all resolve to false and produce no side effects.

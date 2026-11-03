@@ -128,9 +128,13 @@ export function clientTimezone(): string {
   }
 }
 
-export function defaultDailyUsageRange(now = new Date(), days = DEFAULT_USAGE_HEATMAP_DAYS): DailyUsageRange {
+export function defaultDailyUsageRange(
+  now = new Date(),
+  days = DEFAULT_USAGE_HEATMAP_DAYS,
+  minDays = 7
+): DailyUsageRange {
   const timezone = clientTimezone()
-  const rangeDays = Math.max(7, Math.round(days))
+  const rangeDays = Math.max(minDays, Math.round(days))
   const to = dateStringFromParts(now, timezone)
   return {
     from: addDays(to, -(rangeDays - 1)),

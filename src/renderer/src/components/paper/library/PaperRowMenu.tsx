@@ -3,9 +3,9 @@ import {
   BookOpen,
   Copy,
   Download,
-  FolderInput,
   FolderSearch,
   PencilLine,
+  Sparkles,
   Trash2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -14,6 +14,7 @@ import type { PaperReadingStatus } from '@shared/paper/paper-meta-v2'
 
 export type PaperRowMenuAction =
   | 'open'
+  | 'interpret'
   | 'edit'
   | 'copy-bibtex'
   | 'download-pdf'
@@ -79,12 +80,12 @@ export function PaperRowMenu({
       className="ds-no-drag fixed z-[70] rounded-xl border border-[var(--ds-border-strong)] bg-ds-card p-1 shadow-[0_18px_48px_rgba(20,47,95,0.18)]"
     >
       <Item icon={<BookOpen />} label={t('writePaperMenuOpen')} onClick={() => run('open')} />
+      <Item icon={<Sparkles />} label={t('paperRowInterpret')} onClick={() => run('interpret')} />
       <Item icon={<PencilLine />} label={t('writePaperEditMeta')} onClick={() => run('edit')} />
       {!entry.hasPdf ? (
         <Item icon={<Download />} label={t('writePaperDownloadPdf')} onClick={() => run('download-pdf')} />
       ) : null}
       <Item icon={<Copy />} label={t('writePaperCopyBibtex')} onClick={() => run('copy-bibtex')} />
-      <Item icon={<FolderInput />} label={t('writePaperMoveToGroup')} onClick={() => run('move')} />
       <Item
         icon={<FolderSearch />}
         label={window.kunGui?.platform === 'darwin' ? t('fileTreeRevealInFinder') : t('fileTreeRevealInFileManager')}

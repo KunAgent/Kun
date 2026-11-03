@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { mapHookEvent, trimHookPayload } from './hook-activity-mapping.js'
 
 /**
- * Fixture-driven mapping tests (05 §6.3, impl p2 P2-03): each recorded
+ * Fixture-driven mapping tests: each recorded
  * Claude Code hook payload is trimmed to the ingest fields, then mapped.
  */
 

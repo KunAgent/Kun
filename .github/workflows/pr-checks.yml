@@ -10,18 +10,55 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: pr-checks-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '22.23.1'
   GH_TOKEN: ${{ github.token }}
 
 jobs:
+  changes:
+    name: Detect CI changes
+    runs-on: ubuntu-latest
+    outputs:
+      ci: ${{ steps.paths.outputs.ci }}
+    steps:
+      - name: Filter documentation-only changes
+        id: paths
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            // Fail open for GitHub's 3,000-file API limit: never skip unseen code.
+            let ci = true
+            if (pr.changed_files <= 3000) {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo, pull_number: pr.number, per_page: 100
+              })
+              const isDoc = path => path.startsWith('docs/') || path === 'README' ||
+                /^README(?:[._-][a-z0-9-]+)*\.(?:md|mdx|rst|txt)$/i.test(path)
+              ci = files.length !== pr.changed_files || files.length === 0 || files.some(file =>
+                !isDoc(file.filename) || (file.previous_filename && !isDoc(file.previous_filename)))
+            }
+            core.setOutput('ci', String(ci))
+            core.summary.addRaw(ci ? 'Code changes: run all CI gates.' : 'Documentation only: no build or test jobs needed.').write()
+
+  tests:
+    name: Unit tests
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
+    uses: ./.github/workflows/ci-tests.yml
+    permissions:
+      contents: read
+
   quality:
     name: Quality gates
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -48,16 +85,14 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Unit tests
-        run: npm test
-
       - name: Production dependency audit
         run: npm run audit:production
 
   package:
     name: Build Linux package (x64)
-    runs-on: ubuntu-latest
-    needs: quality
+    runs-on: ubuntu-22.04
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 60
     steps:
       - name: Check out repository
@@ -75,7 +110,7 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 xvfb xauth
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm fakeroot dpkg build-essential python3 file xvfb xauth
 
       - name: Install root dependencies
         run: npm ci
@@ -83,13 +118,22 @@ jobs:
       - name: Build Linux AppImage
         run: npm run dist:linux
 
+      - name: Verify Linux x64 package architecture
+        run: >-
+          node ./scripts/verify-linux-package-architecture.mjs
+          --version "$(node -p "require('./package.json').version")"
+          --arch x64
+          --dist dist
+
       - name: Smoke packaged update handoff (Linux x64)
         timeout-minutes: 20
         env:
           KUN_CI_ALLOW_NO_SANDBOX: '1'
         run: |
           # Exercise the packaged Chromium sandbox instead of bypassing it.
-          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
           node ./scripts/configure-linux-chrome-sandbox.cjs --resources dist/linux-unpacked/resources
           npm run smoke:packaged-update-handoff -- --resources dist/linux-unpacked/resources
 
@@ -103,11 +147,13 @@ jobs:
             dist/Kun-*-linux-x86_64.AppImage
             dist/Kun-*-linux-x86_64.AppImage.blockmap
             dist/Kun-*-linux-amd64.deb
+            dist/latest-linux.yml
 
   package-linux-arm64:
     name: Build Linux package (ARM64)
     runs-on: ubuntu-24.04-arm
-    needs: quality
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 180
     steps:
       - name: Check out repository
@@ -164,16 +210,17 @@ jobs:
   package-macos:
     name: Build ad-hoc macOS packages (PR)
     runs-on: macos-latest
-    needs: quality
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 90
     env:
       # PR validation intentionally uses the afterPack ad-hoc signature only.
       # It never consumes Developer ID or notarization secrets.
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      # The 0.3.11 renderer build peaks just above 4 GiB of live heap. 5 GiB
-      # clears it while leaving ~2 GiB of the 7 GB macOS ARM runner for the OS
-      # and esbuild; do not raise further without shrinking the renderer.
-      NODE_OPTIONS: '--max-old-space-size=5120'
+      # Renderer chunk generation now exceeds the former 5 GiB heap ceiling.
+      # Match the 6 GiB budget already exercised by native macOS workspace
+      # builds; retain the same runner, serial packaging and all smoke gates.
+      NODE_OPTIONS: '--max-old-space-size=6144'
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -222,6 +269,8 @@ jobs:
 
   windows-recovery:
     name: Windows recovery safety
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -240,10 +289,35 @@ jobs:
       - name: Install root dependencies
         run: npm ci
 
+      - name: Test local speech downloads and worker paths
+        run: npx vitest run src/main/services/local-sanotts src/shared/local-sanotts --silent=false --reporter=verbose
+
+      - name: Test native Windows file path boundaries
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/attachments/shared-attachment-paths.test.ts src/attachments/shared-attachment-workspace-tools.test.ts src/attachments/shared-attachment-content.test.ts src/remote/files/path-containment.test.ts src/agents/agent-direct-workspace-paths.test.ts
+
+      - name: Test finalized startup helper integrity
+        run: node --test scripts/after-sign.test.cjs
+
+      - name: Build precompiled Windows startup components
+        working-directory: kun
+        run: npm run build:windows-startup
+
+      - name: Test Windows process identity and owned startup
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/server/runtime-process-identity.test.ts src/server/runtime-process-identity.windows.test.ts src/server/runtime-process-identity.windows-native.test.ts src/manager/app-session-reservation.test.ts src/manager/owned-service-manager-session.admission.test.ts src/manager/owned-service-manager-session.test.ts src/process/owned-process-windows.test.ts src/manager/manager-start-lock.test.ts src/manager/manager-start-lock-windows.test.ts src/manager/manager-start-lock.windows-native.test.ts src/process/windows-startup-native.test.ts
+
+      - name: Test Windows startup lock candidate and deadline
+        working-directory: kun
+        run: node node_modules/vitest/vitest.mjs run src/manager/manager-start-lock-diagnostics.test.ts src/manager/manager-start-lock-windows-async.test.ts src/manager/manager-start-lock-async.windows-native.test.ts src/manager/startup-attempt.test.ts
+
+      - name: Test startup cancellation and diagnostic presentation
+        run: npx vitest run src/main/startup-failure-window.test.ts src/main/runtime/desktop-process-stack.test.ts src/main/runtime/kun-runtime-health-monitor.test.ts src/main/main-runtime-startup-flow.test.ts
+
       - name: Test Windows update rollback failpoints
         env:
           KUN_INSTALLER_TEST_ARTIFACT_ROOT: ${{ github.workspace }}\artifacts\windows-installer-transaction
-        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts
+        run: npx vitest run src/main/windows-installer-migration.transaction.test.ts src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts src/main/windows-installer-pending-lease.test.ts --no-file-parallelism
 
       - name: Upload Windows transaction diagnostics
         if: always()
@@ -260,12 +334,13 @@ jobs:
             artifacts/windows-installer-transaction/**/fixture-summary.json
 
       - name: Test Windows installer recovery safety
-        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts
+        run: npx vitest run src/main/windows-installer-migration.recovery-safety.test.ts src/main/windows-installer-migration.payload-backup.test.ts
 
   package-windows:
     name: Build Windows NSIS installer (PR)
     runs-on: windows-latest
-    needs: [quality, windows-recovery]
+    needs: changes
+    if: needs.changes.outputs.ci == 'true'
     timeout-minutes: 240
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -284,9 +359,6 @@ jobs:
 
       - name: Install root dependencies
         run: npm ci
-
-      - name: Test local speech downloads and worker paths
-        run: npx vitest run src/main/services/local-sanotts src/shared/local-sanotts
 
       - name: Smoke Windows mini window interaction and restoration
         timeout-minutes: 5
@@ -328,16 +400,119 @@ jobs:
             dist/latest.yml
             dist/pr-candidate-source.json
 
+  windows-cross-version:
+    name: Windows 0.4.3 GUI upgrade (${{ matrix.source }})
+    runs-on: windows-latest
+    needs: [package-windows]
+    timeout-minutes: 90
+    # The published control is observational: its failure must not mask a
+    # successful repair. The PR candidate remains a required gate.
+    continue-on-error: ${{ matrix.source == 'published-release' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [published-release, pull-request]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GUI_UPGRADE_SOURCE: ${{ matrix.source }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - name: Download exact PR candidate from this run
+        if: matrix.source == 'pull-request'
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-windows-nsis-package
+          path: cross-version-candidate
+      - name: Download published 0.4.4 control without publishing anything
+        if: matrix.source == 'published-release'
+        run: gh release download v0.4.4 -R KunAgent/Kun -p 'Kun-0.4.4-win-x64.exe' -p 'latest.yml' -D cross-version-candidate
+      - name: Upgrade normally launched released 0.4.3 through its real updater
+        run: |
+          $version = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { '0.4.4' } else { node -p "require('./package.json').version" }
+          $scenarios = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { 'normal' } else { 'normal,busy,rollback' }
+          node scripts/smoke-gui-upgrade.cjs --directory cross-version-candidate --version $version --baseline-version 0.4.3 --scenarios $scenarios --report windows-cross-version.json
+      - name: Stage owned cross-version evidence on the checkout volume
+        id: stage_windows_evidence
+        if: always()
+        run: node scripts/stage-windows-upgrade-evidence.cjs --report windows-cross-version.json --output artifacts/windows-cross-version
+      - name: Preserve cross-version logs and transaction evidence
+        if: ${{ always() && steps.stage_windows_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-cross-version-${{ matrix.source }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: artifacts/windows-cross-version
+
+  windows-prepared-restart:
+    name: Windows prepared restart observation (${{ matrix.source }})
+    runs-on: windows-latest
+    needs: [package-windows]
+    timeout-minutes: 90
+    # The released control is observational; the repaired candidate must prove
+    # overlap and normal GUI cleanup. Inconclusive exit 2 cannot satisfy the gate.
+    continue-on-error: ${{ matrix.source == 'published-release' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        source: [published-release, pull-request]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GUI_UPGRADE_SOURCE: ${{ matrix.source }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci
+      - name: Download exact PR candidate from this run
+        if: matrix.source == 'pull-request'
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-windows-nsis-package
+          path: cross-version-candidate
+      - name: Download published 0.4.4 control without publishing anything
+        if: matrix.source == 'published-release'
+        run: gh release download v0.4.4 -R KunAgent/Kun -p 'Kun-0.4.4-win-x64.exe' -p 'latest.yml' -D cross-version-candidate
+      - name: Upgrade normally launched released 0.4.3 through its real updater
+        run: |
+          $version = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { '0.4.4' } else { node -p "require('./package.json').version" }
+          $scenarios = 'restart-prepared'
+          $protection = if ($env:GUI_UPGRADE_SOURCE -eq 'pull-request') { @('--require-pending-protection', 'true') } else { @() }
+          node scripts/smoke-gui-upgrade.cjs --directory cross-version-candidate --version $version --baseline-version 0.4.3 --scenarios $scenarios --report windows-cross-version.json @protection
+      - name: Stage owned prepared-restart evidence on the checkout volume
+        id: stage_windows_evidence
+        if: always()
+        run: node scripts/stage-windows-upgrade-evidence.cjs --report windows-cross-version.json --output artifacts/windows-prepared-restart
+      - name: Preserve prepared-restart logs and transaction evidence
+        if: ${{ always() && steps.stage_windows_evidence.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-prepared-restart-${{ matrix.source }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: artifacts/windows-prepared-restart
+
   pr-gate:
     name: PR gate
     runs-on: ubuntu-latest
     needs:
+      - changes
+      - tests
       - quality
       - package
       - package-linux-arm64
       - package-macos
       - package-windows
       - windows-recovery
+      - windows-cross-version
+      - windows-prepared-restart
     if: always()
     steps:
       - name: Require every PR job to succeed
@@ -345,14 +520,20 @@ jobs:
         with:
           script: |
             const results = [
+              ['Changed paths', '${{ needs.changes.result }}'],
+              ['Unit tests', '${{ needs.tests.result }}'],
               ['Quality gates', '${{ needs.quality.result }}'],
               ['Build Linux package', '${{ needs.package.result }}'],
               ['Build Linux package (ARM64)', '${{ needs['package-linux-arm64'].result }}'],
               ['Build ad-hoc macOS packages (PR)', '${{ needs['package-macos'].result }}'],
               ['Build Windows NSIS installer (PR)', '${{ needs['package-windows'].result }}'],
               ['Windows recovery safety', '${{ needs['windows-recovery'].result }}'],
+              ['Windows 0.4.3 GUI upgrade', '${{ needs['windows-cross-version'].result }}'],
+              ['Windows prepared restart protection', '${{ needs['windows-prepared-restart'].result }}'],
             ]
-            const unsuccessful = results.filter(([, result]) => result !== 'success')
+            const docsOnly = '${{ needs.changes.result }}' === 'success' && '${{ needs.changes.outputs.ci }}' === 'false'
+            const unsuccessful = results.filter(([name, result]) =>
+              result !== 'success' && !(docsOnly && name !== 'Changed paths' && result === 'skipped'))
             if (unsuccessful.length > 0) {
               core.setFailed(
                 `Required jobs did not succeed:\n${unsuccessful
@@ -365,15 +546,21 @@ jobs:
     name: Report PR check feedback
     runs-on: ubuntu-latest
     needs:
+      - changes
+      - tests
       - quality
       - package
       - package-linux-arm64
       - package-macos
       - package-windows
       - windows-recovery
+      - windows-cross-version
+      - windows-prepared-restart
     if: >-
       ${{
-        always() &&
+        always() && !cancelled() &&
+        needs.changes.result == 'success' &&
+        needs.changes.outputs.ci == 'true' &&
         github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository
       }}
@@ -388,12 +575,15 @@ jobs:
         with:
           script: |
             const jobResults = [
+              ['Unit tests', '${{ needs.tests.result }}'],
               ['Quality gates', '${{ needs.quality.result }}'],
               ['Build Linux package', '${{ needs.package.result }}'],
               ['Build Linux package (ARM64)', '${{ needs['package-linux-arm64'].result }}'],
               ['Build ad-hoc macOS packages (PR)', '${{ needs['package-macos'].result }}'],
               ['Build Windows NSIS installer (PR)', '${{ needs['package-windows'].result }}'],
               ['Windows recovery safety', '${{ needs['windows-recovery'].result }}'],
+              ['Windows 0.4.3 GUI upgrade', '${{ needs['windows-cross-version'].result }}'],
+              ['Windows prepared restart protection', '${{ needs['windows-prepared-restart'].result }}'],
             ]
             const failed = jobResults.filter(([, result]) => result !== 'success')
             const failedJobs = failed.map(([name, result]) => `- ${name} (${result})`).join('\n')

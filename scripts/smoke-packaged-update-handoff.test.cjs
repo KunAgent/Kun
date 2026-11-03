@@ -188,6 +188,7 @@ test('profile settings preserve explicit auto-start policy and canonical data sc
   assert.equal(settings.agents.kun.autoStart, false)
   assert.equal(settings.agents.kun.dataDir, '/profile/data')
   assert.equal(settings.agents.kun.port, 18899)
+  assert.equal(settings.provider.providers[0].modelProfiles['packaged-handoff-smoke-model'].contextWindowTokens, 64_000)
 })
 
 test('acceptance and recovery markers are machine-readable', () => {
@@ -340,4 +341,11 @@ test('positive packaged startup gates the preload before discovery', () => {
   )
   assert(positive.indexOf('await assertPackagedPreloadBridge(') > positive.indexOf('tracked.push(candidateDesktop)'))
   assert(positive.indexOf('await assertPackagedPreloadBridge(') < positive.indexOf('const current = await waitForCurrentOwners('))
+})
+
+test('Windows packaged handoff cleanup retries transient profile locks', () => {
+  const source = readFileSync(join(process.cwd(), 'scripts/smoke-packaged-update-handoff.cjs'), 'utf8')
+  assert.match(source, /process\.platform === 'win32'/u)
+  assert.match(source, /maxRetries: 40, retryDelay: 250/u)
+  assert.match(source, /rm\(root\.temporaryRoot, \{ recursive: true, force: true, \.\.\.retry \}/u)
 })

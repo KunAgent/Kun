@@ -14,8 +14,8 @@ export type RoomPeerTriageResult = z.infer<typeof Verdict> & {
 }
 
 /** The small model owns the verdict; extraction tolerates fences, chatter and
- *  truncated output. A thinking model may legitimately spend its budget on
- *  reasoning before answering, so nothing here caps its output length — the
+ *  truncated output. A provider that ignores the thinking control may still
+ *  reason before answering, so nothing here caps its output length — the
  *  streamed text cap in roomPeerTriage only stops runaway generations. */
 function parseParticipationVerdict(raw: string): z.infer<typeof Verdict> {
   const trimmed = raw.trim()
@@ -85,7 +85,9 @@ export async function roomPeerTriage(input: {
       contextInstructions: roomPeerTriageInstructions(),
       prefix: [], history: [{ id: input.identity, threadId: input.identity, turnId: input.identity,
         kind: 'user_message', role: 'user', status: 'completed', createdAt: new Date().toISOString(), text: prompt }],
-      tools: [], responseFormat: 'json_object', temperature: 0,
+      // A yes/no gate does not need thinking; with it a main-model fallback
+      // spent 15-70s per check while the room showed members as "judging".
+      tools: [], responseFormat: 'json_object', temperature: 0, reasoningEffort: 'off',
       stream: true, abortSignal: controller.signal
     })) {
       if (controller.signal.aborted) throw controller.signal.reason ?? new Error('Participation check cancelled')

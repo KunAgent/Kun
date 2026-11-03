@@ -62,7 +62,7 @@ export type GraphSchedulerOptions = {
   mailbox: GraphMailbox
   writes: FileGraphWriteCoordinator
   workerSessions: GraphWorkerSessionRegistry
-  /** Mission-control activity rows for worker attempts (docs/ade/06 §4). */
+  /** Mission-control activity rows for worker attempts. */
   activity?: Pick<{ register(unit: RegisterUnit): unknown }, 'register'>
   authorityForRun: (run: GraphRunV1) => Promise<GraphParentAuthority> | GraphParentAuthority
   artifactStore?: ArtifactStore

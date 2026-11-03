@@ -1,6 +1,6 @@
 /**
- * `callout` — rich node for `> [!type] title` Obsidian/GitHub alerts
- * (implementation §7.3). Header shows a type icon button (cycles through
+ * `callout` — rich node for `> [!type] title` Obsidian/GitHub alerts.
+ * Header shows a type icon button (cycles through
  * the Work callout table) and an editable title; the body is normal block
  * content. Serialization emits the blockquote marker form back.
  */
@@ -165,7 +165,7 @@ export const Callout = TiptapNode.create({
     }
     return {
       // Enter splits the textblock inside the callout — it never lifts the
-      // caret out of the block (implementation §7.4).
+      // caret out of the block.
       Enter: () => {
         const { $from } = this.editor.state.selection
         if (calloutDepth($from) < 0) return false

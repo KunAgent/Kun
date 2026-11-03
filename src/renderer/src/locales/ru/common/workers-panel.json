@@ -1,0 +1,80 @@
+{
+  "workersEmptyTitle": "Участников пока нет",
+  "workersUnavailableTitle": "Не удаётся прочитать команду",
+  "workersRetry": "Повторить",
+  "workersHeader": {
+    "members": "Участников: {{n}}",
+    "usageTitle": "Токены всей команды",
+    "success": "готово",
+    "running": "в работе",
+    "warning": "ждут вас",
+    "danger": "ошибка"
+  },
+  "workersSection": {
+    "needs-you": "Нужны вы",
+    "working": "В работе",
+    "done": "Завершены"
+  },
+  "workersStatus": {
+    "question": "Ждёт ответа",
+    "approval": "Ждёт одобрения",
+    "waiting": "Ожидает",
+    "failed": "Ошибка",
+    "working": "В работе",
+    "done": "Готово",
+    "released": "Освобождён",
+    "idle": "Простаивает"
+  },
+  "workersTool": {
+    "read": "Читает файлы",
+    "edit": "Правит файлы",
+    "search": "Ищет в коде",
+    "command": "Выполняет команду",
+    "web": "Ищет в интернете",
+    "delegate": "Поручает подзадачу",
+    "other": "Вызывает {{tool}}"
+  },
+  "workersPhase": {
+    "investigating": "Исследует",
+    "implementing": "Реализует",
+    "verifying": "Проверяет",
+    "blocked": "Заблокирован",
+    "compacting": "Сжимает контекст"
+  },
+  "workersTime": {
+    "justNow": "только что",
+    "minutes": "{{n}} мин назад",
+    "hours": "{{n}} ч назад",
+    "days": "{{n}} дн назад"
+  },
+  "workersRow": {
+    "files": "файлов: {{n}}"
+  },
+  "workersAction": {
+    "openInMain": "Открыть в основной области",
+    "more": "Другие действия"
+  },
+  "workersQuestion": {
+    "waitingOn": "{{name}} ждёт вашего ответа",
+    "otherAnswer": "Или введите другой ответ…",
+    "answer": "Ответить",
+    "answerPlaceholder": "Или введите ответ…",
+    "answerHint": "Ответ не перехватывает управление"
+  },
+  "workerTab": {
+    "fallbackTitle": "Участник",
+    "loadingConversation": "Загрузка диалога…",
+    "noConversation": "Диалога пока нет.",
+    "missing": "Этого участника больше нет в команде.",
+    "childReadOnly": "Этим агентом управляет менеджер; здесь диалог только для чтения.",
+    "releasedReadOnly": "Участник освобождён; диалог только для чтения."
+  },
+  "workerComposer": {
+    "managed": "Управляет менеджер",
+    "handBack": "Вы управляете · вернуть",
+    "takeOverTitle": "Перехватить участника у менеджера",
+    "handBackTitle": "Вернуть управление менеджеру",
+    "takeOverHint": "Отправка перехватывает управление; его можно вернуть в любой момент."
+  },
+  "assignmentCardTask": "Задача"
+}

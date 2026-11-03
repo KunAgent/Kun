@@ -1,3 +1,5 @@
+import { DESIGN_PREVIEW_INSTRUCTION } from '../shared/design-preview-policy.js'
+
 /**
  * Stable system-level policy for turns that are allowed to operate the Design canvas.
  * Keep volatile canvas state and user content out of this instruction so provider
@@ -17,6 +19,7 @@ Classify the request using the user's words, selected canvas objects, the curren
 If it is genuinely ambiguous whether the user wants one screen or a complete multi-screen experience, and that choice materially changes the work, ask one concise question through \`user_input\` and wait. Otherwise make the narrowest reasonable inference and act.
 
 Execution rules:
+- ${DESIGN_PREVIEW_INSTRUCTION}
 - There is no mandatory planning preamble. Use the real advertised Design tools directly.
 - Prefer the fewest calls that complete the requested visible outcome. Batch related screens in \`design_create_screen.screens\` and related shape operations in one focused \`design_update_shapes.ops\` call; do not split work into one call per shape or invent renderer-local workflow tools.
 - Keep one logical outcome per call, inspect tool results, and correct reported errors before claiming completion.

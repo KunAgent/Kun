@@ -1,3 +1,6 @@
+import { PRIVATE_QUEUE_LOCKED, withPrivateQueueAdmission, privateQueuedTurnAllowed } from '../rooms/private-turn-lifecycle.js'
+import { validateAttachmentAliases, type AttachmentAliases } from '../contracts/attachment-aliases.js'
+import { queueRevision, requirePolicyRevision } from '../domain/remote-policy-revision.js'
 import { isQueueExecutionBlocked, latestExecutedTurn } from '../domain/queue-execution-state.js'
 import { executableHistory } from '../loop/executable-history.js'
 import { resolveTurnReviewRequests } from './review-composer-context.js'
@@ -115,7 +118,7 @@ export const turnServiceQueueOperations = {
   async persistQueuedTurnRecord(this: TurnService, thread: ThreadRecord, input: {
     threadId: string
     request: StartTurnRequest
-  }, allocatedTurnId?: string): Promise<{ turnId: string; userItem: TurnItem }> {
+  }, allocatedTurnId?: string, aliases?: AttachmentAliases): Promise<{ turnId: string; userItem: TurnItem }> {
     assertQueueCapacity(thread, input.threadId)
     const turnId = allocatedTurnId ?? this['deps'].ids.next('turn')
     const designAdmission = resolveDesignTurnAdmission({
@@ -133,6 +136,7 @@ export const turnServiceQueueOperations = {
     const reviewRequests = await resolveTurnReviewRequests(
       thread, composerContexts, this['deps'].resolveReviewRequests
     )
+    const attachmentAliases = validateAttachmentAliases(aliases, input.request.attachmentIds ?? [])
     const attachmentIds = [...new Set(
       (input.request.attachmentIds ?? []).map((id) => id.trim()).filter(Boolean)
     )]
@@ -184,12 +188,14 @@ export const turnServiceQueueOperations = {
       paperContext: input.request.paperContext,
       messageSource: input.request.messageSource,
       subagentResume: input.request.subagentResume,
+      interruptedResume: input.request.interruptedResume,
       model: turnModel,
       providerId: turnProviderId,
       harnessId: turnHarnessId,
       collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
       credentialMode: turnCredentialMode,
       harnessAgentId: input.request.harnessAgentId,
+      harnessSettings: input.request.harnessSettings,
             gatewayBinding,
       accountId: turnAccountId,
       reasoningEffort: input.request.reasoningEffort,
@@ -199,6 +205,7 @@ export const turnServiceQueueOperations = {
       sandboxMode: input.request.sandboxMode ?? thread.sandboxMode,
       approvalReviewer: input.request.approvalReviewer ?? thread.approvalReviewer,
       attachmentIds,
+      attachmentAliases,
       composerContexts,
       guiPlan: input.request.guiPlan,
       guiDesignCanvas: input.request.guiDesignCanvas,
@@ -226,6 +233,7 @@ export const turnServiceQueueOperations = {
       displayText: input.request.displayText,
       messageSource: input.request.messageSource,
       attachmentIds,
+      attachmentAliases,
       composerContexts,
       reviewRequests,
       fileReferences: input.request.fileReferences ?? [],
@@ -317,13 +325,13 @@ export const turnServiceQueueOperations = {
   async enqueueTurn(this: TurnService, input: {
     threadId: string
     request: StartTurnRequest
-  }): Promise<StartTurnResponse> {
+  }, options: { attachmentAliases?: AttachmentAliases } = {}): Promise<StartTurnResponse> {
     const finishAdmission = this['beginExecutionAdmission']()
     try {
       if (this['deps'].migrationMaintenance?.isLocked()) {
         throw new TurnConflictError('runtime migration maintenance is in progress')
       }
-      const response = await enqueueTurnDurably(this, input)
+      const response = await enqueueTurnDurably(this, input, options.attachmentAliases)
       this['notifyTurnQueued'](input.threadId)
       return response
     } finally {
@@ -343,9 +351,13 @@ export const turnServiceQueueOperations = {
     threadId: string
   }): Promise<{ turnId: string } | null> {
     const input = typeof threadIdOrInput === 'string' ? { threadId: threadIdOrInput } : threadIdOrInput
+    if (typeof threadIdOrInput !== 'object' || !(PRIVATE_QUEUE_LOCKED in threadIdOrInput))
+      return withPrivateQueueAdmission(this['deps'].threadStore, input.threadId, () =>
+        this.startNextQueuedTurn(Object.assign({ threadId: input.threadId }, { [PRIVATE_QUEUE_LOCKED]: true })))
     const finishAdmission = this['beginExecutionAdmission']()
     try {
       await reconcilePendingQueueAdmissions(this, input.threadId)
+      await this.reconcileQueuedEdits(input.threadId)
       return await this['withQueueDataMutation'](input.threadId, async () => {
         const failCandidateInPlace = async (
           thread: ThreadRecord,
@@ -386,10 +398,11 @@ export const turnServiceQueueOperations = {
           if (thread.turns.some((turn) => turn.status === 'running')) return null
           if (await this['deps'].executionLeases?.owner(input.threadId)) return null
           const candidate = queuedTurns(thread)[0]
-          if (!candidate) return null
+          if (!candidate || thread.remoteRewind?.phase === 'pending' ||
+            !await privateQueuedTurnAllowed(this['deps'].threadStore, thread, candidate)) return null
           // A new admission may have arrived between the two mutex scopes.
           // Leave it to the next pass; never promote an uncommitted row.
-          if (candidate.admissionPending) return null
+          if (candidate.admissionPending || candidate.queueEdit?.pending) return null
           const requestSnapshot: StartTurnRequest = {
             prompt: candidate.prompt,
             paperContext: candidate.paperContext,
@@ -494,7 +507,7 @@ export const turnServiceQueueOperations = {
             if (userItem) {
               await this['deps'].events.record({
                 kind: 'item_created', threadId: input.threadId, turnId: candidate.id,
-                itemId: userItem.id, item: userItem
+                itemId: userItem.id, item: userItem, turnStartedAt: startedTurn.startedAt
               }).catch(() => undefined)
             }
             return { turnId: candidate.id }
@@ -517,6 +530,7 @@ export const turnServiceQueueOperations = {
    * is idempotent; running turns and unrelated terminal states remain conflicts.
    */
   async cancelQueuedTurn(this: TurnService, input: {
+    expectedQueueRevision?: string
     threadId: string
     turnId: string
   }): Promise<{ threadId: string; turnId: string; status: 'aborted' }> {
@@ -524,6 +538,7 @@ export const turnServiceQueueOperations = {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        requirePolicyRevision(queueRevision(thread), input.expectedQueueRevision)
         const turn = thread.turns.find((candidate) => candidate.id === input.turnId)
         if (!turn) throw new Error(`turn not found: ${input.turnId}`)
         if (turn.admissionPending) {

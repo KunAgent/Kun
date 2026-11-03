@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test } from 'vitest'
 import type { TurnItem } from '../../contracts/items.js'
+import { FileSessionStore } from '../../adapters/file/file-session-store.js'
+import { makeAssistantReasoningItem, makeToolCallItem, makeToolResultItem } from '../../domain/item.js'
+import { resolveTurnHandoff } from '../../handoff/turn-handoff.js'
 import {
   DelegatedSessionCoordinator,
   FileDelegatedSessionBindingStore,
@@ -96,7 +99,7 @@ function makeCtx(overrides: Partial<AcpSessionRequest> = {}): AcpSessionRequest 
     threadId: 'thread_1',
     turnId: 'turn_1',
     workspacePath: '/tmp/work',
-    harnessId: 'gemini-cli',
+    harnessId: 'fixture-agent',
     model: 'fake-model-2',
     items: [],
     ...overrides
@@ -145,7 +148,7 @@ describe('AcpConnection.initialize', () => {
     const initRequests = requests('initialize')
     expect(initRequests).toHaveLength(1)
     expect(initRequests[0].params?.clientInfo).toMatchObject({ name: 'kun' })
-    // P2-10: form-mode elicitation is advertised; url stays unadvertised.
+    // form-mode elicitation is advertised; url stays unadvertised.
     const caps = initRequests[0].params?.clientCapabilities as
       | { elicitation?: Record<string, unknown> }
       | undefined
@@ -164,6 +167,68 @@ describe('AcpConnection.initialize', () => {
 })
 
 describe('AcpSessionManager', () => {
+  test.each(['live', 'reconnected'] as const)('keeps the Devin session on model switch after streaming history reload (%s)', async (connection) => {
+    const fixture = await startFixture('legacy-models.json')
+    await fixture.conn.initialize()
+    const root = mkdtempSync(join(tmpdir(), 'acp-model-continuation-'))
+    tempDirs.push(root)
+    const store = new FileSessionStore({ dataDir: root })
+    const { manager } = makeManager()
+    const ctx = makeCtx({ harnessId: 'devin', model: 'legacy-default', permissionModeId: 'normal' })
+    const first = await manager.ensureSession(ctx, fixture.conn)
+    const user = userItem('turn_1', 'remember the task')
+    const reasoning = makeAssistantReasoningItem({
+      id: 'reasoning', threadId: ctx.threadId, turnId: ctx.turnId, text: 'thinking', status: 'running'
+    })
+    await store.appendItem(ctx.threadId, user)
+    await store.loadItems(ctx.threadId)
+    await store.checkpointLiveItem(ctx.threadId, reasoning, 1)
+    await store.appendItem(ctx.threadId, makeToolCallItem({
+      id: 'call', threadId: ctx.threadId, turnId: ctx.turnId,
+      callId: 'tc', toolName: 'acp:fs.write', arguments: {}
+    }))
+    await store.appendItem(ctx.threadId, makeToolResultItem({
+      id: 'result', threadId: ctx.threadId, turnId: ctx.turnId,
+      callId: 'tc', toolName: 'acp:fs.write', output: 'done'
+    }))
+    await store.finalizeLiveItem(ctx.threadId, makeAssistantReasoningItem({
+      ...reasoning, text: 'thinking', status: 'completed'
+    }))
+    await manager.commit(first, {
+      committedItems: await store.loadItems(ctx.threadId), lastCommittedTurnId: ctx.turnId
+    })
+    first.detach()
+    await store.close()
+    const restored = new FileSessionStore({ dataDir: root })
+    const items = [...await restored.loadItems(ctx.threadId), userItem('turn_2', 'continue')]
+    let nextFixture = fixture
+    if (connection === 'reconnected') {
+      await fixture.conn.close()
+      await manager.handleConnectionExit(fixture.conn, 'devin')
+      nextFixture = await startFixture('legacy-models.json')
+      await nextFixture.conn.initialize()
+    }
+    const next = await manager.ensureSession({
+      ...ctx, turnId: 'turn_2', model: 'legacy-alternative', items
+    }, nextFixture.conn)
+    expect(next.sessionId).toBe(first.sessionId)
+    expect(next.preparation).toMatchObject({ resumed: true, generation: first.preparation.generation })
+    expect(next.preparation.rebaseReason).toBeUndefined()
+    expect(next.replayedHistory).toBe(false)
+    expect(nextFixture.requests('session/new')).toHaveLength(connection === 'live' ? 1 : 0)
+    expect(nextFixture.requests('session/load')).toHaveLength(connection === 'live' ? 0 : 1)
+    expect(nextFixture.requests('session/set_model').map((entry) => entry.params)).toEqual([
+      { sessionId: first.sessionId, modelId: 'legacy-alternative' }
+    ])
+    expect(resolveTurnHandoff({
+      enabled: true, preparation: next.preparation, items, currentTurnId: 'turn_2',
+      ownerThreadId: ctx.threadId, workspacePath: ctx.workspacePath, harnessName: 'Devin'
+    })).toBeUndefined()
+    next.detach()
+    await nextFixture.conn.close()
+    await restored.close()
+  })
+
   test('selects a legacy model on create and resume without bypassing Devin permissions', async () => {
     const { conn, requests } = await startFixture('legacy-models.json')
     await conn.initialize()
@@ -237,6 +302,28 @@ describe('AcpSessionManager', () => {
       configId: 'model',
       value: 'fake-model-2'
     })
+    await conn.close()
+  })
+
+  test('a model change keeps the same session: no new session, no handoff, the new model is applied', async () => {
+    const { conn, requests } = await startFixture('basic-chat.json')
+    await conn.initialize()
+    const { manager } = makeManager()
+    const first = await manager.ensureSession(makeCtx({ model: 'fake-model-1' }), conn)
+    const history = [userItem('turn_1', 'remember the secret')]
+    await manager.commit(first, { committedItems: history, lastCommittedTurnId: 'turn_1' })
+    first.detach()
+    const second = await manager.ensureSession(makeCtx({ turnId: 'turn_2', model: 'fake-model-2', items: history }), conn)
+    expect(second.sessionId).toBe(first.sessionId)
+    expect(second.preparation).toMatchObject({ resumed: true, nativeSessionId: first.sessionId })
+    expect(second.preparation.rebaseReason).toBeUndefined()
+    expect(second.replayedHistory).toBe(false)
+    expect(requests('session/new')).toHaveLength(1)
+    // The agent's session switches to the new model before the prompt.
+    expect(requests('session/set_config_option').map((entry) => entry.params)).toEqual([
+      expect.objectContaining({ sessionId: first.sessionId, configId: 'model', value: 'fake-model-2' })
+    ])
+    second.detach()
     await conn.close()
   })
 
@@ -383,7 +470,7 @@ describe('AcpConnectionPool', () => {
     const { conn } = await startFixture('basic-chat.json')
     let factoryCalls = 0
     const pool = new AcpConnectionPool({ idleReleaseMs: 5_000 })
-    const key = 'gemini-cli:cred-1'
+    const key = 'fixture-agent:cred-1'
     const leaseA = await pool.acquire(key, async () => {
       factoryCalls += 1
       return conn
@@ -402,7 +489,7 @@ describe('AcpConnectionPool', () => {
   test('process exit evicts the entry and fires onExit', async () => {
     const { conn } = await startFixture('basic-chat.json')
     const pool = new AcpConnectionPool({ idleReleaseMs: 5_000 })
-    const key = 'gemini-cli:cred-1'
+    const key = 'fixture-agent:cred-1'
     const lease = await pool.acquire(key, async () => conn)
     const exits: Array<{ code: number | null }> = []
     pool.onExit(key, (exit) => exits.push(exit))
@@ -437,7 +524,7 @@ describe('AcpConnectionPool', () => {
     const before = await coordinator.store.load('thread_1')
     expect(before?.nativeSessionId).toBe('sess-basic')
 
-    await manager.handleConnectionExit(conn, 'gemini-cli')
+    await manager.handleConnectionExit(conn, 'fixture-agent')
 
     const after = await coordinator.store.load('thread_1')
     expect(after?.nativeSessionId).toBe('sess-basic')
@@ -445,7 +532,7 @@ describe('AcpConnectionPool', () => {
       threadId: 'thread_1',
       route: {
         providerKind: 'acp',
-        providerId: 'gemini-cli',
+        providerId: 'fixture-agent',
         credentialIdentity: conn.identity,
         workspace: '/tmp/work',
         model: 'default',
@@ -503,13 +590,17 @@ describe('capabilitiesFromAcp', () => {
     expect(caps.statuses.switchModelMidSession.supported).toBe(true)
     expect(caps.statuses.effort.supported).toBe(true)
     expect(caps.statuses.nativeCommands.supported).toBe(true)
-    expect(caps.statuses.sameTurnSteer.supported).toBe(false)
+    // Guidance always reaches an ACP turn; without the live hook it waits
+    // for the current prompt to finish.
+    expect(caps.statuses.sameTurnSteer.supported).toBe(true)
     expect(caps.statuses.fork.supported).toBe(false)
     expect(caps.facts).toEqual({
       sandbox: 'native',
       usageReporting: 'exact',
-      compactionOwner: 'harness'
+      compactionOwner: 'harness',
+      steering: 'deferred'
     })
+    expect(capabilitiesFromAcp(init, {}, { sandbox: 'native', liveSteering: true }).facts.steering).toBe('live')
   })
 
   test('kunTools follows the delivered descriptor, never a bare claim', () => {

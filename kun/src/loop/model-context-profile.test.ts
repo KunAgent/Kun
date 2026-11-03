@@ -8,6 +8,18 @@ import {
   safeProviderReasoningCapability
 } from './model-context-profile.js'
 
+describe('DeepSeek flash aliases', () => {
+  it('gives the harness catalog short id the same reasoning facts as v4-flash', () => {
+    for (const id of ['deepseek-v4-flash', 'deepseek-flash']) {
+      const capabilities = modelCapabilitiesForModel(id)
+      expect(capabilities.contextWindowTokens).toBe(1_000_000)
+      expect(capabilities.reasoning?.supportedEfforts).toEqual(['off', 'high', 'max'])
+      expect(capabilities.reasoning?.defaultEffort).toBe('max')
+      expect(capabilities.evidence?.reasoning?.status).not.toBe('unknown')
+    }
+  })
+})
+
 describe('contextThresholdsForModel safety cap', () => {
   it('caps soft/hard thresholds to 75%/85% of the context window', () => {
     // A config-provided profile that sets thresholds dangerously close to
@@ -56,8 +68,8 @@ describe('contextThresholdsForModel safety cap', () => {
     expect(thresholds).toEqual(fallback)
   })
 
-  it('keeps explicit fallback thresholds while unknown defaults remain conservative', () => {
-    expect(contextThresholdsForModel('private-model')).toEqual({ softThreshold: 24_000, hardThreshold: 27_200 })
+  it('keeps explicit fallback thresholds while unknown models assume a 1M window', () => {
+    expect(contextThresholdsForModel('private-model')).toEqual({ softThreshold: 750_000, hardThreshold: 850_000 })
     const declared = { softThreshold: 750_000, hardThreshold: 850_000 }
     expect(contextThresholdsForModel('capacity-supplied-by-resolver', declared, [])).toEqual(declared)
   })
@@ -104,19 +116,19 @@ describe('sparse provider model profiles', () => {
         }
       })
 
-      // No window/thresholds configured -> the conservative 32k fallback applies,
+      // No window/thresholds configured -> the assumed 1M window applies,
       // with thresholds derived at the standard 75%/85% ratios.
       expect(resolveModelContextProfile('my-private-model', profiles)).toMatchObject({
-        contextWindowTokens: 32_000,
-        softThreshold: 24_000,
-        hardThreshold: 27_200,
+        contextWindowTokens: 1_000_000,
+        softThreshold: 750_000,
+        hardThreshold: 850_000,
         pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 },
         reasoning: { requestProtocol: 'openai-chat-completions' }
       })
       expect(warn).toHaveBeenCalledOnce()
       expect(warn.mock.calls[0]?.[0]).toContain('my-private-model')
       expect(modelCapabilitiesForModel('my-private-model', profiles)).toMatchObject({
-        contextWindowTokens: 32_000,
+        contextWindowTokens: 1_000_000,
         pricing: { inputUsdPerMillion: 0.15, outputUsdPerMillion: 0.6 }
       })
     } finally {
@@ -196,7 +208,7 @@ describe('per-model endpointFormat', () => {
   it('omits endpointFormat for unknown models so they inherit the provider format', () => {
     const model = modelCapabilitiesForModel('unknown-model', [])
 
-    expect(model.contextWindowTokens).toBe(32_000)
+    expect(model.contextWindowTokens).toBe(1_000_000)
     expect(model.endpointFormat).toBeUndefined()
   })
 })
@@ -303,6 +315,19 @@ describe('built-in reasoning compatibility profiles', () => {
     })
   })
 
+  it('publishes the MiniMax-M3.1-Flash five-effort profile without inheriting M3 off semantics', () => {
+    expect(modelCapabilitiesForProviderModel({
+      providerId: 'minimax',
+      baseUrl: 'https://api.minimaxi.com/anthropic',
+      kind: 'http',
+      model: 'MiniMax-M3.1-Flash'
+    }).reasoning).toEqual({
+      supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+      defaultEffort: 'max',
+      requestProtocol: 'anthropic-thinking'
+    })
+  })
+
   it('does not apply aggregator variants to an unknown custom endpoint', () => {
     expect(modelCapabilitiesForProviderModel({
       providerId: 'private',
@@ -334,19 +359,26 @@ describe('built-in reasoning compatibility profiles', () => {
   })
 
   it('advertises priority only for eligible Codex subscription models', () => {
-    expect(modelCapabilitiesForProviderModel({
-      providerId: 'codex-2',
-      presetSource: 'codex',
-      model: 'gpt-5.4'
-    }).serviceTiers).toEqual(['priority'])
+    for (const model of ['gpt-5.4', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna', 'gpt-6.1-sol']) {
+      expect(modelCapabilitiesForProviderModel({
+        providerId: 'codex-2',
+        presetSource: 'codex',
+        model
+      }).serviceTiers).toEqual(['priority'])
+    }
     expect(modelCapabilitiesForProviderModel({
       providerId: 'codex-2',
       presetSource: 'codex',
       model: 'gpt-5.4-mini'
     }).serviceTiers).toBeUndefined()
     expect(modelCapabilitiesForProviderModel({
+      providerId: 'codex-2',
+      presetSource: 'codex',
+      model: 'gpt-5.3-codex-spark'
+    }).serviceTiers).toBeUndefined()
+    expect(modelCapabilitiesForProviderModel({
       providerId: 'private-openai',
-      model: 'gpt-5.4'
+      model: 'gpt-6-astra'
     }).serviceTiers).toBeUndefined()
   })
 

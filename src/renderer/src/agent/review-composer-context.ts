@@ -5,7 +5,7 @@ import {
 import type { SendReviewResponse } from '@shared/review-comment'
 
 /**
- * Manager-target review sends (docs/ade/11 §4.4): kun renders the batch and
+ * Manager-target review sends: kun renders the batch and
  * returns a `composerContext`; the renderer pins it on the owner thread's
  * composer so it rides the user's next message as a "审查意见 ×N" card.
  */

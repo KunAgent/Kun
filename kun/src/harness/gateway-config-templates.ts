@@ -24,7 +24,7 @@ export function opencodeConfig(
 }
 
 /**
- * Generated PI_CODING_AGENT_DIR/models.json (P6-11): a single `kun` provider
+ * Generated PI_CODING_AGENT_DIR/models.json: a single `kun` provider
  * on the openai-completions surface. Pi resolves a bare environment variable
  * name before treating a value as a literal. The grant stays in the child env.
  */

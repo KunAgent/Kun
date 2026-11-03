@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
+import { BUILTIN_RIGHT_PANEL_IDS, workerSessionTabId } from '../../extensions/contribution-ids'
 import {
   activateCodeRightTab,
   closeCodeRightTab,
@@ -147,5 +147,15 @@ describe('code right tab state', () => {
       activeId: BUILTIN_RIGHT_PANEL_IDS.files
     })
     expect(codeRightTabsForGraphVisibility(state, true)).toBe(state)
+  })
+
+  it('opens worker tabs live but never restores them from a saved layout', () => {
+    const worker = workerSessionTabId('thr_worker')
+    const open = openCodeRightTab(openCodeRightTab(emptyCodeRightTabsState(), BUILTIN_RIGHT_PANEL_IDS.workers), worker)
+    expect(open.tabs).toEqual([BUILTIN_RIGHT_PANEL_IDS.workers, worker])
+    expect(open.activeId).toBe(worker)
+    const restored = normalizeCodeRightTabsState(JSON.parse(JSON.stringify(open)))
+    expect(restored.tabs).toEqual([BUILTIN_RIGHT_PANEL_IDS.workers])
+    expect(restored.activeId).toBe(BUILTIN_RIGHT_PANEL_IDS.workers)
   })
 })

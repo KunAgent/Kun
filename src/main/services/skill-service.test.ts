@@ -358,6 +358,31 @@ describe('skill-service', () => {
     }))
   })
 
+  it('reports which market a skill was installed from', async () => {
+    const workspaceRoot = join(tempRoot, 'workspace')
+    const marketSkill = join(workspaceRoot, '.kun', 'skills', 'from-market')
+    const ownSkill = join(workspaceRoot, '.kun', 'skills', 'handmade')
+    await mkdir(marketSkill, { recursive: true })
+    await mkdir(ownSkill, { recursive: true })
+    await writeFile(join(marketSkill, 'SKILL.md'), '# From market\n', 'utf8')
+    await writeFile(join(ownSkill, 'SKILL.md'), '# Handmade\n', 'utf8')
+    await writeFile(join(marketSkill, '.kun-market.json'), JSON.stringify({
+      sourceId: 'youdao',
+      skillId: 'from-market',
+      version: '1.2.5',
+      installedAt: '2026-10-10T00:00:00.000Z',
+      downloadUrl: 'https://cdn.example.test/from-market.zip'
+    }), 'utf8')
+
+    const result = await listGuiSkills(createSettings(workspaceRoot), workspaceRoot)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.skills.find((skill) => skill.id === 'from-market')?.market)
+      .toEqual({ sourceId: 'youdao', version: '1.2.5' })
+    expect(result.skills.find((skill) => skill.id === 'handmade')).not.toHaveProperty('market')
+  })
+
   function comparable(path: string): string {
     return path.replace(/\\/g, '/').replace(/\/+$/g, '').toLowerCase()
   }

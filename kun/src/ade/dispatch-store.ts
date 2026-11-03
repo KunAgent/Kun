@@ -6,7 +6,7 @@ import {
 import { adeDispatchesFile } from './ade-paths.js'
 import { readAdeJson, withAdeTeamMutex, writeAdeJson } from './ade-file.js'
 
-/** 09 §3.2 — terminal states have no outgoing transitions. */
+/** — terminal states have no outgoing transitions. */
 export const ALLOWED_DISPATCH_TRANSITIONS: Record<DispatchState, readonly DispatchState[]> = {
   pending: ['delivering', 'cancelled', 'failed'],
   delivering: ['accepted', 'uncertain', 'failed'],
@@ -51,13 +51,13 @@ export class FileDispatchStore {
     return file.dispatches.find((entry) => entry.dispatchId === dispatchId) ?? null
   }
 
-  /** The dispatch id doubles as the worker turn's clientRequestId (09 §5). */
+  /** The dispatch id doubles as the worker turn's clientRequestId. */
   async findByClientRequestId(teamId: string, clientRequestId: string): Promise<DispatchRecord | null> {
     const file = await this.readFile(teamId)
     return file.dispatches.find((entry) => entry.dispatchId === clientRequestId) ?? null
   }
 
-  /** Reverse lookup for turn-completion reconciliation (09 §7.4). */
+  /** Reverse lookup for turn-completion reconciliation. */
   async findByTurn(teamId: string, turnId: string): Promise<DispatchRecord | null> {
     const file = await this.readFile(teamId)
     return file.dispatches.find((entry) => entry.turnId === turnId) ?? null

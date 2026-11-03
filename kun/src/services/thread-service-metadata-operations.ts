@@ -1,4 +1,5 @@
 import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { inheritGoogleDataBeforeThreadWrite } from '../gmail/thread-data-state.js'
 import { isAbsolute, relative } from 'node:path'
 import type { ThreadStoreListOptions, ThreadStoreListPage } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -31,6 +32,7 @@ import {
   applyThreadCursor,
   filterThreadSummaries,
   isCodeWorkbenchThread,
+  isWorkWorkbenchThread,
   pageThreadSummaries
 } from '../domain/thread-list-query.js'
 import { isPublicTurnItem, type TurnItem } from '../contracts/items.js'
@@ -61,6 +63,7 @@ import { type ThreadService, type ThreadServiceOptions, type ListThreadsOptions,
 import { adeProjectDefaultsRevision, canonicalProjectIdentity } from '../shared/project-identity.js'
 import { ProjectDefaultsStaleError, resolveThreadExecutionConfig } from '../domain/thread-execution-config.js'
 import { stampThreadExecutionConfig } from '../domain/thread-execution-config.js'
+import { ThreadRevisionConflict } from '../domain/thread-revision-conflict.js'
 
 function toThreadStoreListOptions(options: ListThreadsOptions): ThreadStoreListOptions {
   const storeOptions: ListThreadsOptions = { ...options }
@@ -108,6 +111,8 @@ async list(this: ThreadService, options: ListThreadsOptions = {}): Promise<Threa
     }
     if (options.workbenchScope === 'code') {
       threads = threads.filter(isCodeWorkbenchThread)
+    } else if (options.workbenchScope === 'work') {
+      threads = threads.filter(isWorkWorkbenchThread)
     }
     if (query) {
       threads = threads.filter((thread) => matchesThreadSearch(thread, query))
@@ -180,6 +185,8 @@ async create(this: ThreadService,
       roomContext?: ThreadRecord['roomContext']
       /** Host-written provenance for a thread a bot Agent started; never from a request body. */
       workbenchOrigin?: ThreadRecord['workbenchOrigin']
+      /** Host-written suggestion-card provenance for `relation: 'task'`; never from a request body. */
+      taskOrigin?: ThreadRecord['taskOrigin']
       historyRefId?: string
     } = {}
   ): Promise<ThreadRecord> {
@@ -243,6 +250,7 @@ async create(this: ThreadService,
       ...(options.extensionMetadata ?? {}),
       ...(options.roomContext ? { roomContext: options.roomContext } : {}),
       ...(options.workbenchOrigin ? { workbenchOrigin: options.workbenchOrigin } : {}),
+      ...(options.taskOrigin ? { taskOrigin: options.taskOrigin } : {}),
       ...(options.historyRefId ? { historyRefId: options.historyRefId } : {}),
       ...(request.agentId?.trim() ? { agentId: request.agentId.trim() } : {}),
       ...(request.systemPrompt?.trim() ? { systemPrompt: request.systemPrompt.trim() } : {}),
@@ -262,6 +270,7 @@ async create(this: ThreadService,
     // Without this, a same-id create could reopen the fence just before a
     // concurrent delete performs raw rm(), losing the new lifetime.
     await this['withThreadMutation'](thread.id, async () => {
+      await inheritGoogleDataBeforeThreadWrite(this['threadStore'], thread)
       // A user-visible create is the only operation allowed to reactivate an
       // id after deletion. It deliberately starts a fresh generation so
       // delayed writes captured by the previous lifetime remain stale.
@@ -290,9 +299,9 @@ async update(this: ThreadService, threadId: string, patch: {
     titleAuto?: boolean
     summary?: string
     workspace?: string
-    /** Set-only binding to a host-managed task workspace (07 §5). */
+    /** Set-only binding to a host-managed task workspace. */
     taskWorkspaceId?: string
-    /** Harness rebind for external-session continuation (01 §8). */
+    /** Harness rebind for external-session continuation. */
     harnessId?: string
     collaboration?: ThreadRecord['collaboration']
     additionalWorkspaces?: string[]
@@ -310,10 +319,14 @@ async update(this: ThreadService, threadId: string, patch: {
     relation?: ThreadRelation
     /** Host-only provenance update; omitted from the public thread-update schema. */
     workbenchOrigin?: ThreadRecord['workbenchOrigin']
-  }): Promise<ThreadRecord> {
+    /** Host-only: binds a forked `task` session to its card row. */
+    taskOrigin?: ThreadRecord['taskOrigin']
+  }, options?: { expectedRevision: number }): Promise<ThreadRecord> {
     const updated = await this['withThreadMutation'](threadId, async () => {
       const current = await this['threadStore'].get(threadId)
       if (!current) throw new Error(`thread not found: ${threadId}`)
+      if (options && (current.revision ?? 0) !== options.expectedRevision)
+        throw new ThreadRevisionConflict(current.revision ?? 0)
       if (current.roomContext) {
         const protectedFields = ['workspace', 'taskWorkspaceId', 'additionalWorkspaces', 'knowledgeBases', 'mode',
           'approvalPolicy', 'sandboxMode', 'approvalReviewer', 'status', 'relation', 'harnessId', 'collaboration'] as const
@@ -328,6 +341,9 @@ async update(this: ThreadService, threadId: string, patch: {
       // thread's lifecycle marker.
       if (patch.status !== undefined && patch.status !== 'idle' && patch.status !== 'archived') {
         throw new Error(`thread status is managed by the runtime: ${patch.status}`)
+      }
+      if (patch.relation === 'task' && (current.relation ?? 'primary') !== 'task') {
+        throw new Error('task sessions are created from a suggestion card')
       }
       if (
         patch.taskWorkspaceId !== undefined &&
@@ -393,20 +409,28 @@ async update(this: ThreadService, threadId: string, patch: {
       } else if (costBudgetWarningSent !== undefined) {
         merged.costBudgetWarningSent = costBudgetWarningSent
       }
-      if (patch.relation !== undefined && patch.relation !== 'side') {
-        // Promoting a side thread clears the parent link so the thread
-        // surfaces in the default list as a standalone primary thread.
+      if (patch.relation !== undefined && patch.relation !== 'side' && patch.relation !== 'task') {
+        // Promoting a side thread (or detaching a task session) clears the
+        // parent link so it surfaces as a standalone primary thread.
         delete (merged as { parentThreadId?: string }).parentThreadId
+        delete (merged as { taskOrigin?: unknown }).taskOrigin
       }
       const next = touchThread(merged, this['nowIso']())
-      await this['threadStore'].upsert(next)
+      let committed = next
+      if (options) {
+        const conditional = this['threadStore'].upsertIfRevision
+        if (!conditional) throw new Error('CONDITIONAL_WRITE_UNAVAILABLE')
+        const result = await conditional.call(this['threadStore'], next, options.expectedRevision)
+        if (!result.applied) throw new ThreadRevisionConflict(result.revision)
+        committed = result.thread ?? { ...next, revision: result.revision }
+      } else await this['threadStore'].upsert(next)
       if (next.historyRefId && patch.workspace !== undefined) {
         const snapshot = await this['sessionStore'].loadSession(threadId) ??
           toSessionSnapshot(next, next.updatedAt, await this['sessionStore'].loadItems(threadId))
         await this['sessionStore'].upsertSession({ ...snapshot, historyRefId: next.historyRefId,
           workspace: next.workspace, updatedAt: next.updatedAt })
       }
-      return next
+      return committed
     })
     await this['events'].record({
       kind: 'thread_updated',

@@ -43,7 +43,7 @@ Manifest 权限是精确字符串，完整列表见 [Manifest](./manifest.md#权
 6. 撤销立即阻止新调用；在途调用按能力规则取消/失败。
 7. 一个扩展的 thread、state、account、private command、View Session 和 content-script world 默认不能被另一个扩展访问。
 
-`accounts.secrets.read:<providerId>` 和 `hostDom` 是高风险权限，新增时必须重新确认。`workspace.write`/`tools.register`/`providers.register` 也不能覆盖更严格的 core policy。
+`accounts.secrets.read:<providerId>` 和 `hostDom` 是高风险权限，新增时必须重新确认。`workspace.write`/`tools.register`/`providers.register`/`agents.register` 也不能覆盖更严格的 core policy。`agents.register` 声明的 Agent 只是进入 Agent 中心目录：进程由 Kun 的 owned-process 启动器拥有，用户必须为它单独启用并通过就绪检查，文件写入、审批和沙箱仍走 Kun 的 ACP 中介。
 
 ## Protected Surfaces
 

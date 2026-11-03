@@ -10,7 +10,7 @@ import {
   type AdeStores
 } from './manager-controls-test-support.js'
 
-/** Verdict rules: 10 §4 — independence, supersede, user lock, reviewer merge. */
+/** Verdict rules: — independence, supersede, user lock, reviewer merge. */
 
 async function seeded(): Promise<AdeStores> {
   const stores = await setupAdeStores()
@@ -35,7 +35,7 @@ describe('QualityVerdicts.setVerdict', () => {
       })
       expect(result.ok).toBe(true)
       const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_done')
-      // Acceptance is separate from execution (10 §4.1): state stays completed.
+      // Acceptance is separate from execution: state stays completed.
       expect(dispatch?.state).toBe('completed')
       expect(dispatch?.verdict).toMatchObject({
         status: 'needs_changes',
@@ -74,7 +74,7 @@ describe('QualityVerdicts.setVerdict', () => {
       expect(result.ok).toBe(true)
       const verdict = result.verdict!
       expect(verdict).toMatchObject({ status: 'passed', decidedBy: 'user' })
-      // Both decisions stay on record (10 §4.2).
+      // Both decisions stay on record.
       expect(verdict.superseded).toMatchObject([
         {
           status: 'needs_changes',
@@ -146,6 +146,101 @@ describe('QualityVerdicts.setVerdict', () => {
     }
   })
 
+  it.each([
+    ['passed', 'completed'],
+    ['needs_changes', 'completed'],
+    ['rejected', 'completed'],
+    ['waived', 'failed']
+  ] as const)(
+    'consumes the completion notice for a %s decision on a %s dispatch',
+    async (status, state) => {
+      const stores = await setupAdeStores()
+      try {
+        await seedWorker(stores)
+        await seedDispatch(stores, { dispatchId: 'dsp_terminal', state })
+        const { verdicts } = makeHarness(stores)
+        const result = await verdicts.workerVerdict(managerCtx(), {
+          dispatchId: 'dsp_terminal',
+          status
+        })
+        expect(result.ok).toBe(true)
+        const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_terminal')
+        // Handling the notice never changes execution or acceptance semantics.
+        expect(dispatch?.state).toBe(state)
+        expect(dispatch?.verdict?.status).toBe(status)
+        expect(dispatch?.completionHandledAt).toBe(NOW)
+      } finally {
+        await teardownAdeStores(stores)
+      }
+    }
+  )
+
+  it('does not consume the notice for an early decision on a running dispatch', async () => {
+    const stores = await setupAdeStores()
+    try {
+      await seedWorker(stores)
+      await seedDispatch(stores, { dispatchId: 'dsp_running', state: 'accepted' })
+      const { verdicts } = makeHarness(stores)
+      const result = await verdicts.workerVerdict(managerCtx(), {
+        dispatchId: 'dsp_running',
+        status: 'passed'
+      })
+      expect(result.ok).toBe(true)
+      const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_running')
+      expect(dispatch?.state).toBe('accepted')
+      expect(dispatch?.completionHandledAt).toBeUndefined()
+    } finally {
+      await teardownAdeStores(stores)
+    }
+  })
+
+  it('writes no credential when the user verdict lock refuses a manager decision', async () => {
+    const stores = await setupAdeStores()
+    try {
+      await seedWorker(stores)
+      await seedDispatch(stores, {
+        dispatchId: 'dsp_locked',
+        state: 'completed',
+        verdict: { status: 'rejected', decidedBy: 'user', checks: [] }
+      })
+      const { verdicts } = makeHarness(stores)
+      const locked = await verdicts.workerVerdict(managerCtx(), {
+        dispatchId: 'dsp_locked',
+        status: 'passed'
+      })
+      expect(locked).toMatchObject({ ok: false, refusal: 'user_verdict_locked' })
+      const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_locked')
+      expect(dispatch?.verdict?.status).toBe('rejected')
+      expect(dispatch?.completionHandledAt).toBeUndefined()
+    } finally {
+      await teardownAdeStores(stores)
+    }
+  })
+
+  it('keeps the first handling timestamp when a later decision supersedes it', async () => {
+    const stores = await setupAdeStores()
+    try {
+      await seedWorker(stores)
+      await seedDispatch(stores, {
+        dispatchId: 'dsp_handled',
+        state: 'completed',
+        completionHandledAt: '2026-01-01T00:00:00.000Z'
+      })
+      const { verdicts } = makeHarness(stores)
+      const result = await verdicts.setVerdict({
+        dispatchId: 'dsp_handled',
+        status: 'passed',
+        decidedBy: 'user'
+      })
+      expect(result.ok).toBe(true)
+      expect(result.verdict?.status).toBe('passed')
+      const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_handled')
+      expect(dispatch?.completionHandledAt).toBe('2026-01-01T00:00:00.000Z')
+    } finally {
+      await teardownAdeStores(stores)
+    }
+  })
+
   it('returns dispatch_not_found for an unknown dispatch id', async () => {
     const stores = await seeded()
     try {
@@ -182,7 +277,7 @@ describe('QualityVerdicts.mergeReviewerFindings', () => {
           submittedAt: NOW
         }
       })
-      // The reviewer never decides — user verdict stays (10 §5).
+      // The reviewer never decides — user verdict stays.
       expect(verdict).toMatchObject({
         status: 'passed',
         decidedBy: 'user',
@@ -193,6 +288,30 @@ describe('QualityVerdicts.mergeReviewerFindings', () => {
         { name: 'edge-case', status: 'failed', detail: 'empty input', source: 'reviewer' },
         { name: 'risk', status: 'failed', source: 'reviewer', detail: 'no rollback plan' }
       ])
+    } finally {
+      await teardownAdeStores(stores)
+    }
+  })
+
+  it('never marks the completion notice handled on behalf of the manager', async () => {
+    const stores = await seeded()
+    try {
+      const { verdicts } = makeHarness(stores)
+      await verdicts.mergeReviewerFindings({
+        teamId: 'thr_mgr',
+        dispatchId: 'dsp_done',
+        reviewerWorkerId: 'wrk_rev',
+        report: {
+          summary: 'reviewed',
+          outcome: 'succeeded',
+          checks: [{ name: 'style', status: 'passed' }],
+          risks: [],
+          submittedAt: NOW
+        }
+      })
+      const dispatch = await stores.dispatches.get('thr_mgr', 'dsp_done')
+      expect(dispatch?.verdict?.reviewerWorkerId).toBe('wrk_rev')
+      expect(dispatch?.completionHandledAt).toBeUndefined()
     } finally {
       await teardownAdeStores(stores)
     }

@@ -24,7 +24,7 @@ const selectControlClass =
   'rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] text-ds-ink shadow-sm focus:border-accent-tint/40 focus:outline-none focus:ring-1 focus:ring-accent-tint/30'
 
 /**
- * Write settings → paper reading tab (§6.7): papers directory, interpretation
+ * Write settings → paper reading tab: papers directory, interpretation
  * template + language, auto-preprocess, Cool notes toggle.
  */
 export function WritePaperReadingSettingsPanel({

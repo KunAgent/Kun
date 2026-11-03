@@ -1,6 +1,6 @@
 import type { TurnLimitsConfig } from '../loop/turn-limits.js'
 
-const ORDINARY_CHILD_MAX_STEPS = 128
+const ORDINARY_CHILD_MAX_STEPS = 2048
 const ORDINARY_CHILD_MAX_WALL_MS = 60 * 60_000
 const ORDINARY_CHILD_MAX_TOOL_CALLS_PER_STEP = 64
 const FAST_CONTEXT_MAX_STEPS = 4
@@ -8,17 +8,18 @@ const FAST_CONTEXT_MAX_WALL_MS = 10 * 60_000
 const FAST_CONTEXT_MAX_TOOL_CALLS_PER_STEP = 8
 
 /**
- * Whether a child run should use the Fast Context episode budget. This is
- * true for the dedicated `fast_context` entry point, and also for the
- * built-in retrieval role `explore` when it is launched through a generic
- * `delegate_task` path — otherwise that role could fall back to the 128-step
- * ordinary ceiling and blow through its intended four-step budget.
+ * Whether a child run should use the Fast Context episode budget. Only the
+ * dedicated `fast_context` entry point gets the four-step retrieval episode:
+ * that path is a bounded grep/glob/read sweep whose caller reads the evidence
+ * pack, not the summary. The `explore` role also runs as an ordinary worker
+ * through `delegate_task` and ADE dispatches, where a four-step ceiling ends
+ * any real multi-file investigation with `turn_step_limit`, so the role alone
+ * must not shrink the ordinary episode.
  */
 export function shouldUseFastContextEpisodeBudget(input: {
   fastContext?: boolean
-  profile?: string
 }): boolean {
-  return input.fastContext === true || input.profile === 'explore'
+  return input.fastContext === true
 }
 
 /** Inherit stricter user limits while preserving a finite child episode. */

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Database } from 'better-sqlite3'
@@ -67,4 +67,20 @@ it('retries ordinary scoped erasure after canonical deletion and projection fail
   await expect(store.lifecycle(memory.id, request, access)).resolves.toMatchObject({ erased: true, affectedIds: [memory.id] })
   await expect(store.lifecycle(memory.id, request, access)).resolves.toMatchObject({ erased: true })
   expect((await readFile(join(root, 'memory-index.sqlite3'))).includes(Buffer.from(memory.content))).toBe(false)
+})
+
+it('erases canonical and SQLite content even when optional relation cleanup fails', async () => {
+  const f = await fixture()
+  const relations = join(f.root, 'memory', 'relations')
+  await mkdir(relations, { recursive: true })
+  await writeFile(join(relations, 'suggestions.json'), '{invalid')
+  await expect(f.store.lifecycle(f.memory.id, f.request, f.access)).rejects.toThrow('incomplete')
+  await expect(readFile(join(f.root, 'memory', `${f.memory.id}.json`))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect((await readFile(join(f.root, 'memory-index.sqlite3'))).includes(Buffer.from(f.memory.content))).toBe(false)
+  const wal = await readFile(join(f.root, 'memory-index.sqlite3-wal')).catch(() => Buffer.alloc(0))
+  expect(wal.includes(Buffer.from(f.memory.content))).toBe(false)
+  await expect(f.store.erasureReceipt('erase-op')).rejects.toThrow('incomplete')
+  expect(await readFile(join(relations, 'suggestions.json'), 'utf8')).toBe('{invalid')
+  await writeFile(join(relations, 'suggestions.json'), JSON.stringify({ version: 1, suggestions: [] }))
+  expect(await f.store.erasureReceipt('erase-op')).toEqual([f.memory.id])
 })

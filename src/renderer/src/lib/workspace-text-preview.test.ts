@@ -1,35 +1,20 @@
 import { describe, expect, it } from 'vitest'
+import { workspaceFileIconKind } from './workspace-file-icons'
 import {
+  isWorkspaceConvertedImagePath,
   isWorkspacePreviewPath,
   isWorkspaceRasterImagePreviewPath,
-  isWorkspaceTextPreviewPath,
-  workspaceFileKindLabel,
+  isWorkspaceTextBackedPreviewKind,
   workspaceFilePreviewKind
 } from './workspace-text-preview'
 
-describe('isWorkspaceTextPreviewPath', () => {
-  it('accepts common source and markdown files', () => {
-    expect(isWorkspaceTextPreviewPath('/tmp/app/src/main.ts')).toBe(true)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/README.md')).toBe(true)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/.gitignore')).toBe(true)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/architecture.svg')).toBe(true)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/install.ps1')).toBe(true)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/Profile.psm1')).toBe(true)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/Module.psd1')).toBe(true)
-  })
-
-  it('rejects common binary and media files', () => {
-    expect(isWorkspaceTextPreviewPath('/tmp/app/logo.png')).toBe(false)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/archive.zip')).toBe(false)
-    expect(isWorkspaceTextPreviewPath('/tmp/app/report.pdf')).toBe(false)
-  })
-})
-
 describe('isWorkspaceRasterImagePreviewPath', () => {
-  it('accepts image formats supported by the workspace image reader', () => {
-    for (const extension of ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'ico']) {
+  it('accepts browser image formats and the ones the main process converts', () => {
+    for (const extension of ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'avif', 'ico', 'heic', 'tiff']) {
       expect(isWorkspaceRasterImagePreviewPath(`/tmp/app/image.${extension}`)).toBe(true)
     }
+    expect(isWorkspaceConvertedImagePath('/tmp/app/IMG_2041.HEIC')).toBe(true)
+    expect(isWorkspaceConvertedImagePath('/tmp/app/photo.png')).toBe(false)
   })
 
   it('leaves SVG on the text-backed SVG preview path', () => {
@@ -39,21 +24,50 @@ describe('isWorkspaceRasterImagePreviewPath', () => {
 })
 
 describe('workspaceFilePreviewKind', () => {
-  it('classifies the full workspace preview matrix', () => {
+  it('picks dedicated viewers by extension', () => {
     expect(workspaceFilePreviewKind('README.md')).toBe('markdown')
     expect(workspaceFilePreviewKind('index.html')).toBe('html')
     expect(workspaceFilePreviewKind('diagram.svg')).toBe('svg')
+    expect(workspaceFilePreviewKind('usage.csv')).toBe('table')
+    expect(workspaceFilePreviewKind('usage.tsv')).toBe('table')
     expect(workspaceFilePreviewKind('report.pdf')).toBe('pdf')
     expect(workspaceFilePreviewKind('legacy-report.doc')).toBe('office')
     expect(workspaceFilePreviewKind('budget.xlsx')).toBe('office')
-    expect(workspaceFilePreviewKind('legacy-budget.xls')).toBe('office')
     expect(workspaceFilePreviewKind('legacy-deck.ppt')).toBe('office')
     expect(workspaceFilePreviewKind('voice.mp3')).toBe('audio')
     expect(workspaceFilePreviewKind('demo.webm')).toBe('video')
-    expect(workspaceFilePreviewKind('install.ps1')).toBe('text')
-    expect(workspaceFilePreviewKind('archive.zip')).toBe('unsupported')
-    expect(isWorkspacePreviewPath('photo.png')).toBe(true)
-    expect(workspaceFileKindLabel('install.ps1')).toBe('PS1')
-    expect(workspaceFileKindLabel('budget.xlsx')).toBe('XLSX')
+    expect(workspaceFilePreviewKind('photo.heic')).toBe('image')
+  })
+
+  it('opens every other file as text, so content decides what is binary', () => {
+    for (const name of ['.env.local', 'LICENSE', '.prettierrc', 'events.jsonl', 'mod.mts', 'fix.patch', 'api.proto', 'Dockerfile.dev', 'deploy', 'notes.cfg']) {
+      expect(workspaceFilePreviewKind(`/repo/${name}`)).toBe('text')
+      expect(isWorkspacePreviewPath(`/repo/${name}`)).toBe(true)
+    }
+  })
+
+  it('sends known binary formats straight to the binary card', () => {
+    expect(workspaceFilePreviewKind('archive.zip')).toBe('binary')
+    expect(workspaceFilePreviewKind('kun-remote-0.2.1.tgz')).toBe('binary')
+    expect(workspaceFilePreviewKind('model.gguf')).toBe('binary')
+    expect(isWorkspaceTextBackedPreviewKind('binary')).toBe(false)
+    expect(isWorkspaceTextBackedPreviewKind('table')).toBe(true)
+  })
+})
+
+describe('workspaceFileIconKind', () => {
+  it('maps names and extensions to tinted icon kinds', () => {
+    expect(workspaceFileIconKind('/repo/src/app.tsx')).toBe('ts')
+    expect(workspaceFileIconKind('/repo/main.py')).toBe('py')
+    expect(workspaceFileIconKind('/repo/.env.local')).toBe('env')
+    expect(workspaceFileIconKind('/repo/.prettierrc')).toBe('cfg')
+    expect(workspaceFileIconKind('/repo/.gitignore')).toBe('cfg')
+    expect(workspaceFileIconKind('/repo/package-lock.json')).toBe('lock')
+    expect(workspaceFileIconKind('/repo/package.json')).toBe('json')
+    expect(workspaceFileIconKind('/repo/LICENSE')).toBe('txt')
+    expect(workspaceFileIconKind('/repo/Dockerfile.dev')).toBe('cfg')
+    expect(workspaceFileIconKind('/repo/usage.csv')).toBe('sheet')
+    expect(workspaceFileIconKind('/repo/vendor/kun.tgz')).toBe('zip')
+    expect(workspaceFileIconKind('/repo/deploy')).toBe('file')
   })
 })

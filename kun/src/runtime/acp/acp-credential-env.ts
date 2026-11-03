@@ -2,7 +2,7 @@ import { retainFrozenHarnessAliases } from '../../harness/gateway-alias-binding.
 import { createHash } from 'node:crypto'
 import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../../contracts/harness-gateway-binding.js'
 /**
- * `kun-gateway` credential env for ACP harnesses (docs/ade impl P3-10).
+ * `kun-gateway` credential env for ACP harnesses.
  *
  * A harness child never sees a real provider secret: it gets a process-local
  * `gateway` grant restricted to the selected provider/model route plus a
@@ -19,9 +19,7 @@ import type { HarnessGatewayBinding, HarnessGatewayAliasGrant } from '../../cont
  *   and `wire_api = "responses"` (the `/v1/responses` gateway surface).
  * - Pi (`pi --mode rpc`): a generated `PI_CODING_AGENT_DIR/models.json`
  *   declares only the `kun` openai-completions provider; `apiKey` is pi's
- *   `$NAME` env interpolation so the grant token stays env-only (P6-11).
- * - Gemini CLI is deferred: its gateway protocol is google-specific and Kun
- *   has no matching entry point yet.
+ *   `$NAME` env interpolation so the grant token stays env-only.
  */
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -32,7 +30,7 @@ import {
 } from '../../harness/gateway-model-id.js'
 import type { HarnessTokenService } from '../../harness/harness-token-service.js'
 import type { AcpCredentialEnvInput } from './acp-runtime-support.js'
-import { codexConfig, opencodeConfig, piModelsConfig } from '../../harness/gateway-config-templates.js'
+import { providerModule } from '../../harness/providers/registry.js'
 
 export type AcpCredentialEnvDeps = {
   tokens: Pick<HarnessTokenService, 'issue'>
@@ -121,31 +119,15 @@ export function createAcpCredentialEnv(
       input.harnessId,
       `${slugify(input.threadId)}-${aliases ? createHash('sha256').update(identity).digest('hex').slice(0, 24) : slugify(`${providerId}-${model}`)}`
     )
-    switch (`${input.harnessId}:${gateway.protocol}`) {
-      case 'opencode:openai-chat':
-        return {
-          ...env,
-          OPENCODE_CONFIG: writeConfigFile(
-            join(dir, 'opencode.json'),
-            opencodeConfig(v1, gatewayModelId, gateway.env.token)
-          )
-        }
-      case 'codex:openai-responses':
-        writeConfigFile(
-          join(dir, 'config.toml'),
-          codexConfig(v1, gatewayModelId, gateway.env.token)
-        )
-        return { ...env, CODEX_HOME: dir }
-      case 'pi:openai-chat':
-        writeConfigFile(
-          join(dir, 'models.json'),
-          piModelsConfig(v1, gatewayModelId, gateway.env.token)
-        )
-        return { ...env, PI_CODING_AGENT_DIR: dir }
-      default:
-        throw new Error(
-          `harness '${input.harnessId}' gateway protocol '${gateway.protocol}' has no config mapping`
-        )
+    // Each engine writes its own config format; the grant stays env-only.
+    const configured = providerModule(input.harnessId)?.gatewayConfig?.({
+      protocol: gateway.protocol, dir, baseUrl: v1, model: gatewayModelId, tokenEnv: gateway.env.token, writeConfigFile
+    })
+    if (!configured) {
+      throw new Error(
+        `harness '${input.harnessId}' gateway protocol '${gateway.protocol}' has no config mapping`
+      )
     }
+    return { ...env, ...configured }
   }
 }

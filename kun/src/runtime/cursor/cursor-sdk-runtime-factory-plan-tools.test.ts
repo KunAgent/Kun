@@ -329,11 +329,11 @@ describe('Cursor SDK runtime factory', () => {
     )
 
     expect(review).toHaveBeenCalledWith(expect.objectContaining({
-      route: {
+      route: expect.objectContaining({
         model: 'cursor-model',
         providerId: 'cursor-provider',
         accountId: 'cursor-account'
-      },
+      }),
       intent: 'Publish the report',
       approval: expect.objectContaining({
         action: expect.objectContaining({

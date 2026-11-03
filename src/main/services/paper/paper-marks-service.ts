@@ -15,7 +15,7 @@ import {
 import { atomicWriteFile } from '../../atomic-json-file'
 
 /**
- * `marks/` persistence (plan §5.4): `annotations.json` holds the deduped
+ * `marks/` persistence: `annotations.json` holds the deduped
  * highlight list; translate/ask cards live in per-id files. All writes are
  * atomic; reads tolerate missing/corrupt files so the reader never breaks on
  * a partially written mark.

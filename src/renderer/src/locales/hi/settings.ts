@@ -6,8 +6,10 @@ import routeRules from './settings/route-rules.json'
 import gatewayMiddleware from './settings/gateway-middleware.json'
 import gatewayObservability from './settings/gateway-observability.json'
 import gatewayExtensions from './settings/gateway-extensions.json'
+import gatewaySetup from './settings/gateway-setup.json'
 import navigationProviders from './settings/navigation-providers.json'
 import settingsChrome from './settings/settings-chrome.json'
+import settingsIa from './settings/settings-ia.json'
 import modelRoutes from './settings/model-routes.json'
 import providerManagement from './settings/provider-management.json'
 import providerMediaMcp from './settings/provider-media-mcp.json'
@@ -18,6 +20,9 @@ import codePersonas from './settings/code-personas.json'
 import speak from './settings/speak.json'
 import ade from './settings/ade.json'
 import onboarding from './settings/onboarding.json'
+import assistantMailboxSettings from './settings/assistant-mailbox.json'
+import terminalDock from './settings/terminal-dock.json'
+import storageCleanup from './settings/storage-cleanup.json'
 import pets from './settings/pets.json'
 
 const settings = {
@@ -28,8 +33,10 @@ const settings = {
   ...gatewayMiddleware,
   ...gatewayObservability,
   ...gatewayExtensions,
+  ...gatewaySetup,
   ...navigationProviders,
   ...settingsChrome,
+  ...settingsIa,
   ...modelRoutes,
   ...providerManagement,
   ...providerMediaMcp,
@@ -41,6 +48,9 @@ const settings = {
   ...speak,
   ...ade,
   ...onboarding,
+  ...assistantMailboxSettings,
+  ...terminalDock,
+  ...storageCleanup,
   ...pets
 }
 

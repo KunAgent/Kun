@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import type { AgentDirectActivity, Room } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
 import { RoomPopover } from './RoomPopover'
+import { RailReopenButton } from '../workbench/rail-collapse'
 import { RoomExecutionGates } from './RoomTaskGates'
 import { agentPath, useAgentResource } from './agent-client'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
@@ -106,6 +107,7 @@ export function RoomDirectHeader({ room, models, onSidebar, onSearch, onProfile,
         </> : null}
       </div>}
     </RoomPopover>
+    {embedded ? <RailReopenButton /> : null}
   </header>
 }
 export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, activityInTimeline = false, gatesInTimeline = false }: { room: Room; state: ReturnType<typeof useDirectChat>; onRun: (id: string) => void; openRunId?: string; onModels: () => void; activityInTimeline?: boolean; gatesInTimeline?: boolean }) {
@@ -114,11 +116,37 @@ export function RoomDirectProgress({ room, state, onRun, openRunId, onModels, ac
   useEffect(() => setDismissed(''), [room.id])
   const active = state.data?.active
   const latest = state.data?.requests[0]
-  const failed = !active && latest && ['failed', 'cancelled', 'recovery_required'].includes(latest.status) ? latest : undefined
+  const settled = !active && latest && ['failed', 'cancelled', 'recovery_required'].includes(latest.status) ? latest : undefined
   const runId = active?.runId
   const queued = Math.max(0, (state.data?.pendingCount ?? 0) - 1)
-  const failedKey = failed ? `failed:${failed.id}:${failed.status}:${failed.error ?? ''}` : ''
+  const failedKey = settled ? `failed:${settled.id}:${settled.status}:${settled.error ?? ''}` : ''
+  // A failure already acknowledged when this visit first sees it was shown on
+  // an earlier visit; reopening the chat must not raise it again. One seen
+  // during this visit stays until dismissed.
+  const arrival = useRef({ roomId: room.id, seenBefore: new Map<string, boolean>() })
+  if (arrival.current.roomId !== room.id) arrival.current = { roomId: room.id, seenBefore: new Map() }
+  if (settled && !arrival.current.seenBefore.has(failedKey)) {
+    arrival.current.seenBefore.set(failedKey, settled.status === 'failed' && settled.failureAcknowledged === true)
+  }
+  const failed = settled && !arrival.current.seenBefore.get(failedKey) ? settled : undefined
   const errorKey = state.error ? `error:${state.error}` : ''
+  // Seeing the failure here is the acknowledgement the sidebar's pending badge waits for.
+  const acknowledging = useRef('')
+  const refreshActivity = useRef(state.refresh); refreshActivity.current = state.refresh
+  const unseenFailure = failed?.status === 'failed' && !failed.failureAcknowledged ? `${failed.id}:${failed.revision}` : ''
+  useEffect(() => {
+    if (!unseenFailure) return
+    const requestId = unseenFailure.slice(0, unseenFailure.lastIndexOf(':'))
+    const acknowledge = () => {
+      if (acknowledging.current === unseenFailure || !document.hasFocus()) return
+      acknowledging.current = unseenFailure
+      void roomsRequest(`${roomPath(room.id)}/requests/${encodeURIComponent(requestId)}/acknowledge`, 'POST',
+        { clientRequestId: roomRequestId() }).then(() => refreshActivity.current()).catch(() => { acknowledging.current = '' })
+    }
+    acknowledge()
+    window.addEventListener('focus', acknowledge)
+    return () => window.removeEventListener('focus', acknowledge)
+  }, [room.id, unseenFailure])
   if (!active && !(failed && failedKey !== dismissed) && !(state.error && errorKey !== dismissed) && !room.privateWorkspace) return null
   return <div className="direct-progress">
     {room.privateWorkspace ? <p className="direct-project"><FolderOpen size={13} /><span title={room.privateWorkspace}>{room.privateWorkspace.split('/').at(-1)}</span></p> : null}

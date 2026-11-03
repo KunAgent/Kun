@@ -4,6 +4,7 @@ import type {
   ApprovalActionTarget,
   ApprovalReviewTerminalStatus
 } from '../contracts/approvals.js'
+import type { ApprovalChoice } from '../contracts/approval-choice.js'
 import type {
   ToolEffects,
   ToolProviderKind
@@ -19,11 +20,18 @@ export type ApprovalStatus = 'pending' | 'allowed' | 'denied' | 'expired'
 
 export type ApprovalResolution = {
   decision: 'allow' | 'deny'
+  choice?: ApprovalChoice
   reason?: string
   reviewer?: 'user' | 'agent'
   reviewId?: string
   riskLevel?: 'low' | 'medium' | 'high' | 'critical'
   reviewStatus?: ApprovalReviewTerminalStatus
+}
+
+/** Delivered to the original waiter, independent of bounded audit lookup retention. */
+export function manualApprovalResolution(decision: 'allow' | 'deny', reason?: string, choice?: ApprovalChoice): ApprovalResolution {
+  return Object.freeze({ decision, reviewer: 'user' as const,
+    ...(reason ? { reason } : {}), ...(choice ? { choice: Object.freeze({ ...choice }) } : {}) })
 }
 
 /**
@@ -44,6 +52,7 @@ export type ApprovalRequest = {
   createdAt: string
   decidedAt?: string
   reason?: string
+  choice?: ApprovalChoice
 }
 
 export function createApprovalRequest(input: {

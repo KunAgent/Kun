@@ -28,6 +28,9 @@ import type { HybridThreadStore } from './hybrid-thread-store.js'
  * the append/rewrite has succeeded.
  */
 export class HybridSessionStore implements SessionStore {
+  itemHistoryVersion(threadId: string): Promise<string> {
+    return this.delegate.itemHistoryVersion(threadId)
+  }
   private readonly delegate: FileSessionStore
   private readonly index: HybridThreadStore
 
@@ -107,6 +110,10 @@ export class HybridSessionStore implements SessionStore {
 
   setEventIndexRebuildWake(wake: () => void): void {
     this.delegate.setEventIndexRebuildWake(wake)
+  }
+
+  async loadLatestContextSnapshot(threadId: string, maxSeq: number) {
+    return this.delegate.loadLatestContextSnapshot(threadId, maxSeq)
   }
 
   async loadEventsSince(threadId: string, sinceSeq: number): Promise<RuntimeEvent[]> {

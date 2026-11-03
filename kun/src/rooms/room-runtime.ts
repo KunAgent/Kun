@@ -1,3 +1,8 @@
+import { AssistantCodeContinuations } from './assistant-code-continuations.js'
+import { bindPrivateTurnLifecycle } from './private-turn-lifecycle.js'
+import { privateRequestCanRun } from '../agents/agent-lifecycle-state.js'
+import { AgentProfileImportService } from '../agents/agent-profile-import.js'
+import { AgentLifecycleService } from '../agents/agent-lifecycle-service.js'
 import { reconcileRoomNotificationGates } from './room-notification-observer.js'
 import { AgentCommitmentService } from '../agents/agent-commitment-service.js'
 import { AgentArtifactLibrary, bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
@@ -32,26 +37,31 @@ import { bindRoomPeerStore } from './room-peer-tools.js'
 import { bindImMessageService } from './room-im-message-tool.js'
 import { roomPeerTopicPage, roomPeerMetricPage, stopRoomPeerTopic, deliverRoomPeerTaskProgress } from './room-peer-api.js'
 import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRequest } from './room-discussion-scheduler.js'
-import { pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
+import { peerCoordinationNeeded, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
 import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
-import { enqueuePrivateContinuation } from './room-continuation-service.js'
+import { enqueuePrivateContinuation, roomContinuationIsCurrent } from './room-continuation-service.js'
 import { fireDueRoomReminders } from './room-reminders.js'
 import { bindRoomReminderWake } from './room-reminder-tools.js'
 import { WorkbenchBridge, bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import { reconcileWorkbench } from '../workbench-bridge/reconcile.js'
+import { withRoomTickReads } from './room-tick-reads.js'
 
 /** A tick reports whether live work remains and, when idle, the next scheduled wake time. */
 type RoomTickOutcome = { active: boolean; nextWakeAt?: number; catchUp?: boolean }
 
 const ACTIVE_TICK_MS = 1_000
 const IDLE_TICK_MS = 15_000
+/** A repeating memory capture failure is logged again only after this long. */
+const MEMORY_CAPTURE_WARNING_INTERVAL_MS = 5 * 60_000
 
 export class RoomRuntime {
   private readonly memoryCapture: AgentMemoryCoordinator
   readonly agentMemory: AgentMemoryService
   readonly handoffs: AgentHandoffService
   private readonly handoffRunner: AgentHandoffRunner
+  readonly profileImport: AgentProfileImportService
+  readonly lifecycle: AgentLifecycleService
   readonly agents: AgentIdentityService
   readonly commitments: AgentCommitmentService
   readonly artifactLibrary: AgentArtifactLibrary
@@ -59,6 +69,7 @@ export class RoomRuntime {
   readonly product: RoomProductService
   readonly integrations: RoomIntegrationService
   readonly peers: RoomPeerRunner
+  readonly assistantContinuations: AssistantCodeContinuations
   /** Code/Work hand-offs for private Agents: tools, durable links and outcome delivery. */
   readonly workbench: WorkbenchBridge
   private readonly direct: AgentDirectRunner
@@ -72,9 +83,11 @@ export class RoomRuntime {
   private stopped = true
   private inFlight?: Promise<void>
   private wakeQueued = false
+  private memoryCaptureWarning?: { message: string; at: number }
   private actionQueue: Promise<unknown> = Promise.resolve()
   private requestCursor?: number
   private readonly executionService: RoomService
+  private readonly unbindPrivateLifecycle: () => void
   private readonly unbindContinuations: () => void
 
   constructor(readonly deps: RoomRuntimeDeps, private readonly held: () => boolean = () => true,
@@ -88,6 +101,7 @@ export class RoomRuntime {
     this.agentMemory = new AgentMemoryService(this.agents, () => deps.memoryStore, deps.memoryEnabled)
     deps.agentMemory = this.agentMemory
     this.memoryCapture = new AgentMemoryCoordinator(deps)
+    this.assistantContinuations = new AssistantCodeContinuations(deps)
     this.service = new RoomService(deps.store, () => this.wake())
     this.service.setAgentDirectory(this.agents)
     this.commitments = new AgentCommitmentService(deps, this.agents)
@@ -104,6 +118,11 @@ export class RoomRuntime {
     bindAgentSetupDirectory(deps.threadStore, this.agents)
     this.product = new RoomProductService(deps, this.service)
     this.integrations = new RoomIntegrationService(deps)
+    this.unbindPrivateLifecycle = bindPrivateTurnLifecycle(deps.threadStore, { store: deps.store, exclusive: operation => this.exclusive(operation),
+      continuationAllowed: request => roomContinuationIsCurrent(deps, request),
+      assistantQueuedAllowed: (threadId, requestId) => this.assistantContinuations.queuedTurnAllowed(threadId, requestId) })
+    this.lifecycle = new AgentLifecycleService(this)
+    this.profileImport = new AgentProfileImportService(this)
     this.direct = new AgentDirectRunner(deps, this.executionService)
     this.requests = new RoomRequestRunner(deps, this.executionService)
     this.tasks = new RoomTaskRunner(deps, this.executionService)
@@ -122,7 +141,7 @@ export class RoomRuntime {
         return result
       }))
   }
-  start() { this.stopped = false; this.wake() }
+  start() { this.stopped = false; this.lifecycle.start(); this.wake() }
   /**
    * Immediate wake: a pending idle timer is cancelled so new room work never
    * waits out the backoff window. A wake arriving mid-tick is queued and
@@ -136,7 +155,7 @@ export class RoomRuntime {
     this.timer.unref?.()
   }
   private runTick(): void {
-    this.inFlight = this.tick().catch((error) => {
+    this.inFlight = withRoomTickReads(() => this.tick()).catch((error) => {
       console.warn('[kun] room coordinator:', error instanceof Error ? error.message : String(error))
       const outcome: RoomTickOutcome = { active: true }
       return outcome
@@ -148,6 +167,13 @@ export class RoomRuntime {
       this.inFlight = undefined
       if (this.wakeQueued) { this.wakeQueued = false; this.wake() }
     })
+  }
+  private warnMemoryCapture(error: unknown) {
+    const message = error instanceof Error ? error.message : String(error)
+    const now = Date.now(), last = this.memoryCaptureWarning
+    if (last?.message === message && now - last.at < MEMORY_CAPTURE_WARNING_INTERVAL_MS) return
+    this.memoryCaptureWarning = { message, at: now }
+    console.warn('[kun] room memory capture:', message)
   }
   /**
    * Active work keeps the one-second cadence. Idle passes wait up to fifteen
@@ -164,6 +190,8 @@ export class RoomRuntime {
   }
   async close() {
     this.stopped = true
+    this.lifecycle.close()
+    this.unbindPrivateLifecycle()
     this.unbindContinuations()
     if (this.timer) clearTimeout(this.timer)
     this.timer = undefined
@@ -241,6 +269,7 @@ export class RoomRuntime {
   private async tickRequest(row: import('./room-store.js').RoomStoredDocument<RoomRequestState>, discussionBusy: Set<string>) {
     const current = await this.deps.store.get<RoomRequestState>('request', row.id)
     if (!current || current.revision !== row.revision) return
+    if (row.value.privateProtocol && !row.value.cancellationRequested && !await privateRequestCanRun(this.deps.store, row.value)) return
       try {
         if (row.value.handoffReturnId && !await this.handoffs.current(row.value.handoffReturnId)) {
           await cancelSupersededRoomRequest(this.deps, row.id); return
@@ -258,7 +287,7 @@ export class RoomRuntime {
           if (row.value.cancellationRequested) await this.peers.state.stop(topic.id)
         }
         const target = roomRequestDiscussionTarget(row.value)
-        const directPeerDiscussion = row.value.collaborationProtocol === 'peer' && row.value.message.executionIntent === 'discussion'
+        const directPeerDiscussion = !peerCoordinationNeeded(row.value)
         if (target && !target.turnId && !target.admissionAttempted && !row.value.cancellationRequested && !directPeerDiscussion) {
           if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) return
           const key = row.value.roomId + ':' + target.memberId
@@ -306,7 +335,14 @@ export class RoomRuntime {
     if (!this.held()) return { active: false }
     await this.deps.assertOwnership()
     await this.agents.initialize()
-    const outcome: RoomTickOutcome = { active: await this.memoryCapture.tick() }
+    // Memory capture is background work. Its failure must never hold up the
+    // requests, stops and tasks below, and it does not keep the active cadence.
+    const outcome: RoomTickOutcome = { active: await this.memoryCapture.tick().catch((error: unknown) => {
+      this.warnMemoryCapture(error)
+      return false
+    }) }
+    try { if (await this.exclusive(() => this.assistantContinuations.tick())) outcome.active = true }
+    catch { outcome.active = true }
     try { await reconcileRoomNotificationGates(this.deps) }
     catch (error) {
       console.warn('[kun] room notification reconciliation:', error instanceof Error ? error.message : String(error))
@@ -336,6 +372,7 @@ export class RoomRuntime {
     await this.handoffRunner.registerWaiting()
     await this.peers.registerWaiting()
     for (const row of requests) {
+      if (row.value.privateProtocol && !await privateRequestCanRun(this.deps.store, row.value)) continue
       if (row.value.roomSnapshot.conversationKind === 'user_agent' && !(await this.agents.features()).identities) continue
       const target = roomRequestDiscussionTarget(row.value)
       const actor = row.value.roomSnapshot.members.find((member) => member.id === target?.memberId)

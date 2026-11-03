@@ -109,7 +109,6 @@
   "modelProviderRefKind_subagent": "Subagent",
   "modelProviderRefKind_fastContext": "Fast Ctx",
   "modelProviderRefKind_graph": "Graph",
-  "modelProviderRefKind_pptAgent": "PPT",
   "modelProviderRefKind_promptOptimization": "Prompt",
   "modelProviderRefKind_autoPlanBuild": "Plan",
   "modelProviderRefKind_contextCompaction": "Compact",

@@ -12,6 +12,7 @@ import {
   applyUiFontScale,
   applyWriteTypography
 } from '../lib/apply-theme'
+import { applyColorPalette } from '../lib/color-palettes'
 import { SETTINGS_CHANGED_EVENT } from '../lib/keyboard-shortcut-settings'
 import {
   coerceRendererSettings
@@ -64,9 +65,11 @@ export function useSettingsViewBootstrap(scope: Record<string, any>): { loadWrit
     applyCursorSpotlightColor(formCursorSpotlightColor)
   }, [formCursorSpotlight, formCursorSpotlightColor])
 
+  const formColorPalette = form?.colorPalette
   useEffect(() => {
     applyDarkUiColors(formDarkUiColors)
-  }, [formDarkUiColors])
+    if (formColorPalette) applyColorPalette(formColorPalette, formDarkUiColors)
+  }, [formDarkUiColors, formColorPalette])
 
   // Live-preview the Write editor typography as the form changes, mirroring the
   // theme/scale preview above.

@@ -1,4 +1,8 @@
+import { APP_PRESETS } from '../../contracts/app-connection-catalog.js'
 import { registerAgentDispatchIntentRoutes } from './agent-dispatch-intents.js'
+import { registerTaskSuggestionRoutes } from './task-suggestions.js'
+import { registerAppConnectionRoutes } from './register-app-connection-routes.js'
+import { registerAgentRosterRoutes } from './agent-roster.js'
 import type { Router } from '../router.js'
 import { registerProviderConfigurationRoutes } from './provider-configuration.js'
 import { registerModelUtilityRoutes } from './model-utility.js'
@@ -44,6 +48,7 @@ import {
   fenceModelCredential,
   detectModelConnectionProtocols,
   getModelConnectionCatalog,
+  getPublicModelCatalog,
   getModelConnectionCustomHeaders,
   listModelConnections,
   modelConnectionEvents,
@@ -93,10 +98,12 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
   router.add('POST', '/v1/messages', (request) => gatewayMessages(runtime, request))
   router.add('POST', '/v1/messages/count_tokens', (request) => gatewayCountTokens(runtime, request))
   // Kun Tools MCP endpoint lives outside /v1 so harness-scoped kgw_ tokens
-  // never share the runtime-token authorization surface (docs/ade/05 §3.3).
+  // never share the runtime-token authorization surface.
   router.add('POST', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
   router.add('GET', '/mcp/kun', (request) => handleKunToolsMcp(runtime, request))
   registerAgentDispatchIntentRoutes(router, runtime)
+  registerTaskSuggestionRoutes(router, runtime)
+  registerAgentRosterRoutes(router, runtime)
   const strictGatewayAdmin = (request: Request) => strictRuntimeTokenAuthorized(request, runtime.runtimeToken)
   router.add('GET', '/v1/model-gateway/clients', (request) => {
     if (!strictGatewayAdmin(request)) return gatewayJsonResponse({ code: 'unauthorized', message: 'unauthorized' }, 401)
@@ -337,9 +344,13 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return detectModelConnectionProtocols(runtime.modelConnections, request)
   })
+  router.add('POST', '/v1/model-catalog/public', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getPublicModelCatalog(runtime.modelConnections, request)
+  })
   router.add('GET', '/v1/model-connections/:providerId/catalog', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return getModelConnectionCatalog(runtime.modelConnections, ctx.params.providerId)
+    return getModelConnectionCatalog(runtime.modelConnections, ctx.params.providerId, request)
   })
   router.add('GET', '/v1/model-connections/:providerId/custom-headers', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
@@ -349,6 +360,11 @@ export function registerCoreRoutes(router: Router, runtime: ServerRuntime): void
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return applyRuntimeConfig(runtime, request)
   })
+  router.add('GET', '/v1/apps/catalog', (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return jsonResponse({ presets: APP_PRESETS })
+  })
+  registerAppConnectionRoutes(router, runtime)
   router.add('GET', '/v1/mcp/oauth', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return mcpOAuthDiagnostics(runtime)

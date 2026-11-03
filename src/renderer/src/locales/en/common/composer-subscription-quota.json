@@ -1,0 +1,21 @@
+{
+  "subscriptionQuota": {
+    "checking": "Checking the current account…",
+    "windowHours": "{{count}}-hour",
+    "windowMinutes": "{{count}}-minute",
+    "windowDays": "{{count}}-day",
+    "title": "Subscription limits",
+    "button": "Limits",
+    "open": "View subscription limits",
+    "contextAndQuota": "Context usage and subscription limits",
+    "remaining": "{{percent}} left",
+    "windowRemaining": "{{window}} remaining allowance",
+    "weekly": "Weekly",
+    "refresh": "Refresh subscription limits",
+    "updated": "Updated {{time}}",
+    "contextPending": "No context statistics reported for this conversation yet"
+  },
+  "contextCapacityWindowPending": "Waiting for Agent context capacity",
+  "contextCapacityWindowPendingNote": "The Agent has not reported its context window yet. Percentages and remaining capacity are unavailable.",
+  "contextCapacityReportedTokens": "tokens used"
+}

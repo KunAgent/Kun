@@ -1,9 +1,13 @@
 # Design mode (设计模式)
 
-Design mode is a Design task type inside the **Code** (`chat`) workbench, alongside
-the top-level **Work** workspace. It is an AI design workstation: you describe a UI, an agent produces a
-single-file interactive artifact, a live canvas renders it, and you iterate — with
-a first-class, two-way bridge to the coding agent that ships it.
+Design is a capability of the **Code** (`chat`) workbench, alongside the
+top-level **Work** workspace. It is an AI design workstation: an agent produces
+interactive screens on a live canvas beside the conversation and you iterate —
+with a first-class, two-way bridge to the coding agent that ships it.
+
+There is no Code/Design switch in the composer. The Code agent opens Design
+itself with the `design_open` tool (see §1a); legacy standalone Design threads
+keep their locked Design surface.
 
 > Implementation history lives in [`DESIGN_MODE_PLAN.md`](../DESIGN_MODE_PLAN.md)
 > (the original plan) and the `feat(design): …` commits on `feature/design-mode`.
@@ -41,6 +45,32 @@ Positioning: this is the only one of the surveyed tools where design lives **ins
 the coding-agent IDE** with an organic design↔code loop (see §11).
 
 ---
+
+## 1a. Agent-started design (`design_open`)
+
+Kun advertises `design_open(title, brief, target?, medium?)` on Kun-native GUI
+Code turns only (not plan mode, canvas/Design turns, IM, rooms, workers or
+external harnesses; see `kun/src/adapters/tool/design-open-tool.ts`). The tool
+only records a brief and returns a stable `requestId`; canvas mutation tools stay
+gated to Design turns because they need the renderer-built canvas snapshot and
+the locked document target.
+
+1. The transcript renders the call as a design card (`DesignOpenCard`):
+   queued → opening → designing (N screens) → ready, with Open / Start / Retry.
+2. `useAgentDesignRequestDispatch` arms a request only when its reply finished
+   in this window. Once the conversation is idle, queued user messages have
+   drained, and the reply `completed`, it runs one Design pass on the same thread
+   through `sendDesignPrompt` (`messageSource: 'design_continuation'`, single
+   pass, no composer attachments). If a reply calls the tool more than once,
+   only the last request runs. A stopped or failed reply never starts a pass.
+3. That pass creates and locks the Design document like any Design turn, and
+   opens the canvas in the right panel. The next message is a Code turn again.
+   Asking for a change to the design makes the agent call `design_open` again,
+   which iterates on the same canvas.
+
+Dispatch records live in `design/agent-design-requests.ts` (localStorage,
+per-window session id). Requests from an earlier window never auto-start;
+their cards offer a manual start.
 
 ## 2. Architecture
 

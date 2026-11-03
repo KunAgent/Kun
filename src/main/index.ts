@@ -1,10 +1,13 @@
-import { app } from 'electron'
+import { app, protocol } from 'electron'
+import { registerAppSchemes } from './privileged-schemes'
 import {
   appendUpdateHealthProgress,
   UPDATE_HEALTH_INTERNAL_TIMEOUT_MS,
   updateHealthDiagnosticBasePath,
   writeUpdateHealthBootstrapFailure
 } from './update-health-bootstrap'
+
+registerAppSchemes(protocol)
 
 const HEALTH_PATH_ARG = '--kun-update-health-check='
 const HEALTH_TOKEN_ARG = '--kun-update-health-token='

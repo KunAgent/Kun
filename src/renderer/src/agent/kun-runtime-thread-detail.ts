@@ -4,6 +4,7 @@ import { runtimeErrorToError } from '@shared/runtime-error'
 import type { ThreadDetail } from './types'
 import type { CoreThreadTimelineJson } from './kun-contract'
 import { chatBlockFromItem, goalFromCore, mergeChatBlocks, todosFromCore } from './kun-mapper'
+import { contextSnapshotFromCore } from './kun-mapper-projection'
 import { restoredThreadLiveProjection } from './kun-runtime-thread-live-projection'
 import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
@@ -68,6 +69,7 @@ export async function getKunThreadDetail(threadId: string, options: {
       activeSkillIds: turn.activeSkillIds,
       injectedMemoryIds: turn.injectedMemoryIds,
       injectedMemorySummaries: turn.injectedMemorySummaries,
+      injectedMemoryRelations: turn.injectedMemoryRelations,
       injectedDirectiveIds: turn.injectedDirectiveIds,
       injectedDirectiveSummaries: turn.injectedDirectiveSummaries,
       skillInjectionBytes: turn.skillInjectionBytes,
@@ -148,6 +150,8 @@ export async function getKunThreadDetail(threadId: string, options: {
       orchestration: thread.activeTurn.orchestration === 'graph' ? 'graph' as const : 'direct' as const
     } : null } : {}),
     blocks,
+    ...(thread.contextSnapshot !== undefined ? { contextSnapshot: thread.contextSnapshot?.threadId === threadId
+      ? contextSnapshotFromCore(thread.contextSnapshot) : null } : {}),
     latestSeq: thread.latestSeq ?? 0,
     ...(restoredLive.liveProjection ? { liveProjection: restoredLive.liveProjection } : {}),
     threadStatus: thread.status ?? latestTurn?.status,

@@ -49,7 +49,7 @@ describe('takeOverWorker', () => {
     expect((await threadUnit())?.control).toBe('user')
     const notices = await stores.notices.pending('thr_mgr')
     expect(notices.map((entry) => entry.kind)).toEqual(['worker_taken_over'])
-    // The queued dispatch survives the takeover (09 §9).
+    // The queued dispatch survives the takeover.
     expect((await stores.dispatches.get('thr_mgr', 'dsp_held'))!.state).toBe('pending')
   })
 

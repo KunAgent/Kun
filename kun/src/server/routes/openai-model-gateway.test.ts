@@ -424,6 +424,34 @@ describe('harness-grant gateway requests', () => {
     })
   })
 
+  class SlowUsageModel extends GatewayModel {
+    override async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+      this.last = request
+      await new Promise((resolve) => setTimeout(resolve, 30))
+      yield { kind: 'assistant_text_delta', text: 'hi' }
+      await new Promise((resolve) => setTimeout(resolve, 70))
+      yield { kind: 'usage', usage: { promptTokens: 2, completionTokens: 30, totalTokens: 32, cacheHitRate: null } as never }
+      yield { kind: 'completed', stopReason: 'stop' }
+    }
+  }
+
+  it('times every granted route call so a gateway-routed Agent shows TTFT and tok/s', async () => {
+    const tokens = new HarnessTokenService()
+    const { base, usageEvents } = grantRuntime(new SlowUsageModel(), tokens)
+    const token = issue(tokens, [{ providerId: 'relay-key', model: 'relay-a', role: 'main' }])
+    const streamed = await gatewayResponses(base, grantPost('/v1/responses', {
+      model: 'kun/relay-key/relay-a', input: 'hi', stream: true
+    }, token))
+    await (streamed as Response).text()
+    const usage = usageEvents.find((event) => event.kind === 'usage') as { usage: Record<string, number> } | undefined
+    // Lower bounds are the script's delays; the upper bound only rules out a clock mix-up.
+    expect(usage!.usage.requestTtftMs).toBeGreaterThanOrEqual(25)
+    expect(usage!.usage.requestTtftMs).toBeLessThan(5_000)
+    expect(usage!.usage.requestGenerationMs).toBeGreaterThanOrEqual(60)
+    expect(usage!.usage.requestGenerationMs).toBeLessThan(5_000)
+    expect(usage!.usage.completionTokens).toBe(30)
+  })
+
   it('streams Responses output on a granted route and settles usage on close', async () => {
     const tokens = new HarnessTokenService()
     const { base, usageEvents } = grantRuntime(new UsageModel(), tokens)

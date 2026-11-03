@@ -14,7 +14,7 @@ import { scholarFetchCitations, scholarFetchReferences } from './scholar-client'
 import type { PaperUnitMetaV2 } from '../../../shared/paper/paper-meta-v2'
 
 /**
- * `<unit>/references.json` (plan §6.4): resolution order is local
+ * `<unit>/references.json`: resolution order is local
  * `source/*.bbl` / `*.bib` (saved during e-print unpack) → Semantic Scholar →
  * Crossref. Results cache in the unit dir; `force` refetches over the cache.
  */
@@ -170,7 +170,7 @@ export async function resolvePaperReferences(input: {
   meta: PaperUnitMetaV2
   force?: boolean
   online: boolean
-  /** `citations` uses S2 cited-by instead of the bibliography (plan §PM5). */
+  /** `citations` uses S2 cited-by instead of the bibliography. */
   kind?: 'references' | 'citations'
   fetchContext?: PaperFetchContext
   scholarApiKey?: string

@@ -2,7 +2,7 @@ import { mkdir, readdir, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { AtomicJsonFile } from '../extensions/atomic-json.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
-import { delegatedRouteKey, threadKey } from './delegated-session-binding-keys.js'
+import { delegatedProviderStateKey, threadKey } from './delegated-session-binding-keys.js'
 import type {
   DelegatedProviderKind,
   DelegatedSessionBinding,
@@ -90,6 +90,7 @@ export class FileDelegatedSessionBindingStore implements DelegatedSessionBinding
     threadId: string,
     routeKey: string
   ): string {
+    if (!ROUTE_KEY_DIR.test(routeKey)) throw new Error('invalid provider state key')
     return join(this.providerStateRoot(threadId), providerKind, routeKey)
   }
 
@@ -105,7 +106,7 @@ export class FileDelegatedSessionBindingStore implements DelegatedSessionBinding
           this.providerStateRoot(binding.threadId),
           binding.providerKind
         )
-        const target = join(kindDir, delegatedRouteKey(binding))
+        const target = join(kindDir, delegatedProviderStateKey(binding))
         const entries = await readdir(kindDir, { withFileTypes: true }).catch(() => [])
         for (const entry of entries) {
           if (ROUTE_KEY_DIR.test(entry.name)) continue
@@ -169,6 +170,7 @@ function parseBinding(value: unknown): DelegatedSessionBinding | null {
     !boundedString(record.workspace, 16_384) ||
     !boundedString(record.model) ||
     !hexDigest(record.capabilityFingerprint) ||
+    (record.providerStateKey !== undefined && !hexDigest(record.providerStateKey)) ||
     !hexDigest(record.synchronizedHistoryDigest) ||
     (record.synchronizedInstructionDigest !== undefined &&
       !hexDigest(record.synchronizedInstructionDigest)) ||
@@ -203,6 +205,7 @@ function isParkedSession(value: unknown): value is ParkedSession {
   const continuationMode = record.continuationMode
   return (
     hexDigest(record.key) &&
+    (record.providerStateKey === undefined || hexDigest(record.providerStateKey)) &&
     (record.synchronizedInstructionDigest === undefined ||
       hexDigest(record.synchronizedInstructionDigest)) &&
     (

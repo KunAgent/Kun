@@ -11,5 +11,11 @@
     "autoHint": "입력창 권한 수준을 따릅니다",
     "triggerTitle": "{{agent}} Agent: {{name}}",
     "ownPermissions": "선택한 Agent는 자체 도구 권한을 사용합니다. 읽기 전용 작업은 여전히 가장 엄격한 모드를 사용합니다."
+  },
+  "agentSettingsPicker": {
+    "title": "설정",
+    "triggerTitle": "{{agent}} 세션 설정",
+    "hint": "에이전트가 제공하는 설정이며 다음 메시지부터 적용됩니다.",
+    "reset": "기본값으로"
   }
 }

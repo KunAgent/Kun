@@ -54,7 +54,7 @@ describe('Card-local Agent picker', () => {
   it('retains external Agent identity when choosing a native model', async () => {
     await mount({ mode: 'direct', model: { harnessId: 'codex', credentialMode: 'native-login', model: 'native-model' } })
     await act(async () => { renderer!.root.findByType(FloatingComposerModelPicker).props.onComposerModelChange('native-model', 'ade-cred:native-login') })
-    expect(changed.mock.calls[0][0].model).toEqual({ harnessId: 'codex', credentialMode: 'native-login', model: 'native-model' })
+    expect(changed.mock.calls[0][0].model).toEqual({ harnessId: 'codex', credentialMode: 'native-login', model: 'native-model', reasoningEffort: 'auto' })
   })
 
   it('refreshes only native catalogs for a native-only Agent and ignores irrelevant provider errors', async () => {

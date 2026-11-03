@@ -99,12 +99,12 @@ describe('FloatingComposerHarnessPicker', () => {
     expect(menu()!.textContent).not.toContain('native-login')
   })
 
-  it('omits installed profiles without opt-in, missing readiness, expired proofs and retired Gemini', async () => {
+  it('omits installed profiles without opt-in, missing readiness, expired proofs and retired Agents', async () => {
     await renderPicker({ rows: [rows[0],
       { ...row('disabled', 'Disabled'), enabled: false },
       { ...row('unchecked', 'Unchecked'), readyProfiles: [] },
       { ...row('expired', 'Expired'), readyProfiles: [{ harnessId: 'expired', credentialMode: 'native-login', expiresAt: '2000-01-01T00:00:00Z' }] },
-      { ...row('gemini-cli', 'Gemini CLI'), definition: { ...row('gemini-cli', 'Gemini CLI').definition, availability: 'retired' } }] })
+      { ...row('retired-agent', 'Retired Agent'), definition: { ...row('retired-agent', 'Retired Agent').definition, availability: 'retired' } }] })
     await openMenu()
     expect([...menu()!.querySelectorAll<HTMLElement>('[data-harness-id]')].map((element) => element.dataset.harnessId)).toEqual(['kun'])
   })

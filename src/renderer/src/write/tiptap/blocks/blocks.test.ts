@@ -1,5 +1,5 @@
 /**
- * S5 block-level interaction tests (implementation §9): block targeting,
+ * S5 block-level interaction tests: block targeting,
  * move-up/down transactions, block→markdown copy, heading anchor links,
  * slash-menu filtering, and markdown-aware paste detection. Runs on the
  * view-less editor harness like review-session.test.ts.

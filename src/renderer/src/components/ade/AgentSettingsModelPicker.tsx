@@ -8,6 +8,7 @@ import { ProviderIcon } from '../provider-icon'
 import { DevinModelList } from '../chat/DevinModelList'
 import { devinModelPresentation } from '../chat/devin-model-presentation'
 import { useComposerPickerPopover } from '../chat/use-composer-picker-popover'
+import { agentModelGroupSections } from '../chat/composer-provider-model-sections'
 import { agentSettingFieldClass, agentSettingMenuClass, moveAgentPickerFocus } from './AgentSettingsSelect'
 
 export function AgentSettingsModelPicker({ harnessId, native, value, modelIds, modelInfo, loading, error, onChange, onLoad }: {
@@ -37,6 +38,15 @@ export function AgentSettingsModelPicker({ harnessId, native, value, modelIds, m
     return () => cancelAnimationFrame(frame)
   }, [open, custom, menuRef])
   const visible = modelIds.filter((model) => `${info[model]?.displayName ?? ''} ${model}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()))
+  // Grouping is decided on the full catalog so a search never drops the headings.
+  const sections = useMemo(() => agentModelGroupSections(modelIds, info), [modelIds, info])
+  const visibleIds = new Set(visible)
+  const renderModel = (model: string): ReactElement => <button key={model} type="button" role="menuitemradio" aria-checked={model === value}
+    data-agent-model-option={model} onClick={() => pick(model)}
+    className={`flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-ds-hover focus-visible:bg-ds-hover ${model === value ? 'bg-ds-hover' : 'text-ds-muted'}`}>
+    <Cpu size={15} className="shrink-0 text-ds-faint" /><span className="min-w-0 flex-1 break-words">{info[model]?.displayName || model}</span>
+    {model === value ? <Check size={15} className="shrink-0 text-accent" /> : null}
+  </button>
   return <div className="w-full min-w-0">
     <button type="button" ref={triggerRef} className={agentSettingFieldClass} data-agent-profile-model
       aria-label={t('agentEnablement.model')} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? id : undefined}
@@ -79,12 +89,13 @@ export function AgentSettingsModelPicker({ harnessId, native, value, modelIds, m
               className="h-full min-w-0 flex-1 bg-transparent text-[12px] text-ds-ink outline-none focus-visible:!outline-none focus-visible:!ring-0" />
           </label>
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-            {visible.map((model) => <button key={model} type="button" role="menuitemradio" aria-checked={model === value}
-              data-agent-model-option={model} onClick={() => pick(model)}
-              className={`flex min-h-10 w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left outline-none hover:bg-ds-hover focus-visible:bg-ds-hover ${model === value ? 'bg-ds-hover' : 'text-ds-muted'}`}>
-              <Cpu size={15} className="shrink-0 text-ds-faint" /><span className="min-w-0 flex-1 break-words">{info[model]?.displayName || model}</span>
-              {model === value ? <Check size={15} className="shrink-0 text-accent" /> : null}
-            </button>)}
+            {sections ? sections.map((section) => {
+              const rows = section.modelIds.filter((model) => visibleIds.has(model))
+              return rows.length ? <div key={section.key} role="group" aria-label={section.label} data-agent-model-group={section.key}>
+                <p className="px-2.5 pb-0.5 pt-2 text-[11.5px] font-semibold text-ds-faint">{section.label}</p>
+                {rows.map(renderModel)}
+              </div> : null
+            }) : visible.map(renderModel)}
             {!visible.length && !loading ? <p className="px-2.5 py-3 text-[12px] text-ds-faint">{t(query ? 'composerNoMatchingModels' : 'agentEnablement.noModels')}</p> : null}
           </div>
         </div>}

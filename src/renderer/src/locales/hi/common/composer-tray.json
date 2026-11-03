@@ -1,0 +1,38 @@
+{
+  "composerTray": {
+    "regionLabel": "मौजूदा गतिविधि",
+    "queueLabel": "कतार में संदेश",
+    "collapse": "समेटें",
+    "stop": "रोकें",
+    "duration": {
+      "seconds": "{{seconds}} से",
+      "minutes": "{{minutes}} मि",
+      "minutesSeconds": "{{minutes}} मि {{seconds}} से",
+      "hours": "{{hours}} घं",
+      "hoursMinutes": "{{hours}} घं {{minutes}} मि",
+      "underMinute": "1 मिनट से कम",
+      "minutesRounded": "{{minutes}} मिनट",
+      "hoursRounded": "{{hours}} घंटे",
+      "hoursMinutesRounded": "{{hours}} घंटे {{minutes}} मिनट",
+      "justNow": "अभी-अभी",
+      "ago": "{{duration}} पहले"
+    }
+  },
+  "composerInterrupt": {
+    "previous": "पिछला",
+    "next": "अगला",
+    "pagerPosition": "{{total}} में से {{index}}",
+    "countdown": "{{seconds}} से",
+    "countdownTitle": "{{seconds}} सेकंड में Kun खुद आगे बढ़ेगा",
+    "deciding": "Kun खुद तय कर रहा है…",
+    "recommended": "सुझाया गया",
+    "optionsLabel": "विकल्प",
+    "freeTextLabel": "आपका अपना जवाब"
+  },
+  "composerDock": {
+    "runningPlaceholder": "आगे के बदलाव कतार में डालने के लिए लिखते रहें…",
+    "queueMessage": "कतार में डालें",
+    "stopWithShortcut": "रोकें (Esc)",
+    "enterToQueue": "कतार के लिए Enter"
+  }
+}

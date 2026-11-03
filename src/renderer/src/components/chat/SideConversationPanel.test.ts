@@ -15,9 +15,18 @@ import {
 } from './SideConversationPanel'
 import { FloatingComposer } from './FloatingComposer'
 
+vi.mock('../../product-analytics/presentation', async (load) => ({
+  ...await load<typeof import('../../product-analytics/presentation')>(),
+  useResultPresented: () => undefined
+}))
+
 const firstSide: SideConversation = {
   threadId: 'side-1',
   parentThreadId: 'main-1',
+  harnessId: 'kun',
+  approvalPolicy: 'on-request',
+  sandboxMode: 'workspace-write',
+  approvalReviewer: 'user',
   title: 'Parent · side',
   createdAt: '2026-07-23T00:22:00.000Z',
   inheritedAt: '2026-07-23T00:22:00.000Z',
@@ -92,6 +101,9 @@ describe('SideConversationPanel', () => {
       workspaceRoot: '/workspace',
       runtimeConnection: 'ready',
       busy: false,
+      composerHarnessId: 'kun',
+      composerCredentialMode: '',
+      composerGatewayBinding: undefined,
       composerModel: 'gpt-5.6',
       composerProviderId: 'codex',
       composerPickList: ['gpt-5.6'],
@@ -126,6 +138,43 @@ describe('SideConversationPanel', () => {
     expect(content).not.toContain('Fork response')
     expect(root.findAllByProps({ 'aria-label': 'Edit & resend' })).toHaveLength(0)
 
+    act(() => renderer!.unmount())
+  })
+
+  it('renders branch Agent and permission controls without changing the main selection', () => {
+    let renderer: ReactTestRenderer
+    act(() => { renderer = create(createElement(SideConversationPanel, { variant: 'docked' })) })
+    const composer = renderer!.root.findByType(FloatingComposer)
+    expect(composer.props.sideAgentControls.harnessId).toBe('kun')
+    expect(composer.props.executionSettings.approvalPolicy).toBe('on-request')
+    const previous = useChatStore.getState().composerExecutionSettings
+    act(() => composer.props.onExecutionSettingsChange({ approvalPolicy: 'always', sandboxMode: 'read-only' }))
+    expect(useChatStore.getState().sideConversations['side-1'].approvalPolicy).toBe('always')
+    expect(useChatStore.getState().composerExecutionSettings).toBe(previous)
+    act(() => renderer!.unmount())
+  })
+
+  it('freezes a draft configuration even when the main composer changes later', () => {
+    useChatStore.setState({ sidePanel: { open: true, activeSideId: null }, composerHarnessId: 'kun' })
+    let renderer: ReactTestRenderer
+    act(() => { renderer = create(createElement(SideConversationPanel, { variant: 'docked' })) })
+    const initial = renderer!.root.findByType(FloatingComposer).props.composerModel
+    act(() => useChatStore.setState({ composerModel: 'other-main-model', composerHarnessId: 'codex' }))
+    const composer = renderer!.root.findByType(FloatingComposer)
+    expect(composer.props.composerModel).toBe(initial)
+    expect(composer.props.sideAgentControls.harnessId).toBe('kun')
+    act(() => renderer!.unmount())
+  })
+
+  it('locks branch Agent, model and permission while running', () => {
+    useChatStore.setState({ sideConversations: { 'side-1': { ...firstSide, busy: true } } })
+    let renderer: ReactTestRenderer
+    act(() => { renderer = create(createElement(SideConversationPanel, { variant: 'docked' })) })
+    const composer = renderer!.root.findByType(FloatingComposer)
+    expect(composer.props.sideAgentControls.disabled).toBe(true)
+    act(() => composer.props.onComposerModelChange('wrong', 'api'))
+    act(() => composer.props.onExecutionSettingsChange({ approvalPolicy: 'never' }))
+    expect(useChatStore.getState().sideConversations['side-1']).toMatchObject({ model: 'gpt-5.6', approvalPolicy: 'on-request' })
     act(() => renderer!.unmount())
   })
 
@@ -461,6 +510,7 @@ it('passes draft images to branch creation without changing main attachments', a
     })
 
     let renderer: ReactTestRenderer | undefined
+    let clock: { mockRestore: () => void } | undefined
     try {
       await act(async () => {
         renderer = create(createElement(SideConversationPanel, { variant: 'docked' }))
@@ -470,20 +520,23 @@ it('passes draft images to branch creation without changing main attachments', a
         'data-user-input-variant': 'compact'
       })).toBeDefined()
 
+      // The ask card ignores clicks for a moment after it appears (arming).
+      clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1_000)
       const option = renderer!.root.findAllByType('button').find((button) =>
-        textContent(button).includes('Side only')
+        button.props.role === 'option' && textContent(button).includes('Side only')
       )
       expect(option).toBeDefined()
       await act(async () => {
-        option!.props.onClick()
+        option!.props.onClick({ preventDefault: vi.fn() })
       })
 
       const submit = renderer!.root.findAllByType('button').find((button) =>
-        textContent(button).includes('Submit answers')
+        button.props['data-user-input-primary'] === 'submit'
       )
       expect(submit).toBeDefined()
+      expect(textContent(submit!)).toBe('Submit')
       await act(async () => {
-        submit!.props.onClick()
+        submit!.props.onClick({ preventDefault: vi.fn() })
       })
 
       expect(resolveSideUserInput).toHaveBeenCalledWith(
@@ -495,6 +548,7 @@ it('passes draft images to branch creation without changing main attachments', a
         }
       )
     } finally {
+      clock?.mockRestore()
       const mountedRenderer = renderer
       if (mountedRenderer) {
         act(() => mountedRenderer.unmount())

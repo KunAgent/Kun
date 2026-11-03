@@ -67,6 +67,11 @@ const CODE_STARTERS: Array<{ icon: ReactElement; titleKey: string }> = [
   {
     icon: <Bug className="h-3.5 w-3.5" strokeWidth={1.8} />,
     titleKey: 'codeStarterFix'
+  },
+  {
+    // Code agents open the Design canvas themselves (design_open).
+    icon: <LayoutTemplate className="h-3.5 w-3.5" strokeWidth={1.8} />,
+    titleKey: 'designStarterPage'
   }
 ]
 

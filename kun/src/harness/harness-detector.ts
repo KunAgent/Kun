@@ -3,7 +3,6 @@ import { stripVTControlCharacters } from 'node:util'
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
 import type { HarnessDefinition, HarnessId, HarnessStatus } from '../contracts/harness.js'
 import { harnessStatusReasonCode } from '../contracts/harness.js'
@@ -14,7 +13,7 @@ import {
 } from '../process/owned-process.js'
 import type { HarnessLoginState } from './harness-login-probes.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
-import { resolveCodexExecutable } from './codex-executable.js'
+import { providerModule } from './providers/registry.js'
 import { harnessExecutableEnv } from './harness-executable-env.js'
 import { prepareDeepSeekHarnessLaunch } from './deepseek-harness-launch.js'
 import { buildHarnessEnv } from './harness-env.js'
@@ -127,7 +126,7 @@ export class HarnessDetector {
        * Protocol initialize handshake after the version probe. Runs for ACP
        * and native Codex with a resolved command; its
        * verdict lands on `status.ready` with a sanitized stderr summary.
-       * 'unknown' (P4-03) means the probe timed out — not a failure verdict.
+       * 'unknown' means the probe timed out — not a failure verdict.
        */
       probeReady?: (
         def: HarnessDefinition,
@@ -178,10 +177,20 @@ export class HarnessDetector {
    * is not confused with a known-missing one.
    */
   cachedStatus(id: HarnessId): HarnessStatus | undefined {
+    const status = this.lastKnownStatus(id)
+    return status && (this.cache.get(id)?.expiresAt ?? 0) > this.deps.nowMs() ? status : undefined
+  }
+
+  /**
+   * The latest settled verdict for the current configuration, kept after its
+   * TTL. Advisory listings use it so they do not flicker while a refresh is in
+   * flight; launches still re-check readiness. Undefined until a probe lands.
+   */
+  lastKnownStatus(id: HarnessId): HarnessStatus | undefined {
     const cached = this.cache.get(id)
     const def = this.deps.definitions().find((candidate) => candidate.id === id)
     return !def?.launch?.secretEnv?.length && cached && cached.identity === this.identity(id) &&
-      cached.binary === fileIdentity(cached.status.resolvedCommand) && cached.expiresAt > this.deps.nowMs()
+      cached.binary === fileIdentity(cached.status.resolvedCommand)
       ? cached.status
       : undefined
   }
@@ -192,7 +201,7 @@ export class HarnessDetector {
   }
 
   /**
-   * A real turn launch failed after a probe said ready (P4-03): drop the
+   * A real turn launch failed after a probe said ready: drop the
    * persisted readiness entry and mark the cached status `ready: 'no'` so
    * the UI reflects the observed failure until the next detection pass.
    */
@@ -245,12 +254,10 @@ export class HarnessDetector {
 
   private identity(id: HarnessId): string {
     const def = this.deps.definitions().find((candidate) => candidate.id === id)
+    // A changed sign-in or engine config invalidates the cached status.
     const home = process.env.HOME ?? process.env.USERPROFILE ?? homedir()
-    const claude = process.env.CLAUDE_CONFIG_DIR ?? join(home, '.claude')
-    const codex = process.env.CODEX_HOME ?? join(home, '.codex')
-    const configPaths = [join(claude, '.credentials.json'), join(claude, 'settings.json'),
-      join(codex, 'auth.json'), join(codex, 'config.toml'),
-      join(home, '.config', 'opencode', 'opencode.json'), join(home, '.local', 'share', 'opencode', 'auth.json')]
+    const credentials = providerModule(id)?.credentials
+    const configPaths = [...credentials?.files?.(process.env, home) ?? [], ...credentials?.profileFiles?.(process.env, home) ?? []]
     return createHash('sha256').update(JSON.stringify({
       definition: def,
       network: def ? nativeAgentNetworkStatus(def).networkFingerprint : undefined,
@@ -309,7 +316,7 @@ export class HarnessDetector {
     if (!command && !bundled) {
       // A fallback binary that resolves (e.g. `codex` when `codex-acp` is
       // absent) means an installed tool missing its ACP adapter — surface the
-      // definition's install guidance instead of a bare "not found" (P3-11).
+      // definition's install guidance instead of a bare "not found".
       const hint = override ? undefined : def.detect?.adapterHint
       const hintPresent = hint
         ? await wait((this.deps.resolveExecutable ?? defaultResolveExecutable)(
@@ -329,7 +336,7 @@ export class HarnessDetector {
       })
     }
     if (def.transport === 'terminal') {
-      // Terminal agents (p4 §3.8): a resolved command is the whole verdict.
+      // Terminal agents: a resolved command is the whole verdict.
       // Many interactive CLIs ignore `--version` and wait on stdin instead —
       // probing would hang 5s and mask an installed agent as 'unknown'.
       const login = await wait(this.deps.probeLogin(def, command ?? def.id, { signal }).catch(() => 'unknown' as HarnessLoginState))
@@ -391,7 +398,7 @@ export class HarnessDetector {
       checkedAt,
       ...(readyMessage ? { message: readyMessage.slice(0, 512) } : {})
     }
-    // P4-05: stamp the stable reason code so clients localize a label and a
+    // stamp the stable reason code so clients localize a label and a
     // next step instead of parsing `message` (which stays detail-only).
     const reasonCode = harnessStatusReasonCode(status)
     return store(reasonCode ? { ...status, reasonCode } : status)
@@ -408,17 +415,26 @@ export class HarnessDetector {
       return resolved
     }
     if (!def.detect) return undefined
-    if (!override && !this.deps.resolveExecutable && def.transport === 'codex-app-server' && def.detect.command === 'codex') {
-      return resolve(await raceProbeAbort(resolveCodexExecutable(), signal))
+    // An engine-specific resolver applies only to its own (non-overridden) transport.
+    const engine = providerModule(def.id)
+    if (!override && !this.deps.resolveExecutable && engine?.resolveExecutable && def.transport === engine.definition.transport) {
+      return resolve(await raceProbeAbort(engine.resolveExecutable(), signal))
     }
-    for (const candidate of [def.detect.command, ...(def.detect.aliases ?? [])]) {
+    const candidates = [def.detect.command, ...(def.detect.aliases ?? [])]
+    let first: string | undefined
+    for (const candidate of candidates) {
       signal.throwIfAborted()
       const resolved = await raceProbeAbort(resolve(candidate), signal)
       signal.throwIfAborted()
       if (resolved && def.detect.rejectApplicationLauncher && await isApplicationLauncher(resolved)) continue
-      if (resolved) return resolved
+      if (!resolved) continue
+      if (!def.detect.identityPattern || candidates.length === 1) return resolved
+      // A generic command name (Cursor's `agent`) can belong to another
+      // vendor earlier on PATH; keep looking for an alias that identifies it.
+      first ??= resolved
+      if ((await this.readVersion(def, resolved, signal))?.identityMismatch !== true) return resolved
     }
-    return undefined
+    return first
   }
 
   private async readVersion(

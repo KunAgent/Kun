@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { RoomAvatarReference, RoomPreviewImage, RoomUserProfileDetail } from '@shared/rooms-api'
+import type { KunWardrobeDrop } from '@shared/rooms-api'
 import { RoomModal } from './RoomModal'
-import { RoomAvatarComposer } from './RoomAvatarComposer'
+import { RoomAvatarComposer, editableKunAvatarParts } from './RoomAvatarComposer'
+import { RoomWardrobeProgress } from './RoomWardrobeProgress'
+import { markWardrobeSeen, requireKunAppearanceLogin, useWardrobe, wardrobeGate, wearWardrobeDrop } from './room-wardrobe'
 import { roomsRequest, roomRequestId } from './rooms-client'
 import { cacheRoomAvatar } from './room-uploaded-avatar'
-import { acceptRoomUserProfile } from './room-user-profile'
+import { saveRoomUserProfile } from './room-user-profile'
 import { useAgentResource } from './agent-client'
 
 export function RoomUserAvatarEditor({ onClose, variant = 'modal' }: { onClose: () => void; variant?: 'modal' | 'panel' }) {
@@ -26,6 +29,7 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
   const preview = useRef<HTMLCanvasElement>(null), file = useRef<HTMLInputElement>(null)
   const mounted = useRef(true), loadSerial = useRef(0)
   const pending = useRef<{ key: string; id: string } | null>(null)
+  const wardrobe = useWardrobe()
   useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
   useEffect(() => () => source?.close(), [source])
   // Keep preview and payload identical; the server performs its own bounded normalization.
@@ -50,7 +54,7 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
     finally { if (mounted.current && serial === loadSerial.current) { setBusy(false); onBusy(false) } }
   }
   const save = async () => {
-    if (busy) return
+    if (!requireKunAppearanceLogin() || busy) return
     setBusy(true); onBusy(true); setError('')
     try {
       let selected: RoomAvatarReference | null = avatar
@@ -63,16 +67,18 @@ function UserAvatarForm({ initial, onClose, onBusy }: { initial: RoomUserProfile
       }
       const key = JSON.stringify(selected)
       if (pending.current?.key !== key) pending.current = { key, id: roomRequestId() }
-      const saved = await roomsRequest<RoomUserProfileDetail>('/v1/rooms/user-profile', 'PUT', {
-        avatar: selected, expectedRevision: original.revision, clientRequestId: pending.current.id })
-      acceptRoomUserProfile(saved)
+      await saveRoomUserProfile({ avatar: selected, expectedRevision: original.revision, clientRequestId: pending.current.id })
       if (mounted.current) onClose()
     } catch (cause) { if (mounted.current) setError(String(cause)) }
     finally { if (mounted.current) { setBusy(false); onBusy(false) } }
   }
   const select = (next: RoomAvatarReference | null) => { loadSerial.current++; setSource(null); setAvatar(next); setError('') }
+  const wear = (drop: KunWardrobeDrop) => select({ kind: 'composed', version: 1,
+    parts: wearWardrobeDrop(editableKunAvatarParts(avatar, 'user-preview', true), drop) })
   return <div className="rooms-user-avatar-form">
+    <RoomWardrobeProgress state={wardrobe} busy={busy} onWear={wear} />
     <RoomAvatarComposer id="user-preview" label={t('roomsMyAvatar')} avatar={avatar} user disabled={busy} photo={!!source}
+      wardrobe={wardrobeGate(wardrobe)} onSeen={(keys) => void markWardrobeSeen(keys).catch(() => undefined)}
       onChange={select} onUpload={() => file.current?.click()}
       preview={source ? <div className="rooms-avatar-preview"><canvas width={256} height={256} ref={preview} aria-label={t('roomsAvatarCropPreview')} /></div> : undefined}
       previewControls={source ? <div className="rooms-avatar-crop-controls">

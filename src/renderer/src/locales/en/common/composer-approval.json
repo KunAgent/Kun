@@ -1,0 +1,46 @@
+{
+  "composerApproval": {
+    "header": "Needs your approval",
+    "kind": {
+      "command": "Run command",
+      "edit": "Edit file",
+      "email": "Send email",
+      "tool": "Use {{name}}",
+      "toolUnnamed": "Use a tool"
+    },
+    "question": {
+      "edit": "Edit {{file}}?",
+      "editFiles_one": "Edit this {{count}} file?",
+      "editFiles_other": "Edit these {{count}} files?"
+    },
+    "preview": {
+      "terminal": "Terminal",
+      "email": "Email",
+      "awaiting": "Awaiting approval",
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "diffStats": "{{added}} lines added, {{removed}} removed",
+      "clipped": "Long change; the rest is not shown",
+      "truncated": "The arguments are long, so this preview shows only part of them",
+      "moreInput_one": "{{count}} more argument",
+      "moreInput_other": "{{count}} more arguments"
+    },
+    "option": {
+      "allow": "Allow",
+      "allowAlways": "Always allow",
+      "deny": "Deny",
+      "denyAlways": "Always deny",
+      "once": "Only this time",
+      "denyOnce": "Just this time",
+      "alwaysSession": "Don't ask again this session",
+      "alwaysScoped": "Don't ask again for {{scope}} this session",
+      "alwaysScopedEdit": "Don't ask again for edits in {{scope}} this session",
+      "denyAlwaysSession": "Deny this kind of action for the rest of the session"
+    },
+    "feedbackPlaceholder": "Tell Kun what to do instead — sent with the denial…",
+    "feedbackEmailPlaceholder": "Tell Kun what to change — sent with the denial…",
+    "feedbackLabel": "Note sent with the denial",
+    "hint": "Press 1–{{last}} to choose, or ↑↓ then Enter",
+    "confirm": "Confirm"
+  }
+}

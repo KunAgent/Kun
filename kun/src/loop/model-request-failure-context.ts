@@ -18,7 +18,8 @@ export function modelRequestFailureContext(input: {
   code?: string
 }): ModelRequestFailureContext | undefined {
   const failure = input.failure
-  const preflightFailure = input.code === 'credential_refresh_failed' ||
+  const localNotSent = failure?.requestSent === false
+  const preflightFailure = localNotSent || input.code === 'credential_refresh_failed' ||
     input.code === 'missing_api_key' || input.code === 'model_request_not_sent'
   const providerResponded = failure?.responseReceived === true ||
     failure?.httpStatus !== undefined || Boolean(failure?.providerCode)
@@ -38,8 +39,8 @@ export function modelRequestFailureContext(input: {
       ? { providerId: failure?.providerId ?? input.request.providerId }
       : {}),
     model: failure?.modelId ?? input.request.model,
-    ...(failure?.httpStatus !== undefined ? { httpStatus: failure.httpStatus } : {}),
-    ...(failure?.providerCode || (requestState === 'provider_responded' && input.code)
+    ...(!localNotSent && failure?.httpStatus !== undefined ? { httpStatus: failure.httpStatus } : {}),
+    ...(!localNotSent && (failure?.providerCode || (requestState === 'provider_responded' && input.code))
       ? { providerCode: failure?.providerCode ?? input.code }
       : {}),
     ...(failure?.category ? { category: failure.category } : preflightFailure ? { category: 'authentication' } : {}),

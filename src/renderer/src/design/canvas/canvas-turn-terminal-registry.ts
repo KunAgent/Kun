@@ -22,6 +22,17 @@ const MAX_TERMINAL_RECORDS = 200
 
 const terminalOutcomes = new Map<string, CanvasTurnTerminalRecord>()
 
+type CanvasTurnTerminalListener = (turnId: string, record: CanvasTurnTerminalRecord) => void
+const terminalListeners = new Set<CanvasTurnTerminalListener>()
+
+/** Observe terminal outcomes as they are recorded; returns the unsubscribe. */
+export function subscribeCanvasTurnTerminal(listener: CanvasTurnTerminalListener): () => void {
+  terminalListeners.add(listener)
+  return () => {
+    terminalListeners.delete(listener)
+  }
+}
+
 export function recordCanvasTurnTerminal(
   turnId: string | null | undefined,
   outcome: CanvasTurnTerminalStatus,
@@ -31,11 +42,13 @@ export function recordCanvasTurnTerminal(
   if (!normalized) return
   // Refresh insertion order so eviction is FIFO over recent records.
   terminalOutcomes.delete(normalized)
-  terminalOutcomes.set(normalized, {
+  const record: CanvasTurnTerminalRecord = {
     outcome,
     ...(threadId ? { threadId } : {}),
     at: Date.now()
-  })
+  }
+  terminalOutcomes.set(normalized, record)
+  for (const listener of terminalListeners) listener(normalized, record)
   while (terminalOutcomes.size > MAX_TERMINAL_RECORDS) {
     const oldest = terminalOutcomes.keys().next().value
     if (!oldest) break

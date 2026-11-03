@@ -1,5 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
+const { allowWorkspaceTool } = require('./smoke-workspace-tool-consent.cjs')
 const { confirmAgentCreationModel } = require('./smoke-agent-creation-model.cjs')
 const { createServer } = require('node:http')
 const { readFile, writeFile } = require('node:fs/promises')
@@ -66,21 +67,11 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await wrapper().waitFor()
   }
   const browserState = (threadId) => page.evaluate((id) => window.kunGui.getBrowserUseState(id), threadId)
-  const allowTool = async (label) => {
-    const next = application.waitForEvent('window')
-    await page.getByRole('button', { name: 'Review and allow', exact: true }).first().click()
-    const consent = await next
-    await consent.getByRole('button', { name: 'Allow once', exact: true }).waitFor()
-    assert(!await consent.evaluate(() => Boolean(window.kunGui)), 'Protected consent does not expose the workbench bridge')
-    if (label) await capture(label, consent)
-    await consent.getByRole('button', { name: 'Allow once', exact: true }).click()
-    approvals.push(label ?? 'protected-tool-consent')
-  }
   const completed = async (roomId, previous) => {
     let value
     await poll(async () => {
       const data = await activity(roomId)
-      if (data.approvals.length) await allowTool()
+      assert.equal(data.approvals.length, 0, 'Unexpected extra approval must not be automatically allowed')
       const current = data.requests[0]
       assert(!current || !['failed', 'recovery_required'].includes(current.status), JSON.stringify(data))
       if (current?.id !== previous && current?.status === 'completed' && !data.active) { value = current; return true }
@@ -157,7 +148,9 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await send('WORKSPACE_ARTIFACT Create workspace-evidence.txt and attach the saved file to your final reply.')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
     await capture('workspace-02-real-write-approval')
-    await allowTool('workspace-03-protected-write-consent')
+    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, recordDiagnostic, roomId: entry.roomId,
+      expected: { toolName: 'write', arguments: { path: 'workspace-evidence.txt', content: 'Saved personal workspace artifact v1\n' } },
+      label: 'workspace-03-inline-write-consent' }))
     const artifactRun = await completed(entry.roomId)
     const direct = await activity(entry.roomId)
     assert.equal(await readFile(join(direct.workspace.path, 'workspace-evidence.txt'), 'utf8'), 'Saved personal workspace artifact v1\n')
@@ -219,7 +212,9 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await assertLiveBinding(entry.roomId, active)
     await capture('workspace-08-active-before-browser')
     await page.getByRole('button', { name: 'Review and allow', exact: true }).first().waitFor()
-    await allowTool('workspace-09-protected-browser-tool-consent')
+    approvals.push(await allowWorkspaceTool({ page, request, poll, capture, recordDiagnostic, roomId: entry.roomId,
+      expected: { toolName: 'browser_use', arguments: { action: 'open', url: website.url } },
+      label: 'workspace-09-inline-browser-tool-consent' }))
     const originButton = page.getByRole('button', { name: 'Allow origin once', exact: true })
     await originButton.waitFor()
     assert.equal(website.snapshot().pageRequests, 0, 'No page request occurs before exact-origin consent')
@@ -271,7 +266,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     await assertLiveBinding(entry.roomId, active)
     await poll(async () => (await browserState(active.threadId)).visible, 15000, 'explicit return to current browser')
     assertions.push('Selecting the historical artifact run is read-only until explicitly returning to the current execution')
-    assertions.push('Real browser_use passes protected Kun tool consent and exact-origin consent, then loads only the local fixture in a sandboxed native view')
+    assertions.push('Real browser_use passes trusted inline Kun tool consent and exact-origin consent, then loads only the local fixture in a sandboxed native view')
 
     await page.locator('.sidebar-agent-chats').getByRole('button', { name: 'New conversation', exact: true }).click()
     await page.getByRole('button', { name: 'Define in chat', exact: true }).click()
@@ -365,6 +360,15 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert.equal(recovered.runId, restarting.runId)
     assert.equal(recovered.threadId, restarting.threadId)
     assert.equal(recovered.turnId, restarting.turnId)
+    // This visit retains its failure notice; reload intentionally hides acknowledged failures.
+    if (recovered.status === 'failed') await poll(async () =>
+      (await activity(entry.roomId)).requests.find((item) => item.id === restarting.requestId)?.failureAcknowledged === true,
+    15000, 'renderer acknowledged the interrupted request before recovery geometry')
+    await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay', entry.roomId)
+    await sidebar.resizeTo(760, 780)
+    await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow', entry.roomId)
+    await sidebar.resizeTo(1360, 900)
+    assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Inspecting recovery controls must not replay the request')
     await page.reload({ waitUntil: 'domcontentloaded' })
     await page.locator('[data-workspace-mode-trigger]').first().waitFor()
     await openPrivate(firstAgent.name)
@@ -376,20 +380,21 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert.deepEqual(afterRestart.requests.map((item) => item.id), beforeRestart.requests.map((item) => item.id))
     assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Runtime restart and renderer reload must not replay an interrupted request')
     assert(!(await browserState(restarting.threadId)).sessionId, 'Runtime restart destroys transient browser authority')
-    await sidebar.recoveryCapture('workspace-18-restart-recovery-no-replay', entry.roomId)
-    await sidebar.resizeTo(760, 780)
-    await sidebar.recoveryCapture('workspace-18b-restart-recovery-narrow', entry.roomId)
-    await sidebar.resizeTo(1360, 900)
-    assert.equal(fixture.snapshot().mainCalls, callsBeforeRestart, 'Inspecting recovery controls must not replay the request')
+    if (recovered.status === 'failed') assert.equal(await page.locator(
+      '[data-rooms-workspace][data-private-chat="true"][data-room-id=' + JSON.stringify(entry.roomId) + ']:visible .direct-failed'
+    ).count(), 0, 'Reload must not raise an already acknowledged failure again')
+    await capture('workspace-18c-reloaded-recovery-no-replay')
     await openSavedFiles()
     await page.locator('.direct-file-list:visible').getByRole('button', { name: /workspace-evidence\.txt/ }).first().click()
     await poll(async () => (await page.locator('.rooms-content-preview:visible').innerText()).includes('Saved personal workspace artifact v1'), 15000, 'saved artifact survives real restart')
     await capture('workspace-19-restored-artifact-preview')
     assertions.push('Real Runtime restart reconciles the same interrupted request; reload preserves draft/artifact with no browser session or automatic model replay')
 
-    // Leave for the Code project task, then reopen the conversation from the Code sidebar.
+    // Projects and conversations have mutually exclusive sidebars: switch scopes explicitly.
+    await page.locator('[role="tab"][data-workspace-mode="chat"]').click()
     await page.getByRole('button', { name: /^Code sidebar comparison/ }).first().click()
     await poll(async () => (await roomWorkbenchSnapshot(page)).route === 'chat', 15000, 'Code project task selected')
+    await page.locator('[role="tab"][data-workspace-mode="chats"]').click()
     await sidebarRow(entry.roomId).click()
     await waitForPrivateRoomSurface(page, entry.roomId)
     assert.equal((await roomWorkbenchSnapshot(page)).conversationRoomId, entry.roomId)
@@ -398,7 +403,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
     assert.equal(await wrapper().locator('[data-browser-use-variant]').count(), 0)
     assert.equal(await editor().innerText(), draft)
     await capture('workspace-20-code-private-workspace')
-    assertions.push('Reopening the conversation from the Code sidebar exposes the same private workspace without reviving a historical browser')
+    assertions.push('Switching from Code back to Chats and reopening the conversation exposes the same private workspace without reviving a historical browser')
     sidebar.assertSharedChrome()
     assertions.push('Stopped and restarted recovery actions remain inside their conversation without horizontal overflow at wide and narrow sizes')
     assertions.push('Actual Code and private Agent screenshots share tab-header and rail dimensions; native pointer drags and narrow-window geometry keep private controls unclipped')
@@ -407,7 +412,7 @@ async function exercisePersonalAgentWorkspace({ page, request, poll, capture, re
       website: website.snapshot(), nativeBrowserEvidence,
       fixtureBoundary: { mocked: ['deterministic loopback model responses', 'static loopback browser page', 'one exact native Runtime restart confirmation response'],
         actual: ['Electron renderer/preload/main', 'Manager and Runtime', 'request/run/thread/turn admission',
-          'protected tool consent', 'exact-origin browser consent and SSRF policy', 'sandboxed Browser Use WebContentsView',
+          'trusted inline tool consent with exact approval identity', 'exact-origin browser consent and SSRF policy', 'sandboxed Browser Use WebContentsView',
           'saved artifact publication/search/preview/source', 'Code-mode baseline and private sidebar geometry',
           'native pointer resize and BrowserWindow wide/narrow sizes', 'Runtime restart and renderer reload'] } }
   } catch (error) {
@@ -480,7 +485,8 @@ async function waitForPrivateRoomSurface(page, roomId) {
   const ready = { state: 'visible', timeout: 15000 }
   await surface.waitFor(ready)
   await surface.locator('.rooms-composer .rooms-rich-input').waitFor(ready)
-  await surface.locator('.rooms-workbench-rail [data-room-tool="browser"]').waitFor(ready)
+  // The tool rail lives in the work card's shared rail column, outside the room surface.
+  await page.locator('.rooms-workbench-rail [data-room-tool="browser"]').waitFor(ready)
   return surface
 }
 // Start by proving the product default, then explicitly select the restricted

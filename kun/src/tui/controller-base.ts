@@ -109,6 +109,12 @@ export type TuiControllerState = {
   quitRequested: boolean
 }
 
+export type TuiModelSelection = {
+  providerId?: string
+  accountId?: string
+  model?: string
+}
+
 export abstract class TuiControllerBase {
   protected stateValue: TuiControllerState = {
     // A bare `kun` starts on the guided composer. The conversation picker is
@@ -147,13 +153,16 @@ export abstract class TuiControllerBase {
   /**
    * CLI overrides apply to newly created sessions only. `options` also holds
    * the active session selection for rendering and turn submission, so keep a
-   * separate immutable copy before registry or thread hydration updates it.
+   * separate copy before registry or thread hydration updates it. An explicit
+   * /model pick replaces it, since that choice supersedes the launch flags.
    */
-  protected readonly newThreadSelectionOverride: {
-    providerId?: string
-    accountId?: string
-    model?: string
-  }
+  protected newThreadSelectionOverride: TuiModelSelection
+  /**
+   * Explicit /model picks for sessions that have not started a turn with them
+   * yet. Thread records only learn a model from a turn, so without this a
+   * session reopened before its next turn would fall back to its old model.
+   */
+  protected readonly pendingSessionSelections = new Map<string, TuiModelSelection>()
 
   constructor(
     readonly client: KunTuiClient,
@@ -174,7 +183,22 @@ export abstract class TuiControllerBase {
     return this.stateValue
   }
 
+  /** The selection the next turn uses: the open session's, else the new-session default. */
+  activeModelSelection(): TuiModelSelection {
+    const thread = this.stateValue.projection?.thread
+    const snapshot = this.stateValue.modelConnections
+    const providerId = this.options.providerId ?? (thread ? thread.providerId : snapshot?.defaultProviderId)
+    const accountId = this.options.accountId ?? (thread ? thread.accountId : snapshot?.defaultAccountId)
+    const model = this.options.model ?? (thread ? thread.model : snapshot?.defaultModel)
+    return {
+      ...(providerId ? { providerId } : {}),
+      ...(accountId ? { accountId } : {}),
+      ...(model ? { model } : {})
+    }
+  }
+
   applyModelSelection(snapshot: ModelConnectionSnapshot, notify = true): void {
+    const configurationChanged = this.stateValue.modelConnections?.revision !== snapshot.revision
     const activeSession = this.stateValue.projection
     if (snapshot.defaultModel) this.runtime.runtimeInfo.model = snapshot.defaultModel
     else if (!activeSession) this.runtime.runtimeInfo.model = ''
@@ -195,21 +219,23 @@ export abstract class TuiControllerBase {
           ...(this.stateValue.reasoningEffort ? { preferred: this.stateValue.reasoningEffort } : {})
         })
     this.patch({ modelConnections: snapshot, reasoningEffort })
-    if (snapshot.defaultProviderId && snapshot.defaultAccountId && snapshot.defaultModel) {
+    if (configurationChanged && snapshot.defaultProviderId && snapshot.defaultAccountId && snapshot.defaultModel) {
       void this.recordRecentModel({
         providerId: snapshot.defaultProviderId,
         accountId: snapshot.defaultAccountId,
         model: snapshot.defaultModel
       })
     }
-    if (this.onModelSelectionChanged) {
+    if (configurationChanged && this.onModelSelectionChanged) {
       void Promise.resolve(this.onModelSelectionChanged(snapshot)).catch((error) => {
         this.notify(`Could not persist the shared default model: ${safeMessage(error)}`, 'error')
       })
     }
-    if (notify) this.notify(
+    // An open session stays pinned when the shared default changes elsewhere,
+    // so say which sessions the new default applies to.
+    if (notify && configurationChanged) this.notify(
       snapshot.defaultProviderId && snapshot.defaultModel
-        ? `${this.runtime.legacyGui ? 'Shared model' : 'Default model'}: ${snapshot.defaultProviderId}/${snapshot.defaultModel}`
+        ? `${this.runtime.legacyGui ? 'Shared model' : 'Default model'}${activeSession ? ' for new sessions' : ''}: ${snapshot.defaultProviderId}/${snapshot.defaultModel}`
         : 'Model connection updated.'
     )
   }
@@ -231,6 +257,7 @@ export abstract class TuiControllerBase {
       if (!initialSnapshot) this.applyModelSelection(initial, false)
       await this.client.subscribeModelConnections({
         sinceRevision: initial.revision,
+        sinceMetadataRevision: initial.metadataRevision ?? 0,
         signal: abort.signal,
         onSnapshot: (snapshot) => this.applyModelSelection(snapshot),
         onError: (error) => this.notify(safeMessage(error), 'error')
@@ -413,11 +440,18 @@ export abstract class TuiControllerBase {
       (entry.id === providerId && (!input.accountId || entry.accountId === input.accountId)) ||
       (!providerId && entry.models.includes(model))
     )
-    const derived = profile?.modelCapabilities?.[model]?.reasoning
+    const effective = profile?.modelCapabilities?.[model]
+    const derived = effective?.reasoning
+    // Versioned Runtime metadata already resolved user overrides and account constraints.
+    // Only unversioned legacy snapshots may need the old compatibility fallback.
+    if (effective?.metadata || effective?.supportsReasoning === false) {
+      return effective.supportsReasoning === false ? undefined : derived
+    }
     const builtIn = modelCapabilitiesForProviderModel({
       providerId: profile?.id ?? providerId,
       presetSource: profile?.presetSource,
       baseUrl: profile?.baseUrl,
+      endpointFormat: profile?.endpointFormat, endpoints: profile?.endpoints,
       kind: profile?.kind,
       model
     }).reasoning

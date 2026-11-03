@@ -405,6 +405,36 @@ describe('usageJsonResponse', () => {
     })
   })
 
+  it('joins each settled turn\'s stamped model timing onto its bucket', async () => {
+    const record = (turnId: string) => ({
+      threadId: 'thread-1',
+      turnId,
+      model: 'deepseek-flash',
+      completedAt: '2026-10-21T00:00:00.000Z',
+      usage: { ...emptyUsageSnapshot(), promptTokens: 10, completionTokens: 5, totalTokens: 15, turns: 1 }
+    })
+    const runtime = runtimeFixture({
+      get: vi.fn(async () => ({ id: 'thread-1', model: 'deepseek-flash', updatedAt: '2026-10-21T00:00:00.000Z' })),
+      list: vi.fn(async () => []),
+      loadUsageRecords: vi.fn(async () => [record('turn-1'), record('turn-2')]),
+      threadStore: {
+        get: vi.fn(async () => ({
+          id: 'thread-1',
+          turns: [
+            { id: 'turn-1', modelTiming: { avgTtftMs: 640, avgTokensPerSecond: 52.4 } },
+            { id: 'turn-2' }
+          ]
+        }))
+      }
+    })
+
+    const body = JSON.parse((await usageJsonResponse(request('turn'), runtime)).body) as { buckets: Record<string, unknown>[] }
+
+    const byTurn = new Map(body.buckets.map((bucket) => [bucket.turn_id, bucket]))
+    expect(byTurn.get('turn-1')).toMatchObject({ avg_ttft_ms: 640, avg_tokens_per_second: 52.4 })
+    expect(byTurn.get('turn-2')).not.toHaveProperty('avg_ttft_ms')
+  })
+
   it('requires thread_id for turn grouping', async () => {
     const runtime = runtimeFixture({ list: vi.fn(async () => []), loadUsageRecords: vi.fn(async () => []) })
     const response = await usageJsonResponse(
@@ -476,8 +506,10 @@ function runtimeFixture(overrides: {
   loadEventsSince?: (threadId: string, sinceSeq: number) => Promise<unknown[]>
   loadUsageRecords: (options?: unknown) => Promise<unknown[]>
   aggregateUsage?: (query: unknown) => Promise<unknown>
+  threadStore?: { get: (threadId: string) => Promise<unknown> }
 }): ServerRuntime {
   return {
+    ...(overrides.threadStore ? { threadStore: overrides.threadStore } : {}),
     threadService: {
       get: overrides.get ?? vi.fn(async () => null),
       list: overrides.list

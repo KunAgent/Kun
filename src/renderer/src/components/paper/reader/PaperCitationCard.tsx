@@ -11,8 +11,7 @@ import {
 } from '../../../paper/pdf-citation-resolve'
 import { usePaperReaderServices } from './paper-reader-context'
 import { writeJoinPath } from '../../../write/write-workspace-store'
-import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { openLibraryEntry } from '../../../paper/paper-library-actions'
+import { findPaperReferenceEntry, usePaperReferenceLibrary } from './use-paper-reference-library'
 
 export type CitationAnchor = { x: number; y: number }
 
@@ -122,13 +121,9 @@ export function PaperCitationCard({
 }
 
 function ReferenceRow({ item, t }: { item: PaperReferenceItem; t: TFunction }): ReactElement {
-  // "已在库中" mirrors ReferencesPane: match by arXiv id or DOI at render time.
-  const inLibrary = usePaperModeStore((s) =>
-    s.entries.find((entry) =>
-      (item.arxivId && entry.meta.arxivId === item.arxivId)
-      || (item.doi && entry.meta.doi?.toLowerCase() === item.doi.toLowerCase())
-    )
-  )
+  const services = usePaperReaderServices()
+  const { entries, openEntry } = usePaperReferenceLibrary(services?.workspaceRoot ?? '')
+  const inLibrary = findPaperReferenceEntry(entries, item)
   const href = item.doi
     ? `https://doi.org/${item.doi}`
     : item.arxivId
@@ -161,7 +156,7 @@ function ReferenceRow({ item, t }: { item: PaperReferenceItem; t: TFunction }): 
           <button
             type="button"
             className="ml-auto inline-flex shrink-0 items-center gap-0.5 rounded-full bg-emerald-500/10 px-1.5 py-px text-[10px] font-medium text-emerald-700 transition hover:bg-emerald-500/20 dark:text-emerald-300"
-            onClick={() => void openLibraryEntry(inLibrary)}
+            onClick={() => void openEntry(inLibrary)}
           >
             <BookMarked className="h-2.5 w-2.5" strokeWidth={2} />
             {t('writePaperRefInLibrary')}

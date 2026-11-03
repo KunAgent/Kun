@@ -4,6 +4,7 @@ const { join } = require('node:path')
 
 const CODING_AGENT_PROFILE = Object.freeze({ harnessId: 'opencode', credentialMode: 'native-login' })
 const CODING_AGENT_MODEL = 'opencode-fixture/model'
+const CODING_AGENT_ALTERNATE_MODEL = 'opencode-fixture/alternate'
 const CODING_AGENT_REPLY = 'OpenCode 离线回复'
 
 /** Consent for exactly the offline OpenCode stub; no real account or provider is involved. */
@@ -14,7 +15,7 @@ async function configureCodingAgentFixture(settings, stubPath, home, environment
   await writeFile(join(data, 'opencode', 'auth.json'),
     JSON.stringify({ fixture: { type: 'api', key: 'opencode-offline-fixture-no-service-access' } }))
   const harnesses = settings.agents.kun.harnesses
-  harnesses.binaryPaths = { ...(harnesses.binaryPaths ?? {}), opencode: stubPath }
+  harnesses.providers = { ...(harnesses.providers ?? {}), opencode: { ...harnesses.providers?.opencode, command: stubPath } }
   harnesses.enabledProfiles = [{ ...CODING_AGENT_PROFILE }]
   harnesses.defaults = { ...(harnesses.defaults ?? {}),
     opencode: { credentialMode: CODING_AGENT_PROFILE.credentialMode, model: CODING_AGENT_MODEL } }
@@ -48,7 +49,10 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
     audit({ method: msg.method, sessionId: id, cwd: msg.params?.cwd })
     return reply({ sessionId: id,
       modes: { currentModeId: state.mode, availableModes: [{ id: 'plan', name: 'Plan' }, { id: 'build', name: 'Build' }] },
-      models: { currentModelId: state.model, availableModels: [{ modelId: ${JSON.stringify(CODING_AGENT_MODEL)}, name: 'OpenCode fixture model' }] } })
+      models: { currentModelId: state.model, availableModels: [
+        { modelId: ${JSON.stringify(CODING_AGENT_MODEL)}, name: 'OpenCode fixture model' },
+        { modelId: ${JSON.stringify(CODING_AGENT_ALTERNATE_MODEL)}, name: 'OpenCode alternate model' }
+      ] } })
   }
   if (msg.method === 'session/set_mode') { session(msg.params.sessionId).mode = msg.params.modeId; return reply({}) }
   if (msg.method === 'session/set_model') { session(msg.params.sessionId).model = msg.params.modelId; return reply({}) }
@@ -72,4 +76,4 @@ require('node:readline').createInterface({ input: process.stdin }).on('line', (l
   return path
 }
 
-module.exports = { CODING_AGENT_PROFILE, CODING_AGENT_MODEL, CODING_AGENT_REPLY, configureCodingAgentFixture, writeOpenCodeStub }
+module.exports = { CODING_AGENT_PROFILE, CODING_AGENT_MODEL, CODING_AGENT_ALTERNATE_MODEL, CODING_AGENT_REPLY, configureCodingAgentFixture, writeOpenCodeStub }

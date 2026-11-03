@@ -1,4 +1,6 @@
+import { privateRequestCanRun, contextGeneration } from './agent-lifecycle-state.js'
 import { directCancellationTarget } from './agent-direct-cancellation.js'
+import { resumeStalledPrivateQueue } from './agent-direct-queue.js'
 import { freezeConversationBridge, acknowledgeConversationBridge } from './agent-conversation-history.js'
 import { AGENT_COMMITMENT_TOOLS, AGENT_ARTIFACT_TOOLS, AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
 import { settleRoomResultInbox } from '../rooms/room-result-inbox.js'
@@ -42,6 +44,7 @@ export class AgentDirectRunner {
     let request = structuredClone(row.value)
     const member = request.roomSnapshot.members.find((item) => item.id === request.roomSnapshot.defaultMemberId)!
     if (!member.participantAgentId) throw new Error('Agent identity unavailable')
+    if (!request.cancellationRequested && !await privateRequestCanRun(this.deps.store, request)) return
     if (request.privateContinuation && !request.turnId && !request.admissionAttempted &&
       !await roomContinuationIsCurrent(this.deps, request)) {
       await this.save(row, { ...request, status: 'cancelled', cancellationRequested: true,
@@ -83,7 +86,7 @@ export class AgentDirectRunner {
     }
     if (!request.privateInput) {
       const external = member.executor
-      const main = request.privateModel ?? (external ? externalAgentBinding(external) : agentMainModel(this.deps, member))
+      const main = request.privateModel ?? (external ? externalAgentBinding(external, request.roomSnapshot.privateExecutorModel) : agentMainModel(this.deps, member))
       // An external route is re-validated by harness admission on every turn.
       if (!external) await assertAgentModel(this.deps, main)
       const workspace = request.roomSnapshot.privateWorkspace ?? agentWorkspace(this.deps.dataDir, member.participantAgentId)
@@ -93,6 +96,7 @@ export class AgentDirectRunner {
       const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
       const fingerprint = JSON.stringify([request.roomId, request.roomSnapshot.privateEpoch ?? 0, canonical,
+        ...(contextGeneration(request.roomSnapshot) ? ['context-generation', contextGeneration(request.roomSnapshot)] : []),
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
         profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench),
         ...(external ? [agentExecutorRouteKey(external), 'private-code-dispatch-v1'] : [])])
@@ -155,6 +159,10 @@ export class AgentDirectRunner {
     const identity = this.clientId(request)
     const scoped: ThreadRecord = { ...thread, ...request.privateModel, roomContext: { ...thread.roomContext!, requestId: request.id, rootRequestId: request.rootRequestId } }
     const turn = thread.turns.find((item) => item.clientRequestId === identity)
+    if (request.privateContinuation?.kind === 'personal_assistant' && turn?.status === 'queued' && !await roomContinuationIsCurrent(this.deps, request)) {
+      await this.save(row, { ...request, cancellationRequested: true, error: 'Continuation authorization changed before execution.' })
+      return
+    }
     if (!turn && !request.admissionAttempted) {
       // A run record that already attempted admission means an earlier enqueue lost its
       // receipt; that request must surface as recovery_required rather than steer.
@@ -181,7 +189,7 @@ export class AgentDirectRunner {
       // The host publishes an external Agent's reply, so no in-turn delivery gate applies.
       communicationRequired: freshUserRequest && !member.executor,
       finalResponseRequired: !member.executor && (freshUserRequest || request.privateContinuation?.kind === 'app_connection' ||
-        request.privateContinuation?.kind === 'workbench_task'),
+        request.privateContinuation?.kind === 'workbench_task' || request.privateContinuation?.kind === 'personal_assistant'),
       ...request.privateModel })
     if (!turn) {
       if (run.admissionAttempted || request.admissionAttempted) return this.save(row, { ...request, privateRunId: run.id, status: 'recovery_required' })
@@ -195,6 +203,8 @@ export class AgentDirectRunner {
         const admitted = await this.deps.turns.enqueueTurn({ threadId: thread.id, request: { prompt, clientRequestId: identity,
           ...request.privateModel, attachmentIds: request.message.attachmentIds, clientSurface: request.clientSurface ?? 'gui', agentSurface: 'code',
           ...(member.executor ? { harnessId: member.executor.harnessId, credentialMode: member.executor.credentialMode } : {}),
+          // The conversation's effort is frozen with the request like its model.
+          ...(request.roomSnapshot.privateReasoningEffort ? { reasoningEffort: request.roomSnapshot.privateReasoningEffort } : {}),
           displayText: request.message.body.slice(0, 8000),
           mode: thread.mode, sandboxMode: thread.sandboxMode,
           ...(request.privateContinuation?.route ?? {}), ...(request.privateContinuation?.policy ?? {}), enqueueIfBusy: true } })
@@ -219,6 +229,7 @@ export class AgentDirectRunner {
       await this.save(row, { ...request, turnId: turn.id, privateRunId: run.id, status: 'running' }); return
     }
     await observeRecordedRoomTurn(this.deps, thread, turn)
+    await resumeStalledPrivateQueue(this.deps, thread, turn)
     const pendingInputs = this.deps.inputs.pending(thread.id)
     if (pendingInputs.length) await persistDirectChoiceMessages(this.deps.store, request, pendingInputs)
     const finished = !['queued', 'running'].includes(turn.status)

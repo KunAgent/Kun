@@ -9,12 +9,12 @@ import { projectOfRow, rowHasChildren } from './mission-filters'
 import { formatRelativeTime } from '../../lib/format-relative-time'
 
 export type MissionCardStats = {
-  /** `changedFiles.length` from the task-workspace record (12 §5.3). */
+  /** `changedFiles.length` from the task-workspace record. */
   filesChanged?: number
   insertions?: number
   deletions?: number
   verdict?: string
-  /** P3-15: summed usage for the row's unit (team total on manager rows). */
+  /** summed usage for the row's unit (team total on manager rows). */
   tokens?: number
 }
 
@@ -42,7 +42,7 @@ const VERDICT_TONE: Record<string, string> = {
 }
 
 /**
- * One Mission Control card (docs/ade/12 §5.1): fixed three-row height so
+ * One Mission Control card: fixed three-row height so
  * lazy stats never shift layout — header (dot + title + harness), preview
  * line, footer (project · branch · diff · verdict · time). Needs-you rows
  * carry inline actions; manager cards expand into worker sub-cards.
@@ -184,7 +184,7 @@ export function MissionCard({
           <button
             type="submit"
             disabled={!answer.trim() || sending}
-            className="shrink-0 rounded-md bg-ds-control px-2 py-1 text-[11px] text-ds-control-foreground disabled:opacity-50"
+            className="shrink-0 rounded-md bg-control px-2 py-1 text-[11px] text-control-foreground disabled:opacity-50"
           >
             {t('missionAnswerSubmit')}
           </button>

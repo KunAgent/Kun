@@ -1,6 +1,6 @@
 /**
  * Renderer-facing mirrors of kun/src/contracts/task-workspace.ts and the
- * /v1/task-workspaces diff responses (docs/ade/11 §3). The wire shape is
+ * /v1/task-workspaces diff responses. The wire shape is
  * owned by the kun contract; keep field names aligned.
  */
 import type { ReviewRevision } from './review-revision'
@@ -35,7 +35,7 @@ export type TaskWorkspaceRecord = {
   state: TaskWorkspaceState
   changedFiles: string[]
   patchArtifactId?: string
-  /** Latest forge change-request snapshot (11 §7.2). */
+  /** Latest forge change-request snapshot. */
   changeRequest?: ChangeRequestSnapshot
   lastError?: string
   recovery?: string[]
@@ -73,7 +73,7 @@ export type TaskWorkspaceDiffFileResponse = TaskWorkspaceDiffFile & {
   newText?: string
 }
 
-/** GET /v1/task-workspaces/:id/integrate-preview (docs/ade/11 §7.1). */
+/** GET /v1/task-workspaces/:id/integrate-preview. */
 export type TaskWorkspaceIntegratePreview = {
   canApplyPatch: boolean
   applyBlockReason?: string
@@ -109,7 +109,7 @@ export type TaskWorkspaceIntegrateResponse = {
 
 export type TaskWorkspaceRecordResponse = { record: TaskWorkspaceRecord }
 
-/** POST /v1/task-workspaces `startFrom` discriminated union (07 §4). */
+/** POST /v1/task-workspaces `startFrom` discriminated union. */
 export type TaskWorkspaceStartFrom =
   | { kind: 'default-branch' }
   | { kind: 'current-head' }
@@ -117,7 +117,7 @@ export type TaskWorkspaceStartFrom =
   | { kind: 'commit'; sha: string }
   | { kind: 'remote-branch'; remote: string; name: string }
 
-/** POST /v1/task-workspaces request body (07 §5). */
+/** POST /v1/task-workspaces request body. */
 export type CreateTaskWorkspaceRequest = {
   ownerThreadId: string
   unitId?: string
@@ -127,7 +127,7 @@ export type CreateTaskWorkspaceRequest = {
   startFrom?: TaskWorkspaceStartFrom
 }
 
-/** `task_workspace` runtime-event payload projected onto the owner thread (07 §5). */
+/** `task_workspace` runtime-event payload projected onto the owner thread. */
 export type TaskWorkspaceThreadEvent = {
   threadId: string
   turnId?: string
@@ -138,7 +138,7 @@ export type TaskWorkspaceThreadEvent = {
   workspace?: { path?: string; sourceRoot?: string; kind?: string; branch?: string }
 }
 
-/** 409 body of POST discard without `confirm` (damage preview, 07 §9). */
+/** 409 body of POST discard without `confirm` (damage preview). */
 export type TaskWorkspaceDiscardPreview = {
   uncommittedFiles: number
   unpushedCommits: number
@@ -147,7 +147,7 @@ export type TaskWorkspaceDiscardPreview = {
 /**
  * Branch kept for human review after cleanup declined to delete it
  * (`git branch -d` refused — unmerged commits). Listed by
- * GET /v1/task-workspaces/preserved-branches (07 §8.3).
+ * GET /v1/task-workspaces/preserved-branches.
  */
 export type PreservedBranchInfo = {
   branch: string
@@ -157,7 +157,7 @@ export type PreservedBranchInfo = {
 
 export type PreservedBranchesResponse = { branches: PreservedBranchInfo[] }
 
-/** GET/POST /v1/task-workspaces/:id/change-request (docs/ade/11 §7.2). */
+/** GET/POST /v1/task-workspaces/:id/change-request. */
 export type ChangeRequestCheck = {
   name: string
   status: 'pending' | 'in_progress' | 'completed'
@@ -193,7 +193,7 @@ export type CreateChangeRequestRequest = {
   body?: string
 }
 
-/** GET /v1/task-workspaces/:id/attribution?path= (docs/ade/11 §6). */
+/** GET /v1/task-workspaces/:id/attribution?path=. */
 export type TaskWorkspaceAttributionLine = {
   /** 1-based line in the file's current content. */
   line: number

@@ -6,6 +6,7 @@ import { useRooms } from '../../components/rooms/useRooms'
 import { RoomTimeline } from '../../components/rooms/RoomTimeline'
 import { RoomComposer } from '../../components/rooms/RoomComposer'
 import { RoomPendingSendRow } from '../../components/rooms/RoomPendingSendRow'
+import { RoomWardrobeDropCard } from '../../components/rooms/RoomWardrobeDropCard'
 import { useRoomPendingSends } from '../../components/rooms/useRoomPendingSends'
 import { roomsClient } from '../../components/rooms/rooms-client'
 import { RoomNoticeDismiss, useDirectChat } from '../../components/rooms/RoomDirectChat'
@@ -119,6 +120,7 @@ export function MobileRoomConversation(props: MobileRoomConversationProps) {
           resolvedAnswer={choiceReplies[message.clientRequestId ?? '']}
           title={message.body} onUpdated={async () => { await direct.refresh(); await state.refresh() }} />}
         afterMessages={<>
+          <RoomWardrobeDropCard roomId={room.id} />
           {choiceInputs.filter((input) => !state.messages.some((message) => message.clientRequestId === input.id)).map((input) =>
             <RoomChoiceCard key={input.id} input={input} resolvedAnswer={choiceReplies[input.id]}
               onUpdated={async () => { await direct.refresh(); await state.refresh() }} />)}

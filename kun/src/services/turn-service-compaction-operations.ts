@@ -63,6 +63,7 @@ import {
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
 import { buildArchivedActiveHistory } from './archive-history-commit.js'
+import { clearAppliedTurnErrors, turnErrorAlreadyApplied } from './turn-error-item-dedupe.js'
 
 export const turnServiceCompactionOperations = {
 async compact(this: TurnService, input: {
@@ -75,6 +76,7 @@ async compact(this: TurnService, input: {
   }): Promise<CompactResponse> {
     const thread = await this['deps'].threadStore.get(input.threadId)
     if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+    if (thread.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
     // An external Agent owns its own context window. Compacting Kun's copy of
     // the history would not shrink the Agent's context, and the changed
     // history makes the next turn discard the Agent's native session.
@@ -87,6 +89,7 @@ async compact(this: TurnService, input: {
       return this['withThreadMutation'](input.threadId, async () => {
         const current = await this['deps'].threadStore.get(input.threadId)
         if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        if (current.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         if (current.turns.some(isActiveTurn)) {
           throw new TurnConflictError('thread has an active turn')
         }
@@ -155,7 +158,7 @@ async compact(this: TurnService, input: {
           await staged?.cleanup()
           throw new TurnConflictError('history changed while archive was being committed')
         }
-        await this['threadItems'].syncFromSession(input.threadId)
+        await this['threadItems'].syncWithinMutation(input.threadId)
         await this['deps'].events.record({
           kind: 'compaction_completed',
           threadId: input.threadId,
@@ -214,6 +217,7 @@ async compact(this: TurnService, input: {
       build: async (snapshot, attempt) => {
         const current = await this['deps'].threadStore.get(input.threadId)
         if (!current) throw new Error(`thread not found: ${input.threadId}`)
+        if (current.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         const executableItems = executableHistory(snapshot.items, current)
         const history = effectiveHistoryAfterLatestCompaction(executableItems)
           .filter((item) => item.kind !== 'error')
@@ -476,6 +480,9 @@ async finishTurn(this: TurnService, input: {
             ...(turn.error ? { error: turn.error } : {})
           }
         }
+        // Read before endTurn below releases the in-memory fold: the turn
+        // keeps the averages its live usage events carried.
+        const modelTiming = this['deps'].usage?.turnModelTiming(input.threadId, input.turnId)
         const turns = current.turns.map((candidate) => {
           if (candidate.id !== input.turnId) return candidate
           const finished = this['finalizeOpenItems'](finishTurn(candidate, input.status), input.status)
@@ -483,7 +490,8 @@ async finishTurn(this: TurnService, input: {
           return {
             ...finished,
             ...(input.error ? { error: input.error } : {}),
-            ...(terminalCode ? { terminalCode } : {})
+            ...(terminalCode ? { terminalCode } : {}),
+            ...(modelTiming ? { modelTiming } : {})
           }
         })
         await this['deps'].threadStore.upsert({
@@ -518,7 +526,7 @@ async finishTurn(this: TurnService, input: {
     // The turn's usage metrics are now stable; release per-turn aggregation
     // so long-lived threads do not accumulate one entry per historical turn.
       this['deps'].usage?.endTurn(input.threadId, input.turnId)
-      const errorItem = input.error
+      const errorItem = input.error && !turnErrorAlreadyApplied(input.threadId, input.turnId, input.error)
       ? makeErrorItem({
           id: input.code === 'owner_lease_expired'
             ? `item_${input.turnId}_owner_lease_expired`
@@ -548,6 +556,7 @@ async finishTurn(this: TurnService, input: {
       }
       return settlement
     } finally {
+      clearAppliedTurnErrors(input.threadId, input.turnId)
       this['clearRuntimeTurnState'](input.threadId, input.turnId)
       // Every terminal status frees a global admission slot, so the
       // scheduler is always notified. Aborted turns still pause their own

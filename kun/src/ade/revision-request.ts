@@ -1,7 +1,7 @@
 import type { ReviewComment } from '../contracts/review.js'
 
 /**
- * Deterministic revision-request rendering (11 §4.4): the host, not the
+ * Deterministic revision-request rendering: the host, not the
  * model, assembles the batch text so the worker receives a stable,
  * numbered list regardless of which client pressed send.
  */

@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { windowsStartupNative, WindowsStartupIntegrityError } from '../process/windows-startup-native.js'
 
 export type RuntimeProcessRecordIdentity = {
   startedAt: string
@@ -24,6 +24,7 @@ export function isValidRuntimeProcessIdentity(value: unknown): value is string |
 }
 
 const PROCESS_INSPECTION_TIMEOUT_MS = 3_000
+const PROCESS_ADMISSION_ATTEMPTS = 2
 const PROCESS_INSPECTION_MAX_BUFFER = 16 * 1024
 let cachedCurrentProcessInspection: RuntimeProcessInspection | undefined
 
@@ -56,26 +57,10 @@ function boundedExec(executable: string, args: string[]): string {
 }
 
 function inspectWindowsProcess(pid: number): RuntimeProcessInspection | undefined {
-  const systemRoot = process.env.SystemRoot?.trim()
-  const powershell = systemRoot
-    ? join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-    : 'powershell.exe'
-  const command = [
-    `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}" -ErrorAction Stop`,
-    'if ($null -eq $p) { exit 3 }',
-    `[Console]::Out.Write($p.CreationDate.ToUniversalTime().ToString('O'))`
-  ].join('; ')
-  const startedAt = boundedExec(powershell, [
-    '-NoProfile',
-    '-NonInteractive',
-    '-ExecutionPolicy',
-    'Bypass',
-    '-Command',
-    command
-  ])
-  const startedAtMs = Date.parse(startedAt)
-  if (!startedAt || !Number.isFinite(startedAtMs)) return undefined
-  return { identity: `win32-v1:${startedAt}`, startedAtMs }
+  const result = windowsStartupNative().inspectProcess(pid)
+  if (result.state === 'dead') throw Object.assign(new Error('Process exited'), { status: 3 })
+  if (result.state !== 'alive' || !result.identity || !Number.isFinite(result.startedAtMs)) return undefined
+  return { identity: result.identity, startedAtMs: result.startedAtMs }
 }
 
 function inspectProcProcess(pid: number): RuntimeProcessInspection | undefined {
@@ -112,21 +97,48 @@ function inspectPosixProcess(pid: number): RuntimeProcessInspection | undefined 
   return { identity: `${process.platform}-v1:${startedAt}`, startedAtMs }
 }
 
-export function inspectRuntimeProcess(pid: number): RuntimeProcessInspection | undefined {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return undefined
+function inspectRuntimeProcessOrThrow(pid: number): RuntimeProcessInspection {
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('invalid PID')
   if (pid === process.pid && cachedCurrentProcessInspection) {
     return cachedCurrentProcessInspection
   }
   let inspection: RuntimeProcessInspection | undefined
-  try {
-    if (process.platform === 'win32') inspection = inspectWindowsProcess(pid)
-    else if (process.platform === 'linux') inspection = inspectProcProcess(pid)
-    else inspection = inspectPosixProcess(pid)
-  } catch {
-    inspection = undefined
-  }
-  if (pid === process.pid && inspection) cachedCurrentProcessInspection = inspection
+  if (process.platform === 'win32') inspection = inspectWindowsProcess(pid)
+  else if (process.platform === 'linux') inspection = inspectProcProcess(pid)
+  else inspection = inspectPosixProcess(pid)
+  if (!inspection?.identity) throw new Error('invalid process identity response')
+  if (pid === process.pid) cachedCurrentProcessInspection = inspection
   return inspection
+}
+
+export function inspectRuntimeProcess(pid: number): RuntimeProcessInspection | undefined {
+  try { return inspectRuntimeProcessOrThrow(pid) } catch { return undefined }
+}
+
+/** Admission needs a verified birth identity; errors must not become permission to proceed. */
+export function requireRuntimeProcessIdentity(pid = process.pid): string {
+  let error: unknown
+  // A cold query process under startup load can miss the budget once. Retry
+  // only a timeout; not-found and invalid answers are definitive.
+  for (let attempt = 1; attempt <= PROCESS_ADMISSION_ATTEMPTS; attempt += 1) {
+    try { return inspectRuntimeProcessOrThrow(pid).identity! } catch (caught) {
+      if (caught instanceof WindowsStartupIntegrityError) throw caught
+      error = caught
+      if (errnoCode(caught) !== 'ETIMEDOUT') break
+    }
+  }
+  const code = errnoCode(error)
+  const status = typeof error === 'object' && error !== null && 'status' in error
+    ? (error as { status?: unknown }).status : undefined
+  const reason = code === 'ETIMEDOUT'
+    ? `process identity query timed out after ${PROCESS_INSPECTION_TIMEOUT_MS}ms (${PROCESS_ADMISSION_ATTEMPTS} attempts)`
+    : status === 3 ? 'process was not found by the identity query'
+      : code === 'ENOENT' ? 'process identity query executable or process data is unavailable'
+        : 'process identity query failed or returned an invalid response'
+  // Never copy child stderr, command arguments or environment into diagnostics.
+  const state = Number.isSafeInteger(pid) && pid > 0 && processExists(pid)
+    ? 'PID still exists or its state is inaccessible' : 'PID is no longer present'
+  throw new Error(`Unable to verify owned process ${pid}: ${reason}; ${state}`)
 }
 
 export function runtimeProcessIdentity(pid = process.pid): string | undefined {
@@ -152,4 +164,13 @@ export const runtimeProcessIsAlive: RuntimeProcessIsAlive = (pid, record) => {
   const inspection = inspectRuntimeProcess(pid)
   if (!inspection) return processExists(pid)
   return runtimeProcessInspectionMatchesRecord(record, inspection)
+}
+
+/** Unknown identity is never evidence of a stopped owner. */
+export function runtimeProcessOwnerState(pid: number, record: RuntimeProcessRecordIdentity): 'dead' | 'reused' | 'alive' | 'unknown' {
+  try { process.kill(pid, 0) } catch (error) { return errnoCode(error) === 'ESRCH' ? 'dead' : 'unknown' }
+  const inspection = inspectRuntimeProcess(pid)
+  if (!inspection) return 'unknown'
+  if (!record.processIdentity && inspection.startedAtMs === undefined) return 'unknown'
+  return runtimeProcessInspectionMatchesRecord(record, inspection) ? 'alive' : 'reused'
 }

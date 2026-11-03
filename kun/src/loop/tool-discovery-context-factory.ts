@@ -1,6 +1,7 @@
-import type { PptWorkflowScope, ToolHostContext } from '../ports/tool-host.js'
+import type { ToolHostContext } from '../ports/tool-host.js'
 import type { ToolTurnContextInput } from './turn-execution-types.js'
 import type { InteractiveToolBridge } from './interactive-tool-bridge.js'
+import { KUN_GMAIL_LOCAL_PROVIDER_ID } from '../gmail/tool-policy.js'
 
 export type ToolDiscoveryContextFactoryDeps = {
   memoryEnabled: boolean
@@ -10,7 +11,6 @@ export type ToolDiscoveryContextFactoryDeps = {
   allowHostReads?: boolean
   allowedWritePaths?: readonly string[]
   allowedArtifactIds?: readonly string[]
-  pptWorkflowScope?: PptWorkflowScope
   blockedProviderIds?: readonly string[]
   blockedToolNames?: readonly string[]
   blockedSkillIds?: readonly string[]
@@ -37,6 +37,7 @@ export function createToolDiscoveryContext(
     threadId: input.threadId,
     turnId: input.turnId,
     workspace: input.workspace,
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: input.attachmentAliases } : {}),
     ...(input.orchestration ? { orchestration: input.orchestration } : {}),
     ...(input.messageSource && input.messageSource !== 'design_continuation'
       ? { messageSource: input.messageSource }
@@ -50,10 +51,13 @@ export function createToolDiscoveryContext(
     ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
     ...(input.guiExcalidrawCanvas ? { guiExcalidrawCanvas: true } : {}),
     ...(input.guiDesignMode ? { guiDesignMode: true } : {}),
+    ...(input.designPreviewOnly ? { designPreviewOnly: true } : {}),
     agentSurface: input.agentSurface ?? 'code',
     ...(input.guiDesignArtifact ? { guiDesignArtifact: input.guiDesignArtifact } : {}),
     ...(input.imContext ? { imContext: true } : {}),
     model: input.modelCapabilities,
+    // This host-reserved route has no routing/failover, so its discovery fence is already exact.
+    ...(input.modelProviderId === KUN_GMAIL_LOCAL_PROVIDER_ID ? { modelProviderId: KUN_GMAIL_LOCAL_PROVIDER_ID } : {}),
     ...(input.harnessId ? { harnessId: input.harnessId } : {}),
     ...(input.workspaceMode ? { workspaceMode: input.workspaceMode } : {}),
     ...(input.collaborationEnabled !== undefined
@@ -75,7 +79,6 @@ export function createToolDiscoveryContext(
     ...(deps.allowHostReads ? { allowHostReads: true } : {}),
     ...(deps.allowedWritePaths ? { allowedWritePaths: deps.allowedWritePaths } : {}),
     ...(deps.allowedArtifactIds ? { allowedArtifactIds: deps.allowedArtifactIds } : {}),
-    ...(deps.pptWorkflowScope ? { pptWorkflowScope: deps.pptWorkflowScope } : {}),
     ...(deps.blockedProviderIds ? { blockedProviderIds: deps.blockedProviderIds } : {}),
     ...(deps.blockedToolNames ? { blockedToolNames: deps.blockedToolNames } : {}),
     ...(deps.blockedSkillIds ? { blockedSkillIds: deps.blockedSkillIds } : {}),
@@ -102,52 +105,4 @@ export function createToolDiscoveryContext(
           })
         })
   }
-}
-
-/**
- * Normal Code and Design turns share one model-visible workbench catalog so
- * switching the next-turn intent does not invalidate the provider's cached
- * prefix. Execution still uses the original turn context and therefore keeps
- * every tool's `shouldAdvertise` predicate as an enforcement backstop.
- *
- * Plan, Graph, Work, and dedicated SVG turns retain their narrower catalogs
- * because those are real capability phases rather than presentation modes.
- */
-export function modelToolDiscoveryContexts(context: ToolHostContext): ToolHostContext[] {
-  const surface = context.agentSurface ?? 'code'
-  if (
-    context.clientSurface !== 'gui' ||
-    context.threadMode !== 'agent' ||
-    context.orchestration === 'graph' ||
-    context.guiPlan ||
-    context.guiDesignArtifact?.kind === 'svg' ||
-    context.roomStepKind !== undefined ||
-    (surface !== 'code' && surface !== 'design')
-  ) {
-    return [context]
-  }
-
-  const {
-    agentSurface: _agentSurface,
-    guiDesignArtifact: _guiDesignArtifact,
-    guiDesignCanvas: _guiDesignCanvas,
-    guiExcalidrawCanvas: _guiExcalidrawCanvas,
-    guiDesignMode: _guiDesignMode,
-    ...stableContext
-  } = context
-  return [
-    {
-      ...stableContext,
-      agentSurface: 'code',
-      guiDesignCanvas: true,
-      guiExcalidrawCanvas: true
-    },
-    {
-      ...stableContext,
-      agentSurface: 'design',
-      guiDesignCanvas: true,
-      guiExcalidrawCanvas: true,
-      guiDesignMode: true
-    }
-  ]
 }

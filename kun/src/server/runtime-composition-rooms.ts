@@ -6,6 +6,7 @@ import { createPersistentMemoryStore } from './runtime-factory-storage.js'
 import { RemoteRoomStore } from '../manager/remote-room-store.js'
 import { RoomExecutionLease } from '../manager/room-execution-lease.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
+import { assistantContinuationAuthority } from '../rooms/assistant-continuation-authority.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
@@ -33,6 +34,7 @@ export function createRuntimeRoomComposition(input: {
   }, () => new Date().toISOString()) : undefined
   const rooms = new RoomRuntime({
     ...input.services,
+    assistantContinuationAuthority: request => assistantContinuationAuthority(input.options(), request),
     memoryStore: ownedAgentMemory ?? input.services.memoryStore,
     memoryEnabled: () => true,
     store: executionStore,

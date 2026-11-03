@@ -20,6 +20,7 @@ const helperModulePaths = [
   'windows-installer-migration-paths.ps1',
   'windows-installer-migration-journal.ps1',
   'windows-installer-migration-filesystem.ps1',
+  'windows-installer-migration-payload-copy.ps1',
   'windows-installer-migration-actions.ps1',
   'windows-installer-migration-recovery-env.ps1'
 ].map((fileName) => join(process.cwd(), 'build', fileName))

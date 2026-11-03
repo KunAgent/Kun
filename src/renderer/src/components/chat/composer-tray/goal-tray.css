@@ -1,0 +1,26 @@
+/*
+ * Goal tray pieces (Goal board). Shared chrome comes from composer-tray.css;
+ * this file only adds what the goal segment and its action buttons need.
+ */
+
+/*
+ * The trailing goal segment is short and fixed ("目标 26 分钟"), so it keeps
+ * its full width in a crowded bar; the leading segments ellipsize instead.
+ * Without this the shared slot (min-width: 0; flex-shrink: 1) takes its share
+ * of the squeeze and the two-glyph label is cut mid-glyph.
+ */
+.ds-composer-tray-segment-slot[data-composer-stack-item='goal'] {
+  flex-shrink: 0;
+}
+
+/*
+ * The outlined 暂停 / 继续 toggle draws its border with an inset shadow, which
+ * would otherwise replace the shared focus-visible ring (same specificity,
+ * later rule). Keep both.
+ */
+.ds-goal-tray-action[data-variant='outline']:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--ds-border),
+    0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}

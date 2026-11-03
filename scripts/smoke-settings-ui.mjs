@@ -11,6 +11,7 @@ import { createServer, optimizeDeps } from 'vite'
 import { geometryProblems, measureSettings, newGeometryProblems, worsenedTargetSizes, requiredPolishProblems } from './settings-ui-smoke-geometry.mjs'
 import { annotateSettingsTabs, readGatewayClientPicker, scrollSettingsDetail, verifyGatewayClientMaskAssets } from './settings-ui-smoke-dom.mjs'
 import { captureReadySettingsDetail, readGatewayClientAccessibility } from './settings-ui-smoke-detail.mjs'
+import { assertCurrentSettingsCategoryInventory, settingsCategoryInventory } from './settings-ui-smoke-inventory.mjs'
 
 // Native offline renderer smoke; no app build, runtime, provider network or secrets.
 // node scripts/smoke-settings-ui.mjs [--baseline] [--quick] [--serve [--port <n>]]
@@ -87,7 +88,9 @@ app.on('window-all-closed', () => app.quit())
     report.blockedRequests.push(requested)
     return route.abort('blockedbyclient')
   })
-  await page.goto(url)
+  // The first load waits on Vite's forced dependency re-optimization, which
+  // can outlast Playwright's 30 s default on Windows runners.
+  await page.goto(url, { timeout: 90_000 })
   await page.locator('[data-settings-category-view="general"]').waitFor({ timeout: 90_000 })
   cdp = await page.context().newCDPSession(page)
   await cdp.send('DOM.enable')
@@ -113,9 +116,17 @@ app.on('window-all-closed', () => app.quit())
   const categories = await page.locator('[data-settings-category]').evaluateAll(elements =>
     elements.map(element => element.getAttribute('data-settings-category')))
   report.categories = categories
-  assert.equal(new Set(categories).size, nativePlatform === 'win32' ? 22 : 21,
-    'Every destination, including fixture extension settings and Windows-only storage, must be present')
-  assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
+  const navigationRoot = join(sourceRoot, 'src/renderer/src/components')
+  const navigationSource = await readFile(join(navigationRoot, 'settings-navigation.ts'), 'utf8')
+    .catch(error => {
+      if (error.code !== 'ENOENT') throw error
+      return readFile(join(navigationRoot, 'SettingsSidebar.tsx'), 'utf8')
+    })
+  assert.deepEqual(categories, settingsCategoryInventory(navigationSource, nativePlatform),
+    'Every destination declared by the measured checkout must be present in order')
+  if (phase === 'after') {
+    assertCurrentSettingsCategoryInventory(categories, nativePlatform)
+  }
   const sizes = [{ name: 'wide', width: 1440, height: 1000 }, { name: 'small', width: 900, height: 720 }]
   const configurations = []
   for (const theme of ['light', 'dark']) for (const size of sizes) for (const zoom of [1.25, 1.5, 2]) {
@@ -215,7 +226,10 @@ async function openCategory(category) {
   const compact = page.locator('.ds-settings-compact-navigation select')
   if (await compact.isVisible()) await compact.selectOption(category)
   else await page.locator(`[data-settings-category="${category}"]`).click()
-  await page.locator(`[data-settings-category-view="${category}"]`).waitFor()
+  // Record the historical empty destination while the final navigation rejects it.
+  await page.locator(`[data-settings-category-view="${category}"]`).waitFor({
+    state: phase === 'before' && category === 'integrations' ? 'attached' : 'visible'
+  })
   await settled()
 }
 async function capture(category, panel, config) {
@@ -237,12 +251,12 @@ async function capture(category, panel, config) {
   // Top-of-panel images cannot show nested routes or switches below the fold.
   // Preserve an additional unchanged native frame at each requested detail.
   const detailKind = category === 'general' && panel === 'landing' ? 'general-switch'
-    : category === 'providers' && /provider-workspace-tab-routes|model-routes-settings-tab-/.test(panel)
+    : category === 'gateway' && /model-routes-settings-tab-/.test(panel)
       ? 'model-route-tabs' : null
   const detailKinds = detailKind ? [detailKind] : []
   // The baseline predates Connection Center. Capture its real, visible controls
   // when present, without fabricating credentials, aliases or provider readiness.
-  if (category === 'providers' && await page.locator('[data-gateway-connection-controls]:visible').count()) {
+  if (category === 'gateway' && await page.locator('[data-gateway-connection-controls]:visible').count()) {
     detailKinds.push('gateway-connection-controls')
   }
   for (const detailKind of detailKinds) {

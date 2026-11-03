@@ -4,7 +4,6 @@ import type { ApprovalPolicy, ApprovalReviewer, SandboxMode } from '../contracts
 import type { TurnClientSurface } from '../contracts/turns.js'
 import type { HarnessCredentialMode, HarnessId } from '../contracts/harness.js'
 import type { ThreadExecutionUnit } from '../contracts/threads.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { ChildExecutionState } from './delegation-runtime-base.js'
 import type {
   ChildRunExecutor, ChildRunRecord, ChildReturnFormat, ChildRunLifecycleMetadata,
@@ -41,6 +40,7 @@ export type ChildExecutionArgs = {
   returnFormat: ChildReturnFormat
   fastContext: boolean
   fastContextTasks: readonly import('./fast-context-evidence.js').FastContextTask[] | undefined
+  fastContextHintPaths?: readonly string[] | undefined
   queueTimeoutMs: number | undefined
   workspace: string | undefined
   security: ChildSecuritySnapshot | undefined
@@ -56,7 +56,6 @@ export type ChildExecutionArgs = {
   /** Only meaningful on first delivery; resumes reuse the persisted thread. */
   executionUnit?: ThreadExecutionUnit
   controlPrompt: string | undefined
-  pptWorkflowScope: PptWorkflowScope | undefined
   resumeChild?: boolean
   signal: AbortSignal
 }

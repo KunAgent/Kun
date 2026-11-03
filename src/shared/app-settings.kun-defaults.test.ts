@@ -516,6 +516,13 @@ describe('app behavior settings', () => {
   })
 })
 
+describe('home glyph ripple setting', () => {
+  it('defaults the Code home ripple field on and preserves an explicit opt-out', () => {
+    expect(normalizeAppSettings({ ...settings(), homeGlyphRipple: undefined }).homeGlyphRipple).toBe(true)
+    expect(normalizeAppSettings({ ...settings(), homeGlyphRipple: false }).homeGlyphRipple).toBe(false)
+  })
+})
+
 describe('cursor spotlight settings', () => {
   it('defaults the interaction effect on and preserves an explicit opt-out', () => {
     expect(normalizeAppSettings({

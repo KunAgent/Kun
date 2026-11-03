@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { loadPdfJs, readLocalPdfText } from '../write-pdf-text-service'
 
 /**
- * Local-PDF identification (plan §6.4): pull DOI / arXiv id / a title
+ * Local-PDF identification: pull DOI / arXiv id / a title
  * candidate out of the first pages so an imported local PDF can auto-fill its
  * metadata. Uncertain results set `needsReview` in the caller, not here.
  */

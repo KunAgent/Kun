@@ -6,6 +6,7 @@ import {
   SETTINGS_NAVIGATION_GROUPS,
   filterSettingsNavigationGroups,
   settingsCategoryDescriptionKey,
+  settingsCategoryForRouteSection,
   settingsNavigationItem,
   visibleSettingsNavigationGroups
 } from './settings-navigation'
@@ -15,12 +16,14 @@ import { SettingsSidebar } from './SettingsSidebar'
 const labels: Record<string, string> = {
   general: 'General',
   providers: 'Providers',
-  settingsGroupCore: 'Basics',
+  settingsIaGroupGeneral: 'Basics',
+  port: 'Local service port',
   settingsGroupSystem: 'System',
   keyboardShortcuts: 'Keyboard shortcuts',
   settingsNavShortcuts: 'Shortcuts',
   shortcutsDesc: 'Review and customize global keyboard shortcuts.',
-  providersDesc: 'Connect model APIs with keys and base URLs.'
+  providersDesc: 'Connect model APIs with keys and base URLs.',
+  labPptTitle: 'PPT skill'
 }
 const t = (key: string): string => labels[key] ?? key
 
@@ -46,14 +49,16 @@ describe('settings navigation model', () => {
     expect(mac).not.toContain('extensions')
     expect(windows).toContain('storage')
     expect(windows).toContain('extensions')
-    expect(windows).toHaveLength(23)
-    expect(mac).not.toContain('pets')
-    const desktop = categories(visibleSettingsNavigationGroups({
-      extensionSettingsAvailable: false,
-      platform: 'darwin',
-      desktopShell: true
-    }))
-    expect(desktop).toContain('pets')
+    expect(mac).toContain('storageCleanup')
+    expect(windows).toContain('storageCleanup')
+    expect(windows).toHaveLength(35)
+    expect(mac).toHaveLength(33)
+    expect(mac).not.toContain('integrations')
+  })
+
+  it('shows pets only in the desktop shell', () => {
+    expect(categories(visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' }))).not.toContain('pets')
+    expect(categories(visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin', desktopShell: true }))).toContain('pets')
   })
 
   it('matches short names, full names, groups and descriptions case-insensitively', () => {
@@ -63,6 +68,38 @@ describe('settings navigation model', () => {
     expect(categories(filterSettingsNavigationGroups(groups, 'base urls', t))).toEqual(['providers'])
     expect(categories(filterSettingsNavigationGroups(groups, 'basics general', t))).toEqual(['general'])
     expect(filterSettingsNavigationGroups(groups, 'no such page', t)).toEqual([])
+  })
+
+  it('finds a page by the settings it holds, ignoring untranslated keys', () => {
+    const groups = visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' })
+    expect(categories(filterSettingsNavigationGroups(groups, 'service port', t))).toEqual(['agentRuntime'])
+    // Search keys without copy fall back to the raw key; that must never match.
+    expect(categories(filterSettingsNavigationGroups(groups, 'kunMaxConcurrentTurns', t))).toEqual([])
+  })
+
+  it('routes PPT search to Skills, not Laboratory', () => {
+    const groups = visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' })
+    expect(categories(filterSettingsNavigationGroups(groups, 'PPT', t))).toEqual(['skills'])
+  })
+
+  it('keeps every page to one topic, with no more than seven per group', () => {
+    for (const group of SETTINGS_NAVIGATION_GROUPS) {
+      expect(group.items.length).toBeLessThanOrEqual(7)
+    }
+    const all = SETTINGS_NAVIGATION_GROUPS.flatMap((group) => group.items.map((item) => item.category))
+    expect(new Set(all).size).toBe(all.length)
+  })
+
+  it('maps old deep links to the page that now owns their content', () => {
+    expect(settingsCategoryForRouteSection('agentsHarnesses')).toBe('harnesses')
+    expect(settingsCategoryForRouteSection('agentsCollaboration')).toBe('collaboration')
+    expect(settingsCategoryForRouteSection('skill')).toBe('skills')
+    expect(settingsCategoryForRouteSection('mcp')).toBe('mcp')
+    expect(settingsCategoryForRouteSection('permissions')).toBe('permissions')
+    expect(settingsCategoryForRouteSection('worktree')).toBe('code')
+    expect(settingsCategoryForRouteSection('imageGeneration')).toBe('mediaGeneration')
+    expect(settingsCategoryForRouteSection('speak')).toBe('mediaGeneration')
+    expect(settingsCategoryForRouteSection(null)).toBe('agents')
   })
 })
 

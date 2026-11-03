@@ -30,6 +30,8 @@ export type NormalizedThread = {
   knowledgeBases?: KnowledgeBaseMount[]
   status?: string
   latestSeq?: number
+  /** Accepted turns from the thread list; absent when unknown (older runtime or index row). */
+  turnCount?: number
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer
@@ -42,9 +44,9 @@ export type NormalizedThread = {
   executionConfig?: import('@shared/ade-execution-config').AdeExecutionConfigSnapshot
   /** Optional provider id when this thread is pinned to a non-default provider. */
   providerId?: string
-  /** Explicit harness identity inherited by new turns (01 §4). */
+  /** Explicit harness identity inherited by new turns. */
   harnessId?: string
-  /** Host-managed task workspace bound to this thread (07 §5). */
+  /** Host-managed task workspace bound to this thread. */
   taskWorkspaceId?: string
   /** Optional subagent profile id this thread is bound to (primary-agent persona). */
   agentId?: string
@@ -56,9 +58,11 @@ export type NormalizedThread = {
   summary?: string // Whole-conversation summary shown as the list subtitle.
   latestTurnId?: string
   latestTurnStatus?: string
-  relation?: 'primary' | 'fork' | 'side'
+  relation?: 'primary' | 'fork' | 'side' | 'task'
   parentThreadId?: string
-  /** Host-written ADE worker binding (09 §3.1); absent for normal threads. */
+  /** Host-written: the suggestion-card task a `task` session runs. */
+  taskOrigin?: { intentId: string; taskId: string; index: number; total: number }
+  /** Host-written ADE worker binding; absent for normal threads. */
   executionUnit?: {
     kind: 'worker'
     teamId: string

@@ -67,6 +67,7 @@ import {
 import { type TurnService, type TurnServiceDeps, TurnConflictError, TurnCapacityError, type TerminalTurnStatus, type TurnSettlement, type GraphLeadSuspensionResult, type GraphLeadResumeResult, HOST_SHUTDOWN_TURN_SUSPENSION_CODE, hostShutdownTurnSuspensionReason, isHostShutdownTurnSuspension, DEFAULT_MAX_CONCURRENT_TURNS, fingerprintStartTurnRequest, canonicalizeFingerprintValue, isActiveTurn, terminalStatus, threadStatusFromTurns, threadStatusAfterTurnTransition, normalizeMaxConcurrentTurns, firstNonBlank, modelForManualCompaction } from './turn-service-core.js'
 
 import { reconcilePendingQueueAdmission } from './queue-admission.js'
+import { scanThreadMetadata, scannedThreadMetadata, type ThreadMetadataScan } from './thread-metadata-scan.js'
 
 export const turnServiceRuntimeStateOperations = {
 withTurnMutationFence<T>(this: TurnService,
@@ -122,18 +123,18 @@ abortThreadExecution(this: TurnService, threadId: string): number {
    * Returns the ids of threads that had at least one turn reconciled, so the
    * caller can resume goals that were interrupted mid-run (KunAgent/Kun#370).
    */
-async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]> {
-    // Include `side` threads: a delegated subagent runs on a hidden side thread
-    // whose own turn is left `running` when the runtime is interrupted. Without
-    // includeSide it is never swept, so its turn (and the parent's delegate_task
-    // tool item) stay pending forever, wedging the thread (KunAgent/Kun#621).
-    const summaries = await this['deps'].threadStore.list({ includeSide: true })
+async reconcileOrphanedTurns(this: TurnService, input: {
+    scan?: ThreadMetadataScan
+  } = {}): Promise<RestartRecoverySource[]> {
+    // The scan includes `side` threads: a delegated subagent runs on a hidden
+    // side thread whose own turn is left `running` when the runtime is
+    // interrupted. Without them it is never swept, so its turn (and the
+    // parent's delegate_task tool item) stay pending forever, wedging the
+    // thread (KunAgent/Kun#621). Candidates are re-read below before acting.
+    const scan = input.scan ?? await scanThreadMetadata(this['deps'].threadStore)
     const reconciledSources = new Map<string, RestartRecoverySource>()
-    for (const summary of summaries) {
-      const metadata = await (
-        this['deps'].threadStore.getMetadata?.(summary.id) ??
-        this['deps'].threadStore.get(summary.id)
-      ).catch(() => null)
+    for (const summary of scan.summaries) {
+      const metadata = await scannedThreadMetadata(this['deps'].threadStore, scan, summary.id)
       if (!metadata?.turns.some((turn) => turn.status === 'running' || turn.status === 'queued' ||
         turn.steeringDeliveries?.some((entry) => !entry.delivered))) {
         continue
@@ -272,8 +273,11 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
           if (checkpointed) {
             reconciledSources.set(thread.id, { threadId: thread.id, turnId: turn.id })
           }
-        } catch {
-          // Best-effort sweep; one unreadable thread must not stop the rest.
+        } catch (error) {
+          console.warn('[kun] orphaned turn reconciliation failed', {
+            threadId: thread.id, turnId: turn.id,
+            error: error instanceof Error ? error.message : String(error)
+          })
         }
       }
     }
@@ -287,16 +291,27 @@ async reconcileOrphanedTurns(this: TurnService): Promise<RestartRecoverySource[]
  */
 async reconcileManagerSettledInterruptions(this: TurnService, input: {
     settledAfter?: string
+    scan?: ThreadMetadataScan
   } = {}): Promise<RestartRecoverySource[]> {
-    const summaries = await this['deps'].threadStore.list({ includeSide: true })
+    const scan = input.scan ?? await scanThreadMetadata(this['deps'].threadStore)
     const candidateSources = new Map<string, RestartRecoverySource>()
-    for (const summary of summaries) {
+    for (const summary of scan.summaries) {
       if (
         summary.status === 'archived' ||
         (summary.relation !== 'primary' && summary.relation !== 'fork')
       ) continue
       try {
-        const thread = await this['deps'].threadStore.get(summary.id)
+        // Only metadata is inspected here (turn states and settlement fields);
+        // loading every full record moved hundreds of MB through the Manager
+        // at startup on large histories. The shared scan can predate the
+        // orphan sweep, which turns `running` into a failed turn; any thread
+        // that could now qualify is re-read before it is judged.
+        const scanned = await scannedThreadMetadata(this['deps'].threadStore, scan, summary.id)
+        if (!scanned || !mayBeManagerSettled(scanned)) continue
+        const thread = await (
+          this['deps'].threadStore.getMetadata?.(summary.id) ??
+          this['deps'].threadStore.get(summary.id)
+        )
         if (
           !thread ||
           thread.status === 'archived' ||
@@ -399,6 +414,7 @@ async updateTurnMetadata(this: TurnService,
       | 'activeSkillIds'
       | 'injectedMemoryIds'
       | 'injectedMemorySummaries'
+      | 'injectedMemoryRelations'
       | 'injectedDirectiveIds'
       | 'injectedDirectiveSummaries'
       | 'skillInjectionBytes'
@@ -429,6 +445,9 @@ async updateTurnMetadata(this: TurnService,
               ...(patch.injectedMemoryIds ? { injectedMemoryIds: [...patch.injectedMemoryIds] } : {}),
               ...(patch.injectedMemorySummaries
                 ? { injectedMemorySummaries: [...patch.injectedMemorySummaries] }
+                : {}),
+              ...(patch.injectedMemoryRelations
+                ? { injectedMemoryRelations: [...patch.injectedMemoryRelations] }
                 : {}),
               ...(patch.injectedDirectiveIds
                 ? { injectedDirectiveIds: [...patch.injectedDirectiveIds] }
@@ -593,6 +612,16 @@ function extractInterruptionSummary(input: {
     ...(lastAssistantText ? { lastAssistantText } : {}),
     recentToolCalls
   }
+}
+
+/**
+ * Scan-time prefilter for Manager-settled recovery. A running turn may have
+ * been failed by the orphan sweep after the scan, so it still needs a fresh
+ * read; anything else can only qualify through an already failed latest turn.
+ */
+function mayBeManagerSettled(thread: ThreadRecord): boolean {
+  return thread.turns.some((turn) => turn.status === 'running') ||
+    latestExecutedTurn(thread)?.status === 'failed'
 }
 
 function boundText(value: string, maxChars: number): string {

@@ -1,32 +1,57 @@
 import { z } from 'zod'
+import { randomUUID } from 'node:crypto'
+import { MANAGER_MUTATION_REPLAY_CAPABILITY } from '../contracts/manager-request-replay.js'
 import { requestManagerJson, type ServiceManagerConnection } from './manager-client.js'
 import { isSessionMutation, isThreadMutation } from './shared-data-store-contracts.js'
 import { mutationFenceForValue } from './turn-mutation-context.js'
+import { isServiceManagerTimeoutError } from './usage-errors.js'
 
 type ManagerStore = 'thread' | 'session' | 'artifact' | 'memory' | 'graph' | 'attachment'
 
 const ResultSchema = z.object({ result: z.unknown() }).strict()
 export const MANAGER_USAGE_REQUEST_TIMEOUT_MS = 30_000
 const MANAGER_TIMELINE_DATA_REQUEST_TIMEOUT_MS = 120_000
+/** One extra budget for reads; a degraded Manager often answers the second try. */
+const MANAGER_READ_TIMEOUT_BUDGETS = 2
 
 export async function callManagerStore(
   manager: ServiceManagerConnection,
   store: ManagerStore,
   operation: string,
-  value?: unknown
+  value?: unknown,
+  signal?: AbortSignal
 ): Promise<unknown> {
   const turnFence = shouldFenceManagerStoreMutation(store, operation)
     ? mutationFenceForValue(value)
     : undefined
-  const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
-    method: 'POST',
-    retrySafe: isManagerStoreRead(store, operation),
-    body: store === 'thread' || store === 'session'
-      ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}) }
-      : value ?? {},
-    timeoutMs: resolveManagerDataRequestTimeoutMs(store, operation)
-  })
-  return ResultSchema.parse(response).result
+  const timeoutMs = resolveManagerDataRequestTimeoutMs(store, operation)
+  const replay = shouldFenceManagerStoreMutation(store, operation) &&
+    manager.discovery.capabilities?.includes(MANAGER_MUTATION_REPLAY_CAPABILITY)
+    ? { requestId: randomUUID(), managerInstanceId: manager.discovery.instanceId, expiresAt: Date.now() + timeoutMs }
+    : undefined
+  // Only short-budget reads get a second full budget. A 120 s timeline read
+  // that already consumed its deadline must not double the turn's stall, and a
+  // mutation may have reached the Manager, so it is never replayed this way.
+  const budgets = isManagerStoreRead(store, operation) && timeoutMs <= MANAGER_USAGE_REQUEST_TIMEOUT_MS
+    ? MANAGER_READ_TIMEOUT_BUDGETS
+    : 1
+  for (let budget = 1; ; budget += 1) {
+    try {
+      const response = await requestManagerJson(manager, `/v1/data/${store}/${operation}`, {
+        method: 'POST',
+        signal,
+        retrySafe: isManagerStoreRead(store, operation) || replay !== undefined,
+        ...(replay ? { maxAttempts: 5 } : {}),
+        body: store === 'thread' || store === 'session'
+          ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}), ...(replay ? { replay } : {}) }
+          : value ?? {},
+        timeoutMs
+      })
+      return ResultSchema.parse(response).result
+    } catch (error) {
+      if (budget >= budgets || signal?.aborted || !isServiceManagerTimeoutError(error)) throw error
+    }
+  }
 }
 
 function shouldFenceManagerStoreMutation(store: ManagerStore, operation: string): boolean {
@@ -55,11 +80,12 @@ export function resolveManagerDataRequestTimeoutMs(
 export function isManagerStoreRead(store: ManagerStore, operation: string): boolean {
   const reads: Record<ManagerStore, readonly string[]> = {
     thread: ['list', 'listPage', 'get', 'getMetadata', 'hasHistoryReference'],
-    session: ['loadItemSnapshot', 'loadEventsSince', 'loadEventPage', 'eventReplayFloorSeq',
+    session: ['itemHistoryVersion', 'loadItemSnapshot', 'loadEventsSince', 'loadEventPage', 'eventReplayFloorSeq',
       'loadItems', 'searchItemText', 'loadItemPage', 'loadSession', 'highestSeq',
-      'loadUsageRecords', 'aggregateUsage', 'loadLatestUsageSnapshots'],
+      'loadUsageRecords', 'aggregateUsage', 'loadLatestContextSnapshot', 'loadLatestUsageSnapshots'],
     artifact: ['list', 'get', 'readRange', 'stat'],
     memory: [
+      'relationContext',
       'list', 'listDirectives', 'retrieve', 'diagnostics', 'distillationPending', 'getById', 'history', 'isForgotten', 'erasureReceipt',
       'feedbackEvent', 'feedbackAggregate', 'feedbackAggregates', 'feedbackDiagnostics'
     ],

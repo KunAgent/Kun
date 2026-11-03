@@ -1,3 +1,5 @@
+import type { ProviderCatalogDiscovery } from './discovery.js'
+export * from './discovery.js'
 import { PROVIDER_CATALOG } from './presets.js'
 
 export * from './antigravity-model-catalog.js'
@@ -38,6 +40,7 @@ export type ProviderCatalogEndpoints = {
 
 /** One base-URL choice (a regional cluster or a plan tier). The first entry is the default. */
 export type ProviderCatalogRegion = {
+  discovery?: ProviderCatalogDiscovery
   id: string
   /** Display name; the id is shown when omitted. */
   name?: string
@@ -51,6 +54,7 @@ export type ProviderCatalogBalanceSource = 'deepseek' | 'moonshot' | 'openrouter
 export type ProviderCatalogPlanQuotaSource = 'zhipu' | 'zai' | 'kimi-code' | 'minimax'
 
 export type ProviderCatalogTokenPlan = {
+  discovery?: ProviderCatalogDiscovery
   /** Optional product-specific name used instead of the generic "Token Plan" label. */
   displayName?: string
   baseUrl: string
@@ -63,6 +67,7 @@ export type ProviderCatalogTokenPlan = {
 }
 
 export type ProviderCatalogPreset = {
+  discovery?: ProviderCatalogDiscovery
   id: string
   name: string
   category: ProviderCatalogCategory
@@ -163,6 +168,8 @@ export function resolveProviderCatalogSource(
   }
 
   const id = input.id?.trim().toLowerCase() ?? ''
+  const exactPlan = id.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX) ? catalog.find((preset) => preset.id === id.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length) && preset.tokenPlan) : undefined
+  if (exactPlan) return { preset: exactPlan, presetSource: exactPlan.id, presetMode: 'token-plan' }
   const exact = catalog.find((preset) => preset.id === id)
   if (exact) return { preset: exact, presetSource: exact.id, presetMode: 'api' }
   const numbered = /^(.*)-(?:[2-9]|[1-9][0-9]+)$/u.exec(id)?.[1]

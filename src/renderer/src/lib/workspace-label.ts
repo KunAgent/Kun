@@ -8,7 +8,7 @@ function normalizePathForMatch(path: string): string {
 
 // Treat both current and legacy default workspace paths as the app workspace.
 // Older installs can keep the ~/.deepseekgui path until migration completes.
-function isDefaultWorkspacePath(path: string): boolean {
+export function isDefaultWorkspacePath(path: string): boolean {
   const normalized = normalizePathForMatch(path)
   return (
     normalized === '~/.kun/default_workspace'

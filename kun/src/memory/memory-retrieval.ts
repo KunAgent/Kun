@@ -42,7 +42,7 @@ export type MemoryRetrieveRequest = {
   promptCharacterBudget?: number
   policy?: MemoryCapabilityConfig
   /** 'tool' lookups keep directives visible and must not overwrite injection diagnostics. */
-  purpose?: 'injection' | 'tool'
+  purpose?: 'injection' | 'tool' | 'preview'
   filter?: {
     scope?: MemoryScope
     type?: MemoryType

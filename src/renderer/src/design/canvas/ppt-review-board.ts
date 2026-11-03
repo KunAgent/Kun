@@ -1,4 +1,5 @@
 import type { CanvasShape } from './canvas-types'
+import { isPptReviewSlotShape, pptReviewSlotNames, pptReviewSlotOps, type PptReviewSlotAsset } from './ppt-review-slots'
 
 export type PptReviewSlideBundle = {
   slideId: string
@@ -9,6 +10,8 @@ export type PptReviewSlideBundle = {
   status: 'ready' | 'failed'
   error?: string
   qaIssues?: PptReviewQaIssue[]
+  /** Images placed on the slide, where they came from, and their slot (fractions of the slide). */
+  assets?: PptReviewSlotAsset[]
 }
 
 export type PptReviewQaIssue = {
@@ -103,10 +106,22 @@ export function pptReviewBoardOps(
       `${reviewKey(bundle.workflowId, slide.slideId)}:qa:${issue.issueId}:badge`,
       `${reviewKey(bundle.workflowId, slide.slideId)}:qa:${issue.issueId}:number`
     ])))
+  const expectedSlots = new Set(bundle.slides.flatMap((slide) =>
+    pptReviewSlotNames(reviewKey(bundle.workflowId, slide.slideId), slide.assets)))
   const qaCleanup = shapes
     .filter((shape) => shape.pptReviewRef?.workflowId === bundle.workflowId &&
       shape.pptReviewRef.childId === bundle.childId && shape.pptReviewRef.role === 'annotation' &&
-      shape.name.includes(':qa:') && !expectedQaMarkers.has(shape.name))
+      ((shape.name.includes(':qa:') && !expectedQaMarkers.has(shape.name)) ||
+        (isPptReviewSlotShape(shape) && !expectedSlots.has(shape.name))))
+    .map((shape) => ({ op: 'delete', id: shape.id }))
+  // A deck can drop pages between reviews: remove the cards of slides this
+  // bundle no longer has. Shape names are namespaced by workflow and slide.
+  const workflowPrefix = `ppt-review:${bundle.workflowId}:`
+  const slidePrefixes = bundle.slides.map((slide) => `${reviewKey(bundle.workflowId, slide.slideId)}:`)
+  const cleaned = new Set(qaCleanup.map((op) => op.id))
+  const removedSlides = shapes
+    .filter((shape) => shape.name.startsWith(workflowPrefix) && !cleaned.has(shape.id) &&
+      !slidePrefixes.some((prefix) => shape.name.startsWith(prefix)))
     .map((shape) => ({ op: 'delete', id: shape.id }))
   const slideOps = bundle.slides.flatMap((slide): unknown[] => {
     const col = slide.index % COLUMNS
@@ -195,10 +210,17 @@ export function pptReviewBoardOps(
         op: 'add',
         shape: statusShape
       },
+      ...pptReviewSlotOps({
+        key,
+        assets: slide.assets,
+        preview: { x: x + 8, y: y + 8, width: CARD_WIDTH - 16, height: CARD_HEIGHT - 16 },
+        ref: reviewRef(bundle, slide, 'annotation', parentThreadId),
+        byName
+      }),
       ...qaMarkerOps(bundle, slide, x + 8, y + 8, byName, parentThreadId)
     ]
   })
-  return [...qaCleanup, ...slideOps]
+  return [...qaCleanup, ...removedSlides, ...slideOps]
 }
 
 export type SerializedPptReviewContext = {
@@ -351,10 +373,21 @@ function qaMarkerOps(
     })
 }
 
+function assetLabel(slide: PptReviewSlideBundle): string {
+  if (!Array.isArray(slide.assets) || slide.assets.length === 0) return ''
+  const count = (origin: string) => slide.assets!.filter((asset) => asset?.origin === origin).length
+  const parts = [
+    count('user') ? `${count('user')} yours` : '',
+    count('generated') ? `${count('generated')} generated` : '',
+    count('project') ? `${count('project')} from deck` : ''
+  ].filter(Boolean)
+  return parts.length ? ` · images: ${parts.join(', ')}` : ''
+}
+
 function reviewStatus(slide: PptReviewSlideBundle): string {
-  const base = slide.status === 'failed'
+  const base = `${slide.status === 'failed'
     ? `Preview failed${slide.error ? `: ${slide.error}` : ''}`
-    : `Revision ${slide.revision}`
+    : `Revision ${slide.revision}`}${assetLabel(slide)}`
   if (slide.qaIssues === undefined) return `${base} · visual review`
   const errors = slide.qaIssues.filter((issue) => issue.severity === 'error').length
   const warnings = slide.qaIssues.filter((issue) => issue.severity === 'warning').length

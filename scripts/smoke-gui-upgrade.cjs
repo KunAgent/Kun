@@ -10,9 +10,14 @@ const { tmpdir, homedir } = require('node:os')
 const { join, resolve } = require('node:path')
 const { _electron: electron } = require('playwright-core')
 const { parse } = require('yaml')
+const { sanitizeDiagnostic } = require('./stage-windows-upgrade-evidence.cjs')
 const { digest, startCandidateFeed, validateFeed } = require('./gui-upgrade-feed.cjs')
 const { verifyCandidateSource } = require('./release-candidate-source.cjs')
+const { sameOwnedPath, probeAutomaticRuntime, waitForAutomaticReady } = require('./smoke-windows-installer-relaunch.cjs')
+const { pendingProtectionOption, assertPendingProtection, classifyReconciliation, readReconciliationState, reconciliationSummary } = require('./smoke-windows-installer-pending-protection.cjs')
+const { startPreparedRestartObservation } = require('./smoke-windows-installer-prepared-restart.cjs')
 const { verifyPrCandidateSource } = require('./pr-gui-candidate-source.cjs')
+const { upgradeOptions, verifyPublishedSource, captureWindowsUpgrade, stopVerifiedInstallers, assertCandidateExtractionTrace } = require('./smoke-windows-installer-cross-version.cjs')
 const { closeGuiWithExitEvidence, attachGuiDiagnostics, captureMacProcesses, captureMacUpdateDiagnostics } = require('./gui-upgrade-diagnostics.cjs')
 const { createScenarioJournal, cleanupScenario, recordScenario,
   claimScenarioDirectory, preserveScenarioDirectory } = require('./gui-upgrade-journal.cjs')
@@ -38,6 +43,15 @@ async function install(executable, parent, env) {
   const args = ['/S', '/currentuser', `"/D=${parent}"`]
   await ps(`$p=Start-Process -FilePath ${q(executable)} -ArgumentList @(${args.map(q).join(',')}) -PassThru; ` +
     '$p.WaitForExit(); $p.Refresh(); if ($p.ExitCode -ne 0) { throw "Installer exit $($p.ExitCode)" }', env)
+}
+
+async function windowsGuiProcesses(executable) {
+  const result = await ps(`$rows=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq ${q(executable)} } | ` +
+    'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
+    'if($p){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle;' +
+    'executablePath=[string]$_.ExecutablePath;createdAt=$_.CreationDate.ToUniversalTime().ToString("O")}} }); ' +
+    'ConvertTo-Json -Compress -InputObject $rows')
+  return parseInstallerJson(result.stdout || '[]')
 }
 
 async function stopInstalledGui(executable) {
@@ -140,21 +154,33 @@ async function chat(page, workspace, title) {
   return { thread, turn }
 }
 
-async function settle(page, saved) {
+async function settle(page, saved, observation = {}) {
+  let terminalFailure
   return poll(async () => {
     const turn = await request(page, `/v1/threads/${saved.thread.id}/turns/${saved.turn.turnId}`)
-    if (turn.status === 'failed' || turn.status === 'cancelled') throw new Error(`Test dialogue ${turn.status}`)
+    const summary = { status: turn.status, modelRequests: observation.modelRequests?.() }
+    if (turn.status === 'failed' || turn.status === 'cancelled') {
+      // Keep only bounded diagnostic text, never the model request or credentials.
+      const detail = sanitizeDiagnostic(String(turn.error || turn.failure?.reason || 'No runtime error detail')
+        .replace(/(?:sk-|packaged-handoff-smoke-key)[A-Za-z0-9_-]*/g, '[REDACTED]'), '.txt').slice(0, 2048)
+      summary.error = detail
+      terminalFailure = new Error(`Test dialogue ${turn.status}: ${detail}; modelRequests=${summary.modelRequests ?? 'unknown'}`)
+      observation.record?.(summary)
+      return false
+    }
     return turn.status === 'completed' ? turn : undefined
-  }, TIMEOUT, 'test dialogue completion')
+  }, TIMEOUT, 'test dialogue completion', () => { if (terminalFailure) throw terminalFailure })
 }
 
 async function scenario(input, name, record, persistReport) {
   record.targetVersion = input.version
+  record.baselineVersion = input.baselineVersion
   // NSIS resolves its recovery journal through Windows Known Folders, not the
   // child's APPDATA override. Keep both payload and journal beneath the actual
   // disposable account's AppData for the installer's restricted fault injection.
   const temporaryParent = process.platform === 'win32' ? process.env.APPDATA : tmpdir()
   const root = await mkdtemp(join(temporaryParent, `kun-gui-upgrade-${name}-`))
+  await writeFile(join(root, '.upgrade-acceptance-owner'), root)
   const journal = createScenarioJournal(record, root, persistReport)
   const installControl = createInstallRequestControl(journal)
   const pollInstalling = (operation, timeout, description) => poll(operation, timeout, description, installControl.check)
@@ -199,6 +225,7 @@ async function scenario(input, name, record, persistReport) {
   settings.guiUpdate = { channel: 'stable' }
   await writeFile(join(userData, 'kun-settings.json'), JSON.stringify(settings))
   let gui
+  let preparedRestart
   let failure
   try {
     journal.phase('baseline_installation')
@@ -212,13 +239,19 @@ async function scenario(input, name, record, persistReport) {
     gui = await startGui(executable, environment, userData, undefined, { journal, label: 'baseline' })
     record.baselinePid = gui.processInfo.pid
     record.baselineLauncherPid = gui.app.process().pid
-    assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), '0.3.7')
+    assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), input.baselineVersion)
     journal.phase('baseline_started', gui.processInfo)
+    const effectiveSettings = await gui.page.evaluate(() => window.kunGui.getSettings())
+    const selectedProvider = effectiveSettings.provider?.providers?.find(provider => provider.id === 'deepseek')
+    assert.equal(selectedProvider?.baseUrl, model.baseUrl,
+      'Released GUI must retain the loopback fixture provider URL before sending any dialogue')
     const saved = await chat(gui.page, workspace, `upgrade-history-${name}`)
-    await settle(gui.page, saved)
+    await settle(gui.page, saved, { modelRequests: () => model.state.requests,
+      record: summary => journal.event('baseline_dialogue_failed', summary) })
+    assert.ok(model.state.requests > 0, 'Baseline dialogue must reach the real loopback model fixture')
     if (name !== 'manual') {
       journal.phase('legacy_provider_settings')
-      await prepareReleasedGuiUpdate(gui.page, '0.3.7', record)
+      await prepareReleasedGuiUpdate(gui.page, input.baselineVersion, record)
       journal.persist()
     }
     const before = await gui.page.evaluate(() => window.kunGui.getSettings())
@@ -252,6 +285,9 @@ async function scenario(input, name, record, persistReport) {
       const expectedDigest = await digest(input.candidate)
       const downloadedDigests = await Promise.all(downloaded.paths.map((path) => digest(path)))
       assert.ok(downloadedDigests.includes(expectedDigest), 'GUI downloaded bytes differ from the verified candidate')
+      record.downloadedPaths = downloaded.paths
+      record.verifiedInstallerPaths = downloaded.paths.filter((path, index) =>
+        /\.exe$/i.test(path) && downloadedDigests[index] === expectedDigest)
       journal.phase('candidate_downloaded', { paths: downloaded.paths, sha512: expectedDigest })
       if (name === 'rollback') {
         await gui.app.evaluate(({ app }) => {
@@ -262,7 +298,13 @@ async function scenario(input, name, record, persistReport) {
       }
       await captureMacProcesses(root, 'before-install')
       await gui.page.exposeFunction('__kunRecordUpgradeResult', installControl.recordResult)
-      journal.phase('install_requested', { pid: oldPid, version: '0.3.7', executable })
+      journal.phase('install_requested', { pid: oldPid, version: input.baselineVersion, executable })
+      if (name === 'restart-prepared') {
+        record.preparedRestart = { status: 'running' }
+        preparedRestart = startPreparedRestartObservation({ root, userData, installerRecovery, dataDir,
+          executable, environment, oldPid, processIsAlive, newVersion: input.version, verifiedInstallerPaths: record.verifiedInstallerPaths,
+          record: record.preparedRestart, event: journal.event })
+      }
       await gui.page.evaluate(() => {
         void window.kunGui.installGuiUpdate().then((result) => {
           window.__upgradeResult = result
@@ -287,6 +329,11 @@ async function scenario(input, name, record, persistReport) {
           return value.outcome ? value : undefined
         }, 10 * 60_000, 'installer-authored transaction result')
         await writeFile(join(root, 'installer-result.json'), JSON.stringify(result, null, 2))
+        if (preparedRestart) await preparedRestart.stop()
+        if (input.source === 'pull-request') {
+          assertCandidateExtractionTrace(await readFile(join(root, 'installer.log'), 'utf8'))
+          record.extractionTraceVerified = true
+        }
         if (name === 'rollback') {
           assert.equal(result.code, 'payload_switch_failed')
           assert.equal(result.outcome, 'aborted')
@@ -302,15 +349,36 @@ async function scenario(input, name, record, persistReport) {
       if (process.platform === 'win32') {
         journal.phase('automatic_relaunch')
         const relaunched = await pollInstalling(async () => {
-          const result = await ps(`$rows=@(Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -eq ${q(executable)} } | ` +
-            'ForEach-Object { $p=Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; ' +
-            'if($p -and $p.MainWindowHandle -ne 0){[pscustomobject]@{pid=$p.Id;mainWindowHandle=[long]$p.MainWindowHandle}} }); ' +
-            'ConvertTo-Json -Compress -InputObject $rows')
-          return parseInstallerJson(result.stdout || '[]').find(entry => entry.pid !== oldPid && entry.mainWindowHandle > 0)
+          return (await windowsGuiProcesses(executable)).find(entry => entry.pid !== oldPid && entry.pid !== record.preparedRestart?.launch?.pid && entry.mainWindowHandle > 0)
         }, 10 * 60_000, 'installer relaunch with a real GUI window')
         record.automaticRelaunch = { ...relaunched, source: 'CIM/MainWindowHandle', guiWindowObserved: true,
           observedAt: new Date().toISOString(), beforeHarnessLaunch: true }
         journal.phase('new_gui_started', record.automaticRelaunch)
+        // Do not tear down this first normal launch while it is still creating
+        // Runtime or letting its real updater reconcile the committed install.
+        model.state.mode = 'complete'
+        journal.phase('automatic_runtime_readiness')
+        record.automaticReady = await waitForAutomaticReady({ gui: record.automaticRelaunch,
+          poll: pollInstalling, timeout: TIMEOUT, requireFinalized: input.requirePendingProtection,
+          readGui: async () => (await windowsGuiProcesses(executable)).find(entry => entry.pid === relaunched.pid),
+          readRuntime: async () => {
+            let discovery
+            try { discovery = parseInstallerJson(await readFile(join(dataDir, 'runtime.json'), 'utf8')) }
+            catch (error) { if (error.code === 'ENOENT' || error instanceof SyntaxError) return null; throw error }
+            if (!Number.isSafeInteger(discovery.pid) || discovery.pid <= 0 || !processIsAlive(discovery.pid)) return null
+            return probeAutomaticRuntime(discovery, { version: name === 'rollback' ? input.baselineVersion : input.version,
+              oldRuntimePid: oldRuntime.pid, guiCreatedAt: relaunched.createdAt, dataDir })
+          },
+          readReconciliation: async () => {
+            const state = await readReconciliationState(userData, installerRecovery, join(root, 'installer.log'),
+              { ...record.automaticRelaunch, version: input.version, ownerRoot: root })
+            const classification = classifyReconciliation(state, { oldVersion: input.baselineVersion, newVersion: input.version })
+            record.pendingReconciliation = reconciliationSummary(state, classification)
+            journal.persist()
+            return classification
+          }
+        })
+        journal.event('automatic_runtime_ready', record.automaticReady)
       } else {
         await waitForBundleReplacement(async () => {
           const result = await run('/usr/libexec/PlistBuddy', ['-c', 'Print CFBundleShortVersionString', join(bundle, 'Contents', 'Info.plist')])
@@ -331,7 +399,7 @@ async function scenario(input, name, record, persistReport) {
     journal.phase('inspection_started')
     await stopInstalledGui(executable)
     gui = await startGui(executable, environment, userData, undefined, { journal, label: 'inspection' })
-    const expectedVersion = name === 'rollback' ? '0.3.7' : input.version
+    const expectedVersion = name === 'rollback' ? input.baselineVersion : input.version
     assert.equal(await gui.page.evaluate(() => window.kunGui.getAppVersion()), expectedVersion)
     const after = await gui.page.evaluate(() => window.kunGui.getSettings())
     assert.equal(after.agents.kun.model, before.agents.kun.model)
@@ -352,6 +420,23 @@ async function scenario(input, name, record, persistReport) {
     await gui.page.screenshot({ path: join(root, 'after.png') })
     record.version = expectedVersion
     journal.phase('post_upgrade_verified', { version: expectedVersion, pid: gui.processInfo.pid })
+    if (input.requirePendingProtection) {
+      journal.phase('pending_protection_reconciliation')
+      const reconciled = await poll(async () => {
+        const state = await readReconciliationState(userData, installerRecovery, join(root, 'installer.log'),
+          { ...record.automaticRelaunch, version: input.version, ownerRoot: root, notAfter: record.inspectionStartedAt })
+        const classification = classifyReconciliation(state, { oldVersion: input.baselineVersion, newVersion: input.version })
+        record.pendingReconciliation = reconciliationSummary(state, classification)
+        journal.persist()
+        // Grace is diagnostic context, not acceptance: only the normal GUI may
+        // finalize its recovery records, and this lane must observe completion.
+        return classification === 'finalized' ? classification : undefined
+      }, TIMEOUT, 'legitimate post-runtime-health pending reconciliation')
+      journal.event('pending_protection_reconciled', { classification: reconciled })
+      // Still complete normal updater outcome observation when overlap was missed.
+      // Such a timing-only run is inconclusive, never a strict acceptance pass.
+      if (record.preparedRestart?.status !== 'inconclusive') assertPendingProtection(record.preparedRestart)
+    }
     journal.phase('closing_inspection_gui')
     record.inspectionCloseProof = await closeGuiWithExitEvidence(gui, journal.eventPath, TIMEOUT)
     journal.phase('inspection_gui_closed', record.inspectionCloseProof)
@@ -359,6 +444,9 @@ async function scenario(input, name, record, persistReport) {
   } catch (error) {
     failure = error
     journal.fail(error)
+    await captureWindowsUpgrade(root, { executable, installerRecovery, userData, verifiedInstallerPaths: record.verifiedInstallerPaths || [] }).catch(diagnosticError => {
+      journal.event('diagnostic_capture_failed', { error: diagnosticError.message })
+    })
     await captureMacUpdateDiagnostics(root, bundle).catch((diagnosticError) => {
       record.diagnosticErrors ??= []
       record.diagnosticErrors.push(diagnosticError.message)
@@ -367,7 +455,11 @@ async function scenario(input, name, record, persistReport) {
     await gui?.page.screenshot({ path: join(root, 'failure.png') }).catch(() => undefined)
     await writeFile(join(root, 'failure.txt'), error.stack ?? String(error)).catch(() => undefined)
   } finally {
+    if (preparedRestart) await preparedRestart.stop()
     await cleanupScenario(journal, [
+      ['stop-failed-installer', async () => {
+        if (failure) await stopVerifiedInstallers(record.verifiedInstallerPaths || [])
+      }],
       // A failed baseline may already have exited and relaunched itself.
       // Stop only this scenario's executable before waiting on Playwright.
       ['stop-installed-gui', () => stopInstalledGui(executable)],
@@ -379,7 +471,7 @@ async function scenario(input, name, record, persistReport) {
       ['stop-owned-manager', async () => {
         const manager = await readFile(join(controlDir, 'manager.json'), 'utf8').then(parseInstallerJson).catch(() => null)
         if (!manager) return
-        assert.equal(resolve(manager.dataDir), resolve(dataDir), 'Manager must belong to this scenario')
+        assert.ok(sameOwnedPath(manager.dataDir, dataDir), 'Manager must belong to this exact scenario data directory')
         await fetch(`${manager.baseUrl}/v1/manager/shutdown`, {
           method: 'POST', headers: { authorization: `Bearer ${manager.managerToken}`, 'content-type': 'application/json' },
           body: JSON.stringify({ instanceId: manager.instanceId }), signal: AbortSignal.timeout(10_000)
@@ -388,7 +480,9 @@ async function scenario(input, name, record, persistReport) {
       }],
       ['stop-recovery-gui', () => stopInstalledGui(executable)],
       ['uninstall-windows-fixture', async () => {
-        if (process.platform !== 'win32') return
+        // A failed update is evidence, not a clean-install fixture. Do not let an
+        // uninstaller retire registration or erase rollback state on failure.
+        if (process.platform !== 'win32' || failure) return
         const uninstaller = join(installParent, 'Kun', 'Uninstall Kun.exe')
         const copy = join(root, 'uninstall.exe')
         await copyFile(uninstaller, copy)
@@ -417,7 +511,7 @@ async function scenario(input, name, record, persistReport) {
       journal.phase('cleanup')
       journal.fail(failure)
     }
-    if (!failure) record.status = 'passed'
+    if (!failure) record.status = record.preparedRestart?.status === 'inconclusive' ? 'inconclusive' : 'passed'
     journal.persist()
     process.stdout.write(`GUI upgrade evidence: ${root}\n`)
   }
@@ -436,23 +530,26 @@ async function main() {
   const flags = new Map()
   for (let i = 2; i < process.argv.length; i += 2) flags.set(process.argv[i], process.argv[i + 1])
   const directory = resolve(flags.get('--directory') || 'dist')
-  const version = flags.get('--version')
+  const { version, baselineVersion, scenarios } = upgradeOptions(flags, process.platform)
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('--version is required')
   const checkout = await run('git', ['rev-parse', 'HEAD'])
   const harnessCommit = checkout.stdout.trim()
   const source = process.env.GUI_UPGRADE_SOURCE || 'release-candidate'
-  assert.ok(['pull-request', 'release-candidate'].includes(source), 'Unknown GUI upgrade candidate source')
+  assert.ok(['pull-request', 'release-candidate', 'published-release'].includes(source), 'Unknown GUI upgrade candidate source')
+  const requirePendingProtection = pendingProtectionOption(flags, { source, platform: process.platform, baselineVersion, scenarios })
   const candidateCommit = source === 'pull-request'
     ? await verifyPrCandidateSource(directory, version, harnessCommit)
-    : await verifyCandidateSource(version, process.env.CANDIDATE_TAG || `v${version}`,
+    : source === 'published-release'
+      ? await verifyPublishedSource(version, directory)
+      : await verifyCandidateSource(version, process.env.CANDIDATE_TAG || `v${version}`,
       process.env.CANDIDATE_COMMIT || harnessCommit)
   const manifestName = process.platform === 'win32' ? 'latest.yml' : 'latest-mac.yml'
   const { metadata } = await validateFeed(directory, manifestName, version)
   const candidateName = process.platform === 'win32' ? `Kun-${version}-win-x64.exe` : `Kun-${version}-mac-${process.arch}.zip`
   assert.ok(metadata.files.some((file) => file.url === candidateName))
   const downloads = await mkdtemp(join(tmpdir(), 'kun-upgrade-baseline-'))
-  const baselineName = process.platform === 'win32' ? 'Kun-0.3.7-win-x64.exe' : `Kun-0.3.7-mac-${process.arch}.zip`
-  const report = { version, source, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
+  const baselineName = process.platform === 'win32' ? `Kun-${baselineVersion}-win-x64.exe` : `Kun-${baselineVersion}-mac-${process.arch}.zip`
+  const report = { version, source, requirePendingProtection, commit: candidateCommit, harnessCommit, platform: process.platform, arch: process.arch,
     artifact: candidateName, sha512: await digest(join(directory, candidateName)), scenarios: [],
     status: 'running', phase: 'baseline_download', cleanupErrors: [] }
   const output = resolve(flags.get('--report') || `gui-upgrade-${process.platform}.json`)
@@ -461,21 +558,22 @@ async function main() {
   let feed
   let failure
   try {
-    await run('gh', ['release', 'download', 'v0.3.7', '-R', 'KunAgent/Kun',
+    await run('gh', ['release', 'download', `v${baselineVersion}`, '-R', 'KunAgent/Kun',
       '-p', baselineName, '-p', manifestName, '-D', downloads], { timeout: 10 * 60_000 })
     const baselineMetadata = parse(await readFile(join(downloads, manifestName), 'utf8'))
     const baselineFile = baselineMetadata.files.find((file) => file.url === baselineName)
     assert.ok(baselineFile)
     assert.equal(await digest(join(downloads, baselineName)), baselineFile.sha512)
-    report.baseline = { version: '0.3.7', artifact: baselineName, sha512: baselineFile.sha512 }
+    report.baseline = { version: baselineVersion, artifact: baselineName, sha512: baselineFile.sha512,
+      commit: await verifyPublishedSource(baselineVersion, downloads) }
     report.phase = 'scenarios'
     persist()
     feed = flags.has('--feed-url') ? null : await startCandidateFeed(directory, manifestName, version)
-    for (const name of process.platform === 'win32' ? ['normal', 'busy', 'rollback', 'manual'] : ['normal']) {
-      await recordScenario(report, name, record => scenario({ version, candidate: join(directory, candidateName),
+    for (const name of scenarios) {
+      await recordScenario(report, name, record => scenario({ version, baselineVersion, source, requirePendingProtection, candidate: join(directory, candidateName),
         baseline: join(downloads, baselineName), feedUrl: flags.get('--feed-url') || feed.url }, name, record, persist), persist)
     }
-    report.status = 'passed'
+    report.status = report.scenarios.some(record => record.status === 'inconclusive') ? 'inconclusive' : 'passed'
     report.phase = 'completed'
   } catch (error) {
     failure = error
@@ -500,8 +598,9 @@ async function main() {
     persist()
   }
   if (failure) throw failure
+  if (report.status === 'inconclusive') process.exitCode = 2
 }
 
 if (require.main === module) main().catch((error) => { console.error(error); process.exitCode = 1 })
 
-module.exports = { startGui, prepareReleasedGuiUpdate, parseInstallerJson, createGuiUpgradeEnvironment }
+module.exports = { startGui, prepareReleasedGuiUpdate, parseInstallerJson, createGuiUpgradeEnvironment, settle }

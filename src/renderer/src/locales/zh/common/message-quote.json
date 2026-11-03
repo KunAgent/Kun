@@ -1,0 +1,19 @@
+{
+  "messageQuoteToolbarLabel": "选中文字操作",
+  "messageQuoteStartSide": "开始分支对话",
+  "messageQuoteStartSideTitle": "在分支对话里追问这段，保留当前会话的全部上下文",
+  "messageQuoteSideNeedsRuntime": "连接运行时后可用",
+  "messageQuoteSideNeedsThread": "先开始一个会话",
+  "messageQuoteReply": "回复",
+  "messageQuoteReplyTitle": "在下一条消息里引用这段",
+  "messageQuoteReplyingToAssistant": "回复 Kun",
+  "messageQuoteReplyingToUser": "回复你的消息",
+  "messageQuoteTruncated": "已截取前 2000 字",
+  "messageQuoteExpand": "展开全文",
+  "messageQuoteCollapse": "收起引用",
+  "messageQuoteRemove": "移除引用",
+  "messageQuoteComposerPlaceholder": "回复这段内容…",
+  "messageQuoteSidePlaceholder": "就这段内容提问…",
+  "messageQuoteJumpToSource": "跳到原文",
+  "messageQuoteJumpToSourceLabel": "跳到引用的原文：{{text}}"
+}

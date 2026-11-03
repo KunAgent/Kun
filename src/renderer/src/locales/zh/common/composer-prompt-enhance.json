@@ -1,0 +1,20 @@
+{
+  "composerPromptEnhance": "优化提示词",
+  "composerPromptEnhanceHint": "优化提示词 · 使用 {{model}} 重写草稿",
+  "composerPromptEnhanceHintDefault": "优化提示词 · 使用 Kun 默认模型重写草稿",
+  "composerPromptEnhanceCancel": "取消优化",
+  "composerPromptEnhanceCancelHint": "取消优化（Esc）",
+  "composerPromptEnhanceRunning": "正在用 {{model}} 优化… 草稿暂时只读，再次点击按钮或按 Esc 取消",
+  "composerPromptEnhanceRunningDefault": "正在优化… 草稿暂时只读，再次点击按钮或按 Esc 取消",
+  "composerPromptEnhanceDone": "已用 {{model}} 优化，原文已替换",
+  "composerPromptEnhanceUndo": "撤销",
+  "composerPromptEnhanceUndoHint": "恢复优化前的草稿",
+  "composerPromptEnhanceDismiss": "关闭",
+  "composerPromptEnhanceEmpty": "先输入要优化的提示词",
+  "composerPromptEnhanceUnsupportedAgent": "当前模型使用 {{agent}} 自己的登录，Kun 无法直接调用它来优化提示词。切换到 Kun 供应商模型，或在设置里指定一个优化模型。",
+  "composerPromptEnhanceUnsupported": "当前模型不能用于优化提示词。切换到 Kun 供应商模型，或在设置里指定一个优化模型。",
+  "composerPromptEnhanceOpenSettings": "打开设置",
+  "composerPromptEnhanceFailed": "优化失败：{{message}} 草稿未改动。",
+  "composerPromptEnhanceTimeout": "优化超时，草稿未改动。可以重试，或在设置里调大超时。",
+  "composerPromptEnhanceDisabled": "提示词优化已在设置中关闭。"
+}

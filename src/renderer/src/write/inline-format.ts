@@ -1,4 +1,6 @@
-export type WriteInlineFormatKind = 'bold' | 'italic' | 'strikethrough' | 'code'
+import { parseMarkdownToMdast } from './markdown/remark-pipeline'
+export type WriteInlineFormatKind = 'bold' | 'italic' | 'strikethrough' | 'code' | 'link' | 'clear'
+type MarkKind = Exclude<WriteInlineFormatKind, 'link' | 'clear'>
 
 type FormatMarker = {
   marker: string
@@ -9,7 +11,7 @@ type FormatMarker = {
   unwrapPatterns: Array<{ pattern: RegExp; replacement: string }>
 }
 
-const MARKERS: Record<WriteInlineFormatKind, FormatMarker> = {
+const MARKERS: Record<MarkKind, FormatMarker> = {
   bold: {
     marker: '**',
     unwrapPatterns: [{ pattern: /^\*\*([\s\S]+)\*\*$/, replacement: '$1' }]
@@ -46,7 +48,7 @@ type Segment = {
  * breaks, the other marks cannot span blank lines (paragraph breaks). Each
  * non-gap segment is toggled independently.
  */
-function splitSegments(text: string, kind: WriteInlineFormatKind): Segment[] {
+function splitSegments(text: string, kind: MarkKind): Segment[] {
   const separator = kind === 'code' ? /(\n+)/ : /(\n[ \t]*\n+)/
   return text
     .split(separator)
@@ -61,18 +63,18 @@ function trimCore(text: string): { lead: string; core: string; trail: string } {
   return { lead, core, trail }
 }
 
-function isWrapped(core: string, kind: WriteInlineFormatKind): boolean {
+function isWrapped(core: string, kind: MarkKind): boolean {
   return MARKERS[kind].unwrapPatterns.some(({ pattern }) => pattern.test(core))
 }
 
-function unwrap(core: string, kind: WriteInlineFormatKind): string {
+function unwrap(core: string, kind: MarkKind): string {
   for (const { pattern, replacement } of MARKERS[kind].unwrapPatterns) {
     if (pattern.test(core)) return core.replace(pattern, replacement)
   }
   return core
 }
 
-function wrap(core: string, kind: WriteInlineFormatKind): string {
+function wrap(core: string, kind: MarkKind): string {
   const { marker } = MARKERS[kind]
   if (kind === 'code' && core.includes('`')) return `\`\` ${core} \`\``
   return `${marker}${core}${marker}`
@@ -92,6 +94,8 @@ export function toggleWriteInlineFormat(
   kind: WriteInlineFormatKind
 ): string | null {
   if (!text.trim()) return null
+  if (kind === 'clear') return clearWriteInlineFormat(text)
+  if (kind === 'link') return `[${text}](https://)`
   const segments = splitSegments(text, kind)
   const formattable = segments.filter((segment) => !segment.isGap && segment.text.trim())
   if (formattable.length === 0) return null
@@ -111,4 +115,26 @@ export function toggleWriteInlineFormat(
     .join('')
 
   return next === text ? null : next
+}
+
+/** Strip inline wrappers using parser offsets, preserving block syntax and literal punctuation. */
+export function clearWriteInlineFormat(text: string): string {
+  type Node = { type: string; value?: string; children?: Node[]; position?: { start: { offset?: number }; end: { offset?: number } } }
+  const render = (node: Node, start: number, end: number): string => {
+    let result = '', cursor = start
+    for (const child of node.children ?? []) {
+      const from = child.position?.start.offset, to = child.position?.end.offset
+      if (from === undefined || to === undefined) continue
+      result += text.slice(cursor, from)
+      if (['strong', 'emphasis', 'delete', 'link', 'linkReference'].includes(child.type) && child.children?.length) {
+        const first = child.children[0].position?.start.offset ?? from
+        const last = child.children.at(-1)?.position?.end.offset ?? to
+        result += render(child, first, last)
+      } else if (child.type === 'inlineCode') result += child.value ?? ''
+      else result += child.children ? render(child, from, to) : text.slice(from, to)
+      cursor = to
+    }
+    return result + text.slice(cursor, end)
+  }
+  return render(parseMarkdownToMdast(text) as Node, 0, text.length)
 }

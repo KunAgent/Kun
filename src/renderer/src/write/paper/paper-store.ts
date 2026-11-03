@@ -22,6 +22,8 @@ export type PaperNotice = {
   message: string
   /** One follow-up such as Undo; running it dismisses the notice. */
   action?: { label: string; run: () => void }
+  /** A second, quieter follow-up (e.g. "Open folder" next to Undo). */
+  secondaryAction?: { label: string; run: () => void }
 } | null
 
 export type PendingPaperInterpretation = {

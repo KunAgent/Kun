@@ -232,44 +232,19 @@ describe('buildToolPreferenceInstruction', () => {
     expect(instruction).not.toContain('detached review passed')
   })
 
-  it('describes the stateful image-first PPT review loop without the legacy one-call board path', () => {
+  it('routes presentation work to the slides skill and validated export', () => {
     const instruction = buildToolPreferenceInstruction([
-      { name: 'ppt_agent', description: 'Run the PPT agent' },
+      { name: 'ppt_preview', description: 'Render PPT previews' },
+      { name: 'ppt_export', description: 'Export a PPTX' },
       { name: 'ppt_to_board', description: 'Lay out a PPTD deck' }
     ])
 
-    expect(instruction).toContain('phase="awaiting_review"')
-    expect(instruction).toContain('phase="awaiting_direction"')
-    expect(instruction).toContain('ppt_agent(action="start", title="...")')
-    expect(instruction).toContain('`title` is required on start')
-    expect(instruction).toContain('preview surface, not a required input surface')
-    expect(instruction).toContain('one direction name/number')
-    expect(instruction).toContain('action="revise_previews"|"retry_failed"')
-    expect(instruction).toContain('action="approve_and_build"')
-    expect(instruction).toContain('same PPT child')
-    expect(instruction).toContain('phase="source_unavailable"')
-    expect(instruction).toContain('never bypass governance')
-    expect(instruction).toContain('exact active user turn')
-    expect(instruction).toContain('Never rewrite, summarize, supplement, or invent')
+    expect(instruction).toContain('follow the `slides` skill')
+    expect(instruction).toContain('produce the PPTX only with `ppt_export`')
+    expect(instruction).toContain('`validated: true`')
     expect(instruction).toContain('`.kun-ppt.html`')
-    expect(instruction).not.toContain('deliverable, reviewContext')
-    expect(instruction).toContain('Never replay boardSpec')
-    expect(instruction).not.toContain('in a single call')
-  })
-
-  it('uses one conversation user-input choice to resume PPT direction selection', () => {
-    const instruction = buildToolPreferenceInstruction([
-      { name: 'ppt_agent', description: 'Run the PPT agent' },
-      { name: 'user_input', description: 'Ask the user' }
-    ])
-
-    expect(instruction).toContain('`user_input`')
-    expect(instruction).toContain('exactly one single-choice question')
-    expect(instruction).toContain('ppt_direction:<workflowId>:<childId>')
-    expect(instruction).toContain('label each option `1. <name>`')
-    expect(instruction).toContain('in the same turn')
-    expect(instruction).toContain('never invent or pass a direction id')
-    expect(instruction).not.toContain('reply in the normal conversation')
+    expect(instruction).toContain('`ppt_preview` already puts review previews on the whiteboard')
+    expect(instruction).not.toContain('ppt_agent')
   })
 
   it('explains only exact-profile and automatic routes in existing-profile mode', () => {

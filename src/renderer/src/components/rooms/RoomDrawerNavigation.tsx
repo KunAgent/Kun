@@ -11,6 +11,7 @@ export type RoomDrawerTarget =
   | { kind: 'task'; taskId: string }
   | { kind: 'reply'; messageId: string }
   | { kind: 'run'; runId: string }
+  | { kind: 'session' }
   | { kind: 'content'; reference: RoomContentReference; messageId?: string }
   | { kind: 'files' }
   | { kind: 'models' }
@@ -74,10 +75,10 @@ export function RoomDrawerNavigation({ frames, onBack, onClose, onSection, rende
   }, [current?.key, active])
   if (!current) return null
   const section = [...frames].reverse().find((frame) => frame.target.kind === 'section')?.target
-  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' ? t('roomsAgentSession') : current.target.kind === 'files' ? t('directFiles') : current.target.kind === 'models' ? t('directModels') : current.target.kind === 'reminders' ? t('roomsReminders') : current.target.kind === 'settings' ? t('roomsSettings') : current.target.kind === 'directory' ? t('agentsDirectory') : current.target.kind === 'profile' ? t('roomsMyAvatar') : undefined
+  const title = current.target.kind === 'handoffs' ? t('agentsHandoffs') : current.target.kind === 'agent' ? t(current.target.agentId ? 'agentsProfileAndMemory' : 'agentsCreate') : current.target.kind === 'reply' ? t('roomsReplyThreadTitle') : current.target.kind === 'content' ? t('roomsReplyContentTitle') : current.target.kind === 'run' || current.target.kind === 'session' ? t('roomsAgentSession') : current.target.kind === 'files' ? t('directFiles') : current.target.kind === 'models' ? t('directModels') : current.target.kind === 'reminders' ? t('roomsReminders') : current.target.kind === 'settings' ? t('roomsSettings') : current.target.kind === 'directory' ? t('agentsDirectory') : current.target.kind === 'profile' ? t('roomsMyAvatar') : undefined
   return <RoomDetailsDrawer embedded={embedded} active={active} section={section?.kind === 'section' ? section.section : 'discussion'}
     onSection={onSection} onClose={onClose} onBack={onBack} frameKey={current.key}
-    taskOpen={current.target.kind === 'task'} runOpen={current.target.kind === 'run'}
+    taskOpen={current.target.kind === 'task'} runOpen={current.target.kind === 'run' || current.target.kind === 'session'}
     childOpen={current.target.kind !== 'section' || frames.length > 1}
     title={title} backLabel={t('roomsReplyBack')}>
     <div ref={panel} className="rooms-drawer-pages">

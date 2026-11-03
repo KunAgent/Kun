@@ -19,9 +19,15 @@ import type {
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import type { TaskWorkspaceThreadEvent } from '@shared/task-workspace'
 import { nativeAgentsFromAcpModes } from '../../../../kun/src/contracts/harness-native-agents'
+import { HarnessSessionSettingListSchema } from '../../../../kun/src/contracts/harness-session-settings'
 
 function nativeAgentsField(agents: unknown) {
   return Array.isArray(agents) ? { agents: nativeAgentsFromAcpModes({ availableModes: agents }) } : {}
+}
+
+function sessionSettingsField(settings: unknown) {
+  const parsed = HarnessSessionSettingListSchema.safeParse(settings)
+  return settings !== undefined && parsed.success ? { settings: parsed.data } : {}
 }
 
 export type KunEventNormalizerDeps = {
@@ -128,6 +134,12 @@ function normalizeKunRuntimeEventPayload(
     case 'tool_call_started':
     case 'tool_call_finished': {
       const action = event.item ? normalizeKunTurnItem(event.item, event.child, deps) : null
+      if (action?.type === 'user_message_received' && event.kind === 'item_created') {
+        // Older promotion events lack turnStartedAt, but their durable event
+        // timestamp still records execution admission rather than queue time.
+        const startedAt = event.turnStartedAt ?? event.timestamp
+        if (startedAt) action.payload = { ...action.payload, startedAt }
+      }
       return action ? [action] : []
     }
     case 'turn_started': {
@@ -257,7 +269,8 @@ function normalizeKunRuntimeEventPayload(
           ...(typeof event.currentModeId === 'string' && event.currentModeId.trim()
             ? { currentModeId: event.currentModeId.trim() }
             : {}),
-          ...nativeAgentsField((event as { agents?: unknown }).agents)
+          ...nativeAgentsField((event as { agents?: unknown }).agents),
+          ...sessionSettingsField(event.settings)
         }
       }]
     }
@@ -316,6 +329,7 @@ function normalizeKunRuntimeEventPayload(
           recentTurns: event.stats?.recentTurns ?? 0,
           files: event.stats?.files ?? 0,
           briefDigest: event.briefDigest ?? '',
+          ...(event.continuationFailure ? { continuationFailure: event.continuationFailure } : {}),
           ...(event.timestamp ? { createdAt: event.timestamp } : {})
         }
       }]

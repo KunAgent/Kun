@@ -29,18 +29,26 @@ describe('room SDK execution boundary', () => {
       .resolves.toMatchObject({ allow: false, message: 'This turn only allows Kun-gated tools.' })
   })
 
-  it.each([true, false])('AgentLoop admits only a room-safe runtime: %s', async (roomToolPolicy) => {
+  async function runRoomTurn(kind: 'conversation' | 'execution', roomToolPolicy: boolean) {
     const runTurn = vi.fn(async () => 'completed' as const)
     const sdkRuntime = { handlesProvider: () => true,
       capabilities: () => ({ ...agentSdkCapabilities(), roomToolPolicy }), runTurn } as unknown as AgentSdkRuntime
     const h = makeHarness(model, { sdkRuntime })
     const thread = await h.threads.create({ title: 'Room', workspace: '/tmp', model: 'test', mode: 'agent' }, {
       relation: 'side', roomContext: { roomId: 'room', memberId: 'member', participantAgentId: 'agent',
-        kind: 'conversation', blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
+        kind, blockedToolNames: [], blockedProviderIds: [], blockedSkillIds: [] }
     })
     const turn = await h.turns.startTurn({ threadId: thread.id, request: { prompt: 'Work' } })
     await h.loop.runTurn(thread.id, turn.turnId)
-    expect(runTurn).toHaveBeenCalledTimes(roomToolPolicy ? 1 : 0)
+    return runTurn
+  }
+
+  it.each([true, false])('AgentLoop admits only a room-safe runtime for a room task: %s', async (roomToolPolicy) => {
+    expect(await runRoomTurn('execution', roomToolPolicy)).toHaveBeenCalledTimes(roomToolPolicy ? 1 : 0)
+  })
+
+  it('lets a private conversation run on its engine-native gate, which the host cannot mediate', async () => {
+    expect(await runRoomTurn('conversation', false)).toHaveBeenCalledTimes(1)
   })
 
   it('blocks native mutations and reads even with an unrestricted sandbox', () => {

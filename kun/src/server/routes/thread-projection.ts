@@ -24,6 +24,8 @@ export function projectTimelineThread(thread: ThreadRecord): ThreadRecord {
     additionalWorkspaces: thread.additionalWorkspaces?.slice(0, 32),
     knowledgeBases: thread.knowledgeBases?.slice(0, 8),
     // These snapshots are model/runtime inputs, not renderer timeline data.
+    remoteFork: undefined,
+    remoteRewind: undefined,
     extensionProfile: undefined,
     toolCatalogEpoch: undefined,
     systemPrompt: undefined,
@@ -162,6 +164,7 @@ export async function healSessionItemsForFinishedTurns(
   items: TurnItem[],
   sessionStore: SessionStore
 ): Promise<TurnItem[]> {
+  if (thread.remoteRewind?.phase === 'pending') return items
   if (items.length === 0 || thread.turns.length === 0) return items
   const finishedByTurnId = new Map<string, { status: FinishedTurnStatus; finishedAt?: string }>()
   for (const turn of thread.turns) {
@@ -228,7 +231,7 @@ export function hydrateThreadItemsFromSession(
 
 /** Defense in depth for every HTTP endpoint that returns a ThreadRecord. */
 export function projectPublicThreadRecord(thread: ThreadRecord): ThreadRecord {
-  const { revision: _revision, executionTasks, ...publicThread } = thread
+  const { revision: _revision, remoteFork: _remoteFork, remoteRewind: _remoteRewind, executionTasks, ...publicThread } = thread
   const turns = thread.turns.map(projectPublicTurn)
   return { ...publicThread, ...(executionTasks ? { todos: executionTasksAsTodos(thread.id, executionTasks) } : {}), turns }
 }

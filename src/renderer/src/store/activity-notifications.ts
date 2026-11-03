@@ -3,14 +3,14 @@ import type { AdeActivityNotificationCategory } from '@shared/kun-gui-notificati
 import i18n from '../i18n'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useActivityStore } from './activity-store'
-import { syncAppBadgeCount } from './app-badge'
+import { appBadgeInputFromChatState, syncAppBadgeCount } from './app-badge'
 import { useChatStore } from './chat-store'
 import type { ChatState } from './chat-store-types'
 
 export const ADE_NOTIFICATION_DEDUPE_LIMIT = 500
 
 /**
- * Row transition → notification category (06 §3 states + the stalled flag).
+ * Row transition → notification category.
  * A stalled flip wins over a state label so a still-"working" but stuck unit
  * surfaces once.
  */
@@ -140,9 +140,9 @@ let unsubscribe: (() => void) | null = null
 
 /**
  * Subscribe to ActivityStore row changes and emit OS notifications on
- * transitions to waiting/failed/done/stalled (12 §notifications). Badge count
- * is synced on every change so the Dock number always reads needs-you +
- * unread. Idempotent: a second start is a no-op.
+ * transitions to waiting/failed/done/stalled. Badge count
+ * is synced on every change so the Dock number always matches the sidebar
+ * "needs you" list. Idempotent: a second start is a no-op.
  */
 export function startActivityNotifications(deps: ActivityNotificationDeps = defaultDeps()): void {
   if (unsubscribe) return
@@ -155,7 +155,7 @@ export function startActivityNotifications(deps: ActivityNotificationDeps = defa
       if (row !== prev) void maybeNotifyTransition(row, prev, deps)
     }
     prevRows = nextRows
-    syncAppBadgeCount(useChatStore.getState().unreadThreadIds, nextRows)
+    syncAppBadgeCount(appBadgeInputFromChatState(useChatStore.getState(), nextRows))
   })
 }
 

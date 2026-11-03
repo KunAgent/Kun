@@ -4,6 +4,7 @@
  * resolution, image decoding, the ensure-once workspace checkpoint gate, and
  * the session-binding commit.
  */
+import { acpLaunchArgs } from '../../harness/acp-launch-args.js'
 import { intersectCapabilities } from '../../harness/effective-capabilities.js'
 import type { HarnessCapabilities } from '../../contracts/harness-capabilities.js'
 import type { Turn } from '../../contracts/turns.js'
@@ -42,11 +43,14 @@ import {
 import { acpLegacyCapabilities } from './acp-runtime-support.js'
 import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
 
+/** Connections whose unexpected exit already invalidates hosted session bindings. */
+const watchedConnections = new WeakSet<AcpConnection>()
+
 export type AcpLifecycleDeps = {
   binaryPath?: (harnessId: HarnessId) => string | undefined
   /** Extra env keys to strip from the harness child beyond the shared denylist. */
   stripEnv?: readonly string[]
-  /** Resolves `launch.secretEnv` credential-store refs at spawn (P4-12). */
+  /** Resolves `launch.secretEnv` credential-store refs at spawn. */
   resolveSecretEnv?: HarnessSecretRefResolver
   spawn?: AcpSpawnFn
   debug?: AcpDebugLog
@@ -64,6 +68,7 @@ export async function acquireAcpConnection(
   host: AcpClientHost,
   sessions: AcpSessionManager,
   input: {
+    permissionModeId?: string
     poolKey: string
     command?: string
     definition: HarnessDefinition
@@ -91,7 +96,7 @@ export async function acquireAcpConnection(
       harnessId: input.definition.id,
       signal: input.signal, validateLaunch: input.validateLaunch,
       command,
-      args: input.definition.launch?.args ?? [],
+      args: acpLaunchArgs(input.definition, input.permissionModeId),
       env: acpLaunchEnv(input.definition, { ...secretEnv, ...input.credentialEnv }),
       secretEnv,
       credentialEnv: input.credentialEnv,
@@ -105,25 +110,31 @@ export async function acquireAcpConnection(
       debug: deps.debug
     })
     host.attach(conn)
-    // Drop live handles on exit; preserve native IDs when disk loading is supported.
-    const detachExit = pool.onExit(input.poolKey, () => {
-      detachExit()
-      void sessions
-        .handleConnectionExit(conn, input.definition.id)
-        .catch(() => undefined)
-    })
     if (input.signal.aborted) {
       await conn.close().catch(() => undefined)
       throw new AcpError('request_aborted', 'turn aborted before initialize')
     }
     try {
-      await conn.initialize()
+      await conn.initialize({ fileWrites: input.definition.acpClientWrites !== false })
     } catch (error) {
       await conn.close().catch(() => undefined)
       throw error
     }
     return conn
   }, { signal: input.signal, validate: input.validateLaunch })
+  // Exit listeners attach to a published pool entry, so this must run after
+  // acquire resolves; registering inside the factory was a no-op that left
+  // stale native session ids after an Agent crash.
+  const conn = lease.connection
+  if (!watchedConnections.has(conn)) {
+    watchedConnections.add(conn)
+    const detachExit = pool.onExit(input.poolKey, () => {
+      detachExit()
+      void sessions
+        .handleConnectionExit(conn, input.definition.id)
+        .catch(() => undefined)
+    })
+  }
   try {
     await input.validateLaunch?.()
     input.signal.throwIfAborted()
@@ -263,7 +274,7 @@ export function acpCheckpointGate(
   }
 }
 
-/** Persist the session binding after the turn (best-effort; §5.1). */
+/** Persist the session binding after the turn (best-effort). */
 export async function commitAcpSession(
   sessions: AcpSessionManager,
   sessionStore: Pick<SessionStore, 'loadItems'>,
@@ -306,9 +317,13 @@ export async function recordAcpDelegatedRuntime(
     initResult: AcpInitializeResult | undefined
     session: AcpSessionFacts
     sandbox: 'host' | 'native' | 'none'
+    liveSteering?: boolean
   }
 ): Promise<void> {
-  const reported = capabilitiesFromAcp(input.initResult, input.session, { sandbox: input.sandbox })
+  const reported = capabilitiesFromAcp(input.initResult, input.session, {
+    sandbox: input.sandbox,
+    ...(input.liveSteering ? { liveSteering: true } : {})
+  })
   const capabilitiesV2 = input.declaredCapabilities ? intersectCapabilities(input.declaredCapabilities, reported) : reported
   await events.record({
     kind: 'delegated_runtime',
@@ -323,6 +338,7 @@ export async function recordAcpDelegatedRuntime(
       : {}),
     capabilities: {
       ...acpLegacyCapabilities(),
+      liveSteering: capabilitiesV2.statuses.sameTurnSteer.supported === true,
       // Legacy bag mirrors v2 honesty: only a delivered descriptor counts.
       kunTools:
         input.session.kunToolsDescriptor === 'http' ||

@@ -1,0 +1,28 @@
+{
+  "composerAsk": {
+    "cardLabel": "Kun 的提问",
+    "previousQuestion": "上一题",
+    "nextQuestion": "下一题",
+    "freeTextPlaceholder": "输入你自己的回答…",
+    "otherPlaceholder": "其他，输入你自己的回答…",
+    "ruleAny": "可以多选",
+    "ruleMax_other": "可以多选，最多 {{count}} 项",
+    "ruleMin_other": "可以多选，至少 {{count}} 项",
+    "ruleExact_other": "请选择 {{count}} 项",
+    "ruleRange": "请选择 {{min}}–{{max}} 项",
+    "hintSingle": "↑↓ 或数字键选择，回车{{enter}}，Esc {{escape}}",
+    "hintMulti": "↑↓ 移动，空格勾选，回车{{enter}}",
+    "hintText": "回车{{enter}}，Shift+回车换行",
+    "hintTextOnly": "回车{{enter}}，Shift+回车换行，Esc {{escape}}",
+    "hintEnterSubmit": "提交",
+    "hintEnterNext": "下一题",
+    "hintEscapeSkip": "跳过",
+    "hintEscapeBack": "上一题",
+    "skip": "跳过",
+    "submit": "提交",
+    "next": "下一题",
+    "submitting": "正在提交…",
+    "submitFailed": "回答没有送达：{{message}}",
+    "submitFailedGeneric": "回答没有送达，请重试。"
+  }
+}

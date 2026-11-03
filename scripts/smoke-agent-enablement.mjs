@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { _electron } from 'playwright-core'
-import { createServer } from 'vite'
+import { createServer, optimizeDeps } from 'vite'
+import { setSmokeAppearance } from './agent-enablement-smoke-operation.mjs'
 
 // Real native Electron production components with an offline host boundary.
 // This does not install an external agent, log in, or send a model request.
@@ -22,7 +23,7 @@ const report = { sourceRevision: git('rev-parse', 'HEAD'), nativePlatform: proce
   scaleMethod: 'Native Electron webContents.setZoomFactor; no CSS transform or DPR emulation',
   captureMethod: 'Full native webContents.capturePage().toPNG(); PNG dimensions verified against native content and display scale',
   started: new Date().toISOString(), assertions: [], screenshots: [], screenshotDetails: [], measurements: [], viewports: [],
-  nativeCaptures: [], pageErrors: [], blockedRequests: [], status: 'running' }
+  nativeCaptures: [], appearanceOperations: [], navigations: [], viteMessages: [], preoptimizedDependencies: [], pageErrors: [], blockedRequests: [], status: 'running' }
 let electron, page, server
 try {
   if (process.env.KUN_ENABLEMENT_EXPECTED_SHA) {
@@ -66,6 +67,9 @@ app.on('window-all-closed', () => app.quit())
         })
       }
     }] })
+  // Complete dependency discovery before the first native renderer navigation.
+  const optimized = await optimizeDeps(server.config, true, true)
+  report.preoptimizedDependencies = Object.keys(optimized.optimized)
   await server.listen()
   const origin = new URL(server.resolvedUrls.local[0]).origin
   await page.route('**/*', route => {
@@ -74,11 +78,17 @@ app.on('window-all-closed', () => app.quit())
     report.blockedRequests.push(url)
     return route.abort('blockedbyclient')
   })
+  page.on('framenavigated', frame => {
+    if (frame === page.mainFrame()) report.navigations.push({ url: frame.url(), at: new Date().toISOString() })
+  })
+  page.on('console', message => {
+    if (message.text().includes('[vite]')) report.viteMessages.push({ text: message.text(), at: new Date().toISOString() })
+  })
   await page.goto(`${origin}/__agent_enablement?platform=${process.platform}`, { timeout: 90_000 })
   await panel().waitFor({ timeout: 90_000 })
   await reset()
   assert.deepEqual(await menuIds(), ['kun'])
-  report.assertions.push('Disabled external agents and retired Gemini are absent from the composer')
+  report.assertions.push('Disabled external agents and retired Agents are absent from the composer')
   await screenshot('disabled')
   await screenshotMenu('disabled-composer-menu')
 
@@ -143,8 +153,7 @@ app.on('window-all-closed', () => app.quit())
 
   await reset()
   await pendingCheck()
-  await panel().locator('[data-agent-profile-mode]').click()
-  await page.locator('[data-agent-setting-option="kun-gateway"]').click()
+  await panel().locator('[data-agent-profile-mode-option="kun-gateway"]').click()
   await page.evaluate(() => window.agentEnablementFixture.resolvePending(true))
   await settled()
   assert.equal((await snapshot()).enabledProfiles.length, 0)
@@ -168,15 +177,18 @@ app.on('window-all-closed', () => app.quit())
   await reset()
   await pendingCheck()
   await page.evaluate(() => window.agentEnablementFixture.selectAgent('deepseek-harness'))
-  await page.locator('[data-agent-enablement="deepseek-harness"]').waitFor()
+  await page.locator('[data-agent-detail-slot="deepseek-harness"]:not([hidden]) [data-agent-enablement]').waitFor()
+  // The check keeps running on Pi's hidden page and the list says so.
+  assert.equal(await page.locator('[data-agent-list-id="pi"]').getAttribute('data-agent-state'), 'checking')
   await page.evaluate(() => window.agentEnablementFixture.resolvePending(true))
+  await page.locator('[data-agent-detail-slot="pi"]').waitFor({ state: 'detached' })
   await settled()
-  assert.equal((await snapshot()).enabledProfiles.length, 0)
-  report.assertions.push('Switching agents rejects a late response for the previous agent')
+  assert.deepEqual((await snapshot()).enabledProfiles.map((profile) => profile.harnessId), ['pi'])
+  report.assertions.push('Switching agents keeps a running check, which finishes for the agent it started on')
   await page.evaluate(() => window.agentEnablementFixture.setOutcome('success'))
   await enable().click()
   await state('ready')
-  assert.deepEqual((await menuIds()).sort(), ['deepseek-harness', 'kun'])
+  assert.deepEqual((await menuIds()).sort(), ['deepseek-harness', 'kun', 'pi'])
   await page.locator('[data-agent-readiness-result]').waitFor()
   assert.match(await page.locator('[data-agent-readiness-result]').innerText(), /not verified|unverified|not tested/i)
   await screenshot('deepseek-enabled-auth-unverified')
@@ -187,7 +199,7 @@ app.on('window-all-closed', () => app.quit())
   await page.locator('[data-agent-enablement="devin"]').waitFor()
   await enable().click(); await state('ready')
   for (const theme of ['light', 'dark']) {
-    await page.evaluate(async theme => { await window.agentEnablementFixture.language('zh'); window.agentEnablementFixture.theme(theme) }, theme)
+    await setSmokeAppearance(page, 'zh', theme, report.appearanceOperations)
     await panel().locator('[data-agent-profile-model]').click()
     const menu = page.locator('[data-agent-settings-model-menu]')
     await menu.locator('[data-devin-model="swe-2-high"]').waitFor()
@@ -208,22 +220,23 @@ app.on('window-all-closed', () => app.quit())
     await screenshot(`settings-devin-fusion-${theme}`)
     await menu.locator('input[type="search"]').fill('SWE-2')
     await menu.locator('[data-devin-model="swe-2-high"]').click()
-    await page.waitForFunction(() => window.agentEnablementFixture.snapshot().defaults.devin?.model === 'swe-2-high')
     assert.match(await panel().locator('[data-agent-profile-model]').innerText(), /SWE-2/)
-    await panel().locator('[data-agent-profile-mode]').click()
-    await page.locator('[data-agent-settings-listbox]').waitFor()
-    await screenshot(`settings-connection-menu-${theme}`)
-    await page.keyboard.press('Escape')
+    if (theme === 'light') {
+      // An enabled Agent keeps the saved model until the edit is re-checked.
+      await panel().locator('[data-agent-draft]').waitFor()
+      assert.notEqual((await snapshot()).defaults.devin?.model, 'swe-2-high')
+      await panel().locator('[data-agent-draft-check]').click()
+      await page.waitForFunction(() => window.agentEnablementFixture.snapshot().defaults.devin?.model === 'swe-2-high')
+      await state('ready')
+    }
+    await screenshot(`settings-connection-modes-${theme}`)
   }
   report.assertions.push('Settings reuse the Devin search, brands and Fusion list, save exact native IDs, and keep themed portals inside the viewport')
   await page.evaluate(() => window.agentEnablementFixture.selectAgent('deepseek-harness'))
   await page.locator('[data-agent-enablement="deepseek-harness"]').waitFor()
 
   for (const language of ['en', 'zh']) for (const theme of ['light', 'dark']) {
-    await page.evaluate(async ({ language, theme }) => {
-      await window.agentEnablementFixture.language(language)
-      window.agentEnablementFixture.theme(theme)
-    }, { language, theme })
+    await setSmokeAppearance(page, language, theme, report.appearanceOperations)
     for (const width of [900, 1280]) for (const zoom of [1, 1.5, 2]) {
       await electron.evaluate(({ BrowserWindow }, { width, zoom }) => {
         const window = BrowserWindow.getAllWindows()[0]
@@ -260,8 +273,8 @@ app.on('window-all-closed', () => app.quit())
       // Name evidence with the measured viewport and scroll each real control,
       // not the oversized panel, so high-zoom captures show the tested action.
       const label = `layout-${language}-${theme}-requested${width}x1000-viewport${viewport.width}x${viewport.height}-zoom${zoom}`
-      for (const [target, selector] of [['profile', '[data-agent-profile-mode]'], ['enable', '[data-agent-enable]']]) {
-        const control = await measureControl(panel().locator(selector))
+      for (const [target, selector] of [['profile', '[data-agent-profile-mode-option]'], ['enable', '[data-agent-enable]']]) {
+        const control = await measureControl(panel().locator(selector).first())
         await assertTheme(theme)
         await screenshot(`${label}-${target}`, { ...layout, target, selector, control })
       }
@@ -304,7 +317,8 @@ app.on('window-all-closed', () => app.quit())
   await server?.close()
   await rm(temporary, { recursive: true, force: true })
 }
-function panel() { return page.locator('[data-agent-enablement]') }
+// A check started on another Agent keeps its page mounted but hidden; drive the one on screen.
+function panel() { return page.locator('[data-agent-detail-slot]:not([hidden]) [data-agent-enablement]') }
 function enable() { return panel().locator('[data-agent-enable]') }
 async function customModel(model) {
   await panel().locator('[data-agent-profile-model]').click()
@@ -312,7 +326,7 @@ async function customModel(model) {
   await page.locator('[data-agent-custom-model-input]').fill(model)
   await page.locator('[data-agent-custom-model-apply]').click()
 }
-async function state(value) { await page.waitForFunction(value => document.querySelector('[data-agent-enablement]')?.getAttribute('data-agent-enablement-state') === value, value) }
+async function state(value) { await page.waitForFunction(value => document.querySelector('[data-agent-detail-slot]:not([hidden]) [data-agent-enablement]')?.getAttribute('data-agent-enablement-state') === value, value) }
 async function snapshot() { return page.evaluate(() => window.agentEnablementFixture.snapshot()) }
 async function settled() { await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))) }
 async function reset() { await page.evaluate(() => window.agentEnablementFixture.reset()); await state('disabled'); await settled() }

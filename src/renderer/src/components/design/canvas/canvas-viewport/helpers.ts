@@ -5,6 +5,7 @@ import { createTextTool } from '../../../../design/canvas/tools/text-tool'
 import { createFrameTool } from '../../../../design/canvas/tools/frame-tool'
 import { createHandTool } from '../../../../design/canvas/tools/hand-tool'
 import { createScreenTool } from '../../../../design/canvas/tools/screen-tool'
+import { createStickyTool } from '../../../../design/canvas/tools/sticky-tool'
 import { createAiImageTool } from '../../../../design/canvas/tools/ai-image-tool'
 import { createArrowTool, createLineTool } from '../../../../design/canvas/tools/linear-tool'
 import { createDrawTool } from '../../../../design/canvas/tools/draw-tool'
@@ -127,13 +128,11 @@ export function resolveSelectedImageAnnotationAction(
   }
 }
 
-export function shouldToggleHtmlFrameInteractiveOnDoubleClick(
-  surface: CanvasSurface,
-  shape: CanvasDocument['objects'][string] | undefined
-): boolean {
-  return shouldRenderDesignArtifactOverlays(surface) && Boolean(shape && isHtmlFrame(shape))
-}
-
+/**
+ * Double-click opens component picking on an HTML board, not live interaction:
+ * prototypes should not fire actions just because the user wants to select
+ * something. Preview mode has its own explicit chrome button.
+ */
 export function resolveCanvasDesignSystemBaseDir(
   baseDir: string | undefined,
   designSystemBaseDir: string | undefined
@@ -286,16 +285,14 @@ export function resolveHtmlFrameOverlayInteractionState(
   selectedIds: ReadonlySet<string>,
   state: {
     interactiveId: string | null
-    editingId: string | null
     overlayAvailable?: boolean
     mountableFrameIds?: ReadonlySet<string>
   }
 ): {
   interactiveId: string | null
-  editingId: string | null
 } {
   if (state.overlayAvailable === false) {
-    return { interactiveId: null, editingId: null }
+    return { interactiveId: null }
   }
   const canKeep = (id: string | null): id is string => {
     if (!id || !selectedIds.has(id)) return false
@@ -304,8 +301,7 @@ export function resolveHtmlFrameOverlayInteractionState(
     return Boolean(shape?.visible && isHtmlFrame(shape))
   }
   return {
-    interactiveId: canKeep(state.interactiveId) ? state.interactiveId : null,
-    editingId: canKeep(state.editingId) ? state.editingId : null
+    interactiveId: canKeep(state.interactiveId) ? state.interactiveId : null
   }
 }
 
@@ -423,6 +419,7 @@ const toolFactories: Record<CanvasTool, () => CanvasToolHandler> = {
   text: createTextTool,
   frame: createFrameTool,
   screen: createScreenTool,
+  sticky: createStickyTool,
   image: createAiImageTool,
   arrow: createArrowTool,
   line: createLineTool,

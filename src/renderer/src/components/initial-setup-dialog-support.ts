@@ -18,6 +18,7 @@ import {
   enqueueSharedModelMutation,
   stageSharedProviderCredentialMutation
 } from './shared-provider-mutation-coordinator'
+import { markOverviewTourPending } from './guided-tour/guided-tour-store'
 
 export type ThemePref = AppSettingsV1['theme']
 export type SetupFormPatch = AppSettingsPatch
@@ -351,7 +352,10 @@ export async function finishInitialSetup(input: {
   openCode: () => Promise<void>
   closeInitialSetup: () => void
 }): Promise<void> {
-  if (input.mode === 'required') await input.openCode()
+  if (input.mode === 'required') {
+    markOverviewTourPending()
+    await input.openCode()
+  }
   input.closeInitialSetup()
 }
 
@@ -364,6 +368,7 @@ export async function dismissInitialSetup(input: {
 }): Promise<void> {
   if (input.mode === 'required') {
     await input.persistCompletion()
+    markOverviewTourPending()
   }
   await input.reloadUiSettings()
   input.closeInitialSetup()

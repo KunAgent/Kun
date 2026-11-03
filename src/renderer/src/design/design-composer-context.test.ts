@@ -302,6 +302,52 @@ describe('design composer context', () => {
       }
     })
   })
+
+  it('labels a picked component chip and keeps it on the code whiteboard', () => {
+    const html = artifact('screen-a')
+    const element = {
+      artifactId: html.id,
+      artifactTitle: html.title,
+      artifactRelativePath: html.relativePath,
+      selector: '[data-kun-source-id="cta"]',
+      tagName: 'BUTTON',
+      text: '接管',
+      html: '<button>接管</button>',
+      label: 'Button · 接管',
+      path: ['Page', 'Card', 'Button'],
+      componentName: 'Button',
+      frameId: 'shape-screen',
+      previewRevision: 3
+    }
+    const target = designHtmlElementContextTarget({ artifacts: [html], element })
+    expect(target).toMatchObject({
+      kind: 'html-element',
+      chip: {
+        id: 'html-element:screen-a:shape-screen:[data-kun-source-id="cta"]',
+        label: 'Button · 接管',
+        detail: 'Page / Card / Button'
+      }
+    })
+    const targets = resolveDesignComposerContextViewTargets({
+      route: 'code',
+      artifacts: [html],
+      activeArtifactId: html.id,
+      canvasDocument: createEmptyDocument(),
+      selectedIds: new Set(),
+      htmlElementContext: element
+    })
+    expect(targets.map((entry) => entry.kind)).toEqual(['html-element'])
+    expect(designContextChipsForRoute({
+      route: 'code',
+      targetChip: designTargetContextChip({ label: 'Web' }),
+      targets
+    }).map((chip) => chip.label)).toEqual(['Button · 接管'])
+    expect(designContextChipsForRoute({
+      route: 'chat',
+      targetChip: designTargetContextChip({ label: 'Web' }),
+      targets
+    })).toEqual([])
+  })
 })
 
 describe('designSelectedContextLocations', () => {

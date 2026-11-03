@@ -1,0 +1,15 @@
+{
+  "toolStatePending": "Pending",
+  "toolStateRunning": "Running",
+  "toolStateFailed": "Failed",
+  "toolStateCanceled": "Canceled",
+  "toolStateDuration": "Execution time",
+  "toolStateExitCode": "Exit code",
+  "toolStateExit": "exit {{code}}",
+  "toolSummaryFetched_one": "Fetched {{count}} page",
+  "toolSummaryFetched_other": "Fetched {{count}} pages",
+  "toolSummaryFailed_one": "{{count}} failed",
+  "toolSummaryFailed_other": "{{count}} failed",
+  "toolSummaryCanceled_one": "{{count}} canceled",
+  "toolSummaryCanceled_other": "{{count}} canceled"
+}

@@ -11,7 +11,7 @@ import {
   updateReviewCommentResponse
 } from './reviews.js'
 
-/** Review-comment routes (11 §4): per-workspace, shared across clients. */
+/** Review-comment routes: per-workspace, shared across clients. */
 export function registerReviewRoutes(router: Router, runtime: ServerRuntime): void {
   const reviews = (request: Request): JsonResponse | FileReviewStore => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

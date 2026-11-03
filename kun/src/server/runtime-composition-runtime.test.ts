@@ -2,11 +2,17 @@ import { describe, expect, it, vi } from 'vitest'
 import type { MemoryFeedbackRuntime } from '../memory/memory-feedback-runtime.js'
 import { createServerRuntimeComposition } from './runtime-composition-runtime.js'
 
+// The rooms composition opens real SQLite stores; this suite is about what the runtime composition exposes, not about them.
+vi.mock('./runtime-composition-rooms.js', () => ({ createRuntimeRoomComposition: () => looseObject() }))
+
 describe('server runtime composition', () => {
   it('exposes the composed memory feedback runtime to HTTP routes', () => {
     const memoryFeedback = {} as MemoryFeedbackRuntime
     const addObserver = vi.fn()
-    const services = looseObject({ memoryFeedback, model: looseObject({ core: looseObject({ events: { addObserver } }) }) })
+    // The composition calls these on the Agent source, so they must be callable rather than loose objects.
+    const extensionAgents = { setLoader: vi.fn(), refresh: vi.fn(async () => undefined) }
+    const services = looseObject({ memoryFeedback, harnesses: looseObject({ extensionAgents }),
+      model: looseObject({ core: looseObject({ events: { addObserver } }) }) })
     const extensions = looseObject({
       agent: looseObject({ registryComposition: looseObject({ services }) })
     })
@@ -20,18 +26,20 @@ describe('server runtime composition', () => {
     const runtime = createServerRuntimeComposition(extensions as never, config as never)
 
     expect(runtime.memoryFeedback).toBe(memoryFeedback)
-    expect(addObserver).toHaveBeenCalledTimes(1)
-    expect(addObserver.mock.calls[0][0].constructor.name).toBe('RoomNotificationObserver')
+    expect(extensionAgents.setLoader).toHaveBeenCalledOnce()
+    expect(addObserver.mock.calls.map(([observer]) => observer.constructor.name)).toContain('RoomNotificationObserver')
   })
 })
 
+/** Every member the composition reaches for that a test did not name is another loose object, callable too. */
 function looseObject(overrides: Record<string, unknown> = {}): object {
-  let proxy: object
-  proxy = new Proxy(overrides, {
-    get(target, property) {
-      if (typeof property === 'symbol') return undefined
-      return property in target ? target[property] : proxy
-    }
+  const proxy: object = new Proxy(function loose() { return proxy }, {
+    get(_target, property) {
+      // Symbols and `then` stay undefined so a loose object is never taken for an iterable or a promise.
+      if (typeof property === 'symbol' || property === 'then') return undefined
+      return property in overrides ? overrides[property] : proxy
+    },
+    apply: () => proxy
   })
   return proxy
 }

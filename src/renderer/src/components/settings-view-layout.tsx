@@ -1,6 +1,6 @@
 import { settingsButtonClass } from './settings-button'
 import type { ComponentProps, ReactElement } from 'react'
-import { Suspense, lazy, useEffect } from 'react'
+import { Suspense, lazy, useRef } from 'react'
 import { CircleAlert, RotateCw } from 'lucide-react'
 import { ExtensionDeclarativeSettingsPane } from '../extensions/ExtensionDeclarativeSettingsPane'
 import { GeneralSettingsSection } from './settings-section-general'
@@ -10,10 +10,29 @@ import {
 import { settingsSaveIssueMessage } from './settings-save-error'
 import { SettingsPageHeader, SettingsSaveStatusPill, settingsSaveStatusTone } from './settings-page-header'
 import { lazySection } from './settings-lazy-section'
-import type { SettingsCategory } from './settings-navigation'
+import { AGENT_SETTINGS_PANELS, isAgentSettingsCategory, type SettingsCategory } from './settings-navigation'
+import { useSettingsArrivalFlash } from './use-settings-arrival-flash'
 
 const ProvidersSettingsSection = lazySection(() =>
   import('./settings-section-providers').then((module) => ({ default: module.ProvidersSettingsSection }))
+)
+const GatewaySettingsSection = lazySection(() =>
+  import('./settings-section-gateway').then((module) => ({ default: module.GatewaySettingsSection }))
+)
+const AppearanceSettingsSection = lazySection(() =>
+  import('./settings-section-appearance').then((module) => ({ default: module.AppearanceSettingsSection }))
+)
+const NotificationsSettingsSection = lazySection(() =>
+  import('./settings-section-notifications').then((module) => ({ default: module.NotificationsSettingsSection }))
+)
+const CodeSettingsSection = lazySection(() =>
+  import('./settings-section-code').then((module) => ({ default: module.CodeSettingsSection }))
+)
+const PaperSettingsSection = lazySection(() =>
+  import('./settings-section-paper').then((module) => ({ default: module.PaperSettingsSection }))
+)
+const LegacySessionImportCard = lazySection(() =>
+  import('./settings-section-general-legacy-import').then((module) => ({ default: module.LegacySessionImportCard }))
 )
 const WriteSettingsSection = lazySection(() =>
   import('./settings-section-write').then((module) => ({ default: module.WriteSettingsSection }))
@@ -39,9 +58,6 @@ const SubagentsSettingsSection = lazySection(() =>
 const ArchivedThreadsSettingsSection = lazySection(() =>
   import('./settings-section-archives').then((module) => ({ default: module.ArchivedThreadsSettingsSection }))
 )
-const WorktreeSettingsSection = lazySection(() =>
-  import('./settings-section-worktree').then((module) => ({ default: module.WorktreeSettingsSection }))
-)
 const MemorySettingsSection = lazySection(() =>
   import('./settings-section-memory').then((module) => ({ default: module.MemorySettingsSection }))
 )
@@ -53,6 +69,9 @@ const EasterEggSettingsSection = lazySection(() =>
 )
 const ClawSettingsSection = lazySection(() =>
   import('./settings-section-claw').then((module) => ({ default: module.ClawSettingsSection }))
+)
+const ConnectionsSettingsSection = lazySection(() =>
+  import('./settings-section-connections').then((module) => ({ default: module.ConnectionsSettingsSection }))
 )
 const UpdatesSettingsSection = lazySection(() =>
   import('./settings-section-updates').then((module) => ({ default: module.UpdatesSettingsSection }))
@@ -69,6 +88,9 @@ const DataMigrationSettingsSection = lazySection(() =>
 const StorageRelocationSettingsSection = lazySection(() =>
   import('./settings-section-storage-relocation').then((module) => ({ default: module.StorageRelocationSettingsSection }))
 )
+const StorageCleanupSettingsSection = lazySection(() =>
+  import('./settings-section-storage-cleanup').then((module) => ({ default: module.StorageCleanupSettingsSection }))
+)
 const UninstallSettingsSection = lazySection(() =>
   import('./settings-section-uninstall').then((module) => ({ default: module.UninstallSettingsSection }))
 )
@@ -80,41 +102,37 @@ const WriteDebugLogModal = lazy(() =>
 )
 
 const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
+  appearance: AppearanceSettingsSection.preload,
+  notifications: NotificationsSettingsSection.preload,
   providers: ProvidersSettingsSection.preload,
+  gateway: GatewaySettingsSection.preload,
   write: WriteSettingsSection.preload,
+  paper: PaperSettingsSection.preload,
   design: DesignSettingsSection.preload,
   mediaGeneration: MediaGenerationSettingsSection.preload,
   speechToText: SpeechToTextSettingsSection.preload,
-  agents: AgentsSettingsSection.preload,
   laboratory: LaboratorySettingsSection.preload,
   subagents: SubagentsSettingsSection.preload,
   archives: ArchivedThreadsSettingsSection.preload,
-  worktree: WorktreeSettingsSection.preload,
+  code: CodeSettingsSection.preload,
   memory: MemorySettingsSection.preload,
   shortcuts: KeyboardShortcutsSettingsSection.preload,
   easterEgg: EasterEggSettingsSection.preload,
   claw: ClawSettingsSection.preload,
+  connections: ConnectionsSettingsSection.preload,
   updates: UpdatesSettingsSection.preload,
   terminal: TerminalSettingsSection.preload,
   debug: LlmDebugSettingsSection.preload,
   dataMigration: DataMigrationSettingsSection.preload,
   storage: StorageRelocationSettingsSection.preload,
+  storageCleanup: StorageCleanupSettingsSection.preload,
   uninstall: UninstallSettingsSection.preload,
   pets: PetsSettingsSection.preload
 }
 
 function preloadSettingsCategory(category: SettingsCategory): void {
-  SECTION_PRELOADERS[category]?.()
-}
-
-function LoadedAgentsSettingsSection({
-  onReady,
-  ...props
-}: ComponentProps<typeof AgentsSettingsSection> & { onReady: () => void }): ReactElement {
-  useEffect(() => {
-    onReady()
-  }, [onReady])
-  return <AgentsSettingsSection {...props} />
+  if (isAgentSettingsCategory(category)) AgentsSettingsSection.preload()
+  else SECTION_PRELOADERS[category]?.()
 }
 
 function SettingsSectionFallback(): ReactElement {
@@ -139,11 +157,17 @@ function SettingsSectionFallback(): ReactElement {
 }
 
 export function SettingsViewLayout({ view }: { view: Record<string, any> }): ReactElement {
-  const { t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, activeAgentsPanel, saveStatus, saveError, saveIssue, writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries, writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading, writeDebugError, extensionSettingsService, extensionSettingsContributions, extensionSettingsAvailable, settingsScrollerRef, markAgentsSectionReady, categoryTitle, categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack, clearWriteDebugEntries, settingsSectionContext } = view
+  const { t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, arrival, saveStatus, saveError, saveIssue, writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries, writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading, writeDebugError, extensionSettingsService, extensionSettingsContributions, extensionSettingsAvailable, settingsScrollerRef, categoryTitle, categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack, clearWriteDebugEntries, settingsSectionContext } = view
+  const pageRef = useRef<HTMLDivElement | null>(null)
+  useSettingsArrivalFlash(pageRef, arrival)
   const autoApplyCategory = category !== 'extensions' &&
-    category !== 'dataMigration' && category !== 'storage' && category !== 'uninstall'
-  const explicitSavePanel = category === 'agents' &&
-    (activeAgentsPanel === 'collaboration' || activeAgentsPanel === 'project')
+    category !== 'dataMigration' && category !== 'storage' && category !== 'storageCleanup' &&
+    category !== 'uninstall'
+  // These two pages edit a draft and save it with their own button.
+  const explicitSavePanel = category === 'collaboration' || category === 'projects'
+  // Workspaces carry their own header and use the full content width.
+  const workspacePage = category === 'providers' || category === 'harnesses'
+  const sectionContext = { ...settingsSectionContext, openSettingsCategory: setCategory }
   const saveIssueSummary = saveIssue?.kind === 'provider-model-limit'
     ? settingsSaveIssueMessage(saveIssue, t)
     : saveError
@@ -167,13 +191,13 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
         <div
           ref={settingsScrollerRef}
           className={`ds-settings-scroller ds-no-drag h-full min-h-0 overflow-y-auto ${
-            category === 'providers' ? 'ds-settings-scroller--providers' : ''
+            workspacePage ? 'ds-settings-scroller--providers' : ''
           }`}
         >
           <div className={`ds-settings-content mx-auto ${
-            category === 'providers' ? 'ds-settings-content--providers' : ''
+            workspacePage ? 'ds-settings-content--providers' : ''
           }`}>
-          {category !== 'providers' ? (
+          {!workspacePage ? (
             <SettingsPageHeader
               key={`header-${category}`}
               category={category}
@@ -210,11 +234,12 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
           ) : null}
 
           <div
+            ref={pageRef}
             className={`ds-settings-page ds-settings-page--${category}`}
             data-settings-category-view={category}
             key={category}
           >
-            {category === 'general' ? <GeneralSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'general' ? <GeneralSettingsSection ctx={sectionContext} /> : null}
             {category === 'pets' ? <PetsSettingsSection /> : null}
             {category === 'extensions' && extensionSettingsService ? (
               <ExtensionDeclarativeSettingsPane
@@ -224,27 +249,38 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               />
             ) : null}
             <Suspense fallback={<SettingsSectionFallback />}>
-              {category === 'providers' ? <ProvidersSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'write' ? <WriteSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'design' ? <DesignSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'mediaGeneration' ? <MediaGenerationSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'speechToText' ? <SpeechToTextSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'agents' ? (
-                <LoadedAgentsSettingsSection ctx={settingsSectionContext} onReady={markAgentsSectionReady} />
+              {category === 'appearance' ? <AppearanceSettingsSection ctx={sectionContext} /> : null}
+              {category === 'notifications' ? <NotificationsSettingsSection ctx={sectionContext} /> : null}
+              {category === 'providers' ? <ProvidersSettingsSection ctx={sectionContext} /> : null}
+              {category === 'gateway' ? <GatewaySettingsSection ctx={sectionContext} /> : null}
+              {category === 'write' ? <WriteSettingsSection ctx={sectionContext} /> : null}
+              {category === 'paper' ? <PaperSettingsSection ctx={sectionContext} /> : null}
+              {category === 'design' ? <DesignSettingsSection ctx={sectionContext} /> : null}
+              {category === 'mediaGeneration' ? <MediaGenerationSettingsSection ctx={sectionContext} /> : null}
+              {category === 'speechToText' ? <SpeechToTextSettingsSection ctx={sectionContext} /> : null}
+              {isAgentSettingsCategory(category) ? (
+                <AgentsSettingsSection ctx={sectionContext} panel={AGENT_SETTINGS_PANELS[category]} />
               ) : null}
-              {category === 'laboratory' ? <LaboratorySettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'subagents' ? <SubagentsSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'archives' ? <ArchivedThreadsSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'worktree' ? <WorktreeSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'memory' ? <MemorySettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'easterEgg' ? <EasterEggSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'claw' ? <ClawSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'updates' ? <UpdatesSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'terminal' ? <TerminalSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'debug' ? <LlmDebugSettingsSection ctx={settingsSectionContext} /> : null}
-              {category === 'dataMigration' ? <DataMigrationSettingsSection /> : null}
+              {category === 'laboratory' ? <LaboratorySettingsSection ctx={sectionContext} /> : null}
+              {category === 'subagents' ? <SubagentsSettingsSection ctx={sectionContext} /> : null}
+              {category === 'archives' ? <ArchivedThreadsSettingsSection ctx={sectionContext} /> : null}
+              {category === 'code' ? <CodeSettingsSection ctx={sectionContext} /> : null}
+              {category === 'memory' ? <MemorySettingsSection ctx={sectionContext} /> : null}
+              {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={sectionContext} /> : null}
+              {category === 'easterEgg' ? <EasterEggSettingsSection ctx={sectionContext} /> : null}
+              {category === 'claw' ? <ClawSettingsSection ctx={sectionContext} /> : null}
+              {category === 'connections' ? <ConnectionsSettingsSection ctx={sectionContext} /> : null}
+              {category === 'updates' ? <UpdatesSettingsSection ctx={sectionContext} /> : null}
+              {category === 'terminal' ? <TerminalSettingsSection ctx={sectionContext} /> : null}
+              {category === 'debug' ? <LlmDebugSettingsSection ctx={sectionContext} /> : null}
+              {category === 'dataMigration' ? (
+                <>
+                  <DataMigrationSettingsSection />
+                  <LegacySessionImportCard t={t} tCommon={sectionContext.tCommon} />
+                </>
+              ) : null}
               {category === 'storage' ? <StorageRelocationSettingsSection /> : null}
+              {category === 'storageCleanup' ? <StorageCleanupSettingsSection /> : null}
               {category === 'uninstall' ? <UninstallSettingsSection /> : null}
             </Suspense>
           </div>

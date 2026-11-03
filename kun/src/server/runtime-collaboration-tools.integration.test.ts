@@ -89,4 +89,37 @@ describe('Code collaboration model tools across configuration reloads', () => {
     expect(ordinaryNames).toContain('harness_list')
     expect(ordinaryNames).toContain('worker_create')
   }, 30_000)
+
+  it('keeps dispatch-card and suggestion-card tools after a configuration apply rebuilds the registry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-card-tools-schema-'))
+    cleanups.push(() => rm(root, { recursive: true, force: true }))
+    const fixture = await captureModel()
+    const runtime = await createKunServeRuntime({
+      host: '127.0.0.1', port: 0, dataDir: join(root, 'data'),
+      runtimeToken: 'fixture', apiKey: 'fixture', baseUrl: fixture.baseUrl,
+      model: 'fixture-model', approvalPolicy: 'on-request', sandboxMode: 'workspace-write',
+      tokenEconomyMode: false, insecure: false, storage: { backend: 'file' },
+      ade: AdeConfigSchema.parse({ enabled: false })
+    })
+    cleanups.push(async () => { await runtime.shutdown?.() })
+    const thread = await runtime.threadService.create({
+      workspace: root, model: 'fixture-model', mode: 'agent', workspaceMode: 'code',
+      harnessId: 'kun', collaboration: { enabled: true }
+    })
+    const send = async (marker: string): Promise<string[]> => {
+      const admitted = await runtime.turnService.startTurn({ threadId: thread.id, request: {
+        prompt: `SCHEMA_CAPTURE:${marker}`, clientSurface: 'gui', mode: 'agent', orchestration: 'direct'
+      } })
+      expect(await runtime.runTurn(thread.id, admitted.turnId)).toBe('completed')
+      return fixture.schemas.get(marker) ?? []
+    }
+    const cardTools = ['dispatch_intent_status', 'dispatch_intent_cancel', 'suggest_tasks', 'task_suggestion_status']
+    const startup = await send('startup')
+    for (const name of cardTools) expect(startup, name).toContain(name)
+    for (const marker of ['after-first-apply', 'after-second-apply']) {
+      expect(await runtime.applyConfig({ ade: AdeConfigSchema.parse({ enabled: true }) })).toMatchObject({ ok: true })
+      const names = await send(marker)
+      for (const name of cardTools) expect(names.filter((entry) => entry === name), `${marker}:${name}`).toHaveLength(1)
+    }
+  }, 30_000)
 })

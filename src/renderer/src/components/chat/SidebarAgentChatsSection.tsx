@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentProps, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, ChevronRight, LoaderCircle, MessageCirclePlus, MoreHorizontal, Plus, Search, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, LoaderCircle, MessageCirclePlus, MoreHorizontal, Search, X } from 'lucide-react'
 import type { RoomSidebarEntry } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import { isConversationWorkspacePath } from '../../lib/workspace-path'
@@ -24,11 +24,18 @@ import {
   useAgentChatNavigationStore
 } from '../rooms/agent-chat-navigation'
 import { openAgentChatDialog } from '../rooms/agent-chat-picker'
+import { loadCodingAgentCatalog } from '../rooms/coding-agent-client'
 import { publishLatestPrivateConversation, publishRoomActivityCounts } from '../rooms/room-activity-counts'
 import { SidebarIconButton, SidebarSearchField } from '../sidebar/SidebarPrimitives'
 import { SidebarAgentChatRow } from './SidebarAgentChatRow'
 import { SidebarAgentChatMenu, type SidebarAgentChatAction } from './SidebarAgentChatMenu'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
+import { SidebarNewConversationMenu } from './SidebarNewConversationMenu'
+import { SidebarAssistantRow } from '../assistants/SidebarAssistantRow'
+import { assistantMailbox, startAssistantMailbox, useAssistantMailboxStore } from '../assistants/assistant-mailbox-store'
+import { closeAssistantConversation, openAddAssistantDialog, openAssistantConversation, useAssistantNavigationStore } from '../assistants/assistant-navigation'
+import { assistantSidebarItems, filterAssistantItems, mergeConversationItems, type AssistantSidebarItem } from '../assistants/assistant-sidebar'
+import { useAssistantAttention } from '../assistants/useAssistantAttention'
 import {
   AGENT_CHATS_COLLAPSED_COUNT,
   CONVERSATION_FILTERS,
@@ -41,20 +48,24 @@ import {
 } from './sidebar-agent-chats'
 import './sidebar-agent-chats.css'
 
-type Props = ComponentProps<typeof SidebarConversationsSection>
+type Props = ComponentProps<typeof SidebarConversationsSection> & {
+  /** 对话 mode: the list owns the whole sidebar, shows every conversation and keeps search open. */
+  fill?: boolean
+}
 
 const FILTER_LABEL_KEYS: Record<ConversationFilter, string> = {
   all: 'conversationFilterAll',
   unread: 'conversationFilterUnread',
   attention: 'conversationFilterAttention',
-  group: 'conversationFilterGroups'
+  group: 'conversationFilterGroups',
+  assistants: 'conversationFilterAssistants'
 }
 
 /**
  * Code's conversation list: Agent private chats and group conversations in one
  * IM-style section above the projects. Opening an entry keeps the Code shell.
  */
-export function SidebarAgentChatsSection(props: Props): ReactElement {
+export function SidebarAgentChatsSection({ fill = false, ...props }: Props): ReactElement {
   const { t } = props
   const { t: tc } = useTranslation('common')
   const route = useChatStore((state) => state.route)
@@ -62,10 +73,17 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   const roomId = useAgentChatNavigationStore((state) => state.roomId)
   const error = useAgentChatNavigationStore((state) => state.error)
   const pending = useAgentChatNavigationStore((state) => state.pending)
-  const selectedRoomId = route === 'agent-chat' ? roomId : null
-  const [collapsed, setCollapsed] = useState(false)
+  const assistantSelection = useAssistantNavigationStore((state) => state.selection)
+  const readAt = useAssistantNavigationStore((state) => state.readAt)
+  const assistantStatus = useAssistantMailboxStore((state) => state.status)
+  const assistantsOn = assistantStatus?.availability === 'available'
+  useEffect(() => { startAssistantMailbox() }, [])
+  useAssistantAttention(assistantStatus)
+  const selectedRoomId = route === 'agent-chat' && !assistantSelection ? roomId : null
+  const [collapsedState, setCollapsed] = useState(false)
+  const collapsed = fill ? false : collapsedState
   const [expanded, setExpanded] = useState(false)
-  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(fill)
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<ConversationFilter>('all')
   const [listState, setListState] = useState<ConversationListState>('active')
@@ -83,6 +101,12 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
   useEffect(() => { publishRoomActivityCounts(page.entries) }, [page.entries])
   const unfilteredList = listState === 'active' && filter === 'all' && !search.trim()
   useEffect(() => { if (unfilteredList) publishLatestPrivateConversation(page.entries) }, [page.entries, unfilteredList])
+  // Warm the coding-Agent list once after startup so the new-chat dialog opens filled.
+  useEffect(() => {
+    if (!props.runtimeReady) return
+    const timer = setTimeout(() => { void loadCodingAgentCatalog().catch(() => undefined) }, 8_000)
+    return () => clearTimeout(timer)
+  }, [props.runtimeReady])
   useEffect(() => {
     if (!props.runtimeReady) { setInitializationError(''); return }
     let active = true
@@ -116,15 +140,27 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
     if ([...hiddenEntries].every((id) => listed.has(id))) return
     setHiddenEntries(new Set([...hiddenEntries].filter((id) => listed.has(id))))
   }, [hiddenEntries, page.entries])
-  const browsingAll = expanded || listState !== 'active' || filter !== 'all'
+  const browsingAll = fill || expanded || listState !== 'active' || filter !== 'all'
   const listed = page.entries.filter((entry) => !hiddenEntries.has(entry.id) &&
     (listState === 'deleted' ? entry.deleted : !entry.deleted && entry.archived === (listState === 'archived')))
-  const entries = visibleAgentChatEntries(listed, browsingAll, search, selectedRoomId, listState === 'deleted')
-  const conversationCount = listed.filter(isListedConversation).length
-  const unreadCount = listState === 'active' ? listed.filter((entry) => isListedConversation(entry) && conversationHasUnread(entry)).length : 0
+  const assistantItems = listState === 'active' ? filterAssistantItems(assistantSidebarItems(assistantStatus, readAt), filter, search) : []
+  const roomEntries = filter === 'assistants' ? [] : visibleAgentChatEntries(listed, true, search, selectedRoomId, listState === 'deleted')
+  const items = mergeConversationItems(roomEntries, assistantItems, {
+    collapsed: !browsingAll && !search.trim(), limit: AGENT_CHATS_COLLAPSED_COUNT,
+    selectedKey: route !== 'agent-chat' ? null : assistantSelection ? `${assistantSelection.kind}:${assistantSelection.id}` : selectedRoomId ? `room:${selectedRoomId}` : null
+  })
+  const conversationCount = listed.filter(isListedConversation).length + assistantItems.length
+  const unreadCount = listState === 'active' ? listed.filter((entry) => isListedConversation(entry) && conversationHasUnread(entry)).length
+    + assistantItems.filter((item) => item.unread).length : 0
+  const removeAssistant = (item: AssistantSidebarItem): void => {
+    if (item.selection.kind === 'enrollment') void assistantMailbox.cancelEnrollment(item.selection.id)
+    else if (window.confirm(tc('assistantMailboxRemoveConfirm', { name: item.name }))) void assistantMailbox.revoke(item.selection.id)
+    if (assistantSelection?.id === item.selection.id) closeAssistantConversation()
+  }
   const hasHistory = props.threads.some((thread) =>
     isConversationWorkspacePath(thread.workspace, props.conversationRoot) && !thread.archived)
   const openEntry = (entry: RoomSidebarEntry): void => {
+    closeAssistantConversation()
     if (entry.roomId) openAgentConversationRoom(entry.roomId)
     else if (entry.agentId) void openAgentConversation(entry.agentId).catch(() => undefined)
   }
@@ -173,7 +209,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
     : filter !== 'all' ? tc(FILTER_LABEL_KEYS[filter]) : ''
 
   return <>
-    <section className="sidebar-agent-chats ds-no-drag" data-browsing-all={browsingAll || undefined}
+    <section className="sidebar-agent-chats ds-no-drag" data-fill={fill || undefined} data-browsing-all={browsingAll || undefined}
       data-collapsed={collapsed || undefined} aria-label={t('sidebarConversations')}>
       <div className="sidebar-agent-chats-header">
         <button type="button" aria-expanded={!collapsed} title={t('agentChatsDescription')}
@@ -189,14 +225,14 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
             onClick={() => { setCollapsed(false); setSearchOpen(!searchOpen); if (searchOpen) setSearch('') }}>
             <Search size={14} />
           </SidebarIconButton>
-          <SidebarIconButton title={t('agentChatsStart')} disabled={!props.runtimeReady || pending}
-            className="h-6 w-6" onClick={openNewChat}><Plus size={14} /></SidebarIconButton>
+          <SidebarNewConversationMenu title={t('agentChatsStart')} disabled={!props.runtimeReady || pending}
+            assistants={assistantsOn} onNewChat={openNewChat} onAddAssistant={openAddAssistantDialog} />
           <RoomPopover label={`${t('sidebarConversations')} · ${t('roomsMoreActions')}`} trigger={<MoreHorizontal size={14} />}
             disabled={!props.runtimeReady}
             className="sidebar-agent-chats-list-menu rooms-icon-button" align="end" width={232}>
             {(close) => <div className="rooms-menu-list sidebar-agent-chats-menu">
               <p className="sidebar-agent-chats-menu-label">{tc('conversationFilterLabel')}</p>
-              {CONVERSATION_FILTERS.map((value) => {
+              {CONVERSATION_FILTERS.filter((value) => value !== 'assistants' || assistantsOn).map((value) => {
                 const checked = listState === 'active' && filter === value
                 return <button type="button" key={value} aria-pressed={checked}
                   onClick={() => { close(); setListState('active'); setFilter(value); setCollapsed(false) }}>
@@ -227,13 +263,16 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
             {!runtimeOffline ? <LoaderCircle size={14} className="animate-spin" /> : null}
             {t(runtimeOffline ? 'runtimeActionNeedsConnection' : 'waitingForKun')}
           </div> : <>
-          {entries.map((entry) => <SidebarAgentChatRow key={entry.id} entry={entry}
+          {items.map((item) => item.type === 'assistant' ? <SidebarAssistantRow key={item.key} item={item.item}
+            selected={route === 'agent-chat' && assistantSelection?.kind === item.item.selection.kind && assistantSelection.id === item.item.selection.id}
+            disabled={!props.runtimeReady} onOpen={() => openAssistantConversation(item.item.selection)}
+            onRemove={() => removeAssistant(item.item)} /> : ((entry) => <SidebarAgentChatRow key={entry.id} entry={entry}
             selected={Boolean(selectedRoomId && entry.roomId === selectedRoomId)}
             disabled={!props.runtimeReady || pending || entry.archived || entry.deleted || busyEntries.has(entry.id) || (!entry.roomId && !entry.agentId)}
             onOpen={() => openEntry(entry)} menu={<SidebarAgentChatMenu entry={entry}
               disabled={!props.runtimeReady || pending || busyEntries.has(entry.id)}
-              onAction={(action) => onRowAction(entry, action)} />} />)}
-          {!entries.length && !page.error ? <button type="button" className="sidebar-agent-chats-empty"
+              onAction={(action) => onRowAction(entry, action)} />} />)(item.entry))}
+          {!items.length && !page.error ? <button type="button" className="sidebar-agent-chats-empty"
             onClick={listState === 'active' ? openNewChat : undefined} disabled={listState !== 'active' || !props.runtimeReady || page.busy || pending}>
             <MessageCirclePlus size={20} strokeWidth={1.5} />
             <span>{t(page.busy ? 'roomsLoading' : search.trim() || listState !== 'active' || filter !== 'all' ? 'roomsSearchNoResults' : 'agentChatsEmptyHint')}</span>
@@ -251,7 +290,7 @@ export function SidebarAgentChatsSection(props: Props): ReactElement {
             titleKey="agentChatsLegacyHistory" /> : null}
           </>}
         </div>
-        {props.runtimeReady && listState === 'active' && filter === 'all' && !search.trim() &&
+        {!fill && props.runtimeReady && listState === 'active' && filter === 'all' && !search.trim() &&
           (conversationCount > AGENT_CHATS_COLLAPSED_COUNT || page.nextCursor) ? <button type="button"
           className="sidebar-agent-chats-more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
           {expanded ? t('agentChatsShowLess') : page.nextCursor ? t('agentChatsViewAll')

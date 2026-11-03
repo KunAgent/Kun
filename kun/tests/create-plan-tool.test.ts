@@ -180,12 +180,13 @@ describe('create_plan tool: path validation', () => {
     expect(result.isError).toBe(true)
   })
 
-  it('rejects an explicit plan_relative_path that differs from the reserved GUI plan path', async () => {
+  it('uses the reserved GUI target when the caller supplies a different path and id', async () => {
     const result = await executeCreatePlanTool(
       {
         markdown: '# mismatch',
         operation: 'refine',
-        plan_relative_path: '.kunsdd/plan/other.md'
+        plan_relative_path: '.kunsdd/plan/other.md',
+        plan_id: 'plan_other'
       },
       buildContext({
         threadMode: 'plan',
@@ -195,10 +196,20 @@ describe('create_plan tool: path validation', () => {
           relativePath: '.kunsdd/plan/login.md',
           planId: 'plan_login'
         }
-      })
+      }),
+      {
+        writePlan: async (target) => {
+          expect(target.relativePath).toBe('.kunsdd/plan/login.md')
+          return { path: target.absolutePath, savedAt: 'now' }
+        }
+      }
     )
-    expect(result.isError).toBe(true)
-    expect(JSON.stringify(result.output)).toMatch(/does not match the reserved/)
+    expect(result.isError).toBeFalsy()
+    expect(result.output).toMatchObject({
+      relative_path: '.kunsdd/plan/login.md',
+      plan_id: 'plan_login',
+      operation: 'refine'
+    })
   })
 
   it('uses the active GUI plan operation when the caller supplies the other valid operation', async () => {

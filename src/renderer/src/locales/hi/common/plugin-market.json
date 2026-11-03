@@ -1,0 +1,5 @@
+{
+  "marketSkillInstalled": "{{source}} से {{name}} इंस्टॉल किया गया: {{path}}",
+  "marketSkillInstallFailed": "{{name}} इंस्टॉल नहीं हो सका: {{message}}",
+  "marketMcpPlanFailed": "{{name}} तैयार नहीं हो सका: {{message}}"
+}

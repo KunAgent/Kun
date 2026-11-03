@@ -37,7 +37,9 @@ export type SharedBusinessStorageSyncResult = SharedBusinessStorageCursor & {
   retry: boolean
 }
 
-const POLL_INTERVAL_MS = 1_000
+// Each desktop tick is IPC plus a Manager etag check; nothing is rewritten when
+// the shared document is unchanged.
+const POLL_INTERVAL_MS = 2_000
 // Remote-web pages keep a slower cadence: every tick is an HTTP invoke over
 // the LAN tunnel, not a local IPC call.
 const REMOTE_POLL_INTERVAL_MS = 4_000
@@ -232,6 +234,17 @@ export async function syncSharedBusinessStorageOnce(
   const afterApply = readSharedLocalEntries()
   const remainingDirty = new Set(changedSharedKeys(remote.value, afterApply))
   for (const key of protectedKeys) remainingDirty.add(key)
+  const remoteEntries = sharedEntriesFrom(remote.value)
+  if (
+    journal &&
+    remainingDirty.size === 0 &&
+    journal.dirtyKeys.length === 0 &&
+    journal.acknowledgedRevision === remote.revision &&
+    changedSharedKeys(journal.acknowledgedEntries, remoteEntries).length === 0
+  ) {
+    // Idle tick: the durable journal already acknowledges this exact snapshot.
+    return { baseline: remoteEntries, revision: remote.revision, retry: false }
+  }
   writeSharedBusinessStorageJournal({
     version: 1,
     acknowledgedRevision: remote.revision,

@@ -4,7 +4,7 @@ import { open, stat } from 'node:fs/promises'
 import { Readable as NodeReadable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { createGunzip } from 'node:zlib'
-import { extract, type Header } from 'tar-stream'
+import type { Header } from 'tar-stream'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 
 export const MAX_METADATA_BYTES = 64 * 1024
@@ -199,7 +199,8 @@ export async function downloadArchive(
 }
 
 export async function extractExactBinary(archive: string, memberName: string, destination: string): Promise<number> {
-  const extractor = extract()
+  const tarStream = await import('tar-stream')
+  const extractor = (tarStream.default ?? tarStream).extract()
   let members = 0
   let found = false
   let extractedSize = 0

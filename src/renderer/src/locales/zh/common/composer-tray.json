@@ -1,0 +1,38 @@
+{
+  "composerTray": {
+    "regionLabel": "当前进展",
+    "queueLabel": "排队消息",
+    "collapse": "收起",
+    "stop": "停止",
+    "duration": {
+      "seconds": "{{seconds}} 秒",
+      "minutes": "{{minutes}} 分",
+      "minutesSeconds": "{{minutes}} 分 {{seconds}} 秒",
+      "hours": "{{hours}} 小时",
+      "hoursMinutes": "{{hours}} 小时 {{minutes}} 分",
+      "underMinute": "不到 1 分钟",
+      "minutesRounded": "{{minutes}} 分钟",
+      "hoursRounded": "{{hours}} 小时",
+      "hoursMinutesRounded": "{{hours}} 小时 {{minutes}} 分钟",
+      "justNow": "刚刚",
+      "ago": "{{duration}}前"
+    }
+  },
+  "composerInterrupt": {
+    "previous": "上一个",
+    "next": "下一个",
+    "pagerPosition": "第 {{index}} 个，共 {{total}} 个",
+    "countdown": "{{seconds}} 秒",
+    "countdownTitle": "{{seconds}} 秒后 Kun 会自行继续",
+    "deciding": "Kun 正在自行决定…",
+    "recommended": "推荐",
+    "optionsLabel": "选项",
+    "freeTextLabel": "你自己的回答"
+  },
+  "composerDock": {
+    "runningPlaceholder": "继续输入以排队后续修改…",
+    "queueMessage": "加入队列",
+    "stopWithShortcut": "停止（Esc）",
+    "enterToQueue": "回车加入队列"
+  }
+}

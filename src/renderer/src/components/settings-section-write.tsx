@@ -27,8 +27,6 @@ import { WRITE_DESIGN_DRAFT_DEFAULT_PROMPT, WRITE_INFOGRAPHIC_DEFAULT_PROMPT } f
 import { WRITE_PROTOTYPE_DEFAULT_PROMPT } from '@shared/write-prototype'
 import {
   Bot,
-  FolderOpen,
-  GraduationCap,
   Plus,
   RotateCcw,
   Sparkles,
@@ -49,7 +47,6 @@ import {
   Toggle
 } from './settings-controls'
 import { WriteAgentPresetsSettingsPanel } from './settings-section-write-agent-presets'
-import { WritePaperReadingSettingsPanel } from './settings-section-write-paper'
 
 const textInputClass =
   'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
@@ -121,8 +118,8 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
       : undefined)
     || (kun?.model?.trim() || DEFAULT_WRITE_INLINE_COMPLETION_MODEL)
   const [activeTab, setActiveTab] = useState<
-    'workspace' | 'typography' | 'suggestions' | 'selection' | 'agents' | 'paper'
-  >('workspace')
+    'editor' | 'suggestions' | 'selection' | 'agents'
+  >('editor')
 
   return (
             <>
@@ -131,17 +128,14 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                 ariaLabel={t('write')}
                 value={activeTab}
                 onChange={setActiveTab}
-                contentSized
                 items={[
-                  { id: 'workspace', label: t('sectionWrite'), icon: FolderOpen },
-                  { id: 'typography', label: t('writeTypography'), icon: Type },
+                  { id: 'editor', label: t('settingsIaWriteEditorTab'), icon: Type },
                   { id: 'suggestions', label: t('writeInlineCompletion'), icon: Sparkles },
                   { id: 'selection', label: t('writeSelectionAssistTitle'), icon: TextCursorInput },
-                  { id: 'agents', label: t('writeAgentPresets'), icon: Bot },
-                  { id: 'paper', label: tCommon('writePaperModeSettingsTitle'), icon: GraduationCap }
+                  { id: 'agents', label: t('settingsIaWriteAgentsTab'), icon: Bot }
                 ]}
               />
-              <SettingsTabPanel baseId="write-settings" tabId="workspace" active={activeTab === 'workspace'}>
+              <SettingsTabPanel baseId="write-settings" tabId="editor" active={activeTab === 'editor'}>
               <SettingsCard title={t('sectionWrite')}>
                 <SettingRow
                   title={t('writeWorkspaceRoot')}
@@ -219,9 +213,6 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                   }
                 />
               </SettingsCard>
-              </SettingsTabPanel>
-
-              <SettingsTabPanel baseId="write-settings" tabId="typography" active={activeTab === 'typography'}>
               <SettingsCard title={t('writeTypography')} className="mt-5">
                 <SettingRow
                   title={t('writeFontPreset')}
@@ -669,9 +660,6 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
 
               <WriteAgentPresetsSettingsPanel view={{ t, agentPresets, updateAgentPresets, setWriteDebugModalOpen, loadWriteDebugEntries, activeTab }} />
 
-              <SettingsTabPanel baseId="write-settings" tabId="paper" active={activeTab === 'paper'}>
-                <WritePaperReadingSettingsPanel form={form} update={update} />
-              </SettingsTabPanel>
             </>
   )
 }

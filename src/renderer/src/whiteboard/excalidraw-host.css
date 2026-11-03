@@ -6,6 +6,12 @@
   width: 100%;
 }
 
+/* The wide (desktop) layout's footer is also an .App-menu; stretched to full
+   height it parks the zoom/undo group at the top and the help button midway. */
+.kun-excalidraw-host .excalidraw .App-menu_bottom {
+  height: auto;
+}
+
 /* The shell scales the UI via `body { zoom: var(--ds-ui-scale) }`. Excalidraw
    measures its container with getBoundingClientRect() (post-zoom viewport px)
    but applies the result as pre-zoom canvas style sizes, so the canvas ends up
@@ -18,4 +24,16 @@
 
 .kun-excalidraw-host .excalidraw {
   --color-primary: var(--ds-accent, #4f46e5);
+}
+
+/* Code whiteboard: the shared Kun tool pill replaces Excalidraw's shape
+   toolbar (desktop and mobile layouts) and owns the top band, so the
+   remaining top UI (menu, properties, library trigger) starts below it. */
+.kun-excalidraw-host[data-kun-toolbar='true'] .shapes-section,
+.kun-excalidraw-host[data-kun-toolbar='true'] .App-top-bar .App-toolbar-container {
+  display: none;
+}
+
+.kun-excalidraw-host[data-kun-toolbar='true'] .FixedSideContainer_side_top {
+  top: calc(var(--editor-container-padding) + 52px);
 }

@@ -14,7 +14,7 @@ import {
   applySvgToolBlockWithQueue,
   type SvgArtifactRequestHandler
 } from './svg-artifact-tool-replay'
-import { drainPendingScreens, drainPendingSvgBlocks, type CanvasTurnDrainContext } from './canvas-turn-drain'
+import { createScreenDispatchGate, drainPendingScreens, drainPendingSvgBlocks, type CanvasTurnDrainContext } from './canvas-turn-drain'
 import {
   assembledTurnText as assembledCanvasTurnText,
   applyCanvasStreamFrom,
@@ -174,6 +174,7 @@ export function useApplyShapeOpsLive(
     // re-enqueuing (hence regenerating) a frame across the run's lifetime.
     const pendingScreens: PendingScreenGeneration[] = []
     const screenGenSeen = new Set<string>()
+    const screenDispatchGate = createScreenDispatchGate()
     const canvasDocumentReady = (): boolean =>
       !expectedCanvasDocumentKey ||
       useCanvasShapeStore.getState().documentKey === expectedCanvasDocumentKey
@@ -329,6 +330,7 @@ export function useApplyShapeOpsLive(
 
     const drainContext = (): CanvasTurnDrainContext => ({
       pendingScreens,
+      screenDispatchGate,
       pendingSvgToolBlocks,
       svgSourceTurnIds,
       isDisposed: () => disposed,

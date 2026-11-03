@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Records a real ACP agent's wire traffic into a sanitized JSONL fixture for
- * replay tests (docs/ade/03 §13.3). Manual/nightly tool only — it requires the
+ * replay tests. Manual/nightly tool only — it requires the
  * real CLI binary to be installed and authenticated.
  *
  * Usage:

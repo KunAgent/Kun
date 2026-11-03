@@ -1,3 +1,4 @@
+import { hostNodeLaunch } from '../process/host-node.js'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { closeSync, openSync } from 'node:fs'
@@ -85,11 +86,11 @@ export class PersistentHost {
         KUN_MANAGER_CONTROL_DIR: this.options.controlDir,
         KUN_RUNTIME_DISCOVERY_DIR: runtimeDiscoveryDirectory(this.options.dataDir, this.options.runtimeFlavor, this.options.controlDir),
         KUN_RUNTIME_LOG_PATH: logPath })
-      const packaged = env.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()
-      const command = this.options.launch?.command ?? packaged ?? process.execPath
+      const host = hostNodeLaunch(env)
+      const command = this.options.launch?.command ?? host.command
       const args = this.options.launch?.args ?? [fileURLToPath(new URL('./serve-entry.js', import.meta.url)),
         'serve', '--host', '127.0.0.1', '--port', '0', '--data-dir', this.options.dataDir]
-      if (this.options.launch?.runAsNode ?? Boolean(packaged || process.versions.electron)) env.ELECTRON_RUN_AS_NODE = '1'
+      if (this.options.launch?.runAsNode ?? host.runAsNode) env.ELECTRON_RUN_AS_NODE = '1'
       else delete env.ELECTRON_RUN_AS_NODE
       let child: ChildProcess
       try { child = spawn(command, args, { detached: true, windowsHide: true, stdio: ['ignore', logFd, logFd], env }) }

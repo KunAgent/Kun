@@ -1,3 +1,4 @@
+import { restoredThreadContextSnapshot } from './thread-context-snapshot'
 import type { ChatBlock } from '../agent/types'
 import type { RuntimeProjectionAction } from '../agent/runtime-projection-actions'
 import type { ChatState } from './chat-store-types'
@@ -241,7 +242,8 @@ export function reduceLateChatProjection(
           toModel: event.toModel,
           recentTurns: event.recentTurns,
           files: event.files,
-          briefDigest: event.briefDigest
+          briefDigest: event.briefDigest,
+          continuationFailure: event.continuationFailure
         }
         return { blocks }
       }
@@ -256,7 +258,8 @@ export function reduceLateChatProjection(
         toModel: event.toModel,
         recentTurns: event.recentTurns,
         files: event.files,
-        briefDigest: event.briefDigest
+        briefDigest: event.briefDigest,
+        continuationFailure: event.continuationFailure
       }
       const blocks = upsertProjectedTimelineBlock(state, block)
       return blocks === state.blocks ? {} : { blocks }
@@ -381,7 +384,9 @@ export function reduceLateChatProjection(
         ? snapshot.blocks
         : context.settlePendingRuntimeWork(snapshot.blocks)
       const shouldClearLive = snapshotTurnIsCurrent
+      const timingUserId = snapshot.userBlockId ?? state.currentTurnUserId
       return {
+        ...(snapshotTurnIsCurrent ? { lastContextSnapshot: restoredThreadContextSnapshot(snapshot.threadId, snapshot.contextSnapshot, state.lastContextSnapshot) } : {}),
         blocks: snapshot.turnId
           ? reconcileSnapshotTurn(
               state.blocks,
@@ -413,6 +418,15 @@ export function reduceLateChatProjection(
             ? snapshot.latestTurnStartedAtMs ?? state.currentTurnStartedAtMs
             : null
           : state.currentTurnStartedAtMs,
+        ...(snapshotTurnIsCurrent && busy && timingUserId &&
+          typeof snapshot.latestTurnStartedAtMs === 'number'
+          ? {
+              turnStartedAtByUserId: {
+                ...state.turnStartedAtByUserId,
+                [timingUserId]: snapshot.latestTurnStartedAtMs
+              }
+            }
+          : {}),
         // Merge server-derived durations from the reconciled turn records; the
         // durable record is authoritative, but keep locally recorded durations
         // for turns the snapshot page does not cover.

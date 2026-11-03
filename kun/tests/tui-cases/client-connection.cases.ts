@@ -176,7 +176,7 @@ describe('resolveTuiConnection', () => {
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
-  it('does not attach to or replace a discovered foreign owner in default mode', async () => {
+  it('does not attach after a start failure that is not an ownership refusal', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-client-same-build-'))
     roots.push(root)
     const buildId = 'a'.repeat(64)
@@ -206,6 +206,107 @@ describe('resolveTuiConnection', () => {
 
     expect(String(error)).toContain('already owned by gui')
     expect(startOwnedRuntime).toHaveBeenCalledOnce()
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  async function publishGuiOwner(root: string, buildId: string): Promise<void> {
+    await publishRuntimeDiscovery(root, {
+      instanceId: 'gui-runtime',
+      pid: process.pid,
+      startedAt: '2026-07-22T00:00:00.000Z',
+      host: '127.0.0.1',
+      port: 18899,
+      baseUrl: 'http://127.0.0.1:18899',
+      runtimeToken: 'gui-secret',
+      insecure: false,
+      buildId,
+      launchMode: 'shared',
+      clientOwnerKind: 'gui'
+    })
+  }
+
+  function ownerBusy(code: 'app_session_owner_busy' | 'client_runtime_owner_busy' = 'app_session_owner_busy') {
+    return Object.assign(new Error('Kun profile is already owned: /tmp/control/.app-session'), { code })
+  }
+
+  it.each(['app_session_owner_busy', 'client_runtime_owner_busy'] as const)(
+    'attaches to the live owner of the same build when starting is refused (%s)',
+    async (code) => {
+      const root = await mkdtemp(join(tmpdir(), 'kun-tui-client-attach-'))
+      roots.push(root)
+      const buildId = 'a'.repeat(64)
+      await publishGuiOwner(root, buildId)
+      const fetchImpl = vi.fn(async () => Response.json(runtimeInfo({ instanceId: 'gui-runtime', buildId }))) as unknown as typeof fetch
+      const startOwnedRuntime = vi.fn(async () => { throw ownerBusy(code) })
+
+      const connection = await resolveTuiConnection(
+        options({ dataDir: root, runtimeToken: '' }),
+        fetchImpl,
+        { expectedBuildId: buildId, startOwnedRuntime }
+      )
+
+      expect(startOwnedRuntime).toHaveBeenCalledOnce()
+      expect(connection).toMatchObject({
+        baseUrl: 'http://127.0.0.1:18899',
+        runtimeToken: 'gui-secret',
+        discovered: true,
+        attached: { ownerKind: 'gui', pid: process.pid }
+      })
+      expect(connection.ownedRuntime).toBeUndefined()
+    }
+  )
+
+  it('keeps the ownership error when the owner runs a different build', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-tui-client-attach-build-'))
+    roots.push(root)
+    await publishGuiOwner(root, 'a'.repeat(64))
+    const fetchImpl = vi.fn(async () => Response.json(runtimeInfo({
+      instanceId: 'gui-runtime',
+      buildId: 'a'.repeat(64)
+    }))) as unknown as typeof fetch
+
+    const error = await resolveTuiConnection(
+      options({ dataDir: root, runtimeToken: '' }),
+      fetchImpl,
+      { expectedBuildId: 'b'.repeat(64), startOwnedRuntime: vi.fn(async () => { throw ownerBusy() }) }
+    ).catch((value) => value)
+
+    expect(error).toBeInstanceOf(TuiClientError)
+    expect(error).toMatchObject({ code: 'runtime_build_mismatch' })
+    expect(String(error)).toContain('Kun profile is already owned')
+    expect(String(error)).toContain('different application build')
+  })
+
+  it('keeps the ownership error when the owner Runtime does not answer', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-tui-client-attach-down-'))
+    roots.push(root)
+    const buildId = 'a'.repeat(64)
+    await publishGuiOwner(root, buildId)
+    const fetchImpl = vi.fn(async () => { throw new Error('ECONNREFUSED') }) as unknown as typeof fetch
+
+    const error = await resolveTuiConnection(
+      options({ dataDir: root, runtimeToken: '' }),
+      fetchImpl,
+      { expectedBuildId: buildId, startOwnedRuntime: vi.fn(async () => { throw ownerBusy() }) }
+    ).catch((value) => value)
+
+    expect(error).toMatchObject({ code: 'runtime_owner_unreachable' })
+    expect(String(error)).toContain('Kun profile is already owned')
+  })
+
+  it('rethrows the ownership error unchanged when no Runtime is discoverable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-tui-client-attach-none-'))
+    roots.push(root)
+    const failure = ownerBusy()
+    const fetchImpl = vi.fn() as unknown as typeof fetch
+
+    const error = await resolveTuiConnection(
+      options({ dataDir: root, runtimeToken: '' }),
+      fetchImpl,
+      { expectedBuildId: 'a'.repeat(64), startOwnedRuntime: vi.fn(async () => { throw failure }) }
+    ).catch((value) => value)
+
+    expect(error).toBe(failure)
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 

@@ -50,6 +50,7 @@ describe('thread right-panel state', () => {
   it('closes thread-specific tabs before restoring the destination preference', () => {
     let tabs = openCodeRightTab(emptyCodeRightTabsState(), BUILTIN_RIGHT_PANEL_IDS.files)
     tabs = openCodeRightTab(tabs, BUILTIN_RIGHT_PANEL_IDS.browser)
+    tabs = openCodeRightTab(tabs, BUILTIN_RIGHT_PANEL_IDS.canvas)
     tabs = openCodeRightTab(tabs, BUILTIN_RIGHT_PANEL_IDS.plan)
     tabs = openCodeRightTab(tabs, BUILTIN_RIGHT_PANEL_IDS.sideConversations)
     const registry = rememberThreadRightPanelExpansion(

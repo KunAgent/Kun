@@ -84,7 +84,7 @@ function runItem(
   options: WriteSlashMenuOptions
 ): void {
   const { state } = editor
-  // Stale-check (implementation §9.5): the range must still cover exactly
+  // Stale-check: the range must still cover exactly
   // `/<query>`; an out-of-date menu must never rewrite newer text.
   const current = state.doc.textBetween(range.from, range.to, '\0', '\0')
   if (query === undefined ? !current.startsWith('/') : current !== `/${query}`) return
@@ -145,7 +145,7 @@ function runItem(
 }
 
 /**
- * `/` command menu (implementation §9.5): opens on `/` at line start or
+ * `/` command menu: opens on `/` at line start or
  * after whitespace, filters block-type items by query, and applies them to
  * the containing block.
  */

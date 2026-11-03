@@ -1,3 +1,4 @@
+import { assertNativeBootstrapLock } from './lib/native-bootstrap-lock.mjs'
 import {
   apiContract,
   check,
@@ -408,18 +409,10 @@ for (const path of [
   )
 }
 const semver = requireKun('semver')
-const wasmRuntimeLock = kunLock.packages?.['node_modules/@napi-rs/wasm-runtime']
-for (const dependency of ['@emnapi/core', '@emnapi/runtime']) {
-  const version = kunLock.packages?.[`node_modules/${dependency}`]?.version
-  const peerRange = wasmRuntimeLock?.peerDependencies?.[dependency]
-  check(
-    semver.valid(version) !== null,
-    `Kun npm 10 lock is missing a top-level ${dependency} node with a valid SemVer`
-  )
-  check(
-    typeof peerRange === 'string' && semver.satisfies(version ?? '', peerRange),
-    `Kun npm 10 lock top-level ${dependency}@${String(version)} does not satisfy @napi-rs/wasm-runtime ${String(peerRange)}`
-  )
+try {
+  assertNativeBootstrapLock(kunLock, semver)
+} catch (error) {
+  check(false, error.message)
 }
 
 // Static packaged-resource and cross-platform release coverage.

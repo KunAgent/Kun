@@ -20,6 +20,7 @@ import {
   OFFICECLI_MAX_OPERATIONS,
   assertFileIdentityUnchanged,
   assertOfficeCliSuccess,
+  assertOfficeCliValidationSuccess,
   boundedLogValue,
   captureFileIdentity,
   errorMessage,
@@ -30,6 +31,7 @@ import {
   officeFormat,
   parseOfficeCliOutput,
   parseOfficeEditOperations,
+  repairOfficeSourceStructure,
   sha256File,
   stringArgument,
   type OfficeCliRunResult,
@@ -67,6 +69,7 @@ export class OfficeCliRunner {
   private readonly logger: (message: string) => void
   private active = 0
   private readonly waiters: QueueWaiter[] = []
+  private diagnosed = false
 
   constructor(options: OfficeCliRunnerOptions) {
     this.binaryPath = options.binaryPath
@@ -76,6 +79,13 @@ export class OfficeCliRunner {
   }
 
   async run(args: readonly string[], signal?: AbortSignal): Promise<OfficeCliRunResult> {
+    // The version/schema diagnostic only feeds the log. Running it with the
+    // first real command keeps an idle Runtime from spawning officecli (and the
+    // owned-process guard) on every start and config apply.
+    if (!this.diagnosed) {
+      this.diagnosed = true
+      void this.diagnose()
+    }
     const release = await this.acquire(signal)
     try {
       await mkdir(this.profileDir, { recursive: true, mode: 0o700 })
@@ -212,9 +222,7 @@ export function createConfiguredOfficeCliRunner(options: {
 }): OfficeCliRunner | undefined {
   const binaryPath = options.binaryPath?.trim()
   if (!binaryPath || !existsSync(binaryPath)) return undefined
-  const runner = new OfficeCliRunner({ binaryPath, profileDir: options.profileDir })
-  void runner.diagnose()
-  return runner
+  return new OfficeCliRunner({ binaryPath, profileDir: options.profileDir })
 }
 
 export function buildOfficeCliToolProviders(options: {
@@ -228,7 +236,6 @@ export function buildOfficeCliToolProviders(options: {
     binaryPath: binaryPath!,
     profileDir: options.profileDir
   })
-  if (!options.runner) void runner.diagnose()
   return [{
     id: 'officecli',
     kind: 'built-in',
@@ -507,6 +514,7 @@ async function executeAtomicOfficeEdit(input: {
   )
   try {
     await copyFile(input.absolutePath, temporaryPath)
+    const sourceRepairs = await repairOfficeSourceStructure(temporaryPath, officeFormat(input.absolutePath))
     const commands = input.operations.map(toOfficeCliBatchItem)
     await writeFile(commandPath, JSON.stringify(commands), { encoding: 'utf8', mode: 0o600 })
 
@@ -520,7 +528,14 @@ async function executeAtomicOfficeEdit(input: {
       ['validate', temporaryPath, '--json'],
       input.context.abortSignal
     )
-    assertOfficeCliSuccess(validation, 'Edited Office document failed validation')
+    try {
+      assertOfficeCliValidationSuccess(validation, 'Office edit failed OpenXML validation')
+    } catch (error) {
+      const sourceState = sourceRepairs.length > 0
+        ? `the source document had pre-existing structure errors that were repaired first (${sourceRepairs.join('; ')})`
+        : 'no repairable pre-existing structure error was detected in the source document'
+      throw new Error(`${errorMessage(error)}. Note: ${sourceState}; the original file was not modified.`)
+    }
 
     const afterSha256 = await sha256File(temporaryPath, input.context.abortSignal)
     await assertFileIdentityUnchanged(input.absolutePath, identity)
@@ -538,6 +553,7 @@ async function executeAtomicOfficeEdit(input: {
         before_sha256: beforeSha256,
         after_sha256: afterSha256,
         validation: parseOfficeCliOutput(validation.stdout),
+        source_repairs: sourceRepairs,
         preview_invalidated: true
       }
     }

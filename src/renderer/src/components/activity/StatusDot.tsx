@@ -5,7 +5,7 @@ import type { ActivityRow } from '@shared/activity-row'
 import { activityGlyph } from './activity-glyph'
 
 /**
- * Compact status mark driven by `activityGlyph` (docs/ade/12 §3): working
+ * Compact status mark driven by `activityGlyph`: working
  * spins, waiting is an amber ?, failed a red dot, reviewable-done a green
  * check, done a green dot, idle grey. `stalled` adds a clock hint.
  */

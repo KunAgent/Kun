@@ -5,12 +5,14 @@ import {
   Clock3,
   Columns3,
   LayoutGrid,
+  Layers,
   Puzzle,
   Workflow,
   Zap
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
+import { markAttentionRead } from '../../store/attention-read-actions'
 import type {
   ClawImChannelV1,
 } from '@shared/app-settings'
@@ -21,6 +23,7 @@ import type { ClawImDialogMode, ClawInstallTarget } from './SidebarClawDialogHel
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarAttentionPanel } from './SidebarAttentionPanel'
+import { useSidebarBackgroundActivity } from './useSidebarBackgroundActivity'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { registerSidebarDragAutoScroll } from './sidebar-drag-auto-scroll'
 import { SidebarAgentChatsSection } from './SidebarAgentChatsSection'
@@ -32,6 +35,7 @@ import { useProjectBoardEnabled } from '../../project-board/use-project-board-en
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import { SidebarFrame } from '../sidebar/SidebarPrimitives'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
+import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 
 type Props = {
   threads: NormalizedThread[]
@@ -106,12 +110,15 @@ export function Sidebar({
   onNewConversation
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
+  // 对话 is the agent-chat route: the sidebar lists conversations instead of projects.
+  const chatsScope = useChatStore((state) => state.route === 'agent-chat')
   const iconProps = { className: 'h-4 w-4', strokeWidth: 1.75 }
   // HTML5 drag does not scroll containers; without this, dragged sidebar rows
   // cannot reach projects above or below the visible window.
   useEffect(() => registerSidebarDragAutoScroll(document), [])
 
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
+  const artifactsActive = useChatStore((s) => s.route === 'artifacts')
   const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const codeWorkspaceRoots = useChatStore((s) => s.codeWorkspaceRoots)
   const threadListStatus = useChatStore((s) => s.threadListStatus)
@@ -127,6 +134,7 @@ export function Sidebar({
   const unreadThreadIds = useChatStore((s) => s.unreadThreadIds)
   const scheduledThreadActivities = useChatStore((s) => s.scheduledThreadActivities)
   const awaitingUserInputThreadIds = useChatStore((s) => s.awaitingUserInputThreadIds)
+  const backgroundActivityByThread = useSidebarBackgroundActivity()
   const clawChannels = useChatStore((s) => s.clawChannels)
   const activeClawChannelId = useChatStore((s) => s.activeClawChannelId)
   const selectClawChannel = useChatStore((s) => s.selectClawChannel)
@@ -152,7 +160,8 @@ export function Sidebar({
       watchTurnCompletion,
       unreadThreadIds,
       scheduledThreadActivities,
-      awaitingUserInputThreadIds
+      awaitingUserInputThreadIds,
+      backgroundActivityByThread
     }),
     [
       activeThreadId,
@@ -160,7 +169,8 @@ export function Sidebar({
       watchTurnCompletion,
       unreadThreadIds,
       scheduledThreadActivities,
-      awaitingUserInputThreadIds
+      awaitingUserInputThreadIds,
+      backgroundActivityByThread
     ]
   )
 
@@ -174,7 +184,6 @@ export function Sidebar({
           connectPhoneSidebarOpen={connectPhoneSidebarOpen}
           onFocusModeChange={onFocusModeChange}
           onOpenSettings={() => onOpenSettings('general')}
-          onOpenAgentSettings={() => onOpenSettings('agents')}
           onToggleConnectPhone={onToggleConnectPhone}
           onToggleTheme={onToggleTheme}
         />
@@ -189,7 +198,7 @@ export function Sidebar({
           onWriteOpen={onWriteOpen}
         />
 
-        {activeView !== 'claw' ? (
+        {activeView !== 'claw' && !chatsScope ? (
           <SidebarPrimaryActions
             runtimeReady={runtimeReady}
             newTaskLabel={t('newAgent')}
@@ -198,7 +207,7 @@ export function Sidebar({
             onNewTask={onNewChat}
           />
         ) : null}
-        <nav className="sidebar-code-nav" aria-label={t('sidebarTools')}>
+        {!chatsScope ? <nav className="sidebar-code-nav" aria-label={t('sidebarTools')}>
           {codexReferenceEnabled && activeView === 'chat' ? <SidebarNavRow
             icon={<Clock3 {...iconProps} />} label={t('codexHistoryCreate')} active={false}
             disabled={!runtimeReady} onClick={() => setCodexDialogOpen(true)}
@@ -220,6 +229,12 @@ export function Sidebar({
               { id: 'extensions', label: i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions', icon: <Puzzle {...iconProps} />, active: extensionsActive, onSelect: onOpenExtensions }
             ]}
           />
+          <SidebarNavRow
+            icon={<Layers {...iconProps} />}
+            label={t('artifactsNav')}
+            onClick={openArtifactsPage}
+            active={artifactsActive}
+          />
           {projectBoardEnabled ? (
             <SidebarNavRow
               icon={<Columns3 {...iconProps} />}
@@ -228,7 +243,7 @@ export function Sidebar({
               active={activeView === 'board'}
             />
           ) : null}
-        </nav>
+        </nav> : null}
       </div>
 
       <div className="ds-no-drag mx-1 my-1" />
@@ -272,61 +287,68 @@ export function Sidebar({
         />
       ) : (
       <>
-      <SidebarAgentChatsSection
-        threads={threads}
-        activeThreadId={activeThreadId}
-        runtimeReady={runtimeReady}
-        conversationRoot={conversationWorkspaceRoot}
-        onNewConversation={onNewConversation}
-        onSelectThread={onSelectThread}
-        onRenameThread={onRenameThread}
-        onPinThread={onPinThread}
-        onArchiveThread={onArchiveThread}
-        onDeleteThread={onDeleteThread}
-        onRestoreThread={onRestoreThread}
-        t={t}
-      />
-      {!threadSearch.trim() && ['chat', 'write', 'schedule', 'workflow'].includes(activeView) ? (
+      {chatsScope ? (
+  <SidebarAgentChatsSection
+          fill
+          threads={threads}
+          activeThreadId={activeThreadId}
+          runtimeReady={runtimeReady}
+          conversationRoot={conversationWorkspaceRoot}
+          onNewConversation={onNewConversation}
+          onSelectThread={onSelectThread}
+          onRenameThread={onRenameThread}
+          onPinThread={onPinThread}
+          onArchiveThread={onArchiveThread}
+          onDeleteThread={onDeleteThread}
+          onRestoreThread={onRestoreThread}
+          t={t}
+        />
+      ) : null}
+      {!chatsScope && !threadSearch.trim() && ['chat', 'write', 'schedule', 'workflow'].includes(activeView) ? (
         <SidebarAttentionPanel
           threads={threads}
           activityContext={sidebarActivityContext}
           onSelectThread={onSelectThread}
+          onMarkRead={markAttentionRead}
           t={t}
         />
       ) : null}
-      <SidebarProjectsSection
-        threads={threads}
-        activeView={activeView === 'write' ? 'write' : 'chat'}
-        activeThreadId={activeThreadId}
-        runtimeReady={runtimeReady}
-        threadListStatus={threadListStatus}
-        threadListError={threadListError}
-        onRetryThreads={() => void refreshThreads()}
-        onLoadMoreThreads={(workspacePath) => void loadMoreThreads(workspacePath)}
-        threadListCursorByWorkspace={threadListCursorByWorkspace}
-        searchQuery={threadSearch}
-        showArchived={showArchivedThreads}
-        workspaceRoot={workspaceRoot}
-        workspaceRoots={codeWorkspaceRoots}
-        conversationRoot={conversationWorkspaceRoot}
-        busy={busy}
-        watchTurnCompletion={watchTurnCompletion}
-        unreadThreadIds={unreadThreadIds}
-        scheduledThreadActivities={scheduledThreadActivities}
-        awaitingUserInputThreadIds={awaitingUserInputThreadIds}
-        locale={i18n.language}
-        onPickWorkspace={() => void chooseWorkspace()}
-        onRemoveWorkspace={removeWorkspace}
-        onCreateThreadInWorkspace={onNewChatInWorkspace}
-        onSelectThread={onSelectThread}
-        onRenameThread={onRenameThread}
-        onPinThread={onPinThread}
-        onArchiveThread={onArchiveThread}
-        onDeleteThread={onDeleteThread}
-        onRestoreThread={onRestoreThread}
-        onSearchQueryChange={onThreadSearchChange}
-        t={t}
-      />
+      {!chatsScope ? (
+  <SidebarProjectsSection
+          threads={threads}
+          activeView={activeView === 'write' ? 'write' : 'chat'}
+          activeThreadId={activeThreadId}
+          runtimeReady={runtimeReady}
+          threadListStatus={threadListStatus}
+          threadListError={threadListError}
+          onRetryThreads={() => void refreshThreads()}
+          onLoadMoreThreads={(workspacePath) => void loadMoreThreads(workspacePath)}
+          threadListCursorByWorkspace={threadListCursorByWorkspace}
+          searchQuery={threadSearch}
+          showArchived={showArchivedThreads}
+          workspaceRoot={workspaceRoot}
+          workspaceRoots={codeWorkspaceRoots}
+          conversationRoot={conversationWorkspaceRoot}
+          busy={busy}
+          watchTurnCompletion={watchTurnCompletion}
+          unreadThreadIds={unreadThreadIds}
+          scheduledThreadActivities={scheduledThreadActivities}
+          awaitingUserInputThreadIds={awaitingUserInputThreadIds}
+          locale={i18n.language}
+          onPickWorkspace={() => void chooseWorkspace()}
+          onRemoveWorkspace={removeWorkspace}
+          onCreateThreadInWorkspace={onNewChatInWorkspace}
+          onSelectThread={onSelectThread}
+          onRenameThread={onRenameThread}
+          onPinThread={onPinThread}
+          onArchiveThread={onArchiveThread}
+          onDeleteThread={onDeleteThread}
+          onRestoreThread={onRestoreThread}
+          onSearchQueryChange={onThreadSearchChange}
+          onOpenSchedule={onScheduleOpen}
+          t={t}
+        />
+      ) : null}
       </>
       )}
 

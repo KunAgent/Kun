@@ -11,7 +11,7 @@ import {
 import type { ThreadStoreListOptions } from '../../ports/thread-store.js'
 import { resolveThreadAgentSurface } from '../../domain/thread.js'
 import { executionTasksAsTodos } from '../../tasks/execution-task-state.js'
-import { isCodeWorkbenchThread } from '../../domain/thread-list-query.js'
+import { isCodeWorkbenchThread, isWorkWorkbenchThread } from '../../domain/thread-list-query.js'
 
 export type ThreadRow = {
   id: string; title: string; workspace: string; model: string; mode: ThreadMode; status: ThreadStatus
@@ -73,9 +73,12 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
       collaboration: thread.collaboration,
       executionConfig: thread.executionConfig,
       workbenchOrigin: thread.workbenchOrigin,
+      taskOrigin: thread.taskOrigin,
       planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint,
       planBuildAdmissionCapabilityHash: thread.planBuildAdmissionCapabilityHash,
-      planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen
+      planBuildAdmissionFrozen: thread.planBuildAdmissionFrozen,
+      // Rows written before this field stay without it; readers treat absence as unknown.
+      turnCount: Array.isArray(thread.turns) ? thread.turns.length : undefined
     }),
     created_at: thread.createdAt, updated_at: thread.updatedAt,
     created_at_ms: isoToMillis(thread.createdAt), updated_at_ms: isoToMillis(thread.updatedAt),
@@ -114,10 +117,10 @@ export function summaryFromRow(row: ThreadRow): ThreadSummary {
 
 type ExtensionThreadMetadata = Pick<ThreadRecord,
   'providerId' | 'harnessId' | 'taskWorkspaceId' | 'executionUnit' | 'forkedFromTurnId' | 'historyRefId' | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
-  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin'
+  | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin' | 'taskOrigin'
   | 'collaboration' | 'executionConfig'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
-  | 'planBuildAdmissionFrozen'>
+  | 'planBuildAdmissionFrozen'> & { turnCount?: number }
 
 export function needsSummaryMetadataRepair(row: ThreadRow): boolean {
   return parseJson<{ summaryMetadataVersion?: number }>(row.extension_metadata_json)?.summaryMetadataVersion !== 1
@@ -138,6 +141,7 @@ export function filterThreadSummaries(summaries: ThreadSummary[], options: Threa
     out = out.filter((thread) => (thread.workspaceMode ?? 'code') === options.workspaceMode)
   }
   if (options.workbenchScope === 'code') out = out.filter(isCodeWorkbenchThread)
+  if (options.workbenchScope === 'work') out = out.filter(isWorkWorkbenchThread)
   if (query) out = out.filter((thread) => searchTextForThread(thread).includes(query))
   return typeof options.limit === 'number' ? out.slice(0, options.limit) : out
 }

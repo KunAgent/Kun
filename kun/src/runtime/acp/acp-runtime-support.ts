@@ -1,7 +1,8 @@
+import { providerModule } from '../../harness/providers/registry.js'
 import type { HarnessGatewayBinding } from '../../contracts/harness-gateway-binding.js'
 /**
  * AcpRuntime support: delegated trace records (same shape as the other
- * delegated runtimes), the ACP failure → finishTurn mapping (03 §9), and the
+ * delegated runtimes), the ACP failure → finishTurn mapping, and the
  * per-turn credential-env resolution for non-native-login credential modes.
  */
 import type { ModelRequestTraceDelegated } from '../../contracts/model-request-trace.js'
@@ -12,6 +13,7 @@ import type {
 } from '../../contracts/harness.js'
 import type { LlmDebugSink } from '../../services/llm-debug-recorder.js'
 import type { DelegatedRuntimeCapabilities } from '../delegated-turn-runtime.js'
+import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
 import {
   unsupported,
   type HarnessCapabilities
@@ -28,6 +30,10 @@ import {
   resolveDelegatedCredentialContext,
   type DelegatedCredentialEnvInput
 } from '../../session/delegated-credentials.js'
+
+export function missingAcpCoordinator(): DelegatedSessionCoordinator {
+  throw new Error('AcpRuntime requires sessionCoordinator')
+}
 
 export type AcpTrace = DelegatedTrace
 
@@ -67,20 +73,42 @@ export function acpLegacyCapabilities(): DelegatedRuntimeCapabilities {
     structuredStreaming: true,
     kunTools: true,
     externalApproval: true,
-    liveSteering: false,
+    // Every ACP turn takes guidance, live or deferred (acp-live-steering.ts).
+    liveSteering: true,
     nativeContextTelemetry: false,
     fork: false
   }
 }
 
 /**
- * ACP failure → finishTurn code/message (03 §9): startup spawn/init failures
+ * ACP failure → finishTurn code/message: startup spawn/init failures
  * read as `harness_not_ready`; mid-turn process death is `harness_crashed`;
  * malformed required frames are `harness_protocol_error`; the agent's own
  * JSON-RPC errors are `agent_error`. User-facing text is bounded and never
  * carries environment or credential material.
  */
+/** Name the engine's own sign-in command when it is a plain CLI invocation. */
+function loginGuidance(harnessId: string | undefined): string | undefined {
+  const definition = providerModule(harnessId)?.definition
+  const login = definition?.setup?.login
+  if (!definition || !login?.args.length) return undefined
+  return `${definition.displayName} requires login. Run ${[login.command, ...login.args].join(' ')} in a terminal, then retry.`
+}
+
 export function mapAcpFailure(
+  error: unknown,
+  startup: boolean,
+  harnessId?: string
+): { code: string; message: string } {
+  const mapped = mapAcpFailureCode(error, startup, harnessId)
+  if (mapped.code === 'harness_not_ready' && isAcpAuthenticationRequired(error)) return mapped
+  // The engine may know what a crash or opaque error really means (OpenCode's
+  // shared database, hidden service failures); keep the stable code.
+  const explained = providerModule(harnessId)?.explainFailure?.(mapped.message, false)
+  return explained && !explained.authRequired ? { code: mapped.code, message: explained.detail } : mapped
+}
+
+function mapAcpFailureCode(
   error: unknown,
   startup: boolean,
   harnessId?: string
@@ -89,9 +117,7 @@ export function mapAcpFailure(
     if (isAcpAuthenticationRequired(error)) {
       return {
         code: 'harness_not_ready',
-        message: harnessId === 'devin'
-          ? 'Devin CLI requires login. Run devin auth login in a terminal, then retry.'
-          : 'The agent requires login. Open Agent settings, sign in with its CLI, and retry.'
+        message: loginGuidance(harnessId) ?? 'The agent requires login. Open Agent settings, sign in with its CLI, and retry.'
       }
     }
     switch (error.code) {
@@ -138,7 +164,7 @@ function sanitize(message: string): string {
 }
 
 /**
- * Pre-connect capability view (P3-09): the static ACP declaration, narrowed
+ * Pre-connect capability view: the static ACP declaration, narrowed
  * to not claim `kunTools` when this runtime cannot hand out MCP descriptors.
  */
 export function acpStaticCapabilities(kunToolsDeliverable: boolean): HarnessCapabilities {
@@ -166,11 +192,11 @@ export function kunToolsDescriptorOf(
 export type AcpCredentialEnvInput = DelegatedCredentialEnvInput
 
 /**
- * Resolve the credential identity + child env for a turn (P3-10). A
+ * Resolve the credential identity + child env for a turn. A
  * `kun-gateway` route embeds the selected provider/model in the env, so the
  * identity — and the pooled connection it keys — folds the canonical route in
  * (grant ids never hash routes, so a later turn cannot widen a live token).
- * Shared implementation lives in `session/delegated-credentials.ts` (P6-02).
+ * Shared implementation lives in `session/delegated-credentials.ts`.
  */
 export function resolveAcpCredentialContext(
   resolve: ((input: AcpCredentialEnvInput) => Promise<Record<string, string>>) | undefined,

@@ -1,5 +1,5 @@
 /**
- * Team usage rollup + budget gate (docs/ade/impl p3-review-followup P3-15):
+ * Team usage rollup + budget gate:
  * worker-thread usage sums to a team total; crossing the soft cap notifies
  * the manager once, crossing the hard cap refuses new worker_create /
  * worker_send work without interrupting anything already running.

@@ -1,6 +1,6 @@
 /**
  * UTF-8 byte budgeting helpers shared by the delegated-history transcript and
- * the deterministic handoff brief (docs/ade/08 §3). All truncation iterates
+ * the deterministic handoff brief. All truncation iterates
  * Unicode code points so a cut never produces half a character.
  */
 

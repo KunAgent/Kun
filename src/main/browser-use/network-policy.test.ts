@@ -138,6 +138,7 @@ describe('BrowserUsePolicyProxy', () => {
       expect(status).toBe('403')
       expect(events).toContainEqual({
         outcome: 'blocked',
+        message: 'Browser Use destination DNS resolution timed out.',
         sanitizedUrl: 'https://github.com/',
         code: 'dns_timeout'
       })

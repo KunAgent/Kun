@@ -6,7 +6,7 @@ import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
 
 /**
- * `read_thread_history` (docs/ade/08 §6): delegated external harnesses can
+ * `read_thread_history`: delegated external harnesses can
  * page through their own thread's canonical history (plus fork ancestors)
  * when a handoff brief digest is not enough. Thread identity always comes
  * from the trusted execution context — arguments cannot name another thread.

@@ -17,6 +17,7 @@ import { FileDispatchStore } from './dispatch-store.js'
 import { FileTeamStore } from './team-store.js'
 import { FileQuestionStore } from './question-store.js'
 import { FileWorkerNoticeStore } from './worker-notice-store.js'
+import { renderWorkerUpdates } from './notice-render.js'
 import { DispatchDeliverer, type DelivererDelegation } from './dispatch-deliverer.js'
 import { ManagerRuntime, type ManagerRuntimeDeps, type ManagerToolContext } from './manager-runtime.js'
 import { shouldAdvertiseManagerTools } from '../domain/manager-tools.js'
@@ -142,6 +143,14 @@ function makeRuntime(opts: {
 
 const TOOL_CONTEXT = { workspace: '/repo' } as never
 
+// These manager unit fixtures use a virtual checkout; real filesystem coverage
+// lives in dispatch-deliverer.test.ts.
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs/promises')>()
+  return { ...actual, stat: (path: string) => path === '/repo/.worktrees/fix-login'
+    ? Promise.resolve({ isDirectory: () => true }) : actual.stat(path) }
+})
+
 describe('shouldAdvertiseManagerTools', () => {
   it('advertises only on native-loop ADE threads that are not workers or rooms', () => {
     expect(shouldAdvertiseManagerTools({
@@ -193,7 +202,7 @@ describe('ManagerRuntime.createWorker', () => {
   it('scopes the snapshot to the settled worktree path, not the provisional source root', async () => {
     // Regression: `create` returns before the checkout exists — its `path`
     // still points at the manager workspace. The snapshot must wait for
-    // settlement or the worker can write nowhere (09 §7.1).
+    // settlement or the worker can write nowhere.
     const { runtime, runChild, taskWorkspaces } = makeRuntime()
     taskWorkspaces.create.mockResolvedValue({ ...workspaceRecord('creating'), path: '/repo' })
     taskWorkspaces.get.mockReturnValueOnce(workspaceRecord('ready'))
@@ -405,7 +414,7 @@ describe('ManagerRuntime.createWorker', () => {
     expect(taskWorkspaces.create).not.toHaveBeenCalled()
   })
 
-  it('applies harnesses.defaults for isolation and permission on a pin (P4-11)', async () => {
+  it('applies harnesses.defaults for isolation and permission on a pin', async () => {
     const { runtime, taskWorkspaces } = makeRuntime({
       // A natively-sandboxed harness so 'local' isolation is admissible.
       capabilities: {
@@ -594,6 +603,11 @@ describe('ManagerRuntime worker terminal handling', () => {
     await upsertWorkerThread(workerId, {
       status: 'completed', clientRequestId: result.dispatchId
     })
+    await dispatches.update('thr_mgr', result.dispatchId!, { workerReport: {
+      summary: 'Found a preview bug. '.repeat(150), outcome: 'partial', submittedAt: NOW,
+      checks: [{ name: 'packaged UI', status: 'failed', detail: 'External browser still opens' }],
+      risks: ['Not fixed yet']
+    } })
     await runtime.handleWorkerTurnTerminal(workerId, 'turn_w1', 'completed')
     const dispatch = await dispatches.get('thr_mgr', result.dispatchId!)
     expect(dispatch?.state).toBe('completed')
@@ -604,6 +618,32 @@ describe('ManagerRuntime worker terminal handling', () => {
     expect(pending).toHaveLength(1)
     expect(pending[0]!.kind).toBe('dispatch_completed')
     expect(pending[0]!.dispatchId).toBe(result.dispatchId)
+    const prompt = renderWorkerUpdates(pending, 'en').prompt
+    expect(prompt).toContain('Found a preview bug.')
+    expect(prompt).toContain('[failed] packaged UI: External browser still opens')
+    expect(prompt).toContain('Not fixed yet')
+    expect(prompt).toContain('self-contained final answer')
+    await runtime.handleWorkerTurnTerminal(workerId, 'turn_w1', 'completed')
+    expect(await notices.pending('thr_mgr')).toHaveLength(1)
+  })
+
+  it('runs a captured checkout again after review and reports the second completion', async () => {
+    const { runtime, result, taskWorkspaces, workspace, resumeChild } = await createAndDeliver()
+    const workerId = result.workerId!
+    await upsertWorkerThread(workerId, { status: 'completed', clientRequestId: result.dispatchId })
+    await runtime.handleWorkerTurnTerminal(workerId, 'turn_w1', 'completed')
+    workspace.state = 'captured'
+    await dispatches.update('thr_mgr', result.dispatchId!, { verdict: { status: 'needs_changes', checks: [] } })
+    await childRuns.upsert(childRunRecord({ id: workerId, status: 'completed' }))
+    const next = await runtime.controls.workerSend(managerCtx(), { workerId, task: 'repair review findings' })
+    expect(next).toMatchObject({ ok: true, dispatched: true })
+    expect(resumeChild).toHaveBeenCalledTimes(1)
+    expect((await dispatches.get('thr_mgr', next.dispatchId!))?.verdict?.status).toBe('pending')
+    await upsertWorkerThread(workerId, { id: 'turn_w2', status: 'completed', clientRequestId: next.dispatchId })
+    await runtime.handleWorkerTurnTerminal(workerId, 'turn_w2', 'completed')
+    expect(taskWorkspaces.captureForDispatch).toHaveBeenCalledTimes(2)
+    expect((await dispatches.get('thr_mgr', result.dispatchId!))?.verdict?.status).toBe('needs_changes')
+    expect((await notices.pending('thr_mgr')).map((notice) => notice.dispatchId)).toEqual([result.dispatchId, next.dispatchId])
   })
 
   it('ignores user-originated worker turns that carry no dispatch', async () => {
@@ -626,6 +666,7 @@ describe('ManagerRuntime worker terminal handling', () => {
     await (runtime as unknown as {
       lifecycle: { backfillDispatchTurnId(t: string, id: string): Promise<void> }
     }).lifecycle.backfillDispatchTurnId(workerId, 'turn_w1')
+    expect(await notices.pending('thr_mgr')).toHaveLength(0)
     expect((await dispatches.get('thr_mgr', result.dispatchId!))?.turnId).toBe('turn_w1')
   })
 

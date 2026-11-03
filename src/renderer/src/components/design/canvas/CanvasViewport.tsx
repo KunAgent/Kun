@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PenLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
@@ -12,7 +11,6 @@ import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 import type { DesignArtifact } from '../../../design/design-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
-import type { DesignRuntimeQualityPayload } from '../../../design/design-html-quality'
 import { CanvasWorkspaceContext } from '../../../design/canvas/canvas-workspace-context'
 import {
   handleCanvasKeyDown,
@@ -23,6 +21,7 @@ import { hitTest } from '../../../design/canvas/canvas-hit-test'
 import { hasPrototypePlayback, resolvePreferredPrototypeArtifactId } from '../../../design/prototype-player'
 import { ShapeDispatcher } from './shapes/ShapeDispatcher'
 import { CanvasGrid } from './CanvasGrid'
+import { CanvasContentOverlays } from './CanvasContentOverlays'
 import { CanvasToolbar } from './CanvasToolbar'
 import { MotionSelectionOverlay } from './SelectionOverlay'
 import { PrototypePlayerOverlay } from './PrototypePlayerOverlay'
@@ -43,7 +42,6 @@ import {
   shouldRenderCanvasMinimap,
   shouldRenderDesignArtifactOverlays,
   shouldSyncCanvasHtmlFrames,
-  shouldToggleHtmlFrameInteractiveOnDoubleClick,
   resolveSelectedImageAnnotationAction,
   resolveCanvasDesignSystemBaseDir,
   resolveHtmlFrameOverlayInteractionState
@@ -69,7 +67,11 @@ import {
 import { CanvasMotionDock } from './CanvasMotionDock'
 import { PrototypeFlowOverlay } from './PrototypeFlowOverlay'
 import { useCanvasViewportExports } from './canvas-viewport/canvas-viewport-export'
-import { CanvasViewportChrome } from './canvas-viewport/CanvasViewportChrome'
+import { CanvasViewportChrome, type CanvasViewportChromeSlots } from './canvas-viewport/CanvasViewportChrome'
+import { CanvasImageAnnotationAction } from './canvas-viewport/CanvasImageAnnotationAction'
+import { CanvasViewControls } from './CanvasViewControls'
+import { CanvasInspectorDrawer, useCanvasInspectorLayout } from './CanvasInspectorDrawer'
+import { CanvasBoardFocusView } from './CanvasBoardFocusView'
 
 export {
   resolveCanvasDesignSystemBaseDir,
@@ -80,7 +82,6 @@ export {
   shouldRenderCanvasMinimap,
   shouldRenderDesignArtifactOverlays,
   shouldSyncCanvasHtmlFrames,
-  shouldToggleHtmlFrameInteractiveOnDoubleClick,
   resolveCanvasSelectionAfterDocumentSync,
   resolveHtmlFrameOverlayInteractionState,
   shouldResetCanvasTransientInteractionAfterDocumentSync,
@@ -103,12 +104,11 @@ type Props = {
   syncHtmlScreens?: boolean
   onImplementDesign?: (artifact: DesignArtifact) => void
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
-  onRuntimeQualityFindings?: (payload: DesignRuntimeQualityPayload) => void
-  onRequestQualityRepair?: (payload: DesignRuntimeQualityPayload) => void
   onRequestAssistant?: () => void
   /** Reports whether the current canvas document loaded safely for guarded actions. */
   onDocumentLoadStateChange?: (loaded: boolean) => void
   onError?: (message: string | null) => void
+  chrome?: CanvasViewportChromeSlots
 }
 
 export function canvasViewportBackgroundFillClass(surface: CanvasSurface): string {
@@ -131,12 +131,12 @@ export function CanvasViewport({
   busy = false,
   onOpenAgentSettings,
   syncHtmlScreens = false,
+  onImplementDesign,
   onUseElementAsContext,
-  onRuntimeQualityFindings,
-  onRequestQualityRepair,
   onRequestAssistant,
   onDocumentLoadStateChange,
-  onError
+  onError,
+  chrome
 }: Props) {
   const { t } = useTranslation('common')
   const rootRef = useRef<HTMLDivElement>(null)
@@ -164,7 +164,6 @@ export function CanvasViewport({
 
   const [prototypePlayerOpen, setPrototypePlayerOpen] = useState(false)
   const [interactiveHtmlFrameId, setInteractiveHtmlFrameId] = useState<string | null>(null)
-  const [editingHtmlFrameId, setEditingHtmlFrameId] = useState<string | null>(null)
   const zoom = containerWidth / vbox.width
   const motionOpen = useCanvasMotionStore((s) => s.open)
   const motionPlaying = useCanvasMotionStore((s) => s.playing)
@@ -175,6 +174,7 @@ export function CanvasViewport({
   const motionGestureOverrides = useCanvasMotionStore((s) => s.gestureOverrides)
   const designMotionOpen = isDesignCanvasSurface(surface) && motionOpen
   const designMotionPlaying = designMotionOpen && motionPlaying
+  const inspector = useCanvasInspectorLayout(rootRef, designMotionOpen || readOnly)
   const motionPreviewRefreshKey = `${[...selectedIds].sort().join(',')}:${vbox.x}:${vbox.y}:${vbox.width}:${vbox.height}:${designMotionOpen}`
   useCanvasMotionPreview(rootRef, document, zoom, isDesignCanvasSurface(surface), motionPreviewRefreshKey)
 
@@ -185,7 +185,6 @@ export function CanvasViewport({
     useCanvasMotionStore.getState().setActiveFrameId(frameId)
     setActiveTool('select')
     setInteractiveHtmlFrameId(null)
-    setEditingHtmlFrameId(null)
   }, [designMotionOpen, document, selectedIds, setActiveTool])
   const htmlFrameOverlayMountableIds = useMemo(() => {
     if (!htmlFrameOverlayCanMountAtZoom(zoom)) return new Set<string>()
@@ -194,43 +193,27 @@ export function CanvasViewport({
     return new Set(selectHtmlFramesForOverlay(frames, selectedIds).map((shape) => shape.id))
   }, [document, selectedIds, vbox, zoom])
 
-  const requestCanvasCritique = useCallback((promptSeed: string): void => {
-    onUseElementAsContext?.(null, promptSeed)
-  }, [onUseElementAsContext])
-  const requestMissingPrototypeScreen = useCallback((promptSeed: string): void => {
+  const seedComposer = useCallback((promptSeed: string): void => {
     onUseElementAsContext?.(null, promptSeed)
   }, [onUseElementAsContext])
 
   const toggleHtmlFrameInteractive = useCallback((shapeId: string): void => {
-    setEditingHtmlFrameId(null)
     setInteractiveHtmlFrameId((prev) => (prev === shapeId ? null : shapeId))
-  }, [])
-
-  const toggleHtmlFrameModify = useCallback((shapeId: string): void => {
-    setInteractiveHtmlFrameId(null)
-    setEditingHtmlFrameId((prev) => (prev === shapeId ? null : shapeId))
   }, [])
 
   useEffect(() => {
     const next = resolveHtmlFrameOverlayInteractionState(document, selectedIds, {
       interactiveId: interactiveHtmlFrameId,
-      editingId: editingHtmlFrameId,
       overlayAvailable: htmlFrameOverlayCanMountAtZoom(zoom),
       mountableFrameIds: htmlFrameOverlayMountableIds
     })
     if (next.interactiveId !== interactiveHtmlFrameId) {
       setInteractiveHtmlFrameId(next.interactiveId)
     }
-    if (next.editingId !== editingHtmlFrameId) {
-      setEditingHtmlFrameId(next.editingId)
-      if (!next.editingId) onUseElementAsContext?.(null)
-    }
   }, [
     document,
-    editingHtmlFrameId,
     htmlFrameOverlayMountableIds,
     interactiveHtmlFrameId,
-    onUseElementAsContext,
     selectedIds,
     zoom
   ])
@@ -437,11 +420,6 @@ export function CanvasViewport({
       const hitId = hitTest(interactionDocument, canvas.x, canvas.y)
       if (!hitId) return
       const shape = doc.objects[hitId]
-      if (shouldToggleHtmlFrameInteractiveOnDoubleClick(surface, shape)) {
-        useCanvasSelectionStore.getState().select([hitId])
-        toggleHtmlFrameInteractive(hitId)
-        return
-      }
       if (shape?.type === 'text') {
         useCanvasSelectionStore.getState().select([hitId])
         useCanvasSelectionStore.getState().setEditing(hitId)
@@ -454,7 +432,7 @@ export function CanvasViewport({
         useImageAnnotationStore.getState().openImageAnnotation(hitId)
       }
     },
-    [screenToCanvas, surface, toggleHtmlFrameInteractive]
+    [screenToCanvas, surface]
   )
 
   const onWheel = useCallback(
@@ -520,12 +498,12 @@ export function CanvasViewport({
       <div
         ref={rootRef}
         tabIndex={-1}
-        className={`ds-no-drag relative h-full w-full overflow-hidden bg-[#f8fafc] text-[#1e1e1e] outline-none dark:bg-[#111318] dark:text-[#e9ecef] ${canvasViewportBackgroundFillClass(surface)}`}
+        className={`ds-no-drag relative h-full w-full overflow-hidden bg-[#f4f4f2] text-[#1e1e1e] outline-none dark:bg-[#121315] dark:text-[#e9ecef] ${canvasViewportBackgroundFillClass(surface)}`}
         style={{
           '--canvas-motion-dock-height': '264px',
           '--canvas-bottom-ui-inset': designMotionOpen
             ? 'calc(var(--canvas-motion-dock-height) + 16px)'
-            : '16px'
+            : `${inspector.height + 16}px`
         } as React.CSSProperties}
       >
         <CanvasViewportChrome
@@ -535,35 +513,35 @@ export function CanvasViewport({
           sidebarCollapseLabel={t('sidebarCollapse')}
           minimapEnabled={minimapEnabled}
           uiScale={uiScale}
-        >
-          <div
-            className="pointer-events-none absolute right-3 top-1/2 z-40 -translate-y-1/2"
-            style={{ transform: `translateY(-50%) scale(${uiScale})`, transformOrigin: 'right center' }}
-          >
-            {!readOnly ? <CanvasToolbar
-              workspaceRoot={workspaceRoot}
-              surface={surface}
-              designTargetDisabled={busy || Boolean(pagesRun)}
-              prototypePlayable={prototypePlayable}
-              onOpenPrototypePlayer={() => {
-                useCanvasMotionStore.getState().setPlaying(false)
-                setPrototypePlayerOpen(true)
-              }}
-              onOpenAgentSettings={onOpenAgentSettings}
-              onRequestCanvasCritique={requestCanvasCritique}
-              onExportCanvas={exportCanvas}
-              onExportPrototype={isDesignCanvasSurface(surface) ? exportPrototype : undefined}
-              onError={onError}
-            /> : null}
-          </div>
-        </CanvasViewportChrome>
+          bottomInset={designMotionOpen ? 276 : inspector.height}
+          toolbar={!readOnly ? <CanvasToolbar
+            workspaceRoot={workspaceRoot}
+            surface={surface}
+            documentTitle={chrome?.title}
+            onRequestCanvasCritique={seedComposer}
+            onExportCanvas={exportCanvas}
+            onExportPrototype={isDesignCanvasSurface(surface) ? exportPrototype : undefined}
+            onError={onError}
+          /> : chrome?.notice}
+          viewControls={<CanvasViewControls
+            showPrototypePlay={designArtifactOverlaysEnabled}
+            prototypePlayable={prototypePlayable}
+            onOpenPrototypePlayer={() => {
+              useCanvasMotionStore.getState().setPlaying(false)
+              setPrototypePlayerOpen(true)
+            }}
+            minimapAvailable={minimapEnabled}
+            inspectorAvailable={!readOnly}
+            extraActions={chrome?.actions}
+          />}
+        />
         <div
           ref={containerRef}
-          className={`absolute inset-0 overflow-hidden bg-[#f8fafc] dark:bg-[#111318] ${canvasViewportBackgroundFillClass(surface)}`}
+          className={`absolute inset-0 overflow-hidden bg-[#f4f4f2] dark:bg-[#121315] ${canvasViewportBackgroundFillClass(surface)}`}
           style={{
             bottom: designMotionOpen
               ? 'calc(var(--canvas-motion-dock-height) + 12px)'
-              : 0
+              : inspector.height
           }}
         >
           {isDesignCanvasSurface(surface) && !readOnly
@@ -641,27 +619,7 @@ export function CanvasViewport({
             </svg>
           )}
           {!readOnly && selectedImageAnnotationAction ? (
-            <button
-              type="button"
-              className="ds-no-drag absolute z-30 flex items-center justify-center gap-1.5 rounded-full border border-accent/20 bg-white/95 px-3 text-[12px] font-medium text-accent shadow-[0_8px_24px_rgba(15,23,42,0.14)] backdrop-blur transition hover:bg-accent-soft hover:shadow-[0_10px_28px_rgba(15,23,42,0.18)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:bg-[#1f2430]/95"
-              style={{
-                left: selectedImageAnnotationAction.left,
-                top: selectedImageAnnotationAction.top,
-                width: selectedImageAnnotationAction.width,
-                height: selectedImageAnnotationAction.height
-              }}
-              title={t('canvasInspectorAnnotateOpen', '在图片上标注修改')}
-              aria-label={t('canvasInspectorAnnotate', 'AI 修改图片')}
-              onPointerDown={(e) => e.stopPropagation()}
-              onDoubleClick={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                openImageAnnotation(selectedImageAnnotationAction.shapeId)
-              }}
-            >
-              <PenLine className="h-3.5 w-3.5 shrink-0" strokeWidth={1.9} />
-              <span className="whitespace-nowrap">{t('canvasInspectorAnnotate', 'AI 修改图片')}</span>
-            </button>
+            <CanvasImageAnnotationAction action={selectedImageAnnotationAction} onOpen={openImageAnnotation} />
           ) : null}
           {designArtifactOverlaysEnabled ? (
             <>
@@ -669,18 +627,28 @@ export function CanvasViewport({
                 workspaceRoot={workspaceRoot}
                 readOnly={readOnly}
                 interactiveId={interactiveHtmlFrameId}
-                editingId={editingHtmlFrameId}
                 onToggleInteractive={toggleHtmlFrameInteractive}
-                onToggleModify={toggleHtmlFrameModify}
                 onUseElementAsContext={onUseElementAsContext}
-                onRuntimeQualityFindings={onRuntimeQualityFindings}
-                onRequestQualityRepair={onRequestQualityRepair}
               />
               <SvgFrameOverlay workspaceRoot={workspaceRoot} />
             </>
           ) : null}
+          <CanvasContentOverlays readOnly={Boolean(readOnly)} artifactOverlays={designArtifactOverlaysEnabled} onAskKun={seedComposer} />
         </div>
         {isDesignCanvasSurface(surface) && !readOnly ? <CanvasMotionDock /> : null}
+        {inspector.visible ? (
+          <CanvasInspectorDrawer
+            surface={surface}
+            workspaceRoot={workspaceRoot}
+            height={inspector.height}
+            hostHeight={inspector.hostHeight}
+            onImplementDesign={onImplementDesign}
+            onRequestModify={seedComposer}
+            onOpenAgentSettings={onOpenAgentSettings}
+            designTargetDisabled={busy || Boolean(pagesRun)}
+          />
+        ) : null}
+        {designArtifactOverlaysEnabled ? <CanvasBoardFocusView workspaceRoot={workspaceRoot} /> : null}
         {designArtifactOverlaysEnabled ? (
           <PrototypePlayerOverlay
             open={prototypePlayerOpen}
@@ -689,7 +657,7 @@ export function CanvasViewport({
             initialArtifactId={initialPrototypeArtifactId}
             designTarget={designTarget}
             onClose={() => setPrototypePlayerOpen(false)}
-            onRequestMissingScreen={readOnly ? undefined : requestMissingPrototypeScreen}
+            onRequestMissingScreen={readOnly ? undefined : seedComposer}
           />
         ) : null}
       </div>

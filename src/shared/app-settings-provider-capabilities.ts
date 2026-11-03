@@ -1,3 +1,5 @@
+import { migrateModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
+import { ModelCapabilityFactsSchema, ModelReasoningCapabilityMetadata } from '../../kun/src/contracts/capabilities-core.js'
 import { ModelMetadataEvidenceSchema } from '../../kun/src/contracts/model-metadata-evidence.js'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
@@ -146,6 +148,11 @@ export function normalizeModelProviderModelProfile(
     ...(normalizeProviderModels(input?.aliases).length
       ? { aliases: normalizeProviderModels(input?.aliases) }
       : {}),
+    metadata: migrateModelMetadata(input ?? {}).metadata,
+    ...(boundedPositiveInteger(input?.maxInputTokens, MAX_MODEL_CONTEXT_WINDOW_TOKENS) ? { maxInputTokens: input!.maxInputTokens } : {}),
+    ...(typeof input?.supportsReasoning === 'boolean' ? { supportsReasoning: input.supportsReasoning } : {}),
+    ...(ModelCapabilityFactsSchema.shape.conditionalCapabilities.safeParse(input?.conditionalCapabilities).success && input?.conditionalCapabilities ? { conditionalCapabilities: input.conditionalCapabilities } : {}),
+    ...(input?.metadataResolution ? { metadataResolution: input.metadataResolution } : {}),
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
     ...(maxOutputTokens ? { maxOutputTokens } : {}),
     inputModalities,
@@ -235,6 +242,9 @@ export function normalizeModelReasoningCapability(
   return {
     supportedEfforts,
     defaultEffort: resolvedDefault,
+    ...(ModelReasoningCapabilityMetadata.shape.nativeEfforts.safeParse(input.nativeEfforts).success && input.nativeEfforts ? { nativeEfforts: input.nativeEfforts } : {}),
+    ...(ModelReasoningCapabilityMetadata.shape.nativeDefaultEffort.safeParse(input.nativeDefaultEffort).success && input.nativeDefaultEffort ? { nativeDefaultEffort: input.nativeDefaultEffort } : {}),
+    ...(ModelReasoningCapabilityMetadata.shape.effortMapping.safeParse(input.effortMapping).success && input.effortMapping ? { effortMapping: input.effortMapping } : {}),
     requestProtocol
   }
 }

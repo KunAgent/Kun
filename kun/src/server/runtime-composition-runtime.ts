@@ -1,3 +1,4 @@
+import { ProductAnalyticsObserver } from '../analytics/observer.js'
 import { join } from 'node:path'
 import { RoomNotificationObserver } from '../rooms/room-notification-observer.js'
 import { GatewayMiddlewareHost } from './routes/gateway-middleware.js'
@@ -25,23 +26,35 @@ import { WorkbenchHarnessService } from '../workbench-bridge/harnesses.js'
 import { bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import {
   persistRuntimeCapabilitySection,
-  persistRuntimeMcpConfig,
-  persistRuntimeSkillsConfig,
-  persistSharedMcpConfig
+  persistRuntimeSkillsConfig
 } from './runtime-factory-config.js'
+import {
+  abandonMcpTransaction,
+  beginMcpTransaction,
+  endMcpTransaction,
+  recoverPendingMcpTransaction
+} from './runtime-mcp-transaction.js'
+import { persistMcpServerChange, readMcpServerSnapshots } from './runtime-mcp-persist.js'
+import { assertMcpLockHeld, mcpDataLockPath, withMcpLock } from './runtime-mcp-lock.js'
+import { kunConfigPathForDataDir } from '../config/kun-config.js'
 import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
+import { mutateMcpServer } from './runtime-mcp-mutation.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
+import { CodeWardrobeObserver } from '../rooms/code-wardrobe-observer.js'
 import { beginOwnedProcessShutdown, shutdownOwnedProcesses } from '../process/owned-process.js'
 import { ownedServiceManagerProcesses } from '../manager/owned-service-manager-session.js'
 import { workbenchExecutionControl } from './runtime-workbench-execution.js'
+import { loadExtensionAgentProviders } from './extension-agent-provider-loader.js'
+import { TaskSuggestionLauncher } from '../delegation/task-suggestion-launcher.js'
 
 export function createServerRuntimeComposition(
   extensions: Awaited<ReturnType<typeof createRuntimeExtensionComposition>>,
   config: ReturnType<typeof createRuntimeConfigController>
 ): ServerRuntime {
+  const remoteCleanups = new Set<() => Promise<void>>()
   const { agent } = extensions
   const { registryComposition } = agent
   const { services } = registryComposition
@@ -141,7 +154,29 @@ export function createServerRuntimeComposition(
     bundledSeedResults,
     extensionIndexClient
   } = extensions
-  const { startedAt, rebuildCapabilities, applyConfig } = config
+  const { startedAt, rebuildCapabilities, applyConfig: applyConfigNow } = config
+  // The desktop watchdog and attachment paths poll /v1/runtime/info; the
+  // capability manifest is rebuilt at most every few seconds and immediately
+  // after any config apply.
+  let capabilitiesMemo: { at: number; value: ReturnType<typeof rebuildCapabilities> } | undefined
+  const currentCapabilities = (): ReturnType<typeof rebuildCapabilities> => {
+    const now = Date.now()
+    if (capabilitiesMemo && now - capabilitiesMemo.at < 5_000) return capabilitiesMemo.value
+    capabilitiesMemo = { at: now, value: rebuildCapabilities() }
+    return capabilitiesMemo.value
+  }
+  const applyConfig: typeof applyConfigNow = async (request) => {
+    try {
+      return await applyConfigNow(request)
+    } finally {
+      capabilitiesMemo = undefined
+    }
+  }
+  // Extension-declared Agents join the catalog once their
+  // extension is enabled with `agents.register`; listing Agents refreshes them.
+  services.harnesses.extensionAgents.setLoader(() =>
+    loadExtensionAgentProviders({ registry: extensionRegistry, packageManager: extensionPackageManager }))
+  void services.harnesses.extensionAgents.refresh()
   const roomComposition = createRuntimeRoomComposition({
     options: () => config.activeOptions,
     services: { threads: threadService, threadStore: stores.threadStore, eventBus,
@@ -149,12 +184,21 @@ export function createServerRuntimeComposition(
       memoryStore: services.memoryStore, memoryEnabled: () => config.activeOptions.capabilities?.memory?.enabled !== false,
       turns: turnService, sessions: sessionStore, approvals: approvalGate, inputs: userInputGate,
       runTurn: runAgentTurn,
+      workspaceProfile: async (presetId, workspace) => {
+        const resolution = await agent.agentRoster.resolve(presetId, { lane: 'conversation', workspace, engineOverridden: true })
+        return resolution.ok ? resolution.profile : undefined
+      },
       peerModels: { client: modelClient, roles: () => config.activeOptions.roles },
+      activeBackgroundTurns: () => backgroundShellRuntime.listSessions().filter(item => item.status === 'running')
+        .map(item => ({ threadId: item.threadId, turnId: item.turnId })),
       backgroundExecutionActive: (threadId) => backgroundShellRuntime.listSessions(threadId).some((item) => item.status === 'running'),
       ...workbenchExecutionControl({ turns: turnService, threads: threadService, sessions: sessionStore,
         backgroundShells: backgroundShellRuntime, executionLeases }) }
   })
   events.addObserver(new RoomNotificationObserver({ threadStore: stores.threadStore, store: roomComposition.rooms.deps.store }))
+  // Code task turns roll wardrobe bottles too; Agent conversation turns are counted by their room runs.
+  events.addObserver(new CodeWardrobeObserver({ threadStore: stores.threadStore, turns: turnService, store: roomComposition.rooms.deps.store }))
+  events.addObserver(new ProductAnalyticsObserver({ store: roomComposition.rooms.deps.store, threads: stores.threadStore, turns: turnService }))
   bindAgentCommitmentService(core.threadStore, roomComposition.rooms.commitments)
   bindAgentArtifactLibrary(core.threadStore, roomComposition.rooms.artifactLibrary)
   bindRoomRuleStore(core.threadStore, roomComposition.rooms.service.store)
@@ -162,9 +206,11 @@ export function createServerRuntimeComposition(
   // retains the backing store. Bind both identities to the same room scope.
   bindRoomPeerStore(core.threadStore, roomComposition.rooms.deps.store)
   bindImMessageService(core.threadStore, roomComposition.rooms.service)
-  bindRoomAppAccess(core.threadStore, () => ({
+  bindRoomAppAccess(core.threadStore, async (scopeId) => ({
     servers: (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp.servers,
-    statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status]))
+    statuses: Object.fromEntries(services.mcpProviders.diagnostics.map((item) => [item.id, item.status])),
+    gmail: await services.gmail.status(scopeId),
+    github: await model.githubApp?.service.status(scopeId)
   }))
   bindAgentHandoffService(core.threadStore, roomComposition.rooms.handoffs)
   bindAgentSetupDirectory(core.threadStore, roomComposition.rooms.agents)
@@ -173,21 +219,29 @@ export function createServerRuntimeComposition(
   events.addObserver({ record: (event) => {
     if (event.kind === 'agent_dispatch_intent' && event.dispatchIntent.kind === 'workbench') roomComposition.rooms.workbench.wake()
   } })
+  services.taskSuggestionService.attach(new TaskSuggestionLauncher({
+    threads: threadService, turns: turnService, taskWorkspaces, roster: agent.agentRoster }))
+  events.addObserver({ record: (event) => services.taskSuggestionService.observe(event) })
   roomComposition.rooms.workbench.attach({ taskWorkspaces, projectBoard: projectBoardService, agentDispatch: services.agentDispatchService,
     harnesses: new WorkbenchHarnessService({ catalog: services.harnesses.catalog, detector: services.harnesses.detector, readiness: services.harnesses.readiness,
       runtimes: agent.harnessRuntimeMap, router: agent.harnessRouter,
       probedModels: (definition) => services.harnesses.probedModels(definition),
-      probeModels: (definition) => definition.transport === 'acp' ? services.harnesses.acpModels.probe(definition)
-        : definition.transport === 'agent-sdk' ? services.harnesses.agentSdkModels.probe(definition)
-          : definition.transport === 'codex-app-server' ? services.harnesses.codexModels.probe(definition)
-            : definition.transport === 'pi-rpc' ? services.harnesses.piModels.probe(definition) : Promise.resolve([]),
+      probeModels: (definition) => services.harnesses.probeModelsInBackground(definition),
       snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
     threadService,
+    gmail: services.gmail,
+    githubApp: model.githubApp?.service,
+    gmailDataPolicy: model.gmailDataPolicy,
+    gmailLocalModel: model.gmailLocalModel,
     agentDispatchService: services.agentDispatchService,
+    taskSuggestionService: services.taskSuggestionService,
+    agentRoster: agent.agentRoster,
     historyReferences: core.historyReferences,
     rooms: roomComposition.rooms,
     projectBoardService,
+    genUi: { store: core.genUiStore },
+    mcpApps: () => services.mcpProviders.apps,
     turnService,
     threadStore: stores.threadStore,
     toolCancellationService,
@@ -222,10 +276,12 @@ export function createServerRuntimeComposition(
       inflight: inflight.size(),
       activeCaptures: llmDebug?.activeCaptureCount ?? 0
     }),
+    setManagerHeartbeatAuthority: (state) => executionLeases?.setRuntimeAuthority(state),
     startBackgroundMaintenance: () => {
       backgroundMaintenance.start()
       roomComposition.start()
       void services.agentDispatchService.start().catch((error) => console.warn('[kun] Agent dispatch startup failed:', error))
+      void services.taskSuggestionService.start().catch((error) => console.warn('[kun] Task suggestion startup failed:', error))
     },
     prepareForRequests: async () => {
       await prepareUsageCarryover()
@@ -233,14 +289,14 @@ export function createServerRuntimeComposition(
       // mark their persisted questions timed out before serving requests.
       await services.workerCallbacks.reconcileAllTeams().catch(() => undefined)
       // Terminal-agent units whose exit reports were lost with the last
-      // session come back as restoredUnconfirmed rows (05 §6.1).
+      // session come back as restoredUnconfirmed rows.
       await services.terminalAgents.restore().catch(() => undefined)
       // Re-resolve dispatches stuck in delivering/uncertain before the crash
-      // (09 §5): found turns are adopted; missing ones redeliver idempotently.
+      //: found turns are adopted; missing ones redeliver idempotently.
       await agent.managerRuntime.reconcileOnStartup().catch((error) => {
         console.warn('[kun] ade dispatch reconciliation failed:', error)
       })
-      // Restart replay (09 §6.2): notices still unacknowledged after the last
+      // Restart replay: notices still unacknowledged after the last
       // run get one merged wake-up per manager thread.
       await agent.workerNoticeCoordinator.replayPending().catch((error) => {
         console.warn('[kun] ade worker-notice replay failed:', error)
@@ -311,7 +367,7 @@ export function createServerRuntimeComposition(
 	    },
 	    harnesses: services.harnesses,
 	    providerConfigs: () => config.activeOptions.providers ?? {},
-	    modelClient,
+	    modelClient: model.gmailDataPolicy,
 	    directModelClient,
 	    modelGateway: {
 	      requiresAdminToken: () => config.activeOptions.localModelGateway?.enabled === true ||
@@ -359,6 +415,9 @@ export function createServerRuntimeComposition(
       return runReview(input)
 	    },
 	    runtimeToken: config.activeOptions.runtimeToken,
+        remoteProtectedPaths: [config.activeOptions.dataDir,
+          ...(config.activeOptions.configPath ? [config.activeOptions.configPath] : []),
+          ...(core.options.serviceManager ? [core.options.serviceManager.discovery.settingsPath] : [])],
 	    insecure: config.activeOptions.insecure,
 	    ...(core.options.serviceManager
 	      ? { managerProtocolVersion: KUN_MANAGER_PROTOCOL_VERSION }
@@ -398,7 +457,7 @@ export function createServerRuntimeComposition(
           heapTotalBytes: memory.heapTotal,
           externalBytes: memory.external
         },
-        capabilities: rebuildCapabilities(),
+        capabilities: currentCapabilities(),
 	        extensions: {
 	          enabled: true,
 	          apiVersions: [...SUPPORTED_EXTENSION_API_VERSIONS],
@@ -444,46 +503,67 @@ export function createServerRuntimeComposition(
     mcpConfig: () => structuredClone(
       (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp
     ),
-    setMcpServer: async (serverId, server) => {
-      const capabilities = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
-      const mcp = capabilities.mcp
-      const servers = { ...mcp.servers }
-      if (server) {
-        servers[serverId] = {
-          ...server,
-          planModeReadOnlyTools: server.planModeReadOnlyTools ?? []
+    setMcpServer: async (serverId, mutation) => {
+      const dataDir = config.activeOptions.dataDir
+      const lockPath = mcpDataLockPath(dataDir)
+      // The data lock serializes this mutation against GUI synchronization and
+      // startup recovery, so a stale GUI snapshot can never be committed over
+      // a transaction that already finished here.
+      return withMcpLock(lockPath, async (lockOwner) => config.withConfigLock(async (apply) => {
+        const sharedMcpConfigPath = config.activeOptions.sharedMcpConfigPath
+        // Finish an interrupted mutation before reading the state it left.
+        const recovered = await recoverPendingMcpTransaction({
+          dataDir,
+          configPath: config.activeOptions.configPath ?? kunConfigPathForDataDir(dataDir),
+          sharedMcpConfigPath
+        })
+        const currentOptions = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
+        const servers = { ...currentOptions.mcp.servers }
+        for (const id of recovered.serverIds) {
+          const server = servers[id]
+          if (server && server.enabled !== false) servers[id] = { ...server, enabled: false }
         }
-      }
-      else delete servers[serverId]
-      const result = await applyConfig({
-        capabilities: {
-          ...capabilities,
-          mcp: { ...mcp, enabled: Object.keys(servers).length > 0, servers }
+        const mcp = recovered.serverIds.length
+          ? { ...currentOptions.mcp, servers }
+          : currentOptions.mcp
+        if (recovered.serverIds.length > 0) {
+          const result = await apply({ capabilities: { ...currentOptions, mcp } })
+          capabilitiesMemo = undefined
+          if (!result.ok) {
+            throw new Error(`interrupted MCP mutation could not be rolled back: ${result.message}`)
+          }
         }
-      })
-      if (result.ok) {
-        const updatedMcp = (config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG).mcp
-        await Promise.all([
-          persistRuntimeMcpConfig(config.activeOptions.dataDir, updatedMcp),
-          ...(config.activeOptions.sharedMcpConfigPath
-            ? [persistSharedMcpConfig(config.activeOptions.sharedMcpConfigPath, updatedMcp)]
-            : [])
-        ])
-      }
-      return result
+        return mutateMcpServer({
+          mcp, serverId, mutation,
+          apply: async (next) => {
+            try { return await apply({ capabilities: { ...currentOptions, mcp: next } }) }
+            finally { capabilitiesMemo = undefined }
+          },
+          readExpected: (id) => readMcpServerSnapshots(dataDir, sharedMcpConfigPath, id),
+          persist: (target, stage) => persistMcpServerChange({
+            dataDir, sharedMcpConfigPath, target, ...stage
+          }),
+          fence: () => assertMcpLockHeld(lockPath, lockOwner),
+          transaction: {
+            begin: (ids) => beginMcpTransaction(dataDir, ids),
+            end: (txnId) => endMcpTransaction(dataDir, txnId),
+            abandon: (txnId) => abandonMcpTransaction(dataDir, txnId)
+          }
+        })
+      }))
     },
     skills: (workspace) => workspace
       ? services.skillRuntime.diagnosticsForWorkspace(workspace)
       : services.skillRuntime.diagnostics(),
     refreshSkills: async () => services.skillRuntime.refresh(),
-    setSkillsEnabled: async (enabled) => {
+    setSkillsEnabled: async (enabled) => config.withConfigLock(async (apply) => {
       const capabilities = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
-      const result = await applyConfig({
+      const result = await apply({
         capabilities: {
           ...capabilities,
           skills: { ...capabilities.skills, enabled }
         }
-      })
+      }).finally(() => { capabilitiesMemo = undefined })
       if (result.ok) {
         await persistRuntimeSkillsConfig(
           config.activeOptions.dataDir,
@@ -491,15 +571,15 @@ export function createServerRuntimeComposition(
         )
       }
       return result
-    },
-    setLocalCapabilityEnabled: async (id, enabled) => {
+    }),
+    setLocalCapabilityEnabled: async (id, enabled) => config.withConfigLock(async (apply) => {
       const capabilities = config.activeOptions.capabilities ?? DEFAULT_KUN_CAPABILITIES_CONFIG
-      const result = await applyConfig({
+      const result = await apply({
         capabilities: {
           ...capabilities,
           [id]: { ...capabilities[id], enabled }
         }
-      })
+      }).finally(() => { capabilitiesMemo = undefined })
       if (result.ok) {
         await persistRuntimeCapabilitySection(
           config.activeOptions.dataDir,
@@ -508,7 +588,8 @@ export function createServerRuntimeComposition(
         )
       }
       return result
-    },
+    }),
+    registerRemoteCleanup(cleanup) { remoteCleanups.add(cleanup) },
     shutdown: async () => {
       beginOwnedProcessShutdown()
       await settleCleanupSteps([
@@ -516,7 +597,10 @@ export function createServerRuntimeComposition(
           await shutdownRuntimeExecutionForHost({
             prepare: async () => {
               eventStreamRegistry.closeAll()
+              await Promise.allSettled([...remoteCleanups].map((cleanup) => cleanup()))
+              remoteCleanups.clear()
               await services.agentDispatchService.stop()
+              services.taskSuggestionService.stop()
               await roomComposition.close()
               agent.shuttingDown = true
               await agent.queuedTurnDispatcher.dispose()
@@ -536,7 +620,7 @@ export function createServerRuntimeComposition(
         () => { agent.activityHibernation.stop() },
         async () => { await services.memoryDistillation.shutdown() },
         () => services.harnesses.updates.dispose(),
-        () => services.harnesses.acpModels.dispose(),
+        () => services.harnesses.modelCatalogs.flush(),
         () => backgroundShellRuntime.shutdown(),
         () => extensionJobs.handleRuntimeShutdown(),
         () => { extensionMediaJobs.dispose() },
@@ -552,6 +636,9 @@ export function createServerRuntimeComposition(
         () => extensionModelProviders.disposeAll(),
         () => shutdownAllLspSessions(),
         () => services.mcpProviders.close(),
+        () => services.gmail.dispose(),
+        () => model.githubApp?.service.dispose(),
+        () => model.gmailLocalModel?.dispose(),
         () => migrationService.shutdown(),
         () => migrationImportService.shutdown(),
         () => routeHealth.flush(),

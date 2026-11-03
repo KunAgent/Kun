@@ -4,6 +4,10 @@ import type { UsageSnapshot } from '../contracts/usage.js'
 
 export const ROOM_PEER_LIMITS = { responses: 32, memberResponses: 8, triages: 128 } as const
 export const ROOM_PEER_HOLD_LIMITS = { maxUpdates: 6, maxHolds: 2 } as const
+/** Members of one room answer in parallel; a cap of 2 left the rest of a team
+ *  silent for minutes and made late members answer earlier replies instead of
+ *  the user. Participation checks share one runtime-wide cap. */
+export const ROOM_PEER_CONCURRENCY = { activeMembersPerRoom: 6, participationChecks: 4 } as const
 
 export type RoomPeerRequestInput = {
   id: string
@@ -131,5 +135,7 @@ export type RoomPeerTopicSummary = RoomPeerTopic & {
     error?: string
     waitingReason?: string
     invitedByMemberId?: string
+    /** When this member's state last changed, so an old failure reads as old. */
+    updatedAt?: string
   }>
 }

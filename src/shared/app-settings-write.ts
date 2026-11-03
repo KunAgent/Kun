@@ -56,11 +56,7 @@ export const DEFAULT_WRITE_PAPERS_DIR = 'papers'
 export const WRITE_QUICK_ACTION_BUILTIN_IDS = [
   'polish',
   'explain',
-  'reformat',
-  'distill',
-  'bolder',
-  'quieter',
-  'critique'
+  'reformat'
 ] as const
 
 /** Managed seed file created in Kun's default writing space. */
@@ -69,27 +65,18 @@ export const DEFAULT_WRITE_WELCOME_FILE_NAME = 'welcome.md'
 // Retired built-ins: pristine stored rows (label and prompt empty, i.e. "use
 // the built-in defaults") are dropped on normalization since the defaults no
 // longer exist. Customized rows survive as ordinary custom actions.
-const WRITE_QUICK_ACTION_RETIRED_IDS = new Set(['proofread'])
+const WRITE_QUICK_ACTION_RETIRED_IDS = new Set(['proofread', 'distill', 'bolder', 'quieter', 'critique'])
 
 export const WRITE_QUICK_ACTION_MAX_COUNT = 12
 export const WRITE_QUICK_ACTION_LABEL_MAX_CHARS = 64
 export const WRITE_QUICK_ACTION_PROMPT_MAX_CHARS = 4_000
 
-// Built-in default modes: polish/explain answer through the sidebar assistant —
-// reliable, high-quality prose (the in-place inline-edit pipeline proved too
-// lossy/slow for whole-paragraph rewrites). reformat rewrites in place and lands
-// as an inline red/green diff review, as does any instruction typed into the
-// floating "AI edit" box.
+// Explicit rewrites use an edit-only chat request and remain pending until accepted.
+// Pristine built-ins follow these modes; customized labels/prompts keep their saved mode.
 const WRITE_QUICK_ACTION_BUILTIN_MODES: Record<string, WriteQuickActionMode> = {
-  polish: 'chat',
+  polish: 'edit',
   explain: 'chat',
-  reformat: 'edit',
-  // Design-vocabulary transforms + review. Whole-selection rewrites go through
-  // the sidebar assistant (like polish); critique is a read-only review.
-  distill: 'chat',
-  bolder: 'chat',
-  quieter: 'chat',
-  critique: 'chat'
+  reformat: 'edit'
 }
 
 export function builtinWriteQuickActionMode(id: string): WriteQuickActionMode {
@@ -162,9 +149,8 @@ export function normalizeWriteSelectionAssistSettings(
     if (pristineBuiltin && WRITE_QUICK_ACTION_RETIRED_IDS.has(id)) continue
     const storedMode: WriteQuickActionMode | null =
       raw?.mode === 'edit' || raw?.mode === 'chat' ? raw.mode : null
-    // Pristine 'polish' rows follow the current built-in default (sidebar chat),
-    // migrating away from any older in-place value. Customized rows (with a label
-    // or prompt) keep the user's explicit mode choice.
+    // Pristine 'polish' rows follow the current built-in default (selection review).
+    // Customized labels or prompts keep the user's explicit mode choice.
     const mode: WriteQuickActionMode = storedMode === null
       ? builtinWriteQuickActionMode(id)
       : pristineBuiltin && id === 'polish'

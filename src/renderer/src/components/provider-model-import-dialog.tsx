@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { AlertTriangle, Check, Info, Loader2, Search, X } from 'lucide-react'
 import type { ModelProviderProfileV1 } from '@shared/app-settings'
 import type {
@@ -40,6 +40,8 @@ export function ProviderModelImportDialog({
   catalogResult,
   providerError,
   authoritative = false,
+  discoverySource = 'provider',
+  catalogLoading = false,
   t,
   onCancel,
   onConfirm
@@ -49,6 +51,8 @@ export function ProviderModelImportDialog({
   catalogResult: ModelsDevCatalogResult
   providerError?: string
   authoritative?: boolean
+  discoverySource?: 'provider' | 'preset' | 'manual'
+  catalogLoading?: boolean
   t: Translate
   onCancel: () => void
   onConfirm: (result: ProviderModelImportResult) => Promise<void>
@@ -67,6 +71,17 @@ export function ProviderModelImportDialog({
   const [selected, setSelected] = useState<Set<string>>(
     () => defaultSelectedProviderModelImportKeys(entries, authoritative)
   )
+
+  const previousEntries = useRef(entries)
+  useEffect(() => {
+    const previous = previousEntries.current
+    previousEntries.current = entries
+    setSelected((selection) => {
+      const ids = new Set(previous.filter((entry) => selection.has(providerModelImportEntryKey(entry.kind, entry.modelId))).map((entry) => entry.modelId))
+      const next = new Set(entries.filter((entry) => ids.has(entry.modelId)).map((entry) => providerModelImportEntryKey(entry.kind, entry.modelId)))
+      return next.size === selection.size && [...next].every((key) => selection.has(key)) ? selection : next
+    })
+  }, [entries])
 
   const normalizedQuery = query.trim().toLowerCase()
   const visibleEntries = useMemo(
@@ -193,12 +208,14 @@ export function ProviderModelImportDialog({
         </header>
 
         <div className="grid gap-2.5 border-b border-ds-border px-5 py-3">
+          {catalogLoading ? <p role="status" className="text-[12px] text-ds-faint">{t('providerConfiguration.catalogLoading')}</p> : null}
           {submitError ? (
             <ImportNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
               {t('providerModelImportSubmitFailed', { message: submitError })}
             </ImportNotice>
           ) : null}
-          {providerError ? (
+          {discoverySource !== 'provider' ? <p className="text-[12px] text-amber-600 dark:text-amber-300">{t('providerConfiguration.candidateModelsHint')}</p> : null}
+      {providerError ? (
             <ImportNotice tone="warning" icon={<AlertTriangle className="h-3.5 w-3.5" />}>
               {t('providerModelImportProviderWarning', { message: providerError })}
             </ImportNotice>
@@ -252,7 +269,7 @@ export function ProviderModelImportDialog({
               onClick={() => setSourceFilter('provider-api')}
               className={filterChipClass(sourceFilter === 'provider-api')}
             >
-              {t('providerModelImportSourceApi', { count: sourceCounts['provider-api'] })}
+              {t(discoverySource === 'provider' ? 'providerModelImportSourceApi' : `providerConfiguration.discovery${discoverySource}Count`, { count: sourceCounts['provider-api'] })}
             </button>
             <button
               type="button"
@@ -315,7 +332,9 @@ export function ProviderModelImportDialog({
               {visibleEntries.slice(currentPage * 50, currentPage * 50 + 50).map((entry) => {
                 const key = providerModelImportEntryKey(entry.kind, entry.modelId)
                 const checked = selected.has(key)
-                const sourceLabel = entry.sources.length === 2
+                const sourceLabel = discoverySource !== 'provider' && entry.sources.includes('provider-api')
+                  ? t(`providerConfiguration.discovery${discoverySource}Badge`)
+                  : entry.sources.length === 2
                   ? t('providerModelImportSourceBothBadge')
                   : entry.sources[0] === 'provider-api'
                     ? t('providerModelImportSourceApiBadge')

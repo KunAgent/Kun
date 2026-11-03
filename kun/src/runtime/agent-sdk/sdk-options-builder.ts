@@ -62,7 +62,7 @@ export function normalizeClaudeOAuthToken(raw: string | undefined): string | und
 
 /**
  * Loopback gateway credentials injected into the harness environment for
- * `kun-gateway` credential mode (docs/ade/04 §6). `env` names the variables
+ * `kun-gateway` credential mode. `env` names the variables
  * the harness's protocol expects (`ANTHROPIC_BASE_URL`, ...); `model` and
  * `smallModel` are `kun/<provider>/<model>` direct addresses resolved by the
  * gateway against the grant's routes.

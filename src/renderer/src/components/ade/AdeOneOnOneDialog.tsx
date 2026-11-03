@@ -43,10 +43,10 @@ const fieldClass =
   'w-full rounded-lg border border-ds-border-muted bg-ds-main px-2.5 py-1.5 text-[13px] text-ds-ink outline-none focus:border-accent-tint/50'
 
 /**
- * P4-15: one-to-one session dialog (replaces the sidebar inline list). Pick an
+ * one-to-one session dialog (replaces the sidebar inline list). Pick an
  * agent, then the credential path (native sign-in or Kun gateway/provider with
  * a concrete provider), then model and isolation. Initial values come from the
- * remembered last pick, then `agents.kun.harnesses.defaults` (P4-11).
+ * remembered last pick, then `agents.kun.harnesses.defaults`.
  */
 export function AdeOneOnOneDialog({
   onConfirm,
@@ -230,7 +230,7 @@ export function AdeOneOnOneDialog({
                         ? 'bg-accent/12 text-ds-ink'
                         : unavailable
                           ? 'text-ds-faint'
-                          : 'text-ds-text hover:bg-ds-hover'
+                          : 'text-ds-ink hover:bg-ds-hover'
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2 truncate">
@@ -252,7 +252,7 @@ export function AdeOneOnOneDialog({
           {rows.some((entry) => harnessRowUnavailableCode(entry) !== null) ? (
             <button
               type="button"
-              className="mt-1 text-[11px] text-ds-accent hover:underline"
+              className="mt-1 text-[11px] text-accent hover:underline"
               onClick={() => {
                 onClose()
                 onOpenSettings('agentsHarnesses')

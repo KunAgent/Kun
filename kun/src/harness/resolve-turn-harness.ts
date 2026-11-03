@@ -6,6 +6,7 @@ import type {
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { StartTurnRequest, Turn } from '../contracts/turns.js'
 import type { ServeProviderConfig } from '../config/kun-config-application.js'
+import { PROVIDER_MODULES } from './providers/registry.js'
 
 export type ProviderKindsView = {
   /** providerId -> configured kind; missing id resolves to undefined. */
@@ -14,10 +15,9 @@ export type ProviderKindsView = {
   defaultKind: ServeProviderConfig['kind'] | 'http'
 }
 
-const KIND_TO_HARNESS: Partial<Record<NonNullable<ServeProviderConfig['kind']>, HarnessId>> = {
-  'agent-sdk': 'claude-code',
-  'cursor-sdk': 'cursor',
-  'antigravity-cli': 'antigravity'
+/** The engine whose native account a provider kind carries (agent-sdk → Claude Code). */
+function harnessForKind(kind: string): HarnessId | undefined {
+  return PROVIDER_MODULES.find((module) => module.nativeAccount?.kind === kind)?.definition.id
 }
 
 /**
@@ -33,7 +33,7 @@ export function legacyHarnessForProvider(
     !providerId || providerId === 'default'
       ? kinds.defaultKind
       : kinds.byId[providerId] ?? kinds.defaultKind
-  return (kind && KIND_TO_HARNESS[kind]) ?? 'kun'
+  return (kind && harnessForKind(kind)) ?? 'kun'
 }
 
 /**

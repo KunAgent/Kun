@@ -1,5 +1,7 @@
 import type { AgentProvider, ThreadEventSink } from '../agent/types'
+import { noteWorkTurnCompleted } from '../product-analytics/work'
 import type { ChatState, ChatStoreGet } from './chat-store-types'
+import { noteThreadLiveActivity } from './thread-live-activity'
 import {
   noteThreadRecoveryEvidence,
   markThreadRecoveryCatchingUp,
@@ -54,6 +56,7 @@ export function subscribeThreadEventsWithRecovery(
   const recoverySink: ThreadEventSink = {
     ...sink,
     onSeq: (seq) => {
+      noteThreadLiveActivity(threadId)
       resetSseRecovery(threadId, subscription)
       sink.onSeq(seq)
     },
@@ -63,6 +66,9 @@ export function subscribeThreadEventsWithRecovery(
       sink.onReplaySynchronized?.(cursor)
     },
     onTurnComplete: (event) => {
+      if (event?.status === 'completed' && event.turnId && !event.child && (!event.threadId || event.threadId === threadId)) {
+        noteWorkTurnCompleted(threadId, event.turnId)
+      }
       noteThreadRecoveryEvidence(threadId, generation)
       sink.onTurnComplete(event)
     },

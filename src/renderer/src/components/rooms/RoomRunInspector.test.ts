@@ -112,6 +112,10 @@ describe('Rooms run inspector', () => {
     api.stop.mockReset().mockResolvedValue(true)
     api.event = null
     api.error = null
+    vi.stubGlobal('document', {
+      hidden: false,
+      documentElement: { getAttribute: () => null }
+    })
     vi.stubGlobal('window', {
       kunGui: { startSse: vi.fn() },
       setTimeout: () => 1,

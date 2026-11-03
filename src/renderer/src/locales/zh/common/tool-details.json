@@ -1,0 +1,17 @@
+{
+  "toolDetails": {
+    "previewAudio": "预览音频", "hideAudio": "收起音频", "download": "下载附件", "binaryUnavailable": "缺少完整附件数据，无法预览或下载。",
+    "offset": "偏移量", "limit": "读取上限",
+    "text": "文本", "copy": "复制完整内容", "showMore": "显示更多内容",
+    "expand": "打开完整详情", "close": "关闭工具详情", "title": "工具详情",
+    "input": "输入参数", "output": "输出结果", "error": "错误", "evidence": "附加内容",
+    "fileUnavailable": "当前工作区中无法打开此文件。", "openFile": "打开文件", "openLink": "打开链接", "cwd": "工作目录",
+    "command": "命令", "exit": "退出码 {{code}}", "signal": "信号 {{signal}}",
+    "query": "查询", "matches": "搜索结果", "status": "HTTP {{code}}",
+    "waiting": "正在等待工具输出…", "empty": "工具没有返回输出。",
+    "summaryOnly": "Agent 只返回了摘要，没有返回文件内容。",
+    "truncated": "当前显示较长结果中已保留的部分。",
+    "contentOmitted": "此附件未保存在会话中。",
+    "attachment": "附件", "image": "工具图片", "raw": "原始内容"
+  }
+}

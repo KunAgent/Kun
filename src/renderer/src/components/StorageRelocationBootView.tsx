@@ -64,7 +64,7 @@ export function StorageRelocationBootView(): React.JSX.Element {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-ds-canvas p-8 text-ds-ink">
-      <section className="w-full max-w-2xl rounded-3xl border border-ds-border bg-ds-surface p-8 shadow-2xl">
+      <section className="w-full max-w-2xl rounded-3xl border border-ds-border bg-ds-card p-8 shadow-2xl">
         <div className="flex items-center gap-3">
           <div className="rounded-2xl bg-blue-500/10 p-3 text-blue-600"><Database className="h-7 w-7" /></div>
           <div>

@@ -216,6 +216,16 @@ export function registerThreadRoutes(
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return forkThread(runtime.threadService, ctx.params.id, request)
   })
+  router.add('POST', '/v1/threads/:id/work-title/recover', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const updated = await runtime.threadService.recoverWorkTitle(ctx.params.id)
+    const current = updated ?? await runtime.threadService.getMetadata(ctx.params.id)
+    return jsonResponse(current ? {
+      title: current.title,
+      ...(current.titleAuto !== undefined ? { titleAuto: current.titleAuto } : {}),
+      ...(current.agentSurface ? { agentSurface: current.agentSurface } : {})
+    } : { title: null })
+  })
   router.add('POST', '/v1/threads/:id/summarize', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return summarizeThread(runtime, ctx.params.id, request)

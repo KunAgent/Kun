@@ -1,5 +1,5 @@
 /**
- * Schema validation for codec output (implementation §3.2 fallback path).
+ * Schema validation for codec output.
  *
  * `mdastToPm` converts mdast to PM JSON without a live schema, so edge
  * cases can produce nodes that violate content expressions — a listItem

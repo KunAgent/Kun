@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { collectAgentMemoryEvidence } from './agent-memory-evidence.js'
 import { canonicalMemoryHash } from '../memory/memory-record-normalizer.js'
 import { revisionSnapshot } from '../memory/memory-revisions.js'
-import { MemoryRecord } from '../contracts/memory.js'
+import { MemoryRecord, MemorySourceEvidence } from '../contracts/memory.js'
 import { extractAgentMemories, prepareAgentMemoryCapture } from './agent-memory-extraction.js'
 import type { AgentMemoryCapture, AgentMemoryCaptureSnapshot } from './agent-memory-capture-types.js'
 import type { RoomRuntimeDeps } from '../rooms/room-runtime-types.js'
@@ -40,9 +40,84 @@ it('prioritizes execution receipts over a full assistant-message budget and reta
   expect(evidence.capturedTasks).toEqual(['task'])
 })
 
+it('omits the excerpt of an attachment-only user message so the source still validates', async () => {
+  const f = fixture()
+  const store = f.deps.store as unknown as { get: (kind: string, id: string) => Promise<unknown> }
+  const get = store.get.bind(store)
+  store.get = async (kind, id) => {
+    const row = await get(kind, id) as { value: object } | null
+    return kind === 'message' && id === 'user' && row ? { ...row, value: { ...row.value, body: '' } } : row
+  }
+  const { sources } = await collectAgentMemoryEvidence(f.deps, f.job)
+  expect(sources.find((source) => source.id === 'user')).not.toHaveProperty('excerpt')
+  expect(() => MemorySourceEvidence.array().parse(sources)).not.toThrow()
+})
+
 it.each([['failed', 'passed'], ['cancelled', 'passed'], ['completed', 'failed']])('does not promote %s work with %s checks to observed success', async (status, checks) => {
   const f = fixture(status, checks), evidence = await collectAgentMemoryEvidence(f.deps, f.job)
   expect(memoryEvidenceStatus(evidence.sources)).not.toBe('observed-success')
+})
+
+it.each([0.5, '0.6%', '1%'])('reports low-confidence decision skips for %s', async (confidence) => {
+  const output = JSON.stringify({ candidates: [{
+    content: 'User prefers tea in the morning', type: 'preference', confidence, importance: 0.8,
+    tags: [], sourceIds: ['source-1'], durability: 'durable', comparisons: []
+  }] })
+  const deps = { peerModels: { client: { async *stream() {
+    yield { kind: 'assistant_text_delta', text: output }
+  } } } } as unknown as RoomRuntimeDeps
+  const snapshot = { model: 'fixture', input: '{}', observedAt: at,
+    sources: [{ id: 'source-1', kind: 'user', trust: 'explicit-user' }],
+    comparisonRecords: [] } as unknown as AgentMemoryCaptureSnapshot
+  const result = await extractAgentMemories(deps, snapshot, 'run', new AbortController().signal)
+  expect(result.candidates).toEqual([])
+  expect(result.error).toBeUndefined()
+  expect(result.diagnostics).toEqual([
+    'skipped 1 extracted candidate(s) during decision: low-confidence x1'
+  ])
+})
+
+it.each(['1%', '90%'])('combines score normalization with quarantined comparisons for %s', async (confidence) => {
+  const output = JSON.stringify({ candidates: [{
+    content: 'User prefers tea in the morning', type: 'preference', confidence, importance: '80%',
+    tags: [], sourceIds: ['source-1'], durability: 'durable',
+    comparisons: [{ memoryId: 'prior', relation: 'related' }]
+  }] })
+  const deps = { peerModels: { client: { async *stream() {
+    yield { kind: 'assistant_text_delta', text: output }
+  } } } } as unknown as RoomRuntimeDeps
+  const snapshot = { model: 'fixture', input: '{}', observedAt: at,
+    sources: [{ id: 'source-1', kind: 'user', trust: 'explicit-user' }],
+    comparisonRecords: [] } as unknown as AgentMemoryCaptureSnapshot
+  const result = await extractAgentMemories(deps, snapshot, 'run', new AbortController().signal)
+  expect(result.error).toBeUndefined()
+  if (confidence === '1%') {
+    expect(result.candidates).toEqual([])
+    expect(result.diagnostics).toEqual(['skipped 1 extracted candidate(s) during decision: low-confidence x1'])
+  } else {
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]?.candidate.confidence).toBe(0.9)
+    expect(result.candidates[0]?.reviewReason).toContain('review required')
+    expect(result.diagnostics).toEqual(['routed 1 candidate(s) to review: #0 invalid comparison'])
+  }
+})
+
+it('keeps a candidate whose scores arrive as numeric strings', async () => {
+  const output = JSON.stringify({ candidates: [{
+    content: 'User prefers tea in the morning', type: 'preference', confidence: '0.9', importance: '0.8',
+    tags: [], sourceIds: ['source-1'], durability: 'durable', comparisons: []
+  }] })
+  const deps = { peerModels: { client: { async *stream() {
+    yield { kind: 'assistant_text_delta', text: output }
+  } } } } as unknown as RoomRuntimeDeps
+  const snapshot = { model: 'fixture', input: '{}', observedAt: at,
+    sources: [{ id: 'source-1', kind: 'user', trust: 'explicit-user' }],
+    comparisonRecords: [] } as unknown as AgentMemoryCaptureSnapshot
+  const result = await extractAgentMemories(deps, snapshot, 'run', new AbortController().signal)
+  expect(result.error).toBeUndefined()
+  expect(result.diagnostics).toBeUndefined()
+  expect(result.candidates).toHaveLength(1)
+  expect(result.candidates[0]?.candidate.confidence).toBe(0.9)
 })
 
 it('rejects tool execution from the extraction model', async () => {

@@ -1,5 +1,5 @@
 /**
- * Shared Work-Markdown → HTML renderer (implementation §10.1).
+ * Shared Work-Markdown → HTML renderer.
  *
  * Used by the editor's raw-block previews and the main-process export
  * pipeline so both produce identical markup:

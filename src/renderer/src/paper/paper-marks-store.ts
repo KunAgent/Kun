@@ -11,31 +11,30 @@ import type {
  * (600ms, see use-paper-marks). Cards (translate/ask) arrive in the same IPC
  * payload but are keyed under `cards` by mark id.
  */
-export type PaperMarksState = {
-  /** Library ownership; identical relative unit paths in different libraries are distinct. */
+export type PaperMarksDraft = {
+  /** Identical unit paths in different libraries are distinct. */
   workspaceRoot: string
-  /** Unit dir the marks belong to ('' = unloaded). */
   unitDir: string
   items: PaperHighlight[]
   cards: Record<string, unknown>
   /** Ids deleted locally since the last successful write. */
   removedIds: string[]
   dirty: boolean
-  /** Bump when a write finishes so late external merges stay consistent. */
   revision: number
-  /**
-   * Mark hovered on the page or in the comment gutter (R1.4) — shared so the
-   * page overlay and gutter cards light up / draw connectors together.
-   * Transient UI state; never persisted.
-   */
-  hoveredMarkId: string | null
-  /** Card id opened in edit mode inside the gutter (fresh visual marks). */
-  editingMarkId: string | null
-  /** dataURL cache for visual-mark thumbnails captured this session. */
+  /** Captured thumbnails stay with unsaved visual marks. */
   visualMarkImages: Record<string, string>
 }
 
+export type PaperMarksState = PaperMarksDraft & {
+  /** Unsaved units remain app-owned when another reader takes over this store. */
+  pendingDrafts: Record<string, PaperMarksDraft>
+  /** Hover/edit selection is transient and resets when switching source. */
+  hoveredMarkId: string | null
+  editingMarkId: string | null
+}
+
 const initialMarksState = (): PaperMarksState => ({
+  pendingDrafts: {},
   workspaceRoot: '',
   unitDir: '',
   items: [],
@@ -49,6 +48,45 @@ const initialMarksState = (): PaperMarksState => ({
 })
 
 export const usePaperMarksStore = create<PaperMarksState>(() => initialMarksState())
+
+function draftKey(root: string, unitDir: string): string {
+  return JSON.stringify([root, unitDir])
+}
+
+function snapshot(state: PaperMarksDraft): PaperMarksDraft {
+  const { workspaceRoot, unitDir, items, cards, removedIds, dirty, revision, visualMarkImages } = state
+  return { workspaceRoot, unitDir, items, cards, removedIds, dirty, revision, visualMarkImages }
+}
+
+export function activatePaperMarksUnit(workspaceRoot: string, unitDir: string): void {
+  usePaperMarksStore.setState((state) => {
+    if (state.workspaceRoot === workspaceRoot && state.unitDir === unitDir) return state
+    const pendingDrafts = { ...state.pendingDrafts }
+    if (state.dirty && state.workspaceRoot && state.unitDir) pendingDrafts[draftKey(state.workspaceRoot, state.unitDir)] = snapshot(state)
+    return { ...initialMarksState(), ...pendingDrafts[draftKey(workspaceRoot, unitDir)], workspaceRoot, unitDir, pendingDrafts }
+  })
+}
+
+export function getPaperMarksDraft(workspaceRoot: string, unitDir: string): PaperMarksDraft | undefined {
+  const state = usePaperMarksStore.getState()
+  return state.workspaceRoot === workspaceRoot && state.unitDir === unitDir
+    ? state : state.pendingDrafts[draftKey(workspaceRoot, unitDir)]
+}
+
+/** Late saves update their own pending unit, never whichever reader is now active. */
+export function updatePaperMarksDraft(workspaceRoot: string, unitDir: string, update: (draft: PaperMarksDraft) => Partial<PaperMarksDraft>): void {
+  usePaperMarksStore.setState((state) => {
+    const active = state.workspaceRoot === workspaceRoot && state.unitDir === unitDir
+    const key = draftKey(workspaceRoot, unitDir)
+    const current = active ? snapshot(state) : state.pendingDrafts[key]
+    if (!current) return state
+    const draft = { ...current, ...update(current) }
+    const pendingDrafts = { ...state.pendingDrafts }
+    if (draft.dirty) pendingDrafts[key] = draft
+    else delete pendingDrafts[key]
+    return active ? { ...draft, pendingDrafts } : { pendingDrafts }
+  })
+}
 
 let nextMarkSeq = 0
 

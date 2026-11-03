@@ -21,7 +21,6 @@ export type ModelProviderReferenceKind =
   | 'subagent'
   | 'fastContext'
   | 'graph'
-  | 'pptAgent'
   | 'promptOptimization'
   | 'autoPlanBuild'
   | 'contextCompaction'
@@ -73,7 +72,6 @@ export function listModelProviderReferences(
   if (matches(kun?.videoGeneration?.providerId, id)) push(references, 'video')
   if (matches(kun?.promptOptimization?.providerId, id)) push(references, 'promptOptimization')
   if (matches(kun?.fastContext?.providerId, id)) push(references, 'fastContext')
-  if (matches(kun?.lab?.pptAgent?.providerId, id)) push(references, 'pptAgent')
   if (matches(kun?.lab?.autoPlanBuild?.scheduledDefaults?.providerId, id)) {
     push(references, 'autoPlanBuild')
   }

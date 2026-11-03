@@ -66,6 +66,23 @@ describe('Agent dispatch intervention controls', () => {
     expect(state.act).toHaveBeenCalledWith('cancel')
   })
 
+  it('holds a counting-down card without editing when pausable', async () => {
+    state.act.mockResolvedValue(fixture('paused'))
+    await act(async () => { renderer = create(createElement(AgentDispatchIntentControls, { intentId: 'intent', pausable: true, showStatus: false })) })
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain('60s')
+    const pause = renderer!.root.findAllByType('button').find((entry) => entry.children.includes('dispatchIntent.pause'))!
+    await act(async () => { pause.props.onClick() })
+    expect(state.act).toHaveBeenCalledWith('pause')
+  })
+
+  it('asks for confirmation when an ask-for-approval card is counting down', async () => {
+    state.intent = { ...fixture('countdown'), recommendation: { ...fixture('countdown').recommendation, permissionMode: 'ask-for-approval' } }
+    await act(async () => { renderer = create(createElement(AgentDispatchIntentControls, { intentId: 'intent' })) })
+    const labels = renderer!.root.findAllByType('button').flatMap((entry) => entry.children)
+    expect(labels).toContain('dispatchIntent.confirm')
+    expect(labels).not.toContain('dispatchIntent.startNow')
+  })
+
   it('renders replay and historical cards without mutation controls', async () => {
     await act(async () => { renderer = create(createElement(AgentDispatchIntentControls, { intentId: 'intent', readOnly: true })) })
     expect(renderer!.root.findAllByType('button')).toHaveLength(0)

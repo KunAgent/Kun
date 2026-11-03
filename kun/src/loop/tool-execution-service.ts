@@ -13,8 +13,11 @@ import {
   isPendingReceiptOutput,
   type CanvasReceiptRegistry
 } from '../services/canvas-receipt-registry.js'
-import { prepareBrowserUseToolResultForPersistence } from './tool-result-image.js'
+import { prepareBrowserUseToolResultForPersistence, toolResultTextWithoutImages } from './tool-result-image.js'
+import { prepareToolResultImageBudget } from './tool-result-image-budget.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
+import { toolPresentationKind } from '../contracts/tool-presentation-fields.js'
+import type { ToolPresentation } from '../contracts/tool-presentation.js'
 
 export const TOOL_RESULT_ARTIFACT_THRESHOLD_BYTES = 1024 * 1024
 const TOOL_RESULT_PREVIEW_CHARS = 16 * 1024
@@ -61,6 +64,7 @@ export type ToolExecutionInput = {
   turnId: string
   call: ToolCallLike
   context: ToolHostContext
+  cancellationRegistered?: boolean
 }
 
 /**
@@ -99,11 +103,16 @@ export class ToolExecutionService {
         )
     const executionInput: ToolExecutionInput = {
       ...input,
+      cancellationRegistered: Boolean(registration),
       ...(registration
         ? { context: { ...input.context, abortSignal: registration.signal } }
         : {})
     }
     try {
+      if (registration) await this.deps.turns.updateItem(input.threadId, `item_tool_${input.turnId}_${input.call.callId}`, {
+        status: 'running',
+        meta: { toolPresentation: this.executionPresentation(input, !registration.signal.aborted) }
+      })
       const result = await this.execute(executionInput)
       if (input.context.abortSignal.aborted) {
         throw input.context.abortSignal.reason ?? new Error('Tool execution aborted')
@@ -143,7 +152,21 @@ export class ToolExecutionService {
       }
     } finally {
       registration?.dispose()
+      if (registration) {
+        const settled = this.deps.turns.updateItem(input.threadId, `item_tool_${input.turnId}_${input.call.callId}`, {
+          meta: { toolPresentation: this.executionPresentation(input, false) }
+        }).catch(() => undefined)
+        // The update only clears "can cancel". An aborted turn must not wait on it, or an interrupt
+        // would stall behind a persistence queue that is itself stuck.
+        if (!input.context.abortSignal.aborted) await settled
+      }
     }
+  }
+
+  private executionPresentation(input: ToolExecutionInput, canCancel: boolean): ToolPresentation {
+    return { version: 1, source: 'native', kind: toolPresentationKind(input.call.toolName, input.call.toolKind),
+      name: input.call.toolName, state: 'running', canCancel,
+      ...(input.call.providerId?.startsWith('mcp:') ? { server: input.call.providerId.slice(4) } : {}) }
   }
 
   private cancelledResult(input: ToolExecutionInput): ToolHostResult {
@@ -203,7 +226,12 @@ export class ToolExecutionService {
     // Register before publishing the result. Otherwise the renderer can receive
     // the SSE item and POST its receipt before this process knows the key.
     await this.registerPendingDesignReceipt(threadId, turnId, call, result)
-    const browserSafeItem = prepareBrowserUseToolResultForPersistence(result.item)
+    // Bound bytes before the browser's transient cache sees them, including
+    // results from hosts other than LocalToolHost.
+    const boundedItem = result.item.kind === 'tool_result'
+      ? { ...result.item, output: prepareToolResultImageBudget(result.item.output).output }
+      : result.item
+    const browserSafeItem = prepareBrowserUseToolResultForPersistence(boundedItem)
     await this.deps.turns.applyItem(
       threadId,
       await this.materializeLargeToolResult(threadId, turnId, call, browserSafeItem)
@@ -294,7 +322,11 @@ export class ToolExecutionService {
               if (fingerprint === lastProgressFingerprint) return pendingUpdates
               lastProgressFingerprint = fingerprint
               const update = pendingUpdates.then(async () => {
-                const runningItem = { ...item, status: 'running' } as TurnItem
+                const runningItem = { ...item, status: 'running',
+                  ...((item.kind === 'tool_call' || item.kind === 'tool_result') ? { meta: {
+                    ...item.meta, toolPresentation: this.executionPresentation(input,
+                      input.cancellationRegistered === true && !input.context.abortSignal.aborted)
+                  } } : {}) } as TurnItem
                 if (durableProgressInitialized) {
                   await this.deps.turns.publishTransientItem(input.threadId, runningItem)
                   return
@@ -302,7 +334,7 @@ export class ToolExecutionService {
                 const existing = await this.deps.turns.updateItem(input.threadId, item.id, {
                     output: item.kind === 'tool_result' ? item.output : undefined,
                     isError: item.kind === 'tool_result' ? item.isError : undefined,
-                    meta: item.kind === 'tool_result' ? item.meta : undefined,
+                    meta: runningItem.kind === 'tool_result' ? runningItem.meta : undefined,
                     status: 'running'
                   } as Partial<TurnItem>)
                 if (!existing) await this.deps.turns.applyItem(input.threadId, runningItem)
@@ -455,9 +487,10 @@ export class ToolExecutionService {
     item: TurnItem
   ): Promise<TurnItem> {
     if (!this.deps.artifactStore || item.kind !== 'tool_result') return item
+    const { imageFields } = prepareToolResultImageBudget(item.output)
     let content: string
     try {
-      content = JSON.stringify(item.output)
+      content = imageFields ? toolResultTextWithoutImages(item.output) : JSON.stringify(item.output)
     } catch {
       content = String(item.output)
     }
@@ -480,7 +513,8 @@ export class ToolExecutionService {
           lineCount: stored.meta.lineCount,
           mimeType: stored.meta.mimeType ?? 'application/json',
           inline: stored.summary.inline,
-          truncated: true
+          truncated: true,
+          ...imageFields
         }
       }
     } catch (error) {
@@ -490,7 +524,8 @@ export class ToolExecutionService {
           artifactUnavailable: true,
           byteSize,
           preview: content.slice(0, TOOL_RESULT_PREVIEW_CHARS),
-          reason: error instanceof Error ? error.message : String(error)
+          reason: error instanceof Error ? error.message : String(error),
+          ...imageFields
         }
       }
     }

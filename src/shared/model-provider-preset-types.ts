@@ -66,6 +66,7 @@ export type ModelProviderPresetId =
   | 'ollama-local'
   | 'lmstudio'
   | 'local-openai'
+  | 'magpie'
   | 'baidu-qianfan'
   | 'huaweicloud-maas'
   | 'tencent-tokenhub'
@@ -134,9 +135,12 @@ export const OLLAMA_CLOUD_MODEL_IDS = [
   'qwen3.5:397b'
 ] as const
 
+// Bootstrap ids for the Antigravity CLI (`agy models`, 1.3.1). The live list
+// replaces this catalog once the user refreshes models.
 export const GEMINI_SUBSCRIPTION_MODEL_IDS = [
   'gemini-3.6-flash',
-  'gemini-3.5-flash',
+  'gemini-3.8-flash',
+  'gemini-3.7-flash',
   'gemini-3.1-pro'
 ] as const
 
@@ -347,6 +351,12 @@ export const XIAOMI_REASONING: ModelProviderReasoningCapabilityV1 = {
   supportedEfforts: ['off', 'low', 'medium', 'high'],
   defaultEffort: 'high',
   requestProtocol: 'mimo-chat-completions'
+}
+
+export const MINIMAX_M31_FLASH_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+  defaultEffort: 'max',
+  requestProtocol: 'anthropic-thinking'
 }
 
 export const MINIMAX_M3_REASONING: ModelProviderReasoningCapabilityV1 = {

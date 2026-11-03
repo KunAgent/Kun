@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { SubagentRosterStatus } from './SubagentRosterStatus'
 import type { TFunction } from 'i18next'
 import { ChevronDown, ChevronRight, Pencil, Power, Search, Trash2 } from 'lucide-react'
 import type { KunSubagentSurfaceV1, ModelReasoningEffort } from '@shared/app-settings'
@@ -55,7 +56,7 @@ export function AgentCategorySection({
         aria-expanded={expanded}
         aria-label={t('subagentsPanel.toggleCategory', 'Toggle {{category}} category', { category: label })}
         onClick={onToggle}
-        className={`flex w-full min-w-0 items-center gap-2 rounded-xl text-left font-semibold text-ds-heading transition hover:bg-ds-hover/60 ${
+        className={`flex w-full min-w-0 items-center gap-2 rounded-xl text-left font-semibold text-ds-ink transition hover:bg-ds-hover/60 ${
           compact ? 'px-3 py-2.5 text-[11.5px]' : 'px-3 py-3 text-[12.5px]'
         }`}
       >
@@ -147,7 +148,7 @@ export function CatalogAgentRow({
         </span>
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-1.5">
-            <span className={`truncate font-semibold text-ds-heading ${settings ? 'text-[12.5px]' : 'text-[12px]'}`}>{name}</span>
+            <span className={`truncate font-semibold text-ds-ink ${settings ? 'text-[12.5px]' : 'text-[12px]'}`}>{name}</span>
             {agentSourceChip(agent, t)}
             {agent.baseAgent ? (
               <span className="shrink-0 rounded-full bg-emerald-500/10 px-1.5 py-px text-[8.5px] font-semibold text-emerald-600 dark:text-emerald-400">
@@ -225,7 +226,7 @@ export function AgentDetailsPanel({
         </span>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <h3 className="text-[14px] font-semibold text-ds-heading">{name}</h3>
+            <h3 className="text-[14px] font-semibold text-ds-ink">{name}</h3>
             {agentSourceChip(agent, t)}
           </div>
           <p className="mt-1 text-[11.5px] leading-5 text-ds-muted">{desc}</p>
@@ -240,7 +241,7 @@ export function AgentDetailsPanel({
       <div className="mt-4 space-y-4 border-t border-ds-border-muted pt-4">
         <div className="flex items-center justify-between gap-3 rounded-lg border border-ds-border-muted bg-ds-card px-3 py-2.5">
           <div className="min-w-0">
-            <div className="text-[11px] font-semibold text-ds-heading">
+            <div className="text-[11px] font-semibold text-ds-ink">
               {surfaceLabel(t, selectedSurface)}
             </div>
             <div className="mt-0.5 text-[10px] text-ds-muted">
@@ -330,12 +331,15 @@ export function AgentDetailsPanel({
         </div>
       </div>
 
+      <div className="mt-4">
+        <SubagentRosterStatus profileId={profile.id} />
+      </div>
       <div className="mt-5 flex items-center gap-2 border-t border-ds-border-muted pt-4">
         {!builtin && source !== 'workspace' ? (
           <button data-settings-action="ghost" data-settings-size="icon" aria-label={profile.enabled ? t('disable', 'Disable') : t('enable', 'Enable')}
             type="button"
             onClick={onToggle}
-            className="rounded-lg border border-ds-border px-2.5 py-2 text-ds-muted transition hover:bg-ds-hover hover:text-ds-heading"
+            className="rounded-lg border border-ds-border px-2.5 py-2 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
             title={profile.enabled ? t('disable', 'Disable') : t('enable', 'Enable')}
           >
             <Power className="h-3.5 w-3.5" />
@@ -382,7 +386,7 @@ export function EmptyCatalogState({
   return (
     <div className={`flex flex-col items-center justify-center text-center ${compact ? 'min-h-40' : 'min-h-56'}`}>
       <Search className="h-7 w-7 text-ds-faint" strokeWidth={1.6} />
-      <div className="mt-3 text-[12.5px] font-semibold text-ds-heading">
+      <div className="mt-3 text-[12.5px] font-semibold text-ds-ink">
         {t('subagentsPanel.emptyTitle', 'No matching agents')}
       </div>
       <p className="mt-1 max-w-56 text-[11px] leading-5 text-ds-muted">

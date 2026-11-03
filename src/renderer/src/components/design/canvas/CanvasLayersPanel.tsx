@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown,
   ChevronRight,
@@ -10,11 +10,13 @@ import {
   Circle,
   Type,
   Image,
-  Frame,
+  Hash,
   Group,
   ArrowUpRight,
   Slash,
   Pencil,
+  Monitor,
+  Shapes,
   Trash2
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -22,19 +24,41 @@ import { deleteCanvasLayers } from '../../../design/canvas/canvas-layer-actions'
 import { flattenCanvasLayerRows } from '../../../design/canvas/canvas-layer-tree'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
-import type { CanvasShape, ShapeType } from '../../../design/canvas/canvas-types'
+import {
+  isHtmlFrame,
+  isSvgFrame,
+  type CanvasShape,
+  type ShapeType
+} from '../../../design/canvas/canvas-types'
 
 const TYPE_ICONS: Record<ShapeType, typeof Square> = {
   rect: Square,
   ellipse: Circle,
   text: Type,
   image: Image,
-  frame: Frame,
+  frame: Hash,
   group: Group,
   arrow: ArrowUpRight,
   line: Slash,
   draw: Pencil
 }
+
+export function canvasLayerIcon(shape: CanvasShape): typeof Square {
+  if (isHtmlFrame(shape)) return Monitor
+  if (isSvgFrame(shape)) return Shapes
+  return TYPE_ICONS[shape.type] ?? Square
+}
+
+/** Short quoted preview of a text layer's content, shown after its name. */
+export function canvasLayerTextPreview(shape: CanvasShape, maxLength = 48): string {
+  if (shape.type !== 'text') return ''
+  const text = (shape.textContent ?? '').replace(/\s+/gu, ' ').trim()
+  if (!text || text === shape.name.trim()) return ''
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text
+}
+
+const rowAction =
+  'flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-ds-faint transition hover:bg-ds-border-muted hover:text-ds-ink'
 
 function LayerRow({
   shape,
@@ -56,24 +80,38 @@ function LayerRow({
     delete: string
   }
 }) {
-  const selectedIds = useCanvasSelectionStore((s) => s.selectedIds)
+  const selected = useCanvasSelectionStore((s) => s.selectedIds.has(shape.id))
   const select = useCanvasSelectionStore((s) => s.select)
   const toggle = useCanvasSelectionStore((s) => s.toggle)
   const updateShape = useCanvasShapeStore((s) => s.updateShape)
+  const rowRef = useRef<HTMLDivElement | null>(null)
 
-  const selected = selectedIds.has(shape.id)
-  const Icon = TYPE_ICONS[shape.type] ?? Square
+  const Icon = canvasLayerIcon(shape)
+  const preview = canvasLayerTextPreview(shape)
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState('')
 
+  useEffect(() => {
+    if (selected) rowRef.current?.scrollIntoView({ block: 'nearest' })
+  }, [selected])
+
+  const commitRename = (): void => {
+    const name = draft.trim()
+    if (name) updateShape(shape.id, { name })
+    setRenaming(false)
+  }
+
   return (
     <div
-      className={`flex items-center gap-1 px-1 py-0.5 cursor-pointer rounded text-[12px] transition-colors ${
-        selected
-          ? 'bg-blue-100 dark:bg-blue-900/30'
-          : 'hover:bg-gray-100 dark:hover:bg-white/5'
-      }`}
-      style={{ paddingLeft: `${8 + depth * 16}px` }}
+      ref={rowRef}
+      role="treeitem"
+      aria-selected={selected}
+      aria-expanded={hasChildren ? !collapsed : undefined}
+      data-canvas-layer-row={shape.id}
+      className={`group flex h-8 cursor-pointer items-center gap-1.5 rounded-[8px] pr-1.5 text-[13px] transition-colors ${
+        selected ? 'bg-ds-hover text-ds-ink' : 'text-ds-ink hover:bg-ds-hover'
+      } ${shape.visible ? '' : 'opacity-55'}`}
+      style={{ paddingLeft: `${6 + depth * 18}px` }}
       onClick={(e) => {
         if (e.shiftKey || e.metaKey || e.ctrlKey) toggle(shape.id)
         else select([shape.id])
@@ -88,92 +126,81 @@ function LayerRow({
           type="button"
           title={labels.collapse}
           aria-label={labels.collapse}
-          aria-expanded={!collapsed}
-          className="shrink-0 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+          className="flex h-5 w-4 shrink-0 items-center justify-center text-ds-faint hover:text-ds-ink"
           onClick={(e) => {
             e.stopPropagation()
             onToggleCollapsed(shape.id)
           }}
         >
           {collapsed ? (
-            <ChevronRight className="h-3 w-3" strokeWidth={1.8} />
+            <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.9} />
           ) : (
-            <ChevronDown className="h-3 w-3" strokeWidth={1.8} />
+            <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.9} />
           )}
         </button>
       ) : (
         <span className="h-4 w-4 shrink-0" />
       )}
-      <Icon className="h-3 w-3 shrink-0 text-gray-400" strokeWidth={1.5} />
+      <Icon className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.7} />
       {renaming ? (
         <input
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          onBlur={() => {
-            updateShape(shape.id, { name: draft })
-            setRenaming(false)
-          }}
+          onClick={(e) => e.stopPropagation()}
+          onBlur={commitRename}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              updateShape(shape.id, { name: draft })
-              setRenaming(false)
-            }
+            if (e.key === 'Enter') commitRename()
             if (e.key === 'Escape') setRenaming(false)
           }}
-          className="min-w-0 flex-1 bg-transparent text-[12px] outline-none"
+          className="min-w-0 flex-1 rounded-[6px] bg-ds-elevated px-1.5 py-0.5 text-[13px] outline-none ring-1 ring-accent-tint/50"
         />
       ) : (
-        <span className="min-w-0 flex-1 truncate text-gray-700 dark:text-gray-300">
+        <span className="min-w-0 flex-1 truncate">
           {shape.name}
+          {preview ? <span className="ml-1.5 text-ds-muted">“{preview}”</span> : null}
         </span>
       )}
-      <button
-        type="button"
-        title={labels.visibility}
-        aria-label={labels.visibility}
-        aria-pressed={shape.visible}
-        className="shrink-0 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-        onClick={(e) => {
-          e.stopPropagation()
-          updateShape(shape.id, { visible: !shape.visible })
-        }}
-      >
-        {shape.visible ? (
-          <Eye className="h-3 w-3" strokeWidth={1.5} />
-        ) : (
-          <EyeOff className="h-3 w-3" strokeWidth={1.5} />
-        )}
-      </button>
-      <button
-        type="button"
-        title={labels.lock}
-        aria-label={labels.lock}
-        aria-pressed={shape.locked}
-        className="shrink-0 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-        onClick={(e) => {
-          e.stopPropagation()
-          updateShape(shape.id, { locked: !shape.locked })
-        }}
-      >
-        {shape.locked ? (
-          <Lock className="h-3 w-3" strokeWidth={1.5} />
-        ) : (
-          <Unlock className="h-3 w-3" strokeWidth={1.5} />
-        )}
-      </button>
-      <button
-        type="button"
-        title={labels.delete}
-        aria-label={labels.delete}
-        className="shrink-0 p-0.5 text-gray-400 hover:text-red-500 dark:hover:text-red-400"
-        onClick={(e) => {
-          e.stopPropagation()
-          deleteCanvasLayers([shape.id])
-        }}
-      >
-        <Trash2 className="h-3 w-3" strokeWidth={1.5} />
-      </button>
+      <span className={`flex shrink-0 items-center gap-0.5 ${shape.visible && !shape.locked ? 'opacity-0 group-hover:opacity-100' : ''}`}>
+        <button
+          type="button"
+          title={labels.visibility}
+          aria-label={labels.visibility}
+          aria-pressed={shape.visible}
+          className={rowAction}
+          onClick={(e) => {
+            e.stopPropagation()
+            updateShape(shape.id, { visible: !shape.visible })
+          }}
+        >
+          {shape.visible ? <Eye className="h-3.5 w-3.5" strokeWidth={1.6} /> : <EyeOff className="h-3.5 w-3.5" strokeWidth={1.6} />}
+        </button>
+        <button
+          type="button"
+          title={labels.lock}
+          aria-label={labels.lock}
+          aria-pressed={shape.locked}
+          className={rowAction}
+          onClick={(e) => {
+            e.stopPropagation()
+            updateShape(shape.id, { locked: !shape.locked })
+          }}
+        >
+          {shape.locked ? <Lock className="h-3.5 w-3.5" strokeWidth={1.6} /> : <Unlock className="h-3.5 w-3.5" strokeWidth={1.6} />}
+        </button>
+        <button
+          type="button"
+          title={labels.delete}
+          aria-label={labels.delete}
+          className={`${rowAction} hover:text-ds-danger`}
+          onClick={(e) => {
+            e.stopPropagation()
+            deleteCanvasLayers([shape.id])
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.6} />
+        </button>
+      </span>
     </div>
   )
 }
@@ -200,7 +227,7 @@ function CanvasLayersPanelInner() {
   if (!root) return null
 
   return (
-    <div className="flex flex-col gap-0.5 px-1 py-1">
+    <div role="tree" aria-label={t('canvasInspectorTabOutline')} className="flex flex-col gap-px px-2 py-2">
       {rows.map((row) => {
         const child = document.objects[row.id]
         if (!child) return null
@@ -222,7 +249,7 @@ function CanvasLayersPanelInner() {
         )
       })}
       {rows.length === 0 && (
-        <div className="px-2 py-3 text-center text-[12px] text-gray-400">
+        <div className="px-2 py-6 text-center text-[12px] text-ds-faint">
           {t('canvasLayersEmpty')}
         </div>
       )}

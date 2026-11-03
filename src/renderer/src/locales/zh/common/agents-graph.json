@@ -1,6 +1,9 @@
 {
   "subagentsPanel": {
     "configModel": "配置模型",
+    "tab": { "run": "本对话", "roles": "角色" },
+    "mode": { "library": "从角色库挑选", "libraryDesc": "用下面已配置的角色和模型", "adhoc": "临时定义", "adhocDesc": "每个任务由主代理现场写角色" },
+    "runEmpty": "这个对话里还没有运行过子代理。在「角色」里选择主代理可以委派给谁。",
     "delegatable": "可委派 · 可在对话里用",
     "system": "系统 · 内部用途",
     "global": "全局 · 共享",

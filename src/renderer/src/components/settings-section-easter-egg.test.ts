@@ -49,8 +49,6 @@ const labels: Record<string, string> = {
   uiModeWorkshopDesc: 'Pick the workspace mascot pack. iKun is a pre-installed plugin example.',
   uiModeDefaultTitle: 'Default Kun',
   uiModeDefaultSubtitle: 'The little blue bird',
-  uiPaletteRetromaOn: 'Retroma palette on — click to use default palette',
-  uiPaletteRetromaOff: 'Switch to Retroma parchment palette',
   uiPluginInstall: 'Install plugin folder…',
   uiPluginActivate: 'Use',
   uiPluginActive: 'Active',
@@ -124,9 +122,8 @@ describe('EasterEggSettingsSection (mode workshop)', () => {
     // 默认模式应处于使用中状态;iKun 不再硬编码,而是预装插件,SSR 下列表为空
     expect(html).toContain('Active')
     expect(html).not.toContain('iKun mode')
-    // 默认 Kun 卡片右上角带 Retroma 配色切换按钮(SSR 下 uiMode=default,按钮为关闭态)
-    expect(html).toContain('Switch to Retroma parchment palette')
-    expect(html).toContain('aria-pressed="false"')
+    // Retroma 已移到「外观 → 配色方案」,形象卡片不再带配色开关
+    expect(html).not.toContain('Switch to Retroma parchment palette')
     expect(html).not.toContain('Character size')
   })
 

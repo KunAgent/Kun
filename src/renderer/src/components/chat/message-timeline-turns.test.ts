@@ -89,6 +89,9 @@ describe('message timeline turns', () => {
       'notice_1',
       'reasoning_1'
     ])
+    const withTrailingTurn = [...turns, { turnId: 'turn_orphan', blocks: [] }]
+    expect(activeTimelineTurnIndex(withTrailingTurn, 'turn_background', 'notice_1')).toBe(0)
+    expect(activeTimelineTurnIndex(withTrailingTurn, null, 'notice_1')).toBe(0)
   })
 
   it('binds live state to the durable active turn before a trailing orphan turn', () => {

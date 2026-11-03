@@ -7,7 +7,11 @@ import { defaultKunHarnessSettings } from '@shared/app-settings-kun-harness'
 import { SETTINGS_CHANGED_EVENT } from './keyboard-shortcut-settings'
 const fixture = vi.hoisted(() => ({ getSettings: vi.fn(), invalidate: vi.fn(), load: vi.fn() }))
 vi.mock('../agent/runtime-client', () => ({ rendererRuntimeClient: { getSettings: fixture.getSettings } }))
-vi.mock('../store/harness-store', () => ({ applyHarnessEnablementSettings: fixture.invalidate, loadHarnesses: fixture.load }))
+vi.mock('../store/harness-store', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../store/harness-store')>()
+  return { harnessIdsWithChangedLaunchSettings: actual.harnessIdsWithChangedLaunchSettings,
+    applyHarnessEnablementSettings: fixture.invalidate, loadHarnesses: fixture.load }
+})
 import { useHarnessDefaults } from './harness-defaults'
 afterEach(() => { vi.clearAllMocks() })
 
@@ -24,11 +28,12 @@ it('does not discard ready Agents for theme/workspace updates, but invalidates c
     })))
     expect(fixture.invalidate).not.toHaveBeenCalled()
     expect(fixture.load).not.toHaveBeenCalled()
-    const harnesses = { ...settings.agents.kun.harnesses, disabledIds: ['devin'] }
+    const harnesses = { ...settings.agents.kun.harnesses, providers: { devin: { command: '/opt/devin' } } }
     await act(async () => window.dispatchEvent(new CustomEvent(SETTINGS_CHANGED_EVENT, {
       detail: { ...settings, agents: { kun: { ...settings.agents.kun, harnesses } } }
     })))
-    expect(fixture.invalidate).toHaveBeenCalledExactlyOnceWith(harnesses, true)
+    // Only the Agent whose launch settings changed loses its readiness proof.
+    expect(fixture.invalidate).toHaveBeenCalledExactlyOnceWith(harnesses, ['devin'])
     expect(fixture.load).toHaveBeenCalledExactlyOnceWith(true)
   } finally {
     await act(async () => root.unmount())

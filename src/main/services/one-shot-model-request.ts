@@ -15,8 +15,8 @@ import {
 } from '../codex-responses-lite'
 
 /**
- * Shared one-shot model request used by prompt optimization and the paper
- * reader's translation service. Covers the three supported endpoint families:
+ * Shared one-shot model request used by prompt optimization, commit message
+ * generation and the paper reader's translation service. Covers the three supported endpoint families:
  * OpenAI chat completions, Anthropic messages, and OpenAI responses (plus the
  * Codex Responses Lite streaming variant). URL construction, headers, body
  * shape, and response parsing all live here so callers stay consistent.
@@ -25,7 +25,7 @@ import {
 export const DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS = 1600
 
 export type OneShotModelRequestInput = {
-  purpose?: 'prompt-optimization' | 'paper-translation'
+  purpose?: 'prompt-optimization' | 'paper-translation' | 'commit-message'
   baseUrl: string
   apiKey: string
   endpointFormat: ModelEndpointFormat
@@ -38,6 +38,8 @@ export type OneShotModelRequestInput = {
   providerId?: string
   presetSource?: string
   maxOutputTokens?: number
+  /** Caller cancellation; the timeout above still applies. */
+  signal?: AbortSignal
 }
 
 export type OneShotModelRequestPayload = {
@@ -279,7 +281,8 @@ export async function oneShotModelRequest(
     if (!input.providerId) return { ok: false, message: 'Select a provider connection for this request.' }
     return requestRuntimeModelText({ purpose: input.purpose ?? 'paper-translation', providerId: input.providerId,
       model: input.model, messages: [{ role: 'system', content: input.systemPrompt }, { role: 'user', content: input.userText }],
-      maxOutputTokens: input.maxOutputTokens ?? DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS, timeoutMs: input.timeoutMs })
+      maxOutputTokens: input.maxOutputTokens ?? DEFAULT_ONE_SHOT_MAX_OUTPUT_TOKENS, timeoutMs: input.timeoutMs },
+    input.signal ? { signal: input.signal } : undefined)
   }
   const request = buildOneShotModelRequest({
     baseUrl: input.baseUrl,
@@ -302,7 +305,9 @@ export async function oneShotModelRequest(
       method: 'POST',
       headers: request.headers,
       body: JSON.stringify(request.body),
-      signal: AbortSignal.timeout(Math.max(1_000, input.timeoutMs))
+      signal: input.signal
+        ? AbortSignal.any([input.signal, AbortSignal.timeout(Math.max(1_000, input.timeoutMs))])
+        : AbortSignal.timeout(Math.max(1_000, input.timeoutMs))
     }, input.proxyUrl ?? '')
     bodyText = await response.text()
   } catch (error) {

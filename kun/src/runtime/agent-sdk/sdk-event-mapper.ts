@@ -15,15 +15,18 @@
  * Streaming model (mirrors kun's native loop exactly, or the GUI double-renders):
  * a kun `assistant_text_delta` event carries an INCREMENTAL CHUNK (the GUI
  * APPENDS each delta's `item.text`), and the authoritative full text is emitted
- * ONCE at the end as an `item_created` event (the GUI replaces/finalizes by id).
+ * once per SDK assistant message as an `item_created` event (the GUI
+ * replaces/finalizes by id). The next message then opens a new item id.
  * So: `stream_event` deltas → chunk `*_delta` events; the complete `assistant`
  * message → a single `item_created` with the full text. On the no-partials path
  * (deltas absent) the `item_created` alone carries the whole message.
  */
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import { sdkCostIncrement } from './sdk-session-cost.js'
+import { SdkContextOccupancyTracker, type SdkContextOccupancy } from './sdk-context-occupancy.js'
 import { redactBrowserUseActionForPersistence } from '../../contracts/browser-use.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
+import type { TurnItem } from '../../contracts/items.js'
 import { DEFAULT_MODEL_STREAM_LIMITS } from '../../adapters/model/model-stream-resource-budget.js'
 import {
   makeAssistantTextItem,
@@ -32,6 +35,8 @@ import {
   makeToolResultItem
 } from '../../domain/item.js'
 import { takeSdkToolResultMeta } from './sdk-tool-result-meta.js'
+import { SdkSubagentRouter } from './sdk-subagent-router.js'
+import { StreamTextAccumulator } from './sdk-stream-text-accumulator.js'
 import type {
   SdkApiMessage,
   SdkContentBlock,
@@ -54,6 +59,8 @@ export interface SdkEventMapperContext {
   streamLimits?: Partial<SdkStreamResourceLimits>
   /** Whether the query producing the next result resumed an existing session. */
   resumedQuery?: () => boolean
+  /** Child mappers set false: a subagent's own messages never spawn routers. */
+  subagents?: false
 }
 
 export interface SdkTurnFinal {
@@ -163,6 +170,8 @@ export class SdkEventMapper {
   private textItemId?: string
   private reasoningItemId?: string
   private readonly textAccum = new StreamTextAccumulator()
+  /** Text of the most recently finalized assistant item, for the turn's final text. */
+  private lastText = ''
   private readonly reasoningAccum = new StreamTextAccumulator()
   /** Text emitted in only the current SDK query, used to dedupe its result copy. */
   private readonly queryTextAccum = new StreamTextAccumulator()
@@ -174,9 +183,14 @@ export class SdkEventMapper {
   private toolReadyCount = 0
   private final?: SdkTurnFinal
   private readonly budget: SdkStreamResourceBudget
+  private readonly occupancy = new SdkContextOccupancyTracker()
+  private readonly subagents?: SdkSubagentRouter
 
   constructor(private readonly ctx: SdkEventMapperContext) {
     this.budget = new SdkStreamResourceBudget(normalizeSdkStreamLimits(ctx.streamLimits))
+    if (ctx.subagents !== false) this.subagents = new SdkSubagentRouter({ threadId: ctx.threadId, turnId: ctx.turnId,
+      createChildMapper: (threadId, turnId, model) => new SdkEventMapper({ threadId, turnId, nextId: ctx.nextId,
+        subagents: false, streamLimits: ctx.streamLimits, ...(model ? { model } : {}) }) })
   }
 
   /** SDK session id captured from the `system/init` message (for resume). */
@@ -189,12 +203,17 @@ export class SdkEventMapper {
     return this.final
   }
 
+  /** Real context occupancy/window the SDK reported so far, if any. */
+  getContextOccupancy(): SdkContextOccupancy | undefined {
+    return this.occupancy.snapshot()
+  }
+
   /** Diagnostic/test seam proving completed tool calls release retained name state. */
   getPendingToolCallCount(): number {
     return this.toolNames.size
   }
 
-  /** Reset query-local result/delta state while retaining turn-wide output budgets and item ids. */
+  /** Reset query-local result/delta state while retaining turn-wide output budgets. */
   beginQuery(): void {
     this.queryTextAccum.clear()
     this.currentAssistantTextAccum.clear()
@@ -204,6 +223,9 @@ export class SdkEventMapper {
 
   map(message: SdkMessage): RuntimeEventDraft[] {
     this.budget.addEvent(message, this.toolNames.size)
+    this.occupancy.observe(message)
+    const routed = this.subagents?.route(message)
+    if (routed) return routed
     switch (message.type) {
       case 'system':
         if ((message as { subtype?: string }).subtype === 'init') {
@@ -276,20 +298,32 @@ export class SdkEventMapper {
     // Finalize text/thinking as item_created with the authoritative full payload.
     // (Native finalizes via applyItem -> item_created, a replace — NOT a delta —
     // so the streamed chunks above are not re-appended.)
-    if (thinking) {
-      this.reasoningAccum.replace(thinking)
-      events.unshift(this.reasoningItemCreated())
-    }
+    const finalized: RuntimeEventDraft[] = []
+    if (thinking) this.reasoningAccum.replace(thinking)
+    if (thinking || (this.reasoningItemId && streamedThinking)) finalized.push(this.reasoningItemCreated())
     if (text) {
       this.textAccum.replace(text)
       this.queryTextAccum.replace(text)
-      events.unshift(this.textItemCreated())
-    } else if (this.textItemId && streamedText) {
-      events.unshift(this.textItemCreated())
     }
+    if (text || (this.textItemId && streamedText)) finalized.push(this.textItemCreated())
+    events.unshift(...finalized)
+    this.closeAssistantItems()
+    return events
+  }
+
+  /**
+   * Claude Code emits one SDK assistant message per content block. Each is its
+   * own timeline item, like a native model round: close the current text and
+   * reasoning items so later steps open new ones instead of overwriting them.
+   */
+  private closeAssistantItems(): void {
+    if (this.textItemId) this.lastText = this.textAccum.value
+    this.textItemId = undefined
+    this.reasoningItemId = undefined
+    this.textAccum.clear()
+    this.reasoningAccum.clear()
     this.currentAssistantTextAccum.clear()
     this.currentAssistantReasoningAccum.clear()
-    return events
   }
 
   private mapUser(message: SdkApiMessage): RuntimeEventDraft[] {
@@ -311,7 +345,9 @@ export class SdkEventMapper {
     }
     this.final = {
       status: isError ? 'failed' : 'completed',
-      ...(resultText ? { text: resultText } : this.textAccum.value ? { text: this.textAccum.value } : {}),
+      ...(resultText
+        ? { text: resultText }
+        : (this.textAccum.value || this.lastText) ? { text: this.textAccum.value || this.lastText } : {}),
       ...(isError ? { message: resultText ?? subtype } : {}),
       ...(subtype === 'error_max_turns' ? { code: 'turn_step_limit' as const } : {})
     }
@@ -411,7 +447,7 @@ export class SdkEventMapper {
     this.toolNames.set(block.id, block.name)
     this.toolReadyCount += 1
     const toolKind = toolKindFor(block.name)
-    const callItem = makeToolCallItem({
+    const rawCallItem = makeToolCallItem({
       id: itemId,
       turnId: this.ctx.turnId,
       threadId: this.ctx.threadId,
@@ -423,6 +459,7 @@ export class SdkEventMapper {
         : block.input ?? {},
       status: 'running'
     })
+    const callItem = this.subagents ? this.subagents.decorateCall(rawCallItem, block) : rawCallItem
     return [
       {
         kind: 'item_created',
@@ -463,7 +500,7 @@ export class SdkEventMapper {
       threadId: this.ctx.threadId,
       turnId: this.ctx.turnId,
       itemId,
-      item: makeToolResultItem({
+      item: this.decorateResult(makeToolResultItem({
         id: itemId,
         turnId: this.ctx.turnId,
         threadId: this.ctx.threadId,
@@ -474,43 +511,17 @@ export class SdkEventMapper {
         isError: block.is_error === true,
         status: block.is_error === true ? 'failed' : 'completed',
         ...(meta ? { meta } : {})
-      })
+      }))
     }
+  }
+
+  private decorateResult(item: TurnItem): TurnItem {
+    return this.subagents ? this.subagents.decorateResult(item) : item
   }
 }
 
 function isSdkBrowserUseTool(name: string): boolean {
   return name === 'browser_use' || name === 'mcp__kun__browser_use'
-}
-
-/** O(1)-append, lazily joined accumulator bounded by the enclosing byte/event budget. */
-class StreamTextAccumulator {
-  private parts: string[] = []
-  private joined: string | undefined
-
-  append(text: string): void {
-    if (!text) return
-    this.parts.push(text)
-    this.joined = undefined
-  }
-
-  replace(text: string): void {
-    this.parts = text ? [text] : []
-    this.joined = text
-  }
-
-  clear(): void {
-    this.parts = []
-    this.joined = ''
-  }
-
-  get value(): string {
-    if (this.joined === undefined) {
-      this.joined = this.parts.join('')
-      this.parts = this.joined ? [this.joined] : []
-    }
-    return this.joined
-  }
 }
 
 function normalizeSdkStreamLimits(

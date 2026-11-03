@@ -4,7 +4,8 @@ import { createHash } from 'node:crypto'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
 import type { RoomStore, RoomStoreCommit, RoomStoredDocument } from './room-store.js'
 import { RoomStoreConflictError } from './room-store.js'
-import { appendPeerInbox, emptyPeerMember, peerId, peerInboxRows, peerMemberId, peerMessageRecipients } from './room-peer-inbox.js'
+import { appendPeerInbox, emptyPeerMember, peerId, peerInboxRows, peerMemberId, peerMessageRecipients,
+  peerParallelAnswers } from './room-peer-inbox.js'
 import { publishPeerMessage } from './room-peer-publication.js'
 import { ROOM_PEER_HOLD_LIMITS, ROOM_PEER_LIMITS, type RoomPeerActivation, type RoomPeerBeginInput,
   type RoomPeerMemberState, type RoomPeerPublishInput, type RoomPeerRequestInput, type RoomPeerTopic,
@@ -215,8 +216,11 @@ export class RoomPeerStore {
       const topic = await this.topic(rootId), member = await this.member(rootId, memberId)
       const activation = member?.value.activation
       if (!topic || !member || activation?.clientRequestId !== activationClientRequestId) return
-      const fresh = activation.generation === topic.value.generation &&
-        activation.basePublicationRevision === topic.value.publicationRevision && await this.current(topic)
+      // A skip stays valid when the only newer updates are parallel answers to the same user message.
+      const fresh = activation.generation === topic.value.generation && await this.current(topic) &&
+        (activation.basePublicationRevision === topic.value.publicationRevision ||
+          await peerParallelAnswers(this.store, topic.value, memberId, activation.seenThroughSeq,
+            (await this.store.get<{ replyToMessageId?: string }>('context', activation.contextId))?.value.replyToMessageId) !== null)
       const handled = fresh ? Math.max(member.value.handledInboxSeq, activation.seenThroughSeq) : member.value.handledInboxSeq
       const pending = (await peerInboxRows(this.store, rootId, memberId, handled, topic.value.generation)).length > 0
       const commit: RoomStoreCommit = { requestId: peerId('skip', activationClientRequestId),

@@ -59,6 +59,7 @@ import {
   type RemoteAccessSettingsPatchV1
 } from './app-settings-remote'
 import { normalizeDarkUiColors } from './app-settings-dark-ui'
+import { normalizeColorPaletteSettings } from './app-settings-color-palette'
 
 export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
   const migrated = shouldMigrateLegacySettings(settings)
@@ -79,6 +80,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     terminal?: TerminalSettingsPatchV1
     remote?: RemoteAccessSettingsPatchV1
     darkUiColors?: Parameters<typeof normalizeDarkUiColors>[0]
+    colorPalette?: Parameters<typeof normalizeColorPaletteSettings>[0]
   }
   const providerSettings = normalizeModelProviderSettings(maybeSettings.provider)
   const rawKun = maybeSettings.agents?.kun
@@ -124,7 +126,9 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     composerSendKey: normalizeComposerSendKey(maybeSettings.composerSendKey),
     cursorSpotlight: maybeSettings.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(maybeSettings.cursorSpotlightColor),
+    homeGlyphRipple: maybeSettings.homeGlyphRipple !== false,
     darkUiColors: normalizeDarkUiColors(maybeSettings.darkUiColors),
+    colorPalette: normalizeColorPaletteSettings(maybeSettings.colorPalette, maybeSettings.darkUiColors),
     provider: providerSettings,
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       ...runtime,

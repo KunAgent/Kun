@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "tencentcloud",
   "name": "Tencent Cloud",
   "category": "api",
@@ -23,6 +23,11 @@
       "hunyuan-t1-latest",
       "hunyuan-lite"
     ],
-    "credentialUrl": "https://console.cloud.tencent.com/tokenhub/tokenplan"
+    "credentialUrl": "https://console.cloud.tencent.com/tokenhub/tokenplan",
+    "discovery": {
+      "strategy": "live-with-fallback",
+      "sourceUrl": "https://cloud.tencent.com/document/product/1729/111006",
+      "checkedAt": "2026-10-08"
+    }
   }
 }

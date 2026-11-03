@@ -1,17 +1,20 @@
-import { useCallback, useEffect, type RefObject } from 'react'
+import { useCallback, useEffect, useRef, type RefObject } from 'react'
+import { useAppSurfaceStore } from '../../app-surfaces/app-surface-store'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
+  isWorkerSessionTabId,
+  workerSessionTabId,
   type RightPanelContributionId,
   type RightPanelMode
 } from '../../extensions/contribution-ids'
 import { useReviewStore } from '../../store/review-store'
 import { takePlanBuildReview } from '../../store/plan-build-watch'
-import { useActivityStore } from '../../store/activity-store'
-import { selectWorkerRowsForParent } from '../../store/activity-selectors'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
+import { OPEN_WORKER_SESSION_EVENT } from '../workers/worker-view-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
 import { requestCodeCanvasPanelOpen } from '../../lib/code-canvas-panel-event'
+import { useMessageQuoteStore } from '../../store/message-quote-store'
 
 type Params = {
   input: string
@@ -93,6 +96,32 @@ export function useWorkbenchRightTools({
     }
   }, [activeThreadId, prevThreadId, setSidePanelOpen, sidePanel.open])
 
+  // "Start side conversation" on a selection opens the draft tab; the quote
+  // itself already waits in the side draft composer.
+  const sideDraftRevealRequest = useMessageQuoteStore((state) => state.sideDraftRevealRequest)
+  const handledSideDraftRevealSeq = useRef(sideDraftRevealRequest?.seq ?? 0)
+  useEffect(() => {
+    if (!sideDraftRevealRequest || sideDraftRevealRequest.seq === handledSideDraftRevealSeq.current) return
+    handledSideDraftRevealSeq.current = sideDraftRevealRequest.seq
+    if (sideDraftRevealRequest.parentThreadId !== activeThreadId) return
+    openSideConversationDraft()
+    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
+  }, [activeThreadId, openRightPanelTab, openSideConversationDraft, sideDraftRevealRequest])
+
+  // Interactive app pages (Gen UI expand, MCP App surfaces) open as the App tab.
+  const appPanelKey = useAppSurfaceStore((state) => state.panel?.key ?? null)
+  const previousAppPanelKey = useRef<string | null>(appPanelKey)
+  useEffect(() => {
+    const previous = previousAppPanelKey.current
+    previousAppPanelKey.current = appPanelKey
+    if (appPanelKey && appPanelKey !== previous) openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.appSurface)
+    if (!appPanelKey && previous) closeRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.appSurface)
+  }, [appPanelKey, closeRightPanelTab, openRightPanelTab])
+  useEffect(() => {
+    const panel = useAppSurfaceStore.getState().panel
+    if (panel && panel.threadId !== activeThreadId) useAppSurfaceStore.getState().closePanel()
+  }, [activeThreadId])
+
   const openSideChat = useCallback((): void => {
     const latestSide = currentSideConversations.at(-1)
     if (latestSide) selectSideConversation(latestSide.threadId)
@@ -146,6 +175,7 @@ export function useWorkbenchRightTools({
 
   const closeCodeRightTool = useCallback((id: RightPanelContributionId): void => {
     if (id === BUILTIN_RIGHT_PANEL_IDS.sideConversations) setSidePanelOpen(false)
+    if (id === BUILTIN_RIGHT_PANEL_IDS.appSurface) useAppSurfaceStore.getState().closePanel()
     closeRightPanelTab(id)
   }, [closeRightPanelTab, setSidePanelOpen])
 
@@ -155,12 +185,9 @@ export function useWorkbenchRightTools({
   }, [codeRightTabs.expanded, collapseRightPanel, expandRightPanel])
 
   // The review tab only exists while the active thread binds a task
-  // workspace (11 §3); the binding lookup itself runs in WorkbenchContent.
+  // workspace; the binding lookup itself runs in WorkbenchContent.
   const reviewEnabled = useReviewStore((s) =>
     Boolean(activeThreadId && s.bindings[activeThreadId]))
-  // Collaboration appears only once this task actually has execution units.
-  const workersEnabled = useActivityStore((s) =>
-    Boolean(activeThreadId && selectWorkerRowsForParent(s.rows, activeThreadId).length > 0))
 
   // A finished build never replaces the user's current tool panel. Clear
   // its pending flag when the user explicitly visits the combined changes tab.
@@ -171,12 +198,36 @@ export function useWorkbenchRightTools({
         rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.changes) takePlanBuildReview(activeThreadId)
   }, [activeThreadId, pendingPlanBuildReview, codeRightTabs.expanded, rightPanelMode])
 
-  // The composer Workers pill asks the workbench to open the panel (12 §6.1).
+  // The composer Workers pill asks the workbench to open the panel.
   useEffect(() => {
     const open = (): void => openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.workers)
     window.addEventListener(OPEN_WORKERS_PANEL_EVENT, open)
     return () => window.removeEventListener(OPEN_WORKERS_PANEL_EVENT, open)
   }, [openRightPanelTab])
+
+  // Layout tabs are workspace-scoped, but worker conversations are manager-scoped.
+  // Switching managers closes their tabs; missing activity alone never does.
+  const workerTabsManager = useRef(activeThreadId)
+  useEffect(() => {
+    if (workerTabsManager.current === activeThreadId) return
+    workerTabsManager.current = activeThreadId
+    for (const id of codeRightTabs.tabs) {
+      if (isWorkerSessionTabId(id)) closeRightPanelTab(id)
+    }
+  }, [activeThreadId, codeRightTabs.tabs, closeRightPanelTab])
+
+  // Keep the requested tab visible while its panel resolves membership from
+  // the manager's persisted team and live activity, including historical workers.
+  useEffect(() => {
+    const open = (event: Event): void => {
+      const workerId = (event as CustomEvent<{ workerId?: unknown }>).detail?.workerId
+      if (typeof workerId !== 'string' || !workerId) return
+      if (!activeThreadId) return
+      openRightPanelTab(workerSessionTabId(workerId))
+    }
+    window.addEventListener(OPEN_WORKER_SESSION_EVENT, open)
+    return () => window.removeEventListener(OPEN_WORKER_SESSION_EVENT, open)
+  }, [activeThreadId, openRightPanelTab])
 
   useEffect(() => {
     const unavailable: RightPanelContributionId[] = []
@@ -185,7 +236,6 @@ export function useWorkbenchRightTools({
     if (!fileTreeWorkspaceRoot) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.files)
     if (!filePreviewTarget) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.file)
     if (!reviewEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.review)
-    if (!workersEnabled) unavailable.push(BUILTIN_RIGHT_PANEL_IDS.workers)
     if (!activeThreadId) {
       unavailable.push(BUILTIN_RIGHT_PANEL_IDS.sideConversations)
     }
@@ -199,8 +249,7 @@ export function useWorkbenchRightTools({
     codeRightTabs.tabs,
     filePreviewTarget,
     fileTreeWorkspaceRoot,
-    reviewEnabled,
-    workersEnabled
+    reviewEnabled
   ])
 
   return {

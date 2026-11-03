@@ -1,0 +1,52 @@
+{
+  "composerApproval": {
+    "header": "Нужно ваше одобрение",
+    "kind": {
+      "command": "Запуск команды",
+      "edit": "Изменение файла",
+      "email": "Отправка письма",
+      "tool": "Вызов {{name}}",
+      "toolUnnamed": "Вызов инструмента"
+    },
+    "question": {
+      "edit": "Изменить {{file}}?",
+      "editFiles_one": "Изменить {{count}} файл?",
+      "editFiles_few": "Изменить {{count}} файла?",
+      "editFiles_many": "Изменить {{count}} файлов?",
+      "editFiles_other": "Изменить {{count}} файла?"
+    },
+    "preview": {
+      "terminal": "Терминал",
+      "email": "Письмо",
+      "awaiting": "Ожидает одобрения",
+      "files_one": "{{count}} файл",
+      "files_few": "{{count}} файла",
+      "files_many": "{{count}} файлов",
+      "files_other": "{{count}} файла",
+      "diffStats": "Добавлено строк: {{added}}, удалено строк: {{removed}}",
+      "clipped": "Большое изменение; остальная часть не показана",
+      "truncated": "Аргументы длинные, поэтому в предпросмотре показана только часть",
+      "moreInput_one": "ещё {{count}} аргумент",
+      "moreInput_few": "ещё {{count}} аргумента",
+      "moreInput_many": "ещё {{count}} аргументов",
+      "moreInput_other": "ещё {{count}} аргумента"
+    },
+    "option": {
+      "allow": "Разрешить",
+      "allowAlways": "Всегда разрешать",
+      "deny": "Отклонить",
+      "denyAlways": "Всегда отклонять",
+      "once": "Только в этот раз",
+      "denyOnce": "Отклонить в этот раз",
+      "alwaysSession": "Больше не спрашивать до конца сессии",
+      "alwaysScoped": "Больше не спрашивать для {{scope}} до конца сессии",
+      "alwaysScopedEdit": "Больше не спрашивать о правках в {{scope}} до конца сессии",
+      "denyAlwaysSession": "Отклонять такие действия до конца сессии"
+    },
+    "feedbackPlaceholder": "Скажите Kun, что сделать иначе — отправится вместе с отказом…",
+    "feedbackEmailPlaceholder": "Скажите Kun, что изменить — отправится вместе с отказом…",
+    "feedbackLabel": "Пояснение, которое отправится с отказом",
+    "hint": "Нажмите 1–{{last}}, чтобы выбрать, или ↑↓ и Enter",
+    "confirm": "Подтвердить"
+  }
+}

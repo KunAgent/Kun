@@ -25,12 +25,15 @@ function translate(key: string, values: Record<string, unknown> = {}): string {
     sessionUsageFooterTtft: `TTFT ${values.ttft}`,
     sessionUsageFooterTps: `${values.tps} tok/s`,
     sessionUsageAvgMetricsTitle: 'Average timing',
+    'agentUpdate.usageTimingByAgent': 'Agent-measured timing',
     sessionUsageDetailsTitle: `${values.tokens} tokens · ${values.cost} · ${values.turns} turns`,
     sessionUsageDetailsTitleWithLatestCache: `${values.tokens} tokens · ${values.cost} · ${values.turns} turns`,
     sessionUsageLoading: 'Loading usage',
     sessionUsageUnavailable: 'No usage yet',
     usageHistoryOpen: 'Open usage history',
-    usageHistoryTitle: 'Usage history'
+    usageHistoryTitle: 'Usage history',
+    composerShortcut: 'Enter to send · Shift+Enter for newline',
+    composerShortcutShiftEnter: 'Shift+Enter to send · Enter for newline'
   } as Record<string, string>
   return text[key] ?? key
 }
@@ -224,6 +227,19 @@ describe('FloatingComposerFooterView', () => {
     expect(renderFooter({ compact: true })).toBe('')
   })
 
+  it('uses the configured send shortcut for the editable Work composer only', () => {
+    const work = { compact: true, route: 'write', agentSwitcher: true, canEditComposer: true }
+    expect(renderFooter({ ...work, composerSendKey: 'enter' }))
+      .toContain('Enter to send · Shift+Enter for newline')
+    expect(renderFooter({ ...work, composerSendKey: 'shiftEnter' }))
+      .toContain('Shift+Enter to send · Enter for newline')
+    expect(renderFooter({ ...work, route: 'chat' })).toBe('')
+    expect(renderFooter({ ...work, agentSwitcher: false })).toBe('')
+    expect(renderFooter({ ...work, canEditComposer: false })).toBe('')
+    expect(renderFooter({ ...work, busy: true })).toBe('')
+    expect(renderFooter({ ...work, composerInterrupt: { kind: 'approval' } })).toBe('')
+  })
+
   it('defines the planned container-query reductions without wrapping the footer', async () => {
     const css = await readStylesheetBundle(new URL('../../styles/base-shell.css', import.meta.url))
 
@@ -237,6 +253,19 @@ describe('FloatingComposerFooterView', () => {
     expect(css).toMatch(/@container \(max-width: 560px\)[\s\S]*?\.ds-composer-usage-ttft/s)
     expect(css).toContain('.ds-composer-usage-money-estimate')
     expect(css).toMatch(/@container \(max-width: 460px\)[\s\S]*?\.ds-composer-usage-turns/s)
+  })
+  it('shows TTFT and tok/s for an external Agent and says Kun measured them on its output stream', () => {
+    const usage = usageSummary()
+    const external = renderFooter({ threadUsage: usage, timingThreadUsage: usage,
+      adeComposerEnabled: true, adeComposer: { harnessId: 'devin' } })
+    expect(external).toContain('ds-composer-usage-ttft')
+    expect(external).toContain('ds-composer-usage-tps')
+    expect(external).toContain('title="Agent-measured timing"')
+    expect(external).not.toContain('title="Average timing"')
+    const native = renderFooter({ threadUsage: usage, timingThreadUsage: usage,
+      adeComposerEnabled: true, adeComposer: { harnessId: 'kun' } })
+    expect(native).toContain('title="Average timing"')
+    expect(native).not.toContain('Agent-measured timing')
   })
   it('labels price-less external Agent usage as billed by the Agent instead of an error', () => {
     const usage = usageSummary({ costUsd: null, totalTokens: 48_000, turns: 2 })

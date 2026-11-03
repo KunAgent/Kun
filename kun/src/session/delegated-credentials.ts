@@ -1,6 +1,6 @@
 import { harnessGatewayBindingKey, type HarnessGatewayBinding, type HarnessGatewayAliasGrant } from '../contracts/harness-gateway-binding.js'
 /**
- * Credential identity + child-env resolution for delegated turns (P3-10),
+ * Credential identity + child-env resolution for delegated turns,
  * generalized from `resolveAcpCredentialContext` so every session transport
  * (acp, codex-app-server, pi-rpc) keys its pooled process by the same rule:
  * a `kun-gateway` route folds provider/model into the identity; `native-login`

@@ -1,8 +1,8 @@
 /**
- * ACP connection pool (docs/ade/03 §4.3): one agent process per
+ * ACP connection pool: one agent process per
  * `${harnessId}:${credentialIdentity}` key hosts many ACP sessions.
  *
- * P6-03: the refcount/idle-release/exit-eviction mechanics delegate to the
+ * the refcount/idle-release/exit-eviction mechanics delegate to the
  * shared `HarnessAgentPool` in `kun/src/session/harness-pool.ts`; this class
  * only renames the lease field to `connection` and restores the
  * `AcpConnectionExit` payload the connection's own `onExit` supplies.
@@ -57,7 +57,7 @@ export class AcpConnectionPool {
   }
 
   /**
-   * Activity dormancy (docs/ade/06 §7.2): close the pooled connection hosting
+   * Activity dormancy: close the pooled connection hosting
    * this unit's ACP session — but only when no turn still leases it, so live
    * sibling sessions on the same agent process are never released with it.
    * Session bindings survive the close; the next turn resumes natively or

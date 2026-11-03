@@ -1,0 +1,17 @@
+{
+  "toolDetails": {
+    "previewAudio": "Preview audio", "hideAudio": "Hide audio", "download": "Download attachment", "binaryUnavailable": "Complete attachment data is unavailable for preview or download.",
+    "offset": "Offset", "limit": "Limit",
+    "text": "Text", "copy": "Copy full content", "showMore": "Show more content",
+    "expand": "Open full details", "close": "Close tool details", "title": "Tool details",
+    "input": "Input", "output": "Output", "error": "Error", "evidence": "Additional content",
+    "fileUnavailable": "The file is unavailable in this workspace.", "openFile": "Open file", "openLink": "Open link", "cwd": "Working directory",
+    "command": "Command", "exit": "Exit code {{code}}", "signal": "Signal {{signal}}",
+    "query": "Query", "matches": "Search results", "status": "HTTP {{code}}",
+    "waiting": "Waiting for tool output…", "empty": "The tool returned no output.",
+    "summaryOnly": "The agent returned a summary without the file contents.",
+    "truncated": "Showing the retained portion of a longer result.",
+    "contentOmitted": "This attachment was not retained in the conversation.",
+    "attachment": "Attachment", "image": "Tool image", "raw": "Raw content"
+  }
+}

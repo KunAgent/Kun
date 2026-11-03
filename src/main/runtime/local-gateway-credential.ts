@@ -38,7 +38,7 @@ function publishGatewaySectionStatus(message: string): void {
 }
 
 /**
- * P4-04 migration: persisted settings may enable the local model gateway
+ * migration: persisted settings may enable the local model gateway
  * while Kun's credential store has no active client or shared key. When the runtime is
  * reachable, ensure the key exists; if creation fails, disable the gateway
  * in durable settings so every later hot apply is not rejected by it.

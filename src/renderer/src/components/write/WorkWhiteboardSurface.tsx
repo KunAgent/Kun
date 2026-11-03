@@ -1,4 +1,6 @@
 import {
+  lazy,
+  Suspense,
   useCallback,
   useEffect,
   useId,
@@ -7,14 +9,21 @@ import {
   useState,
   type ReactElement
 } from 'react'
-import { Check, ExternalLink, FileText, RefreshCw, Shapes, Sparkles, WandSparkles } from 'lucide-react'
+import { Check, ExternalLink, FileText, Loader2, RefreshCw, Shapes, Sparkles, WandSparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type {
   WorkWhiteboard,
   WorkWhiteboardPhase
 } from '../../write/write-workspace-store'
-import { CanvasViewport } from '../design/canvas/CanvasViewport'
-import { PropertiesPanel } from '../design/canvas/PropertiesPanel'
+// The Kun canvas and its properties panel are the heaviest part of Work. They
+// load only when a board actually mounts, so entering Work or browsing the
+// artifact library does not pay for the editor.
+const LazyCanvasViewport = lazy(() =>
+  import('../design/canvas/CanvasViewport').then((module) => ({ default: module.CanvasViewport }))
+)
+const LazyPropertiesPanel = lazy(() =>
+  import('../design/canvas/PropertiesPanel').then((module) => ({ default: module.PropertiesPanel }))
+)
 import { useApplyShapeOpsLive } from '../../design/canvas/use-apply-shape-ops-live'
 import type { PptCanvasProjectionOpenRequest } from '../../design/canvas/use-apply-shape-ops-live'
 import type { ExecuteOpsOptions } from '../../design/canvas/shape-ops'
@@ -31,6 +40,7 @@ import {
   workCanvasPptWorkflowGate
 } from '../../design/canvas/work-canvas'
 import { useWorkWhiteboardRenameLive } from './use-work-whiteboard-rename-live'
+import { WorkWhiteboardLeaveActions } from './WorkWhiteboardLeaveActions'
 import { useApplyExcalidrawLive } from '../../whiteboard/use-apply-excalidraw-live'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import {
@@ -118,7 +128,7 @@ function InactiveWorkWhiteboard({
   const { t } = useTranslation('common')
   return (
     <div
-      className="flex h-full min-h-0 w-full items-center justify-center bg-[#f8fafc] p-6 dark:bg-[#111318]"
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 items-center justify-center bg-[#f8fafc] p-6 dark:bg-[#111318]"
       data-work-whiteboard-placeholder="true"
     >
       <div className="flex max-w-sm flex-col items-center text-center">
@@ -140,6 +150,22 @@ function InactiveWorkWhiteboard({
           </button>
         ) : null}
       </div>
+    </div>
+  )
+}
+
+/** Lightweight stand-in while the canvas chunk loads; keeps the header stable. */
+function WorkWhiteboardLoading({ title }: { title?: string }): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <div
+      className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center gap-2 bg-[#f8fafc] text-ds-muted dark:bg-[#111318]"
+      data-work-whiteboard-loading="true"
+    >
+      <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+      <p className="max-w-[280px] truncate text-xs">
+        {title ? t('workWhiteboardLoadingNamed', { name: title }) : t('workWhiteboardCanvasLoadingHint')}
+      </p>
     </div>
   )
 }
@@ -288,7 +314,7 @@ function ExcalidrawWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactEleme
     surface: 'write'
   })
   return (
-    <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="excalidraw">
+    <div className="relative h-full min-h-0 w-full min-w-0 flex-1" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="excalidraw">
       <ExcalidrawSurface
         workspaceRoot={identity.workspaceRoot}
         identityId={identity.artifactId}
@@ -300,6 +326,7 @@ function ExcalidrawWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactEleme
         phase: props.phase ?? 'blank',
         ...(props.sourcePath ? { sourcePath: props.sourcePath } : {})
       }} />
+      <WorkWhiteboardLeaveActions boardId={props.boardId} workspaceRoot={identity.workspaceRoot} engine="excalidraw" />
       <WorkEngineOverlay
         boardId={props.boardId}
         locked={false}
@@ -385,23 +412,26 @@ function MountedWorkWhiteboard(props: WorkWhiteboardSurfaceProps): ReactElement 
   )
 
   return (
-    <div className="relative h-full min-h-0 w-full" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="kun">
-      <CanvasViewport
-        workspaceRoot={identity.workspaceRoot}
-        artifactId={identity.artifactId}
-        baseDir={identity.baseDir}
-        designSystemBaseDir={identity.designSystemBaseDir}
-        surface="work"
-        onRequestAssistant={handleImageAssistant}
-        onDocumentLoadStateChange={handleDocumentLoadStateChange}
-        onError={props.onError}
-      />
-      <PropertiesPanel surface="work" />
+    <div className="relative h-full min-h-0 w-full min-w-0 flex-1" data-work-whiteboard-mounted={props.boardId} data-canvas-engine="kun">
+      <Suspense fallback={<WorkWhiteboardLoading title={props.title} />}>
+        <LazyCanvasViewport
+          workspaceRoot={identity.workspaceRoot}
+          artifactId={identity.artifactId}
+          baseDir={identity.baseDir}
+          designSystemBaseDir={identity.designSystemBaseDir}
+          surface="work"
+          onRequestAssistant={handleImageAssistant}
+          onDocumentLoadStateChange={handleDocumentLoadStateChange}
+          onError={props.onError}
+        />
+        <LazyPropertiesPanel surface="work" />
+      </Suspense>
       <WorkWhiteboardStatus board={{
         title: props.title ?? t('writeUntitledWhiteboard'),
         phase,
         ...(props.sourcePath ? { sourcePath: props.sourcePath } : {})
       }} />
+      <WorkWhiteboardLeaveActions boardId={props.boardId} workspaceRoot={identity.workspaceRoot} engine="kun" />
       <WorkWhiteboardActions
         phase={phase}
         outputPath={props.outputPath}

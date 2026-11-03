@@ -11,7 +11,7 @@ import type { FileTeamStore } from './team-store.js'
 import type { UsageService } from '../services/usage-service-core.js'
 
 /**
- * Race compare payload for `GET /v1/teams/races/:raceId` (10 §6.3, 11 §5):
+ * Race compare payload for `GET /v1/teams/races/:raceId`:
  * per-contender execution state, verdict, diff stats, checks, the worker's
  * own report, wall-clock duration, and usage/cost rolled up per worker
  * thread.

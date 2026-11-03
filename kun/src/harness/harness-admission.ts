@@ -1,3 +1,6 @@
+import { HarnessPermissionModePreferenceSchema } from '../contracts/harness-permission-preference.js'
+import { HarnessTransportError } from '../session/harness-session.js'
+import { customAcpPermission } from './acp-launch-args.js'
 import type { HarnessDefinition, HarnessStatus } from '../contracts/harness.js'
 import type {
   HarnessCapabilities,
@@ -7,7 +10,7 @@ import type { HarnessUsage } from './usage-for-turn.js'
 import { nativeAgentNetworkStatus } from './native-agent-network.js'
 
 /**
- * Admission matrix (02 §5.2): what each usage requires from a harness.
+ * Admission matrix: what each usage requires from a harness.
  * `sandbox: 'host'` demands Kun enforce the sandbox; 'isolated-or-native'
  * accepts a harness-native sandbox or a host-managed isolated worktree.
  */
@@ -19,6 +22,12 @@ export const ADMISSION_RULES: Record<
   }
 > = {
   'one-to-one': { required: ['abort'] },
+  // delegate_task children share the parent workspace, so a write-capable
+  // child needs an engine-native sandbox; read-only roles count as isolated.
+  'delegate-child': {
+    required: ['abort', 'structuredStreaming'],
+    sandbox: 'isolated-or-native'
+  },
   'manager-worker': {
     required: ['abort', 'structuredStreaming'],
     sandbox: 'isolated-or-native'
@@ -73,7 +82,7 @@ function firstMissingMessage(
 }
 
 /**
- * Host-side admission check (02 §5.3). Runs inside `HarnessRouter.resolve`
+ * Host-side admission check. Runs inside `HarnessRouter.resolve`
  * before a delegated turn starts; the caller maps `ok: false` onto a
  * HarnessAdmissionError so the turn ends with a readable failure.
  */
@@ -150,9 +159,9 @@ export function checkHarnessAdmission(input: {
 }
 
 /**
- * Unknown requested levels fall back to permissionModes[0] (strictest).
- * Unattended turns keep a full-access level only when the user explicitly
- * enabled `agents.kun.ade.allowUnattendedFullAccess`; otherwise [0] too.
+ * Unknown ACP modes are explicit full-access preferences, never silent defaults.
+ * Unknown modes on other transports retain the strictest fallback.
+ * Unattended full-access preferences still require explicit host authorization.
  */
 export function resolvePermissionMode(
   def: HarnessDefinition,
@@ -160,7 +169,13 @@ export function resolvePermissionMode(
   unattended: boolean,
   allowUnattendedFullAccess: boolean
 ): string {
+  requested = HarnessPermissionModePreferenceSchema.parse(requested)
   const found = def.permissionModes.find((m) => m.id === requested)
+  if (requested && def.transport === 'acp' && customAcpPermission(requested, def)) {
+    if (unattended && !allowUnattendedFullAccess) throw new HarnessTransportError('policy_denied',
+      'Custom ACP permission modes require explicitly authorized unattended full access')
+    return requested
+  }
   if (!found) return def.permissionModes[0]!.id
   if (
     unattended &&

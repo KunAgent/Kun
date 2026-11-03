@@ -75,6 +75,17 @@ describe('ACP legacy model selection', () => {
     expect(request).toHaveBeenCalledWith('session/set_model', { sessionId: 'session', modelId: 'gpt/high' })
   })
 
+  it('rejects an Agent that echoes a different model than the one it accepted', async () => {
+    const echoed = { id: 'model', category: 'model', type: 'select', currentValue: 'one',
+      options: [{ value: 'one', name: 'One' }, { value: 'two', name: 'Two' }] } as AcpConfigOption
+    const { conn } = connection(vi.fn(async () => ({ configOptions: [echoed] })))
+    const state = { sessionId: 'session', configOptions: [{ ...echoed }] as AcpConfigOption[] }
+    await expect(applyAcpSessionModel(conn, state, 'two'))
+      .rejects.toMatchObject({ code: 'agent_error', message: expect.stringContaining("kept model 'one'") })
+    // The route must not claim a model the session never adopted.
+    expect(state.configOptions[0]!.currentValue).toBe('one')
+  })
+
   it.each([
     { id: 'model', category: 'model', type: 'select', currentValue: 'one', options: [{ value: 'one', name: 'One' }] },
     { id: 'model', category: 'model', type: 'boolean', currentValue: false },

@@ -10,7 +10,7 @@ import { usePaperModeStore } from './paper-mode-store'
 import { refreshPaperLibrary } from './paper-library-index'
 
 const KEY_PREFIX = 'kun.paper.importFolder.'
-const MAX_FOLDER_DEPTH = 3
+export const MAX_FOLDER_DEPTH = 3
 /** Paper-unit internals; the main process refuses them as folder names too. */
 const RESERVED_FOLDER_NAMES = new Set(['figures', 'marks', 'source', 'assets'])
 
@@ -28,6 +28,17 @@ export function normalizePaperFolderInput(value: string): string | null {
     (segment) => !segment || segment.startsWith('.') || RESERVED_FOLDER_NAMES.has(segment) || /[<>:"|?*]/.test(segment)
   )
   return invalid ? null : segments.join('/')
+}
+
+/**
+ * `<parent>/<name>` as a valid folder path, or null when it cannot be one
+ * (invalid name, deeper than the library scan reaches). An empty name is the
+ * parent itself.
+ */
+export function joinPaperFolder(parent: string, name: string): string | null {
+  const child = name.trim()
+  if (!child) return parent
+  return normalizePaperFolderInput(parent ? `${parent}/${child}` : child)
 }
 
 function storageKey(library: string): string {
@@ -63,39 +74,38 @@ export function importFolderLabel(folder: string, rootLabel: string): string {
   return folder ? folder.split('/').pop() || folder : rootLabel
 }
 
+/**
+ * Label that keeps a nested folder recognisable: the whole path while it is
+ * short, otherwise `…/parent/leaf`. '' (the papers dir itself) is `rootLabel`.
+ */
+export function folderDisplayPath(folder: string, rootLabel: string): string {
+  if (!folder) return rootLabel
+  const parts = folder.split('/')
+  return parts.length > 2 ? `…/${parts.slice(-2).join('/')}` : folder
+}
+
 function currentLibrary(): string {
   return normalizePath(useWriteWorkspaceStore.getState().workspaceRoot)
 }
 
-/** Current import folder for the open library (non-hook read). */
+/** The fixed paper-space target never follows the selected Work root. */
 export function currentImportFolder(): string {
-  const library = currentLibrary()
-  const chosen = usePaperModeStore.getState().importFolders[library]
-  return chosen ?? readImportFolder(library)
+  return ''
 }
 
-/** `parentDir` for the current library's import folder. */
-export function currentImportParentDir(folder = currentImportFolder()): string {
-  return paperImportParentDir(useWriteWorkspaceStore.getState().paperReading.papersDir, folder)
+/** The only import destination is the paper space's root papers directory. */
+export function currentImportParentDir(_folder = ''): string {
+  return paperImportParentDir(useWriteWorkspaceStore.getState().paperReading.papersDir, '')
 }
 
-/**
- * Remember the import folder for `library` (defaults to the mounted root).
- * Sidebar trees pass their own root so choosing a folder in another library
- * never writes into the active library's slot.
- */
-export function setImportFolder(folder: string, library?: string): void {
-  const target = normalizePath(library ?? '') || currentLibrary()
-  if (!target) return
-  usePaperModeStore.getState().setImportFolder(target, folder)
-  writeImportFolder(target, folder)
+/** The fixed paper space has no user-selectable import folder. */
+export function setImportFolder(_folder: string, _library?: string): void {
+  // Kept as a no-op compatibility boundary for older drag/drop callers.
 }
 
-/** Hook: the open library's import folder, re-rendering on change. */
+/** Hook: the fixed paper-space root has no folder selector. */
 export function useImportFolder(): string {
-  const library = useWriteWorkspaceStore((s) => normalizePath(s.workspaceRoot))
-  const chosen = usePaperModeStore((s) => s.importFolders[library])
-  return chosen ?? readImportFolder(library)
+  return ''
 }
 
 export type CreatePaperFolderResult = { ok: true; folder: string } | { ok: false; message: string }

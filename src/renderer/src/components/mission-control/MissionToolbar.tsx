@@ -16,7 +16,7 @@ export type MissionToolbarProps = {
 const VERDICT_OPTIONS = ['passed', 'needs_changes', 'rejected', 'waived', 'pending']
 
 /**
- * Mission Control toolbar (docs/ade/12 §5.2): free-text search over
+ * Mission Control toolbar: free-text search over
  * title/project/agent plus project, harness, and verdict filters, and the
  * board setting that reveals the idle column. Counts only show once any
  * filter is active.

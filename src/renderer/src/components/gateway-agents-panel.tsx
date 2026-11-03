@@ -1,10 +1,11 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Bookmark, ChevronDown, Loader2, RefreshCw, Save, Users, X } from 'lucide-react'
+import { ChevronDown, Loader2, RefreshCw, X } from 'lucide-react'
 import type { AgentWiringAction, AgentWiringOverview, AgentWiringPreview } from '@shared/agent-wiring'
 import { GatewayAgentPreview } from './gateway-agent-preview'
 import { agentWiringErrorText, GatewayAgentRow, type AgentConnectRequest } from './gateway-agent-row'
+import { GatewaySectionHead } from './gateway-section-head'
 import { settingsButtonClass } from './settings-button'
 
 type Notice = { tone: 'ok' | 'warn' | 'error'; text: string }
@@ -14,7 +15,14 @@ type Notice = { tone: 'ok' | 'warn' | 'error'; text: string }
  * gateway. Kun edits only the keys it owns in each agent's config and puts
  * the user's values back on disconnect; each agent gets its own gateway key.
  */
-export function GatewayAgentsPanel({ active, translation }: { active: boolean; translation?: TFunction }): ReactElement {
+export function GatewayAgentsPanel({ active, translation, onConnectedCount, onPrepareModels }: {
+  active: boolean
+  translation?: TFunction
+  /** Reports how many agents go through Kun after every load or change. */
+  onConnectedCount?: (count: number) => void
+  /** Leads to where models are set up when the gateway has none. */
+  onPrepareModels?: () => void
+}): ReactElement {
   const { t: localT } = useTranslation('settings')
   const t = translation ?? localT
   const [overview, setOverview] = useState<AgentWiringOverview | null>(null)
@@ -86,83 +94,79 @@ export function GatewayAgentsPanel({ active, translation }: { active: boolean; t
   const visible = agents.filter((agent) => agent.installed || agent.connected)
   const missing = agents.filter((agent) => !agent.installed && !agent.connected)
   const connectedCount = agents.filter((agent) => agent.connected).length
+  useEffect(() => { if (overview) onConnectedCount?.(connectedCount) }, [connectedCount, onConnectedCount, overview])
   const profiles = Object.entries(overview?.profiles ?? {})
   const gatewayOff = overview !== null && !overview.gatewayEnabled
   const disabled = gatewayOff || !overview?.models.length
   // Connecting shows the exact config diff first; nothing is written until it is confirmed.
   const connect = (agentId: string, request: AgentConnectRequest): void => { void run({ action: 'preview', agentId, ...request }, agentId) }
   const confirm = (): void => { if (pending) void run({ action: 'connect', agentId: pending.preview.agentId, ...pending.request }, pending.preview.agentId) }
-  const noticeClass = { ok: 'text-emerald-700 dark:text-emerald-200', warn: 'text-amber-700 dark:text-amber-200', error: 'text-red-600' }
+  const noticeClass = { ok: 'text-ds-status-success', warn: 'text-ds-status-warning', error: 'text-ds-status-danger' }
+  const callout = 'flex flex-wrap items-center gap-2 rounded-xl border border-ds-border-muted bg-ds-card px-3 py-2 text-[12px] text-ds-status-warning'
 
-  return <section className="grid min-w-0 gap-3 rounded-2xl border border-ds-border bg-ds-card p-4" data-gateway-agents>
-    <div className="flex flex-wrap items-start justify-between gap-2">
-      <div className="min-w-0">
-        <h3 className="flex items-center gap-1.5 text-[14px] font-semibold text-ds-ink">
-          <Users className="h-4 w-4 text-accent" />{t('gatewayAgents.title')}
-          {connectedCount ? <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[10.5px] font-medium text-accent">
-            {t('gatewayAgents.connectedCount', { count: connectedCount })}</span> : null}
-        </h3>
-        <p className="mt-1 max-w-[46rem] text-[12px] leading-5 text-ds-muted">{t('gatewayAgents.description')}</p>
-      </div>
-      <div className="flex shrink-0 gap-1.5">
-        <button type="button" className={settingsButtonClass()} disabled={loading || disabled || !connectedCount}
+  return <section className="grid min-w-0 gap-2.5" data-gateway-agents>
+    <GatewaySectionHead title={t('gatewayAgents.title')}
+      badge={connectedCount ? <span className="rounded-full bg-ds-success-soft px-2 py-0.5 text-[10.5px] font-medium text-ds-status-success">
+        {t('gatewayAgents.connectedCount', { count: connectedCount })}</span> : null}
+      description={t('gatewayAgents.description')}
+      actions={<>
+        <button type="button" className={settingsButtonClass({ size: 'compact' })} disabled={loading || disabled || !connectedCount}
           title={t('gatewayAgents.syncHint')} onClick={() => void run({ action: 'sync' })}>{t('gatewayAgents.sync')}</button>
-        <button type="button" className={settingsButtonClass()} disabled={loading} onClick={() => void run({ action: 'list' })}
-          aria-label={t('gatewayAgents.refresh')}>
+        <button type="button" className={settingsButtonClass({ size: 'compact' })} disabled={loading} onClick={() => void run({ action: 'list' })}
+          aria-label={t('gatewayAgents.refresh')} title={t('gatewayAgents.refresh')}>
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
         </button>
-      </div>
-    </div>
-    {gatewayOff ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">{t('gatewayAgents.gatewayOff')}</p>
-      : overview && !overview.models.length ? <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">{t('gatewayAgents.noModelsHint')}</p> : null}
-    {notice ? <p role={notice.tone === 'error' ? 'alert' : 'status'} className={`text-[12px] leading-5 ${noticeClass[notice.tone]}`}>{notice.text}</p> : null}
-    {!overview && loading ? <p className="text-[12px] text-ds-faint">{t('gatewayAgents.loading')}</p> : null}
-    {overview && !visible.length ? <p className="text-[12px] text-ds-muted">{t('gatewayAgents.noneInstalled')}</p> : null}
-    <ul className="grid min-w-0 gap-2">
-      {visible.map((agent) => <Fragment key={agent.id}>
-        <GatewayAgentRow agent={agent} models={overview?.models ?? []}
+      </>} />
+    {gatewayOff ? <p className={callout}>{t('gatewayAgents.gatewayOff')}</p>
+      : overview && !overview.models.length ? <p className={callout}>{t('gatewayAgents.noModelsHint')}
+        {onPrepareModels ? <button type="button" className={settingsButtonClass({ variant: 'link', size: 'compact' })} onClick={onPrepareModels}>
+          {t('gatewaySetup.prepareModels')}</button> : null}</p> : null}
+    {notice ? <p role={notice.tone === 'error' ? 'alert' : 'status'} className={`px-1 text-[12px] leading-5 ${noticeClass[notice.tone]}`}>{notice.text}</p> : null}
+    <div className="min-w-0 overflow-hidden rounded-2xl border border-ds-border bg-ds-card">
+      {!overview && loading ? <p className="px-4 py-6 text-center text-[12px] text-ds-faint">{t('gatewayAgents.loading')}</p> : null}
+      {overview && !visible.length ? <p className="px-4 py-6 text-center text-[12px] text-ds-muted">{t('gatewayAgents.noneInstalled')}</p> : null}
+      {visible.length ? <ul className="grid min-w-0 divide-y divide-ds-border-muted">
+        {visible.map((agent) => <GatewayAgentRow key={agent.id} agent={agent} models={overview?.models ?? []}
           t={t} busy={busyAgent === agent.id} disabled={disabled || (busyAgent !== null && busyAgent !== agent.id) || (pending !== null && pending.preview.agentId !== agent.id)}
           onConnect={(request) => connect(agent.id, request)} onDisconnect={() => { setPending(null); void run({ action: 'disconnect', agentId: agent.id }, agent.id) }}
-          onCopyKey={() => void run({ action: 'copy-key', agentId: agent.id }, agent.id)} />
-        {pending?.preview.agentId === agent.id ? <li className="min-w-0"><GatewayAgentPreview preview={pending.preview} agentName={agent.name}
-          busy={busyAgent === agent.id} t={t} onConfirm={confirm} onCancel={() => setPending(null)} /></li> : null}
-      </Fragment>)}
-    </ul>
-    {missing.length ? <div>
-      <button type="button" className="inline-flex items-center gap-1 text-[11.5px] font-medium text-ds-muted hover:text-ds-ink"
-        aria-expanded={showMissing} onClick={() => setShowMissing((open) => !open)}>
-        <ChevronDown className={`h-3.5 w-3.5 transition ${showMissing ? 'rotate-180' : ''}`} />
-        {t('gatewayAgents.notFound', { count: missing.length })}
-      </button>
-      {showMissing ? <ul className="mt-2 grid gap-1.5">
-        {missing.map((agent) => <li key={agent.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg bg-ds-main/60 px-3 py-2 text-[12px]">
-          <span className="min-w-0 truncate text-ds-muted">{agent.name}</span>
-          <button type="button" className="shrink-0 text-[11.5px] font-medium text-accent hover:underline"
-            onClick={() => void window.kunGui.openExternal(agent.homepage)}>{t('gatewayAgents.install')}</button>
-        </li>)}
+          onCopyKey={() => void run({ action: 'copy-key', agentId: agent.id }, agent.id)}>
+          {pending?.preview.agentId === agent.id ? <GatewayAgentPreview preview={pending.preview} agentName={agent.name}
+            busy={busyAgent === agent.id} t={t} onConfirm={confirm} onCancel={() => setPending(null)} /> : null}
+        </GatewayAgentRow>)}
       </ul> : null}
-    </div> : null}
-    <div className="grid min-w-0 gap-2 rounded-xl border border-dashed border-ds-border p-3" data-gateway-agent-profiles>
-      <div className="flex items-center gap-1.5 text-[12px] font-semibold text-ds-ink"><Bookmark className="h-3.5 w-3.5 text-accent" />{t('gatewayAgents.profiles')}</div>
-      <p className="text-[11px] leading-5 text-ds-faint">{t('gatewayAgents.profilesHint')}</p>
-      {profiles.length ? <div className="flex flex-wrap gap-1.5">
-        {profiles.map(([name, profile]) => <span key={name} className="inline-flex items-center overflow-hidden rounded-full border border-ds-border text-[11.5px]">
-          <button type="button" className="px-2.5 py-1 text-ds-ink hover:bg-ds-hover disabled:opacity-60" disabled={loading || disabled}
-            title={Object.entries(profile).map(([agent, selection]) => `${agent}: ${selection.model}`).join('\n')}
-            onClick={() => void run({ action: 'apply-profile', name })}>{name}</button>
-          <button type="button" className="border-l border-ds-border px-1.5 py-1 text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
-            aria-label={t('gatewayAgents.deleteProfile', { name })} onClick={() => void run({ action: 'delete-profile', name })}>
-            <X className="h-3 w-3" /></button>
-        </span>)}
+      {missing.length ? <div className="border-t border-ds-border-muted px-4 py-2.5">
+        <button type="button" className="inline-flex items-center gap-1 text-[11.5px] font-medium text-ds-muted hover:text-ds-ink"
+          aria-expanded={showMissing} onClick={() => setShowMissing((open) => !open)}>
+          <ChevronDown className={`h-3.5 w-3.5 transition ${showMissing ? 'rotate-180' : ''}`} />
+          {t('gatewayAgents.notFound', { count: missing.length })}
+        </button>
+        {showMissing ? <ul className="mt-2 grid gap-1 sm:grid-cols-2">
+          {missing.map((agent) => <li key={agent.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[12px] hover:bg-ds-hover">
+            <span className="min-w-0 truncate text-ds-muted">{agent.name}</span>
+            <button type="button" className="shrink-0 text-[11.5px] font-medium text-accent hover:underline"
+              onClick={() => void window.kunGui.openExternal(agent.homepage)}>{t('gatewayAgents.install')}</button>
+          </li>)}
+        </ul> : null}
       </div> : null}
-      <form className="flex min-w-0 gap-1.5" onSubmit={(event) => { event.preventDefault(); if (profileName.trim()) void run({ action: 'save-profile', name: profileName.trim() }) }}>
+    </div>
+    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1.5 px-1 text-[12px]" data-gateway-agent-profiles>
+      <span className="font-medium text-ds-ink" title={t('gatewayAgents.profilesHint')}>{t('gatewayAgents.profiles')}</span>
+      {profiles.length ? profiles.map(([name, profile]) => <span key={name} className="inline-flex items-center overflow-hidden rounded-full border border-ds-border bg-ds-card text-[11.5px]">
+        <button type="button" className="px-2.5 py-0.5 text-ds-ink hover:bg-ds-hover disabled:opacity-60" disabled={loading || disabled}
+          title={Object.entries(profile).map(([agent, selection]) => `${agent}: ${selection.model}`).join('\n')}
+          onClick={() => void run({ action: 'apply-profile', name })}>{name}</button>
+        <button type="button" className="border-l border-ds-border px-1.5 py-0.5 text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
+          aria-label={t('gatewayAgents.deleteProfile', { name })} onClick={() => void run({ action: 'delete-profile', name })}>
+          <X className="h-3 w-3" /></button>
+      </span>) : <span className="text-ds-faint">{t('gatewayAgents.profilesHint')}</span>}
+      <form className="ml-auto flex min-w-0 gap-1.5" onSubmit={(event) => { event.preventDefault(); if (profileName.trim()) void run({ action: 'save-profile', name: profileName.trim() }) }}>
         <input value={profileName} maxLength={48} onChange={(event) => setProfileName(event.target.value)} placeholder={t('gatewayAgents.profilePlaceholder')}
           aria-label={t('gatewayAgents.profilePlaceholder')}
-          className="min-w-0 flex-1 rounded-lg border border-ds-border bg-ds-main px-2.5 py-1.5 text-[12px] text-ds-ink" />
-        <button type="submit" className={settingsButtonClass()} disabled={!profileName.trim() || !connectedCount || loading}>
-          <Save className="h-3.5 w-3.5" />{t('gatewayAgents.saveProfile')}</button>
+          className="h-7 w-40 min-w-0 rounded-lg border border-ds-border bg-ds-card px-2.5 text-[12px] text-ds-ink outline-none focus:border-accent" />
+        <button type="submit" className={settingsButtonClass({ size: 'compact' })} disabled={!profileName.trim() || !connectedCount || loading}>
+          {t('gatewayAgents.saveProfile')}</button>
       </form>
     </div>
-    <p className="text-[11px] leading-5 text-ds-faint">{t('gatewayAgents.boundaries')}</p>
+    <p className="px-1 text-[11px] leading-5 text-ds-faint">{t('gatewayAgents.boundaries')}</p>
   </section>
 }

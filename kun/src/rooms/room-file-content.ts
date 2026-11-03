@@ -1,11 +1,11 @@
 import { constants } from 'node:fs'
 import { open, realpath, stat } from 'node:fs/promises'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { RoomRepository } from '../contracts/rooms.js'
 
 function inside(root: string, path: string): boolean {
   const pathWithin = relative(root, path)
-  return pathWithin !== '..' && !pathWithin.startsWith('../') && !isAbsolute(pathWithin)
+  return pathWithin !== '..' && !pathWithin.startsWith('..' + sep) && !isAbsolute(pathWithin)
 }
 export async function readRoomRepositoryFile(repository: Pick<RoomRepository, 'canonicalRoot'>, relativePath: string, maxBytes: number) {
   const path = await realpath(resolve(repository.canonicalRoot, relativePath))

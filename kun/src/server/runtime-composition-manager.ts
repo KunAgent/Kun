@@ -1,4 +1,3 @@
-import { createAgentDispatchToolProvider } from '../adapters/tool/agent-dispatch-tool-provider.js'
 import {
   HARNESS_CAPABILITY_KEYS,
   unsupported,
@@ -18,6 +17,7 @@ import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import type { HarnessRoute } from '../contracts/harness.js'
 import type { HarnessRuntimeMap } from '../harness/harness-router.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
+import type { AgentRoster } from '../delegation/agent-roster.js'
 import type { createRuntimeServices } from './runtime-composition-services.js'
 import type { FileReviewStore } from '../ade/review-store.js'
 import { reanchorWorkspaceComments } from '../ade/review-reanchor.js'
@@ -59,8 +59,8 @@ export function createCapabilitiesForRoute(
 }
 
 /**
- * Provider-pool access shared by worker-route validation and `harness_list`
- * (P3-06): reads the modelConnections snapshot, tolerating snapshot failures
+ * Provider-pool access shared by worker-route validation and `harness_list`:
+ * reads the modelConnections snapshot, tolerating snapshot failures
  * as "no providers" so the manager tools degrade to static lists.
  */
 export function createProviderPoolAccess(
@@ -88,7 +88,7 @@ export function createProviderPoolAccess(
 }
 
 /**
- * `harness_list` deps (10 §2): catalog + detector + runtime map plus the
+ * `harness_list` deps: catalog + detector + runtime map plus the
  * cached probe read and provider pool for per-credential-mode model lists.
  */
 export function createHarnessListDeps(input: {
@@ -116,9 +116,9 @@ export function createHarnessListDeps(input: {
 }
 
 /**
- * ADE manager control plane wiring (09 §4, 10 §3.2): assembles ManagerRuntime
+ * ADE manager control plane wiring: assembles ManagerRuntime
  * deps from the composition composites. The runtime fills
- * isolated/unattended/recentFailures/managerRoute/language per call.
+ * isolated/unattended/routeHealth/managerRoute/language per call.
  */
 export function createManagerRuntime(input: {
   services: Pick<RuntimeServices, 'adeStores' | 'harnesses' | 'workerCallbacks' | 'attribution' | 'agentDispatchService'>
@@ -133,30 +133,36 @@ export function createManagerRuntime(input: {
   >
   delegationRuntime: DelegationRuntime | undefined
   harnessRuntimeMap: HarnessRuntimeMap
+  agentRoster: AgentRoster
   listQuota(): ReturnType<RuntimeServices['model']['providerQuotaService']['list']>
 } & Omit<
   ManagerRuntimeDeps,
   | 'teams' | 'dispatches' | 'questions' | 'taskWorkspaces' | 'activity' | 'catalog'
   | 'detector' | 'capabilitiesForRoute' | 'delegation' | 'selector'
   | 'allowUnattendedFullAccess' | 'teamLimits' | 'managerMayApprove'
-  | 'workerCallbacks' | 'language'
+  | 'workerCallbacks' | 'language' | 'roster'
 >): ManagerRuntime {
   const {
     services,
     core,
     delegationRuntime,
     harnessRuntimeMap,
+    agentRoster,
     listQuota,
     ...runtimeDeps
   } = input
-  // AI line attribution (11 §6.1): file-change items feed the ledger.
+  // AI line attribution: file-change items feed the ledger.
   wireAttributionObserver(core, services, runtimeDeps.threads, runtimeDeps.nowIso)
   return new ManagerRuntime({
     ...runtimeDeps,
     ...services.adeStores,
+    // The raw notice store in adeStores only persists; the caller's sink is
+    // the wake-up coordinator that actually tells the manager.
+    notices: runtimeDeps.notices,
     taskWorkspaces: core.taskWorkspaces,
     activity: core.activityStore,
     delegation: delegationRuntime,
+    roster: agentRoster,
     catalog: services.harnesses.catalog,
     detector: services.harnesses.detector,
     capabilitiesForRoute: createCapabilitiesForRoute(
@@ -173,7 +179,7 @@ export function createManagerRuntime(input: {
       ?? (runtimeDeps.usage ? new TeamBudgetGate(runtimeDeps.usage) : undefined),
     workerCallbacks: services.workerCallbacks,
     managerMayApprove: () => core.activeOptions.ade?.managerMayApprove === true,
-    // Approved worktree.checks runner (10 §4.2) — digest-bound like setup.
+    // Approved worktree.checks runner — digest-bound like setup.
     checks: {
       approvedChecks: createApprovedChecksResolver({
         approvedEntries: () => core.activeOptions.ade?.approvedWorktreeConfigs ?? []
@@ -185,8 +191,8 @@ export function createManagerRuntime(input: {
     selector: {
       configuredModel: (_harnessId, providerId) => providerId ? core.activeOptions.providers?.[providerId]?.selectedModel ?? core.activeOptions.providers?.[providerId]?.models?.[0] : undefined,
       gatewayAliasModel: (binding) => core.activeOptions.routePools?.find((pool) => pool.id === binding.main.routeId && pool.enabled)?.modelId,
-      profiles: (workspace) =>
-        delegationRuntime?.listRoutingProfiles(workspace) ?? Promise.resolve([]),
+      // The worker selector scores the same roster catalog every lane reads.
+      profiles: (workspace) => agentRoster.catalogDocuments({ workspace }),
       quota: createQuotaSnapshot({ list: listQuota }),
       agentOrder: () => core.activeOptions.harnesses?.agentOrder ?? [],
       modelCostTier: (route) =>
@@ -196,7 +202,7 @@ export function createManagerRuntime(input: {
 }
 
 /**
- * Activity stall + dormancy scanner (docs/ade/06 §6, §7.2). A dormant
+ * Activity stall + dormancy scanner. A dormant
  * worker keeps its session binding; the next turn resumes natively or
  * falls back to portable through the delegated session coordinator.
  */
@@ -216,7 +222,7 @@ export function createActivityHibernation(input: {
       lastEventAt: (unitId) => core.activityStore.lastEventAt(unitId),
       hasOpenWork: (row) => managerRuntime.hasOpenWork(row.unitId),
       // Structured harnesses always continue portably; terminal agents
-      // resume only when the harness declares `terminal.resumeArgs` (05 §7.3).
+      // resume only when the harness declares `terminal.resumeArgs`.
       canResume: (row) =>
         row.kind === 'worker' ||
         (row.kind === 'terminal-agent' &&
@@ -241,8 +247,8 @@ export function createActivityHibernation(input: {
 
 /**
  * Task-workspace change side-effects: deliver dispatches queued while the
- * workspace was provisioning (09 §5), and re-anchor unresolved review
- * comments after every fresh capture (11 §4.3).
+ * workspace was provisioning, and re-anchor unresolved review
+ * comments after every fresh capture.
  */
 export function wireTaskWorkspaceChange(
   taskWorkspaces: Pick<TaskWorkspaceService, 'onChange'>,
@@ -260,7 +266,7 @@ export function wireTaskWorkspaceChange(
 }
 
 /**
- * AI line attribution (11 §6.1): file-change tool items from every runtime
+ * AI line attribution: file-change tool items from every runtime
  * feed the per-workspace ledger through the recorder's observer tap.
  */
 export function wireAttributionObserver(
@@ -279,7 +285,7 @@ export function wireAttributionObserver(
   }))
 }
 
-/** ADE manager tool surface + workspace review wiring (09 §4, 10 §6). */
+/** ADE manager tool surface + workspace review wiring. */
 export function registerAdeManagerTooling(input: {
   registry: { registerProvider(provider: unknown): void }
   managerRuntime: ManagerRuntime
@@ -308,7 +314,6 @@ export function registerAdeManagerTooling(input: {
       checks: input.managerRuntime.checkRunnerDeps
     })
   input.registry.registerProvider(provider)
-  input.registry.registerProvider(createAgentDispatchToolProvider(input.services.agentDispatchService))
   wireTaskWorkspaceChange(
     input.core.taskWorkspaces,
     input.managerRuntime,

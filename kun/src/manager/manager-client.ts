@@ -1,5 +1,9 @@
 import { ServiceManagerUnavailableError } from './manager-resolution-error.js'
+import type { EnsureServiceManagerInput, LegacyRuntimeHandoverStatus } from './manager-startup-options.js'
+export type { EnsureServiceManagerInput, LegacyRuntimeHandoverStatus } from './manager-startup-options.js'
 import { ServiceManagerHttpError } from './usage-errors.js'
+import { ManagerRuntimeSlotBusyError } from './manager-runtime-heartbeat-request.js'
+export { ManagerRuntimeSlotBusyError, heartbeatRuntimeWithManager } from './manager-runtime-heartbeat-request.js'
 import { restoreManagerMemoryError } from './manager-memory-errors.js'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -31,15 +35,14 @@ import {
 } from './manager-discovery.js'
 import { sameCanonicalPath } from './canonical-path.js'
 import { withRuntimeDataDirAncillaryWriter } from '../server/runtime-data-dir-lease.js'
-import { ManagerResourceLeaseSchema, type ManagerResourceFence } from './resource-lease-state.js'
+import { ManagerResourceLeaseSchema, RESOURCE_LEASE_TICK_MS, type ManagerResourceFence } from './resource-lease-state.js'
 import type { ManagerRequestOptions } from './manager-client-support.js'
 import { terminateSpawnedRuntime } from '../cli/shared-runtime-launch.js'
 import {
   inspectServiceManager
 } from './manager-resolution.js'
 import {
-  launchServiceManagerProcess,
-  type ManagerLaunchOverride
+  launchServiceManagerProcess
 } from './manager-launch.js'
 export {
   resolveServiceManager,
@@ -60,27 +63,50 @@ export class ManagerRevisionConflictError extends Error {
   }
 }
 
-export class ManagerRuntimeSlotBusyError extends Error {
-  constructor(readonly owner: RuntimeRegistration) {
-    super(`Kun runtime slot ${owner.flavor} is already owned by ${owner.instanceId}`)
-    this.name = 'ManagerRuntimeSlotBusyError'
-  }
-}
-
 export class ManagerRevisionedDocumentClient {
   constructor(
     private readonly manager: ServiceManagerConnection,
     private readonly key: 'settings' | 'client-state'
   ) {}
 
-  async read(): Promise<{ revision: number; value: string | null }> {
-    const body = await requestManagerJson(this.manager, `/v1/documents/${this.key}`, {})
-    return z.object({
-      snapshot: z.object({
-        revision: z.number().int().nonnegative(),
-        value: z.string().nullable()
-      })
+  async read(): Promise<{ revision: number; value: string | null; etag?: string }> {
+    const snapshot = await this.readIfChanged()
+    if ('unchanged' in snapshot) throw new Error('unconditional document read returned no value')
+    return snapshot
+  }
+
+  /**
+   * Conditional read for pollers. With `ifNoneMatch` set to the etag from a
+   * previous read, an unchanged document comes back as `{ unchanged: true }`
+   * instead of its full text. Managers that predate etags ignore the query and
+   * always return the value, which callers handle the same as a change.
+   */
+  async readIfChanged(ifNoneMatch?: string): Promise<
+    | { revision: number; value: string | null; etag?: string }
+    | { revision: number; etag: string; unchanged: true }
+  > {
+    const query = ifNoneMatch ? `?ifNoneMatch=${encodeURIComponent(ifNoneMatch)}` : ''
+    const body = await requestManagerJson(this.manager, `/v1/documents/${this.key}${query}`, {})
+    const snapshot = z.object({
+      snapshot: z.union([
+        z.object({
+          revision: z.number().int().nonnegative(),
+          etag: z.string().min(1),
+          unchanged: z.literal(true)
+        }),
+        z.object({
+          revision: z.number().int().nonnegative(),
+          value: z.string().nullable(),
+          etag: z.string().min(1).optional()
+        })
+      ])
     }).parse(body).snapshot
+    if ('unchanged' in snapshot) return snapshot
+    return {
+      revision: snapshot.revision,
+      value: snapshot.value,
+      ...(snapshot.etag ? { etag: snapshot.etag } : {})
+    }
   }
 
   async write(expectedRevision: number, value: string): Promise<{ revision: number; value: string }> {
@@ -192,7 +218,7 @@ export class ManagerResourceLeaseClient {
 
   private scheduleTick(resource: string, state: ResourceLeaseState): void {
     if (state.timer) clearTimeout(state.timer)
-    state.timer = setTimeout(() => void this.tick(resource), 3_000)
+    state.timer = setTimeout(() => void this.tick(resource), RESOURCE_LEASE_TICK_MS)
     state.timer.unref?.()
   }
 
@@ -226,26 +252,6 @@ function fenceOf(lease: z.infer<typeof ManagerResourceLeaseSchema>): ManagerReso
     fencingToken: lease.fencingToken
   }
 }
-
-export type EnsureServiceManagerInput = {
-  flavor: RuntimeFlavor
-  controlDir?: string
-  fetch?: typeof fetch
-  timeoutMs?: number
-  allowDevelopmentBootstrap?: boolean
-  buildId?: string
-  dataDir: string
-  settingsPath?: string
-  launch?: ManagerLaunchOverride
-  /** Progress sink for the legacy production Runtime handover wait. */
-  onLegacyHandoverStatus?: (status: LegacyRuntimeHandoverStatus) => void
-}
-
-export type LegacyRuntimeHandoverStatus =
-  | { kind: 'idle' }
-  | { kind: 'waiting'; activeTurnCount: number }
-  | { kind: 'shutdown-requested' }
-  | { kind: 'released' }
 
 export async function ensureServiceManager(
   input: EnsureServiceManagerInput
@@ -494,11 +500,13 @@ export async function registerRuntimeWithManager(input: {
   manager: ServiceManagerConnection
   registration: RuntimeRegistration
   fetch?: typeof fetch
+  signal?: AbortSignal
 }): Promise<RuntimeRegistration> {
   const response = await requestManagerResponse(input.manager, `/v1/runtimes/${input.registration.flavor}/register`, {
     method: 'PUT',
     body: { ...input.registration, ...(input.manager.discovery.appOwner ? { appOwner: input.manager.discovery.appOwner } : {}) },
-    fetch: input.fetch
+    fetch: input.fetch,
+    signal: input.signal
   })
   if (response.status === 409) {
     const conflict = z.object({
@@ -511,23 +519,6 @@ export async function registerRuntimeWithManager(input: {
     await requireManagerJson(response)
   )
   return parsed.registration
-}
-
-export async function heartbeatRuntimeWithManager(input: {
-  manager: ServiceManagerConnection
-  flavor: RuntimeFlavor
-  instanceId: string
-  fetch?: typeof fetch
-}): Promise<boolean> {
-  const response = await requestManagerResponse(input.manager, `/v1/runtimes/${input.flavor}/heartbeat`, {
-    method: 'POST',
-    body: { instanceId: input.instanceId },
-    fetch: input.fetch
-  })
-  if (response.ok) return true
-  if (response.status === 409) return false
-  await requireManagerJson(response)
-  return false
 }
 
 export async function unregisterRuntimeWithManager(input: {

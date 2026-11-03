@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   buildCodeCanvasSendOverrides,
   buildDesignTurnSendOverrides,
+  reservedHtmlArtifactContext,
   type DesignTurnPromptState
 } from './design-turn-dispatch'
 import type { AttachmentReference } from '../agent/types'
@@ -147,6 +148,53 @@ describe('design turn dispatch', () => {
     expect(buildCodeCanvasSendOverrides({ canvasEngine: 'excalidraw' })).toEqual({
       agentSurface: 'code',
       guiExcalidrawCanvas: true
+    })
+  })
+
+  it('reserves the page and notes a screen turn owns', () => {
+    expect(reservedHtmlArtifactContext({
+      htmlArtifactId: 'compact',
+      artifactRelativePath: '.kun-design/doc/compact/v1.html',
+      designNotesPath: '.kun-design/doc/compact/DESIGN.md'
+    })).toEqual({
+      kind: 'html',
+      artifactId: 'compact',
+      relativePath: '.kun-design/doc/compact/v1.html',
+      designMdPath: '.kun-design/doc/compact/DESIGN.md'
+    })
+  })
+
+  it('omits a reservation the runtime contract would reject', () => {
+    expect(reservedHtmlArtifactContext({
+      artifactRelativePath: '.kun-design/doc/compact/v1.html'
+    })).toBeUndefined()
+    expect(reservedHtmlArtifactContext({
+      htmlArtifactId: 'compact',
+      artifactRelativePath: 'src/pages/index.html'
+    })).toBeUndefined()
+    expect(reservedHtmlArtifactContext({
+      htmlArtifactId: 'compact',
+      artifactRelativePath: '.kun-design/doc/compact/v1.html',
+      designNotesPath: 'notes.md'
+    })).not.toHaveProperty('designMdPath')
+  })
+
+  it('forwards an HTML reservation on a screen turn', () => {
+    const overrides = buildDesignTurnSendOverrides({
+      displayText: 'Create the compact overview',
+      promptState: { assistantModel: '', assistantProviderId: '' },
+      resolveProviderId: () => '',
+      target: 'screen',
+      guiDesignArtifact: {
+        kind: 'html',
+        artifactId: 'compact',
+        relativePath: '.kun-design/doc/compact/v1.html'
+      }
+    })
+    expect(overrides.guiDesignArtifact).toEqual({
+      kind: 'html',
+      artifactId: 'compact',
+      relativePath: '.kun-design/doc/compact/v1.html'
     })
   })
 })

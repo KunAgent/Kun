@@ -69,7 +69,13 @@ export const HarnessCapabilitiesSchema = z
         /** host: Kun sandbox applies; native: harness sandbox; none: neither. */
         sandbox: z.enum(['host', 'native', 'none']),
         usageReporting: z.enum(['exact', 'estimated', 'none']),
-        compactionOwner: z.enum(['kun', 'harness', 'none'])
+        compactionOwner: z.enum(['kun', 'harness', 'none']),
+        /**
+         * How composer guidance reaches a running turn when sameTurnSteer is
+         * supported. live: it joins the run in flight; deferred: the Agent
+         * answers it right after its current prompt, within the same turn.
+         */
+        steering: z.enum(['live', 'deferred']).optional()
       })
       .strict()
   })
@@ -92,7 +98,7 @@ export function allSupportedStatuses(): HarnessCapabilityStatuses {
 }
 
 /**
- * Every capability unsupported — terminal-only agents (p4 §3.8) run inside a
+ * Every capability unsupported — terminal-only agents run inside a
  * PTY and cannot host delegated turns at all.
  */
 export function allUnsupportedStatuses(

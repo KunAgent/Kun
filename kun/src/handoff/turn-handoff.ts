@@ -26,7 +26,7 @@ export type TaskWorkspaceLister = {
 }
 
 /**
- * Per-turn handoff planner for delegated runtimes (docs/ade/08 §4–§5). Given a
+ * Per-turn handoff planner for delegated runtimes. Given a
  * session preparation it decides whether the next prompt needs a deterministic
  * brief, builds it, and returns the `handoff_injected` event payload.
  */
@@ -119,12 +119,13 @@ function handoffSource(
  * native session normally or there is no conversational history to hand over.
  */
 export function buildTurnHandoff(input: BuildTurnHandoffInput): TurnHandoff | null {
-  const plan = needsHandoff(input.preparation, priorItemsForDelegatedTurn(input.items, input.currentTurnId))
+  const priorItems = priorItemsForDelegatedTurn(input.items, input.currentTurnId)
+  const plan = needsHandoff(input.preparation, priorItems)
   if (!plan) return null
   const reason: HandoffReason =
     plan.mode === 'delta' ? 'harness-switch' : handoffReason(input.preparation)
   const brief = buildHandoffBrief({
-    items: input.items,
+    items: priorItems,
     currentTurnId: input.currentTurnId,
     reason,
     mode: plan.mode,
@@ -146,7 +147,7 @@ export function buildTurnHandoff(input: BuildTurnHandoffInput): TurnHandoff | nu
       : {}),
     workState:
       input.workState ??
-      extractWorkState(input.items, input.taskWorkspace),
+      extractWorkState(priorItems, input.taskWorkspace),
     ...(input.budgets ? { budgets: input.budgets } : {})
   })
   return {

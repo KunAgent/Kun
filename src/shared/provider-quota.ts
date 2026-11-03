@@ -16,6 +16,8 @@ export type ProviderQuotaMetric = {
   remaining?: number
   usedPercent?: number
   resetsAt?: string
+  /** Length of the renewing window, when the provider states it. */
+  windowSeconds?: number
 }
 
 export type ProviderLocalCostCoverage = 'complete' | 'partial' | 'unavailable'

@@ -23,6 +23,12 @@ async function canonicalDirectory(path: string): Promise<string | undefined> {
 export class WorkbenchDirectoryService {
   private current: WorkbenchDirectory = { workRoots: [], codeProjects: [] }
   private loaded = false
+  private readonly listeners = new Set<() => void>()
+  /** Changes are observed after persistence, so a directory refresh sees the new roots. */
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener)
+    return () => { this.listeners.delete(listener) }
+  }
   constructor(private readonly path: string) {}
 
   static forDataDir(dataDir: string): WorkbenchDirectoryService {
@@ -59,8 +65,12 @@ export class WorkbenchDirectoryService {
     const temp = this.path + '.tmp'
     await writeFile(temp, JSON.stringify(next), 'utf8')
     await rename(temp, this.path)
+    const changed = JSON.stringify(this.current) !== JSON.stringify(next)
     this.current = next
     this.loaded = true
+    if (changed) for (const listener of this.listeners) {
+      try { listener() } catch { /* Observers cannot fail an already persisted snapshot. */ }
+    }
     return next
   }
 

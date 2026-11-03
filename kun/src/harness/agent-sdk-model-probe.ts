@@ -1,6 +1,6 @@
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
 /**
- * Claude Code model probing for `GET /v1/harnesses/:id/models` (P3-07).
+ * Claude Code model probing for `GET /v1/harnesses/:id/models`.
  * Opens a throwaway `query()` handle — with an empty prompt iterable so no
  * turn ever runs — and calls the SDK's `supportedModels()` control request.
  * Canonical `resolvedModel` ids are returned in Claude Code's own order with
@@ -17,9 +17,29 @@ import type { HarnessModelCatalog, HarnessModelInfo } from '../contracts/harness
 import { sdkProcessBaseEnv } from '../runtime/agent-sdk/sdk-process-environment.js'
 import { buildScopedEnv } from '../runtime/agent-sdk/sdk-options-builder.js'
 import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
+import { redactApprovalSensitiveText } from '../domain/approval.js'
 
 export const AGENT_SDK_MODEL_PROBE_CACHE_MS = 10 * 60 * 1_000
 const AGENT_SDK_PROBE_TIMEOUT_MS = 10_000
+// Check & enable may meet a cold start (first run after an update, plugin
+// and MCP startup); the background model list keeps the short bound.
+const AGENT_SDK_READINESS_TIMEOUT_MS = 30_000
+
+/**
+ * A readiness failure in user terms. The SDK's own messages name the
+ * executable and the platform, never credentials; stderr is redacted.
+ */
+export function agentSdkFailureDetail(error: unknown, input: { timedOut: boolean; timeoutMs: number; executable?: string }): string {
+  const where = input.executable ? `Claude Code at ${input.executable}` : 'Claude Code from the Agent SDK'
+  if (input.timedOut) {
+    return `${where} did not answer within ${Math.round(input.timeoutMs / 1000)}s. Run \`claude\` in a terminal once to finish its startup (update, trust or login prompts), then check again.`
+  }
+  const message = redactApprovalSensitiveText(error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ').trim()
+  if (/native (?:cli )?binary .*not found/i.test(message)) {
+    return 'Kun found no Claude Code executable to start. Install Claude Code (native installer or npm), or set its command path in this Agent, then check again.'
+  }
+  return `${where} failed during the check: ${message.slice(0, 240)}`
+}
 
 export type AgentSdkModelProbeDeps = {
   /** Settings `harnesses.binaryPaths` override for `pathToClaudeCodeExecutable`. */
@@ -29,6 +49,8 @@ export type AgentSdkModelProbeDeps = {
   nowMs?: () => number
   cacheMs?: number
   timeoutMs?: number
+  /** Receives each successful catalog, e.g. to keep it across restarts. */
+  onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
 }
 
 type ProbeModelRow = {
@@ -115,6 +137,11 @@ export class AgentSdkModelProbe {
       : undefined
   }
 
+  /** Spawn-free cached model facts, under the same freshness rule as `peek`. */
+  peekInfo(definition: HarnessDefinition): HarnessModelCatalog['modelInfo'] | undefined {
+    return this.peek(definition) ? this.cache.get(this.cacheKey(definition))?.catalog.modelInfo : undefined
+  }
+
   /**
    * Best-effort probe; never throws — a harness that cannot start or answer
    * the control request returns `[]` so the route falls back to
@@ -137,6 +164,7 @@ export class AgentSdkModelProbe {
           fetchedAt: this.nowMs(), expiresAt: this.nowMs() + (this.deps.cacheMs ?? AGENT_SDK_MODEL_PROBE_CACHE_MS),
           catalog
         })
+        if (catalog.models.length > 0) this.deps.onCatalog?.(definition, catalog)
         return catalog
       })
       .catch(() => {
@@ -151,17 +179,32 @@ export class AgentSdkModelProbe {
     return task
   }
 
+  /**
+   * Prompt-free readiness: models and account metadata over the SDK control
+   * channel. Only the caller's own cancellation throws; every other failure
+   * returns `ok: false` with the reason, so Check & enable can show it.
+   */
   async probeReadiness(definition: HarnessDefinition, env: Record<string, string>, signal: AbortSignal): Promise<Omit<HarnessTestHandshake, 'durationMs'>> {
-    signal = AbortSignal.any([signal, AbortSignal.timeout(this.deps.timeoutMs ?? AGENT_SDK_PROBE_TIMEOUT_MS)])
+    const timeoutMs = this.deps.timeoutMs ?? AGENT_SDK_READINESS_TIMEOUT_MS
+    const timeout = AbortSignal.timeout(timeoutMs)
+    const bounded = AbortSignal.any([signal, timeout])
     let authentication: HarnessTestHandshake['authentication'] = 'unverified'
-    const { models } = await this.probeUncached(definition, env, signal, (account) => {
-      if (account?.apiProvider === 'firstParty' && Boolean(account.email || account.subscriptionType) && !account.apiKeySource) authentication = 'verified'
-    })
-    return { ok: models.length > 0, supported: true, protocol: 'agent-sdk', models, authentication }
+    try {
+      const { models } = await this.probeUncached(definition, env, bounded, (account) => {
+        if (account?.apiProvider === 'firstParty' && Boolean(account.email || account.subscriptionType) && !account.apiKeySource) authentication = 'verified'
+      })
+      return { ok: models.length > 0, supported: true, protocol: 'agent-sdk', models, authentication,
+        ...(models.length ? {} : { detail: 'Claude Code started but listed no models' }) }
+    } catch (error) {
+      if (signal.aborted) throw error
+      return { ok: false, supported: true, protocol: 'agent-sdk',
+        detail: agentSdkFailureDetail(error, { timedOut: timeout.aborted, timeoutMs, executable: this.deps.binaryPath?.(definition.id) }) }
+    }
   }
 
   private async probeUncached(definition: HarnessDefinition, env: Record<string, string> = {}, signal?: AbortSignal, accountResult?: (account: { email?: string; subscriptionType?: string; apiProvider?: string; apiKeySource?: string } | undefined) => void): Promise<HarnessModelCatalog> {
-    signal = AbortSignal.any([...(signal ? [signal] : []), AbortSignal.timeout(this.deps.timeoutMs ?? AGENT_SDK_PROBE_TIMEOUT_MS)])
+    // A caller-supplied signal carries its own bound (readiness allows a cold start).
+    signal ??= AbortSignal.timeout(this.deps.timeoutMs ?? AGENT_SDK_PROBE_TIMEOUT_MS)
     signal.throwIfAborted()
     const sdk = await raceProbeAbort((this.deps.loadSdk ?? loadAgentSdk)(), signal)
     signal?.throwIfAborted()

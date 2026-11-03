@@ -16,8 +16,7 @@ export function writePreviewDebounceMs(contentLength: number): number {
   if (contentLength < 300_000) return 320
   return 500
 }
-export const INLINE_AGENT_MIN_WIDTH = 420
-export const INLINE_AGENT_MAX_WIDTH = 560
+export const INLINE_AGENT_WIDTH = 280
 export const INLINE_AGENT_GAP = 8
 export const INLINE_AGENT_VIEWPORT_MARGIN = 16
 export const WRITE_EXPORT_NOTICE_MS = 3_600
@@ -205,7 +204,6 @@ export function useDebouncedValue<T>(value: T, delayMs: number): T {
 export function inlineAgentPosition(selection: {
   anchorRect?: { left: number; right?: number; top: number; bottom: number; width: number } | null
 }, options: {
-  compact?: boolean
   coordinateScale?: number
   viewportWidth?: number
 } = {}): WriteInlineAgentPosition | null {
@@ -216,10 +214,7 @@ export function inlineAgentPosition(selection: {
   const anchorLeft = rect.left / coordinateScale
   const anchorWidth = rect.width / coordinateScale
   const availableWidth = Math.max(0, viewportWidth - INLINE_AGENT_VIEWPORT_MARGIN * 2)
-  const minWidth = Math.min(options.compact ? 360 : INLINE_AGENT_MIN_WIDTH, availableWidth)
-  const maxWidth = Math.min(options.compact ? 480 : INLINE_AGENT_MAX_WIDTH, availableWidth)
-  const targetRatio = options.compact ? 0.4 : 0.46
-  const width = clamp(Math.round(viewportWidth * targetRatio), minWidth, maxWidth)
+  const width = Math.min(INLINE_AGENT_WIDTH, availableWidth)
   const left = clamp(anchorLeft + anchorWidth / 2 - width / 2, 16, viewportWidth - width - 16)
   return {
     left,

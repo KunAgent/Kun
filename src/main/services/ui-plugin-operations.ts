@@ -1,6 +1,5 @@
 import { lstat, mkdir, readFile, readdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
-import sharp from 'sharp'
 import {
   UI_PLUGIN_BACKGROUND_SLOTS,
   UI_PLUGIN_BACKGROUND_THEMES,

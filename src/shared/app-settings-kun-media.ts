@@ -96,7 +96,8 @@ import {
   defaultKunSpeakSettings,
   defaultKunSpeechToTextSettings,
   defaultKunTextToSpeechSettings,
-  defaultKunVideoGenerationSettings
+  defaultKunVideoGenerationSettings,
+  KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION
 } from './app-settings-kun-defaults'
 import {
   boundedPositiveInt
@@ -215,16 +216,34 @@ export function normalizeKunTextToSpeechProtocol(value: unknown): TextToSpeechPr
     : DEFAULT_TEXT_TO_SPEECH_PROTOCOL
 }
 
+/**
+ * Stored records from before KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION persisted
+ * the old `enabled: false` default, so they turn the button on once. Only a
+ * complete record qualifies; partial UI patches are left alone.
+ */
+export function migrateKunPromptOptimizationDefaults(
+  input: Partial<KunPromptOptimizationSettingsV1> | undefined
+): Partial<KunPromptOptimizationSettingsV1> {
+  const current = input ?? {}
+  if (boundedPositiveInt(current.defaultsVersion, 0) >= KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION) return current
+  const looksLikeStoredRecord = typeof current.enabled === 'boolean' &&
+    current.timeoutMs !== undefined && current.prompt !== undefined
+  if (!looksLikeStoredRecord) return current
+  return { ...current, enabled: true, defaultsVersion: KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION }
+}
+
 export function normalizeKunPromptOptimizationSettings(
   input: Partial<KunPromptOptimizationSettingsV1> | undefined
 ): KunPromptOptimizationSettingsV1 {
   const defaults = defaultKunPromptOptimizationSettings()
+  const migrated = migrateKunPromptOptimizationDefaults(input)
   return {
-    enabled: input?.enabled === true,
-    providerId: typeof input?.providerId === 'string' ? input.providerId.trim() : defaults.providerId,
-    model: typeof input?.model === 'string' ? input.model.trim() : defaults.model,
-    prompt: typeof input?.prompt === 'string' ? input.prompt.trim() : defaults.prompt,
-    timeoutMs: boundedPositiveInt(input?.timeoutMs, defaults.timeoutMs, 600_000)
+    enabled: typeof migrated.enabled === 'boolean' ? migrated.enabled : defaults.enabled,
+    providerId: typeof migrated.providerId === 'string' ? migrated.providerId.trim() : defaults.providerId,
+    model: typeof migrated.model === 'string' ? migrated.model.trim() : defaults.model,
+    prompt: typeof migrated.prompt === 'string' ? migrated.prompt.trim() : defaults.prompt,
+    timeoutMs: boundedPositiveInt(migrated.timeoutMs, defaults.timeoutMs, 600_000),
+    defaultsVersion: KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION
   }
 }
 

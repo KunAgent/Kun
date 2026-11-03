@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { stripThreadItemBodies } from '../adapters/hybrid/hybrid-thread-projection.js'
+import { restoreThreadBodies } from './thread-metadata-write.js'
 import { ThreadSchema, ThreadSchemaReadable, ThreadSummarySchema, type ThreadRecord } from '../contracts/threads.js'
 import { ThreadIndexStatusInfoSchema } from '../contracts/thread-index-status.js'
 import type { ThreadStore, ThreadStoreListOptions, ThreadStoreListPage } from '../ports/thread-store.js'
@@ -41,15 +43,21 @@ export class ManagerRemoteThreadStore implements ThreadStore {
   }
 
   async upsert(thread: ThreadRecord) {
-    return ThreadSchema.parse(await this.call('upsert', { thread }))
+    const stored = ThreadSchema.parse(await this.call('upsert', {
+      thread: stripThreadItemBodies(thread), metadataOnly: true
+    }))
+    return restoreThreadBodies(stored, thread)
   }
 
   async upsertIfRevision(thread: ThreadRecord, expectedRevision: number) {
-    return z.object({
+    const result = z.object({
       applied: z.boolean(),
       thread: ThreadSchema.optional(),
       revision: z.number().int().nonnegative()
-    }).strict().parse(await this.call('upsertIfRevision', { thread, expectedRevision }))
+    }).strict().parse(await this.call('upsertIfRevision', {
+      thread: stripThreadItemBodies(thread), expectedRevision, metadataOnly: true
+    }))
+    return result.thread ? { ...result, thread: restoreThreadBodies(result.thread, thread) } : result
   }
 
   async delete(threadId: string) {

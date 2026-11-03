@@ -19,6 +19,22 @@ function fakeChild(): ChildProcess {
 }
 
 describe('Kun runtime health monitor', () => {
+  it('cancels readiness and ignores a late healthy result', async () => {
+    const child = fakeChild()
+    const controller = new AbortController()
+    let healthy!: (value: boolean) => void
+    const waiting = waitForKunStartup(child, 18899, {
+      signal: controller.signal, timeoutMs: 1000, healthPollMs: 1,
+      probeHealth: () => new Promise((resolve) => { healthy = resolve })
+    })
+    const rejected = expect(waiting).rejects.toThrow('Quit')
+    await vi.waitFor(() => expect(healthy).toBeTypeOf('function'))
+    controller.abort(new Error('Quit'))
+    await rejected
+    healthy(true)
+    expect(child.listenerCount('exit')).toBe(0)
+    expect(child.stdout?.listenerCount('data')).toBe(0)
+  })
   it('clamps configured startup timeouts and keeps platform defaults', () => {
     expect(resolveKunStartupTimeoutMs('linux', { KUN_STARTUP_TIMEOUT_MS: '1000' })).toBe(15_000)
     expect(resolveKunStartupTimeoutMs('linux', { KUN_STARTUP_TIMEOUT_MS: '120000' })).toBe(120_000)

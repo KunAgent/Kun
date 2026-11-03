@@ -28,5 +28,11 @@
   "canvasEnginePptLocked": "Presentation review boards stay on the Kun canvas.",
   "designExcalidrawUntitled": "Excalidraw sketch",
   "designExcalidrawOpenBlank": "Open blank Excalidraw board",
-  "designDrawingStartExcalidrawDescription": "Sketch diagrams, flows, and architecture on Excalidraw. Agent tools will not draw on this board."
+  "designDrawingStartExcalidrawDescription": "Sketch diagrams, flows, and architecture on Excalidraw. Agent tools will not draw on this board.",
+  "workWhiteboardBackToArtifacts": "Back to artifacts",
+  "workWhiteboardCollapse": "Collapse",
+  "workWhiteboardUnavailableTitle": "This whiteboard cannot be loaded right now",
+  "workWhiteboardUnavailableHint": "The whiteboard index did not load. Your files are still there; retry to continue.",
+  "workWhiteboardUnavailableRetry": "Retry",
+  "workWhiteboardLoadingNamed": "Opening “{{name}}”…"
 }

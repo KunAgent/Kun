@@ -6,6 +6,8 @@ import { fileURLToPath } from 'node:url'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { KUN_APP_SESSION_OWNER_ENV, KUN_APP_SESSION_RESERVATION_ENV, type AppSessionOwner } from '../contracts/app-session-owner.js'
 import { spawnOwnedProcess } from '../process/owned-process.js'
+import { KUN_NODE_CHILD_V8_FLAGS } from '../process/node-child-v8-flags.js'
+import { hostNodeLaunch } from '../process/host-node.js'
 
 export type ManagerLaunchOverride = {
   command: string
@@ -22,6 +24,7 @@ export async function launchServiceManagerProcess(input: {
   launch?: ManagerLaunchOverride
   appOwner?: AppSessionOwner
   reservationPath?: string
+  beforeLaunch?: () => Promise<unknown>
 }): Promise<{ child: ChildProcess; logPath: string }> {
   await mkdir(input.controlDir, { recursive: true, mode: 0o700 })
   const logPath = join(input.controlDir, 'manager.log')
@@ -29,11 +32,13 @@ export async function launchServiceManagerProcess(input: {
   const managerToken = randomBytes(32).toString('base64url')
   const instanceId = randomUUID()
   const entry = fileURLToPath(new URL('./manager-entry.js', import.meta.url))
-  const command = input.launch?.command ?? process.execPath
-  const args = input.launch?.args ?? [entry]
-  const runAsNode = input.launch?.runAsNode ?? Boolean(process.versions.electron)
+  const host = hostNodeLaunch()
+  const command = input.launch?.command ?? host.command
+  const args = input.launch?.args ?? [...KUN_NODE_CHILD_V8_FLAGS, entry]
+  const runAsNode = input.launch?.runAsNode ?? host.runAsNode
   let child: ChildProcess
   try {
+    await input.beforeLaunch?.()
     const options = {
       detached: !input.appOwner,
       windowsHide: true,
@@ -57,7 +62,7 @@ export async function launchServiceManagerProcess(input: {
       }
     }
     child = input.appOwner
-      ? await spawnOwnedProcess(command, args, { ...options, stdio: [...options.stdio], ownerLossGraceMs: 30_000 })
+      ? await spawnOwnedProcess(command, args, { ...options, stdio: [...options.stdio], ownerLossGraceMs: 30_000, beforeLaunch: input.beforeLaunch })
       : spawn(command, args, { ...options, stdio: [...options.stdio] })
     if (!input.appOwner) child.unref()
   } finally {

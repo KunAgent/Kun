@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { makeFakeModel, makeHarness } from '../../../tests/loop-test-harness.js'
 import { SqliteRoomStore } from '../../rooms/room-store-sqlite.js'
 import { RoomRuntime } from '../../rooms/room-runtime.js'
+import { defaultRoomMembers } from '../../rooms/room-service.js'
 import { Router } from '../router.js'
 import { dispatchRequest } from '../http-server.js'
 import { registerRoomRoutes } from './register-room-routes.js'
@@ -22,7 +23,9 @@ async function fixture() {
     model: () => ({ model: 'fake' }), profiles: () => ({}), assertOwnership: () => store.assertOwnership(), runTurn: (id, turnId) => h.loop.runTurn(id, turnId) })
   const router = new Router()
   registerRoomRoutes(router, { rooms, runtimeToken: 'poll-token', insecure: false } as ServerRuntime)
-  const room = (await rooms.service.create({ clientRequestId: 'room', name: 'Poll HTTP' })).room
+  const room = (await rooms.service.create({ clientRequestId: 'room', name: 'Poll HTTP',
+    // A new group starts with 小 Kun only; the poll is put to the role members of a legacy group.
+    members: defaultRoomMembers([]) })).room
   const call = async (path: string, method = 'GET', body?: unknown, token = 'poll-token') => {
     const response = await dispatchRequest(router, new Request('http://localhost' + path, { method,
       headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' },

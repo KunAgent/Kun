@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { extname, join, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { chromium, _electron } from 'playwright-core'
+import sharp from 'sharp'
 import { build, createServer, normalizePath } from 'vite'
+import { loadAvatarCatalog } from './kun-avatar-compose-check.mjs'
 
 // Actual avatar components, shared profile store and CSS; only the HTTP/preload
 // boundary is replaced. No runtime, external network or user data is touched.
@@ -15,6 +17,7 @@ import { build, createServer, normalizePath } from 'vite'
 // this component fixture is distinct from a full --workbench-only app smoke.
 // --serve keeps the development fixture open for manual inspection.
 const repository = fileURLToPath(new URL('../', import.meta.url))
+const catalog = await loadAvatarCatalog(repository)
 const temporary = await mkdtemp(join(tmpdir(), 'kun-layered-avatar-'))
 const evidence = resolve(process.env.KUN_AVATAR_EVIDENCE ?? join(repository, '.cache/kun-avatar-ui'))
 const fixtureId = normalizePath(join(repository, '__kun_avatar_fixture.tsx'))
@@ -52,6 +55,8 @@ try {
       await waitForOptions(30)
       await assertGeometry(mobile ? 'mobile-panel' : 'desktop-dialog')
       await capture(`${mobile ? 'mobile-fallback' : 'desktop'}-${theme}-presets`)
+      await checkArtPanels(`${mobile ? 'mobile-fallback' : 'desktop'}-${theme}`)
+      if (!mobile) await checkOutfitAlignment(theme)
       await editAndSave()
       await show({ mode: mobile ? 'panel' : 'modal' })
       await waitForOptions(30)
@@ -61,6 +66,15 @@ try {
       assert.deepEqual((await snapshot()).profile, before.profile, 'cancel must not persist the draft')
     }
     await checkAgentPicker()
+    if (!mobile) {
+      for (const theme of ['light', 'dark']) for (const cropPage of [0, 1]) {
+        await show({ mode: 'small-crops', theme, cropPage })
+        await waitForImages('[data-small-crops] img', 15 * 6)
+        assert(await page.locator('[data-small-crops]').evaluate((chart) => chart.getBoundingClientRect().bottom <= innerHeight),
+          'all 15 comparison rows must fit in each screenshot')
+        await capture(`desktop-${theme}-compact-before-after-${cropPage + 1}`)
+      }
+    }
     await show({ mode: 'grid', theme: 'light' })
     await waitForImages('[data-gallery] img[data-composed]', 40)
     const geometry = await page.locator('[data-gallery] img[data-composed]').evaluateAll((images) => images.map((image) => ({
@@ -134,16 +148,27 @@ import '/src/renderer/src/styles/base-shell.css'
 import { RoomAvatar } from '/src/renderer/src/components/rooms/RoomAvatar'
 import { RoomUserAvatarEditor } from '/src/renderer/src/components/rooms/RoomUserAvatarEditor'
 import { RoomAvatarPicker } from '/src/renderer/src/components/rooms/RoomAvatarPicker'
+import { renderAvatarComposition } from '/src/renderer/src/components/rooms/room-avatar-composition-canvas'
+import { composedAvatarLayers, composedAvatarLayerUrl } from '/src/renderer/src/components/rooms/room-avatar-compositor'
 import { composedAvatarCache } from '/src/renderer/src/components/rooms/room-avatar-compositor'
 import { acceptRoomUserProfile } from '/src/renderer/src/components/rooms/room-user-profile'
-import { KUN_AVATAR_PRESETS } from '/src/shared/rooms-api'
+import { KUN_AVATAR_PRESETS, KUN_AVATAR_CATALOG, KUN_AVATAR_ACCESSORY_CATEGORIES,
+  createKunWardrobe, normalizeKunAvatarParts } from '/src/shared/rooms-api'
 import i18n from '/src/renderer/src/i18n'
 let profile = { profile: { avatar: { kind: 'builtin', id: 'coder' } }, revision: 1 }
 let agentAvatar = { kind: 'builtin', id: 'reviewer' }
 let saves = 0, agentSaves = 0, serial = 0
 const calls = []
+const wardrobe = { ...createKunWardrobe(1),
+  items: Object.fromEntries(KUN_AVATAR_ACCESSORY_CATEGORIES.flatMap((category) =>
+    KUN_AVATAR_CATALOG[category].map(({ id }) => [category + '/' + id, 1]))),
+  roles: KUN_AVATAR_PRESETS.map(({ id }) => id) }
+wardrobe.seen = [...Object.keys(wardrobe.items), ...wardrobe.roles.map((id) => 'card/' + id)]
 window.kunGui = { platform: 'win32', runtimeRequest: async (path, method = 'GET', body) => {
   calls.push({ path, method })
+  if (path === '/v1/rooms/wardrobe' || path === '/v1/rooms/wardrobe/seen') {
+    return { ok: true, status: 200, body: JSON.stringify({ wardrobe, revision: 1 }) }
+  }
   if (path !== '/v1/rooms/user-profile') throw new Error('Unexpected fixture request: ' + method + ' ' + path)
   if (method === 'PUT') {
     const input = typeof body === 'string' ? JSON.parse(body) : body
@@ -154,6 +179,19 @@ window.kunGui = { platform: 'win32', runtimeRequest: async (path, method = 'GET'
 } }
 const root = createRoot(document.getElementById('root'))
 let state = { mode: 'closed', theme: 'light' }
+function PreviousCrop({ parts, size }) {
+  const [source, setSource] = React.useState()
+  React.useEffect(() => {
+    let active = true, resource
+    const keys = composedAvatarLayers(parts, { size }).map((key) =>
+      size > 34 && key.startsWith('headwear/') ? key.replace('.small', '') : key)
+    const urls = keys.map((key) => composedAvatarLayerUrl(key, 256))
+    renderAvatarComposition(urls, { pixels: size * 2, canvas: 1024, crop: [232, 300, 792, 860], bg: parts.bg })
+      .then((result) => { resource = result; if (active) setSource(result.url); else result.dispose() })
+    return () => { active = false; resource?.dispose() }
+  }, [parts, size])
+  return source ? <img src={source} alt="Previous crop" width={size} height={size} style={{ borderRadius: '50%' }} /> : null
+}
 function render(next) {
   state = { ...state, ...next }
   document.documentElement.dataset.theme = state.theme
@@ -167,7 +205,15 @@ function render(next) {
       variant={state.mode === 'panel' ? 'panel' : 'modal'} /> : state.mode === 'agent' ?
       <RoomAvatarPicker id="fixture-agent" label="Fixture Agent" avatar={agentAvatar}
         onChange={(next) => { agentAvatar = next; agentSaves++; render({ mode: 'agent' }) }} /> :
-      state.mode === 'grid' ? <div data-gallery style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(104px,1fr))', gap: 12 }}>
+      state.mode === 'small-crops' ? <div data-small-crops style={{ display: 'grid', gridTemplateColumns: '160px repeat(6, 64px)', alignItems: 'center', gap: '8px 10px' }}>
+        <strong>Crop comparison</strong>{[24, 34, 48].flatMap((size) => [<small key={size + 'before'}>{size}px old</small>, <small key={size + 'after'}>{size}px B</small>])}
+        {KUN_AVATAR_PRESETS.slice((state.cropPage ?? 0) * 15, (state.cropPage ?? 0) * 15 + 15).map((preset) => <React.Fragment key={preset.id}>
+          <span>{preset.label.en}</span>{[24, 34, 48].flatMap((size) => [
+            <PreviousCrop key={size + 'old'} parts={preset.parts} size={size} />,
+            <RoomAvatar key={size + 'new'} avatar={{ kind: 'composed', version: 1, parts: preset.parts }} id={preset.id} label={preset.label.en} size={size} />
+          ])}
+        </React.Fragment>)}
+      </div> : state.mode === 'grid' ? <div data-gallery style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(104px,1fr))', gap: 12 }}>
         {Array.from({ length: 40 }, (_, index) => <div key={index} style={{ display: 'grid', justifyItems: 'center', gap: 6 }}>
           <RoomAvatar avatar={avatar(index)} id={'gallery-' + index} label={KUN_AVATAR_PRESETS[index % 30].label.en}
             size={[24, 34, 48, 96][index % 4]} />
@@ -182,6 +228,12 @@ i18n.changeLanguage('en').then(() => {
   acceptRoomUserProfile(profile)
   render({})
   window.avatarFixture = { ready: true, render, clearCache: () => composedAvatarCache.clear(),
+    reviewOutfit: (outfit) => {
+      profile = { ...profile, profile: { avatar: { kind: 'composed', version: 1,
+        parts: normalizeKunAvatarParts({ outfit, headwear: 'beanie', face: 'happy', bg: state.theme === 'dark' ? '#2c2c2c' : '#f7f5ef' }) } } }
+      acceptRoomUserProfile(profile)
+      render({ mode: 'modal' })
+    },
     snapshot: () => ({ profile, agentAvatar, saves, agentSaves, calls }) }
 })
 `
@@ -210,8 +262,13 @@ async function waitForImages(selector, count) {
 }
 async function waitForOptions(count) { await waitForImages('.rooms-avatar-composer-option img[data-composed]', count) }
 async function capture(name) {
+  // Loaded URLs can precede their first compositor paint, especially after a theme switch.
+  await page.evaluate(async () => {
+    await Promise.all([...document.images].filter((image) => image.complete).map((image) => image.decode().catch(() => {})))
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  })
   const path = join(evidence, name + '.png')
-  await page.screenshot({ path, fullPage: true })
+  await page.screenshot({ path, fullPage: true, animations: 'disabled' })
   screenshots.push(path)
   console.log('Captured ' + name)
 }
@@ -220,11 +277,12 @@ async function assertGeometry(label) {
     const composer = document.querySelector('.rooms-avatar-composer')
     const { x, width } = composer.getBoundingClientRect()
     return { x, width, viewport: innerWidth, documentWidth: document.documentElement.scrollWidth,
-      buttons: [...composer.querySelectorAll('button')].map((button) => button.getBoundingClientRect().height),
+      buttons: [...composer.querySelectorAll('[role="tab"], .rooms-avatar-composer-option, .rooms-avatar-slot-open')]
+        .map((button) => button.getBoundingClientRect().height),
       options: [...composer.querySelectorAll('.rooms-avatar-composer-option')].map((button) => {
         const bounds = button.getBoundingClientRect()
-        const art = button.querySelector('.rooms-avatar').getBoundingClientRect()
-        const label = button.querySelector(':scope > span:last-of-type').getBoundingClientRect()
+        const art = button.querySelector('.rooms-avatar-option-art').getBoundingClientRect()
+        const label = button.querySelector('.rooms-avatar-option-name').getBoundingClientRect()
         return { top: bounds.top, bottom: bounds.bottom, artTop: art.top, artBottom: art.bottom,
           labelTop: label.top, labelBottom: label.bottom }
       }) }
@@ -238,12 +296,14 @@ async function assertGeometry(label) {
 }
 async function editAndSave() {
   const before = await snapshot()
+  await page.locator('[data-avatar-tab="preset"]').click()
+  await waitForOptions(catalog.KUN_AVATAR_PRESETS.length)
   await page.getByRole('button', { name: 'Coordinator', exact: true }).click()
-  await page.getByRole('combobox', { name: 'Customize avatar', exact: true }).selectOption('color')
-  await waitForOptions(4)
+  await page.locator('[data-avatar-tab="color"]').click()
+  await waitForOptions(catalog.KUN_AVATAR_CATALOG.color.length)
   await page.locator('.rooms-avatar-composer-option').nth(1).click()
-  await page.getByRole('combobox', { name: 'Customize avatar', exact: true }).selectOption('face')
-  await waitForOptions(2)
+  await page.locator('[data-avatar-tab="face"]').click()
+  await waitForOptions(catalog.KUN_AVATAR_CATALOG.face.length)
   await page.locator('.rooms-avatar-composer-option').nth(1).click()
   await waitForImages('.rooms-avatar-composer-preview img[data-composed]', 1)
   await page.getByRole('button', { name: 'Save', exact: true }).click()
@@ -254,6 +314,86 @@ async function editAndSave() {
   assert.equal(after.profile.profile.avatar.parts.color, 'teal')
   assert.equal(after.profile.profile.avatar.parts.face, 'happy')
   assert.equal(after.profile.revision, before.profile.revision + 1)
+}
+async function checkArtPanels(label) {
+  const before = await snapshot()
+  for (const category of catalog.KUN_AVATAR_ACCESSORY_CATEGORIES) {
+    await page.locator(`[data-avatar-tab="${category}"]`).click()
+    const selector = '.rooms-avatar-composer-option .rooms-avatar-item-art img'
+    await waitForImages(selector, catalog.KUN_AVATAR_CATALOG[category].length)
+    assert.equal(await page.locator('.rooms-avatar-composer-option[aria-disabled="true"]').count(), 0,
+      'the explicit complete wardrobe fixture must own every review item')
+    const sources = await page.locator(selector).evaluateAll((images) => images.map((image) => image.currentSrc))
+    assert(sources.every((source) => source.includes(`/icon/${category}/`)), 'wardrobe must load independent item art')
+    const iconStyle = await page.locator(selector).first().evaluate((image) => ({
+      filter: getComputedStyle(image).filter,
+      well: getComputedStyle(image.closest('.rooms-avatar-option-art')).backgroundColor
+    }))
+    assert.equal(iconStyle.filter.includes('drop-shadow'), label.endsWith('-dark'), 'soft icon outline follows the theme')
+    assert.notEqual(iconStyle.well, 'rgba(0, 0, 0, 0)', 'inventory icons need an opaque midtone well')
+    measurements.push({ label, category, iconStyle })
+    if (label.startsWith('desktop') || category === 'outfit') await capture(`${label}-${category}-icons`)
+    if (label.startsWith('desktop') && ['headwear', 'outfit'].includes(category)) {
+      await page.locator('.rooms-avatar-composer-option').last().scrollIntoViewIfNeeded()
+      await capture(`${label}-${category}-icons-bottom`)
+    }
+  }
+  for (const preset of ['Detective', 'Magician']) {
+    await page.locator('[data-avatar-tab="preset"]').click()
+    await waitForOptions(catalog.KUN_AVATAR_PRESETS.length)
+    await page.getByRole('button', { name: preset, exact: true }).click()
+    await page.locator('[data-avatar-tab="bg"]').click()
+    await page.locator('.rooms-avatar-composer-swatch').nth(label.endsWith('-dark') ? 5 : 0).click()
+    await page.mouse.move(4, 4)
+    await waitForImages('.rooms-avatar-composer-preview img[data-composed]', 1)
+    const filter = await page.locator('.rooms-avatar-composer-preview img[data-composed]').evaluate((image) => getComputedStyle(image).filter)
+    assert.equal(filter, 'none', 'the icon outline must never tint stage compositions')
+    await capture(`${label}-${preset.toLowerCase()}-stage`)
+  }
+  await page.locator('[data-avatar-tab="bg"]').click()
+  await waitForImages('.rooms-avatar-scene-art', catalog.KUN_AVATAR_SCENES.length)
+  await page.getByRole('button', { name: catalog.KUN_AVATAR_SCENES[1].label.en, exact: true }).click()
+  await page.mouse.move(4, 4)
+  await waitForImages('.rooms-avatar-composer-preview img[data-composed]', 1)
+  await capture(`${label}-scene-preview`)
+  assert.deepEqual((await snapshot()).profile, before.profile, 'scene try-on must remain local until Save')
+}
+
+async function checkOutfitAlignment(theme) {
+  const cells = []
+  for (const part of catalog.KUN_AVATAR_CATALOG.outfit) {
+    await page.evaluate((outfit) => window.avatarFixture.reviewOutfit(outfit), part.id)
+    await waitForImages('.rooms-avatar-composer-preview img[data-composed]', 1)
+    await page.locator('[data-avatar-tab="outfit"]').click()
+    await page.mouse.move(4, 4)
+    const image = page.locator('.rooms-avatar-composer-preview img[data-composed]')
+    await image.evaluate((element) => element.decode())
+    const dimensions = await image.evaluate((element) => {
+      const bounds = element.getBoundingClientRect()
+      return { width: bounds.width, height: bounds.height, naturalWidth: element.naturalWidth, naturalHeight: element.naturalHeight }
+    })
+    assert.equal(dimensions.width, dimensions.height, part.id + ': stage must be square')
+    assert.equal(dimensions.naturalWidth, dimensions.naturalHeight, part.id + ': composed image must be square')
+    measurements.push({ outfit: part.id, theme, ...dimensions })
+    const path = join(evidence, `outfit-${theme}-${part.id}.png`)
+    await page.locator('.rooms-avatar-stage-mirror').screenshot({ path, animations: 'disabled' })
+    screenshots.push(path)
+    cells.push({ path, id: part.id })
+    if (part.id === 'black-hoodie') await capture(`desktop-${theme}-black-hoodie-alignment`)
+  }
+  const overlays = []
+  for (const [index, cell] of cells.entries()) {
+    const left = index % 6 * 230, top = Math.floor(index / 6) * 254
+    overlays.push({ input: await sharp(cell.path).resize(208, 208).png().toBuffer(), left: left + 11, top: top + 8 })
+    const text = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="230" height="30">` +
+      `<text x="115" y="20" text-anchor="middle" font-family="Arial" font-size="12" fill="${theme === 'dark' ? '#eee' : '#222'}">${cell.id}</text></svg>`)
+    overlays.push({ input: text, left, top: top + 220 })
+  }
+  const path = join(evidence, `outfits-${theme}-all-24.png`)
+  await sharp({ create: { width: 1380, height: Math.ceil(cells.length / 6) * 254,
+    channels: 4, background: theme === 'dark' ? '#202024' : '#f1f2f5' } }).composite(overlays).png().toFile(path)
+  screenshots.push(path)
+  console.log(`Captured all ${cells.length} ${theme} outfit stages`)
 }
 async function checkAgentPicker() {
   await show({ mode: 'agent' })

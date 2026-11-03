@@ -154,6 +154,9 @@ export function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): Usag
     ...(current.gateway ? { gateway: { ...current.gateway } } : {}),
     ...(current.requestTtftMs !== undefined ? { requestTtftMs: current.requestTtftMs } : {}),
     ...(current.requestGenerationMs !== undefined ? { requestGenerationMs: current.requestGenerationMs } : {}),
+    ...(current.requestGenerationTokens !== undefined
+      ? { requestGenerationTokens: current.requestGenerationTokens }
+      : {}),
     ...(current.avgTtftMs !== undefined ? { avgTtftMs: current.avgTtftMs } : {}),
     ...(current.avgTokensPerSecond !== undefined
       ? { avgTokensPerSecond: current.avgTokensPerSecond }

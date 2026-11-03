@@ -48,3 +48,28 @@ it('folds legacy reasoning variants into their base model and marks models witho
   // Reasoning is chosen only through variants, so the rest have no levels to offer.
   expect(result.modelInfo.slice(1).map((entry) => entry.reasoningEfforts)).toEqual([[], [], []])
 })
+
+it('keeps the option group each model is filed under, so same-named models from different routes stay apart', () => {
+  // Shape of dsh-acp 0.2.1-rc.2 session/new: one select group per credential route.
+  const grouped = [{ id: 'model', name: 'Model', category: 'model', type: 'select',
+    currentValue: '["deepseek-official","deepseek-v4-flash"]', options: [
+      { group: 'deepseek-official', name: 'DeepSeek', options: [
+        { value: '["deepseek-official","deepseek-v4-flash"]', name: 'deepseek-v4-flash' },
+        { value: '["deepseek-official","deepseek-flash"]', name: 'DeepSeek-V4.1-Flash' }] },
+      { group: 'deepseek-account', name: 'DeepSeek Account', options: [
+        { value: '["deepseek-account","deepseek-flash"]', name: 'DeepSeek-V4.1-Flash' }] },
+      { group: 'unnamed-route', options: [{ value: 'unnamed-model', name: 'Unnamed' }] }
+    ] }] as unknown as AcpConfigOption[]
+  const result = acpModelCatalog({ harnessId: 'deepseek-harness', configOptions: grouped })
+  expect(result.modelInfo.map((entry) => [entry.id, entry.displayName, entry.group])).toEqual([
+    ['["deepseek-official","deepseek-v4-flash"]', 'deepseek-v4-flash', 'DeepSeek'],
+    ['["deepseek-official","deepseek-flash"]', 'DeepSeek-V4.1-Flash', 'DeepSeek'],
+    ['["deepseek-account","deepseek-flash"]', 'DeepSeek-V4.1-Flash', 'DeepSeek Account'],
+    ['unnamed-model', 'Unnamed', 'unnamed-route']
+  ])
+})
+
+it('adds no group to a flat model list', () => {
+  const result = acpModelCatalog({ harnessId: 'devin', configOptions })
+  expect(result.modelInfo.every((entry) => !('group' in entry))).toBe(true)
+})

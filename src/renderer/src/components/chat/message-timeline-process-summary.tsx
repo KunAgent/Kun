@@ -20,6 +20,8 @@ import {
   Wrench
 } from 'lucide-react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import { readToolPresentation } from '../../agent/tool-presentation'
+import { GmailGlyph } from '../rooms/gmail-brand'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
 import {
@@ -35,10 +37,10 @@ import {
 } from './message-timeline-process-grouping'
 import {
   describeProcessBlock,
-  summarizeToolBlock,
   toolFilePath,
   toolNameForBlock
 } from './message-timeline-process-detail'
+import { summarizeToolLiveAction } from './message-timeline-tool-action'
 
 export function ProcessGlyph({
   Icon,
@@ -90,7 +92,7 @@ export function describeProcessSection(
       ? activeBlock.kind === 'reasoning'
         ? t('thinkingNow')
         : activeBlock.kind === 'tool'
-          ? t('workingToolAction', { action: summarizeToolBlock(activeBlock, t) })
+          ? t('workingToolAction', { action: summarizeToolLiveAction(activeBlock, t) })
           : describeProcessBlock(activeBlock, t)
       : t('processing')
     const workSummary = summarizeProcessWork(section.blocks, t)
@@ -109,13 +111,16 @@ export function summarizeProcessWork(
   blocks: ChatBlock[],
   t: (key: string, opts?: Record<string, unknown>) => string
 ): string {
-  let readCount = 0
+  const readFiles = new Set<string>()
   let searchCount = 0
-  let fileCount = 0
+  const editedFiles = new Set<string>()
+  const fetchedPages = new Set<string>()
   let commandCount = 0
   let backgroundCommandCount = 0
   let toolCount = 0
   let approvalCount = 0
+  let failedCount = 0
+  let canceledCount = 0
 
   for (const block of blocks) {
     if (block.kind === 'approval' || block.kind === 'approval_review') {
@@ -123,23 +128,38 @@ export function summarizeProcessWork(
       continue
     }
     if (block.kind !== 'tool') continue
-    if (block.toolKind === 'file_change') {
-      fileCount += 1
-    } else if (block.toolKind === 'command_execution') {
+    const presentation = readToolPresentation(block)
+    if (presentation.state === 'failed') failedCount += 1
+    if (presentation.state === 'canceled') canceledCount += 1
+    const paths = [...new Set([
+      presentation.filePath ?? toolFilePath(block),
+      ...(presentation.locations ?? []).map((location) => location.path),
+      ...(presentation.diffs ?? []).map((diff) => diff.path)
+    ].filter((path): path is string => Boolean(path?.trim())).map((path) => path.trim().replace(/\\/g, '/')))]
+    // An unknown path represents one operation; do not collapse every unknown
+    // file into a single entry or invent a path from the tool's display title.
+    const fileKeys = paths.length ? paths : [`unknown:${block.id}`]
+    if (block.toolKind === 'file_change' || ['edit', 'write', 'delete', 'move'].includes(presentation.kind)) {
+      fileKeys.forEach((path) => editedFiles.add(path))
+    } else if (block.toolKind === 'command_execution' || presentation.kind === 'shell' || presentation.kind === 'execute') {
       if (isBackgroundShellCommandBlock(block)) {
         backgroundCommandCount += 1
       } else {
         commandCount += 1
       }
-    } else if (isReadToolBlock(block)) {
-      readCount += 1
-    } else if (isSearchToolBlock(block)) {
+    } else if (presentation.kind === 'read' || isReadToolBlock(block)) {
+      fileKeys.forEach((path) => readFiles.add(path))
+    } else if (presentation.kind === 'search' || isSearchToolBlock(block)) {
       searchCount += 1
+    } else if (presentation.kind === 'fetch') {
+      fetchedPages.add(presentation.url || `unknown:${block.id}`)
     } else {
       toolCount += 1
     }
   }
 
+  const readCount = readFiles.size
+  const fileCount = editedFiles.size
   const parts: string[] = []
   if (readCount > 0) {
     parts.push(readCount === 1 ? t('groupReadFile') : t('groupReadFiles', { count: readCount }))
@@ -169,6 +189,9 @@ export function summarizeProcessWork(
   if (toolCount > 0) {
     parts.push(toolCount === 1 ? t('groupUsedTool') : t('groupUsedTools', { count: toolCount }))
   }
+  if (fetchedPages.size > 0) parts.push(t('toolSummaryFetched', { count: fetchedPages.size }))
+  if (failedCount > 0) parts.push(t('toolSummaryFailed', { count: failedCount }))
+  if (canceledCount > 0) parts.push(t('toolSummaryCanceled', { count: canceledCount }))
   if (approvalCount > 0) {
     parts.push(
       approvalCount === 1 ? t('groupApproval') : t('groupApprovals', { count: approvalCount })
@@ -253,6 +276,11 @@ export function toolBlockIcon(block: ToolBlock): LucideIcon {
     case 'create_plan':
     case 'update_plan':
       return ListTodo
+    case 'gmail_connect':
+    case 'gmail_search':
+    case 'gmail_read':
+    case 'gmail_send':
+      return GmailGlyph
     default:
       break
   }

@@ -6,7 +6,7 @@ import { workspaceGit } from './workspace-git.js'
 import type { ReviewRevision } from '../contracts/review-revision.js'
 
 /**
- * Review diff assembly (docs/ade/11 §3): the captured patch artifact is
+ * Review diff assembly: the captured patch artifact is
  * split per file for the list view; per-file requests add old/new full
  * texts — old from `git show <base>:<path>`, new from the worktree —
  * while binary or > 1 MiB files degrade to stats only.

@@ -1,5 +1,5 @@
 /**
- * Codex App Server notification → Kun timeline draft mapping (P6-05).
+ * Codex App Server notification → Kun timeline draft mapping.
  *
  * Codex streams deltas per itemId and sends full ThreadItem snapshots on
  * item/completed; the mapper tracks cumulative delta offsets per item so the
@@ -8,7 +8,7 @@
  * calls) into Kun tool_call/tool_result items.
  */
 import type { TurnItem } from '../../contracts/items.js'
-import type { ThreadTodoList } from '../../contracts/threads.js'
+import { delegatedPlanTodoList } from '../delegated-plan-todos.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import {
   makeAssistantReasoningItem,
@@ -17,6 +17,8 @@ import {
   makeToolResultItem
 } from '../../domain/item.js'
 import { CODEX_NOTIFICATIONS, type CodexThreadItem } from './codex-protocol.js'
+import { codexContextOccupancy } from './codex-context-occupancy.js'
+import { CodexSubagentTracker } from './codex-subagent-tracker.js'
 
 export type CodexMapperContext = {
   threadId: string
@@ -25,6 +27,8 @@ export type CodexMapperContext = {
   codexThreadId: string
   model?: string
   nowIso?: () => string
+  /** Child mappers set false: a spawned agent's own items never spawn trackers. */
+  subagents?: false
 }
 
 type ItemRecord = Record<string, unknown>
@@ -47,8 +51,19 @@ export class CodexEventMapper {
   /** Thread total at the last counted report; a repeat carries no new usage. */
   private lastCountedTotalTokens?: number
   private readonly toolItemIds = new Map<string, string>()
+  private readonly subagents?: CodexSubagentTracker
 
-  constructor(private readonly ctx: CodexMapperContext) {}
+  constructor(private readonly ctx: CodexMapperContext) {
+    if (ctx.subagents !== false) {
+      this.subagents = new CodexSubagentTracker({
+        threadId: ctx.threadId,
+        turnId: ctx.turnId,
+        kunItemId: (id) => this.kunItemId(id),
+        createChildMapper: (threadId, turnId, codexThreadId, model) =>
+          new CodexEventMapper({ threadId, turnId, codexThreadId, subagents: false, ...(model ? { model } : {}) })
+      })
+    }
+  }
 
   /** codex itemId → Kun timeline item id (stable, namespaced). */
   kunItemId(codexItemId: string): string {
@@ -69,7 +84,8 @@ export class CodexEventMapper {
       typeof p.threadId === 'string' &&
       p.threadId !== this.ctx.codexThreadId
     ) {
-      return []
+      // A spawned subagent's thread goes to its side thread; others are dropped.
+      return this.subagents?.routeForeign(method, p) ?? []
     }
     switch (method) {
       case CODEX_NOTIFICATIONS.agentMessageDelta:
@@ -138,6 +154,8 @@ export class CodexEventMapper {
   // -- item lifecycle -------------------------------------------------------------
 
   private itemStarted(item: CodexThreadItem): RuntimeEventDraft[] {
+    const subagent = item?.id ? this.subagents?.handleItem('started', item) : undefined
+    if (subagent) return subagent
     if (!item?.id || !TOOL_ITEM_KINDS.has(item.type)) return []
     const kunId = this.kunItemId(item.id)
     this.toolItemIds.set(item.id, kunId)
@@ -153,6 +171,8 @@ export class CodexEventMapper {
 
   private itemCompleted(item: CodexThreadItem): RuntimeEventDraft[] {
     if (!item?.id) return []
+    const subagent = this.subagents?.handleItem('completed', item)
+    if (subagent) return subagent
     const record = item as ItemRecord
     if (TOOL_ITEM_KINDS.has(item.type)) {
       const kunId = this.toolItemIds.get(item.id) ?? this.kunItemId(item.id)
@@ -323,28 +343,24 @@ export class CodexEventMapper {
   // -- plan / usage ------------------------------------------------------------------
 
   private planUpdated(params: Record<string, unknown>): RuntimeEventDraft {
-    const now = this.ctx.nowIso?.() ?? new Date().toISOString()
     const entries = Array.isArray(params.plan) ? params.plan : []
-    const todos: ThreadTodoList = {
+    const todos = delegatedPlanTodoList({
       threadId: this.ctx.threadId,
-      items: entries.map((entry, index) => {
+      idPrefix: 'codex_plan',
+      entries: entries.map((entry) => {
         const e = entry as { step?: unknown; status?: unknown }
         return {
-          id: `codex_plan_${index}`,
-          content:
-            typeof e.step === 'string' ? e.step.slice(0, 1_000) : '',
+          content: typeof e.step === 'string' ? e.step : '',
           status:
             e.status === 'inProgress'
               ? 'in_progress'
               : e.status === 'completed'
                 ? 'completed'
-                : 'pending',
-          createdAt: now,
-          updatedAt: now
+                : 'pending'
         }
       }),
-      updatedAt: now
-    }
+      now: this.ctx.nowIso?.() ?? new Date().toISOString()
+    })
     return {
       kind: 'todos_updated',
       threadId: this.ctx.threadId,
@@ -408,28 +424,25 @@ export class CodexEventMapper {
         }
       }
     ]
-    if (typeof usage?.modelContextWindow === 'number') {
+    // Occupancy is the latest call, never the thread total (consumption).
+    const occupancy = codexContextOccupancy(usage)
+    if (occupancy) {
       drafts.push({
         kind: 'context_snapshot',
         threadId: this.ctx.threadId,
         turnId: this.ctx.turnId,
         model: this.ctx.model ?? 'codex',
         stepIndex: 0,
-        contextWindowTokens: Math.max(1, usage.modelContextWindow),
-        softThresholdTokens: Math.max(1, usage.modelContextWindow),
-        hardThresholdTokens: Math.max(1, usage.modelContextWindow),
-        estimatedInputTokens: usage.total?.totalTokens ?? total,
-        breakdown: {
-          tools: 0,
-          system: 0,
-          skills: 0,
-          messages: usage.total?.totalTokens ?? total,
-          other: 0
-        },
+        contextWindowTokens: occupancy.windowTokens,
+        softThresholdTokens: occupancy.autoCompactTokens,
+        hardThresholdTokens: occupancy.windowTokens,
+        estimatedInputTokens: occupancy.usedTokens,
+        breakdown: { tools: 0, system: 0, skills: 0, messages: occupancy.usedTokens, other: 0 },
         toolCount: this.toolItemIds.size,
         activeSkillIds: [],
         contextManagement: 'sdk-managed',
-        nativeHistory: 'known'
+        nativeHistory: 'known',
+        occupancySource: 'agent'
       })
     }
     return drafts

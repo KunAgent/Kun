@@ -67,6 +67,7 @@ import { turnServiceCompactionOperations } from './turn-service-compaction-opera
 import { turnServicePruneOperations } from './turn-service-prune-operations.js'
 import type { ThreadSnapshotStore } from './thread-snapshot-store.js'
 import { turnServiceGraphOperations } from './turn-service-graph-operations.js'
+import { turnServiceQueuedEditOperations } from './turn-service-queued-edit.js'
 import { turnServiceQueueControlOperations } from './turn-service-queue-control.js'
 import { turnServiceQueueOperations } from './turn-service-queue-operations.js'
 import { turnServiceRuntimeStateOperations } from './turn-service-runtime-state-operations.js'
@@ -353,7 +354,8 @@ export class TurnService {
   declare private persistQueuedTurnRecord: (
     thread: ThreadRecord,
     input: { threadId: string; request: StartTurnRequest },
-    allocatedTurnId?: string
+    allocatedTurnId?: string,
+    attachmentAliases?: import('../contracts/attachment-aliases.js').AttachmentAliases
   ) => Promise<{ turnId: string; userItem: TurnItem }>
   declare private completeQueuedTurnAdmission: (input: {
     threadId: string
@@ -496,6 +498,7 @@ installServiceOperations(
   turnServiceGraphOperations,
   turnServiceQueueOperations,
   turnServiceQueueControlOperations,
+  turnServiceQueuedEditOperations,
   turnServiceRuntimeStateOperations,
   turnServiceItemPersistenceOperations
 )

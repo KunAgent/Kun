@@ -1,0 +1,40 @@
+{
+  "composerTrayWorkers": {
+    "title": "协作",
+    "ariaLabel": "协作：{{status}}",
+    "ariaLabelUnfinished": "协作：{{status}}，{{remaining}} 个未结束",
+    "segment": {
+      "waiting_other": "{{count}} 个等你处理",
+      "failed_other": "{{count}} 个失败",
+      "review_other": "{{count}} 个待审查",
+      "working_other": "{{count}} 位协作者在做",
+      "done": "协作已完成",
+      "unknown": "状态待确认"
+    },
+    "summary": {
+      "inBackground_other": "{{count}} 个在后台",
+      "done_other": "{{count}} 个已完成",
+      "unconfirmed_other": "{{count}} 个待确认"
+    },
+    "openPanel": "在协作面板打开",
+    "openWorker": "打开 {{title}}",
+    "runningFor": "已运行 {{duration}}",
+    "starting": "正在启动…",
+    "reviewPending": "等待审查",
+    "status": {
+      "waiting": "等你处理",
+      "failed": "失败",
+      "review": "待审查",
+      "done": "已完成",
+      "cancelled": "已取消",
+      "unconfirmed": "待确认"
+    },
+    "answer": "去回答",
+    "resolve": "去处理",
+    "stopWorker": "停止 {{title}}",
+    "dispatchFooter": "还可以派给：{{names}}",
+    "manageAgents": "管理 Agent",
+    "dispatchable_other": "可派 {{count}} 个 Agent",
+    "dispatchableAria": "{{label}}：{{names}}"
+  }
+}

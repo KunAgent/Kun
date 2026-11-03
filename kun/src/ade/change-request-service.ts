@@ -96,7 +96,7 @@ function normalizeChecks(raw: unknown): ChangeRequestCheck[] {
 }
 
 /**
- * Forge change requests for task workspaces (docs/ade/11 §7.2). GitHub is
+ * Forge change requests for task workspaces. GitHub is
  * the only forge with create/status support in P2 — GitLab and unknown
  * remotes are detected and reported as unsupported so the UI can explain.
  * `gh` shells out inside the WORKTREE path, never the source checkout.
@@ -159,7 +159,7 @@ export class ChangeRequestService {
     return null
   }
 
-  /** Default PR body: task, worker report, verdict, checks (11 §7.2). */
+  /** Default PR body: task, worker report, verdict, checks. */
   private async buildBody(record: TaskWorkspaceRecord, title: string): Promise<string> {
     const parts = [`## Task`, '', record.label ?? title]
     const unitId = record.unitId

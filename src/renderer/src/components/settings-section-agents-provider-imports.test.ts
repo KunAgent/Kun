@@ -62,6 +62,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       models: [
         {
           id: 'model-a',
+          matchSpecificity: 'exact',
           name: 'Model A',
           description: 'Multimodal catalog metadata',
           inputModalities: ['text', 'image', 'audio'],
@@ -597,12 +598,9 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         await Promise.resolve()
       })
 
-      const dialogText = instanceText(renderer.root.findByProps({ role: 'dialog' }))
-      expect(dialogText).toContain('Provider verification failed: 401 unauthorized')
-      expect(dialogText).toContain('No models available')
-      expect(dialogText).not.toContain('catalog-only')
-      expect(dialogText).not.toContain('model-a')
-      expect(findButton(renderer, 'Import 0').props.disabled).toBe(true)
+      expect(renderer.root.findAllByProps({ role: 'dialog' })).toHaveLength(0)
+      expect(rendererText(renderer)).toContain('401 unauthorized')
+      expect(rendererText(renderer)).not.toContain('catalog-only')
     })
   })
 })

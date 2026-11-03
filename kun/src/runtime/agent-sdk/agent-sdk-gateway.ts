@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type { HarnessGatewayAliasGrant } from '../../contracts/harness-gateway-binding.js'
 import type { ModelRouteTargetMetadata } from '../../ports/model-client.js'
 /**
- * `kun-gateway` credential mode (docs/ade/04 §5.5): the Claude SDK harness
+ * `kun-gateway` credential mode: the Claude SDK harness
  * reaches the loopback `kun serve` model gateway instead of a provider. This
  * module resolves the per-turn injection — base URL, a turn-scoped `kgw_`
  * grant restricted to the routed provider/model pair, and the harness's

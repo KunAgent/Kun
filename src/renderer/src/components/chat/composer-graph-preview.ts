@@ -6,8 +6,11 @@ import type {
   GraphRun
 } from '../../graph/graph-types'
 import {
+  GRAPH_ACTIVITY_QUIET_MS,
   graphLivenessIsProcessing,
-  graphNodeLiveness
+  graphNodeLiveness,
+  type GraphLivenessKind,
+  type GraphNodeLiveness
 } from '../../graph/graph-liveness'
 
 const terminalRunStatuses = new Set(['completed', 'failed', 'cancelled'])
@@ -24,15 +27,26 @@ const currentNodeStatuses = new Set<GraphNodeStatus>([
   'ready'
 ])
 const activeChildStatuses = new Set<GraphChildRuntime['status']>(['queued', 'running'])
+// Liveness kinds that mean a person should look (a child asked a question, or
+// supervision flagged the node).
+const attentionLivenessKinds = new Set<GraphLivenessKind>(['needs_attention', 'waiting_human'])
 
-const PHASE_WIDTH = 168
-const PHASE_GAP = 24
-const NODE_WIDTH = 144
-const NODE_HEIGHT = 58
-const NODE_GAP = 18
-const LEFT_PADDING = 24
-const TOP_PADDING = 56
-const BOTTOM_PADDING = 22
+/*
+ * Tray node map geometry (Graph board): 132 x 52 node cards in phase columns
+ * 30px apart, every column centered vertically. The canvas keeps this natural
+ * size as its maximum width and shrinks down to COMPOSER_GRAPH_MIN_SCALE of it
+ * before the card scrolls horizontally, so a wide plan never widens the tray.
+ */
+export const COMPOSER_GRAPH_NODE_WIDTH = 132
+export const COMPOSER_GRAPH_NODE_HEIGHT = 52
+export const COMPOSER_GRAPH_MIN_SCALE = 0.85
+const COLUMN_GAP = 30
+const PADDING_X = 28
+const PADDING_Y = 12
+const ROW_GAP = 22
+const DENSE_ROW_GAP = 12
+const MIN_HEIGHT = 96
+const SAME_COLUMN_BOW = 22
 
 export type ComposerGraphProgress = {
   completed: number
@@ -40,6 +54,9 @@ export type ComposerGraphProgress = {
   fraction: number
   activeAgents: string[]
   activeCount: number
+  /** Nodes doing live work right now, in plan order (segment label). */
+  activeNodeIds: string[]
+  activeNodeTitles: string[]
   currentNodeTitle: string | null
   currentNodeId: string | null
   currentStatus: GraphNodeStatus | null
@@ -52,6 +69,7 @@ export type ComposerGraphProgress = {
 export type ComposerGraphLayoutNode = {
   id: string
   phaseId: string
+  phaseTitle: string
   title: string
   objective: string
   agentName: string
@@ -60,6 +78,9 @@ export type ComposerGraphLayoutNode = {
   childThreadId?: string
   childRuntime?: GraphChildRuntime
   processing: boolean
+  livenessKind: GraphLivenessKind
+  /** A running child that has been silent for GRAPH_ACTIVITY_QUIET_MS or longer. */
+  quiet: boolean
   x: number
   y: number
   width: number
@@ -79,107 +100,20 @@ export type ComposerGraphLayout = {
   edges: ComposerGraphLayoutEdge[]
 }
 
-export type ComposerGraphFittedLabel = {
-  text: string
-  fontSize: number
-  estimatedWidth: number
-  truncated: boolean
-}
-
-function glyphWidthEm(character: string): number {
-  const codePoint = character.codePointAt(0) ?? 0
-  if (
-    codePoint === 0x200d ||
-    (codePoint >= 0x0300 && codePoint <= 0x036f) ||
-    (codePoint >= 0xfe00 && codePoint <= 0xfe0f) ||
-    (codePoint >= 0x1f3fb && codePoint <= 0x1f3ff)
-  ) {
-    return 0
-  }
-  if (/\s/u.test(character)) return 0.34
-  if (character === '…') return 0.85
-  if (
-    (codePoint >= 0x1100 && codePoint <= 0x11ff) ||
-    (codePoint >= 0x2e80 && codePoint <= 0xa4cf) ||
-    (codePoint >= 0xac00 && codePoint <= 0xd7af) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0xff01 && codePoint <= 0xff60) ||
-    (codePoint >= 0x1f000 && codePoint <= 0x1faff)
-  ) {
-    return 1
-  }
-  if (/[MW@#%&]/u.test(character)) return 0.88
-  if (/[ilI1'`.,:;|!]/u.test(character)) return 0.32
-  if (/[A-Z]/u.test(character)) return 0.66
-  if (/[a-z0-9]/u.test(character)) return 0.56
-  if ('-_()[]{}+/\\'.includes(character)) return 0.45
-  return 0.72
-}
-
-function labelWidthEm(value: string): number {
-  return [...value].reduce((width, character) => width + glyphWidthEm(character), 0)
-}
-
 /**
- * Fits a single-line SVG label without browser-only text measurement.
- * The SVG renderer still clips each label region, so font metric differences
- * across platforms can never make text escape its node.
+ * Visual state of a node card: done (check on the tray tint), running (accent
+ * ring), attention (amber dot), failed (red dot), pending (muted: waiting for
+ * upstream, or closed without acceptance), idle (ready / queued / waiting for
+ * the Lead).
  */
-export function fitComposerGraphLabel(
-  value: string,
-  maxWidth: number,
-  maxFontSize: number,
-  minFontSize: number
-): ComposerGraphFittedLabel {
-  const normalized = value.replace(/\s+/gu, ' ').trim()
-  const safeMaxWidth = Math.max(0, maxWidth)
-  const safeMaxFontSize = Math.max(0.1, Math.max(maxFontSize, minFontSize))
-  const safeMinFontSize = Math.max(0.1, Math.min(maxFontSize, minFontSize))
-  const fullWidthEm = labelWidthEm(normalized)
-  const fullWidthAtMaximum = fullWidthEm * safeMaxFontSize
-
-  if (!normalized || fullWidthAtMaximum <= safeMaxWidth) {
-    return {
-      text: normalized,
-      fontSize: safeMaxFontSize,
-      estimatedWidth: fullWidthAtMaximum,
-      truncated: false
-    }
-  }
-
-  const fittedFontSize = Math.floor((safeMaxWidth / fullWidthEm) * 100) / 100
-  if (fittedFontSize >= safeMinFontSize) {
-    return {
-      text: normalized,
-      fontSize: fittedFontSize,
-      estimatedWidth: fullWidthEm * fittedFontSize,
-      truncated: false
-    }
-  }
-
-  const ellipsisWidthEm = glyphWidthEm('…')
-  const availableWidthEm = safeMaxWidth / safeMinFontSize
-  const kept: string[] = []
-  let usedWidthEm = 0
-  for (const character of normalized) {
-    const nextWidthEm = usedWidthEm + glyphWidthEm(character)
-    if (nextWidthEm + ellipsisWidthEm > availableWidthEm) break
-    kept.push(character)
-    usedWidthEm = nextWidthEm
-  }
-  const text = kept.length < [...normalized].length ? `${kept.join('')}…` : normalized
-  const estimatedWidth = labelWidthEm(text) * safeMinFontSize
-
-  return {
-    text,
-    fontSize: safeMinFontSize,
-    estimatedWidth: Math.min(safeMaxWidth, estimatedWidth),
-    truncated: text !== normalized
-  }
-}
+export type ComposerGraphNodeState = 'done' | 'running' | 'attention' | 'failed' | 'pending' | 'idle'
 
 function currentPlan(run: GraphRun): GraphRun['plans'][number] | undefined {
   return run.plans.find((plan) => plan.revision === run.currentRevision) ?? run.plans.at(-1)
+}
+
+export function isComposerGraphRunTerminal(run: Pick<GraphRun, 'status'>): boolean {
+  return terminalRunStatuses.has(run.status)
 }
 
 export function graphNodeAgentName(projection: GraphNodeProjection): string {
@@ -200,11 +134,21 @@ export function selectComposerGraphRun(
   return runs.find((run) => !terminalRunStatuses.has(run.status)) ?? null
 }
 
+/** The live run of one thread (null when the thread has none). */
+export function selectThreadComposerGraphRun(
+  runs: readonly GraphRun[],
+  threadId: string | null,
+  selectedRunId: string | null = null
+): GraphRun | null {
+  if (!threadId) return null
+  return selectComposerGraphRun(runs.filter((run) => run.threadId === threadId), selectedRunId)
+}
+
 /**
  * True when a Graph run owns execution for this thread, so Graph node state —
  * not the originating plan checklist — is the authoritative progress metric.
  *
- * Deliberately shares `selectComposerGraphRun` with the Graph chip: the two
+ * Deliberately shares `selectComposerGraphRun` with the Graph segment: the two
  * surfaces can never disagree about which one is reporting live progress.
  */
 export function graphRunOwnsThreadProgress(
@@ -212,16 +156,13 @@ export function graphRunOwnsThreadProgress(
   threadId: string | null,
   selectedRunId: string | null = null
 ): boolean {
-  if (!threadId) return false
-  return selectComposerGraphRun(
-    runs.filter((run) => run.threadId === threadId),
-    selectedRunId
-  ) != null
+  return selectThreadComposerGraphRun(runs, threadId, selectedRunId) != null
 }
 
 export function getComposerGraphProgress(
   run: GraphRun,
-  childRuns: Readonly<Record<string, GraphChildRuntime>> = {}
+  childRuns: Readonly<Record<string, GraphChildRuntime>> = {},
+  now = Date.now()
 ): ComposerGraphProgress {
   const runTerminal = terminalRunStatuses.has(run.status)
   const plan = currentPlan(run)
@@ -238,12 +179,12 @@ export function getComposerGraphProgress(
   const projectionIsActive = (projection: GraphNodeProjection): boolean =>
     !runTerminal && (
       graphLivenessIsProcessing(
-        graphNodeLiveness(projection, childRuns, Date.now(), run.supervision)
+        graphNodeLiveness(projection, childRuns, now, run.supervision)
       ) ||
       activeChildStatuses.has(childForProjection(projection)?.status ?? 'completed')
     )
   const active = projections.filter(projectionIsActive)
-  const current = projections.find(projectionIsActive) ??
+  const current = active[0] ??
     projections.find((projection) => currentNodeStatuses.has(projection.status))
   const activeAgents = [...new Set(active.map(graphNodeAgentName))]
   const currentAttempt = current?.attempts.at(-1)
@@ -256,6 +197,8 @@ export function getComposerGraphProgress(
     fraction: plan?.nodes.length ? completed / plan.nodes.length : 0,
     activeAgents,
     activeCount: active.length,
+    activeNodeIds: active.map((projection) => projection.node.id),
+    activeNodeTitles: active.map((projection) => projection.node.title),
     currentNodeTitle: current?.node.title ?? null,
     currentNodeId: current?.node.id ?? null,
     currentStatus: current?.status ?? null,
@@ -266,47 +209,218 @@ export function getComposerGraphProgress(
   }
 }
 
-function edgePath(
-  from: ComposerGraphLayoutNode,
-  to: ComposerGraphLayoutNode
-): string {
-  const fromX = from.x + from.width
+/**
+ * Node titles for the segment label: the nodes working right now, else the
+ * current node. Capped so the label stays a short, truncatable string.
+ */
+export function composerGraphSegmentTitles(
+  progress: Pick<ComposerGraphProgress, 'activeNodeTitles' | 'currentNodeTitle'>,
+  limit = 3
+): string[] {
+  const titles = progress.activeNodeTitles.length > 0
+    ? progress.activeNodeTitles
+    : progress.currentNodeTitle ? [progress.currentNodeTitle] : []
+  return titles.map((title) => title.replace(/\s+/gu, ' ').trim()).filter(Boolean).slice(0, limit)
+}
+
+/**
+ * Epoch ms at which a running node becomes "quiet" (no child activity for
+ * GRAPH_ACTIVITY_QUIET_MS), or null when it cannot become quiet from here
+ * (already quiet, terminal, or no running child). Lets the tray schedule one
+ * re-render at the transition instead of ticking every second.
+ */
+export function composerGraphQuietDeadline(
+  liveness: GraphNodeLiveness | null | undefined,
+  nowMs: number
+): number | null {
+  if (!liveness || liveness.quiet) return null
+  if (liveness.kind === 'done' || liveness.kind === 'failed') return null
+  if (liveness.child?.status !== 'running' || liveness.lastActivityAgeMs === undefined) return null
+  return nowMs + Math.max(0, GRAPH_ACTIVITY_QUIET_MS - liveness.lastActivityAgeMs)
+}
+
+/** True when the node should pull the user's eye (silent too long, or asking). */
+export function composerGraphLivenessNeedsAttention(
+  liveness: Pick<GraphNodeLiveness, 'kind' | 'quiet'> | null | undefined
+): boolean {
+  return Boolean(liveness && (liveness.quiet || attentionLivenessKinds.has(liveness.kind)))
+}
+
+/**
+ * Why a node pulls the user's eye: a child is asking the user, supervision
+ * flagged it, or a running child has been silent for GRAPH_ACTIVITY_QUIET_MS.
+ */
+export type ComposerGraphAttentionReason = 'asking' | 'flagged' | 'quiet'
+
+// Most actionable first: an open question beats a flag beats silence.
+const ATTENTION_REASON_RANK: Record<ComposerGraphAttentionReason, number> = {
+  asking: 3,
+  flagged: 2,
+  quiet: 1
+}
+
+function livenessAttentionReason(
+  liveness: Pick<GraphNodeLiveness, 'kind' | 'quiet'>
+): ComposerGraphAttentionReason | null {
+  if (liveness.kind === 'waiting_human') return 'asking'
+  if (liveness.kind === 'needs_attention') return 'flagged'
+  return liveness.quiet ? 'quiet' : null
+}
+
+/**
+ * Whether any open node of a live run needs the user right now (a running
+ * child silent for GRAPH_ACTIVITY_QUIET_MS, a child asking, a supervision
+ * flag), the most actionable reason, and the earliest moment another node
+ * goes quiet.
+ */
+export function composerGraphAttention(
+  run: GraphRun,
+  childRuns: Readonly<Record<string, GraphChildRuntime>>,
+  nowMs: number
+): { attention: boolean; reason: ComposerGraphAttentionReason | null; quietDeadline: number | null } {
+  if (terminalRunStatuses.has(run.status)) return { attention: false, reason: null, quietDeadline: null }
+  let reason: ComposerGraphAttentionReason | null = null
+  let quietDeadline: number | null = null
+  for (const node of currentPlan(run)?.nodes ?? []) {
+    const projection = run.nodes[node.id]
+    if (!projection || completedNodeStatuses.has(projection.status)) continue
+    const liveness = graphNodeLiveness(projection, childRuns, nowMs, run.supervision)
+    if (liveness.kind === 'done' || liveness.kind === 'failed') continue
+    const nodeReason = livenessAttentionReason(liveness)
+    if (nodeReason && (!reason || ATTENTION_REASON_RANK[nodeReason] > ATTENTION_REASON_RANK[reason])) {
+      reason = nodeReason
+    }
+    const deadline = composerGraphQuietDeadline(liveness, nowMs)
+    if (deadline != null && (quietDeadline == null || deadline < quietDeadline)) quietDeadline = deadline
+  }
+  return { attention: reason != null, reason, quietDeadline }
+}
+
+/**
+ * Roving-focus target in the node map for `key` pressed on `currentId`.
+ * Nodes arrive column by column, top to bottom (layoutComposerGraph order):
+ * ↑/↓ walk that order, ←/→ jump to the nearest node of the neighbouring
+ * column, Home/End go to the first/last node. Null when nothing moves.
+ */
+export function composerGraphNavigationTarget(
+  nodes: ReadonlyArray<Pick<ComposerGraphLayoutNode, 'id' | 'x' | 'y'>>,
+  currentId: string | null,
+  key: string
+): string | null {
+  const first = nodes[0]
+  const last = nodes.at(-1)
+  if (!first || !last) return null
+  if (key === 'Home') return first.id === currentId ? null : first.id
+  if (key === 'End') return last.id === currentId ? null : last.id
+  const index = nodes.findIndex((node) => node.id === currentId)
+  const current = nodes[index]
+  if (!current) return key.startsWith('Arrow') ? first.id : null
+  if (key === 'ArrowDown') return nodes[index + 1]?.id ?? null
+  if (key === 'ArrowUp') return nodes[index - 1]?.id ?? null
+  if (key !== 'ArrowRight' && key !== 'ArrowLeft') return null
+  const columns = [...new Set(nodes.map((node) => node.x))].sort((left, right) => left - right)
+  const targetX = columns[columns.indexOf(current.x) + (key === 'ArrowRight' ? 1 : -1)]
+  if (targetX === undefined) return null
+  let target: Pick<ComposerGraphLayoutNode, 'id' | 'x' | 'y'> | null = null
+  for (const node of nodes) {
+    if (node.x !== targetX) continue
+    if (!target || Math.abs(node.y - current.y) < Math.abs(target.y - current.y)) target = node
+  }
+  return target?.id ?? null
+}
+
+export function composerGraphNodeState(
+  node: Pick<ComposerGraphLayoutNode, 'status' | 'processing' | 'livenessKind' | 'quiet'>,
+  runTerminal: boolean
+): ComposerGraphNodeState {
+  if (node.status === 'accepted') return 'done'
+  if (node.status === 'failed' || node.status === 'cancelled') return 'failed'
+  if (
+    node.status === 'skipped' || node.status === 'superseded' ||
+    node.status === 'pending' || node.status === 'blocked'
+  ) {
+    return 'pending'
+  }
+  if (runTerminal) return 'idle'
+  if (composerGraphLivenessNeedsAttention({ kind: node.livenessKind, quiet: node.quiet })) return 'attention'
+  if (node.processing) return 'running'
+  return 'idle'
+}
+
+const AGENT_AVATAR_COLORS = [
+  '#c46a3a',
+  '#3f8a5c',
+  '#5b6fd6',
+  '#8a5cc7',
+  '#b8577a',
+  '#2f8487',
+  '#9a7428'
+]
+
+/** "Claude Code" → "CC", "Codex" → "C", "测试代理" → "测". */
+export function graphAgentInitials(name: string): string {
+  const words = name.trim().split(/[\s_\-·.]+/u).filter(Boolean)
+  if (words.length === 0) return 'K'
+  const glyph = (word: string): string => (Array.from(word)[0] ?? '').toUpperCase()
+  const latin = (word: string): boolean => /^[a-z0-9]/iu.test(word)
+  const second = words.length > 1 && latin(words[0]!) && latin(words[1]!) ? glyph(words[1]!) : ''
+  return `${glyph(words[0]!)}${second}`
+}
+
+/** Stable avatar color per agent name (white glyphs stay readable on each). */
+export function graphAgentAvatarColor(name: string): string {
+  let hash = 0
+  for (const character of name.trim().toLowerCase()) {
+    hash = (hash * 31 + (character.codePointAt(0) ?? 0)) >>> 0
+  }
+  return AGENT_AVATAR_COLORS[hash % AGENT_AVATAR_COLORS.length]!
+}
+
+function edgePath(from: ComposerGraphLayoutNode, to: ComposerGraphLayoutNode): string {
   const fromY = from.y + from.height / 2
-  const toX = to.x
   const toY = to.y + to.height / 2
-  const controlOffset = Math.max(34, Math.abs(toX - fromX) * 0.45)
-  const direction = toX >= fromX ? 1 : -1
-  return [
-    `M ${fromX} ${fromY}`,
-    `C ${fromX + controlOffset * direction} ${fromY}`,
-    `${toX - controlOffset * direction} ${toY}`,
-    `${toX} ${toY}`
-  ].join(' ')
+  if (from.x === to.x) {
+    // Same phase column: bow out past the right edge so the curve never runs
+    // through the cards stacked between the two nodes.
+    const edgeX = from.x + from.width
+    const bowX = edgeX + SAME_COLUMN_BOW
+    return `M ${edgeX} ${fromY} C ${bowX} ${fromY} ${bowX} ${toY} ${edgeX} ${toY}`
+  }
+  const forward = to.x > from.x
+  const fromX = forward ? from.x + from.width : from.x
+  const toX = forward ? to.x : to.x + to.width
+  // Forward edges bend at the middle of the gap (Graph board); a backward
+  // edge loops out so it stays readable.
+  const bend = forward ? (toX - fromX) / 2 : -Math.max(34, Math.abs(toX - fromX) * 0.45)
+  return `M ${fromX} ${fromY} C ${fromX + bend} ${fromY} ${toX - bend} ${toY} ${toX} ${toY}`
 }
 
 export function layoutComposerGraph(
   run: GraphRun,
-  childRuns: Readonly<Record<string, GraphChildRuntime>> = {}
+  childRuns: Readonly<Record<string, GraphChildRuntime>> = {},
+  now = Date.now()
 ): ComposerGraphLayout {
   const plan = currentPlan(run)
-  if (!plan) return { width: 640, height: 220, phases: [], nodes: [], edges: [] }
+  if (!plan) return { width: PADDING_X * 2, height: MIN_HEIGHT, phases: [], nodes: [], edges: [] }
   const runTerminal = terminalRunStatuses.has(run.status)
   const phases = [...plan.phases].sort((left, right) => left.order - right.order)
-  const nodesByPhase = new Map<string, ComposerGraphLayoutNode[]>()
+  const phaseTitles = new Map(phases.map((phase) => [phase.id, phase.title]))
+  const columns = new Map<string, Array<Omit<ComposerGraphLayoutNode, 'x' | 'y'>>>(
+    phases.map((phase) => [phase.id, []])
+  )
 
   for (const node of plan.nodes) {
     const projection = run.nodes[node.id]
     if (!projection) continue
-    const phaseIndex = Math.max(0, phases.findIndex((phase) => phase.id === node.phaseId))
-    const phaseNodes = nodesByPhase.get(node.phaseId) ?? []
     const attempt = projection.attempts.at(-1)
     const childThreadId = attempt?.childThreadId
-    const processing = !runTerminal && graphLivenessIsProcessing(
-      graphNodeLiveness(projection, childRuns, Date.now(), run.supervision)
-    )
-    const layoutNode: ComposerGraphLayoutNode = {
+    const liveness = graphNodeLiveness(projection, childRuns, now, run.supervision)
+    // A node whose phase is missing from the plan gets its own trailing column.
+    const column = columns.get(node.phaseId) ?? []
+    column.push({
       id: node.id,
       phaseId: node.phaseId,
+      phaseTitle: phaseTitles.get(node.phaseId) ?? '',
       title: node.title,
       objective: node.objective,
       agentName: graphNodeAgentName(projection),
@@ -316,17 +430,32 @@ export function layoutComposerGraph(
       ...(childThreadId && childRuns[childThreadId]
         ? { childRuntime: childRuns[childThreadId] }
         : {}),
-      processing,
-      x: LEFT_PADDING + phaseIndex * (PHASE_WIDTH + PHASE_GAP),
-      y: TOP_PADDING + phaseNodes.length * (NODE_HEIGHT + NODE_GAP),
-      width: NODE_WIDTH,
-      height: NODE_HEIGHT
-    }
-    phaseNodes.push(layoutNode)
-    nodesByPhase.set(node.phaseId, phaseNodes)
+      processing: !runTerminal && graphLivenessIsProcessing(liveness),
+      livenessKind: liveness.kind,
+      quiet: !runTerminal && liveness.quiet,
+      width: COMPOSER_GRAPH_NODE_WIDTH,
+      height: COMPOSER_GRAPH_NODE_HEIGHT
+    })
+    columns.set(node.phaseId, column)
   }
 
-  const nodes = phases.flatMap((phase) => nodesByPhase.get(phase.id) ?? [])
+  // Empty phases take no column.
+  const filled = [...columns.entries()].filter(([, column]) => column.length > 0)
+  const maximumRows = Math.max(1, ...filled.map(([, column]) => column.length))
+  const rowGap = maximumRows > 2 ? DENSE_ROW_GAP : ROW_GAP
+  const stackHeight = (rows: number): number =>
+    rows * COMPOSER_GRAPH_NODE_HEIGHT + Math.max(0, rows - 1) * rowGap
+  const height = Math.max(MIN_HEIGHT, PADDING_Y * 2 + stackHeight(maximumRows))
+  const columnX = (index: number): number =>
+    PADDING_X + index * (COMPOSER_GRAPH_NODE_WIDTH + COLUMN_GAP)
+  const nodes = filled.flatMap(([, column], index) => {
+    const top = (height - stackHeight(column.length)) / 2
+    return column.map((node, row) => ({
+      ...node,
+      x: columnX(index),
+      y: top + row * (COMPOSER_GRAPH_NODE_HEIGHT + rowGap)
+    }))
+  })
   const nodeLookup = new Map(nodes.map((node) => [node.id, node]))
   const edges = plan.edges.flatMap((edge) => {
     const from = nodeLookup.get(edge.from)
@@ -335,22 +464,17 @@ export function layoutComposerGraph(
       ? [{ ...edge, path: edgePath(from, to), flowing: to.processing }]
       : []
   })
-  const maximumRows = Math.max(1, ...[...nodesByPhase.values()].map((items) => items.length))
-  const width = Math.max(
-    640,
-    LEFT_PADDING * 2 + phases.length * PHASE_WIDTH + Math.max(0, phases.length - 1) * PHASE_GAP
-  )
-  const height = TOP_PADDING + maximumRows * NODE_HEIGHT
-    + Math.max(0, maximumRows - 1) * NODE_GAP + BOTTOM_PADDING
+  const width = PADDING_X * 2 + filled.length * COMPOSER_GRAPH_NODE_WIDTH +
+    Math.max(0, filled.length - 1) * COLUMN_GAP
 
   return {
     width,
     height,
-    phases: phases.map((phase, index) => ({
-      id: phase.id,
-      title: phase.title,
-      x: LEFT_PADDING + index * (PHASE_WIDTH + PHASE_GAP),
-      width: PHASE_WIDTH
+    phases: filled.map(([id], index) => ({
+      id,
+      title: phaseTitles.get(id) ?? '',
+      x: columnX(index),
+      width: COMPOSER_GRAPH_NODE_WIDTH
     })),
     nodes,
     edges

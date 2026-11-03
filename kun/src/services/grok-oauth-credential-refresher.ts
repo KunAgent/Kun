@@ -1,4 +1,5 @@
 import { GROK_CLI_VERSION } from '../adapters/model/provider-cli-identity.js'
+import { mayRefreshOAuthCredential, runInsideOAuthRefresh } from './oauth-refresh-scope.js'
 
 export const GROK_OAUTH_CLIENT_ID = 'b1a00492-073a-47ea-816f-4c329264a828'
 export const GROK_OAUTH_ISSUER = 'https://auth.x.ai'
@@ -76,7 +77,9 @@ export class GrokOAuthCredentialRefresher {
     const shouldRefresh = rejectedAccessToken
       ? credentials.accessToken === rejectedAccessToken
       : isStoredGrokCredentialExpired(credentials, this.nowMs())
-    if (shouldRefresh) {
+    // Read-only chains and resolutions nested inside this source's own refresh
+    // use the stored credential instead of refreshing (or waiting for) it.
+    if (shouldRefresh && mayRefreshOAuthCredential(sourceId)) {
       await this.refreshSingleFlight(sourceId, rejectedAccessToken)
       resolved = await this.store.resolveApiKey(sourceId)
       if (!resolved) {
@@ -97,7 +100,7 @@ export class GrokOAuthCredentialRefresher {
   ): Promise<void> {
     let pending = this.inflight.get(sourceId)
     if (!pending) {
-      pending = this.refreshSource(sourceId, rejectedAccessToken)
+      pending = runInsideOAuthRefresh(sourceId, () => this.refreshSource(sourceId, rejectedAccessToken))
       this.inflight.set(sourceId, pending)
       void pending.finally(() => {
         if (this.inflight.get(sourceId) === pending) this.inflight.delete(sourceId)

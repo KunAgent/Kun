@@ -10,6 +10,13 @@ export function AgentDirectoryModelSummary({ agentId }: { agentId: string }) {
   const provider = state.data?.options.find((item) => modelBindingKey(item) === modelBindingKey(model))
   if (state.error) return <div className="agent-directory-model-summary" role="alert"><small>{state.error}</small>
     <button type="button" onClick={state.refresh}>{t('directCreationModelsRefresh')}</button></div>
+  const executor = state.data?.agent.executor
+  if (executor) return <div className="agent-directory-model-summary">
+    <small>{t('directRoleDefaultModel')}</small>
+    <span title={[executor.harnessId, executor.model].join(' / ')}>{executor.model}</span>
+    <small>{t(executor.credentialMode === 'native-login' ? 'directCodingAgentOwnSignIn'
+      : executor.credentialMode === 'kun-gateway' ? 'directCodingAgentViaGateway' : 'directCodingAgentViaProvider')}</small>
+  </div>
   return <div className="agent-directory-model-summary">
     <small>{t('directRoleDefaultModel')}</small>
     <span title={[provider?.providerLabel ?? model?.providerId, model?.accountId, model?.model].filter(Boolean).join(' / ')}>

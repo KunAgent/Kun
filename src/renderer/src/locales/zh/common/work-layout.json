@@ -5,7 +5,6 @@
   "workRailReviewCount": "修订 · {{count}} 处待审阅",
   "workRailReferences": "引用与资料",
   "workRailReferencesCount": "引用与资料 · {{count}} 项",
-  "workRailHistory": "会话历史",
   "workOutlineSummary": "{{count}} 个标题",
   "workOutlineEmpty": "文档里还没有标题。用 # 开始一个章节，大纲会显示在这里。",
   "workOutlineUnavailable": "大纲仅在文档编辑视图中可用。",
@@ -24,6 +23,5 @@
   "workReferencesClear": "清空",
   "workReferencesPage": "第 {{page}} 页",
   "workReferencesLines": "第 {{start}}–{{end}} 行",
-  "workHistoryNoResource": "打开一个文件或白板后，这里会列出它的会话。",
   "workAssistantSelectionChip": "选区 · {{count}} 字"
 }

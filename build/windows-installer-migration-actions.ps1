@@ -381,6 +381,40 @@ function Remove-EmptyLegacyContainers {
   }
 }
 
+function Stage-ExtractedUpdatePayload {
+  $transaction = Read-UpdateTransaction
+  if ($null -eq $transaction -or [string]$transaction.Phase -ne 'prepared') {
+    throw 'Only a prepared automatic update may stage an extracted candidate.'
+  }
+  if (-not (Test-AutomaticUpdateRequested)) { throw 'Candidate staging requires an automatic update.' }
+  # This is the helper's own fixed NSIS plugin child, never a caller-provided
+  # source path. The authoritative transaction stage and same-volume cutover
+  # remain unchanged; only extraction uses the shorter temporary directory.
+  $candidate = Normalize-FullPath (Join-Path $PSScriptRoot 'kun-candidate')
+  $stage = Normalize-FullPath ([string]$transaction.StageRoot)
+  foreach ($path in @($candidate, $stage)) { Assert-SafeInstallRoot $path 'Automatic update candidate staging' }
+  foreach ($path in @(
+    ([string]$transaction.Source), ([string]$transaction.Target), $stage,
+    ([string]$transaction.BackupRoot), ([string]$transaction.OldPayloadRoot),
+    ([string]$transaction.FailedPayloadRoot), ([string]$transaction.AssetsRoot),
+    (Get-JournalPath), (Get-UpdateTransactionPath)
+  )) {
+    if ((Test-PathWithin $candidate $path) -or (Test-PathWithin $path $candidate)) {
+      throw 'The extracted candidate overlaps an authoritative install or recovery path.'
+    }
+  }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  [KunInstallerPayloadCopy]::Validate($candidate)
+  $manifest = Join-Path $candidate 'resources\kun-runtime-integrity.json'
+  Assert-NonEmptyPayloadFile $manifest 'the extracted candidate runtime integrity manifest'
+  Assert-PackagedInstallPayloadAt $candidate
+  [KunInstallerPayloadCopy]::CopyExtractedCandidate($candidate, $stage)
+  Assert-PackagedInstallPayloadAt $stage
+  Write-InstallerDiagnostic 'STAGED_CANDIDATE verified=tree-type-size phase=prepared'
+  # NSIS owns the temporary child lifetime. On failure retain the journal,
+  # backup and partial stage so the authenticated rollback path can recover.
+}
+
 function Assert-UpdateHealthResult {
   $transaction = Read-UpdateTransaction
   if ($null -eq $transaction) { throw 'The automatic update transaction is unavailable.' }

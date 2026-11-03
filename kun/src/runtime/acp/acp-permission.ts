@@ -1,17 +1,19 @@
 /**
- * ACP `session/request_permission` handling (docs/ade/03 §8.3).
+ * ACP `session/request_permission` handling.
  * The agent's tool call is translated into a Kun approval envelope and put
  * through the normal approval pipeline (policy → agent reviewer → user
- * gate). Kun approvals have once-only semantics, so an `allow` maps to
- * `allow_once` — `allow_always` is only ever selected when it is the
- * sole option the agent offered.
+ * gate). Unqualified approval authorizes one call only. Standing permission
+ * options require the human to choose that exact option explicitly.
  */
 import {
   createApprovalActionEnvelope,
   createApprovalRequest,
   safeApprovalActionSummary,
-  type ApprovalRequest
+  type ApprovalRequest,
+  type ApprovalResolution
 } from '../../domain/approval.js'
+import { approvalChoiceIsValid } from '../../contracts/approval-choice.js'
+import { validAcpPermissionMenu } from './acp-permission-options.js'
 import type { ApprovalActionEnvelope } from '../../contracts/approvals.js'
 import type { AcpRequestPermissionParams } from './acp-schema.js'
 
@@ -24,7 +26,11 @@ export type AcpPermissionOption = {
 /** What the runtime injects: build + gate + decide, same as tool calls. */
 export type AcpApproveFn = (
   approval: ApprovalRequest
-) => Promise<'allow' | 'deny'>
+) => Promise<'allow' | 'deny' | ApprovalResolution>
+
+export function acpDecision(resolution: 'allow' | 'deny' | ApprovalResolution): 'allow' | 'deny' {
+  return typeof resolution === 'string' ? resolution : resolution.decision
+}
 
 /**
  * Once-approved (kind, target) pairs for the current turn. When an agent
@@ -104,7 +110,7 @@ export class AcpPendingPermissions {
   }
 }
 
-/** §8.3 kind mapping for the approval envelope. */
+/** kind mapping for the approval envelope. */
 export function acpPermissionActionKind(
   kind: string | null | undefined
 ): { actionKind: 'command' | 'file' | 'network' | 'external-effect' | 'unknown'
@@ -124,6 +130,33 @@ export function acpPermissionActionKind(
   }
 }
 
+/**
+ * Execution detail the ACP agent actually declared for a tool call. The title
+ * is presentation text and must never be treated as the authorized command.
+ */
+export function acpExecutionDetail(toolCall: {
+  kind?: string | null
+  rawInput?: unknown
+}): { command?: string; cwd?: string } {
+  const raw = toolCall.rawInput
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const record = raw as { command?: unknown; args?: unknown; cwd?: unknown }
+  const argv = typeof record.command === 'string'
+    ? [record.command]
+    : Array.isArray(record.command)
+      ? record.command.filter((part): part is string => typeof part === 'string')
+      : []
+  const args = Array.isArray(record.args)
+    ? record.args.filter((part): part is string => typeof part === 'string')
+    : []
+  const command = argv.length ? [argv[0], ...args].join(' ') : ''
+  const cwd = typeof record.cwd === 'string' && record.cwd.trim() ? record.cwd.trim() : undefined
+  return {
+    ...(command ? { command } : {}),
+    ...(cwd ? { cwd } : {})
+  }
+}
+
 /** Build the approval request (envelope + request shell) for a tool call. */
 export function approvalRequestFromAcp(input: {
   params: AcpRequestPermissionParams
@@ -140,7 +173,8 @@ export function approvalRequestFromAcp(input: {
     (location): location is { path: string; line?: number | null } =>
       typeof location?.path === 'string' && location.path.length > 0
   )
-  const action: ApprovalActionEnvelope = createApprovalActionEnvelope({
+  const execution = acpExecutionDetail(toolCall)
+  let action: ApprovalActionEnvelope = createApprovalActionEnvelope({
     toolName,
     providerKind: 'delegation',
     toolKind,
@@ -153,16 +187,24 @@ export function approvalRequestFromAcp(input: {
     arguments: {
       ...(toolCall.title ? { title: toolCall.title } : {}),
       kind,
+      ...(execution.command ? { command: execution.command } : {}),
+      ...(execution.cwd ? { cwd: execution.cwd } : {}),
       ...(locations.length
         ? { locations: locations.map((l) => ({ path: l.path, ...(l.line ? { line: l.line } : {}) })) }
         : {}),
       ...(toolCall.rawInput !== undefined
         ? { rawInput: truncateForApproval(toolCall.rawInput) }
-        : {})
+        : {}),
+      ...(toolCall.content?.some((item) => item.type === 'diff') ? {
+        changes: toolCall.content.filter((item) => item.type === 'diff')
+      } : {})
     },
     workspace: input.workspace,
     reason: toolCall.title ?? `ACP agent requested permission for ${toolName}`
   })
+  if (input.params.options.length) {
+    action = Object.freeze({ ...action, permissionOptions: input.params.options.map(({ optionId, kind, name }) => ({ optionId, kind, name })) })
+  }
   return createApprovalRequest({
     id: input.approvalId,
     threadId: input.threadId,
@@ -174,21 +216,30 @@ export function approvalRequestFromAcp(input: {
 }
 
 /**
- * Pick the response option for a Kun decision. `allow` prefers
- * `allow_once`; `allow_always` is only selected when no once-option exists
- * (never widening permission beyond this call — §8.3).
+ * Preserve an explicit human choice. Unqualified decisions never grant a
+ * standing permission, even when the agent offers no once-only alternative.
  */
 export function pickPermissionOutcome(
   options: readonly AcpPermissionOption[],
-  decision: 'allow' | 'deny' | 'cancelled'
+  resolution: 'allow' | 'deny' | 'cancelled' | ApprovalResolution
 ): { outcome: { outcome: 'selected'; optionId: string } } | { outcome: { outcome: 'cancelled' } } {
-  if (decision === 'cancelled') return { outcome: { outcome: 'cancelled' } }
+  // Validate the entire menu before every selection path, including automatic
+  // once-only approval. An ID shared with an always/deny option is ambiguous.
+  if (!validAcpPermissionMenu(options)) {
+    return { outcome: { outcome: 'cancelled' } }
+  }
+  if (resolution === 'cancelled') return { outcome: { outcome: 'cancelled' } }
+  const decision = acpDecision(resolution)
+  const choice = typeof resolution === 'object' ? resolution.choice : undefined
+  if (choice) {
+    const valid = approvalChoiceIsValid(options.map((option) => ({ ...option, name: option.name ?? '' })), decision, choice)
+    if (!valid || 'cancelled' in choice || typeof resolution !== 'object' || resolution.reviewer !== 'user') return { outcome: { outcome: 'cancelled' } }
+    return { outcome: { outcome: 'selected', optionId: choice.optionId } }
+  }
   const wanted =
     decision === 'allow'
-      ? (options.find((o) => o.kind === 'allow_once') ??
-        options.find((o) => o.kind === 'allow_always'))
-      : (options.find((o) => o.kind === 'reject_once') ??
-        options.find((o) => o.kind === 'reject_always'))
+      ? options.find((o) => o.kind === 'allow_once')
+      : options.find((o) => o.kind === 'reject_once')
   return wanted
     ? { outcome: { outcome: 'selected', optionId: wanted.optionId } }
     : { outcome: { outcome: 'cancelled' } }
@@ -208,19 +259,8 @@ export async function acpPermissionTargets(
   const kind = toolCall.kind ?? 'other'
   const targets: Array<{ kind: 'file' | 'command'; target: string }> = []
   if (kind === 'execute') {
-    const raw = toolCall.rawInput
-    const command =
-      raw && typeof raw === 'object' && typeof (raw as { command?: unknown }).command === 'string'
-        ? (raw as { command: string }).command
-        : toolCall.title ?? ''
+    const command = acpExecutionDetail(toolCall).command
     if (command) targets.push({ kind: 'command', target: command })
-    const args =
-      raw && typeof raw === 'object' && Array.isArray((raw as { args?: unknown }).args)
-        ? (raw as { args: unknown[] }).args.filter((a): a is string => typeof a === 'string')
-        : []
-    if (command && args.length) {
-      targets.push({ kind: 'command', target: [command, ...args].join(' ') })
-    }
   }
   for (const location of toolCall.locations ?? []) {
     if (typeof location?.path === 'string' && location.path) {

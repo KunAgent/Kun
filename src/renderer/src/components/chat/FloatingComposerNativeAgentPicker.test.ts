@@ -63,6 +63,19 @@ function render(harnessId: string, threadId?: string): void {
 }
 
 describe('FloatingComposerNativeAgentPicker', () => {
+  it('explains when a plugin replaced the Agent\'s own build and plan', () => {
+    useHarnessStore.setState({ models: { opencode: { models: ['m'], loading: false,
+      agents: [{ id: 'Sisyphus - ultraworker' }, { id: 'Prometheus - Plan Builder' }] } } })
+    render('opencode')
+    act(() => host.querySelector<HTMLButtonElement>('[data-native-agent-picker] button')!.click())
+    expect(document.querySelector('[data-native-agent-replaced]')?.textContent)
+      .toBe("OpenCode's built-in plan / build are not listed: a plugin or its configuration replaced them. These are the Agents OpenCode offers now.")
+    act(() => host.querySelector<HTMLButtonElement>('[data-native-agent-picker] button')!.click())
+    useHarnessStore.setState({ models: { opencode: { models: ['m'], loading: false, agents: [{ id: 'build' }, { id: 'plan' }] } } })
+    act(() => host.querySelector<HTMLButtonElement>('[data-native-agent-picker] button')!.click())
+    expect(document.querySelector('[data-native-agent-replaced]')).toBeNull()
+  })
+
   it('stays hidden for Agents without switchable native Agents', () => {
     render('devin')
     expect(host.querySelector('[data-native-agent-picker]')).toBeNull()

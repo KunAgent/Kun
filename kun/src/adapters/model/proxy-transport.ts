@@ -67,6 +67,8 @@ export type ProxyTransportBody = {
  * `destroy` can fire, and a single `settled` guard ensures the Promise settles
  * exactly once.
  */
+const NULL_BODY_STATUSES = new Set([101, 204, 205, 304])
+
 export function proxyTransportRequest(options: {
   url: URL
   method: string
@@ -110,12 +112,22 @@ export function proxyTransportRequest(options: {
             responseHeaders.set(key, String(value))
           }
         }
-        const webBody = Readable.toWeb(response) as ReadableStream<Uint8Array>
-        resolve(new Response(webBody, {
-          status: response.statusCode ?? 0,
-          statusText: response.statusMessage ?? '',
-          headers: responseHeaders
-        }))
+        const status = response.statusCode ?? 0
+        // The Response constructor throws for these statuses (and for HEAD) when given a
+        // body; thrown inside this event handler that would be an uncaught exception.
+        const bodiless = method === 'HEAD' || NULL_BODY_STATUSES.has(status)
+        if (bodiless) response.resume()
+        try {
+          const webBody = bodiless ? null : Readable.toWeb(response) as ReadableStream<Uint8Array>
+          resolve(new Response(webBody, {
+            status,
+            statusText: response.statusMessage ?? '',
+            headers: responseHeaders
+          }))
+        } catch (error) {
+          response.destroy()
+          reject(error instanceof Error ? error : new Error(String(error)))
+        }
       }
     )
 

@@ -1,5 +1,6 @@
 import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { nativeAgentNetworkEnv } from '../harness/native-agent-network.js'
+import { acpSessionCatalog } from '../harness/acp-model-catalog.js'
 /**
  * Delegated-turn-runtime dep assembly for the main serve scope. Extracted
  * from runtime-composition-agent.ts to keep that file under the line-count
@@ -35,6 +36,8 @@ import { harnessDefaultsFor } from '../harness/harness-defaults.js'
 import { buildCodexAppServerDeps } from './runtime-composition-codex.js'
 import { buildPiRpcDeps } from './runtime-composition-pi.js'
 import type { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
+import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 
 export type MainDelegatedRuntimeInput = {
   options: KunServeRuntimeOptions
@@ -115,11 +118,11 @@ export function buildMainDelegatedRuntime(
     ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     ...(input.memoryStore ? { memoryStore: input.memoryStore } : {}),
     ...(input.memoryFeedback ? { memoryFeedback: input.memoryFeedback } : {}),
-    ...((input.options.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY) ? { pathToClaudeCodeExecutable: input.options.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY } : {}),
+    ...withClaudeCodeExecutable(claudeCodeSdkExecutable(harnessCommandOverride(input.options.harnesses, 'claude-code'))),
     sessionCoordinator: delegatedSessions,
     contextProfile: delegatedContextProfile,
     deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
-    // `kun-gateway` credential mode (docs/ade/04 §5.5): grant issuance,
+    // `kun-gateway` credential mode: grant issuance,
     // loopback endpoint, roles, and the catalog's gateway env block.
     harnessTokens: services.harnesses.tokens,
     harnessGatewayBaseUrl: () => services.harnesses.gatewayEndpoint.baseUrl,
@@ -144,7 +147,7 @@ export function buildMainDelegatedRuntime(
     defaultModel: input.options.model,
     systemPrompt: prefix.systemPrompt,
     binaryPath:
-      input.options.harnesses?.binaryPaths?.antigravity ?? process.env.KUN_ANTIGRAVITY_BINARY ??
+      harnessCommandOverride(input.options.harnesses, 'antigravity') ?? process.env.KUN_ANTIGRAVITY_BINARY ??
       resolveAntigravityCliCommand(core.activeOptions.dataDir)?.command,
     threadStore,
     sessionStore,
@@ -202,7 +205,8 @@ export function buildMainDelegatedRuntime(
   const acpRuntimeDeps: AcpRuntimeDeps = {
     readiness: services.harnesses.readiness,
     catalog: services.harnesses.catalog,
-    binaryPath: (harnessId) => core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+    onNativeSession: (definition, session) => services.harnesses.acpModels.seed(definition, acpSessionCatalog(definition, session)),
+    binaryPath: (harnessId) => harnessCommandOverride(core.activeOptions.harnesses, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),
     resolveSecretEnv: services.harnesses.resolveSecretEnv, threadStore, sessionStore,
     turns: turnService,
@@ -223,7 +227,7 @@ export function buildMainDelegatedRuntime(
     defaultApprovalReviewer: input.options.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
     turnLimits: input.options.runtime?.turnLimits,
     awaitWorkspaceCheckpoint: (id, sig) => waitForWorkspaceCheckpoint(core.activeOptions.dataDir, id, sig),
-    // P4-03: a real launch failure outweighs any earlier probe verdict.
+    // a real launch failure outweighs any earlier probe verdict.
     onLaunchFailure: (id, detail) => services.harnesses.detector.recordLaunchFailure(id, detail),
     ...(llmDebug ? { debugSink: llmDebug } : {}),
     nowIso,
@@ -234,7 +238,7 @@ export function buildMainDelegatedRuntime(
     antigravity: antigravityRuntimeDeps,
     cursor: cursorRuntimeDeps,
     acp: acpRuntimeDeps,
-    // P6-07: native `codex app-server` transport on the shared session layer;
+    // native `codex app-server` transport on the shared session layer;
     // dep assembly lives in runtime-composition-codex.ts.
     codexAppServer: buildCodexAppServerDeps(input.options, services.harnesses, {
       sessionCoordinator: delegatedSessions,
@@ -251,9 +255,10 @@ export function buildMainDelegatedRuntime(
       attachmentStore: input.attachmentStore,
       taskWorkspaces: input.taskWorkspaces,
       debugSink: llmDebug,
+      kunToolsMcp: services.kunToolsMcp,
       nowIso
     }),
-    // P6-09/11: native `pi --mode rpc` transport on the shared session layer;
+    // native `pi --mode rpc` transport on the shared session layer;
     // dep assembly lives in runtime-composition-pi.ts.
     piRpc: buildPiRpcDeps(input.options, services.harnesses, {
       sessionCoordinator: delegatedSessions,
@@ -276,4 +281,8 @@ export function buildMainDelegatedRuntime(
     // native turns so the usage index and composer footer stay correct.
     usage: core.usageService
   }
+}
+
+function withClaudeCodeExecutable(path: string | undefined): { pathToClaudeCodeExecutable?: string } {
+  return path ? { pathToClaudeCodeExecutable: path } : {}
 }

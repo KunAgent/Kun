@@ -1,3 +1,5 @@
+import { trackProduct } from '../../product-analytics/client'
+import { noteAnalyticsRoomRendered } from '../../product-analytics/presentation'
 import { RoomPopover } from './RoomPopover'
 import { useLayoutEffect, useState } from 'react'
 import { ArrowUpRight, BellRing, Check, Copy, MoreHorizontal, Pin, Reply } from 'lucide-react'
@@ -12,6 +14,9 @@ import { RoomProposalCard } from './RoomProposalCard'
 import { RoomAppConnectionCard } from './RoomAppConnectionCard'
 import { RoomWorkbenchTaskCard } from './RoomWorkbenchTaskCard'
 import { roomPath, roomRequestId, roomsRequest } from './rooms-client'
+import { useFocusModeStore } from '../../store/focus-mode-store'
+import { RoomTurnClock, RoomTurnResult, RoomTurnTrail } from './RoomTurnParts'
+import type { RoomTurnPosition } from './room-turn-steps'
 import './rooms-reminders.css'
 import './rooms-polish.css'
 import { noteRoomMessageRendered } from './room-im-response-metrics'
@@ -39,7 +44,8 @@ export function RoomMessageRow({
   onRun,
   onHandoff,
   onOpenContent,
-  continuation = false
+  continuation = false,
+  turn
 }: {
   message: RoomMessage
   room?: Room
@@ -57,9 +63,12 @@ export function RoomMessageRow({
   onHandoff?: (id: string) => void
   onOpenContent?: (reference: RoomContentReference, messageId?: string) => void
   continuation?: boolean
+  /** Private chat only: this Agent message's place in its turn. */
+  turn?: RoomTurnPosition
 }) {
   const { t } = useTranslation('common')
-  useLayoutEffect(() => { noteRoomMessageRendered(message) }, [message])
+  const focusMode = useFocusModeStore((state) => state.enabled)
+  useLayoutEffect(() => { noteRoomMessageRendered(message); noteAnalyticsRoomRendered(message) }, [message])
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [reactBusy, setReactBusy] = useState(false)
@@ -72,6 +81,10 @@ export function RoomMessageRow({
     finally { setPinBusy(false) }
   }
   const system = message.authorKind === 'system'
+  // The avatar opens the author's member card; focus mode hides the avatar, so
+  // the name keeps that entry instead of leaving the row without one.
+  const authorId = message.authorMemberId && member && !member.removedAt ? message.authorMemberId : undefined
+  const openAuthor = authorId && onMember ? () => onMember(authorId, message.rootRequestId) : undefined
   const progressPrefix = message.taskId ? `progress-${message.taskId}-` : ''
   const legacyTaskProgress = Boolean(message.taskId &&
     message.id.startsWith(progressPrefix) &&
@@ -81,6 +94,7 @@ export function RoomMessageRow({
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(message.body)
+      if (message.authorKind === 'member') trackProduct({ name: 'result_action', properties: { mode: 'room', action: 'copy' } })
       setCopied(true)
       setCopyError('')
     } catch (cause) {
@@ -121,16 +135,18 @@ export function RoomMessageRow({
           member={member}
           id={message.authorMemberId ?? message.authorKind}
           label={message.authorLabelSnapshot}
-          onClick={
-            message.authorMemberId && member && !member.removedAt && onMember
-              ? () => onMember(message.authorMemberId!, message.rootRequestId)
-              : undefined
-          }
+          onClick={openAuthor}
         />
       ) : null}
       <div className="rooms-message-content">
         <div className="rooms-message-meta">
-          <strong>{message.authorLabelSnapshot}</strong>
+          {focusMode && !continuation && openAuthor ? (
+            <button type="button" className="rooms-message-author" onClick={openAuthor}>
+              {message.authorLabelSnapshot}
+            </button>
+          ) : (
+            <strong>{message.authorLabelSnapshot}</strong>
+          )}
           {member && !system ? (
             <span className="rooms-message-role">{member.agentTitle || t(roles[member.role])}</span>
           ) : null}
@@ -144,7 +160,9 @@ export function RoomMessageRow({
               minute: '2-digit'
             })}
           </time>
+          {turn?.first ? <RoomTurnClock roomId={message.roomId} runId={turn.runId} /> : null}
         </div>
+        {turn ? <RoomTurnTrail roomId={message.roomId} runId={turn.runId} since={turn.since} until={message.createdAt} /> : null}
         <div
           className={`rooms-message-bubble${message.attachmentIds.length ? ' rooms-message-wide' : ''}`}
         >
@@ -236,6 +254,10 @@ export function RoomMessageRow({
             </RoomPopover>
           </div>
         </div>
+        {turn?.last ? <>
+          <RoomTurnTrail roomId={message.roomId} runId={turn.runId} since={message.createdAt} />
+          <RoomTurnResult roomId={message.roomId} runId={turn.runId} onRun={onRun} />
+        </> : null}
         {pinned ? <p role="status" className="rooms-message-feedback">{t('roomsPinnedAsRule')}</p> : null}
         {copyError ? (
           <p role="alert" className="rooms-message-error">

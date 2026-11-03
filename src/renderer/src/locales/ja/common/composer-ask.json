@@ -1,0 +1,31 @@
+{
+  "composerAsk": {
+    "cardLabel": "Kun からの質問",
+    "previousQuestion": "前の質問",
+    "nextQuestion": "次の質問",
+    "freeTextPlaceholder": "自分で回答を入力…",
+    "otherPlaceholder": "その他 — 自分で回答を入力…",
+    "ruleAny": "該当するものをいくつでも選択",
+    "ruleMax_one": "最大 {{count}} 件まで選択",
+    "ruleMax_other": "最大 {{count}} 件まで選択",
+    "ruleMin_one": "{{count}} 件以上選択",
+    "ruleMin_other": "{{count}} 件以上選択",
+    "ruleExact_one": "{{count}} 件選択",
+    "ruleExact_other": "{{count}} 件選択",
+    "ruleRange": "{{min}}〜{{max}} 件選択",
+    "hintSingle": "↑↓ か数字キーで選択、Enter で{{enter}}、Esc で{{escape}}",
+    "hintMulti": "↑↓ で移動、Space で切り替え、Enter で{{enter}}",
+    "hintText": "Enter で{{enter}}、Shift+Enter で改行",
+    "hintTextOnly": "Enter で{{enter}}、Shift+Enter で改行、Esc で{{escape}}",
+    "hintEnterSubmit": "送信",
+    "hintEnterNext": "次へ",
+    "hintEscapeSkip": "スキップ",
+    "hintEscapeBack": "戻る",
+    "skip": "スキップ",
+    "submit": "送信",
+    "next": "次へ",
+    "submitting": "送信中…",
+    "submitFailed": "回答が届きませんでした：{{message}}",
+    "submitFailedGeneric": "回答が届きませんでした。もう一度お試しください。"
+  }
+}

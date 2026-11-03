@@ -5,6 +5,8 @@ import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
 import type { TurnItem } from '../../contracts/items.js'
 import { BUILTIN_HARNESSES } from '../../harness/builtin-harnesses.js'
+import { AcpModelProbe } from '../../harness/acp-model-probe.js'
+import { acpSessionCatalog } from '../../harness/acp-model-catalog.js'
 import { createAcpCredentialEnv } from './acp-credential-env.js'
 import { KunToolsMcpProvider } from './kun-tools-mcp.js'
 import { HarnessTokenService } from '../../harness/harness-token-service.js'
@@ -51,6 +53,18 @@ describe('AcpRuntime.runTurn', () => {
     expect(binding?.nativeSessionId).toBe('sess-basic')
   })
 
+  test('populates the model catalog from the real conversation session only', async () => {
+    const catalog = new AcpModelProbe()
+    const h = await makeHarness('basic-chat.json', { deps: {
+      onNativeSession: (definition, session) => catalog.seed(definition, acpSessionCatalog(definition, session))
+    } })
+    expect(await catalog.probe(h.definition)).toEqual([])
+    expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
+    expect(h.requests('session/new')).toHaveLength(1)
+    expect(await catalog.probe(h.definition)).toEqual(['fake-model-1', 'fake-model-2'])
+    expect(h.recorded.some((event) => event.kind === 'harness_session_state')).toBe(true)
+  })
+
   test('rejects a non-ACP harness route', async () => {
     const h = await makeHarness('basic-chat.json', {
       thread: { harnessId: 'not-acp' },
@@ -76,7 +90,7 @@ describe('AcpRuntime.runTurn', () => {
       new AbortController().signal
     )
     expect(outcome).toBe('completed')
-    // allow preferentially maps to the once-only option (§8.4).
+    // allow preferentially maps to the once-only option.
     const settled = h
       .journal()
       .find(
@@ -161,7 +175,7 @@ describe('AcpRuntime.runTurn', () => {
     expect(h.finished[0]?.error ?? '').not.toContain('sk-testsecret')
   })
 
-  test('a launch failure reports back through onLaunchFailure (P4-03)', async () => {
+  test('a launch failure reports back through onLaunchFailure', async () => {
     const failures: Array<{ harnessId: string; detail: string }> = []
     const h = await makeHarness('basic-chat.json', {
       deps: {
@@ -385,7 +399,7 @@ describe('AcpRuntime.runTurn', () => {
   })
 
   test('graph-worker admission rejects an ACP harness that cannot serve MCP', async () => {
-    // P3-09: a runtime with no kun-tools provider cannot deliver a
+    // a runtime with no kun-tools provider cannot deliver a
     // descriptor, so graph admission must refuse it with a readable reason.
     const h = await makeHarness('basic-chat.json')
     const verdict = checkHarnessAdmission({
@@ -411,7 +425,7 @@ describe('AcpRuntime.runTurn', () => {
   })
 
   test('kun-gateway spawn env strips provider secrets and carries the grant', async () => {
-    // P3-10: a gateway-mode child sees the kgw_ grant and the harness's
+    // a gateway-mode child sees the kgw_ grant and the harness's
     // gateway env vars, but never the host's provider credentials.
     process.env.OPENAI_API_KEY = 'sk-test-host-secret'
     process.env.OPENCODE_CONFIG = '/tmp/user-opencode-config.json'

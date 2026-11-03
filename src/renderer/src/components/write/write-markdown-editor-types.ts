@@ -1,3 +1,5 @@
+import type { WriteDocumentReviewHandle } from './write-document-editor-handle'
+import type { WriteInlineFormatKind } from '../../write/inline-format'
 import type { WriteBlockType } from '../../write/block-type'
 import type { OfficeDocumentPreviewFormat } from '@shared/office-document'
 
@@ -52,6 +54,7 @@ export type WriteEditorSelectionState = {
   cellRange?: string
   formulas?: string[]
   /** Block type of the line at the selection start (selection toolbar). */
+  activeFormats?: WriteInlineFormatKind[]
   blockType?: WriteBlockType
   /** Set when a single raster image is selected (TipTap node selection or a
    * caret on an image markdown line in source mode). */
@@ -70,25 +73,13 @@ export type WriteSelectedImage = {
  * through the editor so undo history stays granular and the selection ends up
  * covering the replacement (allowing chained formatting).
  */
-export type WriteMarkdownEditorHandle = {
+export type WriteMarkdownEditorHandle = WriteDocumentReviewHandle & {
   applyRangeReplacement: (
     range: { from: number; to: number },
     original: string,
-    replacement: string
+    replacement: string,
+    selection?: { from: number; to: number }
   ) => boolean
   /** Rewrite the block markers of the lines spanning the current selection. */
   setBlockType: (type: WriteBlockType) => boolean
-  /**
-   * Enters an inline red/green diff review: swaps the document to `nextDoc` and
-   * shows a per-chunk accept/reject merge view against `original`. Returns false
-   * when the editor is read-only/unavailable, a review is already running, or
-   * the texts are identical.
-   */
-  beginDiffReview: (params: { original: string; nextDoc: string }) => boolean
-  /** True while an inline diff review is in progress. */
-  isDiffReviewActive: () => boolean
-  /** Accepts every pending diff chunk and commits the result. */
-  acceptAllDiff: () => void
-  /** Rejects every pending diff chunk (reverting to the original) and commits. */
-  rejectAllDiff: () => void
 }

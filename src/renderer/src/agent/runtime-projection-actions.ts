@@ -68,6 +68,7 @@ type RuntimeProjectionActionPayload =
         threadId: string
         blocks: ChatBlock[]
         latestSeq: number
+        contextSnapshot?: RequestContextSnapshot | null
         threadStatus?: string
         latestTurnId?: string
         latestTurnStatus?: string

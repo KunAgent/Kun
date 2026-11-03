@@ -230,6 +230,7 @@ export function resolveKunRuntimeSettings(settings: AppSettingsV1): KunRuntimeSe
     modelProfiles: modelProviderModelProfilesForProvider(settings, provider.id),
     memoryEnabled: resolveKunMemoryEnabled(settings),
     memoryDistillationEnabled: resolveKunMemoryDistillationEnabled(settings),
-    memoryDirectivesEnabled: resolveKunMemoryDirectivesEnabled(settings)
+    memoryDirectivesEnabled: resolveKunMemoryDirectivesEnabled(settings),
+    memoryRelationContextEnabled: getKunRuntimeSettings(settings).memoryRelationContextEnabled === true
   }
 }

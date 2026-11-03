@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import { RuntimeFlavorSchema, type RuntimeFlavor } from '../contracts/runtime-flavor.js'
 import type { ManagerResourceFence } from './resource-lease-state.js'
+import { openManagerRequestSignal } from './manager-client-lifetime.js'
 import {
   currentManagerDataCommitId,
   currentManagerDataMutexContext,
@@ -278,22 +279,29 @@ function managerRuntimeIdentity(): {
 class ManagerConflictError extends Error {}
 
 async function managerRequest(url: string, token: string, body: unknown): Promise<unknown> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${token}`,
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(5_000)
-  })
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '')
-    const message = `Kun Service Manager data mutex failed with HTTP ${response.status}: ${detail.slice(0, 512)}`
-    if (response.status === 409) throw new ManagerConflictError(message)
-    throw new Error(message)
+  // Lease renewals run every few seconds; a disposable signal is released as
+  // soon as the request settles instead of when its 5 s timer would fire.
+  const request = openManagerRequestSignal(undefined, 5_000, { admission: false })
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${token}`,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify(body),
+      signal: request.signal
+    })
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '')
+      const message = `Kun Service Manager data mutex failed with HTTP ${response.status}: ${detail.slice(0, 512)}`
+      if (response.status === 409) throw new ManagerConflictError(message)
+      throw new Error(message)
+    }
+    return await response.json()
+  } finally {
+    request.dispose()
   }
-  return response.json()
 }
 
 function isManagerConflict(error: unknown): error is ManagerConflictError {

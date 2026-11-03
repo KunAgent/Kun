@@ -18,7 +18,7 @@ import { readFile } from 'node:fs/promises'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
 
 /**
- * Line-level review comments for one task workspace (11 §4.1):
+ * Line-level review comments for one task workspace:
  * `dataDir/ade/reviews/<workspaceId>.json`. Shared by every client so the
  * phone can see and send the same pending batch as the desktop.
  */

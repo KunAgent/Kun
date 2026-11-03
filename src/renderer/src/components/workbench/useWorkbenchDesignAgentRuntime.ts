@@ -14,6 +14,9 @@ import {
   useCodeCanvasPromptController,
   type CodeCanvasPromptControllerOptions
 } from '../design/canvas/useCodeCanvasPromptController'
+import { useStickyKunRequests } from '../design/useStickyKunRequests'
+import { useAgentDesignAutoOpen } from './useAgentDesignAutoOpen'
+import { useComposerPrefillEvent } from './useComposerPrefillEvent'
 
 type WorkbenchDesignAgentRuntimeOptions = {
   activeCodeCanvasWorkspace: CodeCanvasPromptControllerOptions['activeCodeCanvasWorkspace']
@@ -132,7 +135,8 @@ export function useWorkbenchDesignAgentRuntime({
     activeThreadId,
     composerReasoningEffort,
     sendMessage,
-    setError
+    setError,
+    htmlElementContext: designHtmlElementContext
   })
   const designPrompt = useDesignPromptController({
     route,
@@ -165,6 +169,9 @@ export function useWorkbenchDesignAgentRuntime({
     clearComposerAttachments,
     clearHtmlElementContext
   })
+  useComposerPrefillEvent(setInput)
+  useStickyKunRequests(designPrompt.sendDesignPrompt)
+  useAgentDesignAutoOpen({ activeThreadId, threads, workspaceRoot })
 
   return {
     ...designCodeRoundtrip,

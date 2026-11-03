@@ -6,6 +6,7 @@ import type { ThreadEventSink } from '../../agent/provider-types'
 const provider = vi.hoisted(() => ({ getThreadDetail: vi.fn(), subscribeThreadEvents: vi.fn(), interrupt: vi.fn() }))
 vi.mock('../../agent/registry', () => ({ getProvider: () => provider }))
 import { useWorkerTranscript } from './use-worker-transcript'
+import { resetThreadLiveActivityForTests, threadLiveActivityAt } from '../../store/thread-live-activity'
 
 let current: ReturnType<typeof useWorkerTranscript>
 let renderer: ReactTestRenderer
@@ -65,6 +66,29 @@ describe('visible worker transcript subscription', () => {
     expect(provider.getThreadDetail).toHaveBeenLastCalledWith('worker', expect.objectContaining({ before: 'older-page' }))
     expect(current.detail?.blocks.map((block) => block.id)).toEqual(['old', 'new'])
     expect(current.detail?.hasMoreHistory).toBe(false)
+  })
+
+  it('keeps the transcript visible while a metadata or compaction reset refetches', async () => {
+    provider.getThreadDetail.mockResolvedValueOnce({
+      blocks: [{ id: 'recent', kind: 'user', text: 'recent' }], latestSeq: 7,
+      historyCursor: 'older-page', hasMoreHistory: true
+    })
+    await mount()
+    provider.getThreadDetail.mockResolvedValue({ blocks: [{ id: 'fresh', kind: 'user', text: 'fresh' }], latestSeq: 8 })
+    await act(async () => { sink.onThreadUpdated?.({ threadId: 'worker', title: 'Renamed' }) })
+    expect(current.detail?.blocks.map((block) => block.id)).toEqual(['recent'])
+    expect(current.detail?.hasMoreHistory).toBe(false)
+    expect(current.detail?.historyCursor).toBeUndefined()
+    await act(async () => { await vi.advanceTimersByTimeAsync(600) })
+    expect(current.detail?.blocks.map((block) => block.id)).toEqual(['fresh'])
+  })
+
+  it('records worker events so the live row does not report silence while it streams', async () => {
+    resetThreadLiveActivityForTests()
+    await mount()
+    expect(threadLiveActivityAt('worker')).toBeUndefined()
+    await act(async () => { sink.onSeq(8) })
+    expect(threadLiveActivityAt('worker')).toBe(Date.now())
   })
 
   it('discards a late response after the preview changes thread', async () => {

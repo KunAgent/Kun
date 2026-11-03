@@ -1,4 +1,5 @@
 import { lazy, Suspense, type ReactElement } from 'react'
+import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import type { ExcalidrawSceneV1 } from './excalidraw-persistence'
 import type { CanvasEngine } from './canvas-engine'
 
@@ -9,6 +10,10 @@ export type ExcalidrawSurfaceProps = {
   readOnly?: boolean
   onEmptyChange?: (empty: boolean) => void
   onSceneChange?: (scene: ExcalidrawSceneV1) => void
+  /** Replace Excalidraw's shape toolbar with the shared Kun tool pill. */
+  kunToolbar?: boolean
+  /** Receives the live editor API (null on unmount) for host menus such as export. */
+  onApiChange?: (api: ExcalidrawImperativeAPI | null) => void
 }
 
 const ExcalidrawSurfaceApp = lazy(async () => {

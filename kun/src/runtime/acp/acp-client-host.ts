@@ -1,6 +1,6 @@
 import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
- * Agent → client method host (docs/ade/03 §8). Registers the fs/*,
+ * Agent → client method host. Registers the fs/*,
  * terminal/*, and session/request_permission handlers on a connection's
  * JSON-RPC peer. Every handler resolves its session through
  * `contextFor(sessionId)` — a context the runtime registers while a turn is
@@ -36,6 +36,7 @@ import {
   acpPermissionTargets,
   approvalRequestFromAcp,
   pickPermissionOutcome,
+  acpDecision,
   type AcpApproveFn
 } from './acp-permission.js'
 import {
@@ -68,7 +69,7 @@ export type AcpClientContext = {
   /** Scoped env for agent terminals — the same stripped env the agent got. */
   terminalEnv?: NodeJS.ProcessEnv
   /**
-   * Form elicitation handler (P2-10): user_input gate on interactive turns,
+   * Form elicitation handler: user_input gate on interactive turns,
    * ask_manager on worker turns; absent when the turn disables user input.
    */
   elicit?: AcpElicitFn
@@ -209,7 +210,7 @@ export class AcpClientHost {
         'acp:fs.write'
       )
       const decision = await ctx.approve(approval)
-      if (decision !== 'allow') {
+      if (acpDecision(decision) !== 'allow') {
         throw new AcpError('policy_denied', 'write rejected by Kun policy', {
           rpcCode: ACP_RPC_ERROR.policyDenied
         })
@@ -269,7 +270,8 @@ export class AcpClientHost {
         ctx.approve(approval),
         slot.cancelled.then(() => 'cancelled' as const)
       ])
-      if (decision === 'allow') {
+      const outcome = pickPermissionOutcome(parsed.options, decision)
+      if (decision !== 'cancelled' && acpDecision(decision) === 'allow' && outcome.outcome.outcome === 'selected') {
         // Later mediated calls against these targets skip a second prompt.
         const targets = await acpPermissionTargets(parsed, (path) =>
           resolveInside(ctx.writeRoots, path)
@@ -278,7 +280,7 @@ export class AcpClientHost {
           this.memo.mark(ctx.turnId, target.kind, target.target)
         }
       }
-      return pickPermissionOutcome(parsed.options, decision)
+      return outcome
     } finally {
       slot.done()
     }
@@ -322,7 +324,7 @@ export class AcpClientHost {
         }
       )
       const decision = await ctx.approve(approval)
-      if (decision !== 'allow') {
+      if (acpDecision(decision) !== 'allow') {
         throw new AcpError('policy_denied', 'command rejected by Kun policy', {
           rpcCode: ACP_RPC_ERROR.policyDenied
         })
@@ -379,7 +381,7 @@ export class AcpClientHost {
   // ---- elicitation -----------------------------------------------------------
 
   /**
-   * `elicitation/create` (P2-10): only the form mode is advertised, so url
+   * `elicitation/create`: only the form mode is advertised, so url
    * and custom modes decline politely; request-scoped elicitations carry no
    * sessionId and cancel since no turn context can own them.
    */

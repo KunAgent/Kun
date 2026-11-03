@@ -22,6 +22,7 @@ export type TimelineStores = {
   loadEarlierThreadHistory: () => Promise<boolean>
   currentTurnId: string | null
   currentTurnUserId: string | null
+  currentTurnStartedAtMs: number | null
   turnStartedAtByUserId: Record<string, number>
   turnDurationByUserId: Record<string, number>
   turnReasoningFirstAtByUserId: Record<string, number>
@@ -42,6 +43,7 @@ export function useTimelineStores(activeThreadId: string | null): TimelineStores
   const loadEarlierThreadHistory = useChatStore((s) => s.loadEarlierThreadHistory)
   const currentTurnId = useChatStore((s) => s.currentTurnId)
   const currentTurnUserId = useChatStore((s) => s.currentTurnUserId)
+  const currentTurnStartedAtMs = useChatStore((s) => s.currentTurnStartedAtMs)
   const turnStartedAtByUserId = useChatStore((s) => s.turnStartedAtByUserId)
   const turnDurationByUserId = useChatStore((s) => s.turnDurationByUserId)
   const turnReasoningFirstAtByUserId = useChatStore((s) => s.turnReasoningFirstAtByUserId)
@@ -67,6 +69,7 @@ export function useTimelineStores(activeThreadId: string | null): TimelineStores
     loadEarlierThreadHistory,
     currentTurnId,
     currentTurnUserId,
+    currentTurnStartedAtMs,
     turnStartedAtByUserId,
     turnDurationByUserId,
     turnReasoningFirstAtByUserId,

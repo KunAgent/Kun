@@ -164,7 +164,7 @@ function Fixture(): ReactElement {
     </section> : <WriteAssistantPanel {...common} input={input} setInput={setInput}
       mode="agent" setMode={action('mode')} busy={state.streaming} liveAssistant=""
       composerModel="fixture-model" composerPickList={['fixture-model']}
-      composerReasoningEffort="medium" composerFastMode={false}
+      composerReasoningEffort="auto" composerFastMode={false}
       setComposerModel={action('model')} setComposerReasoningEffort={action('reasoning')}
       setComposerFastMode={action('fast')} queuedMessages={[]}
       removeQueuedMessage={action('remove-queued')} guideQueuedMessage={action('guide-queued')}

@@ -1,0 +1,14 @@
+{
+  "officePptOpening": "Opening presentation…",
+  "officePptOpenFailed": "Couldn't open this deck",
+  "officeZoomFitPage": "Fit page",
+  "officeZoomFitWidth": "Fit width",
+  "officeZoomAutomatic": "Automatic",
+  "officeZoomLevel": "Zoom level",
+  "officeDocxOpening": "Opening document…",
+  "officeDocxOpenFailed": "Couldn't open this document",
+  "officeDocxRenderError": "This Word document could not be rendered.",
+  "officeSheetOpenFailed": "Couldn't open this workbook",
+  "officeSheetRenderError": "This spreadsheet could not be rendered.",
+  "officeCopyFailed": "Could not copy the selection"
+}

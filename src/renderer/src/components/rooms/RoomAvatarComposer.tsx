@@ -1,14 +1,19 @@
-import { useId, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Ban, Check, PaintBucket, Palette, RotateCcw, Smile, Sparkles, Upload, type LucideIcon } from 'lucide-react'
+import { useWardrobe, requireKunAppearanceLogin } from './room-wardrobe'
+import { WardrobeGuestCard } from '../wardrobe/WardrobeGuest'
+import { useEffect, useId, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Ban, Check, Lock, PaintBucket, Palette, RotateCcw, Smile, Sparkles, Upload, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  KUN_AVATAR_CATALOG, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS,
-  canonicalKunAvatarKey, normalizeKunAvatarParts, randomKunAvatarParts, updateKunAvatarPart,
-  type KunAvatarAccessoryCategory, type KunAvatarCategory, type KunAvatarParts, type RoomAvatarReference
+  KUN_AVATAR_CATALOG, KUN_AVATAR_DEFAULT_PARTS, KUN_AVATAR_PRESETS, KUN_AVATAR_SCENES,
+  KUN_AVATAR_RARITIES, KUN_AVATAR_RARITY_LABELS,
+  canonicalKunAvatarKey, kunWardrobeItemKey, kunWardrobeMissingParts, kunWardrobeOwns, kunWardrobePartKeys, normalizeKunAvatarParts, randomKunAvatarParts, updateKunAvatarPart,
+  type KunAvatarAccessoryCategory, type KunAvatarCategory, type KunAvatarParts, type KunAvatarRarity, type KunWardrobe, type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
+import { composedAvatarLayerUrl } from './room-avatar-compositor'
 import { RoomAvatarItemArt } from './RoomAvatarItemArt'
 import { AVATAR_SLOTS, RoomAvatarStage } from './RoomAvatarStage'
+import { WardrobeCardBack, WardrobeUnknownItem } from './RoomWardrobeBottle'
 import { avatarForIdentity } from './room-avatar-catalog'
 import './room-avatar-composer.css'
 
@@ -25,6 +30,7 @@ const tabs: ReadonlyArray<{ id: EditorCategory; icon: LucideIcon }> = [
 const backgroundColors = ['#f7f5ef', '#eef6ff', '#eaf6ef', '#fbf0f3', '#fff4d6', '#1d2530']
 const isAccessory = (category: EditorCategory): category is KunAvatarAccessoryCategory =>
   AVATAR_SLOTS.some((slot) => slot.id === category)
+type CardExtras = { locked?: boolean; fresh?: boolean; copies?: number; meta?: string; lockedHint?: string }
 
 function composed(parts: KunAvatarParts): RoomAvatarReference {
   return { kind: 'composed', version: 1, parts }
@@ -40,23 +46,33 @@ export function editableKunAvatarParts(avatar: RoomAvatarReference | null | unde
 /**
  * A dress-up studio: the look on stage, a wardrobe beside it. Hovering an item
  * tries it on; clicking wears it, and clicking a worn item takes it off.
+ * With a wardrobe, unowned items show as locked silhouettes that only preview.
  */
 export function RoomAvatarComposer({ id, label, avatar, user = false, disabled = false, photo = false,
-  preview, previewControls, onChange, onUpload }: {
+  preview, previewControls, wardrobe = null, onChange, onUpload, onSeen }: {
   id: string; label: string; avatar?: RoomAvatarReference | null; user?: boolean; disabled?: boolean
   photo?: boolean; preview?: ReactNode; previewControls?: ReactNode
+  /** Null means nothing is locked. */
+  wardrobe?: KunWardrobe | null
   onChange: (avatar: RoomAvatarReference | null) => void; onUpload: () => void
+  onSeen?: (keys: string[]) => void
 }) {
   const { t, i18n } = useTranslation('common')
+  const access = useWardrobe(false)
   const base = useId()
   const [category, setCategory] = useState<EditorCategory>('preset')
   const [notice, setNotice] = useState('')
   const [trying, setTrying] = useState<KunAvatarParts | null>(null)
+  const [ownedOnly, setOwnedOnly] = useState(false)
   const parts = editableKunAvatarParts(avatar, id, user)
   const language = i18n.language.startsWith('zh') ? 'zh' : 'en'
   const active = !photo && avatar?.kind !== 'uploaded'
-  const choose = (next: RoomAvatarReference | null) => { setTrying(null); setNotice(''); onChange(next) }
+  const owns = (slot: KunAvatarAccessoryCategory, partId: string) => !wardrobe || kunWardrobeOwns(wardrobe, slot, partId)
+  const lit = (presetId: string) => !wardrobe || wardrobe.roles.includes(presetId)
+  const fresh = (key: string) => Boolean(wardrobe) && !wardrobe!.seen.includes(key)
+  const choose = (next: RoomAvatarReference | null) => { if (!requireKunAppearanceLogin()) return; setTrying(null); setNotice(''); onChange(next) }
   const edit = (slot: KunAvatarCategory, value: string | undefined) => {
+    if (!requireKunAppearanceLogin()) return
     const result = updateKunAvatarPart(parts, slot, value)
     setTrying(null)
     onChange(composed(result.parts))
@@ -65,12 +81,35 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
     }) : '')
   }
   const tryOn = (next: KunAvatarParts | null) => { if (!disabled) setTrying(next) }
-  const card = (key: string, text: string, selected: boolean, art: ReactNode, onClick: () => void, look?: KunAvatarParts) => (
+  // "New" marks fade once the user has looked at that shelf for a moment.
+  useEffect(() => {
+    if (!wardrobe || !onSeen) return
+    const keys = category === 'preset' ? wardrobe.roles.map((role) => 'card/' + role)
+      : isAccessory(category) ? KUN_AVATAR_CATALOG[category].map((part) => kunWardrobeItemKey(category, part.id)).filter((key) => (wardrobe.items[key] ?? 0) > 0) : []
+    const unseen = keys.filter((key) => !wardrobe.seen.includes(key))
+    if (!unseen.length) return
+    const timer = setTimeout(() => onSeen(unseen), 2000)
+    return () => clearTimeout(timer)
+  }, [category, wardrobe, onSeen])
+  const card = (key: string, text: string, selected: boolean, art: ReactNode, onClick: () => void, look?: KunAvatarParts,
+    details?: { rarity: KunAvatarRarity; flavor: string }, extras: CardExtras = {}) => (
     <button key={key} type="button" className="rooms-avatar-composer-option" disabled={disabled}
-      aria-label={text} aria-pressed={selected} onClick={onClick}
+      aria-label={text} aria-pressed={selected} data-rarity={details?.rarity} data-locked={extras.locked || undefined}
+      aria-disabled={extras.locked || undefined} data-fresh={extras.fresh && !extras.locked ? true : undefined}
+      onClick={extras.locked ? () => { setTrying(null); setNotice(extras.lockedHint ?? t('roomsWardrobeLockedHint')) } : onClick}
+      title={extras.locked ? t('roomsWardrobeLocked') : details ? `${KUN_AVATAR_RARITY_LABELS[details.rarity][language]} · ${details.flavor}` : undefined}
+      aria-description={extras.locked ? t('roomsWardrobeLocked') : details ? KUN_AVATAR_RARITY_LABELS[details.rarity][language] : undefined}
       onPointerEnter={look ? () => tryOn(look) : undefined} onPointerLeave={look ? () => tryOn(null) : undefined}>
-      <span className="rooms-avatar-option-art">{art}</span>
+      <span className="rooms-avatar-option-art">{art}
+        {extras.locked ? <span className="rooms-avatar-option-lock" aria-hidden="true"><Lock size={11} strokeWidth={2.5} /></span>
+          : extras.copies && extras.copies > 1 ? <span className="rooms-avatar-option-copies" aria-hidden="true">{t('roomsWardrobeCount', { count: extras.copies })}</span> : null}
+      </span>
       <span className="rooms-avatar-option-name">{text}</span>
+      {extras.meta ? <span className="rooms-avatar-option-meta">{extras.meta}</span> : details ? <span className="rooms-avatar-option-rarity">
+        <span aria-hidden="true">{'◆'.repeat(KUN_AVATAR_RARITIES.indexOf(details.rarity) + 1)}</span>
+        {KUN_AVATAR_RARITY_LABELS[details.rarity][language]}
+      </span> : null}
+      {extras.fresh && !extras.locked ? <span className="rooms-avatar-option-new">{t('roomsWardrobeNew')}</span> : null}
       {selected ? <span className="rooms-avatar-option-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span> : null}
     </button>
   )
@@ -87,10 +126,22 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
   }
   const items = () => {
     if (category === 'preset') {
-      return KUN_AVATAR_PRESETS.map((preset) => card(preset.id, preset.label[language],
-        active && (avatar?.kind === 'builtin' ? avatar.id === preset.id : avatar?.kind === 'composed' &&
-          canonicalKunAvatarKey(parts) === canonicalKunAvatarKey(preset.parts)),
-        look(preset.parts), () => choose(composed({ ...preset.parts })), preset.parts))
+      return KUN_AVATAR_PRESETS.filter((preset) => !ownedOnly || lit(preset.id)).map((preset) => {
+        const open = lit(preset.id)
+        const total = kunWardrobePartKeys(preset.parts).length
+        const have = wardrobe ? total - kunWardrobeMissingParts(wardrobe, preset.parts).length : total
+        // An unrevealed card keeps its secret: card back, no name, no try-on.
+        if (!open) {
+          return card(preset.id, t('roomsWardrobeUnknownCard'), false, <WardrobeCardBack width={48} height={64} />,
+            () => undefined, undefined, undefined,
+            { locked: true, meta: t('roomsWardrobeCollected', { have, total }), lockedHint: t('roomsWardrobeUnknownCardHint') })
+        }
+        return card(preset.id, preset.label[language],
+          active && (avatar?.kind === 'builtin' ? avatar.id === preset.id : avatar?.kind === 'composed' &&
+            canonicalKunAvatarKey(parts) === canonicalKunAvatarKey(preset.parts)),
+          look(preset.parts), () => choose(composed({ ...preset.parts })), preset.parts, undefined,
+          { fresh: fresh('card/' + preset.id), meta: wardrobe ? t('roomsWardrobeLit') : undefined })
+      })
     }
     if (category === 'color' || category === 'face') {
       return KUN_AVATAR_CATALOG[category].map((part) => {
@@ -110,33 +161,53 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
         <button type="button" disabled={disabled} className="rooms-avatar-composer-transparent"
           aria-pressed={active && parts.bg === 'transparent'} onClick={() => edit('bg', 'transparent')}>{t('roomsAvatarTransparent')}</button>
         <label className="rooms-avatar-composer-custom-color">{t('roomsAvatarCustomBackground')}
-          <input type="color" disabled={disabled} value={parts.bg === 'transparent' ? '#f7f5ef' : parts.bg}
+          <input type="color" disabled={disabled} value={parts.bg.startsWith('#') ? parts.bg : '#f7f5ef'}
             onChange={(event) => edit('bg', event.target.value)} />
         </label>
+        <div className="rooms-avatar-scene-options">
+          {KUN_AVATAR_SCENES.map((scene) => {
+            const background = `scene:${scene.id}`
+            const next = updateKunAvatarPart(parts, 'bg', background).parts
+            return card(scene.id, scene.label[language], active && parts.bg === background,
+              <img className="rooms-avatar-scene-art" src={composedAvatarLayerUrl(`scene/${scene.id}`, 128)}
+                alt="" draggable={false} loading="lazy" />, () => edit('bg', background), next)
+          })}
+        </div>
       </>
     }
     const slot = category
     return <>
       {card('none', t('roomsAvatarNone'), active && !parts[slot], <Ban size={22} aria-hidden="true" />,
         () => edit(slot, undefined), updateKunAvatarPart(parts, slot, undefined).parts)}
-      {KUN_AVATAR_CATALOG[slot].map((part) => {
+      {KUN_AVATAR_CATALOG[slot].filter((part) => !ownedOnly || owns(slot, part.id)).map((part) => {
         const worn = active && parts[slot] === part.id
+        const owned = owns(slot, part.id), key = kunWardrobeItemKey(slot, part.id)
+        // An item not found yet keeps its secret: no art, no name, no try-on.
+        if (!owned) {
+          return card(part.id, t('roomsWardrobeUnknownItem'), false, <WardrobeUnknownItem size={48} />, () => undefined, undefined, undefined,
+            { locked: true, meta: t('roomsWardrobeLocked'), lockedHint: t('roomsWardrobeUnknownItemHint') })
+        }
         // Clicking what is already worn takes it off, like any wardrobe.
-        const art = slot === 'outfit' ? <RoomAvatarItemArt category={slot} id={part.id} size={88} height={56} mannequin={parts.color} />
-          : <RoomAvatarItemArt category={slot} id={part.id} size={54} />
+        const art = <RoomAvatarItemArt category={slot} id={part.id} size={60} />
         return card(part.id, part.label[language], worn, art,
-          () => edit(slot, worn ? undefined : part.id), updateKunAvatarPart(parts, slot, part.id).parts)
+          () => edit(slot, worn ? undefined : part.id), updateKunAvatarPart(parts, slot, part.id).parts,
+          { rarity: part.rarity, flavor: part.flavor[language] },
+          { fresh: fresh(key), copies: wardrobe?.items[key] })
       })}
     </>
   }
   const panel = `${base}-panel`
   const count = isAccessory(category) || category === 'color' || category === 'face' ? KUN_AVATAR_CATALOG[category].length
     : category === 'preset' ? KUN_AVATAR_PRESETS.length : 0
+  const owned = wardrobe && isAccessory(category) ? KUN_AVATAR_CATALOG[category].filter((part) => owns(category, part.id)).length
+    : wardrobe && category === 'preset' ? KUN_AVATAR_PRESETS.filter((preset) => lit(preset.id)).length : null
+  const random = () => choose(composed(randomKunAvatarParts(Math.random, wardrobe ? (slot, partId) => kunWardrobeOwns(wardrobe, slot, partId) : undefined)))
+  if (access.mode === 'guest') return <WardrobeGuestCard />
   return <div className="rooms-avatar-composer">
     <div className="rooms-avatar-studio">
       <RoomAvatarStage id={id} label={label} user={user} avatar={avatar} parts={parts} trying={trying} active={active}
         preview={preview} previewControls={previewControls} notice={notice} disabled={disabled} language={language}
-        onSlot={selectTab} onRemove={(slot) => edit(slot, undefined)} onRandom={() => choose(composed(randomKunAvatarParts()))} />
+        onSlot={selectTab} onRemove={(slot) => edit(slot, undefined)} onRandom={random} />
       <section className="rooms-avatar-wardrobe" aria-label={t('roomsAvatarWardrobe')}>
         <div className="rooms-avatar-wardrobe-tabs" role="tablist" aria-label={t('roomsAvatarCustomize')} onKeyDown={moveTab}>
           {tabs.map((tab) => <button key={tab.id} type="button" role="tab" id={`${base}-tab-${tab.id}`} data-avatar-tab={tab.id}
@@ -147,8 +218,12 @@ export function RoomAvatarComposer({ id, label, avatar, user = false, disabled =
         </div>
         <p className="rooms-avatar-wardrobe-hint">
           <strong>{t(categories[category])}</strong>
-          {count ? <span>{t('roomsAvatarItemCount', { count })}</span> : null}
+          {owned !== null ? <span>{t('roomsWardrobeOwned', { owned, total: count })}</span>
+            : count ? <span>{t('roomsAvatarItemCount', { count })}</span> : null}
           <span>{t(category === 'bg' ? 'roomsAvatarBackdropHint' : 'roomsAvatarWardrobeHint')}</span>
+          {owned !== null ? <label className="rooms-avatar-wardrobe-filter">
+            <input type="checkbox" checked={ownedOnly} onChange={(event) => setOwnedOnly(event.target.checked)} />{t('roomsWardrobeOwnedOnly')}
+          </label> : null}
         </p>
         <div className="rooms-avatar-composer-options" role="tabpanel" id={panel} data-category={category}
           aria-labelledby={`${base}-tab-${category}`} onPointerLeave={() => tryOn(null)}>

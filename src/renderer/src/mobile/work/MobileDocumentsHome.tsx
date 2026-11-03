@@ -44,6 +44,11 @@ export function MobileDocumentsHome({ page, navigate, onPapers, canLeave }: Prop
   const searchState = query ? { ...work, entriesByDir: { [work.rootDirectory]: matchingSearch?.entries ?? [] } } : work
   const { resources, recent } = mobileWorkResources(searchState, query ? work.rootDirectory : directory, search)
   useEffect(() => setStoredRecent(readMobileWorkRecent(work.workspaceRoot)), [work.workspaceRoot])
+  const ensureWhiteboards = useWriteWorkspaceStore((state) => state.ensureWhiteboards)
+  useEffect(() => {
+    // Browsing the document home is what surfaces boards on a phone.
+    if (work.workspaceRoot) void ensureWhiteboards(work.workspaceRoot)
+  }, [ensureWhiteboards, work.workspaceRoot])
   const recentRows = useMemo(() => {
     if (query || directory !== work.rootDirectory) return []
     const saved: MobileWorkResource[] = storedRecent.filter((item) => item.root === work.workspaceRoot).map((item) => ({

@@ -59,6 +59,7 @@ function projectProps(threads: NormalizedThread[], activity: Record<string, unkn
     onDeleteThread: vi.fn(async () => undefined),
     onRestoreThread: vi.fn(async () => undefined),
     onSearchQueryChange: noOp,
+    onOpenSchedule: vi.fn(),
     t: (key: string) => key,
     ...activity
   }

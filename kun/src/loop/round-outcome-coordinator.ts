@@ -70,6 +70,27 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
   }
 
   /**
+   * A peer reply or a coordination plan is the step's whole deliverable: the
+   * host publishes the accepted submission and discards any later prose. Ending
+   * the turn here skips that discarded model round, which also keeps the window
+   * in which a parallel member's answer makes this staged draft stale small.
+   * A held (not accepted) draft keeps the turn going so the member can revise.
+   */
+  private async acceptedFinalRoomSubmission(input: RoundOutcomeInput,
+    calls: readonly { callId: string; toolName: string }[]): Promise<boolean> {
+    const context = input.prepared.toolDiscoveryContext
+    const toolName = context.roomStepKind === 'coordination' ? 'submit_room_plan'
+      : context.roomStepKind === 'discussion' && context.roomPeer === true ? 'send_room_message' : undefined
+    if (!toolName || !calls.some((call) => call.toolName === toolName)) return false
+    const items = await this.deps.sessionStore.loadItems(input.threadId)
+    return items.some((item) => item.turnId === input.turnId && item.kind === 'tool_result' &&
+      item.toolName === toolName && item.isError !== true &&
+      calls.some((call) => call.callId === item.callId) &&
+      typeof item.output === 'object' && item.output !== null &&
+      (item.output as { accepted?: unknown }).accepted === true)
+  }
+
+  /**
    * A bot conversation turn owes the user a visible bubble. It is still
    * pending while the turn has no successful send_im_message result and the
    * model can still call the tool (not during tool-disabled recovery).
@@ -253,6 +274,7 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
     )
     if (dispatched === 'aborted') return 'aborted'
     if (dispatched === 'budget_exhausted') return 'failed'
+    if (await this.acceptedFinalRoomSubmission(input, dispatchableToolCalls)) return 'stop'
     const publicationCalls = dispatchableToolCalls.filter((call) => PRIVATE_PUBLICATION_TOOL_NAMES.includes(
       call.toolName as typeof PRIVATE_PUBLICATION_TOOL_NAMES[number]))
     if (publicationCalls.length) {
@@ -354,7 +376,8 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       return this.advanceToolSuppressionRecovery(input)
     }
     await this.updatePostToolFailureRecoveryAfterDispatch(input, dispatchableToolCalls)
-    this.toolSuppressionRecoveryStepsByTurn.delete(input.turnId)
+    // Keep the recovery budget across unrelated successful rounds, too.
+    // Otherwise alternating a suppressed call and echo can run forever.
     if (this.deps.receipts) {
       // Two-phase design tools: block the next model request until the
       // renderer confirms the canvas applied (or the timeout finalizes the
@@ -380,6 +403,8 @@ export class RoundOutcomeCoordinator extends RoundOutcomeRecoveryPhase {
       }
       this.svgCompletionRecoveryStepsByTurn.delete(input.turnId)
     }
+    // Unrelated successful calls must not mask a repeating suppressed failure.
+    if (dispatched === 'some_suppressed') return this.advanceToolSuppressionRecovery(input)
     return 'continue'
   }
 }

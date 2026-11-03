@@ -1,6 +1,6 @@
 /**
  * Work construct nodes + attribute extensions composing the rich schema
- * additions (implementation §3.2, §7). `WriteBlockId` must come first so the
+ * additions. `WriteBlockId` must come first so the
  * global attribute applies to every listed node type.
  */
 import type { AnyExtension } from '@tiptap/core'

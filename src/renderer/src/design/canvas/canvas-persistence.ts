@@ -1,3 +1,6 @@
+import { parseCanvasPages } from './canvas-pages'
+import { parseCanvasSections } from './canvas-sections'
+import { parseCanvasSticky } from './canvas-sticky'
 import type {
   CanvasAgentNote,
   CanvasDocument,
@@ -185,6 +188,7 @@ function parseShape(raw: unknown, id: string): CanvasShape | null {
   ) return null
 
   const agentNote = parseCanvasAgentNote(raw.agentNote)
+  const sticky = parseCanvasSticky(raw.sticky)
   const runningApp = parseRunningAppFrame(raw.runningApp)
   const embeddedArtifact = parseEmbeddedArtifact(raw.embeddedArtifact)
   const pptReviewRef = parsePptReviewRef(raw.pptReviewRef)
@@ -246,7 +250,9 @@ function parseShape(raw: unknown, id: string): CanvasShape | null {
     ...(typeof raw.blendMode === 'string' && { blendMode: raw.blendMode as CanvasShape['blendMode'] }),
     ...(isObj(raw.layout) && { layout: raw.layout as unknown as CanvasShape['layout'] }),
     ...(isObj(raw.constraints) && { constraints: raw.constraints as unknown as CanvasShape['constraints'] }),
-    ...(agentNote ? { agentNote } : {})
+    ...(agentNote ? { agentNote } : {}),
+    ...(sticky ? { sticky } : {}),
+    ...(typeof raw.pageId === 'string' && raw.pageId ? { pageId: raw.pageId } : {})
   }
 }
 
@@ -462,6 +468,7 @@ export function parseCanvasDocument(raw: string): CanvasDocument | null {
   const codeBindings = Array.isArray(parsed.codeBindings)
     ? parsed.codeBindings.map(parseCodeBinding).filter((binding): binding is DesignCodeBinding => Boolean(binding))
     : undefined
+  const sections = parseCanvasSections(parsed.sections, objects)
   const motion = parsed.motion === undefined
     ? createEmptyMotionDocument()
     : parseCanvasMotionDocument(parsed.motion, { rootId, objects }) ?? createEmptyMotionDocument()
@@ -474,7 +481,9 @@ export function parseCanvasDocument(raw: string): CanvasDocument | null {
     ...(operationJournal && operationJournal.length > 0 ? { operationJournal } : {}),
     ...(rendererReplayKeys && rendererReplayKeys.length > 0 ? { rendererReplayKeys } : {}),
     ...(rendererReplayWatermarkTurnId ? { rendererReplayWatermarkTurnId } : {}),
-    ...(codeBindings && codeBindings.length > 0 ? { codeBindings } : {})
+    ...(codeBindings && codeBindings.length > 0 ? { codeBindings } : {}),
+    ...(sections ? { sections } : {}),
+    ...parseCanvasPages(parsed, objects)
   }
 }
 

@@ -179,7 +179,7 @@ describe('AgentLoop transcript characterization', () => {
       .not.toContain(TOKEN_ECONOMY_INSTRUCTION)
   })
 
-  it('keeps the cache prefix stable when a GUI thread switches from Code to Design', async () => {
+  it('keeps immutable instructions stable while partitioning the actual Code and Design tool catalogs', async () => {
     const model = new ScriptedCapturingModel([
       [{ kind: 'assistant_text_delta', text: 'code done' }, { kind: 'completed', stopReason: 'stop' }],
       [{ kind: 'assistant_text_delta', text: 'design done' }, { kind: 'completed', stopReason: 'stop' }]
@@ -242,11 +242,15 @@ describe('AgentLoop transcript characterization', () => {
     expect(codeRequest).toBeDefined()
     expect(designRequest).toBeDefined()
     if (!codeRequest || !designRequest) return
-    expect(codeRequest.tools.map((tool) => tool.name)).toEqual(['code_only', 'design_only'])
-    expect(designRequest.tools).toEqual(codeRequest.tools)
+    // The catalog follows the actual turn, not a union advertising tools that
+    // execution would reject. Only the immutable instructions remain stable.
+    expect(codeRequest.tools.map((tool) => tool.name)).toEqual(['code_only'])
+    expect(designRequest.tools.map((tool) => tool.name)).toEqual(['design_only'])
     expect(designRequest.systemPrompt).toBe(codeRequest.systemPrompt)
     expect(designRequest.prefix).toEqual(codeRequest.prefix)
-    expect(designRequest.promptCachePartition).toBe(codeRequest.promptCachePartition)
+    expect(codeRequest.promptCachePartition).toEqual(expect.any(String))
+    expect(designRequest.promptCachePartition).toEqual(expect.any(String))
+    expect(designRequest.promptCachePartition).not.toBe(codeRequest.promptCachePartition)
     expect(designRequest.modeInstruction).toBeUndefined()
     expect(modelRequestContextText(designRequest)).toContain('Kun Design mode')
 

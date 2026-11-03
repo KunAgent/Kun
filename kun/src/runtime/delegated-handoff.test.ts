@@ -117,6 +117,17 @@ describe('buildTurnHandoff', () => {
     userItem('u2', 't2', 'second request')
   ]
 
+  test('never includes a later queued turn in a recovery brief', () => {
+    const handoff = buildTurnHandoff({
+      items: [...items, userItem('future', 't3', 'FUTURE_QUEUED_REQUEST')],
+      currentTurnId: 't2',
+      preparation: preparation({ rebaseReason: 'native_state_unavailable' })
+    })
+    expect(handoff!.brief.text).toContain('first request')
+    expect(handoff!.brief.text).not.toContain('second request')
+    expect(handoff!.brief.text).not.toContain('FUTURE_QUEUED_REQUEST')
+  })
+
   test('builds a full brief and handoff_injected payload for a new generation', () => {
     const handoff = buildTurnHandoff({
       items,

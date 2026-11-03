@@ -12,6 +12,7 @@ import './styles/settings-layout.css'
 import './styles/settings-chrome.css'
 import './styles/settings-controls.css'
 import './styles/settings-pages.css'
+import './styles/settings-features.css'
 import './styles/surfaces-write.css'
 import './styles/markdown-code.css'
 import './styles/write-editor.css'
@@ -24,9 +25,11 @@ import './styles/graph-workbench.css'
 import './styles/neutral-polish.css'
 import './styles/provider-quota-panel.css'
 import { applyCursorSpotlight, initializeStartupTheme } from './lib/apply-theme'
+import { applyCachedColorPalette } from './lib/color-palettes'
 import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
 import { resolveDesktopTitleBarMode } from '@shared/desktop-title-bar'
+import { whenDesktopStartupReady } from './lib/desktop-startup-ready'
 import { StartupGate } from './StartupGate'
 import { installProviderMutationFlushHandler } from './services/provider-mutation-flush-service'
 import { startActivityForegroundReporting } from './store/activity-foreground'
@@ -35,7 +38,12 @@ document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
 if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
-initializeStartupTheme(window.kunGui?.getSettings)
+void whenDesktopStartupReady()
+  .then(() => import('./components/rooms/art-asset-store'))
+  .then(({ startArtUpdates }) => startArtUpdates())
+  .catch((error: unknown) => console.warn('[kun-gui] art updates unavailable:', error))
+initializeStartupTheme()
+applyCachedColorPalette()
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()
 const storageRelocationMode = new URLSearchParams(window.location.search).get('storageRelocation') === '1'

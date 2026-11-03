@@ -38,9 +38,11 @@ import {
 import {
   ModelProviderModelProfileV1,
   ModelReasoningEffort,
-  ModelRequestRetrySettingsV1,
-  ScheduleReasoningEffort
+  ModelRequestRetrySettingsV1
 } from './app-settings-types-provider'
+import type { KunLabSettingsV1 } from './app-settings-types-kun-lab'
+
+export * from './app-settings-types-kun-lab'
 
 export type KunSubagentSurfaceV1 = 'shared' | 'code' | 'write' | 'design'
 
@@ -74,19 +76,23 @@ export type KunSubagentProfileV1 = {
   blockedSkills?: string[]
   /** Reasoning depth applied to this profile's child model requests. Default 'off'. */
   reasoningEffort?: ModelReasoningEffort
-  /** ADE worker harness binding (10 §3.1); empty/absent = native Kun loop. */
+  /** Engine binding honored by every dispatch lane; empty/absent = the lane default. */
   harnessId?: string
   /** Credential path on the bound harness; empty/absent = harness default. */
   credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
   gatewayBinding?: HarnessGatewayBinding
   /** "Best for / not for" notes read by the manager worker selector. */
   delegationNotes?: string
+  /** The work this role owns; dispatching turns hand that work over instead of doing it. */
+  owns?: string
 }
 
 export type KunSubagentsSettingsV1 = {
   enabled: boolean
   /** Defaults to true when absent for settings written by older app versions. */
   useExistingAgents?: boolean
+  /** delegate_task runs a role on its bound engine. Absent = on. */
+  honorEngineBinding?: boolean
   maxParallel?: number
   /** Main-agent continuation policy for failed ordinary delegate_task children. */
   proactiveRetry?: {
@@ -130,79 +136,6 @@ export type KunFastContextSettingsV1 = {
   reasoningEffort?: ModelReasoningEffort
   /** Codex fast mode (serviceTier = priority). Only effective for Codex models that advertise priority. */
   fast: boolean
-}
-
-/** Experimental Lab feature settings for the first-class `ppt_agent` tool. */
-export type KunLabPptAgentSettingsV1 = {
-  /** Master switch for the ppt_agent tool. Default true. */
-  enabled: boolean
-  /** Optional child model override. Empty = follow the main session model. */
-  model: string
-  /** Provider id paired with model. Empty = follow the main session provider. */
-  providerId: string
-  /** Optional reasoning depth for ppt_agent child requests. Empty = follow the main session. */
-  reasoningEffort?: ModelReasoningEffort
-  /** Codex fast mode (serviceTier = priority). Only effective for Codex models that advertise priority. */
-  fast: boolean
-  /** Generate and review a complete visual slide set before building the editable deck. Default true. */
-  imageFirst: boolean
-}
-
-/** Experimental Lab session-display optimization (charts, diagrams, structured visuals). */
-export type KunLabConversationVisualizationSettingsV1 = {
-  /** Master switch. Default false while the feature is experimental. */
-  enabled: boolean
-}
-
-/** Experimental Lab feature settings for the project board sidebar entry. */
-export type KunLabProjectBoardSettingsV1 = {
-  /** Master switch. Default false while the feature is experimental. */
-  enabled: boolean
-}
-
-export type KunLabAutoPlanBuildMode = 'direct' | 'scheduled'
-export type KunLabAutoPlanBuildConfirmation = 'always' | 'defaults'
-
-export type KunLabAutoPlanBuildScheduledDefaultsV1 = {
-  /** Empty values inherit the active composer/runtime selection. */
-  providerId: string
-  model: string
-  reasoningEffort: ScheduleReasoningEffort
-  /** Empty uses the host system time zone. Exact date/time is never persisted here. */
-  timeZone: string
-}
-
-/** GUI-only Laboratory defaults for the Automatic (plan + build) composer mode. */
-export type KunLabAutoPlanBuildSettingsV1 = {
-  enabled: boolean
-  confirmation: KunLabAutoPlanBuildConfirmation
-  defaultBuildMode: KunLabAutoPlanBuildMode
-  useWorktreeByDefault: boolean
-  scheduledDefaults: KunLabAutoPlanBuildScheduledDefaultsV1
-}
-
-/** Experimental Lab feature settings written into Kun config `lab`. */
-export type KunLabSettingsV1 = {
-  pptAgent: KunLabPptAgentSettingsV1
-  conversationVisualization: KunLabConversationVisualizationSettingsV1
-  autoPlanBuild: KunLabAutoPlanBuildSettingsV1
-  opencodeReferenceBranches: { enabled: boolean }
-  claudeCodeReferenceBranches: { enabled: boolean }
-  codexReferenceBranches: { enabled: boolean }
-  projectBoard: KunLabProjectBoardSettingsV1
-}
-
-/** Partial settings patch for the Lab section. Nested fields merge with current values. */
-export type KunLabSettingsPatchV1 = {
-  pptAgent?: Partial<KunLabPptAgentSettingsV1>
-  conversationVisualization?: Partial<KunLabConversationVisualizationSettingsV1>
-  autoPlanBuild?: Partial<Omit<KunLabAutoPlanBuildSettingsV1, 'scheduledDefaults'>> & {
-    scheduledDefaults?: Partial<KunLabAutoPlanBuildScheduledDefaultsV1>
-  }
-  opencodeReferenceBranches?: { enabled?: boolean }
-  claudeCodeReferenceBranches?: { enabled?: boolean }
-  codexReferenceBranches?: { enabled?: boolean }
-  projectBoard?: Partial<KunLabProjectBoardSettingsV1>
 }
 
 export const KUN_GRAPH_ROLLOUT_STAGES = [
@@ -358,7 +291,7 @@ export type KunPlanExecutionSettingsV1 = {
 }
 
 /**
- * A `secretEnv` binding (docs/ade/impl/p4 §3.7, P4-12): settings only carry
+ * A `secretEnv` binding: settings only carry
  * the opaque credential-store ref; the secret value resolves inside kun at
  * spawn time and is never echoed to the UI or logs.
  */
@@ -367,9 +300,21 @@ export type KunHarnessSecretEnvEntryV1 = {
   secretRef: string
 }
 
-/** User-defined custom (ACP) harness entry under agents.kun.harnesses.custom. */
+/**
+ * Per-Agent launch override or user Agent under agents.kun.harnesses.providers;
+ * the shape is Kun's config schema.
+ */
+export type KunHarnessProviderOverrideV1 =
+  import('../../kun/src/config/kun-config-harness-providers.js').HarnessProviderOverride
+
+/**
+ * Portable user-Agent definition: the import/export JSON and the legacy
+ * `harnesses.custom[]` entry. `extends` names a builtin ACP engine it derives
+ * from; absent means a generic ACP agent.
+ */
 export type KunHarnessCustomEntryV1 = {
   id: string
+  extends?: string
   displayName: string
   command: string
   args: string[]
@@ -378,7 +323,7 @@ export type KunHarnessCustomEntryV1 = {
 }
 
 /**
- * Per-harness defaults (docs/ade/impl/p4 §3.6, P4-11): the composer, the
+ * Per-harness defaults: the composer, the
  * one-to-one dialog, and the manager worker selector fall back to these
  * when nothing was picked explicitly. Supersedes the legacy flat
  * `defaultPermissionMode` map, which normalization folds into
@@ -396,7 +341,7 @@ export type KunHarnessDefaultsEntryV1 = {
 }
 
 /**
- * Terminal-only agent (docs/ade/impl/p4 §3.8, P4-13): an interactive CLI
+ * Terminal-only agent: an interactive CLI
  * launched inside a Kun terminal tab as a registered execution unit. It
  * cannot host delegated turns — dispatch reaches it only through the
  * `kun worker` callback, and only when the agent cooperates.
@@ -426,22 +371,18 @@ export type KunHarnessSettingsV1 = {
   enabledProfiles: KunHarnessEnabledProfileV1[]
   /** Builtin harnesses the user turned off; they stay out of pickers. */
   disabledIds: string[]
-  /** Per-harness local command path overrides. */
-  binaryPaths: Record<string, string>
-  /** User-defined ACP harnesses (id must not collide with builtins). */
-  custom: KunHarnessCustomEntryV1[]
+  /**
+   * Launch overrides for builtin Agents (command path, arguments, env) and
+   * user Agents (`extends`: a builtin ACP engine, `acp` or `terminal`).
+   * Replaces the legacy `binaryPaths`, `custom[]` and `terminalAgents[]`.
+   */
+  providers: Record<string, KunHarnessProviderOverrideV1>
   /** Per-harness defaults; the migrated home of `defaultPermissionMode`. */
   defaults: Record<string, KunHarnessDefaultsEntryV1>
   /** Default harness for new one-to-one ADE conversations. */
   defaultHarnessId: string
-  /** User preference order for ADE worker selection (10 §3.2 userPreference). */
+  /** User preference order for ADE worker selection. */
   agentOrder: string[]
-  /**
-   * Interactive CLIs exposed in the terminal "new agent tab" menu (p4 §3.8).
-   * They join the harness catalog as `transport: 'terminal'` — visible to
-   * `harness_list` as terminal-only, never dispatchable as turn runtimes.
-   */
-  terminalAgents: KunTerminalAgentEntryV1[]
 }
 
 export type KunAdeSettingsV1 = {
@@ -476,6 +417,16 @@ export type KunAdeSettingsV1 = {
     structuredMinutes: number
     terminalMinutes: number
   }
+  /** Waiting dispatch cards start after `autoStartSeconds` without a response (0 = always
+   *  wait); ask-for-approval cards join only with `autoStartWhenConfirmationRequired`. */
+  dispatch: {
+    autoStartSeconds: number
+    autoStartWhenConfirmationRequired: boolean
+    /** User guidance on which Agent and model suit which work; '' = none. */
+    preferencePrompt: string
+    preferences: import('./ade-collaboration-settings').AdeDispatchPreferenceRule[]
+  }
+  tasks: import('./ade-collaboration-settings').AdeTaskSuggestionSettings
   /** GUI-only notification switches; never written into Kun config. */
   notifications: {
     waiting: boolean
@@ -564,6 +515,8 @@ export type KunRuntimeSettingsV1 = {
   memoryDistillationEnabled: boolean
   /** Whether user-approved long-term directives are injected into every turn. */
   memoryDirectivesEnabled: boolean
+  /** Opt-in annotations between already-selected, user-reviewed reference memories. */
+  memoryRelationContextEnabled: boolean
   /** Native Kun AGENTS.md instructions injected into every turn. */
   instructions: KunInstructionSettingsV1
   /** Host computer-use (screenshot + mouse/keyboard control) settings. */

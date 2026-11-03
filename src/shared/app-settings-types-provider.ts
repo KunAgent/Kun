@@ -1,3 +1,4 @@
+import type { ModelMetadataState, ModelMetadataResolution, ModelCapabilityMetadata as RuntimeModelCapability } from '../../kun/src/contracts/capabilities-core.js'
 import type { ModelMetadataEvidence } from '../../kun/src/contracts/model-metadata-evidence.js'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
@@ -335,7 +336,7 @@ export const MODEL_PROVIDER_MESSAGE_PARTS = ['text', 'image_url', 'input_image']
 
 export type ModelProviderMessagePartSupport = (typeof MODEL_PROVIDER_MESSAGE_PARTS)[number]
 
-export const MODEL_REASONING_EFFORTS = ['auto', 'off', 'low', 'medium', 'high', 'max'] as const
+export const MODEL_REASONING_EFFORTS = ['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const
 
 export type ModelReasoningEffort = (typeof MODEL_REASONING_EFFORTS)[number]
 
@@ -361,6 +362,9 @@ export type ModelProviderReasoningCapabilityV1 = {
   supportedEfforts: ModelReasoningEffort[]
   defaultEffort: ModelReasoningEffort
   requestProtocol: ModelReasoningRequestProtocol
+  nativeEfforts?: string[]
+  nativeDefaultEffort?: string
+  effortMapping?: Partial<Record<ModelReasoningEffort, string>>
 }
 
 export type ModelProviderModelPricingV1 = {
@@ -375,6 +379,11 @@ export type ModelProviderModelPricingV1 = {
 }
 
 export type ModelProviderModelProfileV1 = {
+  metadata?: ModelMetadataState
+  metadataResolution?: ModelMetadataResolution
+  maxInputTokens?: number
+  supportsReasoning?: boolean
+  conditionalCapabilities?: RuntimeModelCapability['conditionalCapabilities']
   aliases?: string[]
   contextWindowTokens?: number
   maxOutputTokens?: number
@@ -543,7 +552,7 @@ export const MODEL_ROUTE_STRATEGIES = [
 /** Target provider id that names another route alias (nested routing). */
 export const NESTED_ROUTE_PROVIDER_ID = '@route'
 
-export const MODEL_ROUTE_RULE_EFFORTS = ['off', 'low', 'medium', 'high', 'max', 'auto'] as const
+export const MODEL_ROUTE_RULE_EFFORTS = ['off', 'low', 'medium', 'high', 'xhigh', 'max', 'auto'] as const
 export type ModelRouteRuleEffort = (typeof MODEL_ROUTE_RULE_EFFORTS)[number]
 
 export type ModelRouteRuleV1 = {

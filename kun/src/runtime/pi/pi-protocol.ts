@@ -1,7 +1,6 @@
 /**
- * Pi `--mode rpc` protocol constants (P6-09), verified against
- * `@earendil-works/pi-coding-agent@0.99.0` (live probe + bundled docs) — see
- * docs/ade/impl/pi-protocol-notes.md. Bare semver `pi --version` ("0.99.0").
+ * Pi `--mode rpc` protocol constants, verified against
+ * `@earendil-works/pi-coding-agent@0.99.0` (live probe + bundled docs). Bare semver `pi --version` ("0.99.0").
  * Hand-curated surface only; no schema snapshot exists upstream.
  *
  * Wire facts:

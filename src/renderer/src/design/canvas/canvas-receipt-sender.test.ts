@@ -70,4 +70,23 @@ describe('sendCanvasTurnReceipt', () => {
       }]
     })
   })
+
+  it('logs instead of swallowing a rejected receipt request', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    mocks.runtimeRequest.mockRejectedValueOnce(new Error('runtime request path is not allowed'))
+    sendCanvasTurnReceipt({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      receiptKey: 'design-receipt-1',
+      affectedIds: ['shape-1'],
+      errors: []
+    })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(warn).toHaveBeenCalledWith(
+      '[design] canvas receipt was not delivered',
+      expect.objectContaining({ receiptKey: 'design-receipt-1' })
+    )
+    warn.mockRestore()
+  })
 })

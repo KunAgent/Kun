@@ -1,3 +1,6 @@
+import { resolveKunStartupTimeoutMs } from './runtime/kun-runtime-health-monitor'
+import { detectAnalyticsInstallation } from './product-analytics/storage'
+import { homedir } from 'node:os'
 import {
   app,
   ipcMain,
@@ -16,6 +19,7 @@ import {
 } from './settings-store'
 import { requestRuntimeProviderQuotas } from './runtime-provider-quota'
 import { registerTrayQuotaIpc } from './tray-quota-ipc'
+import { syncNativeThemeSource } from './native-theme-source'
 import { syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath } from './main-paths'
 import {
@@ -51,7 +55,10 @@ import {
 import { localizeProtectedExtensionPrompt } from './extensions/protected-extension-prompt'
 import { ProtectedCredentialSurfaceController } from './extensions/protected-credential-surface'
 import { ExtensionContentScriptController } from './extensions/extension-content-script-controller'
-import { WorkspacePreviewProtocolRegistry } from './services/workspace-preview-protocol'
+import {
+  sharedWorkspacePreviewProtocols,
+  type WorkspacePreviewProtocolRegistry
+} from './services/workspace-preview-protocol'
 import {
   configureBrowserUseHost
 } from './browser-use/browser-use-host'
@@ -147,6 +154,7 @@ export async function initializeMainServices(input: {
     const productionSettingsUserDataPath = appIdentity.flavor === 'production'
       ? app.getPath('userData')
       : join(app.getPath('appData'), 'Kun')
+    await detectAnalyticsInstallation(app.getPath('userData'), join(homedir(), '.kun'))
     const productionSettingsPath = input.productionSettingsPath
     if (appIdentity.flavor === 'production') {
       traceStartup('runtime data migration:start')
@@ -163,6 +171,19 @@ export async function initializeMainServices(input: {
         return null
       }
     }
+    desktopProcessStack.beginStartup(resolveKunStartupTimeoutMs(process.platform, process.env), (progress) => {
+      const stages = {
+        profile: 'Checking which Kun session owns your data...',
+        'previous-processes': 'Checking the previous Kun session...',
+        'manager-launch': 'Starting the Kun data service...',
+        'manager-ready': 'Waiting for the Kun data service...',
+        'runtime-launch': 'Starting Kun...',
+        ready: 'Kun is ready.',
+        cleanup: 'Finishing startup recovery...'
+      }
+      input.onPhase?.('manager_starting', `${stages[progress.stage]} (${Math.ceil(progress.remainingMs / 1_000)}s remaining)`)
+      logInfo('startup', 'Kun startup progress.', progress)
+    })
     const managerDataDir = await resolveKunManagerDataDirFromSettings(productionSettingsPath)
     input.onPhase?.('manager_starting')
     const serviceManager = await ensureKunServiceManager({
@@ -201,12 +222,23 @@ export async function initializeMainServices(input: {
     configureKunManagerDataPlaneForCurrentProcess(serviceManager)
     const sharedSettingsBackend = new ManagerRevisionedDocumentClient(serviceManager, 'settings')
     const sharedClientStateDocument = new ManagerRevisionedDocumentClient(serviceManager, 'client-state')
+    // The renderer syncs shared client state on a short interval. Keep the last
+    // parsed snapshot and ask the Manager only whether its etag changed.
+    let sharedClientStateCache: {
+      etag: string
+      revision: number
+      value: ReturnType<typeof parseSharedClientState>
+    } | null = null
     ipcMain.handle('shared-client-state:get', async () => {
-      const snapshot = await sharedClientStateDocument.read()
-      return {
-        revision: snapshot.revision,
-        value: parseSharedClientState(snapshot.value)
+      const snapshot = await sharedClientStateDocument.readIfChanged(sharedClientStateCache?.etag)
+      if ('unchanged' in snapshot && sharedClientStateCache) {
+        sharedClientStateCache.revision = snapshot.revision
+        return { revision: snapshot.revision, value: sharedClientStateCache.value }
       }
+      const full = 'unchanged' in snapshot ? await sharedClientStateDocument.read() : snapshot
+      const value = parseSharedClientState(full.value)
+      sharedClientStateCache = full.etag ? { etag: full.etag, revision: full.revision, value } : null
+      return { revision: full.revision, value }
     })
     ipcMain.handle('shared-client-state:put', async (_event, input: unknown) => {
       const parsed = parseSharedClientStateWrite(input)
@@ -214,6 +246,7 @@ export async function initializeMainServices(input: {
         parsed.expectedRevision,
         `${JSON.stringify(parsed.entries, null, 2)}\n`
       )
+      sharedClientStateCache = null
       return {
         revision: committed.revision,
         value: parsed.entries
@@ -242,6 +275,7 @@ export async function initializeMainServices(input: {
         })
     traceStartup('settings load:start')
     const initial = await mainState.store.load()
+    syncNativeThemeSource(initial.theme)
     desktopProcessStack.assertCanStart()
     mainState.settledRuntimeSettings = initial
     runtimeSupervisor.noteLatest(initial)
@@ -297,8 +331,8 @@ export async function initializeMainServices(input: {
       })
     }
     registerExtensionProtocol(protocol)
-    const workspacePreviewProtocols = new WorkspacePreviewProtocolRegistry()
-    workspacePreviewProtocols.register(protocol)
+    // Registered in main-ready before the window exists; see sharedWorkspacePreviewProtocols.
+    const workspacePreviewProtocols = sharedWorkspacePreviewProtocols()
 
     const extensionProtocolForPartition = (partition: string) => session.fromPartition(partition).protocol
     const extensionMediaProtocols = new ExtensionMediaProtocolRegistry({

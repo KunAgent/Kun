@@ -1,0 +1,547 @@
+/* The right panel's Usage: its shell, its header, and the statistics tab. */
+
+.usage-quota-panel,
+.provider-quota-panel {
+  --kq-text: var(--ds-text);
+  --kq-muted: var(--ds-text-muted);
+  --kq-faint: var(--ds-text-faint);
+  --kq-card: var(--ds-surface-card);
+  --kq-subtle: var(--ds-surface-subtle);
+  --kq-hover: var(--ds-surface-hover);
+  --kq-border: var(--ds-border-muted);
+  --kq-border-strong: var(--ds-border);
+  --kq-track: color-mix(in srgb, var(--ds-text) 9%, transparent);
+  --kq-accent: var(--ds-accent);
+  --kq-ring: var(--ds-text-muted);
+  --kq-warn: var(--ds-warning);
+  --kq-warn-soft: var(--ds-warning-soft);
+  --kq-danger: var(--ds-danger);
+  --kq-focus: var(--ds-focus-ring);
+  --kq-control: var(--ds-control);
+  --kq-control-foreground: var(--ds-control-foreground);
+  --kq-radius-card: 12px;
+  --kq-duration: var(--ds-duration-functional, 150ms);
+  container-type: inline-size;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--ds-text);
+  background: var(--ds-bg-sidebar);
+}
+
+.usage-quota-panel button,
+.provider-quota-panel button,
+.usage-quota-panel select {
+  font-family: inherit;
+}
+
+.usage-quota-header {
+  flex: none;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ds-border-muted);
+}
+
+.usage-quota-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.usage-quota-tabs button {
+  min-height: 26px;
+  padding: 0 14px;
+  font-size: 12.5px;
+}
+
+.usage-quota-refreshed-at {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-quota-body {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.usage-panel-scroller {
+  height: 0;
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 12px 16px;
+  scrollbar-gutter: stable;
+  touch-action: pan-y;
+}
+
+.usage-panel-state {
+  display: flex;
+  min-height: 160px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+}
+
+.usage-panel-state.is-compact {
+  min-height: 72px;
+  flex-direction: row;
+}
+
+.usage-panel-state p {
+  margin: 0;
+}
+
+.usage-panel-state svg {
+  width: 15px;
+  height: 15px;
+}
+
+.usage-panel-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: var(--ds-danger);
+  background: var(--ds-danger-soft);
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.usage-panel-alert.is-inline {
+  margin-bottom: 12px;
+  color: var(--ds-warning);
+  background: var(--ds-warning-soft);
+}
+
+.usage-panel-alert svg {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  margin-top: 1.5px;
+}
+
+.usage-panel-note {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.usage-panel-note.is-warning {
+  color: var(--ds-warning);
+}
+
+/* Statistics tab. */
+.usage-stats {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.usage-stats .kq-seg {
+  --kq-text: var(--ds-text);
+  --kq-muted: var(--ds-text-muted);
+}
+
+.usage-session {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 10px;
+  background: var(--ds-surface-card);
+  font-size: 12px;
+}
+
+.usage-session-label {
+  flex: none;
+  color: var(--ds-text-muted);
+  font-weight: 600;
+}
+
+.usage-session-figures {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-session svg {
+  width: 13px;
+  height: 13px;
+  color: var(--ds-text-faint);
+}
+
+.usage-stats-bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.usage-stats-bar .kq-seg {
+  width: 100%;
+}
+
+.usage-stats-bar .kq-seg button {
+  flex: 1;
+}
+
+.usage-kpis {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usage-kpis-head {
+  display: flex;
+  min-height: 20px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+  color: var(--ds-text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.usage-day-chip {
+  display: inline-grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ds-text-faint);
+  background: var(--ds-surface-subtle);
+  cursor: pointer;
+}
+
+.usage-day-chip:hover {
+  color: var(--ds-text);
+}
+
+.usage-day-chip svg {
+  width: 11px;
+  height: 11px;
+}
+
+.usage-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 12px;
+  background: var(--ds-border-muted);
+  gap: 1px;
+}
+
+.usage-kpi {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 10px 12px;
+  background: var(--ds-surface-card);
+}
+
+.usage-kpi dd {
+  margin: 0;
+  overflow: hidden;
+  color: var(--ds-text);
+  font-size: 19px;
+  font-weight: 650;
+  line-height: 24px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-kpi dt {
+  color: var(--ds-text-muted);
+  font-size: 11.5px;
+  line-height: 16px;
+}
+
+.usage-kpi p {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 12px;
+  background: var(--ds-surface-card);
+}
+
+.usage-card-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.usage-card-head h3 {
+  margin: 0;
+  color: var(--ds-text);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.usage-card-sub {
+  color: var(--ds-text-faint);
+  font-size: 11px;
+}
+
+.usage-select select {
+  max-width: 118px;
+  min-height: 24px;
+  padding: 0 22px 0 8px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 7px;
+  color: var(--ds-text-muted);
+  background-color: var(--ds-surface-subtle);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+/* Trend chart. */
+.usage-chart {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usage-chart-readout {
+  display: flex;
+  min-width: 0;
+  min-height: 17px;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0;
+  color: var(--ds-text-muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.usage-chart-readout strong {
+  color: var(--ds-text);
+  font-weight: 600;
+}
+
+.usage-chart-split,
+.usage-chart-hint {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  text-overflow: ellipsis;
+}
+
+.usage-chart-max {
+  margin-left: auto;
+  color: var(--ds-text-faint);
+  font-size: 10.5px;
+}
+
+.usage-chart-plot {
+  position: relative;
+  min-width: 0;
+  height: 112px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.usage-chart-plot:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--ds-focus-ring) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.usage-chart-plot svg {
+  display: block;
+  overflow: visible;
+}
+
+.usage-chart-grid {
+  stroke: var(--ds-border-muted);
+  stroke-dasharray: 2 3;
+}
+
+.usage-chart-base {
+  stroke: var(--ds-border);
+}
+
+.usage-chart-hot {
+  fill: color-mix(in srgb, var(--ds-text) 6%, transparent);
+}
+
+.usage-chart-bar {
+  fill: color-mix(in srgb, var(--ds-accent) 34%, transparent);
+}
+
+.usage-chart-bar.is-strong {
+  fill: var(--ds-accent);
+}
+
+[data-dimmed='true'] .usage-chart-bar,
+.usage-chart-bar[data-dimmed='true'] {
+  opacity: 0.42;
+}
+
+.usage-chart-axis {
+  fill: var(--ds-text-faint);
+  font-size: 10px;
+}
+
+.usage-chart-legend {
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  color: var(--ds-text-faint);
+  font-size: 10.5px;
+}
+
+.usage-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.usage-chart-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--ds-accent);
+}
+
+.usage-chart-legend i.is-light {
+  background: color-mix(in srgb, var(--ds-accent) 34%, transparent);
+}
+
+.usage-chart-empty {
+  margin: 0;
+  padding: 22px 8px;
+  border-radius: 8px;
+  color: var(--ds-text-faint);
+  background: var(--ds-surface-subtle);
+  font-size: 11.5px;
+  text-align: center;
+}
+
+/* Models ranking. */
+.usage-models {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.usage-model {
+  min-width: 0;
+}
+
+.usage-model-row {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.usage-model-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--ds-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-model-name small {
+  margin-left: 5px;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+}
+
+.usage-model-figure {
+  flex: none;
+  color: var(--ds-text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-model-share {
+  min-width: 34px;
+  flex: none;
+  color: var(--ds-text-muted);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.usage-model-track {
+  height: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--ds-text) 7%, transparent);
+}
+
+.usage-model-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--ds-accent);
+}
+
+.usage-models-more {
+  align-self: flex-start;
+  margin-left: -4px;
+}
+
+@container (max-width: 300px) {
+  .usage-quota-refreshed-at {
+    display: none;
+  }
+
+  .usage-kpi dd {
+    font-size: 16px;
+  }
+}

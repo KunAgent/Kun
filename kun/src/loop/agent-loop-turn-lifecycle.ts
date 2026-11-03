@@ -248,6 +248,8 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
       return finalStatus
     }
     try {
+      if (delegatedSdkRuntime) await this.opts.model.assertGoogleWorkspaceDelegatedHistory?.(
+        threadId, owningThread?.turns.flatMap((turn) => turn.items))
       goalTimer = turnRecord?.paperContext ? null : await this.goalTurns.begin(threadId)
       // Conversation members retain their engine-native gate; constrained Code
       // handoffs still require the host to enforce their inherited ceiling.
@@ -418,7 +420,14 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
         `error=${raw}`,
         stack ? `stack=${stack}` : ''
       ].filter(Boolean).join(' ')
-      const settlement = await settle({ status: 'failed', error: message })
+      const settlement = await settle({
+        status: 'failed',
+        error: message,
+        // A slow or restarting local Manager is not a provider failure. Keep
+        // the typed code so the renderer explains it as such and the turn stays
+        // resumable instead of reporting a model-request timeout.
+        ...(error instanceof ServiceManagerTransportError ? { code: 'service_manager_unavailable' } : {})
+      })
       finalStatus = statusFromSettlement(settlement, 'failed')
       finalError = errorFromSettlement(settlement)
       return finalStatus

@@ -39,6 +39,15 @@
   color: var(--ds-text-muted);
   font-size: 0.8125rem;
 }
+.rooms-agent-activity-session {
+  display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: 0.25rem;
+  padding: 3px 8px; border-radius: 7px;
+  color: var(--ds-text-muted);
+  font-size: 11px; line-height: 1.35; white-space: nowrap;
+}
+.rooms-agent-activity-session:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
+.rooms-agent-activity-session.is-active { color: var(--ds-accent, #4f46e5); }
+.rooms-agent-activity-session:focus-visible { outline: 2px solid var(--ds-focus-ring); outline-offset: 1px; }
 .rooms-timeline-gates { width: min(480px, calc(100% - 3.5rem)); margin: 8px 8px 16px 3.1rem; }
 .rooms-message-continuation .rooms-message-meta {
   position: absolute;
@@ -129,6 +138,27 @@
 }
 .rooms-message-role {
   color: var(--ds-text-muted);
+}
+/* The author name carries the member entry whenever the avatar is not shown. */
+.rooms-message-author {
+  max-width: 55%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rooms-message-author:hover { text-decoration: underline; text-underline-offset: 2px; }
+.rooms-message-author:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
 }
 .rooms-message-meta time {
   white-space: nowrap;
@@ -385,3 +415,12 @@
     transition: none;
   }
 }
+
+/* Focus mode: no avatar art and no reserved avatar column, so names, times and
+ * run status line up with the message content. */
+html[data-focus-mode='on'] .rooms-workspace .rooms-message-row > .rooms-avatar,
+html[data-focus-mode='on'] .rooms-workspace .rooms-message-row > .rooms-message-avatar-spacer {
+  display: none;
+}
+html[data-focus-mode='on'] .rooms-workspace .rooms-message-system { padding-left: 0; }
+html[data-focus-mode='on'] .rooms-workspace .rooms-timeline-gates { width: 100%; margin-inline-start: 0; }

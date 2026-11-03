@@ -4,6 +4,7 @@ import {
   parseStoredGrokOAuthCredentials,
   type RefreshableLegacyCredentialStore
 } from './grok-oauth-credential-refresher.js'
+import { withoutOAuthRefresh } from './oauth-refresh-scope.js'
 
 const NOW = Date.parse('2026-07-23T00:00:00.000Z')
 
@@ -112,6 +113,45 @@ describe('GrokOAuthCredentialRefresher', () => {
     expect(fetchForSource).toHaveBeenCalledWith(sourceId)
     expect(tokenPosts).toHaveBeenCalledTimes(1)
     expect(fallbackFetch).not.toHaveBeenCalled()
+  })
+
+  it('does not wait on its own refresh when the transport lookup resolves the same source', async () => {
+    const sourceId = 'settings:provider:grok-subscription'
+    const store = memoryStore(encodedCredentials())
+    const { fetchImpl, tokenPosts } = tokenFetch()
+    let nested: Awaited<ReturnType<GrokOAuthCredentialRefresher['resolve']>> | undefined
+    // The runtime picks the refresh transport by materializing the registry,
+    // which reads the model catalog with this same (still expired) credential.
+    const refresher: GrokOAuthCredentialRefresher = new GrokOAuthCredentialRefresher(store, {
+      fetchForSource: async (id) => {
+        nested = await refresher.resolve(id)
+        return fetchImpl
+      },
+      nowMs: () => NOW
+    })
+
+    const outcome = await Promise.race([
+      refresher.resolve(sourceId).then(() => 'resolved'),
+      new Promise<string>((resolve) => setTimeout(() => resolve('deadlocked'), 500))
+    ])
+
+    expect(outcome).toBe('resolved')
+    expect(nested).toEqual({ rawApiKey: encodedCredentials(), refreshable: true })
+    expect(tokenPosts).toHaveBeenCalledTimes(1)
+    expect(parseStoredGrokOAuthCredentials(store.current)?.accessToken).toBe('new-access')
+  })
+
+  it('returns the stored credential without refreshing inside a read-only chain', async () => {
+    const store = memoryStore(encodedCredentials())
+    const { fetchImpl, tokenPosts } = tokenFetch()
+    const refresher = new GrokOAuthCredentialRefresher(store, { fetchImpl, nowMs: () => NOW })
+
+    const resolved = await withoutOAuthRefresh(() => refresher.resolve('settings:provider:grok-subscription'))
+
+    expect(resolved).toEqual({ rawApiKey: encodedCredentials(), refreshable: true })
+    expect(fetchImpl).not.toHaveBeenCalled()
+    expect(tokenPosts).not.toHaveBeenCalled()
+    expect(store.updates).toHaveLength(0)
   })
 
   it('leaves plain API keys unchanged and non-refreshable', async () => {

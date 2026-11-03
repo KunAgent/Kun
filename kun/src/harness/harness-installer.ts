@@ -79,7 +79,11 @@ export class HarnessInstaller {
         if (policy?.source === 'system') Object.assign(env, { HTTPS_PROXY: policy.proxyUrl, HTTP_PROXY: policy.proxyUrl,
           https_proxy: policy.proxyUrl, http_proxy: policy.proxyUrl })
       }
-      Object.assign(env, { CI: '1', NONINTERACTIVE: '1', HOMEBREW_NO_AUTO_UPDATE: '1', FORCE_COLOR: '0' })
+      // Like the managed updater, install npm packages from the official
+      // registry: mirrors lag behind prerelease platform packages (OpenCode2's
+      // postinstall then fails with notarget). The env form reaches nested npm runs.
+      Object.assign(env, { CI: '1', NONINTERACTIVE: '1', HOMEBREW_NO_AUTO_UPDATE: '1', FORCE_COLOR: '0',
+        npm_config_registry: 'https://registry.npmjs.org' })
       const shell = process.platform === 'win32' ? 'powershell.exe' : 'bash'
       const args = process.platform === 'win32'
         ? ['-NoProfile', '-NonInteractive', '-Command', "$ErrorActionPreference = 'Stop'; " + entry.job.command + '; if ($LASTEXITCODE) { exit $LASTEXITCODE }']

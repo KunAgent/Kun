@@ -15,7 +15,7 @@ export type ActivityRollupState =
   | 'closed'
 
 /**
- * Fold child counts into the unit's own state (docs/ade/06 §5).
+ * Fold child counts into the unit's own state.
  * Mirror of kun/src/services/activity-rollup.ts; both sides are pinned by
  * the shared fixture at kun/src/services/__fixtures__/activity-rollup.json.
  */

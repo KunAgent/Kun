@@ -1,10 +1,12 @@
+import { usePaperSpaceStore } from '../../../paper/paper-space-store'
 import { useState, type ReactElement } from 'react'
 import { ChevronDown, ChevronUp, Loader2, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { PaperImportHintMeta } from '@shared/paper/paper-types'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { currentImportParentDir, useImportFolder } from '../../../paper/paper-import-target'
+import { paperImportParentDir } from '../../../paper/paper-import-target'
 import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-store'
+import { ensurePaperSpace, paperSpaceReadingSettings } from '../../../paper/paper-space'
 
 /** Normalized title key, mirroring `paperTitleKey` in the unit service. */
 function titleKey(title: string | undefined): string {
@@ -19,7 +21,7 @@ function titleKey(title: string | undefined): string {
 export function ImportButton({
   input,
   meta,
-  workspaceRoot,
+  workspaceRoot: _workspaceRoot,
   t
 }: {
   input: string
@@ -27,9 +29,10 @@ export function ImportButton({
   workspaceRoot: string
   t: (key: string, options?: Record<string, unknown>) => string
 }): ReactElement | null {
-  const entries = usePaperModeStore((s) => s.entries)
+  const items = usePaperSpaceStore((s) => s.items)
+  const entries = items.map((item) => item.entry)
   const refreshEntries = usePaperModeStore((s) => s.refreshEntries)
-  const folder = useImportFolder()
+  const folder = ''
   const [busy, setBusy] = useState(false)
   const wantTitle = titleKey(meta?.title)
   const inLibrary = entries.some(
@@ -55,11 +58,12 @@ export function ImportButton({
     if (busy || typeof window.kunGui?.paperImport !== 'function') return
     setBusy(true)
     try {
+      const targetRoot = await ensurePaperSpace()
       const result = await window.kunGui.paperImport({
-        workspaceRoot,
+        workspaceRoot: targetRoot,
         input,
         meta,
-        parentDir: currentImportParentDir(),
+        parentDir: paperImportParentDir(paperSpaceReadingSettings().papersDir, ''),
         requestId: newPaperRequestId()
       })
       if (result.ok) {
@@ -73,6 +77,8 @@ export function ImportButton({
       } else {
         usePaperStore.getState().setNotice({ tone: 'error', message: result.message })
       }
+    } catch (error) {
+      usePaperStore.getState().setNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
     } finally {
       setBusy(false)
     }

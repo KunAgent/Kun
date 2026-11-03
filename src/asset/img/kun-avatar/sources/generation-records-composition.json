@@ -1,0 +1,21 @@
+{
+  "created": "2026-10-10",
+  "tool": "image_gen.imagegen",
+  "transparentBackground": true,
+  "sources": [
+    {
+      "file": "composition-bust-shirts.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "900cc10db0cb3616b1ef459d63e339c2921536e926ea0ccdcaacf1892b5c3778",
+      "promptSummary": "ImageGen: three broad transparent upper-chest overlays fitted to the locked Kun body: cream shirt, cardigan, pilot jacket. Shallow open neckline, small collars and high chest details. Second ImageGen pass strengthens the outer silhouette and neckline to uniform 24px dark navy ink, preserving layout and transparency."
+    },
+    {
+      "file": "composition-bust-workwear.png",
+      "width": 1254,
+      "height": 1254,
+      "sha256": "673a1312990398a552bd4f8decc92c3f7f35f5fa6b1f833cb948ce12cc8725a8",
+      "promptSummary": "ImageGen: three broad transparent upper-chest overlays fitted to the locked Kun body: chef coat, photographer straps shirt, green overalls. Open alpha neckline and continuous cropped fabric. Second ImageGen pass strengthens the outer silhouette and neckline to uniform 24px dark navy ink, preserving layout and transparency."
+    }
+  ]
+}

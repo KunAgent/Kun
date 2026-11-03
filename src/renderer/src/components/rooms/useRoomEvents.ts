@@ -24,15 +24,10 @@ import {
 } from '../../lib/browser-storage'
 import { registerRemoteStreamResubscriber } from '../../lib/remote-stream-resubscribers'
 import { createRoomNotificationNavigator, isFocusedRoomConversation, type RoomNotificationTarget } from './room-notification-navigation'
+import { publishRoomEvent, subscribeRoomEvents, type RoomEvent } from './room-event-listeners'
 
-type Event = {
-  seq: number
-  roomId: string
-  kind: string
-  createdAt?: string
-  payload?: { id?: string; taskId?: string; linkId?: string; status?: string; threadId?: string; gateKind?: 'approval' | 'input'; occurredAt?: string }
-}
-const listeners = new Set<(event: Event) => void>()
+type Event = RoomEvent
+export { subscribeRoomEvents }
 const badgeListeners = new Set<() => void>()
 const SEEN_ATTENTION_KEY = 'kun.rooms.seenAttention.v1'
 let badge = 0
@@ -69,12 +64,6 @@ function applyAttentionResult(result: { attentionCount: number; items?: string[]
 export function acknowledgeRoomAttention() {
   writeSeenAttention(attentionItems)
   publishBadge(0)
-}
-export function subscribeRoomEvents(listener: (event: Event) => void) {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
 }
 export function useRoomAttentionCount() {
   return useSyncExternalStore(
@@ -152,7 +141,7 @@ export function useRoomEvents() {
       if (stopped || !queue || !queue.accept(event)) return
       cursor = queue.cursor
       writeBrowserStorageItem('kun.rooms.eventCursor', String(cursor))
-      listeners.forEach((listener) => listener(event))
+      publishRoomEvent(event)
       // A bot-started Code session appears in the sidebar without the user opening Rooms.
       if (event.kind === 'workbench.link.updated' && (event.payload?.status === 'queued' || event.payload?.status === 'running')) {
         clearTimeout(threadRefreshTimer)

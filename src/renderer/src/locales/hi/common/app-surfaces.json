@@ -1,0 +1,21 @@
+{
+  "appSurfaceDesktopOnly": "इंटरैक्टिव पेज Kun डेस्कटॉप ऐप में उपलब्ध हैं।",
+  "appSurfaceRetry": "फिर से कोशिश करें",
+  "appSurfacePageError": "पेज त्रुटि: {{message}}",
+  "appSurfaceWidgetAria": "इंटरैक्टिव विजेट: {{title}}",
+  "appSurfaceCopyImage": "इमेज के रूप में कॉपी करें",
+  "appSurfaceCopied": "कॉपी हो गया",
+  "appSurfaceExpand": "ऐप पैनल में खोलें",
+  "appSurfaceOpenInPanel": "ऐप पैनल में दिखाया गया। फिर से खोलने के लिए क्लिक करें।",
+  "appSurfaceFollowUpConfirm": "क्या \"{{app}}\" की ओर से यह संदेश भेजें?",
+  "appSurfaceOpenLinkConfirm": "\"{{app}}\" यह लिंक आपके ब्राउज़र में खोलना चाहता है।",
+  "appSurfaceToolConsent": "क्या \"{{app}}\" को इस बातचीत में अपने टूल चलाने की अनुमति दें?",
+  "appSurfaceToolConsentDetail": "पेज अपने MCP सर्वर के टूल कॉल कर सकता है, जैसे अपने दस्तावेज़ सहेजना या बदलना। यह अन्य सर्वर, फ़ाइलों या बातचीत के इतिहास तक नहीं पहुँच सकता।",
+  "appSurfaceWidgetStateChip": "{{title}} स्थिति",
+  "appSurfaceWidgetStateSummary": "इंटरैक्टिव विजेट में सहेजे गए विकल्प",
+  "appSurfaceAppContextChip": "{{title}} संदर्भ",
+  "appSurfaceAppContextSummary": "ऐप में चुना गया संदर्भ",
+  "appSurfaceDownloadConfirm": "\"{{app}}\" आपके कंप्यूटर पर एक फ़ाइल सहेजना चाहता है।",
+  "appSurfacePanelTab": "ऐप",
+  "appSurfacePanelEmpty": "कोई ऐप खुला नहीं है। बातचीत से कोई इंटरैक्टिव कार्ड खोलें।"
+}

@@ -1,4 +1,8 @@
-import { app, dialog, type BrowserWindow } from 'electron'
+import { startPlanWorktreeSweeper } from './services/plan-worktree-sweeper'
+import { registerArtProtocol } from './art-assets/protocol'
+import { registerPetAssetProtocol } from './pets/pet-protocol'
+import { sharedWorkspacePreviewProtocols } from './services/workspace-preview-protocol'
+import { app, dialog, protocol, type BrowserWindow } from 'electron'
 import { shouldStartHidden } from './desktop-behavior'
 import { disposeProxyAgents } from './proxy-fetch'
 import { maybePromptCliInstall } from './cli-install-service'
@@ -49,6 +53,7 @@ import { registerShellIpc } from './main-ready-ipc'
 import { registerMainIpc } from './main-ready-ipc-full'
 import { revealMainWindow, syncTray } from './main-tray'
 import { resolveLogDirectory } from './main-paths'
+import { isKunAccountReturnLink } from './kun-account/config'
 import { showStartupFailureWindow } from './startup-failure-window'
 import { sanitizeStartupFailureMessage } from './startup-failure-content'
 import {
@@ -60,7 +65,6 @@ import {
 } from './desktop-instance-identity'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
 import { join, resolve } from 'node:path'
-import { prefetchCatalogPricing } from './catalog-prefetch'
 import { attachModelsDevDiskCache } from './models-dev-catalog'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 import { installHostPowerRecovery } from './host-power-recovery'
@@ -123,6 +127,12 @@ export function startMainApp(): Promise<void> {
     }
   }
   const onImportLink = (raw: string): void => {
+    // "Back to Kun" on the account sign-in result page: macOS will not let a
+    // background app take focus, so the browser hands it back explicitly.
+    if (isKunAccountReturnLink(raw)) {
+      activation.requestReveal()
+      return
+    }
     const staged = stageProviderImportLink(raw)
     if (!staged.ok) {
       logWarn('provider-import-link', 'Rejected kun:// import link.', { message: staged.message })
@@ -188,7 +198,7 @@ export function startMainApp(): Promise<void> {
       mainState.logDir,
       {
         ...(recoverHandoff ? { recoverHandoff } : {}),
-        recoverRetry: () => prepareGuiRuntimeForStartupRetry(error),
+        recoverRetry: (signal) => prepareGuiRuntimeForStartupRetry(error, signal),
         replaceWindow: earlyWindow
       }
     )
@@ -221,6 +231,9 @@ export function startMainApp(): Promise<void> {
 
   return app.whenReady().then(async () => {
     traceStartup('app.whenReady:start')
+    registerArtProtocol(protocol)
+    registerPetAssetProtocol(protocol)
+    sharedWorkspacePreviewProtocols().register(protocol)
     if (!gotSingleInstanceLock) {
       await explainConflictingDesktopInstance()
       return
@@ -229,6 +242,7 @@ export function startMainApp(): Promise<void> {
     const disposeHostPowerRecovery = installHostPowerRecovery()
     app.once('before-quit', disposeHostPowerRecovery)
     app.once('before-quit', () => disposeProxyAgents())
+    app.once('before-quit', startPlanWorktreeSweeper())
     if (await recoverUpdateBeforeRuntimeStart()) return
 
     const startup = await startWindowFirstStartup({
@@ -270,12 +284,12 @@ export function startMainApp(): Promise<void> {
     // Persist the models.dev catalog across restarts so provider metadata is
     // available immediately and offline launches reuse the last fetch.
     attachModelsDevDiskCache(join(app.getPath('userData'), 'cache', 'models-dev.json'))
-    void prefetchCatalogPricing(mainState.store).catch((err) => {
-      console.warn('[kun-gui] catalog pricing prefetch failed:', err)
-    })
+    // Runtime owns public catalog warming and derived pricing; startup never
+    // writes automatic prices into user model profiles.
 
     await runPostWindowRuntimeStartup(initial, {
       startupState: mainState.startupState,
+      onReady: () => desktopProcessStack.finishStartup(),
       reconcileBundledRuntimeAfterInstall,
       resolveManagedRuntimeStartupTarget,
       managedKunHostCanAutoStart,

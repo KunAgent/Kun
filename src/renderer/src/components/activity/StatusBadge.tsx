@@ -5,7 +5,7 @@ import { activityGlyph } from './activity-glyph'
 import { StatusDot } from './StatusDot'
 
 /**
- * Status pill = StatusDot + translated label (docs/ade/12 §3). Used where a
+ * Status pill = StatusDot + translated label. Used where a
  * bare dot would be ambiguous (column headers, worker rows, banners).
  */
 export function StatusBadge({

@@ -1,48 +1,23 @@
 import { useMemo, useState, type ReactElement } from 'react'
-import { Check, ClipboardCopy, Import, Loader2, MessageSquarePlus, Search, X } from 'lucide-react'
+import { ClipboardCopy, Search, Send, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { generatePaperBibtex } from '@shared/paper/paper-bibtex'
 import type { PaperUnitMetaV2 } from '@shared/paper/paper-meta-v2'
-import type { PaperLibraryEntry } from '@shared/paper/paper-library-types'
-import { titleKey } from '@shared/paper/paper-search'
-import { paperCardImportInput, paperCardImportMeta } from '../../../agent/paper-list-adapter'
-import type { ResearchPool, ResearchPoolEntry } from '../../../paper/paper-research-pool'
+import { candidateFromPoolEntry, findLibraryEntry, useLibraryIndex } from '../../../paper/paper-import-candidates'
+import { findImportItem, usePaperImportJobs } from '../../../paper/paper-import-job'
+import { selectionHas, usePaperImportSelection, usePaperSelectionRecords } from '../../../paper/paper-import-selection'
 import { usePaperModeStore } from '../../../paper/paper-mode-store'
-import { newPaperRequestId, usePaperStore } from '../../../write/paper/paper-store'
-import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
-import { currentImportParentDir } from '../../../paper/paper-import-target'
-import { PaperImportFolderPicker } from '../import/PaperImportFolderPicker'
+import type { ResearchPool, ResearchPoolEntry } from '../../../paper/paper-research-pool'
+import { PaperImportAction } from '../import/PaperImportAction'
+import { PaperImportStatus } from '../import/PaperImportStatus'
+import { PaperMoreMenu } from '../import/PaperMoreMenu'
+import { PaperCheck, PaperPickRow, PRIORITY_TONE } from '../import/PaperPickRow'
+import { PaperResearchPoolDetail } from './PaperResearchPoolDetail'
 
 type PoolTab = 'all' | 'recommended' | 'library'
 type PoolSort = 'relevance' | 'hits' | 'year' | 'citations'
 
 const PRIORITY_RANK: Record<string, number> = { must: 0, should: 1, optional: 2 }
-const PRIORITY_TONE: Record<string, string> = {
-  must: 'bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300',
-  should: 'bg-sky-50 text-sky-700 dark:bg-sky-950 dark:text-sky-300',
-  optional: 'bg-ds-subtle text-ds-muted'
-}
-
-function libraryIndex(entries: readonly PaperLibraryEntry[]): Set<string> {
-  const keys = new Set<string>()
-  for (const entry of entries) {
-    const meta = entry.meta
-    if (meta.arxivId) keys.add(`arxiv:${meta.arxivId}`)
-    if (meta.doi) keys.add(`doi:${meta.doi.toLowerCase()}`)
-    if (meta.coolPapers?.id) keys.add(`cool:${meta.coolPapers.id}`)
-    if (meta.title) keys.add(`title:${titleKey(meta.title)}`)
-  }
-  return keys
-}
-
-function inLibrary(entry: ResearchPoolEntry, keys: Set<string>): boolean {
-  return (
-    (entry.arxivId !== undefined && keys.has(`arxiv:${entry.arxivId}`)) ||
-    (entry.doi !== undefined && keys.has(`doi:${entry.doi.toLowerCase()}`)) ||
-    (entry.coolId !== undefined && keys.has(`cool:${entry.coolId}`)) ||
-    keys.has(`title:${titleKey(entry.title)}`)
-  )
-}
 
 function toBibtexMeta(entry: ResearchPoolEntry): PaperUnitMetaV2 {
   return {
@@ -79,119 +54,117 @@ function sortEntries(entries: ResearchPoolEntry[], sort: PoolSort): ResearchPool
 }
 
 /**
- * Right rail of the research stage: every paper the session surfaced,
- * deduplicated, with recommendations, library state and bulk actions.
+ * Right panel of the research stage: every paper the session surfaced,
+ * deduplicated. It shares one selection with the recommendation card, shows
+ * each paper's import state, and imports through the same import sheet.
  */
 export function PaperResearchPool({
   pool,
-  onFocusBlock
+  scope,
+  topic,
+  running,
+  onFocusBlock,
+  onClose
 }: {
   pool: ResearchPool
+  scope: string
+  topic: string
+  running: boolean
   onFocusBlock: (blockId: string) => void
+  /** Hide the panel (the header shows a close button when given). */
+  onClose?: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
-  const libraryEntries = usePaperModeStore((s) => s.entries)
-  const refreshEntries = usePaperModeStore((s) => s.refreshEntries)
+  const index = useLibraryIndex()
   const composer = usePaperModeStore((s) => s.composerBridge)
-  const [tab, setTab] = useState<PoolTab>('all')
+  const records = usePaperSelectionRecords(scope)
+  const job = usePaperImportJobs((s) => s.jobs[scope])
+  const [tab, setTab] = useState<PoolTab>(pool.stats.recommended > 0 ? 'recommended' : 'all')
   const [sort, setSort] = useState<PoolSort>('relevance')
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set())
-  const [importing, setImporting] = useState(false)
+  const [openKey, setOpenKey] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const libraryKeys = useMemo(() => libraryIndex(libraryEntries), [libraryEntries])
 
+  const rows = useMemo(
+    () => pool.entries.map((entry) => ({ entry, candidate: candidateFromPoolEntry(entry, index) })),
+    [pool.entries, index]
+  )
   const needle = query.trim().toLowerCase()
-  const visible = useMemo(() => sortEntries(pool.entries.filter((entry) => {
-    if (tab === 'recommended' && !entry.recommended) return false
-    if (tab === 'library' && !inLibrary(entry, libraryKeys)) return false
-    return !needle || `${entry.title} ${entry.authors.join(' ')}`.toLowerCase().includes(needle)
-  }), sort), [pool.entries, tab, libraryKeys, needle, sort])
-  const chosen = pool.entries.filter((entry) => selected.has(entry.key))
-  const libraryCount = pool.entries.filter((entry) => inLibrary(entry, libraryKeys)).length
+  const visible = useMemo(() => {
+    const kept = rows.filter(({ entry, candidate }) => {
+      if (tab === 'recommended' && !entry.recommended) return false
+      if (tab === 'library' && !candidate.owned) return false
+      return !needle || `${entry.title} ${entry.authors.join(' ')}`.toLowerCase().includes(needle)
+    })
+    const order = new Map(sortEntries(kept.map((row) => row.entry), sort).map((entry, position) => [entry.key, position]))
+    return [...kept].sort((a, b) => (order.get(a.entry.key) ?? 0) - (order.get(b.entry.key) ?? 0))
+  }, [rows, tab, needle, sort])
+  const libraryCount = rows.filter((row) => row.candidate.owned).length
+  const chosen = rows.filter((row) => selectionHas(records, row.candidate.keys))
+  const locked = job?.running === true
+  // Papers surfaced by the last two searches get a "new" tag while running.
+  const recentBlocks = running ? new Set(Object.keys(pool.newCountByBlock).slice(-2)) : new Set<string>()
 
-  const toggle = (key: string): void => setSelected((current) => {
-    const next = new Set(current)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
-    return next
-  })
-
-  const importChosen = async (): Promise<void> => {
-    const items = chosen
-      .filter((entry) => !inLibrary(entry, libraryKeys))
-      .flatMap((entry) => {
-        const input = paperCardImportInput(entry)
-        return input ? [{ input, meta: paperCardImportMeta(entry) }] : []
-      })
-    if (importing || !items.length || typeof window.kunGui?.paperImportBatch !== 'function') return
-    setImporting(true)
-    try {
-      const writeState = useWriteWorkspaceStore.getState()
-      const result = await window.kunGui.paperImportBatch({
-        workspaceRoot: writeState.workspaceRoot,
-        items,
-        parentDir: currentImportParentDir(),
-        requestId: newPaperRequestId()
-      })
-      if (result.ok) {
-        const imported = result.results.filter((r) => r.ok && !r.reused).length
-        const reused = result.results.filter((r) => r.ok && r.reused).length
-        const failed = result.results.filter((r) => !r.ok).length
-        usePaperStore.getState().setNotice({
-          tone: failed ? 'error' : 'info',
-          message: t('writePaperReportImportDone', { imported, reused, failed })
-        })
-        refreshEntries()
-        setSelected(new Set())
-      } else {
-        usePaperStore.getState().setNotice({ tone: 'error', message: result.message })
-      }
-    } finally {
-      setImporting(false)
-    }
+  const toggle = (keys: readonly string[]): void => usePaperImportSelection.getState().toggle(scope, keys)
+  const visibleState = (): 'on' | 'off' | 'some' => {
+    const count = visible.filter((row) => selectionHas(records, row.candidate.keys)).length
+    return count === 0 ? 'off' : count === visible.length ? 'on' : 'some'
   }
+  const recommendedRows = rows.filter((row) => row.entry.recommended && row.entry.recommended.priority !== 'optional' && !row.candidate.owned)
 
   const copyBibtex = async (): Promise<void> => {
-    const text = generatePaperBibtex(chosen.map(toBibtexMeta))
+    const text = generatePaperBibtex(chosen.map((row) => toBibtexMeta(row.entry)))
     if (!text) return
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
   }
-
   const sendToAssistant = (): void => {
     if (!composer?.setInput || !chosen.length) return
-    const lines = chosen.map(sendableLine).join('\n')
+    const lines = chosen.map((row) => sendableLine(row.entry)).join('\n')
     composer.setInput(composer.input.trim() ? `${composer.input.trim()}\n\n${lines}` : lines)
   }
 
-  const tabs: Array<[PoolTab, string, number]> = [
+  const tabs: Array<[PoolTab, string, number | string]> = [
     ['all', t('paperResearchPoolAll'), pool.entries.length],
-    ['recommended', t('paperResearchPoolRecommended'), pool.stats.recommended],
+    ['recommended', t('paperResearchPoolRecommended'), pool.stats.recommended || '–'],
     ['library', t('paperResearchPoolInLibrary'), libraryCount]
   ]
 
   return (
-    <aside className="flex h-full min-h-0 w-full flex-col bg-ds-main">
+    <aside className="flex h-full min-h-0 w-full flex-col bg-ds-main" aria-label={t('paperResearchPoolTitle')}>
       <div className="shrink-0 border-b border-ds-border-muted px-3 pb-2 pt-3">
-        <div className="flex items-baseline justify-between">
+        <div className="flex items-baseline gap-2">
           <span className="text-[13px] font-semibold text-ds-ink">{t('paperResearchPoolTitle')}</span>
-          <span className="text-[11.5px] tabular-nums text-ds-faint">{pool.entries.length}</span>
+          <span className="text-[11.5px] tabular-nums text-ds-faint">{t('paperToolPaperCount', { count: pool.entries.length })}</span>
+          {running ? (
+            <span className="inline-flex items-center gap-1 text-[11.5px] text-[var(--ds-accent)]">
+              <span className="h-1.5 w-1.5 rounded-full bg-[var(--ds-accent)]" />
+              {t('paperResearchPoolLive')}
+            </span>
+          ) : null}
+          <span className="flex-1" />
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label={t('close')}
+              title={t('close')}
+              className="-mr-1 grid h-6 w-6 place-items-center rounded-md text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          ) : null}
         </div>
-        <p className="mt-0.5 text-[11px] text-ds-faint">
-          {t('paperResearchPoolStats', { searches: pool.stats.searches, recommended: pool.stats.recommended })}
-          {pool.stats.failedSources.length
-            ? ` · ${t('paperToolFailed', { sources: pool.stats.failedSources.map((s) => t(`writePaperSearchSource_${s}`)).join(', ') })}`
-            : ''}
-        </p>
-        <div className="mt-2 flex h-7 items-center rounded-md border border-ds-border-muted bg-ds-subtle p-0.5">
+        <div className="mt-2 flex h-7 items-center rounded-lg bg-ds-subtle p-0.5" role="tablist" aria-label={t('paperResearchPoolTitle')}>
           {tabs.map(([value, label, count]) => (
             <button
               key={value}
               type="button"
+              role="tab"
+              aria-selected={tab === value}
               onClick={() => setTab(value)}
-              className={`inline-flex h-6 flex-1 items-center justify-center gap-1 rounded px-1 text-[11.5px] transition ${
+              className={`inline-flex h-6 flex-1 items-center justify-center gap-1 rounded-md px-1 text-[11.5px] transition ${
                 tab === value ? 'bg-ds-main font-medium text-ds-ink shadow-sm' : 'text-ds-muted hover:text-ds-ink'
               }`}
             >
@@ -207,7 +180,7 @@ export function PaperResearchPool({
               onChange={(event) => setQuery(event.target.value)}
               placeholder={t('paperResearchPoolFilter')}
               aria-label={t('paperResearchPoolFilter')}
-              className="h-7 w-full rounded-md border border-ds-border-muted bg-ds-main pl-6 pr-5 text-[12px] text-ds-ink outline-none placeholder:text-ds-faint focus:border-[var(--ds-accent)]"
+              className="h-7 w-full rounded-md border border-ds-border-muted bg-ds-main pl-6 pr-5 text-[12px] text-ds-ink outline-none placeholder:text-ds-faint focus-visible:outline-none focus:border-[var(--ds-accent)]"
             />
             {query ? (
               <button type="button" aria-label={t('clearSearch')} onClick={() => setQuery('')} className="absolute right-1 p-0.5 text-ds-faint hover:text-ds-ink">
@@ -227,86 +200,74 @@ export function PaperResearchPool({
             <option value="citations">{t('writePaperSearchSort_citations')}</option>
           </select>
         </div>
-      </div>
-
-      <ul className="min-h-0 flex-1 overflow-y-auto px-1.5 py-1">
-        {visible.map((entry) => {
-          const checked = selected.has(entry.key)
-          const owned = inLibrary(entry, libraryKeys)
-          const priority = entry.recommended?.priority
-          return (
-            <li key={entry.key} className="group flex items-start gap-2 rounded-md px-1.5 py-1.5 hover:bg-ds-hover">
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => toggle(entry.key)}
-                aria-label={entry.title}
-                className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-[var(--ds-accent)]"
-              />
+        {visible.length > 0 ? (
+          <div className="mt-2 flex items-center gap-2 text-[11.5px] text-ds-muted">
+            <PaperCheck
+              state={visibleState()}
+              disabled={locked}
+              onToggle={() => usePaperImportSelection.getState().setMany(scope, visible.map((row) => row.candidate.keys), visibleState() !== 'on')}
+              label={t('writePaperReportSelectAll')}
+            />
+            <span className="flex-1">{t('writePaperReportSelectAll')}</span>
+            {recommendedRows.length > 0 ? (
               <button
                 type="button"
-                onClick={() => entry.firstBlockId && onFocusBlock(entry.firstBlockId)}
-                title={entry.recommended?.reason ?? entry.title}
-                className="min-w-0 flex-1 text-left"
+                disabled={locked}
+                onClick={() => usePaperImportSelection.getState().setMany(scope, recommendedRows.map((row) => row.candidate.keys), true)}
+                className="rounded px-1.5 py-0.5 font-medium text-[var(--ds-accent)] transition hover:bg-ds-hover disabled:opacity-40"
               >
-                <span className="line-clamp-2 text-[12.5px] leading-[1.35] text-ds-ink">{entry.title}</span>
-                <span className="mt-0.5 flex min-w-0 items-center gap-1 whitespace-nowrap text-[10.5px] text-ds-faint">
-                  {priority ? (
-                    <span className={`shrink-0 rounded px-1 font-medium ${PRIORITY_TONE[priority]}`}>{t(`paperResearchPriority_${priority}`)}</span>
-                  ) : entry.recommended ? (
-                    <span className="shrink-0 rounded bg-ds-subtle px-1 font-medium text-ds-muted">{t('paperResearchPoolRecommendedBadge')}</span>
-                  ) : null}
-                  <span className="min-w-0 truncate">
-                    {[entry.year ? String(entry.year) : '', entry.venue ?? ''].filter(Boolean).join(' · ')}
-                  </span>
-                  {entry.hits > 1 ? <span className="shrink-0 tabular-nums">×{entry.hits}</span> : null}
-                  {owned ? <span className="shrink-0 text-emerald-700 dark:text-emerald-300">{t('writePaperRefInLibrary')}</span> : null}
-                </span>
+                {t('paperPoolSelectRecommended')}
               </button>
-            </li>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      <ul className="min-h-0 flex-1 overflow-y-auto">
+        {visible.map(({ entry, candidate }) => {
+          const priority = entry.recommended?.priority
+          const library = findLibraryEntry(index, candidate.keys)
+          const meta = [entry.year ? String(entry.year) : '', entry.venue ?? '', entry.hits > 1 ? `×${entry.hits}` : ''].filter(Boolean).join(' · ')
+          return (
+            <PaperPickRow
+              key={entry.key}
+              checked={selectionHas(records, candidate.keys)}
+              onToggle={() => (locked ? undefined : toggle(candidate.keys))}
+              checkLabel={entry.title}
+              priority={priority
+                ? { label: t(`paperResearchPriority_${priority}`), tone: PRIORITY_TONE[priority] ?? '' }
+                : entry.recommended
+                  ? { label: t('paperResearchPoolRecommendedBadge'), tone: PRIORITY_TONE.should ?? '' }
+                  : recentBlocks.has(entry.firstBlockId)
+                    ? { label: t('paperPoolNew'), tone: 'bg-[var(--ds-accent-soft)] text-[var(--ds-accent)]' }
+                    : undefined}
+              title={entry.title}
+              meta={meta}
+              status={<PaperImportStatus scope={scope} item={findImportItem(job, candidate.keys)} owned={library ? { unitDir: library.unitDir, group: library.group } : undefined} />}
+              open={openKey === entry.key}
+              onOpen={() => setOpenKey((current) => (current === entry.key ? null : entry.key))}
+            >
+              <PaperResearchPoolDetail entry={entry} onFocusBlock={onFocusBlock} />
+            </PaperPickRow>
           )
         })}
         {!visible.length ? (
-          <li className="px-3 py-10 text-center text-[12px] text-ds-faint">{t('paperResearchPoolEmpty')}</li>
+          <li className="px-3 py-10 text-center text-[12px] text-ds-faint">
+            {running && !pool.entries.length ? t('paperResearchPoolWaiting') : t('paperResearchPoolEmpty')}
+          </li>
         ) : null}
       </ul>
 
-      <div className="shrink-0 border-t border-ds-border-muted px-3 py-2">
-        <div className="mb-1.5 flex items-center gap-1">
-          <span className="min-w-0 flex-1 truncate text-[11px] text-ds-faint">
-            {chosen.length ? t('paperResearchPoolSelected', { count: chosen.length }) : t('paperResearchPoolChildNote')}
-          </span>
-          <PaperImportFolderPicker showPrefix={false} className="-mr-1" />
-        </div>
-        <div className="flex flex-wrap gap-1">
-          <button
-            type="button"
-            disabled={!chosen.length || importing}
-            onClick={() => void importChosen()}
-            className="inline-flex h-7 items-center gap-1 rounded-md bg-[var(--ds-control)] px-2 text-[11.5px] font-medium text-[var(--ds-control-foreground)] transition hover:opacity-90 disabled:opacity-40"
-          >
-            {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Import className="h-3 w-3" />}
-            {t('writePaperImport')}
-          </button>
-          <button
-            type="button"
-            disabled={!chosen.length}
-            onClick={() => void copyBibtex()}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-ds-border-muted px-2 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
-          >
-            {copied ? <Check className="h-3 w-3" /> : <ClipboardCopy className="h-3 w-3" />}
-            BibTeX
-          </button>
-          <button
-            type="button"
-            disabled={!chosen.length || !composer?.setInput}
-            onClick={sendToAssistant}
-            className="inline-flex h-7 items-center gap-1 rounded-md border border-ds-border-muted px-2 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
-          >
-            <MessageSquarePlus className="h-3 w-3" />
-            {t('paperResearchPoolSendToChat')}
-          </button>
-        </div>
+      <div className="flex shrink-0 items-center gap-2 border-t border-ds-border-muted bg-ds-subtle/40 px-3 py-2">
+        <span className="min-w-0 flex-1 truncate text-[12px] text-ds-muted">{t('paperResearchPoolSelected', { count: chosen.length })}</span>
+        <PaperImportAction scope={scope} candidates={chosen.map((row) => row.candidate)} topic={topic} compact />
+        <PaperMoreMenu
+          label={t('paperReportMore')}
+          items={[
+            { id: 'bibtex', label: copied ? t('writePaperReportCopied') : t('writePaperReportCopyBibtex'), icon: <ClipboardCopy className="h-3.5 w-3.5" strokeWidth={1.8} />, disabled: !chosen.length, onSelect: () => void copyBibtex() },
+            { id: 'send', label: t('paperResearchPoolSendToChat'), icon: <Send className="h-3.5 w-3.5" strokeWidth={1.8} />, disabled: !chosen.length || !composer?.setInput, onSelect: sendToAssistant }
+          ]}
+        />
       </div>
     </aside>
   )

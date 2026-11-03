@@ -12,6 +12,7 @@ import { useChatStore } from '../../store/chat-store'
 import { prepareAssistantMarkdownRenderer } from '../../lib/assistant-markdown-loader'
 import { ThreadHydrationGate } from './ThreadHydrationLoading'
 import { LiveAssistantStreamingProvider } from './live-assistant-streaming'
+import { TurnUndoDialogHost } from './turn-undo-dialog'
 
 const LazyLoadedMessageTimeline = lazy(() =>
   import('./MessageTimeline').then((module) => ({ default: module.MessageTimeline }))
@@ -60,6 +61,7 @@ export function LazyMessageTimeline({
         <Suspense fallback={fallback}>
           <LazyLoadedMessageTimeline key={timelineKey} {...props} />
         </Suspense>
+        <TurnUndoDialogHost />
       </LiveAssistantStreamingProvider>
     </ThreadHydrationGate>
   )

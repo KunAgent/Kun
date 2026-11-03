@@ -1,3 +1,4 @@
+import { approvalChoiceKey, type ApprovalChoice } from '../contracts/approval-choice.js'
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 
 export const KUN_APPROVAL_CONSENT_HEADER = 'x-kun-approval-consent'
@@ -9,12 +10,13 @@ export function createApprovalConsentToken(input: {
   runtimeToken: string
   approvalId: string
   decision: 'allow' | 'deny'
+  choice?: ApprovalChoice
   expiresAt: number
   nonce?: string
 }): string {
   const nonce = input.nonce ?? randomBytes(24).toString('base64url')
   const signature = createHmac('sha256', input.runtimeToken)
-    .update(approvalConsentPayload(input.approvalId, input.decision, input.expiresAt, nonce))
+    .update(approvalConsentPayload(input.approvalId, input.decision, input.expiresAt, nonce, input.choice))
     .digest('base64url')
   return [APPROVAL_CONSENT_VERSION, input.expiresAt, nonce, signature].join('.')
 }
@@ -31,6 +33,7 @@ export class ApprovalConsentVerifier {
     token: string | null
     approvalId: string
     decision: 'allow' | 'deny'
+    choice?: ApprovalChoice
   }): boolean {
     const parsed = parseToken(input.token)
     if (!parsed || !this.runtimeToken) return false
@@ -38,7 +41,7 @@ export class ApprovalConsentVerifier {
     this.prune(now)
     if (parsed.expiresAt <= now || parsed.expiresAt > now + MAX_APPROVAL_CONSENT_LIFETIME_MS) return false
     const expected = createHmac('sha256', this.runtimeToken)
-      .update(approvalConsentPayload(input.approvalId, input.decision, parsed.expiresAt, parsed.nonce))
+      .update(approvalConsentPayload(input.approvalId, input.decision, parsed.expiresAt, parsed.nonce, input.choice))
       .digest()
     let actual: Buffer
     try {
@@ -86,7 +89,8 @@ function approvalConsentPayload(
   approvalId: string,
   decision: 'allow' | 'deny',
   expiresAt: number,
-  nonce: string
+  nonce: string,
+  choice?: ApprovalChoice
 ): string {
-  return `${APPROVAL_CONSENT_VERSION}\n${approvalId}\n${decision}\n${expiresAt}\n${nonce}`
+  return `${APPROVAL_CONSENT_VERSION}\n${approvalId}\n${decision}\n${expiresAt}\n${nonce}${choice ? `\n${approvalChoiceKey(choice)}` : ''}`
 }

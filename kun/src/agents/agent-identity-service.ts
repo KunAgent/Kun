@@ -1,3 +1,4 @@
+import { withManagerDataMutex } from '../manager/data-mutex.js'
 import { migrateAgentPermissions } from './agent-permission-migration.js'
 import { observeRoomRepository } from '../rooms/task-workspace-service.js'
 import { createHash, randomUUID } from 'node:crypto'
@@ -7,7 +8,6 @@ import { RoomMemberSchema, RoomSchema, type Room, type RoomMember } from '../con
 import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
 import type { RoomStore, RoomStoreCommit } from '../rooms/room-store.js'
 import { RoomStoreConflictError } from '../rooms/room-store.js'
-import { DEFAULT_AGENT_TEMPLATES } from './agent-defaults.js'
 import { bindAgentMembers, freezeAgentRoom } from './agent-membership.js'
 import { agentExecutorRouteKey, type AgentExecutor } from '../contracts/agent-executor.js'
 
@@ -36,7 +36,7 @@ export class AgentIdentityService {
     return result.result
   }
   async initialize(): Promise<void> {
-    if (!this.initializing) this.initializing = this.migrate().then(() => migrateAgentPermissions(this.store)).catch((error) => { this.initializing = undefined; throw error })
+    if (!this.initializing) this.initializing = withManagerDataMutex('agent-directory', () => this.migrate().then(() => migrateAgentPermissions(this.store))).catch((error) => { this.initializing = undefined; throw error })
     return this.initializing
   }
   private async migrate(): Promise<void> {
@@ -80,6 +80,9 @@ export class AgentIdentityService {
       ...(rows.length > input.limit ? { nextCursor: String(rows[input.limit - 1].seq) } : {}) }
   }
   async create(raw: unknown): Promise<{ agent: AgentIdentity }> {
+    return withManagerDataMutex('agent-directory', () => this.createNow(raw))
+  }
+  private async createNow(raw: unknown): Promise<{ agent: AgentIdentity }> {
     const input = CreateAgentRequest.parse(raw)
     const key = 'agent-create:' + input.clientRequestId, hash = fingerprint(input)
     const replay = await this.store.getRequest(key)
@@ -108,6 +111,9 @@ export class AgentIdentityService {
     return saved.result as typeof result
   }
   async update(id: string, raw: unknown): Promise<{ agent: AgentIdentity }> {
+    return withManagerDataMutex('agent-directory', () => this.updateNow(id, raw))
+  }
+  private async updateNow(id: string, raw: unknown): Promise<{ agent: AgentIdentity }> {
     const parsed = UpdateAgentRequest.parse(raw)
     // Zod defaults inside optional fields must not turn a partial update into a reset.
     const input = Object.fromEntries(Object.entries(parsed).filter(([key]) =>
@@ -134,14 +140,14 @@ export class AgentIdentityService {
       (old.executor && agentExecutorRouteKey(old.executor) !== agentExecutorRouteKey(agent.executor!))) {
       throw new RoomStoreConflictError('an Agent\'s engine route cannot change; only a coding Agent\'s model can')
     }
-    await this.validate(normalizeExternalAgent(agent), old.executor)
+    await this.validate(normalizeExternalAgent(agent), old.executor, old.avatar)
     const saved = await this.store.commit({ requestId: key, fingerprint: hash,
       checks: [{ kind: 'agent_identity', id, expectedRevision }],
       puts: [{ kind: 'agent_identity', id, value: agent }], result: { agent },
       events: [{ roomId: namespace, kind: 'agent.updated', payload: { id } }] })
     return saved.result as { agent: AgentIdentity }
   }
-  private async validate(agent: AgentIdentity, previousExecutor?: AgentExecutor) {
+  private async validate(agent: AgentIdentity, previousExecutor?: AgentExecutor, previousAvatar?: AgentIdentity['avatar']) {
     if (agent.allowedRepositoryRoots) {
       const repositories = await Promise.all(agent.allowedRepositoryRoots.map((root) => observeRoomRepository(root)))
       agent.allowedRepositoryRoots = [...new Set(repositories.map((repo) => repo.root))]
@@ -158,8 +164,12 @@ export class AgentIdentityService {
       if (!this.executorValidator) throw new RoomStoreConflictError('coding Agents are unavailable')
       agent.executor = await this.executorValidator(agent.executor)
     }
+    if (JSON.stringify(agent.avatar) === JSON.stringify(previousAvatar)) return
     if (agent.avatar?.kind === 'uploaded') {
       if (!this.validateAvatars) throw new Error('avatar storage unavailable')
+      await this.validateAvatars([this.asMember(agent)])
+    } else if (agent.avatar?.kind === 'composed' && this.validateAvatars) {
+      // A composed look may only wear items the user's wardrobe holds.
       await this.validateAvatars([this.asMember(agent)])
     }
   }
@@ -168,24 +178,16 @@ export class AgentIdentityService {
       presetId: agent.presetId, role: agent.defaultRole, avatar: agent.avatar, revision: 0,
       allowedRepositoryIds: repositoryIds, ...(repositoryIds.length === 1 ? { defaultRepositoryId: repositoryIds[0] } : {}) })
   }
+  /** A new group starts with 小 Kun only; role presets are created on request, never seeded. */
   async defaultMembers(repositoryIds: string[]): Promise<RoomMember[]> {
-    const members: RoomMember[] = []
-    for (const template of DEFAULT_AGENT_TEMPLATES) {
-      const id = 'agent-default-' + template.templateId
-      let row = await this.store.get<AgentIdentity>('agent_identity', id)
-      if (!row) {
-        const now = new Date().toISOString()
-        const { examples: _examples, ...fields } = template
-        const agent = AgentIdentitySchema.parse({ ...fields, schemaVersion: 1, id, revision: 0, createdAt: now, updatedAt: now })
-        await this.store.commit({ requestId: 'agent-default:' + id,
-          checks: [{ kind: 'agent_identity', id, expectedRevision: null }],
-          puts: [{ kind: 'agent_identity', id, value: agent }] })
-        row = await this.store.get<AgentIdentity>('agent_identity', id)
-      }
-      if (!row!.value.archivedAt) members.push({ ...this.asMember(row!.value, repositoryIds), id: template.templateId })
-    }
-    if (!members.length) throw new RoomStoreConflictError('choose an active agent for the room')
-    return members
+    const { quickCreateAgent } = await import('./agent-chat-entry.js')
+    const { agentId } = await quickCreateAgent(this, { clientRequestId: 'default-members' }, true)
+    const kun = await this.store.get<AgentIdentity>('agent_identity', agentId)
+    if (kun && !kun.value.archivedAt) return [this.asMember(kun.value, repositoryIds)]
+    const fallback = (await this.store.list<AgentIdentity>('agent_identity', { limit: 50 }))
+      .find((row) => !row.value.archivedAt && !row.value.executor && row.value.setup?.status !== 'pending')
+    if (!fallback) throw new RoomStoreConflictError('choose an active agent for the room')
+    return [this.asMember(fallback.value, repositoryIds)]
   }
   async present(room: Room): Promise<Room> {
     const members = await Promise.all(room.members.map(async (member) => {

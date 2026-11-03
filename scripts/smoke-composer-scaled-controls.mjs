@@ -90,7 +90,16 @@ app.on('window-all-closed', () => app.quit())
         }
       }
     }
-    if (phase === 'fixed') await assertInteractions()
+    if (phase === 'fixed') {
+      // The fixture adds ~150px of stage padding; `agent` widths are shifted to match the Work rail's content widths.
+      await exerciseVariant(url, 'work', [240, 280, 320, 360, 400, 440, 520, 640])
+      await exerciseVariant(url, 'agent', [388, 428, 468, 508, 548, 628, 708, 788])
+    }
+    if (phase === 'fixed') {
+      await page.goto(url, { timeout: 90_000 })
+      await page.locator('.ds-composer-voice-action').waitFor({ state: 'attached', timeout: 90_000 })
+      await assertInteractions()
+    }
     await server.close()
     server = undefined
   }
@@ -227,9 +236,14 @@ async function assertInteractions() {
   await page.locator('.ds-composer-textarea').fill('Explain the change')
   await page.locator('.ds-composer-prompt-optimize-action').click()
   await page.waitForFunction(() => document.querySelector('.ds-composer-textarea').value === 'Optimized: Explain the change')
+  // The rewrite offers an undo; Undo restores the draft and the second run replaces it again.
+  await page.locator('[data-prompt-enhance-status="done"] button').first().click()
+  await page.waitForFunction(() => document.querySelector('.ds-composer-textarea').value === 'Explain the change')
+  await page.locator('.ds-composer-prompt-optimize-action').click()
+  await page.waitForFunction(() => document.querySelector('.ds-composer-textarea').value === 'Optimized: Explain the change')
   await page.locator('.ds-composer-primary-action').click()
   assert.deepEqual(await page.evaluate(() => window.composerFixture.calls.sent), ['Optimized: Explain the change'])
-  assert.deepEqual(await page.evaluate(() => window.composerFixture.calls.optimized), ['Explain the change'])
+  assert.deepEqual(await page.evaluate(() => window.composerFixture.calls.optimized), ['Explain the change', 'Explain the change'])
   await page.locator('.ds-composer-voice-action').click()
   const recording = page.locator('.ds-composer-toolbar-actions')
   await recording.locator('canvas').waitFor({ state: 'visible' })
@@ -263,4 +277,90 @@ async function assertInteractions() {
   await page.locator('.ds-composer-voice-action').waitFor({ state: 'visible' })
   assert.match(await page.locator('.ds-composer-textarea').inputValue(), /Recorded fixture text$/)
   assertGeometry(await geometry(page))
+}
+
+// The Work assistant composer in a narrow rail, and Code with a third-party
+// Agent: always one row, the controls never overlap or clip, and words give way
+// (Agent name, model name, level) instead of the actions wrapping.
+async function exerciseVariant(url, variant, widths) {
+  await page.goto(`${url}?variant=${variant}`, { timeout: 90_000 })
+  await page.locator('[data-agent-mode-trigger]').waitFor({ timeout: 90_000 })
+  for (const effort of ['auto', 'high']) {
+    await page.evaluate(effort => window.composerFixtureEffort(effort), effort)
+    for (const enabled of [false, true]) {
+      await page.evaluate(enabled => window.composerFixture.setEnabled(enabled), enabled)
+      if (enabled) await page.locator('.ds-composer-voice-action').waitFor({ state: 'visible' })
+      else await page.locator('.ds-composer-voice-action').waitFor({ state: 'detached' })
+      for (const language of ['en', 'zh']) {
+        await page.evaluate(language => window.composerFixture.language(language), language)
+        for (const width of widths) {
+          await resize(width, 900)
+          await page.waitForTimeout(60)
+          const actual = await workGeometry(page)
+          measurements.push({ phase: variant, effort, enabled, language, width, ...actual })
+          if (evidence && language === 'zh') await page.screenshot({ path: join(evidence, `${variant}-${effort}-${enabled ? 'actions' : 'plain'}-${width}.png`),
+            clip: { x: 0, y: Math.max(0, actual.root.y - 8), width, height: actual.root.height + 16 } })
+          assertWorkGeometry(actual, { enabled })
+          console.log(`${variant}: ${effort} ${enabled ? 'voice+optimize' : 'plain'} ${language} ${width}px rows=${actual.rows} model=${actual.modelText.visible}/${actual.modelText.full} PASS`)
+        }
+      }
+    }
+  }
+}
+
+async function workGeometry(page) {
+  return page.evaluate(() => {
+    const box = element => {
+      const { x, y, width, height, right, bottom } = element.getBoundingClientRect()
+      return { x, y, width, height, right, bottom }
+    }
+    const control = (name, selector) => {
+      const element = document.querySelector(selector)
+      if (!element) return { name, present: false }
+      const bounds = box(element)
+      const style = getComputedStyle(element)
+      const visible = style.display !== 'none' && style.visibility !== 'hidden' && bounds.width > 0
+      const center = document.elementFromPoint(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2)
+      return { name, present: true, ...bounds, visible, hittable: visible && element.contains(center) }
+    }
+    const controls = [
+      control('menu', '.ds-composer-menu-button'),
+      control('agent', '[data-agent-mode-trigger]'),
+      control('permission', '.ds-composer-permission-button'),
+      control('model', '.ds-composer-model-trigger'),
+      control('voice', '.ds-composer-voice-action'),
+      control('optimize', '.ds-composer-prompt-optimize-action'),
+      control('send', '.ds-composer-primary-action')
+    ].filter(item => item.present && item.visible)
+    const modelName = document.querySelector('.ds-composer-model-trigger-model')
+    const rows = new Set(controls.map(item => Math.round((item.y + item.height / 2) / 12))).size
+    return { root: box(document.querySelector('.ds-floating-composer')), toolbar: box(document.querySelector('.ds-composer-toolbar')),
+      controls, rows, overflow: document.documentElement.scrollWidth > innerWidth,
+      agentLabel: document.querySelector('[data-agent-mode-trigger]')?.innerText.trim() ?? '',
+      modelText: { visible: modelName?.clientWidth ?? 0, full: modelName?.scrollWidth ?? 0 } }
+  })
+}
+
+function assertWorkGeometry(actual, { enabled }) {
+  const detail = JSON.stringify(actual)
+  assert.equal(actual.overflow, false, detail)
+  for (const name of ['menu', 'agent', 'permission', 'model', 'send', ...(enabled ? ['voice', 'optimize'] : [])]) {
+    const item = actual.controls.find(control => control.name === name)
+    assert.ok(item, `${name} is shown: ${detail}`)
+    assert.equal(item.hittable, true, `${name} must not be clipped or covered: ${detail}`)
+    assert.ok(item.x >= actual.toolbar.x - 1 && item.right <= actual.toolbar.right + 1, `${name} inside the toolbar: ${detail}`)
+  }
+  for (let i = 0; i < actual.controls.length; i++) for (let j = i + 1; j < actual.controls.length; j++) {
+    const a = actual.controls[i], b = actual.controls[j]
+    const overlap = Math.min(a.right, b.right) - Math.max(a.x, b.x) > 1 && Math.min(a.bottom, b.bottom) - Math.max(a.y, b.y) > 1
+    assert.equal(overlap, false, `${a.name} overlaps ${b.name}: ${detail}`)
+  }
+  // The model name is whole, readable (~9 characters) or hidden; never a sliver.
+  const { visible, full } = actual.modelText
+  assert.ok(visible === 0 || visible >= Math.min(full, 60), `model name squeezed: ${detail}`)
+  // Never a second row: the toolbar gives up words, not its layout. Only a
+  // toolbar under ~220px with voice and optimize both on (the last-resort
+  // level 7) may wrap, because clipping an action would be worse.
+  const wrapAllowed = enabled && actual.toolbar.width < 220
+  assert.ok(actual.rows === 1 || (wrapAllowed && actual.rows === 2), `one toolbar row: ${detail}`)
 }

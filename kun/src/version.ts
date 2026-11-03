@@ -17,6 +17,8 @@ type PackageManifest = {
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const ARTIFACT_VERSION = /^[0-9A-Za-z][0-9A-Za-z._-]*$/
+// Daily frontier builds stamp this so updaters never rank them above a stable release.
+const DAILY_DEV_VERSION = /^0\.0\.0-dev-\d{8}-\d{4}$/
 
 export const DEFAULT_KUN_CHANNEL = 'stable' as const
 
@@ -24,6 +26,15 @@ export const KUN_PACKAGE_VERSION = packageVersion()
 export const KUN_BUILD_METADATA = loadBuildMetadata()
 export const KUN_VERSION = KUN_BUILD_METADATA.serviceVersion
 export const KUN_RELEASE_CHANNEL = KUN_BUILD_METADATA.channel
+
+/**
+ * Version an `engines.kun` range is checked against. A daily dev build is cut from develop, so it
+ * counts as the release line in kun/package.json instead of 0.0.0. Every other version, stable or
+ * prerelease, is checked as-is.
+ */
+export function kunEngineVersion(kunVersion: string, releaseLineVersion = KUN_PACKAGE_VERSION): string {
+  return DAILY_DEV_VERSION.test(kunVersion) ? releaseLineVersion : kunVersion
+}
 
 function packageVersion(): string {
   try {

@@ -1,3 +1,4 @@
+import type { ScheduledTaskHarnessV1 } from './schedule-task-harness'
 import type { AppLocale } from './app-locales'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
@@ -21,14 +22,13 @@ import {
   KunDesignQualitySettingsV1,
   KunFastContextSettingsV1,
   KunGraphSettingsPatchV1,
-  KunHarnessCustomEntryV1,
   KunHarnessDefaultsEntryV1,
+  KunHarnessProviderOverrideV1,
   KunInstructionSettingsV1,
   KunLabSettingsPatchV1,
   KunPlanExecutionSettingsV1,
   KunRuntimeSettingsV1,
-  KunSubagentsSettingsPatchV1,
-  KunTerminalAgentEntryV1
+  KunSubagentsSettingsPatchV1
 } from './app-settings-types-kun-runtime'
 import {
   CheckpointCleanupIntervalDays,
@@ -135,14 +135,20 @@ export type KunTextToSpeechSettingsV1 = {
 }
 
 export type KunPromptOptimizationSettingsV1 = {
+  /** Shows the composer's prompt-enhance button. */
   enabled: boolean
-  /** Existing provider profile to use. Empty means inherit the active Kun provider. */
+  /**
+   * Pinned provider profile. Empty (with an empty model) follows the
+   * composer's selected Kun model.
+   */
   providerId: string
-  /** Empty means smallModel || main conversation model. */
+  /** Pinned model. Empty follows the composer, or the pinned provider's default. */
   model: string
   /** Empty means use DEFAULT_PROMPT_OPTIMIZATION_PROMPT. */
   prompt: string
   timeoutMs: number
+  /** Defaults migration marker; see KUN_PROMPT_OPTIMIZATION_DEFAULTS_VERSION. */
+  defaultsVersion?: number
 }
 
 export type KunMusicGenerationSettingsV1 = {
@@ -332,18 +338,16 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunHarnessSettingsPatchV1 = {
   enabledProfiles?: import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1[]
   disabledIds?: string[]
-  binaryPaths?: Record<string, string>
-  custom?: KunHarnessCustomEntryV1[]
+  /** Replaces the whole override map, like the other records. */
+  providers?: Record<string, KunHarnessProviderOverrideV1>
   defaults?: Record<string, KunHarnessDefaultsEntryV1>
   /**
-   * Legacy pre-P4-11 shape: merges into `defaults[*].permissionMode` for
+   * Legacy shape: merges into `defaults[*].permissionMode` for
    * entries that lack one. New writers should send `defaults` only.
    */
   defaultPermissionMode?: Record<string, string>
   defaultHarnessId?: string
   agentOrder?: string[]
-  /** Terminal-only agents for the "new agent tab" menu (p4 §3.8, P4-13). */
-  terminalAgents?: KunTerminalAgentEntryV1[]
 }
 
 /** Patch shape for agents.kun.ade; nested objects merge field-wise. */
@@ -360,6 +364,9 @@ export type KunAdeSettingsPatchV1 = {
   budget?: { softTokens?: number; hardTokens?: number } | null
   hibernation?: { enabled?: boolean; idleMinutes?: number }
   stall?: { structuredMinutes?: number; terminalMinutes?: number }
+  dispatch?: { autoStartSeconds?: number; autoStartWhenConfirmationRequired?: boolean; preferencePrompt?: string;
+    preferences?: import('./ade-collaboration-settings').AdeDispatchPreferenceRule[] }
+  tasks?: { autoStartSeconds?: number; worktree?: boolean; inheritContext?: boolean }
   notifications?: {
     waiting?: boolean
     failed?: boolean
@@ -527,6 +534,7 @@ export type ScheduleTaskCreateInput = {
   reasoningEffort: ScheduleReasoningEffort
   mode: ScheduleRunMode
   orchestration: ScheduleTaskOrchestration
+  harness?: ScheduledTaskHarnessV1
   schedule: {
     kind: 'at'
     atTime: string
@@ -539,6 +547,7 @@ export type ScheduleTaskUpdateInput = {
   providerId: string
   model: string
   reasoningEffort: ScheduleReasoningEffort
+  harness?: ScheduledTaskHarnessV1
   schedule: {
     kind: 'at'
     atTime: string
@@ -578,6 +587,8 @@ export type ScheduledTaskV1 = {
   dependsOn?: string[]
   /** Run the task in an isolated worktree from workspaceRoot. */
   useWorktree?: boolean
+  /** External Agent for a handed-off plan build; absent = Kun. */
+  harness?: ScheduledTaskHarnessV1
   schedule: ScheduledTaskScheduleV1
   createdAt: string
   updatedAt: string

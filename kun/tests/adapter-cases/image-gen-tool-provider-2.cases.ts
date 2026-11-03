@@ -31,6 +31,8 @@ import {
 
 import { FileAttachmentStore } from '../../src/attachments/attachment-store.js'
 
+import { codexModelCatalogResponse, isCodexModelCatalogRequest } from './image-gen-codex-catalog.fixture.js'
+
 import {
   buildRuntimeCapabilityManifest,
   KunCapabilitiesConfig
@@ -130,7 +132,8 @@ afterEach(async () => {
 
 it('omits input_fidelity for the routed gpt-image-2-codex model name', async () => {
     const requests: Array<Record<string, any>> = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push(JSON.parse(String(init?.body)) as Record<string, any>)
       return new Response([
         `data: ${JSON.stringify({
@@ -162,7 +165,8 @@ it('omits input_fidelity for the routed gpt-image-2-codex model name', async () 
 it('retries a Codex image edit once without input_fidelity when the model rejects it', async () => {
     const requests: Array<Record<string, any>> = []
     const resultBase64 = png(8, 8).toString('base64')
-    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push(JSON.parse(String(init?.body)) as Record<string, any>)
       if (requests.length === 1) {
         return new Response(JSON.stringify({
@@ -223,7 +227,8 @@ it('retries a Codex image edit once without input_fidelity when the model reject
 
 it('does not retry unrelated Codex image edit errors without input_fidelity', async () => {
     const requests: string[] = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push(String(init?.body))
       return new Response(JSON.stringify({
         error: { code: 'content_policy_violation', message: 'Request blocked by content policy.' }
@@ -245,7 +250,8 @@ it('does not retry unrelated Codex image edit errors without input_fidelity', as
 
 it('does not retry input_fidelity errors returned with a non-400 status', async () => {
     const requests: string[] = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push(String(init?.body))
       return new Response(JSON.stringify({
         error: {
@@ -269,7 +275,8 @@ it('does not retry input_fidelity errors returned with a non-400 status', async 
 
 it('keeps input_fidelity omitted after its retry enters tool_choice fallback', async () => {
     const requests: Array<Record<string, any>> = []
-    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push(JSON.parse(String(init?.body)) as Record<string, any>)
       if (requests.length === 1) {
         return new Response(JSON.stringify({
@@ -310,7 +317,9 @@ it('keeps input_fidelity omitted after its retry enters tool_choice fallback', a
   })
 
 it('uses the latest Codex partial image when the final image item is absent', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response([
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => isCodexModelCatalogRequest(url)
+      ? codexModelCatalogResponse()
+      : new Response([
       `data: ${JSON.stringify({
         type: 'response.image_generation_call.partial_image',
         partial_image_b64: png(8, 8).toString('base64')
@@ -340,7 +349,8 @@ it('uses the latest Codex partial image when the final image item is absent', as
 it('retries Codex image requests when a deployment rejects preferred tool_choice shapes', async () => {
     const requests: string[] = []
     const resultBase64 = png(8, 8).toString('base64')
-    vi.stubGlobal('fetch', vi.fn(async (_url: string | URL, init?: RequestInit) => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL, init?: RequestInit) => {
+      if (isCodexModelCatalogRequest(url)) return codexModelCatalogResponse()
       requests.push(String(init?.body))
       if (requests.length === 1) {
         return new Response('Tool choice allowed_tools not found in tools parameter.', { status: 400 })
@@ -385,7 +395,9 @@ it('retries Codex image requests when a deployment rejects preferred tool_choice
   })
 
 it('summarizes Codex responses that complete without image data', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => new Response([
+    vi.stubGlobal('fetch', vi.fn(async (url: string | URL) => isCodexModelCatalogRequest(url)
+      ? codexModelCatalogResponse()
+      : new Response([
       `data: ${JSON.stringify({
         type: 'response.output_text.delta',
         delta: 'I can help with that.'

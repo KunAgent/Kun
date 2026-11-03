@@ -37,6 +37,7 @@ import {
   workbenchContextForRoute
 } from '../extensions/use-contributions'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
+import { registerAgentUpdateSettingsFlush } from '../store/harness-update-runner'
 import {
   compactHomePathForSettingsDisplay,
   compactHomePathListForSettingsDisplay,
@@ -103,8 +104,9 @@ export function SettingsView(): ReactElement {
   const deleteThread = useChatStore((s) => s.deleteThread)
   const addClawChannel = useChatStore((s) => s.addClawChannel)
   const [category, setCategoryState] = useState<SettingsCategory>('general')
-  const [activeAgentsPanel, setActiveAgentsPanel] = useState('assistant')
-  const onAgentsPanelChange = useCallback((panel: string) => setActiveAgentsPanel(panel), [])
+  // Bumped when a deep link opens a page, so the page can flash what was asked for.
+  const [arrival, setArrival] = useState(0)
+  const markArrival = useCallback(() => setArrival((value) => value + 1), [])
   const {
     register: registerSettingsDraft,
     hasPending: hasPendingSettingsDraft,
@@ -166,7 +168,6 @@ export function SettingsView(): ReactElement {
   const [memoryDiagnostics, setMemoryDiagnostics] = useState<CoreMemoryDiagnosticsJson | null>(null)
   const [runtimeDiagnosticsBusy, setRuntimeDiagnosticsBusy] = useState(false)
   const [runtimeDiagnosticsNotice, setRuntimeDiagnosticsNotice] = useState<InlineNotice | null>(null)
-  const [agentsSectionReady, setAgentsSectionReady] = useState(false)
   const [writeDebugModalOpen, setWriteDebugModalOpen] = useState(false)
   const [writeCompletionDebugEntries, setWriteCompletionDebugEntries] = useState<WriteInlineCompletionDebugEntry[]>([])
   const [writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId] = useState<string | null>(null)
@@ -214,7 +215,6 @@ export function SettingsView(): ReactElement {
   const formCursorSpotlight = form?.cursorSpotlight
   const formCursorSpotlightColor = form?.cursorSpotlightColor
   const formDarkUiColors = form?.darkUiColors
-  const markAgentsSectionReady = useCallback(() => setAgentsSectionReady(true), [])
   const settingsPlatform = typeof window !== 'undefined' ? window.kunGui?.platform ?? '' : ''
   const settingsHomeDir = typeof window !== 'undefined' ? window.kunGui?.homeDir ?? '' : ''
   const categoryTitle = t(settingsCategoryLabelKey(category))
@@ -264,8 +264,7 @@ export function SettingsView(): ReactElement {
   })
 
   useSettingsRouteSynchronization({
-    settingsSection, category, setCategory, form, agentsSectionReady, agentsSectionRef,
-    skillSectionRef, mcpSectionRef, permissionsSectionRef
+    settingsSection, setCategory, markArrival
   })
 
   useEffect(() => {
@@ -288,6 +287,9 @@ export function SettingsView(): ReactElement {
     setSaveStatus, setSaveError, setSaveIssue, saveTimer, statusTimer, draftVersion, pendingSnapshotRef,
     persistedSettingsRef, flushOnUnmountRef, settingsPlatform, settingsHomeDir
   })
+  const flushRef = useRef(flushPendingSave); flushRef.current = flushPendingSave
+  // A background Agent update writes its new command path only after this view's pending edits are saved.
+  useEffect(() => registerAgentUpdateSettingsFlush(() => flushRef.current(true)), [])
   const guardedGoBack = (): void => {
     cancelAgentEnablementChecks()
     if (hasPendingSettingsDraft()) {
@@ -554,7 +556,6 @@ export function SettingsView(): ReactElement {
     goBack: guardedGoBack,
     openStorageSettings: () => setCategory('storage'),
     settingsSection,
-    onAgentsPanelChange,
     form,
     provider,
     kun,
@@ -679,12 +680,12 @@ export function SettingsView(): ReactElement {
 
   return <>
     <SettingsViewLayout view={{
-    t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, activeAgentsPanel,
+    t, workspaceRoot, extensionWorkspaceRoot, category, setCategory, arrival,
     saveStatus, saveError, saveIssue,
     writeDebugModalOpen, setWriteDebugModalOpen, writeCompletionDebugEntries,
     writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId, writeDebugLoading,
     writeDebugError, extensionSettingsService, extensionSettingsContributions,
-    extensionSettingsAvailable, settingsScrollerRef, markAgentsSectionReady, categoryTitle,
+    extensionSettingsAvailable, settingsScrollerRef, categoryTitle,
     categoryDescription, loadWriteDebugEntries, portError, flushPendingSave, goBack: guardedGoBack,
     clearWriteDebugEntries, settingsSectionContext
     }} />

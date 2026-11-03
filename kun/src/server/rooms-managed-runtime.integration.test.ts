@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { startServiceManager, type ServiceManagerHandle } from '../manager/service-manager.js'
 import { startKunServe, type KunServeHandle } from './runtime-factory.js'
 import type { Room, RoomMessage } from '../contracts/rooms.js'
+import { defaultRoomMembers } from '../rooms/room-service.js'
 import type { RoomTask } from '../contracts/room-tasks.js'
 import type { RoomPeerTopicSummary } from '../rooms/room-peer-types.js'
 import { RoomRunRecordSchema, type RoomRunRecord } from '../contracts/room-runs.js'
@@ -26,7 +27,7 @@ async function modelServer() {
   let executionCalls = 0
   let originalRuleId = ''
   let originalRuleRead = false
-  let peerSubmissions = 0, triageCalls = 0, peerAccepted = false, peerToolAdvertised = false
+  let peerSubmissions = 0, triageCalls = 0, peerFollowUps = 0, peerToolAdvertised = false
   const server = createServer(async (request, response) => {
     try {
       const chunks: Buffer[] = []
@@ -56,8 +57,8 @@ async function modelServer() {
             name: 'send_room_message', arguments: JSON.stringify({ body: PEER_REPLY })
           } }]
         } else {
-          const output = JSON.parse(String(toolResult.content))
-          peerAccepted ||= output.accepted === true && output.staged === true && output.value?.body === PEER_REPLY
+          // The accepted submission now ends the turn; a follow-up round would only produce discarded prose.
+          peerFollowUps++
           content = PEER_END_PROSE
         }
       } else if (prompt.includes('READ_ORIGINAL_ROOM_RULE')) {
@@ -113,7 +114,7 @@ async function modelServer() {
   cleanup.push(() => closeServer(server))
   return { baseUrl: 'http://127.0.0.1:' + address.port, calls: () => executionCalls,
     setRule: (id: string) => { originalRuleId = id }, ruleRead: () => originalRuleRead,
-    peer: () => ({ submissions: peerSubmissions, triageCalls, accepted: peerAccepted, advertised: peerToolAdvertised }) }
+    peer: () => ({ submissions: peerSubmissions, triageCalls, followUps: peerFollowUps, advertised: peerToolAdvertised }) }
 }
 
 function closeServer(server: Server): Promise<void> {
@@ -167,8 +168,9 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       expect(response.ok, JSON.stringify(payload)).toBe(true)
       return payload as T
     }
+    // A new group starts with 小 Kun only; this suite works with the coordinator, developer and reviewer of a legacy group.
     const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'room', name: 'Managed smoke', collaborationMode: 'autonomous',
-      repositories: [{ id: 'repo', displayPath: repo }] })
+      repositories: [{ id: 'repo', displayPath: repo }], members: defaultRoomMembers(['repo']) })
     const message = { clientRequestId: 'message', body: 'Create smoke.txt and have it reviewed.', executionIntent: 'execute' }
     const sent = await api('/v1/rooms/' + room.id + '/messages', message)
     expect(await api('/v1/rooms/' + room.id + '/messages', message)).toEqual(sent)
@@ -228,10 +230,14 @@ describe('Rooms full managed Runtime HTTP composition', () => {
       expect(response.ok, JSON.stringify(value)).toBe(true)
       return value as T
     }
-    const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'peer-room', name: 'Native peer boundary' })
+    // The peers of the addressed member are what the participation check runs over, so the group needs more than 小 Kun.
+    const { room } = await api<{ room: Room }>('/v1/rooms', { clientRequestId: 'peer-room', name: 'Native peer boundary',
+      members: defaultRoomMembers([]) })
     expect(room.collaborationMode).toBe('peer')
+    // Addressing the default member keeps the others on the participation-check path.
     const sent = await api<{ requestId: string }>(`/v1/rooms/${room.id}/messages`, {
-      clientRequestId: 'peer-discussion', body: 'Discuss the publication boundary only.', executionIntent: 'discussion' })
+      clientRequestId: 'peer-discussion', body: 'Discuss the publication boundary only.', executionIntent: 'discussion',
+      mentionMemberIds: [room.defaultMemberId] })
     await vi.waitFor(async () => {
       const { topics } = await api<{ topics: RoomPeerTopicSummary[] }>(`/v1/rooms/${room.id}/topics`)
       expect(topics.find((topic) => topic.rootRequestId === sent.requestId)?.status).toBe('idle')
@@ -241,7 +247,7 @@ describe('Rooms full managed Runtime HTTP composition', () => {
     expect(replies.map((message) => message.body)).toEqual([PEER_REPLY])
     expect(replies[0]).toMatchObject({ rootRequestId: sent.requestId, status: 'final', authorMemberId: room.defaultMemberId })
     expect(messages.some((message) => message.body.includes(PEER_END_PROSE))).toBe(false)
-    expect(model.peer()).toMatchObject({ submissions: 1, accepted: true, advertised: true })
+    expect(model.peer()).toMatchObject({ submissions: 1, followUps: 0, advertised: true })
     expect(model.peer().triageCalls).toBeGreaterThanOrEqual(2)
     expect((await api<{ tasks: RoomTask[] }>(`/v1/rooms/${room.id}/tasks`)).tasks).toEqual([])
     expect(model.calls()).toBe(0)

@@ -8,6 +8,7 @@ import { createInstallerCharacterCutout } from './installer-character-cutout.mjs
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
 const buildDirectory = join(repositoryRoot, 'build')
 const characterPath = join(buildDirectory, 'dmg-character.png')
+const appIconPath = join(repositoryRoot, 'src', 'asset', 'img', 'kun_mac.png')
 const backgroundPath = join(buildDirectory, 'dmg-background.png')
 const retinaBackgroundPath = join(buildDirectory, 'dmg-background@2x.png')
 
@@ -15,74 +16,47 @@ const width = 660
 const height = 430
 const scale = 2
 
+// Finder draws the icon labels (black) itself and ignores the dark appearance
+// for picture backgrounds, so the artwork is light only. The Kun and
+// Applications icons sit at the Finder positions in electron-builder.config.cjs
+// (centers 364,284 and 548,284); the artwork leaves the tray and drop slot
+// behind them.
+const font = "'PingFang SC', 'Hiragino Sans GB', -apple-system, 'Helvetica Neue', Arial, sans-serif"
+
 function backgroundSvg(targetWidth, targetHeight) {
-  const factor = targetWidth / width
-  const value = (number) => number * factor
+  const f = targetWidth / width
 
   return Buffer.from(`
-    <svg width="${targetWidth}" height="${targetHeight}" viewBox="0 0 ${targetWidth} ${targetHeight}"
+    <svg width="${targetWidth}" height="${targetHeight}" viewBox="0 0 ${width} ${height}"
       xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="surface" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#ffffff"/>
-          <stop offset="0.62" stop-color="#f8fbff"/>
-          <stop offset="1" stop-color="#edf6ff"/>
-        </linearGradient>
-        <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-          <stop offset="0" stop-color="#20a8ff" stop-opacity="0.18"/>
-          <stop offset="1" stop-color="#20a8ff" stop-opacity="0"/>
-        </radialGradient>
-        <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="#0b54e8"/>
-          <stop offset="1" stop-color="#0aa8ff"/>
-        </linearGradient>
-        <filter id="softShadow" x="-40%" y="-40%" width="180%" height="180%">
-          <feGaussianBlur stdDeviation="${value(5)}"/>
-        </filter>
+        <clipPath id="card"><rect x="32" y="24" width="220" height="352" rx="20"/></clipPath>
       </defs>
+      <rect width="${width}" height="${height}" fill="#fcfcfd"/>
 
-      <rect width="${targetWidth}" height="${targetHeight}" fill="url(#surface)"/>
-      <ellipse cx="${value(525)}" cy="${value(75)}" rx="${value(205)}" ry="${value(150)}" fill="url(#glow)"/>
-      <path d="M ${value(310)} 0 L ${value(660)} 0 L ${value(660)} ${value(186)} Z"
-        fill="#e7f4ff" opacity="0.34"/>
-      <path d="M ${value(382)} 0 L ${value(660)} 0 L ${value(660)} ${value(102)} Z"
-        fill="#d9efff" opacity="0.38"/>
-      <circle cx="${value(622)}" cy="${value(42)}" r="${value(3)}" fill="#0a92ff" opacity="0.58"/>
-      <circle cx="${value(605)}" cy="${value(42)}" r="${value(3)}" fill="#0a92ff" opacity="0.30"/>
-      <circle cx="${value(588)}" cy="${value(42)}" r="${value(3)}" fill="#0a92ff" opacity="0.16"/>
+      <rect x="32" y="24" width="220" height="352" rx="20" fill="#ecf3ff"/>
+      <circle cx="158" cy="88" r="70" fill="#dce9ff" clip-path="url(#card)"/>
+      <ellipse cx="160" cy="358" rx="55" ry="5" fill="#0550c8" opacity="0.10"/>
+      <ellipse cx="100" cy="346" rx="25" ry="4" fill="#0550c8" opacity="0.10"/>
+      <rect x="32.5" y="24.5" width="219" height="351" rx="19.5" fill="none" stroke="#dde8fb"/>
 
-      <g transform="translate(${value(330)} ${value(55)})">
-        <path d="M 0 ${value(2)} h ${value(11)} v ${value(44)} H 0 Z" fill="url(#brand)"/>
-        <path d="M ${value(12)} ${value(24)} L ${value(39)} ${value(1)} h ${value(15)} L ${value(28)} ${value(24)}
-          L ${value(55)} ${value(47)} H ${value(40)} Z" fill="url(#brand)"/>
-        <text x="${value(70)}" y="${value(43)}"
-          font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
-          font-size="${value(43)}" font-weight="750" letter-spacing="${value(7)}" fill="#10213b">KUN</text>
-        <text x="${value(1)}" y="${value(72)}"
-          font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
-          font-size="${value(10)}" font-weight="600" letter-spacing="${value(2.6)}" fill="#52708f">
-          LOCAL-FIRST AI AGENT WORKSPACE
-        </text>
-      </g>
+      <text x="338" y="60" font-family="${font}" font-size="28" font-weight="650"
+        letter-spacing="-0.2" fill="#20242d">Kun</text>
+      <text x="286" y="109" font-family="${font}" font-size="14" fill="#687083">本地优先的 AI 智能体工作台</text>
+      <text x="286" y="133" font-family="${font}" font-size="12" fill="#9299a8">Local-first AI agent workspace</text>
 
-      <g transform="translate(${value(417)} ${value(291)})">
-        <path d="M ${value(2)} ${value(13)} H ${value(45)}" stroke="#8aa9c8" stroke-width="${value(7)}"
-          stroke-linecap="round" opacity="0.34" filter="url(#softShadow)"/>
-        <path d="M ${value(2)} ${value(13)} H ${value(45)}" stroke="#8ba6c2" stroke-width="${value(5)}"
-          stroke-linecap="round"/>
-        <path d="M ${value(37)} ${value(3)} L ${value(48)} ${value(13)} L ${value(37)} ${value(23)}"
-          fill="none" stroke="#8ba6c2" stroke-width="${value(5)}" stroke-linecap="round"
-          stroke-linejoin="round"/>
-      </g>
+      <rect x="284.5" y="160.5" width="343" height="215" rx="19.5" fill="#f5f6f8" stroke="#e7e9ee"/>
+      <text x="456" y="195" text-anchor="middle" font-family="${font}" font-size="14"
+        font-weight="600" fill="#20242d">拖动 Kun 到 Applications 文件夹</text>
+      <text x="456" y="218" text-anchor="middle" font-family="${font}" font-size="12"
+        fill="#8a92a3">Drag Kun onto the Applications folder</text>
 
-      <text x="${value(444)}" y="${value(196)}" text-anchor="middle"
-        font-family="-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif"
-        font-size="${value(10)}" font-weight="650" letter-spacing="${value(2.5)}" fill="#8aa1ba">
-        DRAG TO INSTALL
-      </text>
-      <path d="M ${value(340)} ${value(213)} H ${value(548)}" stroke="#d6e5f3" stroke-width="${value(1)}"/>
-      <circle cx="${value(340)}" cy="${value(213)}" r="${value(2)}" fill="#18a0fb"/>
-      <circle cx="${value(548)}" cy="${value(213)}" r="${value(2)}" fill="#18a0fb"/>
+      <rect x="492.75" y="228.75" width="110.5" height="110.5" rx="25.5" fill="#edf2ff"
+        stroke="#b8c9fb" stroke-width="1.5" stroke-dasharray="5 4"/>
+      <path d="M 418 284 H 474" fill="none" stroke="#0570fd" stroke-width="2"
+        stroke-linecap="round" stroke-dasharray="5 5"/>
+      <path d="M 469 277 L 477 284 L 469 291" fill="none" stroke="#0570fd" stroke-width="2.4"
+        stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
   `)
 }
@@ -92,17 +66,24 @@ async function renderRetinaBackground() {
   const character = await sharp(characterCutout)
     .trim({ background: { r: 255, g: 255, b: 255, alpha: 0 }, threshold: 2 })
     .resize({
-      width: 272 * scale,
-      height: 390 * scale,
+      width: 156 * scale,
+      height: 324 * scale,
       fit: 'contain',
       position: 'south',
       background: { r: 0, g: 0, b: 0, alpha: 0 }
     })
     .png()
     .toBuffer()
+  const appIcon = await sharp(appIconPath)
+    .resize(48 * scale, 48 * scale)
+    .png()
+    .toBuffer()
 
   await sharp(backgroundSvg(width * scale, height * scale))
-    .composite([{ input: character, left: 22 * scale, top: 5 * scale }])
+    .composite([
+      { input: character, left: 64 * scale, top: 38 * scale },
+      { input: appIcon, left: 284 * scale, top: 28 * scale }
+    ])
     .png({ compressionLevel: 9 })
     .toFile(retinaBackgroundPath)
 }

@@ -8,7 +8,7 @@ import { readAdeJson, withAdeTeamMutex, writeAdeJson } from './ade-file.js'
 /**
  * Minimal write-side surface for worker notices. The store satisfies it
  * directly; the WorkerNoticeCoordinator wraps the store so every enqueue
- * also schedules a manager wake-up (09 §6.2).
+ * also schedules a manager wake-up.
  */
 export interface WorkerNoticeSink {
   enqueue(notice: WorkerNotice): Promise<WorkerNotice>
@@ -17,7 +17,7 @@ export interface WorkerNoticeSink {
 /**
  * Pending-notice inbox per manager team. Notices persist before delivery;
  * `ack` marks them consumed after the manager turn is durably admitted, and
- * `pending` is the restart-replay source (09 §6.2).
+ * `pending` is the restart-replay source.
  */
 export class FileWorkerNoticeStore {
   constructor(

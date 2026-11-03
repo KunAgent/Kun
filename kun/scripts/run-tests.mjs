@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { fullTestPlan, largeHistoryTest, parseTestShard } from './test-execution-plan.mjs'
 
 const require = createRequire(import.meta.url)
 
@@ -30,7 +31,9 @@ function resolveElectronExecutable() {
 
 const vitest = join(dirname(fileURLToPath(import.meta.url)), '..', 'node_modules', 'vitest', 'vitest.mjs')
 const doctorFiles = [
+  largeHistoryTest,
   'src/adapters/hybrid/hybrid-memory-distillation.test.ts',
+  'src/adapters/hybrid/hybrid-memory-context.test.ts',
   'src/adapters/hybrid/hybrid-memory-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-store.test.ts',
   'src/adapters/hybrid/hybrid-thread-workbench.test.ts',
@@ -42,7 +45,16 @@ const doctorFiles = [
   'tests/thread-store-doctor-race.test.ts',
   'src/manager/usage-query-runner.test.ts',
   'src/manager/remote-thread-workbench.test.ts',
-  'src/services/opencode-go-local-quota.test.ts'
+  'src/services/opencode-go-local-quota.test.ts',
+  // Memory suites that open the better-sqlite3 index directly.
+  'src/adapters/hybrid/hybrid-memory-erasure.test.ts',
+  'src/adapters/hybrid/hybrid-legacy-harness-usage.test.ts',
+  'src/memory/memory-lifecycle.test.ts',
+  'src/memory/memory-lexical-abstention-hybrid.test.ts',
+  'src/memory/memory-project-identity.test.ts',
+  'src/manager/agent-memory-roundtrip.test.ts',
+  'src/manager/memory-relations-manager.test.ts',
+  'src/server/memory-managed-runtime.integration.test.ts'
 ]
 
 function runVitest(executable, args, env = process.env) {
@@ -60,8 +72,18 @@ function runVitest(executable, args, env = process.env) {
 }
 
 const requested = process.argv.slice(2)
+// CI uses an environment variable so sharding cannot bypass the ABI-aware plan.
+const shard = parseTestShard(process.env.KUN_TEST_SHARD)
+if (shard && requested.length > 0) {
+  throw new Error('KUN_TEST_SHARD requires the full suite without focused test arguments')
+}
 if (currentNodeCanLoadSqlite()) {
-  process.exit(runVitest(process.execPath, requested))
+  if (requested.length > 0) process.exit(runVitest(process.execPath, requested))
+  for (const step of fullTestPlan(doctorFiles, false, shard)) {
+    const status = runVitest(process.execPath, step.args)
+    if (status !== 0) process.exit(status)
+  }
+  process.exit(0)
 }
 
 // The desktop monorepo intentionally installs better-sqlite3 for Electron's
@@ -79,9 +101,13 @@ if (!electron) {
 const electronEnv = { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
 
 if (requested.length === 0) {
-  const nodeStatus = runVitest(process.execPath, doctorFiles.flatMap((file) => ['--exclude', file]))
-  if (nodeStatus !== 0) process.exit(nodeStatus)
-  process.exit(runVitest(electron, doctorFiles, electronEnv))
+  for (const step of fullTestPlan(doctorFiles, true, shard)) {
+    const status = step.runtime === 'electron'
+      ? runVitest(electron, step.args, electronEnv)
+      : runVitest(process.execPath, step.args)
+    if (status !== 0) process.exit(status)
+  }
+  process.exit(0)
 }
 
 const requestedDoctorFiles = requested.filter((arg) => doctorFiles.some((file) => arg.endsWith(file)))

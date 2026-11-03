@@ -68,7 +68,6 @@ describe('DelegationRuntime resume handling', () => {
           calls.push(input)
           return {
             summary: input.resumeChild ? 'revised' : 'initial',
-            reviewBundle: { revision: input.resumeChild ? 2 : 1 },
             usage: input.resumeChild
               ? { promptTokens: 30, completionTokens: 12, totalTokens: 42, turns: 2 }
               : { promptTokens: 10, completionTokens: 5, totalTokens: 15, turns: 1 }
@@ -126,8 +125,6 @@ describe('DelegationRuntime resume handling', () => {
         agentSurface: 'design',
         summary: 'revised',
         resumeCount: 1,
-        reviewBundle: { revision: 2 },
-        reviewBundleParentTurnId: 'turn-2',
         usage: { promptTokens: 30, completionTokens: 12, totalTokens: 42, turns: 2 },
         durationMs: 2_000
       })
@@ -153,7 +150,7 @@ describe('DelegationRuntime resume handling', () => {
     }
   })
 
-  it('validates the PPT workflow before resume and intersects the current parent boundary', async () => {
+  it('intersects the current parent boundary on resume', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-delegation-resume-boundary-'))
     try {
       const calls: Parameters<ChildRunExecutor>[0][] = []
@@ -163,13 +160,7 @@ describe('DelegationRuntime resume handling', () => {
         idGenerator: () => 'child_ppt_boundary',
         executor: async (input) => {
           calls.push(input)
-          return {
-            summary: 'review ready',
-            reviewBundle: {
-              childId: input.childId,
-              workflowId: 'workflow-1'
-            }
-          }
+          return { summary: 'review ready' }
         }
       })
       const first = await runtime.runChild({
@@ -191,23 +182,12 @@ describe('DelegationRuntime resume handling', () => {
         signal: new AbortController().signal
       })
 
-      await expect(runtime.resumeChild({
-        childId: first.id,
-        parentThreadId: 'parent',
-        parentTurnId: 'turn-wrong',
-        prompt: 'wrong workflow',
-        expectedProfile: 'ppt',
-        expectedWorkflowId: 'workflow-other',
-        signal: new AbortController().signal
-      })).rejects.toThrow('does not own PPT workflow')
-
       await runtime.resumeChild({
         childId: first.id,
         parentThreadId: 'parent',
         parentTurnId: 'turn-2',
         prompt: 'revise slide',
         expectedProfile: 'ppt',
-        expectedWorkflowId: 'workflow-1',
         security: {
           sandboxRoot: '/workspace',
           allowedToolNames: ['generate_image'],
@@ -225,51 +205,6 @@ describe('DelegationRuntime resume handling', () => {
         blockedToolNames: ['bash'],
         memoryEnabled: false
       })
-    } finally {
-      await rm(dir, { recursive: true, force: true })
-    }
-  })
-
-  it('resumes a PPT workflow that has directions but no slide review yet', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'kun-delegation-direction-resume-'))
-    try {
-      let call = 0
-      const runtime = new DelegationRuntime({
-        config: subagentConfig(),
-        store: new FileDelegationStore(dir),
-        idGenerator: () => 'child_ppt_direction',
-        executor: async (input) => {
-          call += 1
-          return call === 1
-            ? {
-                summary: 'directions ready',
-                directionBundle: { childId: input.childId, workflowId: 'workflow-direction' }
-              }
-            : { summary: 'selection resumed' }
-        }
-      })
-      const first = await runtime.runChild({
-        parentThreadId: 'parent',
-        parentTurnId: 'turn-1',
-        prompt: 'generate directions',
-        workspace: '/workspace',
-        inlineProfile: {
-          id: 'ppt', source: 'builtin',
-          profile: { mode: 'subagent', toolPolicy: 'inherit', allowedTools: ['generate_image'] }
-        },
-        security: { sandboxRoot: '/workspace', memoryEnabled: false },
-        signal: new AbortController().signal
-      })
-
-      await expect(runtime.resumeChild({
-        childId: first.id,
-        parentThreadId: 'parent',
-        parentTurnId: 'turn-2',
-        prompt: 'select the recommendation',
-        expectedProfile: 'ppt',
-        expectedWorkflowId: 'workflow-direction',
-        signal: new AbortController().signal
-      })).resolves.toMatchObject({ id: first.id, summary: 'selection resumed' })
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

@@ -122,7 +122,7 @@ export function toggleOptionAnswer(
 }
 
 /**
- * Map free-typed composer text onto the current question. An exact (case- and
+ * Map the ask card's free-text answer onto a question. An exact (case- and
  * whitespace-insensitive) match against an option collapses to that option;
  * otherwise it becomes a custom "Other" answer (options present) or a plain
  * free-form "Answer" (no options).
@@ -196,6 +196,93 @@ export function nextUnansweredIndex(
     }
   }
   return from
+}
+
+/**
+ * One question's answer built from what the card holds separately: the option
+ * pick (`selection`) and the free-text row's draft (`text`).
+ *
+ * - Single choice: a picked option wins; the typed text is the answer only
+ *   when nothing is picked (typing clears the pick, see the controller).
+ * - Multiple choice: the text is one more item next to the checked options.
+ *   Text alone (or text naming an option) behaves like answerFromTypedText;
+ *   with checked options it becomes an "Other" answer whose `values` list the
+ *   options and then the text, so readers see every item.
+ */
+export function combineAnswerDraft(
+  question: UserInputQuestion,
+  selection: UserInputAnswer | undefined,
+  text: string
+): UserInputAnswer | undefined {
+  const trimmed = text.trim()
+  if (!trimmed) return selection
+  if (!isMultipleChoiceQuestion(question)) return selection ?? answerFromTypedText(question, trimmed)
+  const labels = selectedOptionValues(selection)
+  if (labels.length === 0) return answerFromTypedText(question, trimmed)
+  const matched = question.options.find(
+    (option) => option.label.trim().toLowerCase() === trimmed.toLowerCase()
+  )
+  if (matched) {
+    const picked = new Set([...labels, matched.label])
+    return answerFromOptions(question, question.options.filter((option) => picked.has(option.label)))
+  }
+  const values = [...labels, trimmed]
+  return {
+    id: question.id,
+    label: USER_INPUT_OTHER_LABEL,
+    value: values.join(USER_INPUT_MULTI_VALUE_SEPARATOR),
+    labels,
+    values
+  }
+}
+
+/**
+ * Inverse of {@link combineAnswerDraft} for answers stored on a block (e.g.
+ * after a failed submit): the option pick and the free-text draft.
+ */
+export function splitAnswerDraft(
+  answer: UserInputAnswer | undefined
+): { selection: UserInputAnswer | undefined; text: string } {
+  if (!answer) return { selection: undefined, text: '' }
+  if (answer.label !== USER_INPUT_OTHER_LABEL && answer.label !== USER_INPUT_FREEFORM_LABEL) {
+    return { selection: answer, text: '' }
+  }
+  const labels = answer.labels?.filter((label) => label.trim()) ?? []
+  if (labels.length === 0) return { selection: undefined, text: answer.value }
+  const value = labels.join(USER_INPUT_MULTI_VALUE_SEPARATOR)
+  const typed = answer.values && answer.values.length > labels.length
+    ? answer.values.slice(labels.length).join(USER_INPUT_MULTI_VALUE_SEPARATOR)
+    : ''
+  return {
+    selection: { id: answer.id, label: value, value, labels, values: labels },
+    text: typed
+  }
+}
+
+/** Items a multiple-choice draft counts against maxSelections (typed text is one). */
+export function draftSelectionCount(selection: UserInputAnswer | undefined, text: string): number {
+  return selectedOptionValues(selection).length + (text.trim() ? 1 : 0)
+}
+
+export type MultiSelectRule =
+  | { kind: 'any' }
+  | { kind: 'max'; count: number }
+  | { kind: 'min'; count: number }
+  | { kind: 'exact'; count: number }
+  | { kind: 'range'; min: number; max: number }
+
+/**
+ * The selection rule shown under a multiple-choice question ("choose up to
+ * 3"). A maximum that equals the option count is no real limit.
+ */
+export function multiSelectRule(question: UserInputQuestion): MultiSelectRule | null {
+  if (!isMultipleChoiceQuestion(question)) return null
+  const rawMax = questionMaxSelections(question)
+  const max = rawMax !== undefined && rawMax < question.options.length ? rawMax : undefined
+  const min = questionMinSelections(question)
+  if (max === undefined) return min > 1 ? { kind: 'min', count: min } : { kind: 'any' }
+  if (min >= max) return { kind: 'exact', count: max }
+  return min > 1 ? { kind: 'range', min, max } : { kind: 'max', count: max }
 }
 
 /** Options carrying descriptions render as full-width rows; bare ones as chips. */

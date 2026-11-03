@@ -9,7 +9,7 @@ import { WorkerCreateInputSchema, type WorkerCreateInput } from './manager-worke
 import { newManagerWorkRefusal } from './new-work-admission.js'
 import { budgetHardRefusal } from './team-budget.js'
 import { resolveManagerWorkerRoute } from './worker-route.js'
-import { countRecentWorkerFailures } from './worker-selector.js'
+import { workerRouteHealth } from './worker-route-health.js'
 import { clampPermission } from './permission-clamp.js'
 import { checkHarnessAdmission } from '../harness/harness-admission.js'
 import { requestUserOnlyEscalation } from './escalation-approval.js'
@@ -26,8 +26,8 @@ export class ManagerWorkerCreator {
   private reportLanguage() { return reportLanguage(this.deps.language?.()) }
   private workerSecurity = workerWorkspaceSecurity
   private resolveRoute(ctx: ManagerToolContext, input: WorkerCreateInput, isolated: boolean) {
-    return resolveManagerWorkerRoute(this.deps, ctx, input, isolated, (teamId, harnessId: HarnessId) =>
-      countRecentWorkerFailures({ teams: this.deps.teams, dispatches: this.deps.dispatches }, teamId, harnessId))
+    return resolveManagerWorkerRoute(this.deps, ctx, input, isolated, (teamId, route) =>
+      workerRouteHealth(this.deps, teamId, route))
   }
 
   async create(
@@ -35,7 +35,7 @@ export class ManagerWorkerCreator {
     rawInput: unknown,
     /** The calling turn's security view (tool context), for the worker ceiling. */
     toolContext: ToolHostContext,
-    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string }
+    allocation?: { workerId: string; dispatchId: string; intentId: string; selection?: WorkerRecord['selection']; profileId?: string; reasoningEffort?: WorkerRecord['reasoningEffort'] }
   ): Promise<WorkerCreateResult> {
     const language = this.reportLanguage()
     const input = WorkerCreateInputSchema.parse(rawInput)
@@ -98,7 +98,7 @@ export class ManagerWorkerCreator {
           : `Task workspace ${reuseId} is not reusable; worker not created.`
       }
     }
-    // P4-11: an explicitly pinned harness's `defaults.isolation` applies
+    // an explicitly pinned harness's `defaults.isolation` applies
     // when the caller left isolation unspecified (a selector-picked harness
     // is not known early enough to feed its own default into selection).
     const isolation = reused?.isolation ?? input.workspace?.isolation ??
@@ -119,7 +119,7 @@ export class ManagerWorkerCreator {
     }
     if (isolation === 'worktree' && !this.deps.taskWorkspaces) {
       // Admission would report `isolated` for a run that would actually write
-      // into the manager's own workspace — refuse instead (09 §7.1).
+      // into the manager's own workspace — refuse instead.
       return {
         ok: false,
         refusal: 'admission',
@@ -188,12 +188,12 @@ export class ManagerWorkerCreator {
             : `Permission escalation for worker "${input.label}" was not confirmed; nothing was created.`
         }
       }
-      // User confirmed: the worker runs at the requested mode (09 §7.2).
+      // User confirmed: the worker runs at the requested mode.
       effectivePermissionMode = permission.requestedMode.id
     }
     const workerId = allocation?.workerId ?? this.deps.ids.next('child')
     if (reused && reused.unitId !== workerId) {
-      // The workspace now belongs to the new worker (11 §4.4 'new-worker').
+      // The workspace now belongs to the new worker.
       this.deps.taskWorkspaces?.bindUnit(reused.workspaceId, workerId)
     }
     let tws = reused ?? (this.deps.taskWorkspaces
@@ -210,7 +210,7 @@ export class ManagerWorkerCreator {
       // `create` returns a provisional record: `path` still names the source
       // root until the async checkout finishes. The snapshot must name the
       // real task workspace — it is both the worker's only write root
-      // (09 §7.1) and its thread workspace (delegation-runtime-run).
+      // and its thread workspace (delegation-runtime-run).
       tws = (await waitForTaskWorkspaceSettlement(
         this.deps.taskWorkspaces!, tws.workspaceId, ctx.signal)) ?? tws
       if (!['ready', 'captured', 'conflict'].includes(tws.state)) {
@@ -236,6 +236,7 @@ export class ManagerWorkerCreator {
       label: input.label,
       ...(input.role ? { role: input.role } : {}),
       route,
+      ...(allocation?.reasoningEffort ? { reasoningEffort: allocation.reasoningEffort } : {}),
       ...(profileId ? { profileId } : {}),
       ...(selection ? { selection } : {}),
       permissionMode: effectivePermissionMode,

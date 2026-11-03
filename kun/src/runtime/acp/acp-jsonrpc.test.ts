@@ -207,6 +207,47 @@ describe('AcpJsonRpc', () => {
     pushRaw('{"jsonrpc":"2.0", not json}\n')
     await expect(hanging).rejects.toMatchObject({ code: 'harness_protocol_error' })
   })
+
+  test('non-JSON stdout noise lines are skipped without closing the connection', async () => {
+    const debug: string[] = []
+    const { rpc, nextFrame, pushRaw } = makeLoopback({
+      debug: (entry) => debug.push(`${entry.direction}:${entry.summary}`)
+    })
+    const pending = rpc.request('session/new')
+    await nextFrame()
+    // The bracketed prefix must not be mistaken for a JSON array frame.
+    pushRaw('[llm-deepseek-account] model listing from https://api.deepseek.com/models loaded 2 model(s)\n')
+    pushRaw('plain diagnostic text\r\n')
+    pushRaw('{"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n')
+    await expect(pending).resolves.toEqual({ ok: true })
+    expect(rpc.closed).toBe(false)
+    expect(debug.filter((line) => line.startsWith('note:ignored non-JSON stdout line'))).toHaveLength(2)
+    rpc.close()
+  })
+
+  test('a noise line split across chunks and a trailing frame still parse', async () => {
+    const { rpc, nextFrame, pushRaw } = makeLoopback()
+    const pending = rpc.request('one')
+    await nextFrame()
+    pushRaw('[log] half a no')
+    pushRaw('ise line\n{"jsonrpc":"2.0","id":1,"result":{"n":1}}\n')
+    await expect(pending).resolves.toEqual({ n: 1 })
+    rpc.close()
+  })
+
+  test('a non-object JSON line is still an invalid frame', async () => {
+    const { rpc, pushRaw } = makeLoopback()
+    const hanging = rpc.request('never')
+    pushRaw('[1,2,3]\n')
+    await expect(hanging).rejects.toMatchObject({ code: 'harness_protocol_error' })
+  })
+
+  test('a truncated frame mid-stream after noise is still a protocol error', async () => {
+    const { rpc, pushRaw } = makeLoopback()
+    const hanging = rpc.request('never')
+    pushRaw('[log] fine\n{"jsonrpc":"2.0","id":1,"result":\n')
+    await expect(hanging).rejects.toMatchObject({ code: 'harness_protocol_error' })
+  })
 })
 
 describe('AcpProcess', () => {

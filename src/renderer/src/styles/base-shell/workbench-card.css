@@ -1,0 +1,93 @@
+/*
+ * The work area floats as a rounded card on the sidebar's ground: no rule
+ * between sidebar and content, a 4px gutter on the card's free edges, and a
+ * right workspace that shares the conversation's background.
+ */
+
+@media (min-width: 768px) {
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell {
+    --ds-workbench-ground: color-mix(in srgb, var(--ds-bg-sidebar) var(--kun-ground-alpha), transparent);
+    background: var(--ds-workbench-ground);
+  }
+
+  html[data-theme='dark']:not([data-ikun-mode='on']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell {
+    --ds-workbench-ground: color-mix(
+      in srgb,
+      color-mix(in srgb, var(--ds-bg-main) 88%, black) var(--kun-ground-alpha),
+      transparent
+    );
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell
+    > [data-workbench-left-sidebar]
+    .ds-sidebar-shell {
+    /* The shell already paints the ground; a second coat would stack to near-opaque. */
+    --ds-sidebar-field-bg: color-mix(in srgb, var(--ds-text) 5%, transparent);
+    --ds-sidebar-field-focus: color-mix(in srgb, var(--ds-surface-card) 88%, transparent);
+    --ds-sidebar-divider: var(--kun-hair-2);
+    border-right-width: 0;
+    background: transparent;
+  }
+
+  /* Dark rows tint the glass instead of covering it with an opaque panel. */
+  html[data-theme='dark']:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell
+    > [data-workbench-left-sidebar]
+    .ds-sidebar-shell {
+    --ds-sidebar-row-hover: rgba(255, 255, 255, 0.055);
+    --ds-sidebar-row-active: rgba(255, 255, 255, 0.09);
+    --ds-sidebar-row-ring: var(--kun-hair-1);
+    --ds-sidebar-divider: var(--kun-hair-1);
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-card {
+    margin: var(--kun-card-gutter) var(--kun-card-gutter) var(--kun-card-gutter) 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: var(--kun-radius-lg);
+    background: var(--ds-bg-main);
+    box-shadow: var(--kun-shadow-rest);
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-shell
+    > .ds-workbench-card:first-child {
+    margin-left: 4px;
+  }
+
+  /* The resize handle between sidebar and card shows a line only while hovered. */
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    [data-workbench-left-sidebar]
+    + .ds-workbench-divider {
+    width: 6px;
+    flex-basis: 6px;
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    [data-workbench-left-sidebar]
+    + .ds-workbench-divider:not(:hover)::before,
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    [data-workbench-left-sidebar]
+    + .ds-workbench-divider:not(:hover)::after {
+    opacity: 0;
+  }
+
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-card
+    [data-workbench-right-panel] {
+    --ds-sidebar-surface-bg: var(--ds-bg-main);
+    --ds-sidebar-surface-chrome-bg: var(--ds-bg-main);
+  }
+
+  /* The rail shares the work card's surface so it reads as one column, not a stray strip. */
+  html:not([data-ikun-mode='on']):not([data-color-palette='parchment']):not([data-ui-plugin-presentation='on']):not([data-kun-mini='on'])
+    .ds-workbench-card
+    > .kun-rail-slot {
+    --ds-sidebar-surface-bg: var(--ds-bg-main);
+    --ds-sidebar-surface-chrome-bg: var(--ds-bg-main);
+  }
+}

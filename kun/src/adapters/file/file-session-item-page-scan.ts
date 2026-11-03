@@ -27,6 +27,7 @@ export async function readItemPageFromJsonl(
   const beforeWindow = createItemPageWindow()
   let beforeFound = options.before === undefined
   const anchor = { item: null as TurnItem | null }
+  const tail = { turnId: undefined as string | undefined, reply: null as TurnItem | null }
   const anchorTurnId = options.before ? undefined : options.anchorTurnId?.trim()
   let remainder = ''
 
@@ -54,6 +55,11 @@ export async function readItemPageFromJsonl(
       seenIds.add(item.id)
       if (isPublicTurnItem(item)) {
         appendPageWindowItem(latestWindow, safeItem, maxItems, maxBytes)
+        if (tail.turnId !== item.turnId) {
+          tail.turnId = item.turnId
+          tail.reply = null
+        }
+        if (item.kind === 'assistant_text' && item.text.trim()) tail.reply = safeItem
         if (
           anchorTurnId &&
           !anchor.item &&
@@ -80,6 +86,7 @@ export async function readItemPageFromJsonl(
       if (anchor.item && item.id === anchor.item.id) {
         anchor.item = safeItem
       }
+      if (tail.reply && item.id === tail.reply.id) tail.reply = safeItem
     }
   }
 
@@ -127,8 +134,15 @@ export async function readItemPageFromJsonl(
     anchorCandidateId !== undefined &&
     !selectedWindow.items.has(anchorCandidateId)
   )
+  // Likewise the newest turn's closing assistant text must survive a window
+  // flooded by tool results; the builder pins it from this prefix.
+  const replyId = tail.reply?.id
+  const pinnedReply = !options.before && tail.reply && tail.reply.turnId === tail.turnId &&
+    !selectedWindow.items.has(replyId!) && replyId !== anchor.item?.id
+    ? tail.reply
+    : null
   const page = buildPublicItemHistoryPage(
-    anchoredPage ? [anchor.item!, ...windowItems] : windowItems,
+    [...(anchoredPage ? [anchor.item!] : []), ...(pinnedReply ? [pinnedReply] : []), ...windowItems],
     {
       ...(anchoredPage ? { anchorTurnId: anchorTurnId! } : {}),
       maxItems,

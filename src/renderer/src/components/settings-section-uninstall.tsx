@@ -80,7 +80,7 @@ export function UninstallSettingsSection(): React.JSX.Element {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-surface p-5">
+      <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 gap-3">
             <div className="rounded-xl bg-red-500/10 p-2.5 text-red-600 dark:text-red-400">
@@ -124,7 +124,7 @@ export function UninstallSettingsSection(): React.JSX.Element {
         </div>
       </section>
 
-      <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-surface p-5">
+      <section className="rounded-[var(--ds-radius-card)] border border-ds-border bg-ds-card p-5">
         <div className="space-y-3">
           <label className="flex cursor-pointer items-start gap-3">
             <input

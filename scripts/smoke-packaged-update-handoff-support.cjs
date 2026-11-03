@@ -100,6 +100,19 @@ function buildSmokeSettings({ dataDir, port, runtimeToken, workspaceRoot, baseUr
   return {
     version: 1,
     workspaceRoot,
+    provider: {
+      // Once a provider object exists, released GUI normalization intentionally
+      // does not migrate credentials/URL from the legacy agents.kun slots.
+      apiKey: 'packaged-handoff-smoke-key',
+      baseUrl,
+      providers: [{
+        id: 'deepseek',
+        models: [MODEL_NAME],
+        modelProfiles: {
+          [MODEL_NAME]: { contextWindowTokens: 64_000 }
+        }
+      }]
+    },
     agents: {
       kun: {
         dataDir,
@@ -445,7 +458,38 @@ function delay(ms) {
   return new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
 }
 
+function argumentValue(name) {
+  const index = process.argv.indexOf(name)
+  if (index < 0) return undefined
+  const value = process.argv[index + 1]
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`)
+  return value
+}
+
+function requiredPath(name) {
+  const value = argumentValue(name)
+  if (!value) throw new Error(`${name} is required`)
+  return resolve(value)
+}
+
+function optionalPath(name) {
+  const value = argumentValue(name)
+  return value ? resolve(value) : undefined
+}
+
+function positiveIntegerArgument(name, fallback) {
+  const value = argumentValue(name)
+  if (value === undefined) return fallback
+  const number = Number(value)
+  if (!Number.isSafeInteger(number) || number <= 0) throw new Error(`${name} must be a positive integer`)
+  return number
+}
+
 module.exports = {
+  argumentValue,
+  requiredPath,
+  optionalPath,
+  positiveIntegerArgument,
   CHAT_MARKER,
   MODEL_NAME,
   NEGATIVE_SCENARIOS,

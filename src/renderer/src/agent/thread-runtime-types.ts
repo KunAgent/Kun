@@ -43,6 +43,8 @@ export type RequestContextSnapshot = {
   providerId?: string
   stepIndex: number
   contextWindowTokens: number
+  contextWindowKnown?: boolean
+  maxInputTokens?: number
   softThresholdTokens: number
   hardThresholdTokens: number
   estimatedInputTokens: number
@@ -57,6 +59,10 @@ export type RequestContextSnapshot = {
   activeSkillIds: string[]
   contextManagement?: 'kun-managed' | 'sdk-managed'
   nativeHistory?: 'known' | 'unknown' | 'none'
+  /** `agent`: the Agent measured its own request; no category breakdown exists unless `breakdownSource` is `agent`. */
+  occupancySource?: 'estimate' | 'agent'
+  /** `agent`: the Agent split its own count into `breakdown`'s categories; otherwise they are Kun's estimate. */
+  breakdownSource?: 'estimate' | 'agent'
 }
 
 export type DelegatedRuntimeState = {
@@ -97,8 +103,9 @@ export type HarnessRuntimeState = {
   capabilitiesV2: HarnessCapabilities
 }
 
-/** `handoff_injected` event metadata (docs/ade/08 §4). */
+/** `handoff_injected` event metadata. */
 export type HandoffEventPayload = {
+  continuationFailure?: import('./handoff-continuation').HandoffContinuationFailure
   threadId: string
   turnId?: string
   reason: 'harness-switch' | 'rebase' | 'worker-dispatch' | 'context-overflow'

@@ -30,13 +30,12 @@
 /* Identity */
 .conversation-info-hero { display: flex; flex-direction: column; align-items: center; text-align: center; }
 .conversation-info-avatar { position: relative; display: inline-flex; flex: 0 0 auto; }
-.conversation-info-avatar:not([data-group]) .rooms-avatar:not([data-engine]) { border: 0; border-radius: 50%; }
 .conversation-info .rooms-avatar-letter { display: none; }
 .conversation-info-avatar:not([data-group])::after {
   content: '';
   position: absolute;
-  right: 3px;
-  bottom: 3px;
+  right: -3px;
+  bottom: -3px;
   width: 14px;
   height: 14px;
   border: 2.5px solid var(--info-surface);

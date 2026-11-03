@@ -1,3 +1,4 @@
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import type { StartTurnRequest, StartTurnResponse } from '../contracts/turns.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
 import { TurnConflictError, ThreadClosingError, fingerprintStartTurnRequest, type TurnService } from './turn-service-core.js'
@@ -43,7 +44,7 @@ export async function reconcilePendingQueueAdmissions(service: TurnService, thre
 /** One serialized admission, including idempotent recovery, commit and rollback. */
 export async function enqueueTurnDurably(service: TurnService, input: {
   threadId: string; request: StartTurnRequest
-}): Promise<StartTurnResponse> {
+}, attachmentAliases?: AttachmentAliases): Promise<StartTurnResponse> {
   return withManagerDataMutex(`thread:${input.threadId}`, async () => {
     let attemptedTurnId: string | undefined
     let stage = 'prepare'
@@ -62,6 +63,7 @@ export async function enqueueTurnDurably(service: TurnService, input: {
         if (service['deps'].lifecycleFence?.isClosing(input.threadId)) throw new ThreadClosingError(input.threadId)
         const thread = await service['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        if (thread.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         assertRoomTurnAdmission(thread, input.request)
         if (thread.status === 'archived') throw new TurnConflictError(`thread is archived: ${input.threadId}`)
         const replay = service['idempotentStartFromThread'](thread, input.request, fingerprint)
@@ -71,7 +73,7 @@ export async function enqueueTurnDurably(service: TurnService, input: {
         }
         attemptedTurnId = service['deps'].ids.next('turn')
         stage = 'persist'
-        return { pending: await service['persistQueuedTurnRecord'](thread, input, attemptedTurnId) }
+        return { pending: await service['persistQueuedTurnRecord'](thread, input, attemptedTurnId, attachmentAliases) }
       })
       if (started.response) return started.response
       stage = 'commit'

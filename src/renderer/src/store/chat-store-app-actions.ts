@@ -6,6 +6,7 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { extensionWorkbenchClient } from '../extensions/extension-workbench-client'
 import { readRemoteLocaleOverride } from '../lib/remote-mobile'
+import { applyColorPalette } from '../lib/color-palettes'
 import {
   effectiveCodeWorkspaceRoot,
   readRemovedCodeWorkspaces
@@ -23,6 +24,7 @@ import type { ComposerPlanMode } from './chat-store-helpers'
 import {
   composerReasoningEffortForSelection,
   isNativeAgentRoute,
+  rememberThreadComposerReasoning,
   persistComposerIsolation,
   persistComposerMode,
   persistComposerPersonaId,
@@ -319,6 +321,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         state.composerProviderId,
         effort
       )
+      if (state.activeThreadId) rememberThreadComposerReasoning(state.activeThreadId, effort)
       set({ composerReasoningEffort: effort })
     },
 
@@ -531,6 +534,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       applyCursorSpotlight(settings.cursorSpotlight !== false)
       applyCursorSpotlightColor(settings.cursorSpotlightColor)
       applyDarkUiColors(settings.darkUiColors)
+      applyColorPalette(settings.colorPalette, settings.darkUiColors)
       if (settings.write?.typography) applyWriteTypography(settings.write.typography)
       set({
         workspaceRoot,

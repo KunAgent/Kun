@@ -6,6 +6,8 @@ import i18n from '../../i18n'
 import { RoomEmojiPicker } from './RoomEmojiPicker'
 import { RoomMessageRow } from './RoomMessageRow'
 import { RoomProposalCard } from './RoomProposalCard'
+import { useFocusModeStore } from '../../store/focus-mode-store'
+import { readStylesheetBundle } from '../../testing/stylesheet-bundle'
 
 const api = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('./rooms-client', async (original) => ({ ...(await original<typeof import('./rooms-client')>()),
@@ -22,7 +24,11 @@ const props = { onReply: vi.fn(), onPin: vi.fn(), onTask: vi.fn(), onViewReply: 
 describe('room message row actions', () => {
   let renderer: ReactTestRenderer | undefined
   beforeEach(async () => { await i18n.changeLanguage('en'); api.request.mockReset().mockResolvedValue({ reactions: { roomId: 'room', messageId: 'm1', revision: 0, reactions: [] } }) })
-  afterEach(() => { if (renderer) act(() => renderer!.unmount()); renderer = undefined })
+  afterEach(() => {
+    if (renderer) act(() => renderer!.unmount())
+    renderer = undefined
+    useFocusModeStore.getState().setEnabled(false)
+  })
 
   it('offers the emoji picker inside the message action toolbar and posts new reactions', async () => {
     await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message, ...props })) })
@@ -74,6 +80,47 @@ describe('room message row actions', () => {
     await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message: drafted, ...props })) })
     expect(renderer!.root.findAllByType(RoomProposalCard)).toHaveLength(1)
     expect(renderer!.root.findAllByType('p').map((node) => node.props.children)).not.toContain('hello')
+  })
+
+  it('moves the member entry onto the author name once focus mode hides the avatar', async () => {
+    const onMember = vi.fn()
+    useFocusModeStore.getState().setEnabled(true)
+    await act(async () => {
+      renderer = create(createElement(RoomMessageRow, { room, message, member: room.members[0], onMember, ...props }))
+    })
+    const author = renderer!.root.findByProps({ className: 'rooms-message-author' })
+    expect(author.children).toEqual(['Member'])
+    await act(async () => author.props.onClick())
+    expect(onMember).toHaveBeenCalledWith('member', 'topic')
+  })
+
+  it('keeps the plain name when focus mode has no member entry to offer', async () => {
+    useFocusModeStore.getState().setEnabled(true)
+    await act(async () => { renderer = create(createElement(RoomMessageRow, { room, message, ...props })) })
+    expect(renderer!.root.findAllByProps({ className: 'rooms-message-author' })).toHaveLength(0)
+    const removedRoom = {
+      ...room,
+      members: [{ ...room.members[0], removedAt: '2026-09-01T00:00:00Z' }]
+    } as unknown as Room
+    const onMember = vi.fn()
+    await act(async () => {
+      renderer!.update(createElement(RoomMessageRow, {
+        room: removedRoom, message, member: removedRoom.members[0], onMember, ...props
+      }))
+    })
+    expect(renderer!.root.findAllByProps({ className: 'rooms-message-author' })).toHaveLength(0)
+    await act(async () => {
+      renderer!.update(createElement(RoomMessageRow, { room, message, member: room.members[0], onMember, continuation: true, ...props }))
+    })
+    expect(renderer!.root.findAllByProps({ className: 'rooms-message-author' })).toHaveLength(0)
+  })
+
+  it('drops avatar art and its column only while focus mode is on', async () => {
+    const css = await readStylesheetBundle(new URL('./rooms-timeline.css', import.meta.url))
+    expect(css).toContain("html[data-focus-mode='on'] .rooms-workspace .rooms-message-row > .rooms-avatar")
+    expect(css).toContain("html[data-focus-mode='on'] .rooms-workspace .rooms-message-row > .rooms-message-avatar-spacer")
+    expect(css).toContain("html[data-focus-mode='on'] .rooms-workspace .rooms-message-system { padding-left: 0; }")
+    expect(css).toMatch(/\.rooms-message-author:hover/)
   })
 
   it('falls back to the plain body for proposal messages without a room context', async () => {

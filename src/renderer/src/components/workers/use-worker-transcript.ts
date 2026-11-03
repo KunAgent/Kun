@@ -3,6 +3,7 @@ import type { ChatBlock } from '../../agent/types'
 import type { ThreadDetail, ThreadEventSink } from '../../agent/provider-types'
 import { getProvider } from '../../agent/registry'
 import { formatRuntimeError } from '../../lib/format-runtime-error'
+import { noteThreadLiveActivity } from '../../store/thread-live-activity'
 
 function mergeBlocks(older: ChatBlock[], latest: ChatBlock[]): ChatBlock[] {
   const byId = new Map(older.map((block) => [block.id, block]))
@@ -71,15 +72,21 @@ export function useWorkerTranscript(workerId: string, activityStamp: string | un
       if (!alive() || refreshTimer) return
       refreshTimer = setTimeout(() => { refreshTimer = undefined; void read() }, 600)
     }
+    // Keep the current transcript on screen until the refetch replaces it;
+    // only its stale paging cursor is dropped so "load earlier" cannot mix
+    // pre-reset history into the new snapshot.
     const resetHistory = (): void => {
       if (!alive()) return
       history.current = []
       historyPage.current = null
-      setSnapshot(null)
+      setSnapshot((previous) => previous?.workerId === workerId ? { workerId, detail: {
+        ...previous.detail, hasMoreHistory: false, historyCursor: undefined
+      } } : previous)
       schedule()
     }
     const sink: ThreadEventSink = {
-      onSeq: () => undefined, onDeltas: schedule, onAssistantItem: schedule,
+      // The live row's "no new output" notice reads this thread's last event.
+      onSeq: () => noteThreadLiveActivity(workerId), onDeltas: schedule, onAssistantItem: schedule,
       onUserMessage: schedule, onTool: schedule,
       onCompaction: resetHistory,
       onThreadUpdated: resetHistory,

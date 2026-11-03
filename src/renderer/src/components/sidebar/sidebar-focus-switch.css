@@ -1,0 +1,233 @@
+/* Focus mode pill switch in the standard sidebar footer (SidebarFocusModeSwitch). */
+.ds-sidebar-footer-bar {
+  container-type: inline-size;
+}
+
+.ds-focus-mode-switch {
+  --ds-focus-switch-track-off: #cdd3dd;
+  --ds-focus-switch-thumb-off: #ffffff;
+  display: inline-flex;
+  flex: 0 1 auto;
+  min-width: 28px;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 4px 0 8px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  outline: none;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease;
+}
+
+.ds-focus-mode-switch:hover {
+  border-color: color-mix(in srgb, var(--ds-text-muted) 38%, var(--ds-sidebar-row-ring));
+  color: var(--ds-text);
+}
+
+.ds-focus-mode-switch:focus-visible {
+  outline: 2px solid var(--ds-accent);
+  outline-offset: 2px;
+}
+
+.ds-focus-mode-switch[aria-checked='true'] {
+  border-color: color-mix(in srgb, var(--ds-accent) 42%, transparent);
+  background: var(--ds-accent-soft);
+  color: var(--ds-text);
+}
+
+.ds-focus-mode-switch[aria-checked='true']:hover {
+  border-color: var(--ds-accent);
+}
+
+.ds-focus-mode-switch-icon {
+  display: none;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.ds-focus-mode-switch-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-focus-mode-switch-track {
+  position: relative;
+  flex: none;
+  width: 24px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--ds-focus-switch-track-off);
+  transition: background-color 140ms ease;
+}
+
+.ds-focus-mode-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--ds-focus-switch-thumb-off);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.28);
+  transition: transform 140ms ease;
+}
+
+.ds-focus-mode-switch[aria-checked='true'] .ds-focus-mode-switch-track {
+  background: var(--ds-accent);
+}
+
+.ds-focus-mode-switch[aria-checked='true'] .ds-focus-mode-switch-thumb {
+  background: #ffffff;
+  transform: translateX(10px);
+}
+
+[data-theme='dark'] .ds-focus-mode-switch {
+  --ds-focus-switch-track-off: rgba(255, 255, 255, 0.2);
+  --ds-focus-switch-thumb-off: #e8eaee;
+  box-shadow: none;
+}
+
+/* The outer container lets the focus footer wrap without depending on window width. */
+.kun-account-focus-footer {
+  container: kun-account-focus / inline-size;
+}
+
+.kun-account-focus-row:has(> .ds-sidebar-update-chip) {
+  column-gap: 2px;
+}
+
+.kun-account-focus-row:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch {
+  flex: none;
+  height: 32px;
+}
+
+.kun-account-focus-row:has(> .ds-sidebar-update-chip) .kun-account-focus-tools {
+  flex: none;
+  gap: 2px;
+}
+
+/* The update chip needs room before the same right-aligned controls. */
+@container (max-width: 300px) {
+  .ds-sidebar-footer-bar:not(.kun-account-focus-row):has(> .ds-sidebar-update-chip) .ds-focus-mode-switch {
+    width: 28px;
+    padding: 0;
+    border-radius: var(--ds-radius-control);
+  }
+
+  .ds-sidebar-footer-bar:not(.kun-account-focus-row):has(> .ds-sidebar-update-chip) .ds-focus-mode-switch-icon {
+    display: block;
+  }
+
+  .ds-sidebar-footer-bar:not(.kun-account-focus-row):has(> .ds-sidebar-update-chip) :is(.ds-focus-mode-switch-label, .ds-focus-mode-switch-track) {
+    display: none;
+  }
+}
+
+/* Narrow sidebars use one icon, keeping the switch's name and checked state. */
+@container (max-width: 220px) {
+  .ds-focus-mode-switch {
+    width: 28px;
+    padding: 0;
+    border-radius: var(--ds-radius-control);
+  }
+
+  .ds-focus-mode-switch-icon {
+    display: block;
+  }
+
+  .ds-focus-mode-switch-label,
+  .ds-focus-mode-switch-track {
+    display: none;
+  }
+}
+
+/* Keep the update entry and Focus together; move only the tools to a second row. */
+@container kun-account-focus (max-width: 264px) {
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > [data-footer-settings-slot='spacer'] {
+    order: 1;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .ds-focus-mode-switch {
+    order: 2;
+    width: auto;
+    padding: 0 4px 0 8px;
+    border-radius: 999px;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) .ds-focus-mode-switch-icon {
+    display: none;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) :is(.ds-focus-mode-switch-label, .ds-focus-mode-switch-track) {
+    display: block;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .ds-sidebar-update-chip {
+    justify-content: center;
+    width: 32px;
+    padding: 0;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .ds-sidebar-update-chip .ds-sidebar-update-chip-label {
+    position: absolute;
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) > .kun-account-focus-tools {
+    flex: 0 0 100%;
+    justify-content: flex-end;
+    gap: 4px;
+    order: 3;
+  }
+
+  .kun-account-focus-row:has(> .ds-sidebar-update-chip) .kun-account-focus-tools .ds-sidebar-icon-button {
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* pulseFocusModeSwitch(): after the what's-new card, show where the switch lives. */
+html[data-focus-switch-pulse='on'] .ds-focus-mode-switch {
+  animation: ds-focus-switch-pulse 1.2s ease-out 2;
+}
+
+@keyframes ds-focus-switch-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ds-accent) 55%, transparent);
+  }
+
+  100% {
+    box-shadow: 0 0 0 10px color-mix(in srgb, var(--ds-accent) 0%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-focus-mode-switch,
+  .ds-focus-mode-switch-track,
+  .ds-focus-mode-switch-thumb {
+    transition: none;
+  }
+
+  html[data-focus-switch-pulse='on'] .ds-focus-mode-switch {
+    animation: none;
+    outline: 2px solid var(--ds-accent);
+    outline-offset: 2px;
+  }
+}

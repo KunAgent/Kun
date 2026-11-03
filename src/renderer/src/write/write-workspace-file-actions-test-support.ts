@@ -43,6 +43,7 @@ export function makeWriteFileActionBaseState(): WriteWorkspaceState {
     refreshWorkspace: async () => undefined,
     openFile: async () => undefined,
     loadWhiteboards: async () => undefined,
+    ensureWhiteboards: async () => true,
     createWhiteboard: async () => null,
     openWhiteboard: () => undefined,
     findOrCreatePptWhiteboard: async () => null,

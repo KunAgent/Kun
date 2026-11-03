@@ -28,5 +28,11 @@
   "canvasEnginePptLocked": "演示评审白板固定使用 Kun 画布。",
   "designExcalidrawUntitled": "Excalidraw 草图",
   "designExcalidrawOpenBlank": "打开空白 Excalidraw",
-  "designDrawingStartExcalidrawDescription": "用 Excalidraw 画流程图、架构图和日常草图。Agent 不会在这块板上改图。"
+  "designDrawingStartExcalidrawDescription": "用 Excalidraw 画流程图、架构图和日常草图。Agent 不会在这块板上改图。",
+  "workWhiteboardBackToArtifacts": "返回产物",
+  "workWhiteboardCollapse": "收起",
+  "workWhiteboardUnavailableTitle": "暂时无法读取这块白板",
+  "workWhiteboardUnavailableHint": "白板索引没有加载成功。文件仍然在，重试即可继续。",
+  "workWhiteboardUnavailableRetry": "重试",
+  "workWhiteboardLoadingNamed": "正在打开「{{name}}」…"
 }

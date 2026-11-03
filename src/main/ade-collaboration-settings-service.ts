@@ -5,6 +5,7 @@ import {
   type KunAdeSettingsV1
 } from '../shared/app-settings'
 import { defaultKunAdeSettings } from '../shared/app-settings-kun-harness'
+import { DEFAULT_ADE_TASK_SUGGESTION_SETTINGS, dispatchPreferencesValid } from '../shared/ade-collaboration-settings'
 import type {
   AdeCollaborationSettingsMutation,
   AdeCollaborationSettingsMutationResult,
@@ -24,6 +25,8 @@ function valueFromAde(ade: KunAdeSettingsV1): AdeCollaborationSettingsValue {
     ...(ade.budget ? { budget: { ...ade.budget } } : {}),
     hibernation: { ...ade.hibernation },
     stall: { ...ade.stall },
+    dispatch: { ...ade.dispatch, preferences: (ade.dispatch.preferences ?? []).map((rule) => ({ ...rule })) },
+    tasks: { ...(ade.tasks ?? DEFAULT_ADE_TASK_SUGGESTION_SETTINGS) },
     harnessRouter: ade.harnessRouter,
     deterministicHandoff: ade.deterministicHandoff
   }
@@ -62,6 +65,7 @@ export function createAdeCollaborationSettingsService(options: {
           return current
         }
         conflict = undefined
+        if (!dispatchPreferencesValid(request.value.dispatch)) throw new Error('Invalid or oversized collaboration preferences.')
         const managerModel = request.value.managerModel
         if (managerModel && !current.provider.providers.some((provider) => provider.id === managerModel.providerId) &&
           managerModel.providerId !== snapshot.value.managerModel?.providerId) {
@@ -77,6 +81,8 @@ export function createAdeCollaborationSettingsService(options: {
             budget: request.value.budget ?? null,
             hibernation: request.value.hibernation,
             stall: request.value.stall,
+            dispatch: request.value.dispatch,
+            tasks: request.value.tasks,
             harnessRouter: request.value.harnessRouter,
             deterministicHandoff: request.value.deterministicHandoff
           } } }

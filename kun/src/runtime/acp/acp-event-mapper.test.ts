@@ -53,7 +53,7 @@ function makeMapper(debugSink?: string[]): {
   const mapper = new AcpEventMapper({
     threadId: 'thread_1',
     turnId: 'turn_1',
-    harnessId: 'gemini-cli',
+    harnessId: 'devin',
     model: 'fake-model-1',
     nextId: (prefix) => `${prefix}_${++n}`,
     nowIso: () => '2026-01-01T00:00:00.000Z',
@@ -274,9 +274,11 @@ describe('AcpEventMapper', () => {
       { sessionUpdate: 'usage_update', used: 12_000, size: 200_000 }
     ])
     expect(kinds(drafts)).toEqual(['context_snapshot', 'context_snapshot'])
-    const snapshot = drafts[0] as unknown as { contextWindowTokens: number; estimatedInputTokens: number }
+    const snapshot = drafts[0] as unknown as { contextWindowTokens: number; estimatedInputTokens: number; occupancySource?: string }
     expect(snapshot.contextWindowTokens).toBe(200_000)
     expect(snapshot.estimatedInputTokens).toBe(12_000)
+    // The Agent measured it; the UI must not split it into Kun's categories.
+    expect(snapshot.occupancySource).toBe('agent')
     expect(mapper.observedFacts.sawUsageTelemetry).toBe(true)
     expect(mapper.observedFacts.sawUsageTokens).toBe(false)
   })
@@ -338,6 +340,32 @@ describe('AcpEventMapper', () => {
     })
     expect(drafts[0]).toMatchObject({ source: 'harness-reported' })
     expect(mapper.observedFacts.sawUsageTokens).toBe(true)
+  })
+
+  test('prompt-result usage whose input excludes cache reads (OpenCode) adds them back', () => {
+    // A real OpenCode assistant message: total = input + output + thought + cache read.
+    const { mapper } = makeMapper()
+    const drafts = mapper.applyPromptResult({
+      totalTokens: 59_693,
+      inputTokens: 286,
+      outputTokens: 105,
+      thoughtTokens: 102,
+      cachedReadTokens: 59_200
+    })
+    expect((drafts[0] as { usage: Record<string, unknown> }).usage).toMatchObject({
+      promptTokens: 59_486,
+      completionTokens: 105,
+      cachedTokens: 59_200,
+      cacheHitTokens: 59_200,
+      cacheMissTokens: 286
+    })
+    // A small cache read under an input that already counts it stays as reported.
+    const included = makeMapper().mapper.applyPromptResult({
+      totalTokens: 10_700, inputTokens: 10_000, outputTokens: 100, thoughtTokens: 600, cachedReadTokens: 500
+    })
+    expect((included[0] as { usage: Record<string, unknown> }).usage).toMatchObject({
+      promptTokens: 10_000, cacheHitTokens: 500, cacheMissTokens: 9_500
+    })
   })
 
   test('user_message_chunk is ignored and unknown variants debug-log only', () => {

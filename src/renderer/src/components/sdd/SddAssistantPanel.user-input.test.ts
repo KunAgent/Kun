@@ -76,6 +76,7 @@ describe('SddAssistantPanel structured user input', () => {
     })
 
     let renderer: ReactTestRenderer | undefined
+    let clock: { mockRestore: () => void } | undefined
     try {
       await act(async () => {
         renderer = create(createElement(SddAssistantPanel, {
@@ -121,20 +122,23 @@ describe('SddAssistantPanel structured user input', () => {
         'data-user-input-variant': 'compact'
       })).toBeDefined()
 
+      // The ask card ignores clicks for a moment after it appears (arming).
+      clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 1_000)
       const option = renderer!.root.findAllByType('button').find((button) =>
-        textContent(button).includes('Current turn')
+        button.props.role === 'option' && textContent(button).includes('Current turn')
       )
       expect(option).toBeDefined()
       await act(async () => {
-        option!.props.onClick()
+        option!.props.onClick({ preventDefault: vi.fn() })
       })
 
       const submit = renderer!.root.findAllByType('button').find((button) =>
-        textContent(button).includes('Submit answers')
+        button.props['data-user-input-primary'] === 'submit'
       )
       expect(submit).toBeDefined()
+      expect(textContent(submit!)).toBe('Submit')
       await act(async () => {
-        submit!.props.onClick()
+        submit!.props.onClick({ preventDefault: vi.fn() })
       })
 
       expect(resolveUserInput).toHaveBeenCalledWith('sdd-input-item', {
@@ -142,6 +146,7 @@ describe('SddAssistantPanel structured user input', () => {
         answers: [{ id: 'lifecycle', label: 'Current turn', value: 'Current turn' }]
       })
     } finally {
+      clock?.mockRestore()
       if (renderer) {
         act(() => renderer!.unmount())
       }

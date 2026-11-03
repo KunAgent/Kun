@@ -1,23 +1,77 @@
 {
   "id": "slides",
   "name": "Kun Slides",
-  "version": "1.0.0",
-  "description": "Create, edit, review, and export native PowerPoint presentations through Kun's governed presentation workflow.",
+  "version": "2.0.0",
+  "description": "Create, revise, review, and export native, editable PowerPoint decks from PPTD source in the main conversation.",
   "entry": "SKILL.md",
   "triggers": {
     "commands": [
-      "/slides"
+      "/slides",
+      "/ppt"
     ],
     "promptPatterns": [
       "Kun Slides",
       "PowerPoint",
       "PPT",
       "slides",
-      "演示文稿"
+      "slide deck",
+      "pitch deck",
+      "演示文稿",
+      "幻灯片"
     ],
-    "fileTypes": []
+    "fileTypes": [
+      ".pptd"
+    ]
   },
   "allowedTools": [],
-  "assets": [],
-  "priority": 0
+  "assets": [
+    "references/pptd/format.md",
+    "references/pptd/pages-and-elements.md",
+    "references/pptd/shared-types.md",
+    "references/pptd/charts.md",
+    "references/pptd/examples.md",
+    "references/design-policy.md",
+    "references/categories.md",
+    "references/categories/academic-research.md",
+    "references/categories/analysis-decision.md",
+    "references/categories/brand-creative.md",
+    "references/categories/business-plan.md",
+    "references/categories/education-training.md",
+    "references/categories/management-report.md",
+    "references/categories/tech-engineering.md",
+    "references/styles.md",
+    "references/styles/academic/blue-line-courseware.md",
+    "references/styles/academic/deep-blue-atlas.md",
+    "references/styles/academic/paper-white-courseware.md",
+    "references/styles/academic/pastel-derivation.md",
+    "references/styles/academic/teal-green-academic-defense.md",
+    "references/styles/academic/wine-red-data.md",
+    "references/styles/consulting/apricot-white-brief.md",
+    "references/styles/consulting/indigo-due-diligence.md",
+    "references/styles/consulting/marine-blue-research.md",
+    "references/styles/consulting/moss-green-transformation.md",
+    "references/styles/consulting/pine-green-strategy.md",
+    "references/styles/consulting/red-black-growth.md",
+    "references/styles/finance/black-gold-ledger.md",
+    "references/styles/finance/ebony-ledger.md",
+    "references/styles/finance/honey-orange-memo.md",
+    "references/styles/finance/lake-blue-memo.md",
+    "references/styles/finance/prospect-annual.md",
+    "references/styles/finance/rice-paper-annual.md",
+    "references/styles/promotion/aqua-charity-report.md",
+    "references/styles/promotion/cream-collage.md",
+    "references/styles/promotion/pine-soot-pictorial.md",
+    "references/styles/promotion/silk-yellow-magazine.md",
+    "references/styles/promotion/silver-gray-luxury-magazine.md",
+    "references/styles/promotion/travel-green-handbook.md",
+    "references/styles/work/blue-flame-brand.md",
+    "references/styles/work/electric-violet-business.md",
+    "references/styles/work/moon-white-imagery.md",
+    "references/styles/work/sky-blue-wayfinding.md",
+    "references/styles/work/warm-clay-works.md",
+    "references/styles/work/warm-jade-annual-report.md",
+    "references/fonts.md",
+    "references/shapes.md"
+  ],
+  "priority": 20
 }

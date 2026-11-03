@@ -190,6 +190,19 @@ describe('Room request admission and coordination', () => {
     expect(task.memberSnapshot.modelRef).toEqual({ model: 'test-model', providerId: 'test-provider' })
   })
 
+  it('resolves an unsnapshotted member role through the bound repository roster', async () => {
+    const f = await fixture()
+    const seen: string[] = []
+    Object.assign(f.deps, { workspaceProfile: async (presetId: string, workspace: string) => {
+      seen.push(`${presetId}@${workspace}`)
+      return { name: 'Repo developer', mode: 'all', toolPolicy: 'inherit', model: 'repo-model', providerId: 'repo-provider' }
+    } })
+    const task = (await createTask(f)).value
+    expect(task.configuration).toMatchObject({ name: 'Repo developer' })
+    expect(task.task.memberSnapshot.modelRef).toEqual({ model: 'repo-model', providerId: 'repo-provider' })
+    expect(seen).toEqual([expect.stringMatching(/^developer@.*repo with spaces$/)])
+  })
+
   it('stops new admissions after archive while allowing an already admitted request to finish', async () => {
     const f = await fixture()
     const sent = await f.service.send(f.room.id, { clientRequestId: 'before-archive', body: 'Discuss this' })

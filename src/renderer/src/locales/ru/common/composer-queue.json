@@ -1,0 +1,31 @@
+{
+  "composerQueue": {
+    "caption_one": "{{count}} сообщение в очереди · отправится после этого хода",
+    "caption_few": "{{count}} сообщения в очереди · отправятся по порядку после этого хода",
+    "caption_many": "{{count}} сообщений в очереди · отправятся по порядку после этого хода",
+    "caption_other": "{{count}} сообщения в очереди · отправятся по порядку после этого хода",
+    "dragHint": "Перетащите, чтобы изменить порядок",
+    "showMore_one": "Ещё {{count}} сообщение",
+    "showMore_few": "Ещё {{count}} сообщения",
+    "showMore_many": "Ещё {{count}} сообщений",
+    "showMore_other": "Ещё {{count}} сообщения",
+    "showLess": "Свернуть",
+    "now": "Сейчас",
+    "nowLabel": "Вставить сейчас",
+    "pausedTitle": "Очередь приостановлена, потому что вы остановили ответ",
+    "pausedCount_one": "{{count}} сообщение",
+    "pausedCount_few": "{{count}} сообщения",
+    "pausedCount_many": "{{count}} сообщений",
+    "pausedCount_other": "{{count}} сообщения",
+    "resume": "Продолжить",
+    "resumeHint": "Отправить сообщения из очереди по порядку",
+    "images_one": "{{count}} изображение",
+    "images_few": "{{count}} изображения",
+    "images_many": "{{count}} изображений",
+    "images_other": "{{count}} изображения",
+    "files_one": "{{count}} файл",
+    "files_few": "{{count}} файла",
+    "files_many": "{{count}} файлов",
+    "files_other": "{{count}} файла"
+  }
+}

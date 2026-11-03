@@ -5,13 +5,18 @@ import {
   DESIGN_MODE_INSTRUCTION,
   SVG_ARTIFACT_MODE_INSTRUCTION
 } from './design-mode.js'
+import { DESIGN_CANVAS_MODE_INSTRUCTION } from './design-canvas-mode.js'
+import { DESIGN_HTML_PAGE_MODE_INSTRUCTION } from './design-html-page-mode.js'
 import { PLAN_MODE_INSTRUCTION } from './plan-mode.js'
 import { WORK_MODE_INSTRUCTION } from './work-mode.js'
+import { GUI_BROWSER_ROUTING_INSTRUCTION } from '../shared/design-preview-policy.js'
 
 type TurnModeState = {
+  clientSurface?: string
   agentSurface?: 'code' | 'write' | 'design'
   orchestration: 'direct' | 'graph'
   guiDesignArtifact?: { kind: string }
+  guiDesignCanvas?: boolean
   guiDesignMode?: boolean
   designProfile?: unknown
 }
@@ -36,16 +41,21 @@ export function buildTurnModeInstruction(
     'Room discussion is coordinated by the host. Do not create standalone plans, goals, or delegated agents.',
     roomContext.kind === 'coordination' ? 'Submit the room decision with submit_room_plan when available; otherwise return the requested JSON object.' :
       roomContext.kind === 'review' ? 'Inspect the pinned delivery and submit findings with submit_room_review when available; otherwise return the requested JSON object.' :
-        'Answer as the current member using attributed room context. Never claim unperformed checks.'
+        'Answer as the current member using attributed room context. Never claim unperformed checks, and do not restate these step limits in your reply.'
   ].join('\n') : PLAN_MODE_INSTRUCTION
   return [
+    ...(turn.clientSurface === 'gui' ? [GUI_BROWSER_ROUTING_INSTRUCTION] : []),
     ...(turn.agentSurface === 'write' ? [WORK_MODE_INSTRUCTION] : []),
     ...(turn.orchestration === 'graph' ? [GRAPH_LEAD_MODE_INSTRUCTION] : []),
     ...(planTurnActive ? [readOnlyRoomInstruction] : []),
     ...(turn.guiDesignArtifact?.kind === 'svg'
       ? [SVG_ARTIFACT_MODE_INSTRUCTION]
-      : turn.guiDesignMode === true || Boolean(turn.designProfile)
-        ? [DESIGN_MODE_INSTRUCTION]
-        : [])
+      : turn.guiDesignArtifact?.kind === 'html'
+        ? [DESIGN_HTML_PAGE_MODE_INSTRUCTION]
+        : turn.guiDesignMode === true && turn.guiDesignCanvas === true
+          ? [DESIGN_CANVAS_MODE_INSTRUCTION]
+          : turn.guiDesignMode === true || Boolean(turn.designProfile)
+            ? [DESIGN_MODE_INSTRUCTION]
+            : [])
   ].join('\n\n')
 }

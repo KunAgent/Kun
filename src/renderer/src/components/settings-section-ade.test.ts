@@ -9,6 +9,7 @@ import type {
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import { AgentsCollaborationSettingsPanel, collaborationApplyLabelKey } from './settings-section-agents-collaboration'
 import { AgentsHarnessesSettingsPanel } from './settings-section-agents-harnesses'
+import { DispatchPreferenceEditor } from './workers/DispatchPreferenceEditor'
 import { WorktreeSettingsSection } from './settings-section-worktree'
 import { useHarnessStore } from '../store/harness-store'
 import { useChatStore } from '../store/chat-store'
@@ -151,6 +152,40 @@ describe('AgentsCollaborationSettingsPanel', () => {
     act(() => renderer.unmount())
   })
 
+  it('saves the no-response dispatch window and the approval-mode switch', async () => {
+    const saveRequest = vi.fn(async (request: AdeCollaborationSettingsMutation) => ({
+      ok: true as const, value: request.value, revision: savedRevision, generation: 6
+    }))
+    const renderer = await renderPanel(saveRequest)
+    const window = renderer.root.find((node) => node.type === 'select' && node.props['data-dispatch-auto-start'])
+    expect(window.props.value).toBe('60')
+    act(() => window.props.onChange({ target: { value: '180' } }))
+    const confirm = renderer.root.findByProps({ role: 'switch', 'aria-label': 'adeSettings.dispatchAutoStartConfirm' })
+    expect(confirm.props['aria-checked']).toBe(true)
+    act(() => confirm.props.onClick())
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).toHaveBeenCalledWith({ expectedRevision: revision, value: expect.objectContaining({
+      dispatch: { autoStartSeconds: 180, autoStartWhenConfirmationRequired: false, preferencePrompt: '', preferences: [] } }) })
+    act(() => renderer.unmount())
+  })
+
+  it('saves visual preferences and rejects oversized composed text', async () => {
+    const saveRequest = vi.fn(async (request: AdeCollaborationSettingsMutation) => ({
+      ok: true as const, value: request.value, revision: savedRevision, generation: 7
+    }))
+    const renderer = await renderPanel(saveRequest)
+    const preferences = [{ id: 'review', scenario: 'Review', agentId: 'kun', enabled: true }]
+    act(() => renderer.root.findByType(DispatchPreferenceEditor).props.onPreferencesChange(preferences))
+    act(() => renderer.root.findByType(DispatchPreferenceEditor).props.onNotesChange('x'.repeat(2000)))
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).not.toHaveBeenCalled()
+    act(() => renderer.root.findByType(DispatchPreferenceEditor).props.onNotesChange('Preserve tests'))
+    await click(renderer, 'adeSettings.collaborationSave')
+    expect(saveRequest).toHaveBeenCalledWith({ expectedRevision: revision, value: expect.objectContaining({
+      dispatch: expect.objectContaining({ preferences, preferencePrompt: 'Preserve tests' }) }) })
+    act(() => renderer.unmount())
+  })
+
   it('does not persist an incomplete manager route', async () => {
     const saveRequest = vi.fn()
     const renderer = await renderPanel(saveRequest)
@@ -215,50 +250,59 @@ describe('AgentsHarnessesSettingsPanel', () => {
     return renderer
   }
 
-  it('lists harness rows with version and login state', () => {
+  it('lists harness rows with version and login state, leaving Kun to the default picker', () => {
     useHarnessStore.setState({
-      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')],
+      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code'), makeHarnessRow('codex')],
       rowsLoadedAt: 1_000
     })
     const renderer = renderPanel(vi.fn())
+    expect(renderer.root.findAllByProps({ 'data-agent-list-id': 'kun' })).toHaveLength(0)
     const claudeListItem = renderer.root.findByProps({ 'data-agent-list-id': 'claude-code' })
     act(() => claudeListItem.props.onClick())
     const text = instanceText(renderer.root)
     expect(text).toContain('claude-code display')
     expect(text).toContain('1.2.3')
-    expect(text).toContain('agentEnablement.disabled')
+    expect(text).toContain('agentCenter.state.available.status')
     expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(1)
-    const kunListItem = renderer.root.findAllByType('button' as never)
-      .find((button) => instanceText(button).includes('kun display'))!
-    act(() => kunListItem.props.onClick())
-    expect(kunListItem.props['aria-selected']).toBe(true)
-    expect(kunListItem.props['data-selected']).toBe(true)
+    const codexListItem = renderer.root.findByProps({ 'data-agent-list-id': 'codex' })
+    act(() => codexListItem.props.onClick())
+    expect(codexListItem.props['aria-selected']).toBe(true)
+    expect(codexListItem.props['data-selected']).toBe(true)
     expect(renderer.root.findAllByProps({ 'data-agent-card': 'claude-code' })).toHaveLength(0)
-    expect(renderer.root.findAllByProps({ 'data-agent-card': 'kun' })).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'codex' })).toHaveLength(1)
     act(() => renderer.unmount())
   })
 
   it('opens the requested Agent detail from a repair deep link', () => {
     useHarnessStore.setState({
-      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')],
+      rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code'), makeHarnessRow('codex')],
       rowsLoadedAt: 1_000,
-      settingsHarnessId: 'kun'
+      settingsHarnessId: 'codex'
     })
     const renderer = renderPanel(vi.fn())
-    expect(renderer.root.findAllByProps({ 'data-agent-card': 'kun' })).toHaveLength(1)
+    expect(renderer.root.findAllByProps({ 'data-agent-card': 'codex' })).toHaveLength(1)
     expect(useHarnessStore.getState().settingsHarnessId).toBeUndefined()
     act(() => renderer.unmount())
   })
 
-  it('shows the selected Agent defaults immediately while keeping command override advanced', () => {
+  it('shows the first-time steps for an Agent that is not connected, and the tabs once it is', () => {
     useHarnessStore.setState({ rows: [makeHarnessRow('kun'), makeHarnessRow('claude-code')], rowsLoadedAt: 1_000 })
-    const renderer = renderPanel(vi.fn())
-    expect(renderer.root.findAllByProps({ 'data-agent-detail-settings': true })).toHaveLength(1)
-    expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(0)
-    const advanced = renderer.root.findByProps({ 'data-agent-advanced-toggle': true })
-    act(() => advanced.props.onClick())
-    expect(renderer.root.findAllByProps({ 'data-agent-advanced-settings': true })).toHaveLength(1)
-    act(() => renderer.unmount())
+    const fresh = renderPanel(vi.fn())
+    expect(fresh.root.findAllByProps({ 'data-agent-setup': 'claude-code' })).toHaveLength(1)
+    expect(fresh.root.findAllByProps({ role: 'tablist' })).toHaveLength(0)
+    expect(fresh.root.findAllByProps({ 'data-agent-profile-mode-option': 'native-login' })).toHaveLength(1)
+    act(() => fresh.unmount())
+
+    const kun = defaultKunRuntimeSettings()
+    kun.harnesses.enabledProfiles = [{ harnessId: 'claude-code', credentialMode: 'native-login' }]
+    const connected = renderPanel(vi.fn(), kun)
+    expect(connected.root.findAllByProps({ 'data-agent-setup': 'claude-code' })).toHaveLength(0)
+    const tabs = connected.root.findAllByProps({ role: 'tab' })
+    expect(tabs.map((tab) => instanceText(tab))).toEqual(['agentCenter.tabs.connection', 'agentCenter.tabs.models', 'agentCenter.tabs.launch', 'agentCenter.tabs.version'])
+    expect(connected.root.findAllByProps({ 'data-agent-command-path': true })).toHaveLength(0)
+    act(() => tabs[2]!.props.onClick())
+    expect(connected.root.findAllByProps({ 'data-agent-command-path': true })).toHaveLength(1)
+    act(() => connected.unmount())
   })
 
   it('removes only the selected profile when explicitly disabled', () => {
@@ -285,6 +329,7 @@ describe('AgentsHarnessesSettingsPanel', () => {
     const renderer = renderPanel(updateKun)
     await act(async () => renderer.root.findByProps({ 'data-agent-add-open': true }).props.onClick())
     await act(async () => renderer.root.findByProps({ 'data-agent-add-custom': true }).props.onClick())
+    await act(async () => renderer.root.findByProps({ 'data-agent-add-next': true }).props.onClick())
     const inputs = renderer.root.findAllByType('input' as never)
     const textarea = renderer.root.findByType('textarea' as never)
     act(() => {
@@ -317,37 +362,19 @@ describe('AgentsHarnessesSettingsPanel', () => {
     await act(async () => addButton.props.onClick())
     expect(updateKun).toHaveBeenCalledWith({
       harnesses: expect.objectContaining({
-        custom: [
-          {
-            id: 'custom-my-agent',
-            displayName: 'My Agent',
+        providers: {
+          'custom-my-agent': {
+            extends: 'acp',
+            label: 'My Agent',
             command: '/usr/local/bin/my-agent',
-            args: ['--acp', '--fast'],
-            env: { TOKEN: 'abc' },
-            secretEnv: []
+            args: { mode: 'replace', values: ['--acp', '--fast'] },
+            env: { TOKEN: 'abc' }
           }
-        ]
+        }
       })
     })
-    // Reopen: the saved custom entry still feeds the form state.
-    const saved = {
-      ...defaultKunRuntimeSettings(),
-      harnesses: {
-        ...defaultKunRuntimeSettings().harnesses,
-        custom: [
-          {
-            id: 'custom-my-agent',
-            displayName: 'My Agent',
-            command: '/usr/local/bin/my-agent',
-            args: ['--acp', '--fast'],
-            env: { TOKEN: 'abc' },
-            secretEnv: []
-          }
-        ]
-      }
-    }
-    expect(saved.harnesses.custom[0].id).toBe('custom-my-agent')
-    expect(renderer.root.findAllByProps({ 'data-agent-add-finish': true })).toHaveLength(1)
+    // Saving closes the dialog and selects the new Agent.
+    expect(renderer.root.findAllByProps({ 'data-agent-custom-form': true })).toHaveLength(0)
     act(() => renderer.unmount())
   })
 })

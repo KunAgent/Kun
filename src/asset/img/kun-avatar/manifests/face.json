@@ -1,0 +1,104 @@
+{
+  "face/normal": {
+    "png": "face/normal.png",
+    "webp": {
+      "128": "128/face/normal.webp",
+      "256": "256/face/normal.webp",
+      "512": "512/face/normal.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "features.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 0
+    }
+  },
+  "face/happy": {
+    "png": "face/happy.png",
+    "webp": {
+      "128": "128/face/happy.webp",
+      "256": "256/face/happy.webp",
+      "512": "512/face/happy.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "features.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 1
+    }
+  },
+  "face/surprised": {
+    "png": "face/surprised.png",
+    "webp": {
+      "128": "128/face/surprised.webp",
+      "256": "256/face/surprised.webp",
+      "512": "512/face/surprised.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-faces.png",
+      "grid": [
+        3,
+        1
+      ],
+      "cell": 0
+    }
+  },
+  "face/wink": {
+    "png": "face/wink.png",
+    "webp": {
+      "128": "128/face/wink.webp",
+      "256": "256/face/wink.webp",
+      "512": "512/face/wink.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "polish-faces.png",
+      "grid": [
+        2,
+        2
+      ],
+      "cell": 1
+    }
+  },
+  "face/focused": {
+    "png": "face/focused.png",
+    "webp": {
+      "128": "128/face/focused.webp",
+      "256": "256/face/focused.webp",
+      "512": "512/face/focused.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-faces.png",
+      "grid": [
+        3,
+        1
+      ],
+      "cell": 1
+    }
+  },
+  "face/sleepy": {
+    "png": "face/sleepy.png",
+    "webp": {
+      "128": "128/face/sleepy.webp",
+      "256": "256/face/sleepy.webp",
+      "512": "512/face/sleepy.webp"
+    },
+    "canvas": 1024,
+    "source": {
+      "file": "v2-faces.png",
+      "grid": [
+        3,
+        1
+      ],
+      "cell": 2
+    }
+  }
+}

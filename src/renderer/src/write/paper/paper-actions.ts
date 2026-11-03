@@ -4,10 +4,17 @@ import type { WritePaperReadingSettingsV1 } from '@shared/app-settings-types-pro
 import { useWriteWorkspaceStore } from '../write-workspace-store'
 import { normalizePath } from '../write-workspace-store-helpers'
 import { newPaperRequestId, usePaperStore } from './paper-store'
+import { usePaperModeStore } from '../../paper/paper-mode-store'
+import { ensurePaperSpace, openPaperSpaceItem, refreshPaperSpace, paperSpaceReadingSettings } from '../../paper/paper-space'
+import { paperSpaceItemKey } from '../../paper/paper-space-store'
+import { upgradePaperMeta } from '@shared/paper/paper-meta-v2'
 import { openPaperInterpretation, openPaperUnit } from './paper-open-layout'
-import { usePaperReadingRequest } from '../../paper/paper-reading-request'
+import { buildPaperInterpretPrompt } from './paper-interpret-prompt'
 import {
-  PAPER_INTERPRET_SUFFIX
+  nextInterpretationFileName,
+  PAPER_INTERPRET_SUFFIX,
+  PAPER_TEXT_FILE,
+  paperUnitSlugFromDir
 } from './paper-unit'
 
 export type PaperTranslate = (key: string, options?: Record<string, unknown>) => string
@@ -62,29 +69,28 @@ export async function importPaper(
   const requestId = newPaperRequestId()
   usePaperStore.getState().beginJob('import', requestId)
   try {
+    const targetRoot = await ensurePaperSpace()
     const result = await window.kunGui.paperImport({
-      workspaceRoot,
+      workspaceRoot: targetRoot,
       input: deps.input ?? '',
       ...(deps.localPdfPath ? { localPdfPath: deps.localPdfPath } : {}),
-      parentDir: deps.settings.papersDir,
+      parentDir: paperSpaceReadingSettings().papersDir,
       requestId
     })
-    if (!workspaceIsCurrent(workspaceRoot)) return result.ok
     if (!result.ok) {
       errorNotice(t, result.code, result.message)
       return false
     }
-    usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
-    paperNotice({
-      tone: 'success',
-      message: t('writePaperImportDone', { title: result.meta.title })
-    })
-    await refreshWorkspace(workspaceRoot)
-    if (!workspaceIsCurrent(workspaceRoot)) return true
-    await openPaperUnit({ workspaceRoot, unitDir: result.unitDir, meta: result.meta })
+    const sourceRoot = result.workspaceRoot ?? targetRoot
+    if (workspaceIsCurrent(sourceRoot)) usePaperStore.getState().rememberUnit(result.unitDir, result.meta)
+    paperNotice({ tone: 'success', message: t('writePaperImportDone', { title: result.meta.title }) })
+    await refreshPaperSpace()
+    await openPaperSpaceItem({ key: paperSpaceItemKey(sourceRoot, result.unitDir), libraryRoot: sourceRoot,
+      entry: { unitDir: result.unitDir, meta: upgradePaperMeta(result.meta), group: '',
+        hasPdf: Boolean(result.meta.pdfFile), hasNotes: true, interpretationCount: result.meta.interpretations?.length ?? 0 } })
     deps.onImported?.(result.unitDir, result.meta)
-    if (deps.settings.autoPreprocess) {
-      void preprocessPaper({ ...deps, unitDir: result.unitDir })
+    if (deps.settings.autoPreprocess && !result.reused) {
+      void preprocessPaper({ ...deps, workspaceRoot: sourceRoot, unitDir: result.unitDir }).then(() => refreshPaperSpace())
     }
     return true
   } catch (error) {
@@ -109,7 +115,7 @@ export async function openPdfAsPaper(
 }
 
 /**
- * Fetch papers.cool/Kimi notes and append them to NOTES.md (§6.2). Flushes the
+ * Fetch papers.cool/Kimi notes and append them to NOTES.md. Flushes the
  * open document first; the NOTES.md reload comes from the file watcher.
  */
 export async function fetchCoolNotes(
@@ -163,7 +169,7 @@ export function cancelPaperJob(kind: PaperJobKind): void {
   if (job) void window.kunGui.paperCancel({ requestId: job.requestId })
 }
 
-/** Deterministic preprocessing: paper.md text + figures/index.json (§6.3). */
+/** Deterministic preprocessing: paper.md text + figures/index.json. */
 export async function preprocessPaper(
   deps: PaperActionDeps & { unitDir: string; force?: boolean }
 ): Promise<boolean> {
@@ -210,12 +216,69 @@ export type InterpretDeps = PaperActionDeps & {
 }
 
 /**
- * One-click interpretation (§6.5/§7): flush, ensure paper.md exists, build the
+ * One-click interpretation: flush, ensure paper.md exists, build the
  * prompt, open the assistant, submit. The host watches the workspace for the
  * generated `-解读*.md` after the turn ends (see `checkPendingInterpretation`).
  */
 export async function interpretPaper(deps: InterpretDeps): Promise<void> {
-  usePaperReadingRequest.getState().open({ workspaceRoot: deps.workspaceRoot, unitDir: deps.unitDir, meta: deps.meta })
+  const { t, workspaceRoot, unitDir, meta } = deps
+
+  if (!await useWriteWorkspaceStore.getState().flushSave(workspaceRoot)) {
+    paperNotice({ tone: 'error', message: t('writePaperSaveFailed') })
+    return
+  }
+
+  const listing = await window.kunGui.listWorkspaceDirectory({ workspaceRoot, path: unitDir })
+  const entries = listing.ok ? listing.entries : []
+  const hasPaperText = entries.some(
+    (entry) => entry.type === 'file' && entry.name === PAPER_TEXT_FILE
+  )
+  if (!hasPaperText && deps.settings.autoPreprocess) {
+    const ok = await preprocessPaper(deps)
+    if (!ok) return
+  }
+
+  const slug = meta.slug || paperUnitSlugFromDir(unitDir)
+  const outputName = nextInterpretationFileName(
+    slug,
+    entries.filter((entry) => entry.type === 'file').map((entry) => entry.name)
+  )
+  const outputPath = `${unitDir}/${outputName}`
+  const prompt = buildPaperInterpretPrompt({
+    unitDir,
+    meta,
+    outputPath,
+    template: deps.settings.interpretTemplate,
+    language: deps.settings.outputLanguage,
+    visionCapable: deps.visionCapable,
+    figuresFailed: meta.preprocess?.figuresStatus === 'failed'
+  })
+
+  usePaperStore.getState().setPendingInterpretation({
+    workspaceRoot,
+    unitDir,
+    outputDir: unitDir,
+    fileStem: outputName.replace(/\.md$/i, ''),
+    plannedPath: outputPath,
+    startedAt: Date.now()
+  })
+  useWriteWorkspaceStore.getState().setAssistantOpen(true)
+  if (deps.onSubmitPrompt) deps.onSubmitPrompt(prompt)
+  else deps.setInput(deps.input.trim() ? `${deps.input.trim()}\n\n${prompt}` : prompt)
+}
+
+/** Interpret from anywhere in Work: the composer bridge sends it to the assistant. */
+export function interpretPaperWithAssistant(
+  input: { t: PaperTranslate; workspaceRoot: string; unitDir: string; meta: PaperUnitMeta }
+): Promise<void> {
+  const bridge = usePaperModeStore.getState().composerBridge
+  return interpretPaper({
+    ...input,
+    settings: useWriteWorkspaceStore.getState().paperReading,
+    input: bridge?.input ?? '',
+    setInput: bridge?.setInput ?? (() => undefined),
+    onSubmitPrompt: bridge?.submit
+  })
 }
 
 /**

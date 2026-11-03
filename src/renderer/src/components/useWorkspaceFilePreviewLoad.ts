@@ -10,24 +10,32 @@ import type {
   WorkspaceFileTarget,
   WorkspaceImageReadResult,
   WorkspacePdfReadResult,
-  WorkspacePreviewLeaseResult
+  WorkspacePreviewLeaseResult,
+  WorkspaceTextEncoding
 } from '@shared/workspace-file'
 import {
-  isWorkspaceRasterImagePreviewPath,
+  isWorkspaceTextBackedPreviewKind,
   workspaceFilePreviewKind
 } from '../lib/workspace-text-preview'
 import type { CachedTextDraft } from './workspace-file-preview-support'
 import { useWorkspaceOfficePreview } from './useWorkspaceOfficePreview'
 
-type Translate = (key: string, values?: Record<string, unknown>) => string
 type PreviewKind = ReturnType<typeof workspaceFilePreviewKind>
+
+/** A known-binary file only needs its head for the card and the hex view. */
+const BINARY_PROBE_BYTES = 4096
 
 type LoadParams = {
   target: WorkspaceFileTarget | null
   workspaceRoot: string
   activeTargetKey: string
   previewKind: PreviewKind
-  t: Translate
+  /** Reopen text with this encoding; null detects one. */
+  encoding: WorkspaceTextEncoding | null
+  /** Bytes of text to read; null reads the default head. */
+  maxBytes: number | null
+  /** Bumped to read the same file again. */
+  reloadNonce: number
   textDraftsRef: MutableRefObject<Map<string, CachedTextDraft>>
   setSvgRendered: Dispatch<SetStateAction<boolean>>
   setHtmlRendered: Dispatch<SetStateAction<boolean>>
@@ -38,12 +46,18 @@ type LoadParams = {
   setDiskConflict: Dispatch<SetStateAction<boolean>>
 }
 
+function failure(error: unknown): { ok: false; message: string } {
+  return { ok: false, message: error instanceof Error ? error.message : String(error) }
+}
+
 export function useWorkspaceFilePreviewLoad({
   target,
   workspaceRoot,
   activeTargetKey,
   previewKind,
-  t,
+  encoding,
+  maxBytes,
+  reloadNonce,
   textDraftsRef,
   setSvgRendered,
   setHtmlRendered,
@@ -82,40 +96,37 @@ export function useWorkspaceFilePreviewLoad({
     let cancelled = false
     setSvgRendered(true)
     setHtmlRendered(false)
-    setTextDraft('')
     setTextSaveError(null)
     setSavingText(false)
     setEditingText(false)
     setDiskConflict(false)
     setLoading(true)
-    setResult(null)
     setImageResult(null)
     setPdfResult(null)
     setPreviewLease(null)
+    // Keep the shown text while "load more" or a re-encode refetches the same file.
+    if (maxBytes === null && encoding === null) {
+      setTextDraft('')
+      setResult(null)
+    }
 
     const readTarget = {
       ...target,
       workspaceRoot: target.workspaceRoot ?? workspaceRoot
     }
 
-    if (isWorkspaceRasterImagePreviewPath(target.path)) {
+    if (previewKind === 'image') {
       void window.kunGui
         .readWorkspaceImage(readTarget)
         .then((next) => {
           if (!cancelled) setImageResult(next)
         })
         .catch((error) => {
-          if (!cancelled) {
-            setImageResult({
-              ok: false,
-              message: error instanceof Error ? error.message : String(error)
-            })
-          }
+          if (!cancelled) setImageResult(failure(error))
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
         })
-
       return () => {
         cancelled = true
       }
@@ -128,9 +139,7 @@ export function useWorkspaceFilePreviewLoad({
           if (!cancelled) setPdfResult(next)
         })
         .catch((error) => {
-          if (!cancelled) {
-            setPdfResult({ ok: false, message: error instanceof Error ? error.message : String(error) })
-          }
+          if (!cancelled) setPdfResult(failure(error))
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -159,9 +168,7 @@ export function useWorkspaceFilePreviewLoad({
           if (!cancelled) setPreviewLease(next)
         })
         .catch((error) => {
-          if (!cancelled) {
-            setPreviewLease({ ok: false, message: error instanceof Error ? error.message : String(error) })
-          }
+          if (!cancelled) setPreviewLease(failure(error))
         })
         .finally(() => {
           if (!cancelled) setLoading(false)
@@ -172,19 +179,16 @@ export function useWorkspaceFilePreviewLoad({
       }
     }
 
-    if (previewKind === 'unsupported') {
-      setResult({
-        ok: false,
-        message: t('filePreviewUnsupported')
-      })
-      setLoading(false)
-      return
-    }
-
     let leaseId = ''
+    const textBacked = isWorkspaceTextBackedPreviewKind(previewKind)
     void (async () => {
       const [next, htmlLease] = await Promise.all([
-        window.kunGui.readWorkspaceFile(readTarget),
+        window.kunGui.readWorkspaceFile({
+          ...readTarget,
+          ...(previewKind === 'binary' ? { maxBytes: BINARY_PROBE_BYTES } : {}),
+          ...(textBacked && maxBytes !== null ? { maxBytes } : {}),
+          ...(textBacked && encoding ? { encoding } : {})
+        }),
         previewKind === 'html'
           ? window.kunGui.openWorkspacePreviewResource({
               path: readTarget.path,
@@ -203,12 +207,7 @@ export function useWorkspaceFilePreviewLoad({
       }
     })()
       .catch((error) => {
-        if (!cancelled) {
-          setResult({
-            ok: false,
-            message: error instanceof Error ? error.message : String(error)
-          })
-        }
+        if (!cancelled) setResult(failure(error))
       })
       .finally(() => {
         if (!cancelled) setLoading(false)
@@ -220,7 +219,10 @@ export function useWorkspaceFilePreviewLoad({
     }
   }, [
     activeTargetKey,
+    encoding,
+    maxBytes,
     previewKind,
+    reloadNonce,
     setDiskConflict,
     setEditingText,
     setHtmlRendered,
@@ -228,7 +230,6 @@ export function useWorkspaceFilePreviewLoad({
     setSvgRendered,
     setTextDraft,
     setTextSaveError,
-    t,
     target,
     textDraftsRef,
     workspaceRoot

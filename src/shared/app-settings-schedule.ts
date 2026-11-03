@@ -1,3 +1,4 @@
+import { normalizeScheduledTaskHarness } from './schedule-task-harness'
 import {
   DEFAULT_SCHEDULE_INTERNAL_PORT,
   DEFAULT_SCHEDULE_MODEL,
@@ -37,6 +38,7 @@ export function normalizeScheduledTask(
 ): ScheduledTaskV1 {
   const schedule = task.schedule
   const model = normalizeScheduleModel(task.model)
+  const harness = normalizeScheduledTaskHarness(task.harness)
   return {
     id: typeof task.id === 'string' && task.id.trim() ? task.id.trim() : `task-${index + 1}`,
     title: typeof task.title === 'string' && task.title.trim() ? task.title.trim() : `Task ${index + 1}`,
@@ -54,6 +56,7 @@ export function normalizeScheduledTask(
     priority: normalizePositiveInteger(task.priority, 0, 0, 100),
     dependsOn: compactStrings(task.dependsOn).filter((id) => id !== task.id),
     useWorktree: normalizeBoolean(task.useWorktree, false),
+    ...(harness ? { harness } : {}),
     schedule: {
       kind: normalizeScheduleKind(schedule?.kind),
       everyMinutes: normalizePositiveInteger(schedule?.everyMinutes, 60, 1, 10_080),

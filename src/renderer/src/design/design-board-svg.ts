@@ -18,6 +18,7 @@ import {
   type SyncHtmlArtifactsToBoardResult
 } from './design-board'
 import type { DesignArtifact, DesignArtifactNode } from './design-types'
+import { assignAgentBoardSections } from './design-board-sections'
 import { useDesignWorkspaceStore } from './design-workspace-store'
 
 function cloneDocument(doc: CanvasDocument): CanvasDocument {
@@ -264,7 +265,8 @@ export function syncDesignArtifactsToBoardDocument(
   artifacts: readonly DesignArtifact[]
 ): SyncHtmlArtifactsToBoardResult {
   const html = syncHtmlArtifactsToBoardDocument(doc, artifacts)
-  const svg = syncSvgArtifactsToBoardDocument(html.document, artifacts)
+  const sectioned = assignAgentBoardSections(html.document, html.addedFrameIds, artifacts)
+  const svg = syncSvgArtifactsToBoardDocument(sectioned, artifacts)
   const root = svg.document.objects[svg.document.rootId]
   const normalChildren = root?.children.filter((id) => !isArtifactFrame(svg.document.objects[id])) ?? []
   const portalChildren = root?.children.filter((id) => isArtifactFrame(svg.document.objects[id])) ?? []

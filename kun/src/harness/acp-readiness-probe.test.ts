@@ -62,7 +62,7 @@ describe('probeAcpReadiness', () => {
   })
 
   it('reports unknown (not failed) when initialize does not answer in time', async () => {
-    // P4-03: a timeout means "no answer yet" — a slow cold start is not a
+    // a timeout means "no answer yet" — a slow cold start is not a
     // definitive unready verdict, so the UI can offer a retry.
     const silent = def('basic-chat.json', ['-e', 'setInterval(() => {}, 1_000)'])
     const result = await probeAcpReadiness(silent, process.execPath, {

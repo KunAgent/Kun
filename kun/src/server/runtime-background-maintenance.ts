@@ -1,5 +1,13 @@
-export const ATTACHMENT_PRUNE_DELAY_MS = 30_000
-export const ATTACHMENT_PRUNE_INTERVAL_MS = 60 * 60 * 1_000
+import type { MaintenanceCompletionLog } from './runtime-maintenance-schedule.js'
+
+/**
+ * A pruning pass reads every thread, hydrated, to collect the attachments it
+ * still references: minutes of Manager reads on a large history. It waits out
+ * the launch, runs every six hours, and resumes its schedule across restarts.
+ * Deferring it only delays reclaiming attachments nothing references.
+ */
+export const ATTACHMENT_PRUNE_DELAY_MS = 5 * 60_000
+export const ATTACHMENT_PRUNE_INTERVAL_MS = 6 * 60 * 60 * 1_000
 export const THREAD_GUARDIAN_DELAY_MS = 45_000
 export const THREAD_GUARDIAN_INTERVAL_MS = 6 * 60 * 60 * 1_000
 export const EVENT_INDEX_REBUILD_DELAY_MS = 120_000
@@ -15,6 +23,9 @@ type TaskEntry = {
   delayMs: number
   intervalMs: number
   dueAt: number
+  /** The completion time survives restarts (see MaintenanceCompletionLog). */
+  resumable?: boolean
+  ran?: boolean
 }
 
 export type RuntimeBackgroundMaintenance = {
@@ -35,6 +46,7 @@ export function createRuntimeBackgroundMaintenance(input: {
   eventIndexRebuildDelayMs?: number
   eventIndexRebuildIntervalMs?: number
   sliceRetryMs?: number
+  completions?: MaintenanceCompletionLog
 }): RuntimeBackgroundMaintenance {
   let started = false
   let stopped = false
@@ -47,7 +59,8 @@ export function createRuntimeBackgroundMaintenance(input: {
       run: input.pruneAttachments,
       delayMs: input.attachmentDelayMs ?? ATTACHMENT_PRUNE_DELAY_MS,
       intervalMs: input.attachmentIntervalMs ?? ATTACHMENT_PRUNE_INTERVAL_MS,
-      dueAt: Number.POSITIVE_INFINITY
+      dueAt: Number.POSITIVE_INFINITY,
+      resumable: true
     },
     {
       name: 'thread guardian',
@@ -85,11 +98,13 @@ export function createRuntimeBackgroundMaintenance(input: {
     if (stopped || running) return
     const task = tasks.reduce((min, entry) => (entry.dueAt < min.dueAt ? entry : min))
     running = true
+    task.ran = true
     void task.run().then((complete) => {
       const retry = complete === false
       task.dueAt = Date.now() + (retry
         ? input.sliceRetryMs ?? MAINTENANCE_SLICE_RETRY_MS
         : task.intervalMs)
+      if (!retry && task.resumable) void input.completions?.record(task.name, Date.now())
     }).catch((error) => {
       input.onError(task.name, error)
       task.dueAt = Date.now() + task.intervalMs
@@ -104,6 +119,15 @@ export function createRuntimeBackgroundMaintenance(input: {
     started = true
     for (const task of tasks) task.dueAt = Date.now() + task.delayMs
     schedule()
+    void input.completions?.read().then((completed) => {
+      if (stopped) return
+      for (const task of tasks) {
+        const last = completed[task.name]
+        if (!task.resumable || task.ran || last === undefined) continue
+        task.dueAt = Math.max(task.dueAt, last + task.intervalMs)
+      }
+      schedule()
+    }, () => undefined)
   }
 
   const stop = (): void => {

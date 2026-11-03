@@ -1,6 +1,6 @@
 import type { DispatchRecord, QuestionRecord, TeamRecord } from '../contracts/ade.js'
 
-/** Dispatches that still count as unfinished work (06 §7.2 condition 2). */
+/** Dispatches that still count as unfinished work. */
 const OPEN_DISPATCH_STATES: ReadonlySet<DispatchRecord['state']> = new Set([
   'pending',
   'delivering',
@@ -25,7 +25,7 @@ export type WorkerOpenWorkStores = {
 }
 
 /**
- * Dormancy gate (docs/ade/06 §7.2 conditions 2-3): does this worker still
+ * Dormancy gate: does this worker still
  * have an unfinished dispatch or an unanswered question? Queried live from
  * the ADE stores instead of being mirrored into ActivityStore rows.
  */

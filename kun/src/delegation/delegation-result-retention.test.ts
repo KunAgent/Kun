@@ -31,9 +31,7 @@ describe('delegation result retention', () => {
             lineCount: 3_000,
             mimeType: 'text/markdown'
           },
-          evidence: ['read source.ts: completed'],
-          reviewBundle: { verdict: 'pass' },
-          deckArtifact: { output: 'deck.pptx', validated: true }
+          evidence: ['read source.ts: completed']
         })
       })
       const record = await runtime.runChild({
@@ -49,9 +47,7 @@ describe('delegation result retention', () => {
         summary: 'bounded preview',
         summaryTruncated: true,
         resultRef: { artifactId: 'art_result' },
-        evidence: ['read source.ts: completed'],
-        reviewBundle: { verdict: 'pass' },
-        deckArtifact: { output: 'deck.pptx', validated: true }
+        evidence: ['read source.ts: completed']
       })
       expect(events.at(-1)).toMatchObject({
         text: 'bounded preview',

@@ -1,4 +1,5 @@
 import type { HarnessNativeAgent } from './harness-native-agents.js'
+import type { HarnessSessionSetting } from './harness-session-settings.js'
 
 /** Native model facts; absence of a capability means unknown, not unsupported. */
 export type HarnessModelInfo = {
@@ -10,6 +11,8 @@ export type HarnessModelInfo = {
   reasoningEfforts?: string[]
   defaultReasoningEffort?: string
   category?: 'model' | 'fusion'
+  /** Section the Agent files the model under (an ACP select option group); absent when its list is flat. */
+  group?: string
 }
 
 /** Why a live native catalog lookup returned no models (never contains secrets). */
@@ -25,5 +28,7 @@ export type HarnessModelCatalog = {
   agents?: HarnessNativeAgent[]
   /** The Agent a fresh native session starts with. */
   defaultAgentId?: string
+  /** Agent-published controls Kun does not model itself, as a fresh session reports them. */
+  settings?: HarnessSessionSetting[]
   error?: HarnessModelCatalogError
 }

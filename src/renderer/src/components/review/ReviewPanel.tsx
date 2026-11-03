@@ -21,9 +21,9 @@ import { ReviewRevisionSummary } from './ReviewRevisionSummary'
 import { ReviewSendMenu } from './ReviewSendMenu'
 
 /**
- * ADE review surface (docs/ade/11 §3): workspace header on top, then a
+ * ADE review surface: workspace header on top, then a
  * directory file tree beside the per-file diff blocks. The primary action
- * row is reserved for P1-19's integrate controls.
+ * row is reserved integrate controls.
  */
 export function ReviewPanel({
   className,
@@ -59,7 +59,7 @@ export function ReviewPanel({
     }
   }, [workspaceId, review?.loaded, review?.loading, review?.error, review?.commentsLoaded])
 
-  // Live refresh: settled work on the bound unit reloads the diff (11 §4.4).
+  // Live refresh: settled work on the bound unit reloads the diff.
   useEffect(() => {
     if (!workspaceId) return
     watchReviewWorkspace(workspaceId, binding)
@@ -154,7 +154,7 @@ export function ReviewPanel({
             {review.files.map((file) => (
               <ReviewDiffBlock key={file.path} workspaceId={binding.workspaceId} file={file} />
             ))}
-            {/* 11 §6: attribution is best-effort — only Kun-observable writes. */}
+            {/* attribution is best-effort — only Kun-observable writes. */}
             <div className="px-3 py-2 text-[10.5px] text-ds-faint">
               {t('reviewAttributionNote')}
             </div>

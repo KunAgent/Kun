@@ -7,8 +7,7 @@
  * text, list, checkbox, date. Nested maps and multi-line scalars fall
  * back to raw source editing.
  *
- * Ported from Agentero `src/lib/markdown/frontmatter.ts` (see
- * docs/work-markdown-implementation.zh-CN.md §4).
+ * Ported from Agentero `src/lib/markdown/frontmatter.ts`.
  */
 
 const FRONTMATTER_RE = /^(?:\uFEFF)?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/

@@ -1,5 +1,5 @@
 /**
- * Delegated failure → finishTurn code/message mapping (P6-02, generalized
+ * Delegated failure → finishTurn code/message mapping (generalized
  * from `mapAcpFailure`): startup spawn/init failures read as
  * `harness_not_ready`; mid-turn process death is `harness_crashed`; malformed
  * required frames are `harness_protocol_error`; the agent's own protocol

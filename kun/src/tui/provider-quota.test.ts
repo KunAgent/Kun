@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
+import { pageText } from './page-model.js'
+import { key } from './keys.test-support.js'
 import { stripAnsi } from './layout.js'
 import {
-  ProviderQuotaDialog,
+  ProviderQuotaPage,
   providerQuotaBody,
   providerQuotaVisibleWidth
 } from './provider-quota.js'
@@ -84,22 +86,21 @@ describe('provider quota TUI', () => {
       if (reject) throw new Error('refresh failed with token=super-secret-value')
       return snapshot
     })
-    const dialog = new ProviderQuotaDialog(
-      { requestRender } as never,
+    const dialog = new ProviderQuotaPage(
       load,
       vi.fn(),
-      () => 12,
+      requestRender,
       () => Date.parse('2026-07-28T01:31:00.000Z')
     )
 
     const pending = dialog.refresh()
-    expect(dialog.render(70).map(stripAnsi).join('\n')).toContain('Loading provider quota')
+    expect(pageText(dialog.view({ width: 70, height: 12 }))).toContain('Loading provider quota')
     await pending
-    expect(dialog.render(70).map(stripAnsi).join('\n')).toContain('Codex subscription')
+    expect(pageText(dialog.view({ width: 70, height: 12 }))).toContain('Codex subscription')
 
     reject = true
     await dialog.refresh()
-    const rendered = dialog.render(70).map(stripAnsi).join('\n')
+    const rendered = pageText(dialog.view({ width: 70, height: 12 }))
     expect(rendered).toContain('Refresh failed')
     expect(rendered).toContain('Codex subscription')
     expect(rendered).not.toContain('super-secret-value')
@@ -109,24 +110,23 @@ describe('provider quota TUI', () => {
     const requestRender = vi.fn()
     const close = vi.fn()
     const load = vi.fn(async () => snapshot)
-    const dialog = new ProviderQuotaDialog(
-      { requestRender } as never,
+    const dialog = new ProviderQuotaPage(
       load,
       close,
-      () => 9,
+      requestRender,
       () => Date.parse('2026-07-28T01:31:00.000Z')
     )
     await dialog.refresh()
 
-    const first = dialog.render(60).map(stripAnsi).join('\n')
-    dialog.handleInput('\x1b[6~')
-    const second = dialog.render(60).map(stripAnsi).join('\n')
+    const first = pageText(dialog.view({ width: 60, height: 9 }))
+    dialog.handleKey(key('\x1b[6~'))
+    const second = pageText(dialog.view({ width: 60, height: 9 }))
     expect(second).not.toBe(first)
     expect(second).toContain('/')
 
-    dialog.handleInput('r')
+    dialog.handleKey(key('r'))
     await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2))
-    dialog.handleInput('\x1b')
+    dialog.handleKey(key('\x1b'))
     expect(close).toHaveBeenCalledTimes(1)
   })
 })

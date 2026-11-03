@@ -1,0 +1,111 @@
+{
+  "created": "2026-10-08",
+  "sources": [
+    {
+      "prompt": "Carefully repair the ink contour thickness of THREE supplied Kun avatar wearing overlays. Match their exact silhouettes, angles, palette and simple painted cel-shaded game art identity. Return THREE isolated objects arranged in THREE columns ONE row on a real TRANSPARENT background, with 15% transparent margins around every object and wide gutters. No black/white background or checkerboard. Do not include bird, body, mannequin, text, labels, shadow or any unrelated specks. These are WEARING layers not inventory icons: preserve the flattened proportions of the first two references and the exact quill diagonal. LEFT: the purple BERET from reference1, a very wide low stretched oval soft hat, width2.74timesheight INCLUDING short stalk on upper-left, long axis rising toward right only about12degrees, a narrow dark-violet band along the underside, violet material in two cel tones and one muted upper-right spot of highlight. Keep original wide flat profile and same upper-left short stalk position, no underside opening. REDRAW outer contour in uniform clean navy #0e2f66, noticeably thinner than reference: outer stroke width2.5% of overall hat width (target18px when hat width720px), and inner seam thickness1%width; do not scale whole hat to change thickness, locally redraw ink instead. Remove tiny unrelated dark fragment to right of reference. MIDDLE: the DARK NAVY SQUARE EYEGLASSES from reference2, strictly FRONT-facing symmetric two large rounded-square windows, straight upper rims, short side hinges, curved small central bridge; overall width2.71timesheight. Keep original positions and proportions of the two lens windows. REDRAW navy #0e2f66 frame as slimmer even-width band about2.9%of overall glasses width (target20px atwidth678px; maximum24px). Lenses are TRANSPARENT clear windows through which avatar eyes will stay fully visible; small pale-blue translucent highlight confined to very upper-left of each lens only, rest clear alpha. No cloudy diagonal lens filling, no opaque white glass; do not add long arms across lens openings. Small subtle blue-gray highlight on outside upper rim. RIGHT: the CREAM FEATHER QUILL from reference3, long pointed feather with same four deep angled notches along each side, slender dark brown shaft running from bottom-left to upper-right, ratio width0.684timesheight, overall diagonal about35degrees from vertical. Preserve tip, silhouette and color: warm ivory with a few pale beige cel barbs, brown shaft. REDRAW its navy #0e2f66 outer contour THICKER than reference: uniform outer stroke about3.15%of quill overall height (target12px when quill height380px), seam or barb marks far thinner. It must read as same feather, not a leaf. For all three use navy near #0e2f66 only for outer ink (NOT nearly black), preserve two-tone cel shading and clean readable local ink. No gradients, no airbrush, no synthetic vector look. Essential: the BERET and GLASSES must be wide FLAT profiles with width almost3xheight, while the QUILL must remain tall diagonal. Do not enlarge their outline widths together: beret thinner, glasses thinner, quill thicker relative to their own reference.",
+      "referencedImages": [
+        "v2-outline-reference-beret.png",
+        "v2-outline-reference-square.png",
+        "v2-outline-reference-quill.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "F6 wearing-layer repairs; original registration boxes retained. First sheet accepted only for beret; square glasses and quill are superseded by refined sources. Beret neighbor fragment removed. Diagnostic values are reported without claiming a pass against the incompatible raw distance threshold.",
+      "sha256": "78392d54f9ec0abcf69821db3b5c1973ec2b5a016d685a2ef7a5db63303e7b56",
+      "referenceHashes": {
+        "v2-outline-reference-beret.png": "37ce2fa7fab692116d5f67ac9d40aa99c9b0b28634c452d89ec1483029667771",
+        "v2-outline-reference-square.png": "5a3488515b4ef0dea4d176ad749c769c088e7f7672d6701a61820e8507421892",
+        "v2-outline-reference-quill.png": "f42ede155ed923a904a6731b02a883838d148bd4fe64078001c3fc26b40b14a1"
+      },
+      "verification": {
+        "key": "headwear/beret",
+        "registration": [
+          140,
+          142,
+          720,
+          263
+        ],
+        "before": {
+          "row": 25,
+          "distance": 11.180339887498949
+        },
+        "after": {
+          "row": 18,
+          "distance": 9.055385138137417
+        }
+      },
+      "file": "v2-outline-repairs.png",
+      "width": 2172,
+      "height": 724
+    },
+    {
+      "prompt": "Extract and carefully repaint ONLY THE RIGHTMOST CREAM QUILL in the attached three-item transparent artwork, returning ONE isolated quill on true transparent background with comfortable margin. Omit beret and eyeglasses. Preserve exact current outer feather shape, relative proportions, cream and pale beige cel-shaded barbs, brown shaft, all notches, orientation leaning to upper-right, no changed pose. Make one LOCAL OUTLINE REPAIR: increase the navy exterior ink contour width by about35% along the entire cream feather perimeter and along the shaft, consistently and smoothly, adding ink inward while preserving the outer silhouette. The old contour was about10px at final380px high object; new contour must be12–13px at final380px object height. Draw navy near #0e2f66, never black. Keep internal brown shaft/seams and pale beige painted barbs at their current thin widths; only outer dark boundary gets thicker. This is same Kun friendly painted two-tone cel art, not vector, no gradients, no background, glow, shadow, text, label, extra object, or border. Long pointed feather with four angled carved notches each side, ratio width0.684timesheight, leaning35degrees to upper-right, same exact identity and detail as right-hand reference. SINGLE isolated quill only.",
+      "referencedImages": [
+        "v2-outline-repairs.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "Second local contour pass thickens only the quill outer navy contour. Original registration [732,620,260,380] retained. Row-run proxy is 13 px (original 9); raw distance diagnostic median 11.402 px. No procedural painting or geometry scaling was used to alter stroke widths.",
+      "sha256": "4fce31bf8bc301128dfe37d845375fed652657513dc397a1c894240289a0b605",
+      "referenceHashes": {
+        "v2-outline-repairs.png": "78392d54f9ec0abcf69821db3b5c1973ec2b5a016d685a2ef7a5db63303e7b56"
+      },
+      "verification": {
+        "key": "prop/quill",
+        "registration": [
+          732,
+          620,
+          260,
+          380
+        ],
+        "before": {
+          "row": 9,
+          "distance": 8.06225774829855
+        },
+        "after": {
+          "row": 13,
+          "distance": 11.40175425099138
+        }
+      },
+      "file": "v2-outline-quill-refined.png",
+      "width": 1035,
+      "height": 1520
+    },
+    {
+      "prompt": "Take ONLY THE MIDDLE EYEGLASSES from the attached transparent three-item sheet and make ONE isolated frontal square eyeglasses overlay on transparent background, preserving exact symmetrical geometry, proportions, two rounded-square clear windows, short outer hinges, central bridge and dark navy/blue-gray palette. Omit beret and feather. The glasses overall outline width-to-height ratio must remain2.71:1, front-facing, no perspective, no long temple arms inside lenses. One careful local repair: dark NAVY ink parts of the frames are currently too slender. Increase the dark navy outer frame/ink band width by40% all along top, bottom and both sides of each eye frame, uniformly, with equivalent medium weight at bridge and hinge. Target the dark band about16 pixels wide when complete glasses overall width678pixels (currently11pixels). Retain the OUTER silhouette and enlarge the band INWARD slightly into the lens openings, not by resizing/stretching the entire glasses. Keep one narrow subdued slate-blue rim highlight, but do not let it consume most of the dark band. Frame navy near #0e2f66. Both lenses must remain true transparent windows, with a tiny translucent cool-white reflection only confined to very upper-left corner of each window, no other glass fog, no diagonal opaque filling. Retain the original rounded square window proportions and eye opening locations, stable centerline. Same friendly Kun game illustration, hand-painted smooth contour, clean two-level cel shaded frame. No realistic3D, no background, checkerboard, text, person, bird, shadow, glow, border or extra objects. SINGLE GLASSES only, centered with generous transparent margins.",
+      "referencedImages": [
+        "v2-outline-repairs.png"
+      ],
+      "transparentBackground": true,
+      "generator": "image_gen.imagegen",
+      "createdAt": "2026-10-08",
+      "note": "Second local frame repair adds dark ink inward while retaining clear lenses and original registration. Row-run proxy is 13 px (original 30, first pass 11); raw distance diagnostic 11.705 px (original 11). Diagnostic values are reported, not a claim of passing the incompatible distance 12-22 px threshold.",
+      "verification": {
+        "key": "glasses/square",
+        "registration": [
+          173,
+          476,
+          678,
+          250
+        ],
+        "before": {
+          "row": 30,
+          "distance": 11
+        },
+        "after": {
+          "row": 13,
+          "distance": 11.704699910719626
+        }
+      },
+      "sha256": "901831f3d16d579f316c45e47d1a685fb0505999ea6c3f1e64c82fd708854b34",
+      "referenceHashes": {
+        "v2-outline-repairs.png": "78392d54f9ec0abcf69821db3b5c1973ec2b5a016d685a2ef7a5db63303e7b56"
+      },
+      "file": "v2-outline-square-refined.png",
+      "width": 2041,
+      "height": 770
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 import type { TurnItem } from '../contracts/items.js'
 import type { ModelRequestTraceRecord } from '../contracts/model-request-trace.js'
+import type { UsageSnapshot } from '../contracts/usage.js'
 import {
   TRAJECTORY_SCHEMA_VERSION,
   TrajectoryPageSchema,
@@ -14,8 +15,15 @@ import {
   type TrajectorySummary,
   type TrajectoryToolRecord
 } from '../contracts/trajectory.js'
-import type { SessionStore } from '../ports/session-store.js'
+import type { SessionStore, SessionUsageRecord } from '../ports/session-store.js'
 import type { LlmDebugRecorder } from './llm-debug-recorder.js'
+import {
+  agentToolLabel,
+  isAgentTurn,
+  projectAgentRequests,
+  type AgentRequestProjection,
+  type AgentTrajectoryTurn
+} from './trajectory-agent-requests.js'
 import { TRAJECTORY_SEARCH_PREVIEW_BYTES } from './trajectory-content-store.js'
 import { resolveTrajectoryDetail } from './trajectory-query-detail.js'
 
@@ -32,7 +40,9 @@ export type TrajectoryQuery = {
 export class TrajectoryQueryService {
   constructor(
     private readonly recorder: LlmDebugRecorder,
-    private readonly sessions: SessionStore
+    private readonly sessions: SessionStore,
+    /** Turns of the thread; third-party Agent turns are rebuilt from items + usage. */
+    private readonly loadTurns?: (threadId: string) => Promise<readonly AgentTrajectoryTurn[]>
   ) {}
 
   async page(threadId: string, query: TrajectoryQuery): Promise<TrajectoryPage> {
@@ -92,16 +102,22 @@ export class TrajectoryQueryService {
     warnings: string[]
     truncated: boolean
   }> {
-    const [requestSource, items] = await Promise.all([
+    const [requestSource, items, turns] = await Promise.all([
       loadAllRequests(this.recorder, threadId),
-      this.sessions.loadItems(threadId)
+      this.sessions.loadItems(threadId),
+      this.loadTurns?.(threadId).catch(() => []) ?? []
     ])
-    const requestRecords = await projectRequests(
+    const tracedRequests = await projectRequests(
       requestSource.records,
       this.recorder,
       threadId
     )
-    const itemRecords = projectItems(items, requestRecords)
+    const tracedTurnIds = new Set(tracedRequests.map((request) => request.turnId))
+    const agent = turns.some((turn) => isAgentTurn(turn) && !tracedTurnIds.has(turn.id))
+      ? projectAgentRequests({ threadId, turns, items, usage: await this.loadUsage(threadId), tracedTurnIds })
+      : undefined
+    const requestRecords = agent ? [...tracedRequests, ...agent.requests] : tracedRequests
+    const itemRecords = projectItems(items, requestRecords, agent)
     const records = [...requestRecords, ...itemRecords]
       .sort(newestFirst)
       .slice(0, MAX_QUERY_RECORDS)
@@ -112,6 +128,15 @@ export class TrajectoryQueryService {
       summary: summarize(records),
       warnings: requestSource.warnings,
       truncated: requestSource.truncated || requestRecords.length + itemRecords.length > MAX_QUERY_RECORDS
+    }
+  }
+
+  private async loadUsage(threadId: string): Promise<SessionUsageRecord[]> {
+    try {
+      return await this.sessions.loadUsageRecords?.({ threadId }) ?? []
+    } catch {
+      // Usage only enriches rebuilt Agent calls; the trajectory still renders without it.
+      return []
     }
   }
 }
@@ -147,7 +172,7 @@ async function projectRequests(
     const step = trace.step ?? turnSteps.get(roundId) ?? turnSteps.size
     turnSteps.set(roundId, step)
     steps.set(trace.turnId, turnSteps)
-    const usage = trace.decoded?.usage
+    const usage = withTraceTiming(trace.decoded?.usage, trace)
     const manifest = trace.manifestId
       ? await recorder.loadPromptManifest(threadId, trace.manifestId)
       : null
@@ -204,7 +229,33 @@ async function projectRequests(
   return projected
 }
 
-function projectItems(items: TurnItem[], requests: TrajectoryRequestRecord[]): TrajectoryRecord[] {
+/**
+ * Native traces are recorded below the model timing decorator, so their
+ * decoded usage carries no request timing. Derive it from the trace's own
+ * stamps (request start, first content chunk, finish) so native requests
+ * count toward the summary's TTFT and tok/s like Agent-reported ones do.
+ */
+export function withTraceTiming(
+  usage: UsageSnapshot | undefined,
+  trace: Pick<ModelRequestTraceRecord, 'startedAt' | 'firstTokenAt' | 'finishedAt'>
+): UsageSnapshot | undefined {
+  if (!usage || usage.requestTtftMs !== undefined || !trace.firstTokenAt) return usage
+  const started = Date.parse(trace.startedAt)
+  const firstToken = Date.parse(trace.firstTokenAt)
+  if (!Number.isFinite(started) || !Number.isFinite(firstToken) || firstToken < started) return usage
+  const finished = trace.finishedAt ? Date.parse(trace.finishedAt) : Number.NaN
+  return {
+    ...usage,
+    requestTtftMs: firstToken - started,
+    ...(Number.isFinite(finished) && finished >= firstToken ? { requestGenerationMs: finished - firstToken } : {})
+  }
+}
+
+function projectItems(
+  items: TurnItem[],
+  requests: TrajectoryRequestRecord[],
+  agent?: Pick<AgentRequestProjection, 'owners' | 'turnIds'>
+): TrajectoryRecord[] {
   const records: TrajectoryRecord[] = []
   const resultByCall = new Map(items
     .filter((item): item is Extract<TurnItem, { kind: 'tool_result' }> => item.kind === 'tool_result')
@@ -246,7 +297,10 @@ function projectItems(items: TurnItem[], requests: TrajectoryRequestRecord[]): T
     items: Array<Extract<TurnItem, { kind: 'assistant_text' | 'assistant_reasoning' }>>
   }>()
   for (const item of items) {
-    const request = latestRequestBefore(requests, item.turnId, item.createdAt)
+    const agentTurn = agent?.turnIds.has(item.turnId) === true
+    const request = agentTurn
+      ? agent!.owners.get(item.id)
+      : latestRequestBefore(requests, item.turnId, item.createdAt)
     const roundId = request?.roundId ?? `turn:${item.turnId}`
     const step = request?.step ?? 0
     if (item.kind === 'tool_call') {
@@ -256,6 +310,8 @@ function projectItems(items: TurnItem[], requests: TrajectoryRequestRecord[]): T
       continue
     }
     if (item.kind === 'assistant_text' || item.kind === 'assistant_reasoning') {
+      // Rebuilt Agent calls own every non-empty output item.
+      if (agentTurn && !request) continue
       const key = request?.requestId ?? `${item.turnId}:${step}`
       const group = assistantGroups.get(key) ?? { request, items: [] }
       group.items.push(item)
@@ -298,7 +354,9 @@ function projectItems(items: TurnItem[], requests: TrajectoryRequestRecord[]): T
     const request = group.request
     const texts = group.items.filter((item) => item.kind === 'assistant_text').map((item) => item.text)
     const thinking = group.items.filter((item) => item.kind === 'assistant_reasoning').map((item) => item.text)
-    const completedAt = group.items.map((item) => item.finishedAt).filter((value): value is string => Boolean(value)).sort().at(-1)
+    // Agent output items rarely carry finishedAt; the rebuilt call knows when output ended.
+    const completedAt = group.items.map((item) => item.finishedAt).filter((value): value is string => Boolean(value)).sort().at(-1) ??
+      (request?.origin === 'agent' ? request.completedAt : undefined)
     records.push({
       schemaVersion: TRAJECTORY_SCHEMA_VERSION,
       id: `assistant:${key}`,
@@ -365,6 +423,8 @@ function projectTool(
         ? 'cancelled'
         : 'running'
   const completedAt = result?.finishedAt ?? result?.createdAt ?? call.finishedAt
+  const label = agentToolLabel(call)
+  const argumentPreview = label?.argumentPreview ?? stringifyPreview(call.arguments)
   return {
     schemaVersion: TRAJECTORY_SCHEMA_VERSION,
     id: `tool:${call.callId}`,
@@ -378,15 +438,17 @@ function projectTool(
     ...(completedAt ? { completedAt, durationMs: elapsed(call.createdAt, completedAt) } : {}),
     callId: call.callId,
     ...(request ? { parentRequestId: request.requestId } : {}),
-    toolName: call.toolName,
+    toolName: label?.toolName ?? call.toolName,
     argumentsItemId: call.id,
     ...(result ? { resultItemId: result.id } : {}),
     isError: result?.isError === true,
-    argumentPreview: boundedPreview(stringifyPreview(call.arguments)),
+    argumentPreview: boundedPreview(argumentPreview),
     resultPreview: result ? boundedPreview(stringifyPreview(result.output)) : '',
     schemaAvailable: Boolean(request?.toolsBlobId),
     attachmentIds: result ? collectAttachmentIds(result.output) : [],
-    preview: boundedPreview(`${call.toolName} ${call.summary ?? stringifyPreview(call.arguments)}`),
+    preview: boundedPreview(label
+      ? `${label.toolName} ${argumentPreview}`
+      : `${call.toolName} ${call.summary ?? stringifyPreview(call.arguments)}`),
     detailState: 'available',
     ...(result?.isError ? { errorMessage: boundedPreview(stringifyPreview(result.output)) } : {})
   }
@@ -453,8 +515,9 @@ function summarize(records: TrajectoryRecord[]): TrajectorySummary {
     costUsd += usage?.costUsd ?? 0; costCny += usage?.costCny ?? 0
     valueEstimateUsd += usage?.valueEstimateUsd ?? 0; valueEstimateCny += usage?.valueEstimateCny ?? 0
     if (usage?.requestTtftMs !== undefined) { ttftTotal += usage.requestTtftMs; ttftCount += 1 }
-    if (usage?.requestGenerationMs && usage.completionTokens > 0) {
-      tpsTotal += usage.completionTokens / (usage.requestGenerationMs / 1_000); tpsCount += 1
+    const generatedTokens = usage?.requestGenerationTokens ?? usage?.completionTokens ?? 0
+    if (usage?.requestGenerationMs && generatedTokens > 0) {
+      tpsTotal += generatedTokens / (usage.requestGenerationMs / 1_000); tpsCount += 1
     }
   }
   const cacheTotal = cacheReadTokens + Math.max(0, inputTokens - cacheReadTokens)

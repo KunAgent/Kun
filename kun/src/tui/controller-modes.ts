@@ -316,7 +316,7 @@ export abstract class TuiControllerModes extends TuiControllerTurns {
           ? { ...candidate, selectedModel: input.model }
           : candidate)
       }
-      this.applyModelSelection(updated)
+      this.applyExplicitModelSelection(updated, input)
       return updated
     }
     try {
@@ -324,7 +324,7 @@ export abstract class TuiControllerModes extends TuiControllerTurns {
         expectedRevision: snapshot.revision,
         ...input
       })
-      this.applyModelSelection(updated)
+      this.applyExplicitModelSelection(updated, input)
       return updated
     } catch (error) {
       if (error instanceof TuiClientError && error.status === 409) {
@@ -334,6 +334,29 @@ export abstract class TuiControllerModes extends TuiControllerTurns {
       }
       throw error
     }
+  }
+
+  /**
+   * A /model pick also retargets the open session for its next turn. Shared
+   * default changes from other clients keep it pinned (applyModelSelection).
+   */
+  private applyExplicitModelSelection(
+    updated: ModelConnectionSnapshot,
+    selection: { providerId: string; accountId: string; model: string }
+  ): void {
+    this.newThreadSelectionOverride = {}
+    const projection = this.stateValue.projection
+    if (projection) {
+      this.options.providerId = selection.providerId
+      this.options.accountId = selection.accountId
+      this.options.model = selection.model
+      this.pendingSessionSelections.set(projection.thread.id, { ...selection })
+    }
+    this.applyModelSelection(updated, false)
+    const label = `${selection.providerId}/${selection.model}`
+    this.notify(projection
+      ? `Model: ${label}${projection.runningTurnId ? ' · applies from the next turn' : ''}`
+      : `${this.runtime.legacyGui ? 'Shared model' : 'Default model'}: ${label}`)
   }
 
   async cycleRecentModel(direction: 1 | -1): Promise<boolean> {
@@ -348,10 +371,11 @@ export abstract class TuiControllerModes extends TuiControllerTurns {
       this.notify('Use /model to select at least two models before cycling recent models.', 'error')
       return false
     }
+    const active = this.activeModelSelection()
     const current = recent.findIndex((entry) =>
-      entry.providerId === snapshot.defaultProviderId &&
-      entry.accountId === snapshot.defaultAccountId &&
-      entry.model === snapshot.defaultModel
+      entry.providerId === active.providerId &&
+      entry.accountId === active.accountId &&
+      entry.model === active.model
     )
     const index = (Math.max(0, current) + direction + recent.length) % recent.length
     const target = recent[index]!

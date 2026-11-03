@@ -1,3 +1,4 @@
+import { handoffRestartLabel } from '../../agent/handoff-continuation'
 import { useEffect, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ArrowRightLeft, ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
@@ -50,7 +51,7 @@ function useHandoffBrief(block: HandoffBlock): {
 /**
  * Expanded body of a `handoff` process row. The 16 KiB brief body is never
  * persisted into the event stream — it is rebuilt on demand through
- * `GET /v1/threads/:id/handoff-preview?turnId=` (docs/ade/08 §5).
+ * `GET /v1/threads/:id/handoff-preview?turnId=`.
  */
 export function HandoffBriefDetail({ block }: { block: HandoffBlock }): ReactElement {
   const { t } = useTranslation('common')
@@ -89,7 +90,7 @@ export function HandoffEntry({ block }: { block: HandoffBlock }): ReactElement {
   const label = block.handoffMode === 'delta'
     ? t('adeHandoffDelta', { agent: block.toHarnessName })
     : block.reason === 'rebase'
-      ? t('adeHandoffRestart', { agent: block.toHarnessName, turns: block.recentTurns })
+      ? handoffRestartLabel(t, block)
       : t('adeHandoff', {
         agent: block.toHarnessName,
         turns: block.recentTurns,
@@ -105,7 +106,7 @@ export function HandoffEntry({ block }: { block: HandoffBlock }): ReactElement {
         aria-expanded={open}
       >
         <ArrowRightLeft className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <span className="min-w-0 flex-1 truncate" title={label}>{label}</span>
         {open ? (
           <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
         ) : (

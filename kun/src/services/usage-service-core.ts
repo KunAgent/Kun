@@ -15,6 +15,7 @@ import type {
   ThreadUsageResponse,
   UsageSnapshot
 } from '../contracts/usage.js'
+import type { TurnModelTiming } from '../contracts/turn-model-timing.js'
 
 /**
  * Coordinates usage and cache telemetry. The service records each
@@ -115,6 +116,17 @@ export class UsageService {
   }
 
   /**
+   * The averages this turn's usage events carried, for stamping on the turn
+   * when it settles. Undefined when no call measured anything.
+   */
+  turnModelTiming(threadId: string, turnId: string): TurnModelTiming | undefined {
+    const timing = this.turnTiming.get(this.turnKey(threadId, turnId))
+    if (!timing) return undefined
+    const averages = turnTimingAverages(timing)
+    return averages.avgTtftMs === null && averages.avgTokensPerSecond === null ? undefined : averages
+  }
+
+  /**
    * Drop per-turn timing for a finished turn so long-lived threads do not
    * accumulate one entry per historical turn. Call when the turn settles.
    */
@@ -146,14 +158,15 @@ export class UsageService {
       agg.ttftCalls += 1
     }
     const generation = snapshot.requestGenerationMs
+    const tokens = snapshot.requestGenerationTokens ?? snapshot.completionTokens
     if (
       typeof generation === 'number' &&
       Number.isFinite(generation) &&
       generation >= 0 &&
-      snapshot.completionTokens > 0
+      tokens > 0
     ) {
       agg.generationSumMs += generation
-      agg.completionTokensSum += snapshot.completionTokens
+      agg.completionTokensSum += tokens
       agg.tpsCalls += 1
     }
     this.turnTiming.set(key, agg)
@@ -251,10 +264,18 @@ export function emptyTurnTiming(): TurnTiming {
  * generation time.
  */
 export function attachTurnAverages(snapshot: UsageSnapshot, timing: TurnTiming): UsageSnapshot {
+  const averages = turnTimingAverages(timing)
   return {
     ...snapshot,
-    turnAvgTtftMs: timing.ttftCalls > 0 ? timing.ttftSumMs / timing.ttftCalls : null,
-    turnAvgTokensPerSecond:
+    turnAvgTtftMs: averages.avgTtftMs,
+    turnAvgTokensPerSecond: averages.avgTokensPerSecond
+  }
+}
+
+export function turnTimingAverages(timing: TurnTiming): TurnModelTiming {
+  return {
+    avgTtftMs: timing.ttftCalls > 0 ? timing.ttftSumMs / timing.ttftCalls : null,
+    avgTokensPerSecond:
       timing.generationSumMs > 0
         ? (timing.completionTokensSum / timing.generationSumMs) * 1_000
         : null

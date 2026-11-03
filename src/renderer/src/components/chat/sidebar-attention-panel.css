@@ -1,0 +1,33 @@
+.sidebar-attention-panel {
+  container-type: inline-size;
+}
+
+.sidebar-attention-read-tooltip {
+  width: min(224px, calc(100cqw - 36px));
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+.sidebar-attention-read-wrap:hover .sidebar-attention-read-tooltip,
+.sidebar-attention-read-wrap:focus-within .sidebar-attention-read-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+@container (max-width: 215px) {
+  .sidebar-attention-read-label {
+    display: none;
+  }
+
+  .sidebar-attention-read {
+    width: 28px;
+    padding-inline: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-attention-read-tooltip {
+    transition: none;
+  }
+}

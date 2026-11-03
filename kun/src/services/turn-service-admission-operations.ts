@@ -1,5 +1,7 @@
+import { validateAttachmentAliases, type AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { restartSourceIsCurrent, insertRecoveryTurn } from '../domain/queue-execution-state.js'
 import { resolveTurnReviewRequests } from './review-composer-context.js'
+import { recoverWorkSessionTitle } from './work-session-title.js'
 import { createHash } from 'node:crypto'
 import { assertRoomTurnAdmission } from './room-thread-admission-policy.js'
 import { promotePendingExecutionConfig } from './thread-service-execution-config.js'
@@ -89,6 +91,8 @@ async startTurn(this: TurnService, input: {
     threadId: string
     request: StartTurnRequest
   }, options: {
+    /** Host-authored attachment view; never accepted from StartTurnRequest. */
+    attachmentAliases?: AttachmentAliases
     /** Internal extension-broker accounting baseline; not part of StartTurnRequest. */
     extensionBudgetTokenBaseline?: number
     /** Private host-authored context; never accepted from HTTP or projected to clients. */
@@ -98,6 +102,7 @@ async startTurn(this: TurnService, input: {
     /** Runs only for a newly admitted turn, never for an idempotent replay. */
     onAdmitted?: (response: StartTurnResponse) => void | Promise<void>
   } = {}): Promise<StartTurnResponse> {
+    const attachmentAliases = validateAttachmentAliases(options.attachmentAliases, input.request.attachmentIds ?? [])
     const runtimeContext = options.runtimeContext
       ? InternalTurnRuntimeContext.parse(options.runtimeContext)
       : undefined
@@ -111,7 +116,7 @@ async startTurn(this: TurnService, input: {
       input.request.enqueueIfBusy === true &&
       await this['deps'].executionLeases?.owner(input.threadId)
     ) {
-      return this.enqueueTurn(input)
+      return this.enqueueTurn(input, { attachmentAliases })
     }
     const finishAdmission = this['beginExecutionAdmission']()
     try {
@@ -130,6 +135,7 @@ async startTurn(this: TurnService, input: {
         }
         let thread = await this['deps'].threadStore.get(input.threadId)
         if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+        if (thread.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         await assertHistoryReferenceWorkspace(thread)
         assertRoomTurnAdmission(thread, input.request)
         if (thread.turns.some((turn) => turn.status === 'running' || turn.status === 'queued')) {
@@ -291,12 +297,14 @@ async startTurn(this: TurnService, input: {
             paperContext: input.request.paperContext,
             messageSource: input.request.messageSource,
             subagentResume: input.request.subagentResume,
+            interruptedResume: input.request.interruptedResume,
             model: turnModel,
             providerId: turnProviderId,
             harnessId: turnHarnessId,
             collaborationEnabled: thread.collaboration?.enabled ?? thread.workspaceMode === 'ade',
             credentialMode: turnCredentialMode,
             harnessAgentId: input.request.harnessAgentId,
+            harnessSettings: input.request.harnessSettings,
             gatewayBinding,
             accountId: turnAccountId,
             reasoningEffort: input.request.reasoningEffort,
@@ -306,6 +314,7 @@ async startTurn(this: TurnService, input: {
             sandboxMode,
             approvalReviewer,
             attachmentIds,
+            attachmentAliases,
             composerContexts,
             guiPlan: input.request.guiPlan,
             guiDesignCanvas: input.request.guiDesignCanvas,
@@ -336,6 +345,7 @@ async startTurn(this: TurnService, input: {
             displayText: input.request.displayText,
             messageSource: input.request.messageSource,
             attachmentIds,
+            attachmentAliases,
             composerContexts,
             reviewRequests,
             fileReferences: input.request.fileReferences ?? [],
@@ -396,7 +406,7 @@ async startTurn(this: TurnService, input: {
       )
       if (started.kind === 'replay') return started.response
       if (started.kind === 'queued') {
-        return this.enqueueTurn(input)
+        return this.enqueueTurn(input, { attachmentAliases })
       }
       const committedThread = await this['markTurnAdmissionCompleted'](
         input.threadId,
@@ -463,6 +473,12 @@ async startTurn(this: TurnService, input: {
           `${error instanceof Error ? error.message : String(error)}`
         )
       })
+      if (threadAgentSurface === 'write' && started.userItem.kind === 'user_message' &&
+        committedThread.turns.find((turn) => !turn.messageSource)?.id === started.turnId) {
+        await recoverWorkSessionTitle(this['deps'], input.threadId, started.userItem).catch((error) => {
+          console.warn('[kun] Work session title could not be generated:', error instanceof Error ? error.message : String(error))
+        })
+      }
       const response = {
         threadId: input.threadId,
         turnId: started.turnId,
@@ -611,6 +627,7 @@ async rewindThread(this: TurnService, input: {
     return this['withThreadMutation'](input.threadId, async () => {
       const thread = await this['deps'].threadStore.get(input.threadId)
       if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+      if (thread.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
       // `archived` is an overlay, so checking the thread marker alone lets a
       // caller rewrite history while a turn is still queued/running. The turn
       // records are the source of truth for execution state.

@@ -1,6 +1,8 @@
+import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
+import { modelRequestCapacityFailure } from './model-request-capacity.js'
 import { serialToolStream } from './serial-tool-stream.js'
 import { observeModelAttempts } from './model-attempt-observer.js'
-import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import type { GoogleWorkspaceModelFence, ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { goalContextTexts } from '../../contracts/items.js'
 import { startLlmDebugRoundIfEnabled, type LlmDebugRound } from '../../services/llm-debug-recorder.js'
 import { exponentialRetryDelayMs, normalizeModelRequestRetryConfig, sleepWithAbort } from './compat-retry-policy.js'
@@ -46,7 +48,14 @@ export type { CompatModelClientConfig } from './compat-model-types.js'
 export class CompatModelClient extends CompatModelStreamingClient implements ModelClient {
   paperReadOnlyDispatchGuard(): () => void { return () => undefined }
 
+  googleWorkspaceDispatchGuard(_request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    return Object.assign(() => undefined, { mode: 'configured-models' as const, recipient: GMAIL_CONVERSATION_RECIPIENT })
+  }
+
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    if (request.googleWorkspaceData) {
+      request.googleWorkspaceData.assertCurrent()
+    }
     const stream = (current: ModelRequest) => current.parallelToolCalls === false
       ? serialToolStream(this.streamObserved(current)) : this.streamObserved(current)
     return request.attemptObserver ? observeModelAttempts(request, stream) : stream(request)
@@ -55,12 +64,12 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
   private async *streamObserved(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
     // External gateway content never enters native prompt/trajectory diagnostics,
     // even when a global or per-thread debug policy requests full capture.
-    if (request.gatewayRouting || request.paperReadOnly) {
+    if (request.gatewayRouting || request.paperReadOnly || request.googleWorkspaceData) {
       try {
         for await (const chunk of this.streamInner(request, null)) {
           const safe = gatewaySafeModelChunk(this.attributeUsage(chunk, request))
-          yield request.paperReadOnly && safe.kind === 'error'
-            ? { ...safe, message: safe.message.replace('Gateway upstream', 'Paper model') } : safe
+          yield (request.paperReadOnly || request.googleWorkspaceData) && safe.kind === 'error'
+            ? { ...safe, message: safe.message.replace('Gateway upstream', request.googleWorkspaceData ? 'Gmail model' : 'Paper model') } : safe
         }
       } catch (error) {
         if (!request.abortSignal.aborted) yield gatewaySafeThrownError(error)
@@ -140,6 +149,8 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
   ): AsyncIterable<ModelStreamChunk> {
     if (request.abortSignal.aborted) return
     const requestModel = request.model?.trim() || this.config.model
+    const capacityFailure = modelRequestCapacityFailure(request, this.config.modelCapabilities?.(requestModel))
+    if (capacityFailure) { yield capacityFailure; return }
     // Resolve the wire format per request model: a single provider (e.g.
     // OpenCode Go) can route some models to chat completions and others to
     // Anthropic Messages. Falls back to the provider/runtime format.
@@ -177,7 +188,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       endpoint.pathname = '/beta/completions'
       url = endpoint.toString()
       body = { model: requestModel, prompt: request.fim.prompt, suffix: request.fim.suffix,
-        stream: false, max_tokens: request.maxTokens ?? 256, temperature: request.temperature ?? 0 }
+        stream: false, max_tokens: this.resolveMaxTokens(request, requestModel, 256), temperature: request.temperature ?? 0 }
     }
     let credentials: { apiKey: string; headers?: Record<string, string>; refreshable: boolean }
     try {
@@ -221,6 +232,7 @@ export class CompatModelClient extends CompatModelStreamingClient implements Mod
       apiKey: credentials.apiKey,
       ...(request.gatewayRouting ? { gatewayRouting: request.gatewayRouting } : {}),
       ...(request.paperReadOnly ? { paperReadOnly: request.paperReadOnly } : {}),
+      ...(request.googleWorkspaceData ? { googleWorkspaceData: request.googleWorkspaceData } : {}),
       ...(request.routingBudget ? { routingBudget: request.routingBudget } : {}),
       beforeProviderDispatch: request.beforeProviderDispatch,
       beforeWireDispatch: request.beforeWireDispatch,

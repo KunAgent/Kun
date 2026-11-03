@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next'
 import type { RoomPeerTopicSummary } from '@shared/rooms-api'
 
 type TopicMember = RoomPeerTopicSummary['members'][number]
@@ -64,6 +65,8 @@ export function roomRespondingMemberIds(
         ['responding', 'triaging'].includes(member.state)
     )
     .map((member) => member.memberId)
+    // A member active in two topics is still one person.
+    .filter((id, index, ids) => ids.indexOf(id) === index)
 }
 
 /**
@@ -83,4 +86,13 @@ export function roomWaitingMemberIds(
         (member.pendingCount > 0 || member.state === 'pending')
     )
     .map((member) => member.memberId)
+    .filter((id, index, ids) => ids.indexOf(id) === index)
+}
+
+/** "Delivered · waiting for A、B and N more": N counts only the unnamed members. */
+export function roomWaitingReceipt(t: TFunction, names: readonly string[]): string {
+  const unique = names.filter((name, index) => names.indexOf(name) === index)
+  const name = unique.slice(0, 2).join(t('roomsTyping_sep'))
+  const more = unique.length - 2
+  return more > 0 ? t('roomsReceipt_waitingMore', { name, count: more }) : t('roomsReceipt_waiting', { name })
 }

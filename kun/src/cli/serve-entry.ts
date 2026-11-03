@@ -1,14 +1,9 @@
 #!/usr/bin/env node
-import { runGatewayCliCommand } from './gateway-cli.js'
 import process from 'node:process'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { parseServeOptionsSafe, SERVE_USAGE, ServeExitCode } from './serve.js'
-import {
-  KUN_CLI_USAGE,
-  runAgentCommand,
-  splitKunCliCommand
-} from './agent-cli.js'
+import { KUN_CLI_USAGE, splitKunCliCommand } from './kun-cli-command.js'
 import { startKunServe, type KunServeHandle } from '../server/runtime-factory.js'
 import {
   resolveEventLoopHardStallThresholdMs,
@@ -16,14 +11,11 @@ import {
   startEventLoopMonitor
 } from '../server/event-loop-monitor.js'
 import { installServeCrashHandlers } from './serve-crash-handlers.js'
-import { runExtensionCommand } from './extension-cli.js'
-import { runMcpBridgeCommand } from './mcp-bridge-cli.js'
 import { inspectSharedRuntime, resolveSharedRuntime, runRuntimeCommand } from './shared-runtime.js'
 import { withRuntimeStartLock } from '../server/runtime-discovery.js'
 import { RuntimeBuildIdSchema } from '../contracts/runtime-info.js'
 import { readRuntimeBuildIdForEntry } from '../server/runtime-build-identity.js'
 import { KUN_VERSION } from '../version.js'
-import { runSelfUpdateCommand } from './self-update.js'
 import { RuntimeFlavorSchema } from '../contracts/runtime-flavor.js'
 import {
   KUN_RUNTIME_CLIENT_OWNER_KIND_ENV,
@@ -36,12 +28,10 @@ import {
 import { runtimeDiscoveryDirectory } from './shared-runtime.js'
 import { defaultKunControlDir } from '../manager/manager-discovery.js'
 import {
-  ManagerRuntimeSlotBusyError,
   registerRuntimeWithManager,
   ensureServiceManager,
   resolveServiceManager,
-  unregisterRuntimeWithManager,
-  heartbeatRuntimeWithManager
+  unregisterRuntimeWithManager
 } from '../manager/manager-client.js'
 import type { ServiceManagerConnection } from '../manager/manager-client.js'
 import {
@@ -55,9 +45,9 @@ import { appSessionOwnerFromEnvironment } from '../contracts/app-session-owner.j
 import { createOwnedServiceManagerSession } from '../manager/owned-service-manager-session.js'
 import { bindRuntimeManagerDataPlane, connectInjectedServiceManager } from '../manager/owned-manager-binding.js'
 import { shutdownOwnedProcesses } from '../process/owned-process.js'
-import { runManagerRetireCommand } from './manager-retire.js'
-import { runWorkerCallbackCommand } from './worker-callback-cli.js'
-import { runHostCommand } from './host-cli.js'
+import type { ManagerOwnershipLostReason, RuntimeManagerHeartbeat } from './runtime-manager-heartbeat.js'
+import { startIsolatedRuntimeManagerHeartbeat } from './runtime-isolated-heartbeat.js'
+import { createServeShutdownHandler, type ServeShutdownReason } from './serve-shutdown.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 // Replacement clients wait 15 seconds before escalating to a hard kill. Keep
@@ -128,6 +118,7 @@ async function serveMain(argv: readonly string[]): Promise<number> {
   let cleanupServer: KunServeHandle | undefined
   let cleanupManager: ServiceManagerConnection | undefined
   let cleanupCompleted = false
+  let managerHeartbeat: RuntimeManagerHeartbeat | undefined
   try {
     const managerPaths = {
       flavor: runtimeFlavor,
@@ -201,7 +192,6 @@ async function serveMain(argv: readonly string[]): Promise<number> {
     handle = server
     process.title = runtimeFlavor === 'development' ? 'kun-dv-runtime' : 'kun-runtime'
     const info = server.runtime.info()
-    let managerHeartbeat: ReturnType<typeof setInterval> | null = null
     const registration = {
       flavor: runtimeFlavor,
       instanceId: server.instanceId,
@@ -215,33 +205,22 @@ async function serveMain(argv: readonly string[]): Promise<number> {
       ...(buildId ? { buildId } : {}),
       ...(process.env.KUN_RUNTIME_LOG_PATH ? { logPath: process.env.KUN_RUNTIME_LOG_PATH } : {})
     }
-    let ownershipShutdownSignaled = false
-    let requestOwnershipShutdown!: () => void
-    const ownershipShutdownRequested = new Promise<void>((resolve) => {
+    let requestOwnershipShutdown!: (reason: ManagerOwnershipLostReason) => void
+    const ownershipShutdownRequested = new Promise<ManagerOwnershipLostReason>((resolve) => {
       requestOwnershipShutdown = resolve
     })
-    const signalOwnershipShutdown = (ownerInstanceId?: string): void => {
-      if (ownershipShutdownSignaled) return
-      ownershipShutdownSignaled = true
-      process.stderr.write(
-        `kun serve: ${runtimeFlavor} runtime registration is owned by ` +
-        `${ownerInstanceId ?? 'another instance'}; stopping duplicate PID ${process.pid}.\n`
-      )
-      requestOwnershipShutdown()
-    }
-    let managerRecovery: Promise<void> | null = null
     const applyManagerConnection = (connection: typeof manager): void => {
       manager.discovery = connection.discovery
       process.env.KUN_MANAGER_BASE_URL = connection.discovery.baseUrl
       process.env.KUN_MANAGER_TOKEN = connection.discovery.managerToken
       process.env.KUN_MANAGER_DATA_DIR = connection.discovery.dataDir
     }
-    const recoverManagerConnection = async (): Promise<void> => {
+    const recoverManagerConnection = async (signal: AbortSignal): Promise<void> => {
       if (manager.discovery.appOwner) {
-        requestOwnershipShutdown()
         throw new Error('Application-owned Manager disconnected; Runtime cannot elect or replace its Manager')
       }
       let recovered = await resolveServiceManager(controlDir)
+      signal.throwIfAborted()
       if (!recovered && (runtimeFlavor === 'production' || allowDevelopmentBootstrap)) {
         recovered = await ensureServiceManager({
           flavor: runtimeFlavor,
@@ -251,49 +230,22 @@ async function serveMain(argv: readonly string[]): Promise<number> {
           settingsPath: manager.discovery.settingsPath
         })
       }
+      signal.throwIfAborted()
       if (!recovered) throw new Error('Kun Service Manager is unavailable')
       applyManagerConnection(recovered)
-      await registerRuntimeWithManager({ manager, registration })
-    }
-    const heartbeatManager = async (): Promise<void> => {
-      try {
-        const accepted = await heartbeatRuntimeWithManager({
-          manager,
-          flavor: runtimeFlavor,
-          instanceId: server.instanceId
-        })
-        if (!accepted) {
-          signalOwnershipShutdown()
-          return
-        }
-      } catch (error) {
-        if (error instanceof ManagerRuntimeSlotBusyError) {
-          signalOwnershipShutdown(error.owner.instanceId)
-          return
-        }
-        if (!managerRecovery) {
-          managerRecovery = recoverManagerConnection().finally(() => { managerRecovery = null })
-        }
-        try {
-          await managerRecovery
-        } catch (recoveryError) {
-          if (recoveryError instanceof ManagerRuntimeSlotBusyError) {
-            signalOwnershipShutdown(recoveryError.owner.instanceId)
-            return
-          }
-          throw recoveryError
-        }
-      }
+      await registerRuntimeWithManager({ manager, registration, signal })
     }
     try {
       await registerRuntimeWithManager({
         manager,
         registration
       })
-      managerHeartbeat = setInterval(() => {
-        void heartbeatManager().catch(() => undefined)
-      }, 5_000)
-      managerHeartbeat.unref?.()
+      managerHeartbeat = await startIsolatedRuntimeManagerHeartbeat({
+        manager, registration,
+        onAuthorityChange: (state) => server.runtime.setManagerHeartbeatAuthority?.(state),
+        onOwnershipLost: requestOwnershipShutdown,
+        ...(!manager.discovery.appOwner ? { recoverUnownedManager: recoverManagerConnection } : {})
+      })
     } catch (error) {
       await server.close().catch(() => undefined)
       throw error
@@ -339,45 +291,43 @@ async function serveMain(argv: readonly string[]): Promise<number> {
         ]
       }
     })
-    await new Promise<void>((resolve) => {
-      let stopping = false
-      const stop = () => {
-        if (stopping) return
-        stopping = true
-        if (managerHeartbeat) clearInterval(managerHeartbeat)
-        loopMonitor.stop()
-        // Keep the manager slot owned until the server has closed its stores and
-        // released filesystem handles. A concurrent client must not elect a
-        // replacement in the gap between unregister and process teardown.
-        void settleCleanupBeforeDeadline(
-          () => server.close().finally(() => unregisterRuntimeWithManager({
-            manager,
-            flavor: runtimeFlavor,
-            instanceId: server.instanceId
-          })),
-          SERVE_SHUTDOWN_TIMEOUT_MS
-        ).then((closed) => {
-          if (!closed) {
-            process.stderr.write(
-              `kun serve: graceful shutdown exceeded ${SERVE_SHUTDOWN_TIMEOUT_MS}ms; forcing process exit\n`
-            )
-          }
-        }).catch((error) => {
-          process.stderr.write(
-            `kun serve: failed to close runtime cleanly: ${error instanceof Error ? error.message : String(error)}\n`
-          )
-        }).finally(resolve)
+    const shutdown = createServeShutdownHandler({
+      identity: { flavor: runtimeFlavor, instanceId: server.instanceId, pid: process.pid },
+      timeoutMs: SERVE_SHUTDOWN_TIMEOUT_MS,
+      log: (line) => { process.stderr.write(`${line}\n`) },
+      // Retain the slot until stores and filesystem handles have closed.
+      close: async () => {
+        try {
+          await managerHeartbeat?.stop()
+        } finally {
+          await server.close().finally(() => unregisterRuntimeWithManager({
+            manager, flavor: runtimeFlavor, instanceId: server.instanceId
+          }))
+        }
       }
-      process.once('SIGTERM', stop)
-      process.once('SIGINT', stop)
-      void server.shutdownRequested.then(stop)
-      void ownershipShutdownRequested.then(stop)
-      if (ownerMonitor) void ownerMonitor.disconnected.then(stop)
     })
+    const stop = (reason: ServeShutdownReason): void => {
+      void managerHeartbeat?.stop()
+      loopMonitor.stop()
+      shutdown.request(reason)
+    }
+    const onSigterm = (): void => stop({ code: 'process_signal', signal: 'SIGTERM' })
+    const onSigint = (): void => stop({ code: 'process_signal', signal: 'SIGINT' })
+    process.once('SIGTERM', onSigterm)
+    process.once('SIGINT', onSigint)
+    void server.shutdownRequested.then(() => stop({ code: 'runtime_shutdown_requested' }))
+    void ownershipShutdownRequested.then(stop)
+    if (ownerMonitor) void ownerMonitor.disconnected.then(() => stop({
+      code: ownerMonitor?.reason ?? 'client_owner_disconnected'
+    }))
+    await shutdown.completed
+    process.removeListener('SIGTERM', onSigterm)
+    process.removeListener('SIGINT', onSigint)
     ownerMonitor?.dispose()
     cleanupCompleted = true
     return ServeExitCode.ok
   } finally {
+    await managerHeartbeat?.stop()
     ownerMonitor?.dispose()
     if (!cleanupCompleted && cleanupServer) {
       const server = cleanupServer
@@ -425,14 +375,17 @@ export async function main(argv: readonly string[]): Promise<number> {
     executablePath: process.argv[1]
   })
   process.title = process.env.KUN_RUNTIME_FLAVOR === 'development' ? 'kun-dv' : 'kun'
-  if (argv[0] === 'host') return runHostCommand(argv.slice(1), {
+  // Every subcommand except `serve` is loaded on demand: the desktop Runtime
+  // runs `kun serve` and must not carry the TUI, agent, extension packaging,
+  // gateway, or self-update CLIs in its heap.
+  if (argv[0] === 'host') return (await import('./host-cli.js')).runHostCommand(argv.slice(1), {
     stdout: process.stdout, stderr: process.stderr, env: process.env
   })
-  if (argv[0] === 'manager') return runManagerRetireCommand(argv.slice(1), {
+  if (argv[0] === 'manager') return (await import('./manager-retire.js')).runManagerRetireCommand(argv.slice(1), {
     stdout: process.stdout, stderr: process.stderr, env: process.env
   })
   if (argv[0] === 'extension') {
-    return runExtensionCommand(argv.slice(1), {
+    return (await import('./extension-cli.js')).runExtensionCommand(argv.slice(1), {
       stdout: process.stdout,
       stderr: process.stderr,
       env: process.env,
@@ -440,10 +393,10 @@ export async function main(argv: readonly string[]): Promise<number> {
     })
   }
   if (argv[0] === 'gateway' || argv[0] === 'agents' || argv[0] === 'quota' || argv[0] === 'provider') {
-    return runGatewayCliCommand(argv[0], argv.slice(1), { stdout: process.stdout, stderr: process.stderr, env: process.env })
+    return (await import('./gateway-cli.js')).runGatewayCliCommand(argv[0], argv.slice(1), { stdout: process.stdout, stderr: process.stderr, env: process.env })
   }
   if (argv[0] === 'worker') {
-    return runWorkerCallbackCommand(argv.slice(1), {
+    return (await import('./worker-callback-cli.js')).runWorkerCallbackCommand(argv.slice(1), {
       stdin: process.stdin,
       stdout: process.stdout,
       stderr: process.stderr,
@@ -475,21 +428,21 @@ export async function main(argv: readonly string[]): Promise<number> {
     })
   }
   if (command.command === 'update') {
-    return runSelfUpdateCommand(command.args, {
+    return (await import('./self-update.js')).runSelfUpdateCommand(command.args, {
       stdout: process.stdout,
       stderr: process.stderr,
       env: process.env
     })
   }
   if (command.command === 'mcp-bridge') {
-    return runMcpBridgeCommand(command.args, {
+    return (await import('./mcp-bridge-cli.js')).runMcpBridgeCommand(command.args, {
       stdin: process.stdin,
       stdout: process.stdout,
       stderr: process.stderr,
       env: process.env
     })
   }
-  return runAgentCommand(command.command, command.args, {
+  return (await import('./agent-cli.js')).runAgentCommand(command.command, command.args, {
     stdin: process.stdin,
     stdout: process.stdout,
     stderr: process.stderr,

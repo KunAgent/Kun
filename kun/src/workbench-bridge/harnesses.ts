@@ -21,13 +21,25 @@ const modelIds = (provider: ModelConnectionProfile) => [...new Set([provider.sel
 const usable = (provider: ModelConnectionProfile) => isModelConnectionProfileUsable(provider) && !isRetiredOpenCodeFreeConnection(provider)
 const httpModel = (provider: ModelConnectionProfile) => ['http', 'gemini-cli-api', 'gemini-code-assist'].includes(provider.kind)
 
+/**
+ * Discovery waits at most this long for engine detection and model probes.
+ * Slower engines are listed as `detecting`; their probes keep running in the
+ * background and land in the shared caches for the next refresh.
+ */
+export const HARNESS_DISCOVERY_ENGINE_BUDGET_MS = 6_000
+/** Whole-list guard; stays below the desktop's 15s GET timeout so callers get an answer. */
+const HARNESS_DISCOVERY_TOTAL_BUDGET_MS = 14_000
+
 /** Read-only access to the same catalog, model pools and admission router as Code. */
 export class WorkbenchHarnessService {
   constructor(private readonly deps: HarnessListDeps & {
     router: HarnessRouter
+    /** Background listing for engines with no known catalog (production: one CLI at a time). */
     probeModels?: (definition: HarnessDefinition) => Promise<string[]>
     snapshot: () => Promise<ModelConnectionSnapshot>
     defaultModel: () => { model: string; providerId?: string; accountId?: string }
+    /** Test seam for `HARNESS_DISCOVERY_ENGINE_BUDGET_MS`. */
+    discoveryBudgetMs?: number
   }) {}
 
   /** The effective route is saved on the card before it can start; never silently switch engines. */
@@ -135,9 +147,25 @@ export class WorkbenchHarnessService {
   }
 
   /** Bounded discovery output; launch commands, secret refs and credentials never leave the host. */
-  async list(signal?: AbortSignal, ceiling?: WorkbenchCapabilityCeiling) {
-    const bounded = AbortSignal.any([AbortSignal.timeout(20_000), ...(signal ? [signal] : [])])
-    const result = await abortable(this.listWithin(bounded), bounded)
+  /**
+   * Changes whenever settings would change the discovered list. Spawn-free, so
+   * callers can cache discovery for minutes and still react to a settings edit.
+   */
+  discoveryKey(): string {
+    return JSON.stringify([this.deps.router.enabled(), this.deps.catalog.list().map((definition) => [
+      definition.id, definition.availability ?? '', this.deps.catalog.isDisabled(definition.id),
+      this.deps.catalog.enabledProfiles?.(definition.id) ?? []
+    ])])
+  }
+
+  /**
+   * `modelLimit` raises the per-Agent model cap for pickers; tool callers keep the compact default.
+   * `harnessIds` narrows discovery to the engines a caller can show: the others are neither detected nor probed.
+   */
+  async list(signal?: AbortSignal, ceiling?: WorkbenchCapabilityCeiling,
+    options: { modelLimit?: number; harnessIds?: readonly string[] } = {}) {
+    const bounded = AbortSignal.any([AbortSignal.timeout(HARNESS_DISCOVERY_TOTAL_BUDGET_MS), ...(signal ? [signal] : [])])
+    const result = await abortable(this.listWithin(bounded, options.modelLimit, options.harnessIds), bounded)
     if (!hasWorkbenchCapabilityConstraints(ceiling)) return result
     return { ...result, agents: result.agents.map((agent) => {
       let reason = agent.reason
@@ -152,35 +180,54 @@ export class WorkbenchHarnessService {
     }) }
   }
 
-  private async listWithin(signal: AbortSignal) {
+  private async listWithin(signal: AbortSignal, modelLimit?: number, harnessIds?: readonly string[]) {
+    const perGroup = modelLimit ?? 8, perAgent = modelLimit ?? 24
+    const only = harnessIds ? (id: string) => harnessIds.includes(id) : undefined
     signal.throwIfAborted()
     const snapshot = await this.deps.snapshot()
     const providers = snapshot.providers.filter(usable)
     const statuses = new Map<string, Promise<HarnessStatus>>()
+    // One shared deadline: engines are probed concurrently, so a single slow CLI
+    // cannot hold the list longer than the budget. Its detection is not
+    // cancelled; the detector and model caches keep the late result.
+    const deadline = AbortSignal.timeout(this.deps.discoveryBudgetMs ?? HARNESS_DISCOVERY_ENGINE_BUDGET_MS)
+    const budgeted = AbortSignal.any([signal, deadline])
+    const slow = new Set<string>()
+    const awaitBudgeted = <T>(id: string, operation: Promise<T>): Promise<T> =>
+      abortable(operation, budgeted).catch((error: unknown) => {
+        if (deadline.aborted && !signal.aborted) slow.add(id)
+        throw error
+      })
     const status = (id: string) => {
       signal.throwIfAborted()
       if (this.deps.catalog.isDisabled(id) || (id !== 'kun' && !this.deps.router.enabled())) return Promise.resolve({
         harnessId: id, installed: 'unknown' as const, login: 'unknown' as const, checkedAt: '1970-01-01T00:00:00.000Z'
       })
-      if (!statuses.has(id)) statuses.set(id, abortable(this.deps.detector.status(id), signal))
+      if (!statuses.has(id)) {
+        // The identity-checked verdict (binary, config files, environment) is
+        // as current as a new spawn for listing purposes; launch re-verifies.
+        const cached = this.deps.detector.cachedStatus?.(id)
+        statuses.set(id, cached ? Promise.resolve(cached) : awaitBudgeted(id, this.deps.detector.status(id)))
+      }
       return statuses.get(id)!
     }
     // Cold-start discovery must not require opening the Code model picker first.
-    // Reuse its cached, prompt-free probes and never start disabled/unready engines.
-    for (const definition of this.deps.catalog.list().slice(0, 30)) {
-      signal.throwIfAborted()
+    // A catalog listed before (also by an earlier Runtime) is reused without a
+    // spawn; only engines with none are probed, never disabled/unready ones.
+    // `probeModels` queues those one CLI at a time; the budget marks the rest detecting.
+    await Promise.all(this.deps.catalog.list().filter((definition) => only?.(definition.id) ?? true).slice(0, 30).map(async (definition) => {
       if (!this.deps.router.enabled() || definition.modelSource !== 'probe' || this.deps.catalog.isDisabled(definition.id) ||
-        !definition.credentialModes.includes('native-login') || this.deps.probedModels?.(definition)?.length) continue
+        !definition.credentialModes.includes('native-login') || this.deps.probedModels?.(definition)?.length) return
       const detected = await status(definition.id).catch(() => undefined)
       if (detected?.installed === 'yes' && detected.login !== 'signed-out' &&
         detected.ready !== 'no' && detected.versionSupported !== false) {
-        if (this.deps.probeModels) await abortable(this.deps.probeModels(definition), signal).catch(() => undefined)
+        if (this.deps.probeModels) await awaitBudgeted(definition.id, this.deps.probeModels(definition)).catch(() => undefined)
       }
-    }
+    }))
     signal.throwIfAborted()
     const listed = await listHarnessesForManager({ ...this.deps, detector: { status }, providers: async () => providers.map((entry) => ({
       providerId: entry.id, label: entry.name, kind: entry.kind, models: modelIds(entry), gatewayExportable: exposableProvider(entry)
-    })) })
+    })) }, undefined, { modelsPerGroup: perGroup, ...(only ? { only } : {}) })
     const agents = await Promise.all(listed.agents.slice(0, 30).map(async (agent) => {
       signal.throwIfAborted()
       const definition = this.deps.catalog.get(agent.harnessId)!
@@ -188,14 +235,16 @@ export class WorkbenchHarnessService {
       const models = [...agent.models]
       if (definition.modelSource === 'provider' && definition.credentialModes.includes('native-login')) {
         for (const provider of providers.filter((entry) => entry.kind === legacyProviderKindFor(definition.id))) {
-          models.push(...modelIds(provider).slice(0, 8).map((model) => ({ model, providerId: provider.id, credentialMode: 'native-login' as const })))
+          models.push(...modelIds(provider).slice(0, perGroup).map((model) => ({ model, providerId: provider.id, credentialMode: 'native-login' as const })))
         }
       }
+      const detecting = slow.has(agent.harnessId)
       let reason = this.deps.catalog.isDisabled(agent.harnessId) ? 'Disabled in Code settings' :
         agent.harnessId !== 'kun' && !this.deps.router.enabled() ? 'External Code Agent routing is disabled in settings' :
-        agent.terminalOnly ? 'Terminal-only Agent' : !agent.ready ? availabilityReason(detected) : undefined
+        agent.terminalOnly ? 'Terminal-only Agent' : detecting && !detected ? 'Still checking this Agent' :
+          !agent.ready ? availabilityReason(detected) : undefined
       const routes: Model[] = []
-      for (const model of models.slice(0, 24)) {
+      for (const model of models.slice(0, perAgent)) {
         try {
           routes.push(await this.resolveWithSnapshot({ title: 'Code task', goal: '', mode: 'agent', isolation: 'inherit', report: 'final',
             execution: { mode: 'direct', model: { ...model, harnessId: agent.harnessId } } }, snapshot, detected ?? null))
@@ -203,7 +252,8 @@ export class WorkbenchHarnessService {
       }
       return { harnessId: agent.harnessId, displayName: agent.displayName, available: routes.length > 0,
         ...(routes.length ? {} : { reason: reason ?? 'No available models. Configure or refresh this Agent in Code.' }),
-        models: routes, ...(models.length > 24 || agent.modelsTruncated ? { modelsTruncated: (models.length - Math.min(models.length, 24)) + (agent.modelsTruncated ?? 0) } : {}),
+        ...(detecting ? { detecting: true as const } : {}),
+        models: routes, ...(models.length > perAgent || agent.modelsTruncated ? { modelsTruncated: (models.length - Math.min(models.length, perAgent)) + (agent.modelsTruncated ?? 0) } : {}),
         executionModes: agent.harnessId === 'kun' ? ['direct', 'plan', 'auto', 'goal'] : ['direct'],
         orchestration: agent.harnessId === 'kun' ? ['direct', 'graph'] : ['direct'] }
     }))

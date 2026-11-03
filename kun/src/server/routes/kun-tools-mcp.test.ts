@@ -107,7 +107,7 @@ function makeFixture(options: FixtureOptions = {}) {
   const tokens = new HarnessTokenService()
   const token = tokens.issue({
     threadId: thread.id,
-    harnessId: 'gemini-cli',
+    harnessId: 'devin',
     credentialIdentity: 'cred:test',
     scopes: ['kun-tools']
   })
@@ -158,7 +158,7 @@ describe('kun tools MCP route', () => {
     expect((await post(runtime, rpc('ping'), 'kgw_deadbeef.badsig')).status).toBe(401)
     const gatewayOnly = tokens.issue({
       threadId: 'thread_1',
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialIdentity: 'cred:test',
       scopes: ['gateway']
     })
@@ -244,6 +244,27 @@ describe('kun tools MCP route', () => {
     expect(body.result.tools.map((tool: { name: string }) => tool.name)).not.toContain('read')
   })
 
+  it('strips top-level oneOf/anyOf/allOf from listed input schemas', async () => {
+    const { runtime, token } = makeFixture({
+      catalog: [
+        {
+          name: 'browser_use',
+          description: 'Browser',
+          inputSchema: {
+            type: 'object',
+            properties: { action: { type: 'string' } },
+            oneOf: [{ properties: { action: { const: 'open' } } }]
+          }
+        }
+      ] as unknown as CapabilityToolSpec[]
+    })
+    const listed = await post(runtime, rpc('tools/list', undefined, 'l2'), token)
+    const [tool] = (await listed.json()).result.tools
+    expect(tool.inputSchema).not.toHaveProperty('oneOf')
+    expect(tool.inputSchema.type).toBe('object')
+    expect(tool.inputSchema.required).toEqual(['action'])
+  })
+
   it('returns a tool error when no turn is running', async () => {
     const { runtime, token } = makeFixture({ runningTurn: false })
     const called = await post(
@@ -309,7 +330,7 @@ describe('kun tools MCP route', () => {
   })
 })
 
-  it('delivers a worker submit_result call to the callback service (P3-08)', async () => {
+  it('delivers a worker submit_result call to the callback service', async () => {
     const calls: Array<{ threadId: string; args: unknown }> = []
     const service = {
       reportProgress: async () => ({ status: 'recorded' }),
@@ -389,7 +410,7 @@ describe('kgw token guard', () => {
     const tokens = new HarnessTokenService()
     const toolsToken = tokens.issue({
       threadId: 'thread_1',
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialIdentity: 'cred:test',
       scopes: ['kun-tools']
     })
@@ -406,7 +427,7 @@ describe('kgw token guard', () => {
     // Gateway-scoped grants reach only the gateway surface.
     const gatewayToken = tokens.issue({
       threadId: 'thread_1',
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialIdentity: 'cred:test',
       scopes: ['gateway']
     })
@@ -422,7 +443,7 @@ describe('kgw token guard', () => {
 it('rejects a prior-turn MCP grant even while another turn is running', async () => {
   const execute = vi.fn()
   const f = makeFixture({ execute })
-  const token = f.tokens.issue({ threadId: f.thread.id, harnessId: 'gemini-cli',
+  const token = f.tokens.issue({ threadId: f.thread.id, harnessId: 'devin',
     credentialIdentity: 'native-session', scopes: ['kun-tools'], turnId: 'previous-turn' })
   const response = await post(f.runtime, rpc('tools/call', { name: 'memory_search', arguments: {} }), token)
   expect((await response.json()).result.isError).toBe(true)

@@ -3,6 +3,7 @@ import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { ModelRequestFailureContext } from '../contracts/model-request-failure.js'
 import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { MemoryRecord } from '../contracts/memory.js'
+import type { MemoryRelationContextResult } from '../contracts/memory-working-context.js'
 import type {
   ModelDocumentAttachment,
   ModelInputAttachment,
@@ -26,6 +27,7 @@ import type {
 } from '../contracts/turns.js'
 import type { KnowledgeBaseMount } from '../contracts/threads.js'
 import type { PrivateDeliveryState } from '../rooms/room-im-delivery.js'
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 
 /** Terminal status exposed by the public AgentLoop turn boundary. */
 export type TurnExecutionStatus = 'completed' | 'failed' | 'aborted'
@@ -53,7 +55,7 @@ export type TurnExecutionFailure = {
 export type ModelRoundOutcome = 'continue' | 'stop' | 'failed' | 'aborted'
 
 /** Outcome returned after the ordered tool-dispatch stage. */
-export type ToolDispatchOutcome = 'continue' | 'aborted' | 'all_suppressed' | 'budget_exhausted'
+export type ToolDispatchOutcome = 'continue' | 'aborted' | 'all_suppressed' | 'some_suppressed' | 'budget_exhausted'
 
 export type ResolvedTurnAttachments = Readonly<{
   imageAttachments: readonly ModelInputAttachment[]
@@ -96,6 +98,8 @@ export type PreparedTurnContext = Readonly<{
   memories: readonly MemoryRecord[]
   /** User-approved standing rules injected this turn (empty when none/on rooms). */
   memoryDirectives: readonly MemoryRecord[]
+  memoryReferenceBlocks?: readonly string[]
+  memoryRelationContext?: MemoryRelationContextResult
   activeGoalInstruction: string | null
   goalRecoveryInstruction: string | null
   activeTodoInstruction: string | null
@@ -114,6 +118,7 @@ export type PreparedTurnContext = Readonly<{
  * real approval or persist interactive state.
  */
 export type ToolTurnContextInput = {
+  attachmentAliases?: AttachmentAliases
   threadId: string
   turnId: string
   workspace: string
@@ -129,6 +134,7 @@ export type ToolTurnContextInput = {
   guiDesignCanvas?: boolean
   guiExcalidrawCanvas?: boolean
   guiDesignMode?: boolean
+  designPreviewOnly?: boolean
   agentSurface?: 'code' | 'write' | 'design'
   guiDesignArtifact?: GuiDesignArtifactContext
   modelProviderId?: string

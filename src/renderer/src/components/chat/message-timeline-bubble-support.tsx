@@ -1,16 +1,16 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { captureOptionalCompletion } from '../../product-analytics/optional-completion'
 import { Check, Copy, Download, Loader2, Presentation } from 'lucide-react'
-import type { ChatBlock, RuntimeDisclosureMetadata, UserInputAnswer } from '../../agent/types'
 import type { WriteExportFormat } from '@shared/write-export'
 import { ComposerContextAttachmentSchema } from '@kun/extension-api'
+import { messageQuoteFromComposerContext } from '../../lib/message-quote'
 import { useChatStore } from '../../store/chat-store'
 import { assistantExportMarkdown } from '../../lib/conversation-export-markdown'
 import {
   readWorkspaceOfficeViewPosition,
   type WorkspaceOfficeViewPosition
 } from '../../lib/workspace-office-view-context'
-import { answerDisplayValues, answersByQuestionId } from './user-input-panel-logic'
 import { InjectedMemoryMetaChip } from './injected-memory-meta-chip'
 import {
   metaInstructionSources,
@@ -42,6 +42,8 @@ export function metaComposerContextLabels(meta: Record<string, unknown> | undefi
     const record = entry as Record<string, unknown>
     const parsed = ComposerContextAttachmentSchema.safeParse(entry)
     if (parsed.success && readWorkspaceOfficeViewPosition(parsed.data)) return []
+    // Reply quotes render as quotes above the message text.
+    if (messageQuoteFromComposerContext(entry)) return []
     const title = typeof record.title === 'string' ? record.title.trim() : ''
     const provenance = record.provenance && typeof record.provenance === 'object'
       ? record.provenance as Record<string, unknown>
@@ -185,10 +187,14 @@ export function RuntimeMetaChips({
 
 export function CopyFeedbackButton({
   text,
-  iconOnly = false
+  iconOnly = false,
+  onCopied,
+  onCopyStarted
 }: {
   text: string
   iconOnly?: boolean
+  onCopied?: () => void
+  onCopyStarted?: () => (() => void)
 }): ReactElement {
   const { t } = useTranslation('common')
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -210,10 +216,13 @@ export function CopyFeedbackButton({
   }
 
   const handleCopy = async (): Promise<void> => {
+    const copied = captureOptionalCompletion(onCopyStarted)
     try {
       if (!navigator?.clipboard?.writeText) throw new Error('Clipboard unavailable')
       await navigator.clipboard.writeText(text)
       setStatus('success')
+      onCopied?.()
+      copied?.()
     } catch {
       setStatus('error')
     }
@@ -257,11 +266,13 @@ export function CopyFeedbackButton({
 export function AssistantExportButton({
   text,
   createdAt,
-  renderMode
+  renderMode,
+  onExportStarted
 }: {
   text: string
   createdAt?: string
   renderMode?: 'plain-text' | 'safe-markdown'
+  onExportStarted?: () => (() => void)
 }): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useChatStore((state) => state.workspaceRoot)
@@ -270,6 +281,7 @@ export function AssistantExportButton({
   const [error, setError] = useState('')
 
   const handleExport = async (format: WriteExportFormat): Promise<void> => {
+    const exported = captureOptionalCompletion(onExportStarted)
     if (typeof window.kunGui?.exportWriteDocument !== 'function') {
       setError(t('writeExportUnavailable'))
       return
@@ -291,6 +303,7 @@ export function AssistantExportButton({
         setError(result.message)
       } else if (result.ok) {
         detailsRef.current?.removeAttribute('open')
+        exported?.()
       }
     } catch (exportError) {
       setError(exportError instanceof Error ? exportError.message : String(exportError))
@@ -342,164 +355,6 @@ export function AssistantExportButton({
         ) : null}
       </div>
     </details>
-  )
-}
-
-export function UserInputBubble({
-  block,
-  nested = false
-}: {
-  block: Extract<ChatBlock, { kind: 'user_input' }>
-  nested?: boolean
-}): ReactElement {
-  const { t } = useTranslation('common')
-  const [answers, setAnswers] = useState<Record<string, UserInputAnswer>>(() =>
-    answersByQuestionId(block.answers)
-  )
-  // The timeline is the durable record; answering lives in the composer panel.
-  // Only a live request appears active. A stale persisted `pending` block is
-  // rendered as ended so reopening history never advertises a dead action.
-  const pending = block.status === 'pending' && block.live === true
-  const done = block.status !== 'pending'
-
-  useEffect(() => {
-    setAnswers(answersByQuestionId(block.answers))
-  }, [block.id, block.answers])
-
-  const statusLabel =
-    block.status === 'submitted'
-      ? t('userInputSubmitted')
-      : block.status === 'cancelled'
-        ? t('userInputCancelled')
-        : block.status === 'timeout'
-          ? t('userInputTimedOut')
-          : block.status === 'error'
-            ? t('userInputFailed')
-            : pending
-              ? t('userInputPending')
-              : t('userInputCancelled')
-  const tone =
-    block.status === 'error'
-      ? 'error'
-      : block.status === 'submitted'
-        ? 'success'
-        : block.status === 'cancelled' || block.status === 'timeout'
-          ? 'muted'
-          : pending
-            ? 'active'
-            : 'muted'
-  const questionCount = block.questions.length
-  const containerClass = nested
-    ? `overflow-hidden rounded-[14px] border px-3.5 py-3 text-[13px] leading-5 ${
-        tone === 'error'
-          ? 'border-red-300/65 bg-red-500/[0.025] dark:border-red-800/55 dark:bg-red-950/20'
-          : tone === 'success'
-            ? 'border-emerald-500/22 bg-emerald-500/[0.025] dark:border-emerald-600/30'
-            : tone === 'muted'
-              ? 'border-ds-border-muted bg-ds-card/75'
-              : 'border-accent/25 bg-accent/[0.025]'
-      }`
-    : `overflow-hidden rounded-[16px] border px-4 py-4 text-[13px] leading-6 shadow-[0_10px_28px_rgba(20,47,95,0.04)] ${
-        tone === 'error'
-          ? 'border-red-300/70 bg-red-500/[0.025] dark:border-red-800/60 dark:bg-red-950/20'
-          : tone === 'success'
-            ? 'border-emerald-500/24 bg-emerald-500/[0.025] dark:border-emerald-600/32'
-            : tone === 'muted'
-              ? 'border-ds-border bg-ds-card/82'
-              : 'border-accent/26 bg-ds-card text-ds-ink'
-      }`
-  const iconFrameClass =
-    tone === 'error'
-      ? 'border-red-300/60 bg-red-500/10 text-red-700 dark:border-red-800/45 dark:text-red-300'
-      : tone === 'success'
-        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-        : tone === 'active'
-          ? 'border-accent/20 bg-accent/10 text-accent'
-          : 'border-ds-border-muted bg-ds-subtle text-ds-muted'
-  const statusClass =
-    tone === 'error'
-      ? 'text-red-700 dark:text-red-300'
-      : tone === 'success'
-        ? 'text-emerald-700 dark:text-emerald-300'
-        : tone === 'active'
-          ? 'text-accent'
-          : 'text-ds-muted'
-  const statusIcon =
-    tone === 'active' ? (
-      <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
-    ) : tone === 'success' ? (
-      <Check className="h-3.5 w-3.5" strokeWidth={2} />
-    ) : tone === 'error' ? (
-      <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-current text-[10px] font-bold leading-none">
-        !
-      </span>
-    ) : (
-      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
-    )
-
-  return (
-    <div className={containerClass}>
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border ${iconFrameClass}`}
-          >
-            {statusIcon}
-          </span>
-          <div className="min-w-0">
-            <div className="font-semibold text-ds-ink">{t('userInputTitle')}</div>
-          </div>
-        </div>
-        <span className={`shrink-0 rounded-full border border-current/15 px-2 py-0.5 text-[11.5px] font-semibold ${statusClass}`}>
-          {statusLabel}
-        </span>
-      </div>
-
-      {block.status === 'pending' ? (
-        <div className="mt-3 border-t border-ds-border-muted pt-3">
-          {block.questions[0] ? (
-            <p className="line-clamp-2 whitespace-pre-wrap break-words text-[13px] font-medium leading-5 text-ds-ink [overflow-wrap:anywhere]">
-              {block.questions[0].question}
-            </p>
-          ) : null}
-          {pending ? (
-            <div className="mt-2 flex items-center justify-between gap-3 text-[11.5px] text-ds-faint">
-              <span>{t('userInputCompleteAboveComposer')}</span>
-              {questionCount > 1 ? (
-                <span className="shrink-0 font-semibold tabular-nums">
-                  {t('userInputQuestionCount', { count: questionCount })}
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-        </div>
-      ) : done && block.questions.length > 0 ? (
-        <div className="mt-3 overflow-hidden rounded-[11px] border border-ds-border-muted bg-ds-card/65">
-          {block.questions.map((question) => {
-            const submittedValues = answerDisplayValues(answers[question.id])
-            return (
-              <div
-                key={question.id}
-                className="grid min-w-0 gap-1 border-b border-ds-border-muted px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(8rem,0.7fr)] sm:items-center sm:gap-4"
-              >
-                <span className="min-w-0 truncate text-[12px] text-ds-muted" title={question.question}>
-                  {question.question}
-                </span>
-                <span className={`min-w-0 break-words text-[12.5px] font-semibold [overflow-wrap:anywhere] ${
-                  submittedValues.length > 0 ? 'text-ds-ink' : 'text-ds-faint'
-                }`}>
-                  {submittedValues.length > 0 ? submittedValues.join(', ') : statusLabel}
-                </span>
-              </div>
-            )
-          })}
-        </div>
-      ) : null}
-
-      {block.errorMessage ? (
-        <p className="mt-3 text-[12px] text-red-700 dark:text-red-300">{block.errorMessage}</p>
-      ) : null}
-    </div>
   )
 }
 

@@ -1,6 +1,6 @@
 /**
- * Transport-independent host for Kun tools bridged into delegated harnesses
- * (docs/ade/05 §3.2). The Agent SDK MCP adapter, the Cursor SDK custom-tools
+ * Transport-independent host for Kun tools bridged into delegated harnesses.
+ * The Agent SDK MCP adapter, the Cursor SDK custom-tools
  * adapter, and the Kun Tools MCP server all describe the same turn-scoped
  * catalog and run calls through the same boundary; only their request/result
  * wire formats differ. This module owns the shared semantics so each adapter
@@ -109,7 +109,6 @@ export type KunToolContextBoundary = Pick<
   | 'allowHostReads'
   | 'allowedWritePaths'
   | 'allowedArtifactIds'
-  | 'pptWorkflowScope'
   | 'blockedProviderIds'
   | 'blockedToolNames'
   | 'blockedSkillIds'
@@ -134,14 +133,20 @@ export type KunToolBridgeHostDeps = {
   defaultApprovalReviewer?: ApprovalReviewer
   /**
    * When false, the harness's own native tools are disabled for this scope
-   * (delegated children / managed workflows). Combined with a scoped
-   * `pptWorkflowScope`, overlap suppression applies to listing as well.
+   * (delegated children / managed workflows).
    */
   allowHarnessBuiltins?: boolean
   /** Read-only delegated scopes clamp policy/sandbox regardless of turn state. */
   enforceReadOnly?: boolean
   /** Fallback call-id prefix when the transport did not supply one. */
   callIdPrefix?: string
+  /**
+   * Tools whose Kun result item is applied to the turn as well. A transport
+   * whose harness transcript cannot carry Kun's result (the Kun Tools MCP
+   * server: ACP agents and Codex report their own lossy MCP call items) lists
+   * the tools the GUI renders from that item, such as design_open's card.
+   */
+  recordResultItemTools?: ReadonlySet<string>
   nowIso?: () => string
 }
 
@@ -260,7 +265,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
   const makeAwaitApproval = (
     scope: Pick<
       KunToolBridgeTurnScope,
-      'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'actingModelRoute' | 'turn'
+      'approvalPolicy' | 'sandboxMode' | 'approvalReviewer' | 'actingModelRoute' | 'turn' | 'thread'
     >,
     signal: AbortSignal
   ): ToolHostContext['awaitApproval'] =>
@@ -275,6 +280,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         sandboxMode: scope.sandboxMode,
         approvalReviewer: scope.approvalReviewer,
         actingModelRoute: scope.actingModelRoute!,
+        reviewSource: { harnessId: scope.turn.harnessId ?? scope.thread.harnessId ?? 'unknown' },
         intent: scope.turn.prompt,
         signal
       }
@@ -484,15 +490,11 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         providerKind: spec.providerKind,
         toolKind: spec.toolKind
       }))
-    const managedScope =
-      deps.allowHarnessBuiltins === false &&
-      deps.toolContextBoundary?.pptWorkflowScope !== undefined
     const suppressOverlap =
       Boolean(scope.graphPolicy) ||
       Boolean(scope.thread.roomContext) ||
       hasWorkbenchCapabilityConstraints(scope.thread.workbenchOrigin?.capabilityCeiling) ||
-      scope.plan.planMode ||
-      managedScope
+      scope.plan.planMode
     return selectBridgeableTools(catalog, {
       overlap: opts?.overlap ?? (suppressOverlap ? new Set() : undefined)
     })
@@ -599,6 +601,12 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         await deps.receipts.awaitReceipt(result.item.output.receiptKey, 30_000)
         if (finalized) return finalized
         return { output: 'Renderer receipt timed out; the canvas was not verified.', isError: true }
+      }
+      if (deps.recordResultItemTools?.has(call.toolName) && !result.item.isError) {
+        await deps.turns.applyItem(threadId, {
+          ...result.item,
+          id: `item_toolresult_${turnId}_${toolCall.callId}_${deps.ids.next('kun')}`
+        })
       }
       // The SDK stream later synthesizes the tool_result item; park the
       // client sideband so the event mapper can attach it.

@@ -1,7 +1,9 @@
-import { useEffect, type ReactElement } from 'react'
+import { useEffect, useMemo, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
+import { RailSlot } from './rail-slot'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
+import { EXTERNAL_SUBAGENT_SOURCE_LABELS, externalSubagentSourceForThread } from '../../agent/external-subagent'
 import { AgentBrowserFloatingPreview } from '../AgentBrowserFloatingPreview'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import {
@@ -16,6 +18,7 @@ import { shouldShowSideSessionReturnBar } from './workbench-side-session-mode'
 import { ensureThreadBinding, useReviewStore } from '../../store/review-store'
 import { useActivityStore } from '../../store/activity-store'
 import { selectWorkerRowsForParent } from '../../store/activity-selectors'
+import { selectSessionExecutionSummary } from '../../store/session-execution-summary'
 
 type Context = Record<string, any>
 
@@ -52,15 +55,18 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
   } = context
   const normalizedRoute = normalizeWorkbenchRoute(route)
   const activeConversationThread = threads.find((thread: any) => thread.id === activeThreadId)
+  const externalSource = activeThreadRelation === 'side' ? externalSubagentSourceForThread(activeThreadId) : undefined
   const reviewEnabled = useReviewStore((s) =>
     activeThreadId ? Boolean(s.bindings[activeThreadId]) : false)
-  // 12 §6.1: the Workers rail button appears while worker rows exist under
-  // the active (manager) thread; the panel itself also self-disables.
-  const workersEnabled = useActivityStore((s) =>
-    Boolean(
-      activeThreadId &&
-        selectWorkerRowsForParent(s.rows, activeThreadId).length > 0
-    ))
+  // Live activity supplies badges, not the availability of historical collaboration.
+  const activityRows = useActivityStore((s) => s.rows)
+  const activityFeedError = useActivityStore((s) => s.status === 'error')
+  const workerSummary = useMemo(() => {
+    if (!activeThreadId) return null
+    const rows = selectWorkerRowsForParent(activityRows, activeThreadId)
+    if (rows.length === 0) return null
+    return selectSessionExecutionSummary(rows, { feedError: activityFeedError })
+  }, [activityRows, activeThreadId, activityFeedError])
   useEffect(() => {
     if (activeThreadId) void ensureThreadBinding(activeThreadId)
   }, [activeThreadId])
@@ -139,6 +145,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onBackdropClose={toggleLeftSidebar}
       />
 
+      <div className="ds-workbench-card relative flex min-h-0 min-w-0 flex-1">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
       {activeExtensionCenterView ? (
         <main className="ds-stage-surface relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -216,10 +223,12 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
               parentThreadId: activeThreadParentId
             }),
             returnBarVariant: (
-              activeConversationThread?.agentId === 'explore'
+              externalSource ? 'external'
+                : activeConversationThread?.agentId === 'explore'
                 ? 'explore'
                 : 'subagent'
-            ) as 'explore' | 'subagent',
+            ) as 'explore' | 'subagent' | 'external',
+            ...(externalSource ? { returnBarAgentName: EXTERNAL_SUBAGENT_SOURCE_LABELS[externalSource] } : {}),
             graphChildContext,
             composerProps: chatComposerProps,
             conversationDropWorkspaceRoot: activeSkillWorkspace,
@@ -276,7 +285,12 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
             canvasEnabled: true,
             graphEnabled,
             reviewEnabled,
-            workersEnabled,
+            workersEnabled: true,
+            workersRunning:
+              workerSummary?.kind === 'running' ||
+              workerSummary?.kind === 'starting' ||
+              workerSummary?.kind === 'continuing',
+            workersUnfinished: workerSummary?.unfinished ?? 0,
             sideChatRunningCount: currentSideRunningCount,
             sideChatOpen: rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.sideConversations,
             sideChatEnabled: runtimeConnection === 'ready' && Boolean(activeThreadId),
@@ -309,6 +323,8 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
           />
         </div>
       ) : null}
+      </div>
+      <RailSlot />
       </div>
       <DeclarativeContextMenuOverlay
         contributions={extensionHostContextMenus.filter(

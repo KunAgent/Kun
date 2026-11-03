@@ -1,8 +1,9 @@
 import type { ReactElement } from 'react'
+import { TerminalAttentionBadge, useTerminalButtonTooltip } from '../terminal/TerminalAttentionBadge'
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
+import { RailCollapseButton, RailReopenButton, useRailCollapseStore } from '../workbench/rail-collapse'
 import { WorkbenchSideRailDivider, WorkbenchSideRailSurface, sideRailButtonClass } from '../workbench/WorkbenchSideRail'
-import { WorkbenchGuiUpdateButton } from './WorkbenchGuiUpdateButton'
 import {
   Blocks,
   Bot,
@@ -25,9 +26,9 @@ import {
   RefreshCw,
   Search,
   Shapes,
+  Shirt,
   Smartphone,
   Terminal,
-  Users,
   type LucideIcon
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -45,7 +46,9 @@ import {
 } from '../../extensions/contribution-ids'
 import { boundedPlainText } from '../../extensions/safe-text'
 import { useRemoteMobileLayout } from '../../lib/remote-mobile'
+import { useMobilePairings } from '../remote/mobile-pairing-store'
 import { switchRemoteSurface } from '../../mobile/use-remote-surface'
+import { CollaborationIcon } from '../workers/CollaborationIcon'
 
 export type { RightPanelMode } from '../../extensions/contribution-ids'
 
@@ -59,10 +62,14 @@ type Props = {
   planPanelEnabled?: boolean
   canvasEnabled?: boolean
   graphEnabled?: boolean
-  /** Thread binds a task workspace → offer the review tab (11 §3). */
+  /** Thread binds a task workspace → offer the review tab. */
   reviewEnabled?: boolean
-  /** ADE thread has worker activity rows → offer the Workers tab (12 §6.1). */
+  /** Collaboration is available by default, independently of live worker activity. */
   workersEnabled?: boolean
+  /** Background children are executing right now. */
+  workersRunning?: boolean
+  /** Background children that still need runtime or user action. */
+  workersUnfinished?: number
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
@@ -84,6 +91,10 @@ type RailEntry = {
   active: boolean
   disabled?: boolean
   running?: boolean
+  /** Optional rail counter shown as a small pill; never used for unread mail. */
+  badge?: number
+  /** Neutral in-progress count, e.g. unfinished background tasks. */
+  count?: number
   onClick: () => void
 }
 
@@ -116,6 +127,7 @@ export function WorkbenchTopActions({
   onOpenMobileRail
 }: WorkbenchTopActionsProps): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
+  const terminalTooltip = useTerminalButtonTooltip(t('rightPanelTerminal'), terminalOpen)
   const remoteMobile = useRemoteMobileLayout()
   const [editors, setEditors] = useState<EditorInfo[]>([])
   const [selectedEditorId, setSelectedEditorId] = useState(() => readPreferredEditorId() ?? '')
@@ -235,8 +247,6 @@ export function WorkbenchTopActions({
         </button>
       ) : null}
 
-      <WorkbenchGuiUpdateButton />
-
       {/* Host-side affordances (editor picker, runtime restart) are dropped on
           Remote mobile — they operate on the desktop host and crowd the bar. */}
       {!remoteMobile ? (
@@ -290,12 +300,13 @@ export function WorkbenchTopActions({
         <button
           type="button"
           onClick={onToggleTerminal}
-          className={topbarActionButtonClass(terminalOpen)}
-          data-tooltip={t('rightPanelTerminal')}
+          className={topbarActionButtonClass(terminalOpen, 'relative')}
+          data-tooltip={terminalTooltip}
           aria-label={t('rightPanelTerminal')}
           aria-pressed={terminalOpen}
         >
           <Terminal className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+          <TerminalAttentionBadge dockOpen={terminalOpen} />
         </button>
       ) : null}
 
@@ -349,6 +360,7 @@ export function WorkbenchTopActions({
           <Ellipsis className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
+      {!remoteMobile ? <RailReopenButton /> : null}
     </div>
   )
 }
@@ -362,7 +374,9 @@ export function WorkbenchSideRail({
   planPanelEnabled = false,
   canvasEnabled = false,
   graphEnabled = false,
-  workersEnabled = false,
+  workersEnabled = true,
+  workersRunning = false,
+  workersUnfinished = 0,
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
@@ -375,8 +389,10 @@ export function WorkbenchSideRail({
   onSelectExtension
 }: Props): ReactElement | null {
   const { t } = useTranslation(['common', 'settings'])
+  const railCollapsed = useRailCollapseStore((state) => state.collapsed)
   // The Remote panel configures this host; hide the entry inside Remote clients.
   const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
+  const pairings = useMobilePairings().length
   const panel = (mode: Exclude<RightPanelMode, null>, label: string, icon: LucideIcon): RailEntry => ({
     key: mode, label, icon, active: rightPanelMode === mode, onClick: () => onToggleRightPanelMode(mode)
   })
@@ -391,13 +407,24 @@ export function WorkbenchSideRail({
     ...(onOpenSideChat ? [{ key: 'side-chat', label: t('sidePanelOpen'), icon: MessageCircleMore, active: sideChatOpen,
       disabled: !sideChatEnabled, onClick: onOpenSideChat, running: sideChatRunningCount > 0 }] : []),
     panel(BUILTIN_RIGHT_PANEL_IDS.subagents, t('rightPanelSubagents'), Bot),
-    ...(workersEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.workers, t('rightPanelWorkers', { defaultValue: 'Workers' }), Users)] : []),
+    ...(workersEnabled ? [{
+      ...panel(
+        BUILTIN_RIGHT_PANEL_IDS.workers,
+        workersUnfinished > 0
+          ? t('backgroundTaskWorkersRailLabel', { value: workersUnfinished })
+          : t('rightPanelWorkers', { defaultValue: 'Workers' }),
+        CollaborationIcon
+      ),
+      running: workersRunning,
+      ...(workersUnfinished > 0 ? { count: workersUnfinished } : {})
+    }] : []),
     ...(graphEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.graph, t('rightPanelGraph', { defaultValue: 'Graph' }), GitBranch)] : []),
     ...(canvasEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.canvas, t('rightPanelWhiteboard'), Shapes)] : [])
   ], [
     panel(BUILTIN_RIGHT_PANEL_IDS.mcpSkills, t('rightPanelMcpSkills'), Blocks),
     panel(BUILTIN_RIGHT_PANEL_IDS.providerQuotas, t('rightPanelProviderQuotas'), Gauge),
-    ...(isRemoteWeb ? [] : [panel(BUILTIN_RIGHT_PANEL_IDS.remote, t('rightPanelRemote'), Radio)])
+    panel(BUILTIN_RIGHT_PANEL_IDS.wardrobe, t('rightPanelWardrobe'), Shirt),
+    ...(isRemoteWeb ? [] : [{ ...panel(BUILTIN_RIGHT_PANEL_IDS.remote, t('rightPanelRemote'), Radio), badge: pairings }])
   ]]
 
   if (presentation === 'sheet') {
@@ -499,8 +526,12 @@ export function WorkbenchSideRail({
     )
   }
 
+  if (railCollapsed) return null
+
   return (
-    <WorkbenchSideRailSurface>
+    <WorkbenchSideRailSurface className="code-side-rail">
+      <RailCollapseButton />
+      <WorkbenchSideRailDivider />
       {groups.map((group, index) => (
         <Fragment key={index}>
           {index === 2 ? <span className="flex-1" aria-hidden="true" /> : null}
@@ -521,8 +552,10 @@ export function WorkbenchSideRail({
               >
                 <Icon className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
                 {entry.running ? (
-                  <span className="absolute bottom-1 left-1 h-[7px] w-[7px] animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" />
+                  <span className="absolute bottom-1 left-1 h-[7px] w-[7px] animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)] motion-reduce:animate-none" />
                 ) : null}
+                {entry.count ? <span className="ds-rail-count absolute bottom-0 right-0 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-accent px-[3px] text-[9.5px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" data-rail-count={entry.count}>{entry.count > 9 ? '9+' : entry.count}</span> : null}
+                {entry.badge ? <span className="ds-rail-badge absolute right-0.5 top-0.5 grid h-[14px] min-w-[14px] place-items-center rounded-full bg-[var(--ds-danger,#d14343)] px-[3px] text-[9.5px] font-bold leading-none text-white shadow-[0_0_0_2px_var(--ds-sidebar-surface-bg,#fff)]" data-rail-badge={entry.badge}>{entry.badge > 9 ? '9+' : entry.badge}</span> : null}
               </button>
             )
           })}

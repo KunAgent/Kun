@@ -55,4 +55,26 @@ describe('manager atomic JSON idempotency', () => {
     })).rejects.toMatchObject({ currentRevision: 1 })
     await store.close()
   })
+  it('answers a conditional read without the document only for this Manager generation', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-manager-atomic-etag-')); roots.push(root)
+    const otherRoot = await mkdtemp(join(tmpdir(), 'kun-manager-atomic-etag-other-')); roots.push(otherRoot)
+    const store = await ManagerSharedDataStore.create(root)
+    const other = await ManagerSharedDataStore.create(otherRoot)
+    try {
+      const path = join(root, 'agent-dispatch', 'intents.json')
+      await store.writeAtomicJson({ path, expectedRevision: 0, value: { version: 1, intents: [] } })
+      const first = await store.readAtomicJsonConditional(path)
+      expect(first).toEqual({ revision: 1, etag: expect.any(String), value: { version: 1, intents: [] } })
+      expect(await store.readAtomicJsonConditional(path, first.etag))
+        .toEqual({ revision: 1, etag: first.etag, unchanged: true })
+      await store.writeAtomicJson({ path, expectedRevision: 1, value: { version: 1, intents: [{ id: 'a' }] } })
+      expect(await store.readAtomicJsonConditional(path, first.etag))
+        .toMatchObject({ revision: 2, value: { version: 1, intents: [{ id: 'a' }] } })
+      const otherPath = join(otherRoot, 'agent-dispatch', 'intents.json')
+      await other.writeAtomicJson({ path: otherPath, expectedRevision: 0, value: { version: 1, intents: [] } })
+      expect(await other.readAtomicJsonConditional(otherPath, first.etag)).toHaveProperty('value')
+    } finally {
+      await Promise.all([store.close(), other.close()])
+    }
+  })
 })

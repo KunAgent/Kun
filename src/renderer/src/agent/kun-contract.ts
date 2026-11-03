@@ -1,3 +1,4 @@
+import type { ContextSnapshotEvent } from '../../../../kun/src/contracts/context-snapshot'
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
 import type { RoomThreadSource } from '@shared/rooms-api'
 import type { ComposerContextAttachment } from '@kun/extension-api'
@@ -57,21 +58,25 @@ export type CoreThreadSummaryJson = {
   status: CoreThreadStatus
   /** Rebuildable event-log high-water mark available on lean list responses. */
   latestSeq?: number
+  /** Accepted turns; absent on runtimes or index rows that predate it. */
+  turnCount?: number
   approvalPolicy?: string
   sandboxMode?: string
   approvalReviewer?: string
   modelRequestCaptureEnabled?: boolean
   pinned?: boolean
   providerId?: string
-  /** Explicit harness identity inherited by new turns (01 §4). */
+  /** Explicit harness identity inherited by new turns. */
   harnessId?: string
-  /** Host-managed task workspace bound to this thread (07 §5). */
+  /** Host-managed task workspace bound to this thread. */
   taskWorkspaceId?: string
   agentId?: string
   systemPrompt?: string
-  relation?: 'primary' | 'fork' | 'side'
+  relation?: 'primary' | 'fork' | 'side' | 'task'
   parentThreadId?: string
-  /** Host-written ADE worker binding (09 §3.1); absent for normal threads. */
+  /** Host-written: the suggestion-card task a `task` session runs. */
+  taskOrigin?: { intentId: string; taskId: string; index: number; total: number }
+  /** Host-written ADE worker binding; absent for normal threads. */
   executionUnit?: {
     kind: 'worker'
     teamId: string
@@ -98,6 +103,7 @@ export type CoreThreadSummaryJson = {
 }
 
 export type CoreThreadJson = CoreThreadSummaryJson & {
+  contextSnapshot?: ContextSnapshotEvent | null
   turns?: CoreTurnJson[]
   latestSeq?: number
   /** Request ids the runtime is still actively awaiting (live ask-user gate). */

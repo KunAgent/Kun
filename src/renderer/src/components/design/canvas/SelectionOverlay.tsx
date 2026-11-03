@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { CanvasDocument, CanvasShape, Rect } from '../../../design/canvas/canvas-types'
-import { ROOT_SHAPE_ID, isHtmlFrame } from '../../../design/canvas/canvas-types'
+import { ROOT_SHAPE_ID, isArtifactFrame, isHtmlFrame, isRunningAppFrame } from '../../../design/canvas/canvas-types'
 import { shapeGeometry } from '../../../design/canvas/canvas-types'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 import { getSelectionBounds } from '../../../design/canvas/canvas-hit-test'
@@ -389,7 +389,13 @@ function SelectionOverlayInner({
   )
 
   const resizeHandles = bounds ? selectionResizeHandles(bounds) : []
-  const rotateHandle = bounds
+  // Embedded boards (HTML/SVG screens, running apps) are not rotated, and the
+  // handle would sit on top of their label row.
+  const onlyBoards = [...editableSelectedIds].every((id) => {
+    const shape = objects[id]
+    return Boolean(shape && (isArtifactFrame(shape) || isRunningAppFrame(shape)))
+  })
+  const rotateHandle = bounds && !onlyBoards
     ? { cx: bounds.x + bounds.width / 2, cy: bounds.y - ro }
     : null
 

@@ -14,6 +14,8 @@ import {
   mergeTerminalSettings,
   mergeRemoteAccessSettings,
   mergeDarkUiColors,
+  mergeColorPaletteSettings,
+  normalizeColorPaletteSettings,
   normalizeAppBehaviorSettings,
   normalizeClawSettings,
   normalizeDesignSettings,
@@ -74,6 +76,14 @@ const SETTINGS_CLEAR_SENTINELS: Readonly<Record<string, string>> = {
   'agents.kun.contextCompaction.summaryProviderId': ''
 }
 
+// The main-process merger replaces these records whole (`patch.x ?? base.x`),
+// so a key-level diff would drop deleted keys and wipe untouched siblings.
+const SETTINGS_WHOLE_RECORDS: ReadonlySet<string> = new Set([
+  'agents.kun.harnesses.defaults',
+  'agents.kun.harnesses.providers',
+  'agents.kun.ade.projectDefaults'
+])
+
 export const DEFAULT_WORKSPACE_ROOT = '~/.kun/default_workspace'
 
 export function splitSettingsList(raw: string): string[] {
@@ -98,12 +108,15 @@ export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): App
     agents: agentsPatch,
     provider: providerPatch,
     darkUiColors: darkUiColorsPatch,
+    colorPalette: colorPalettePatch,
     ...restPatch
   } = patch
+  const darkUiColors = mergeDarkUiColors(safeCurrent.darkUiColors, darkUiColorsPatch)
   return {
     ...applyKunRuntimePatch(safeCurrent, agentsPatch?.kun),
     ...restPatch,
-    darkUiColors: mergeDarkUiColors(safeCurrent.darkUiColors, darkUiColorsPatch),
+    darkUiColors,
+    colorPalette: mergeColorPaletteSettings(safeCurrent.colorPalette, colorPalettePatch, darkUiColors),
     provider: mergeModelProviderSettings(safeCurrent.provider, providerPatch),
     log: {
       ...safeCurrent.log,
@@ -161,7 +174,9 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     composerSendKey: normalizeComposerSendKey(raw.composerSendKey),
     cursorSpotlight: raw.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(raw.cursorSpotlightColor),
+    homeGlyphRipple: raw.homeGlyphRipple !== false,
     darkUiColors: normalizeDarkUiColors(raw.darkUiColors),
+    colorPalette: normalizeColorPaletteSettings(raw.colorPalette, raw.darkUiColors),
     provider: normalizeModelProviderSettings(raw.provider),
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), getKunRuntimeSettings(settings))),
     workspaceRoot: typeof raw.workspaceRoot === 'string' ? raw.workspaceRoot : DEFAULT_WORKSPACE_ROOT,
@@ -209,7 +224,7 @@ function diffSettingsValue(
   path: readonly string[]
 ): unknown | typeof SETTINGS_DIFF_NO_CHANGE {
   if (settingsValueEqual(base, next)) return SETTINGS_DIFF_NO_CHANGE
-  if (isPlainSettingsRecord(base) && isPlainSettingsRecord(next)) {
+  if (isPlainSettingsRecord(base) && isPlainSettingsRecord(next) && !SETTINGS_WHOLE_RECORDS.has(path.join('.'))) {
     const out: Record<string, unknown> = {}
     for (const key of Object.keys(next).sort()) {
       const childDiff = diffSettingsValue(base[key], next[key], [...path, key])

@@ -56,7 +56,7 @@ describe('createAcpCredentialEnv', () => {
       env({ ...base, harnessId: 'opencode', credentialMode: 'kun-gateway', gateway })
     ).rejects.toThrow('provider/model')
     await expect(
-      env({ ...base, harnessId: 'gemini-cli', credentialMode: 'kun-gateway', providerId: 'deepseek', model: 'deepseek-chat' })
+      env({ ...base, harnessId: 'devin', credentialMode: 'kun-gateway', providerId: 'deepseek', model: 'deepseek-chat' })
     ).rejects.toThrow('no gateway surface')
   })
 

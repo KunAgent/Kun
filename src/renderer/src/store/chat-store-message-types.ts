@@ -42,7 +42,7 @@ export type QueuedUserMessage = {
   model?: string
   providerId?: string
   accountId?: string
-  /** ADE harness + credential path frozen at enqueue time (12 §7.2). */
+  /** ADE harness + credential path frozen at enqueue time. */
   harnessId?: string
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
@@ -53,6 +53,8 @@ export type QueuedUserMessage = {
   messageSource?: 'design_continuation'
   /** Renderer-only guard that prevents a scoped send from falling back to another thread. */
   expectedThreadId?: string
+  /** Renderer-only requirement: never admit this submission in the source checkout. */
+  taskWorkspace?: { sourceRoot: string; workspaceId?: string }
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
@@ -88,7 +90,7 @@ export type QueuedUserMessage = {
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer
-  /** Managed plan-build turn (07 §10); Kun admission enforces an isolated worktree. */
+  /** Managed plan-build turn; Kun admission enforces an isolated worktree. */
   planBuild?: boolean
 }
 
@@ -106,11 +108,9 @@ export type GuiPlanMessageContext = {
   title?: string
 }
 
-export type GuiDesignArtifactMessageContext = {
-  kind: 'svg'
-  artifactId: string
-  relativePath: string
-}
+export type GuiDesignArtifactMessageContext =
+  | { kind: 'svg'; artifactId: string; relativePath: string }
+  | { kind: 'html'; artifactId: string; relativePath: string; designMdPath?: string }
 
 /** Renderer-only routing context that keeps a Write send bound to the file and
  * conversation selected when the user submitted it. */
@@ -138,15 +138,17 @@ export type SendMessageOverrides = {
   approvalReviewer?: ApprovalReviewer
   /** Resolve the send only after Kun accepts it, including when it first enters the queue. */
   waitForRuntimeAdmission?: boolean
-  /** Managed plan-build turn (07 §10); Kun admission enforces an isolated worktree. */
+  /** Managed plan-build turn; Kun admission enforces an isolated worktree. */
   planBuild?: boolean
   model?: string
   providerId?: string
   accountId?: string
-  /** ADE harness + credential path for this turn (12 §7.2). */
+  /** ADE harness + credential path for this turn. */
   harnessId?: string
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: string
+  /** A Work assistant turn: run it on the composer's Agent (Kun or an external Agent), as Code does. */
+  useComposerAgent?: boolean
   modelLabel?: string
   reasoningEffort?: string
   serviceTier?: 'priority'
@@ -202,7 +204,7 @@ export type ClearDesignHistoryResult = {
 export type InitialSetupMode = 'required' | 'preview'
 
 /**
- * External-harness plan build dispatch input (07 §10). The controller
+ * External-harness plan build dispatch input. The controller
  * resolves the harness selection; the store action owns thread creation,
  * host-worktree preparation, and the parked build turn.
  */
@@ -221,4 +223,10 @@ export type ExternalPlanBuildRequest = {
   model?: string
   providerId?: string
   accountId?: string
+  /** Reasoning level for the build turn; omitted leaves it to the Agent. */
+  reasoningEffort?: string
 }
+
+export type ExternalPlanBuildDispatchResult =
+  | { ok: true; threadId: string; workspaceId: string }
+  | { ok: false; error: string }

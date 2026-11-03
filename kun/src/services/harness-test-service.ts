@@ -16,8 +16,7 @@ import { probePiHandshake } from '../harness/pi-handshake-probe.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 
 /**
- * `POST /v1/harnesses/:id/test` orchestration (docs/ade/impl/p4 §3.5,
- * P4-10). Three progressive levels, each recorded with its own duration:
+ * `POST /v1/harnesses/:id/test` orchestration. Three progressive levels, each recorded with its own duration:
  * detect → handshake → trial. A failed level stops the deeper ones (a
  * missing binary cannot handshake); a transport without a handshake
  * surface reports `supported: false` and does not block the trial.
@@ -120,11 +119,13 @@ async function runHandshake(
       ? detectStatus.resolvedCommand
       : (definition.launch?.command ?? definition.detect?.command ?? definition.id)
   switch (definition.transport) {
-    case 'acp':
-      return probeAcpHandshake(definition, command, {
+    case 'acp': {
+      const { catalog: _catalog, ...handshake } = await probeAcpHandshake(definition, command, {
         resolveSecretEnv: runtime.harnesses?.resolveSecretEnv,
         signal
       })
+      return handshake
+    }
     case 'codex-app-server':
       return probeCodexHandshake(definition, command, {
         resolveSecretEnv: runtime.harnesses?.resolveSecretEnv,

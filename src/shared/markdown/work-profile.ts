@@ -1,7 +1,7 @@
 /**
  * Shared Work-document profile: callout type table, HTML allowlist, and the
  * inline-math recognition rule. Used by the renderer editor, the shared
- * remark plugins, and the export render pipeline (implementation §1, §7).
+ * remark plugins, and the export render pipeline.
  */
 
 /** Callout type → lucide-style icon name + palette slot. Unknown but legal
@@ -63,7 +63,7 @@ export const WORK_HTML_ALLOWED_ATTRS = [
   'href', 'rel', 'target', 'color', 'face', 'size', 'open'
 ] as const
 
-/** DOMPurify config used by editor NodeViews (§7.5). */
+/** DOMPurify config used by editor NodeViews. */
 export const WORK_HTML_PURIFY_CONFIG = {
   ALLOWED_TAGS: [...WORK_HTML_ALLOWED_TAGS],
   ALLOWED_ATTR: [...WORK_HTML_ALLOWED_ATTRS],
@@ -73,7 +73,7 @@ export const WORK_HTML_PURIFY_CONFIG = {
 } as const
 
 /**
- * Pandoc-style inline-math rule (§3.1): an opening `$` must be followed by a
+ * Pandoc-style inline-math rule: an opening `$` must be followed by a
  * non-space character; the closing `$` must be preceded by a non-space
  * character and must not be followed by a digit. `\$` never opens or closes.
  * Applied to mdast `text` nodes by `remarkInlineMathPandoc`.

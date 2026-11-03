@@ -13,8 +13,7 @@ import {
 } from 'node:path'
 import {
   mkdir,
-  readFile,
-  writeFile
+  readFile
 } from 'node:fs/promises'
 import {
   getKunRuntimeSettings,
@@ -33,6 +32,7 @@ import {
 import {
   NativeDialogCoordinator
 } from '../native-dialog-coordinator'
+import { writeKunMcpConfigFile } from '../runtime/kun-runtime-mcp-file-write'
 import {
   DEFAULT_KUN_DATA_DIR,
   resolveKunRuntimeSettings
@@ -96,24 +96,39 @@ export function registerAppKunConfigIpcHandlers(options: RegisterAppIpcHandlersO
     }
   })
 
-  ipcMain.handle('kun:config:write', async (_, content: unknown) => {
+  ipcMain.handle('kun:config:write', async (_, content: unknown, baseContent?: unknown) => {
     const validatedContent = parseIpcPayload(
       'kun:config:write',
       deepseekConfigContentSchema,
       content
     )
-    const path = resolveKunConfigPath()
     validateMcpConfigContent(validatedContent)
-    await mkdir(dirname(path), { recursive: true })
-    await writeFile(path, validatedContent, 'utf8')
-    try {
-      await onKunMcpConfigWritten?.(path, validatedContent)
-    } catch (error: unknown) {
-      logError('mcp-config', 'Failed to apply MCP config change after write', {
-        path,
-        message: error instanceof Error ? error.message : String(error)
-      })
+    if (baseContent === undefined) {
+      throw new Error(
+        'MCP config save requires the base content that was loaded; reload it before saving'
+      )
     }
+    const validatedBase = parseIpcPayload(
+      'kun:config:write',
+      deepseekConfigContentSchema,
+      baseContent
+    )
+    const path = resolveKunConfigPath()
+    await writeKunMcpConfigFile({
+      path,
+      content: validatedContent,
+      baseContent: validatedBase,
+      onWritten: async (writtenPath, written) => {
+        try {
+          await onKunMcpConfigWritten?.(writtenPath, written)
+        } catch (error: unknown) {
+          logError('mcp-config', 'Failed to apply MCP config change after write', {
+            path: writtenPath,
+            message: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
+    })
     return { ok: true as const, path }
   })
 

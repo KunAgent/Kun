@@ -256,6 +256,8 @@ export type SkillListItem = {
   scope: 'project' | 'global'
   builtin?: boolean
   legacy: boolean
+  /** Set when the skill was installed from a remote market. */
+  market?: { sourceId: string; version?: string }
 }
 export type SkillListResult = { ok: true; skills: SkillListItem[]; validationErrors: Array<{ root: string; message: string }> }
   | { ok: false; message: string }
@@ -417,82 +419,31 @@ export type CursorSubscriptionModel = {
   aliases?: string[]
   parameters?: CursorSubscriptionModelParameter[]
   variants?: CursorSubscriptionModelVariant[]
+  profile?: Partial<ModelProviderModelProfileV1>
 }
 
-export type ModelsDevCatalogModelHint = {
-  id: string
-  aliases?: string[]
-}
-
-export type ModelsDevCatalogMetadataIssue = {
-  field: 'contextWindowTokens' | 'maxOutputTokens'
-  code: 'out_of_range'
-  rawValue: number
-  maxAllowed: number
-}
-
-export type ModelsDevCatalogPricing = {
-  /** USD per million input tokens (non-cache). */
-  inputUsdPerMillion: number
-  /** USD per million output tokens. */
-  outputUsdPerMillion: number
-  /** Cache-read/write USD per million tokens; omitted falls back to input. */
-  cacheReadUsdPerMillion?: number
-  cacheWriteUsdPerMillion?: number
-}
-
-export type ModelsDevCatalogModel = {
-  observedAt?: string
-  id: string
-  providerKey?: string
-  name?: string
-  description?: string
-  inputModalities: ModelsDevCatalogModality[]
-  outputModalities: ModelsDevCatalogModality[]
-  reasoning?: boolean
-  toolCalling?: boolean
-  parallelTools?: boolean; streaming?: boolean; structuredOutput?: boolean
-  /** True only when models.dev reports both input and output cost as zero. */
-  free?: boolean
-  pricing?: ModelsDevCatalogPricing
-  contextWindowTokens?: number
-  maxOutputTokens?: number
-  /** Import-only diagnostics for catalog fields omitted by the sanitizer. */
-  metadataIssues?: ModelsDevCatalogMetadataIssue[]
-}
-
-export type ModelsDevCatalogRequest = {
-  providerId: string
-  baseUrl: string
-  forceRefresh?: boolean
-  modelHints?: ModelsDevCatalogModelHint[]
-}
-
-export type ModelsDevCatalogMatchMode = 'catalog' | 'enrichment-only'
-
-export type ModelsDevCatalogSource = 'models.dev' | 'kun-agent'
-
-export type ModelsDevCatalogResult =
-  | {
-      status: 'ok'
-      providerKey: string
-      providerName: string
-      matchMode: ModelsDevCatalogMatchMode
-      stale: boolean
-      /** Which catalog source produced the model data (for diagnostics/UI). */
-      source?: ModelsDevCatalogSource
-      models: ModelsDevCatalogModel[]
-    }
-  | { status: 'unmapped'; models: [] }
-  | { status: 'error'; message: string; models: [] }
+export type { ModelsDevCatalogModelHint, ModelsDevCatalogMetadataIssue, ModelsDevCatalogPricing, ModelsDevCatalogModel, ModelsDevCatalogRequest, ModelsDevCatalogMatchMode, ModelsDevCatalogSource, ModelsDevCatalogResult } from '../../kun/src/contracts/public-model-catalog'
 
 export type PromptOptimizationRequest = {
   text: string
+  /** Renderer-chosen id; `cancelPromptOptimization` aborts the matching request. */
+  requestId?: string
+  /** The composer's selected Kun model. A model pinned in Settings wins over it. */
+  providerId?: string
+  model?: string
 }
+
+export type PromptOptimizationFailureCode =
+  | 'empty'
+  | 'disabled'
+  | 'unsupported_model'
+  | 'cancelled'
+  | 'timeout'
+  | 'failed'
 
 export type PromptOptimizationResult =
   | { ok: true; text: string; model: string; providerId: string }
-  | { ok: false; message: string }
+  | { ok: false; code: PromptOptimizationFailureCode; message: string }
 
 export type ClawImInstallQrResult =
   | { ok: true; url: string; deviceCode: string; userCode: string; interval: number; expireIn: number }

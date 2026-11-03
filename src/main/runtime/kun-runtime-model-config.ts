@@ -1,7 +1,7 @@
 import {
   defaultKunTokenEconomySettings,
   getModelProviderSettings,
-  projectExecutableModelRoutePools,
+  projectRuntimeModelRoutePools,
   projectFailoverGroupsForRuntime,
   resolveKunRuntimeSettings,
   resolveModelProviderPresetSource,
@@ -12,6 +12,7 @@ import {
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1
 } from '../../shared/app-settings'
+import { composeDispatchPreferencePrompt } from '../../shared/ade-collaboration-settings'
 import { legacyProviderCredentialSourceId } from '../legacy-provider-settings-migration'
 
 const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
@@ -22,7 +23,7 @@ const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
     supportsToolCalling: true, messageParts: ['text']
   },
   'deepseek-v4-flash': {
-    aliases: ['deepseek-chat', 'deepseek-reasoner'],
+    aliases: ['deepseek-flash', 'deepseek-chat', 'deepseek-reasoner'],
     contextWindowTokens: 1_000_000,
     contextCompaction: { softThreshold: 980_000, hardThreshold: 990_000 },
     inputModalities: ['text'], outputModalities: ['text'],
@@ -151,7 +152,7 @@ function modelCapabilitiesForProviderConfig(
 
 export function routePoolsConfigForRuntime(settings: AppSettingsV1) {
   const providerSettings = getModelProviderSettings(settings)
-  return projectExecutableModelRoutePools(providerSettings)
+  return projectRuntimeModelRoutePools(providerSettings)
 }
 
 export function providerFailoverConfigForRuntime(settings: AppSettingsV1) {
@@ -208,7 +209,7 @@ const sortedRecord = (value: Record<string, string> | undefined): Record<string,
   )
 
 /**
- * `defaults[harnessId]` (p4 §3.6): fixed field order inside each entry so
+ * `defaults[harnessId]`: fixed field order inside each entry so
  * identical settings serialize byte-identically.
  */
 const sortedDefaultsRecord = (
@@ -231,48 +232,40 @@ const sortedDefaultsRecord = (
 
 /**
  * `harnesses` config section. Pure and byte-stable: arrays sort by id and
- * record keys sort alphabetically so identical settings never rewrite
+ * record keys (including `providers`) sort alphabetically so identical settings never rewrite
  * config.json (a moving config would retrigger runtime syncs forever).
  */
 export function harnessesConfigForRuntime(
   harnesses: Pick<KunRuntimeSettingsV1, 'harnesses'>['harnesses'] | undefined
 ): Record<string, unknown> {
-  const custom = [...(harnesses?.custom ?? [])]
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .map((entry) => ({
-      id: entry.id,
-      displayName: entry.displayName,
-      command: entry.command,
-      args: [...entry.args],
-      env: sortedRecord(entry.env),
-      secretEnv: [...(entry.secretEnv ?? [])]
+  const providers = Object.fromEntries(Object.entries(harnesses?.providers ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, entry]) => [id, {
+      ...(entry.extends ? { extends: entry.extends } : {}),
+      ...(entry.label ? { label: entry.label } : {}),
+      ...(entry.command ? { command: entry.command } : {}),
+      ...(entry.args ? { args: { mode: entry.args.mode, values: [...entry.args.values] } } : {}),
+      ...(entry.env ? { env: sortedRecord(entry.env) } : {}),
+      ...(entry.secretEnv?.length ? { secretEnv: [...entry.secretEnv]
         .sort((a, b) => a.name.localeCompare(b.name))
-        .map((row) => ({ name: row.name, secretRef: row.secretRef }))
-    }))
-  const terminalAgents = [...(harnesses?.terminalAgents ?? [])]
-    .sort((a, b) => a.id.localeCompare(b.id))
-    .map((entry) => ({
-      id: entry.id,
-      displayName: entry.displayName,
-      command: entry.command,
-      args: [...entry.args],
-      ...(entry.taskFlag ? { taskFlag: entry.taskFlag } : {}),
-      ...(entry.resumeArgs?.length ? { resumeArgs: [...entry.resumeArgs] } : {}),
-      ...(entry.hooks ? { hooks: entry.hooks } : {})
-    }))
+        .map((row) => ({ name: row.name, secretRef: row.secretRef })) } : {}),
+      ...(entry.terminal ? { terminal: {
+        ...(entry.terminal.taskFlag ? { taskFlag: entry.terminal.taskFlag } : {}),
+        ...(entry.terminal.resumeArgs?.length ? { resumeArgs: [...entry.terminal.resumeArgs] } : {}),
+        ...(entry.terminal.hooks ? { hooks: entry.terminal.hooks } : {})
+      } } : {})
+    }]))
   return {
     enabledProfiles: [...(harnesses?.enabledProfiles ?? [])]
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))
       .map(({ harnessId, credentialMode, providerId, gatewayBinding }) => ({ harnessId, credentialMode,
         ...(gatewayBinding ? { gatewayBinding: structuredClone(gatewayBinding) } : providerId ? { providerId } : {}) })),
     disabledIds: [...(harnesses?.disabledIds ?? [])].sort(),
-    binaryPaths: sortedRecord(harnesses?.binaryPaths),
-    custom,
+    providers,
     defaults: sortedDefaultsRecord(harnesses?.defaults),
     defaultHarnessId: harnesses?.defaultHarnessId ?? 'kun',
     // Ordering is significant: the worker selector reads it as preference rank.
-    agentOrder: [...(harnesses?.agentOrder ?? [])],
-    terminalAgents
+    agentOrder: [...(harnesses?.agentOrder ?? [])]
   }
 }
 
@@ -326,6 +319,16 @@ export function adeConfigForRuntime(
     stall: {
       structuredMinutes: ade?.stall.structuredMinutes ?? 10,
       terminalMinutes: ade?.stall.terminalMinutes ?? 20
+    },
+    dispatch: {
+      autoStartSeconds: ade?.dispatch?.autoStartSeconds ?? 60,
+      autoStartWhenConfirmationRequired: ade?.dispatch?.autoStartWhenConfirmationRequired ?? true,
+      preferencePrompt: composeDispatchPreferencePrompt(ade?.dispatch)
+    },
+    tasks: {
+      autoStartSeconds: ade?.tasks?.autoStartSeconds ?? 0,
+      worktree: ade?.tasks?.worktree ?? true,
+      inheritContext: ade?.tasks?.inheritContext ?? false
     },
     approvedWorktreeConfigs: [...(extras.approvedWorktreeConfigs ?? [])]
       .sort((a, b) => a.repoRoot.localeCompare(b.repoRoot)),

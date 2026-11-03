@@ -6,7 +6,7 @@ import type { ApprovedSetupStep } from './setup-runner.js'
 import type { EnvFillEntryMode } from './environment-fill.js'
 
 /**
- * Approved-setup resolution for task workspaces (docs/ade/07 §7.1). The GUI
+ * Approved-setup resolution for task workspaces. The GUI
  * writes digest-bound worktree sections into `ade.approvedWorktreeConfigs`;
  * Kun only returns the declared steps while the live `.kun/project.json`
  * digest still matches — editing any section (MCP included) revokes approval.
@@ -51,7 +51,7 @@ export function createApprovedSetupResolver(opts: {
   return createApprovedSectionResolver(opts, (worktree) => worktree.setup)
 }
 
-/** `worktree.checks` follow the same whole-config digest approval (10 §4.2). */
+/** `worktree.checks` follow the same whole-config digest approval. */
 export function createApprovedChecksResolver(opts: {
   approvedEntries: () => readonly ApprovedWorktreeConfigEntry[]
   loadConfig?: (repoRoot: string) => Promise<{ status: string; digest?: string } | null>

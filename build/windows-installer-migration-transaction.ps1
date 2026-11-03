@@ -293,7 +293,7 @@ function Assert-UpdateTransactionPaths($Transaction) {
   }
 }
 
-function Read-UpdateTransaction {
+function Read-TrustedUpdateTransaction {
   $path = Get-UpdateTransactionPath
   if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { return $null }
   Assert-UpdateTransactionStorage
@@ -306,7 +306,12 @@ function Read-UpdateTransaction {
   if (-not [string]::Equals([string]$transaction.InstallMode, (Get-NormalizedInstallMode), [StringComparison]::Ordinal)) {
     throw 'The automatic update transaction installation mode does not match.'
   }
-  Assert-UpdateTransactionPaths $transaction
+  return $transaction
+}
+
+function Read-UpdateTransaction {
+  $transaction = Read-TrustedUpdateTransaction
+  if ($null -ne $transaction) { Assert-UpdateTransactionPaths $transaction }
   return $transaction
 }
 
@@ -354,9 +359,7 @@ function Initialize-UpdateTransaction {
   }
   $transactionPath = Get-UpdateTransactionPath
   $assets = "$transactionPath.assets"
-  foreach ($path in @($stage, ($target + '.kun-failed'), $assets)) {
-    if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force }
-  }
+  foreach ($path in @($stage, ($target + '.kun-failed'), $assets)) { Remove-PayloadTreeIfPresent $path }
   [IO.Directory]::CreateDirectory($assets) | Out-Null
 
   $inPlace = [bool](Test-PathEqual $source $target)
@@ -412,6 +415,7 @@ function Initialize-UpdateTransaction {
   $transaction.StageRoot = $stage
   $transaction.HealthResult = Get-UpdateHealthResultPath
   Assert-InstallerRecoveryFields $transaction
+  Set-InstallerTransactionOwner $transaction
   Write-UpdateTransaction $transaction
   Invoke-InstallerFaultPoint 'prepare.after_journal'
   Write-InstallerResult $stage
@@ -426,10 +430,12 @@ function Invoke-SwitchUpdatePayload {
   Invoke-InstallerFaultPoint 'validate.before_check'
   Assert-PackagedInstallPayloadAt $stage
   if ([string]$transaction.Phase -eq 'payload_switched') { return }
-  if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+  $script:UpdateFileWaitMs = 0
+  Stop-UpdatePayloadProcesses $transaction
+  Invoke-UpdateFileOperation { Remove-PayloadTreeIfPresent $old }
   if (Test-Path -LiteralPath $target) {
     if (Test-PathEqual ([string]$transaction.Source) $target) {
-      Move-Item -LiteralPath $target -Destination $old
+      Invoke-UpdateFileOperation { Move-Item -LiteralPath $target -Destination $old -ErrorAction Stop }
       Invoke-InstallerFaultPoint 'switch.after_old_move'
     } elseif (@(Get-ChildItem -LiteralPath $target -Force).Count -eq 0) {
       Remove-Item -LiteralPath $target -Force
@@ -438,10 +444,10 @@ function Invoke-SwitchUpdatePayload {
     }
   }
   try {
-    Move-Item -LiteralPath $stage -Destination $target
+    Invoke-UpdateFileOperation { Move-Item -LiteralPath $stage -Destination $target -ErrorAction Stop }
   } catch {
     if ((Test-Path -LiteralPath $old) -and -not (Test-Path -LiteralPath $target)) {
-      Move-Item -LiteralPath $old -Destination $target
+      Invoke-UpdateFileOperation { Move-Item -LiteralPath $old -Destination $target -ErrorAction Stop }
     }
     throw
   }
@@ -535,12 +541,8 @@ function Restore-TransactionPayloadBackup($Transaction) {
   $source = Normalize-FullPath ([string]$Transaction.Source)
   Assert-RecoveryPayload $backup
   Assert-SafeInstallRoot $source 'Automatic update recovery destination'
-  [IO.Directory]::CreateDirectory($source) | Out-Null
-  foreach ($entry in @(Get-ChildItem -LiteralPath $backup -Force)) {
-    if ($entry.PSIsContainer) { Assert-NoReparsePointsInTree $entry 'Automatic update transaction backup' }
-    elseif (Test-ReparsePoint $entry.FullName) { throw "Automatic update transaction backup is a reparse point: $($entry.FullName)" }
-    Copy-Item -LiteralPath $entry.FullName -Destination $source -Recurse -Force
-  }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  Copy-RecoveryPayloadTree $backup $source
   Assert-RecoveryPayload $source
 }
 
@@ -554,21 +556,18 @@ function Invoke-RollbackUpdateTransaction {
     $target = Normalize-FullPath ([string]$transaction.Target)
     $old = Normalize-FullPath ([string]$transaction.OldPayloadRoot)
     $failed = Normalize-FullPath ([string]$transaction.FailedPayloadRoot)
-    $stopResult = Stop-AppProcesses @($target)
-    if ($stopResult.Outcome -ne 'stopped') {
-      Write-BlockingProcessDiagnostic $stopResult
-      throw 'The candidate application could not be stopped before rollback.'
-    }
-    if (Test-Path -LiteralPath $failed) { Remove-Item -LiteralPath $failed -Recurse -Force }
+    $script:UpdateFileWaitMs = 0
+    Stop-UpdatePayloadProcesses $transaction
+    Invoke-UpdateFileOperation { Remove-PayloadTreeIfPresent $failed }
     if (Test-Path -LiteralPath $target) {
       if ((Test-PathEqual ([string]$transaction.Source) $target) -and (Test-Path -LiteralPath $old)) {
-        Move-Item -LiteralPath $target -Destination $failed
+        Invoke-UpdateFileOperation { Move-Item -LiteralPath $target -Destination $failed -ErrorAction Stop }
       } elseif (-not (Test-PathEqual ([string]$transaction.Source) $target)) {
-        Move-Item -LiteralPath $target -Destination $failed
+        Invoke-UpdateFileOperation { Move-Item -LiteralPath $target -Destination $failed -ErrorAction Stop }
       }
     }
     if ([bool]$transaction.InPlace -and (Test-Path -LiteralPath $old)) {
-      Move-Item -LiteralPath $old -Destination $target
+      Invoke-UpdateFileOperation { Move-Item -LiteralPath $old -Destination $target -ErrorAction Stop }
     }
     if ([bool]$transaction.InPlace) {
       Restore-TransactionPayloadBackup $transaction
@@ -612,11 +611,7 @@ function Invoke-RollbackUpdateTransaction {
       ([string]$transaction.StageRoot),
       ([string]$transaction.FailedPayloadRoot),
       ([string]$transaction.AssetsRoot)
-    )) {
-      if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-        Remove-Item -LiteralPath $path -Recurse -Force
-      }
-    }
+    )) { Remove-PayloadTreeIfPresent $path }
     Assert-RecoveryPayload (Normalize-FullPath ([string]$transaction.Source))
     $copy = @{}
     foreach ($property in $transaction.PSObject.Properties) { $copy[$property.Name] = $property.Value }
@@ -688,11 +683,7 @@ function Finalize-TerminalUpdateTransaction {
     ([string]$transaction.BackupRoot),
     ([string]$transaction.AssetsRoot),
     ([string]$transaction.HealthResult)
-  )) {
-    if (-not [string]::IsNullOrWhiteSpace($path) -and (Test-Path -LiteralPath $path)) {
-      Remove-Item -LiteralPath $path -Recurse -Force
-    }
-  }
+  )) { Remove-PayloadTreeIfPresent $path }
   Remove-Journal
   Invoke-InstallerFaultPoint 'finalize.before_transaction_removal'
   Remove-Item -LiteralPath (Get-UpdateTransactionPath) -Force

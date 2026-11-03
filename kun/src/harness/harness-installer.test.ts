@@ -40,14 +40,15 @@ describe('Agent installation plans', () => {
   it('reports missing prerequisites and recognizes Windows npm.cmd', async () => {
     expect(await harnessInstallPlan(definition, 'install', 'linux', async () => undefined))
       .toMatchObject({ available: false, missingCommand: 'bash' })
-    const gemini = new HarnessCatalog().get('gemini-cli')!
-    expect(await harnessInstallPlan(gemini, 'install', 'win32', async (cmd) =>
+    const npmAgent = new HarnessCatalog().get('cline')!
+    expect(await harnessInstallPlan(npmAgent, 'install', 'win32', async (cmd) =>
       ['powershell.exe', 'npm.cmd'].includes(cmd) ? cmd : undefined)).toMatchObject({ available: true })
   })
   it('finds new user installs without replacing explicit PATH precedence', () => {
     const env = harnessExecutableEnv({ HOME: '/fixture', PATH: '/custom/bin' })
     expect(env.PATH?.startsWith('/custom/bin')).toBe(true)
     expect(env.PATH).toContain('/fixture/.local/bin')
+    expect(env.PATH).toContain('/fixture/.codemaker/bin')
   })
   it.each(['darwin', 'linux'] as const)('uses the supported Antigravity bootstrap arguments on %s', async (platform) => {
     const agy = new HarnessCatalog().get('antigravity')!
@@ -70,6 +71,12 @@ describe('Agent installation jobs', () => {
     await flush()
     expect(detect).toHaveBeenCalledOnce()
     expect((await installer.state('devin')).job).toMatchObject({ status: 'completed', detected: { login: 'signed-out' } })
+  })
+  it('installs npm packages from the official registry, not a lagging mirror', async () => {
+    const { installer, spawn } = fixture()
+    await installer.start('devin', 'install')
+    const options = (spawn.mock.calls[0] as unknown[])[2] as { env: Record<string, string> }
+    expect(options.env.npm_config_registry).toBe('https://registry.npmjs.org')
   })
   it('does not mistake a zero installer exit for a working command', async () => {
     const { installer, child } = fixture({ installed: false })

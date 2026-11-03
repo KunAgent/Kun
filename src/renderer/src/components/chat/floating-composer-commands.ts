@@ -42,7 +42,7 @@ export type SlashCommand = {
   scopeLabel?: string
   skillPrompt?: string
   /**
-   * Harness-native command text sent verbatim on selection (12 §7.4). The
+   * Harness-native command text sent verbatim on selection. The
    * runtime must receive the exact `/<name>` — the composer never rewrites
    * or expands it.
    */
@@ -93,9 +93,16 @@ export const RESEARCH_COMMAND_ALIASES = [
   'deep_research'
 ]
 
+/**
+ * A Chinese input method types `、` (or the full-width `／`) for the slash key,
+ * so both open the command menu too. Picking a command applies it by id, and
+ * text that never picks one is sent as typed.
+ */
+const SLASH_TRIGGERS = ['/', '、', '／']
+
 export function getSlashQuery(input: string): string | null {
   const trimmed = input.trimStart()
-  if (!trimmed.startsWith('/')) return null
+  if (!SLASH_TRIGGERS.some((trigger) => trimmed.startsWith(trigger))) return null
   if (/\s/.test(trimmed)) return null
   return trimmed.slice(1).toLowerCase()
 }

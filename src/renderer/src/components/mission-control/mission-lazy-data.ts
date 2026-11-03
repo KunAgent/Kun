@@ -4,7 +4,7 @@ import type { AdeTeamOverview } from '@shared/ade-teams'
 import { getProvider } from '../../agent/registry'
 
 /**
- * Lazy card data for Mission Control (docs/ade/12 §5.3): task-workspace
+ * Lazy card data for Mission Control: task-workspace
  * file counts per bound thread plus team overviews per manager, fetched on
  * demand and shared across cards. Everything is best-effort — a missing
  * provider method or 404 resolves to null and the footer keeps its

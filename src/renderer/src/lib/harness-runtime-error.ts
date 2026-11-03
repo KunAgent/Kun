@@ -1,6 +1,9 @@
 /** Match known native Agent failures without replacing unrelated provider errors. */
 export function harnessRuntimeErrorKey(code: string | null, text: string): string | undefined {
   if (/(?:requires a newer version|upgrade to the latest app or cli)/i.test(text)) return 'agentRuntimeError.update'
+  // The session offers other Agents but not the mode Kun maps this permission to
+  // (OpenCode with plugins that replace build/plan): the fix is in the composer.
+  if (code === 'policy_denied' && /pick one of its Agents/i.test(text)) return 'agentRuntimeError.nativeAgent'
   if (code === 'policy_denied' && /(?:permission mode|agent permission)/i.test(text)) return 'agentRuntimeError.permission'
   if (/(?:agent launch has no current readiness proof|agent profile changed|configuration or credentials changed|readiness check was superseded)/i.test(text)) {
     return 'agentRuntimeError.changed'

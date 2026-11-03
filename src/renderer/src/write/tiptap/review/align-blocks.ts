@@ -1,5 +1,5 @@
 /**
- * Block-level alignment for the rich diff review (implementation §6.2).
+ * Block-level alignment for the rich diff review.
  *
  * Callers parse both revisions with `parseWorkDocument` and pass the per-block
  * verbatim keys (`raw.trimEnd()`). `diffArrays` finds equal/removed/added

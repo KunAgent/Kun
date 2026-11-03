@@ -17,9 +17,9 @@ import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 
 /**
- * Harness catalog client (docs/ade/01 §7, 12 §7.2). Catalog rows carry
+ * Harness catalog client. Catalog rows carry
  * cached detection status; `waitMs` asks the server to hold the response
- * briefly so inflight detections can settle first (P4-02).
+ * briefly so inflight detections can settle first.
  */
 export function createKunHarnessesClient() {
   return {
@@ -43,7 +43,7 @@ export function createKunHarnessesClient() {
     },
 
     /**
-     * Models for one harness (01 §9): static, probed, or provider-derived.
+     * Models for one harness: static, probed, or provider-derived.
      * With `credentialMode` set to `provider`/`kun-gateway` the response
      * carries `groups` — gateway-exposable providers and their models.
      */
@@ -85,7 +85,7 @@ export function createKunHarnessesClient() {
     },
 
     /**
-     * Progressive connection test (p4 §3.5, P4-10): detect → handshake →
+     * Progressive connection test: detect → handshake →
      * optional trial turn on a hidden side thread. Trial consumes quota.
      */
     async testHarness(
@@ -111,7 +111,7 @@ export function createKunHarnessesClient() {
     },
 
     /**
-     * Pre-save handshake for a custom ACP definition (p4 §3.7, P4-12): the
+     * Pre-save handshake for a custom ACP definition: the
      * Agent Center gates "save" on this so broken agents are caught early.
      */
     async probeHarnessDefinition(

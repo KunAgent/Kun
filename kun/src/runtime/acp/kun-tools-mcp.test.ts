@@ -6,8 +6,8 @@ import type { HarnessId } from '../../contracts/harness.js'
 const CTX = {
   threadId: 'thr_1',
   turnId: 'turn_1',
-  harnessId: 'gemini-cli' as HarnessId,
-  credentialIdentity: 'native-login:gemini-cli'
+  harnessId: 'devin' as HarnessId,
+  credentialIdentity: 'native-login:devin'
 } as const
 
 function makeProvider(endpoint: string | undefined = 'http://127.0.0.1:18899') {

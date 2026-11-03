@@ -8,20 +8,16 @@ import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { useChatStore } from '../../store/chat-store'
 import {
   activeWriteThreadForWorkspace,
-  readWriteThreadRegistry
+  readWriteThreadRegistry,
+  writeThreadBelongsToWorkspace
 } from '../../write/write-thread-registry'
-import { workWhiteboardThreadIds } from '../../write/work-whiteboard'
-import { usePaperStore } from '../../write/paper/paper-store'
-import { paperModeView } from '../../paper/paper-view'
-import { paperConversationResourcePath } from '../../paper/paper-conversation-scope'
-import {
-  applicableWorkSessionPin,
-  useWorkSidebarStore,
-  workDocumentKey,
-  writeHasDocumentContext
-} from '../../write/work-sidebar-store'
+import { paperResearchStageActive } from '../../paper/paper-view'
+import { researchResourcePath } from '../../paper/paper-research-sessions'
+import { useWorkSessionStore } from '../../write/work-session-store'
+import { rememberWorkSessionTabs } from '../../write/work-session-tabs'
+import { recordWorkRecentDocument } from '../../write/work-recent-documents'
 import { useWorkConversationStage } from '../../write/work-conversation-stage'
-import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
+import { writeWorkspaceKey } from '../../write/write-thread-registry'
 
 type WorkbenchWriteAssistantRuntimeOptions = {
   composerPickList: string[]
@@ -36,18 +32,13 @@ export function useWorkbenchWriteAssistantRuntime({
   const conversationStage = useWorkConversationStage()
   const writeAssistantExpanded = useWriteWorkspaceStore((s) => s.writeRightPanel.expanded)
   const writeAssistantOpen = writeAssistantExpanded || conversationStage
-  const sidebarView = useWorkSidebarStore((s) => s.view)
-  const sessionPin = useWorkSidebarStore((s) => s.pin)
-  const pinTransitions = useWorkSidebarStore((s) => s.transitions)
+  const currentSessions = useWorkSessionStore((s) => s.current)
+  const sessionTransitions = useWorkSessionStore((s) => s.transitions)
   const setWriteAssistantOpen = useWriteWorkspaceStore((s) => s.setAssistantOpen)
   const writeAssistantModel = useWriteWorkspaceStore((s) => s.assistantModel)
   const writeAssistantProviderId = useWriteWorkspaceStore((s) => s.assistantProviderId)
   const writeWorkspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
-  const workSurface = useWriteWorkspaceStore((s) => s.workSurface)
-  const paperView = useWriteWorkspaceStore((s) => paperModeView(s))
-  const researchSessionId = useWriteWorkspaceStore((s) => s.paperResearch.sessionId)
-  const activeWriteFilePath = useWriteWorkspaceStore((s) => s.activeFilePath)
-  const activeWhiteboardId = useWriteWorkspaceStore((s) => s.activeWhiteboardId)
+  const researchFocus = useWriteWorkspaceStore((s) => paperResearchStageActive(s) ? s.paperResearch.sessionId ?? '' : null)
   const activeWhiteboard = useWriteWorkspaceStore((s) =>
     s.activeWhiteboardId ? s.whiteboards[s.activeWhiteboardId] ?? null : null
   )
@@ -57,7 +48,9 @@ export function useWorkbenchWriteAssistantRuntime({
   const activeThreadId = useChatStore((s) => s.activeThreadId)
   const threads = useChatStore((s) => s.threads)
   const pendingThreadIdRef = useRef<string | null>(null)
-  const pendingBoardIdRef = useRef<string | null>(null)
+  const seenActiveRef = useRef<string | null | undefined>(undefined)
+  const seenBoardRef = useRef<string | null>(null)
+  const seenResearchRef = useRef<string | null>(null)
   const writeAssistantPickList = useMemo(() => {
     return buildComposerAssistantPickList({
       composerPickList
@@ -71,146 +64,102 @@ export function useWorkbenchWriteAssistantRuntime({
     })
   }, [composerModelGroups, writeAssistantModel, writeAssistantProviderId])
 
+  // The session law (work-session-store): the space's current session is the
+  // conversation, whatever is open. Pages that are sessions themselves — a
+  // PPT review board's task, an Agent research run — make theirs current
+  // when they come to the front; a Work session selected from elsewhere (a
+  // notification, search) is adopted.
   useEffect(() => {
-    if (route !== 'write' || !writeWorkspaceRoot || pinTransitions > 0) return
+    if (route !== 'write' || !writeWorkspaceRoot || sessionTransitions > 0) return
     const chatState = useChatStore.getState()
-    // A session chosen in the sidebar owns the conversation: in the sessions
-    // view whatever opens, in the files view until another document opens
-    // (the conversation then follows the document again). An empty pin is a
-    // draft that the next send turns into a new session. Whiteboards keep
-    // their own bound thread, which their workflows depend on.
-    const document = { workSurface, activeFilePath: activeWriteFilePath, activeWhiteboardId }
-    const pin = activeWhiteboardId ? null : applicableWorkSessionPin({
-      view: sidebarView,
-      pin: sessionPin,
-      workspaceRoot: writeWorkspaceRoot,
-      documentContext: writeHasDocumentContext(document),
-      documentKey: workDocumentKey(document)
-    })
-    if (!pin && sessionPin && sidebarView === 'files' && !activeWhiteboardId &&
-      normalizeWorkspaceRoot(sessionPin.workspaceRoot) === normalizeWorkspaceRoot(writeWorkspaceRoot)) {
-      // The document moved on in the files view; the pin is spent.
-      useWorkSidebarStore.getState().clearPin()
-      return
+    const sessions = useWorkSessionStore.getState()
+    const spaceKey = writeWorkspaceKey(writeWorkspaceRoot)
+    const activeChanged = seenActiveRef.current !== undefined && seenActiveRef.current !== activeThreadId
+    seenActiveRef.current = activeThreadId
+    const current = currentSessions[spaceKey] ?? ''
+
+    const boardKey = activeWhiteboard?.workflowId && activeWhiteboard.threadId
+      ? `${activeWhiteboard.id}\u0000${activeWhiteboard.threadId}` : null
+    if (boardKey !== seenBoardRef.current) {
+      seenBoardRef.current = boardKey
+      if (boardKey && activeWhiteboard?.threadId && activeWhiteboard.threadId !== current) {
+        sessions.select(writeWorkspaceRoot, activeWhiteboard.threadId)
+        return
+      }
     }
-    if (pin && !pin.threadId) {
+    if (researchFocus !== seenResearchRef.current) {
+      seenResearchRef.current = researchFocus
+      if (researchFocus) {
+        const research = activeWriteThreadForWorkspace(writeWorkspaceRoot, threads, readWriteThreadRegistry(),
+          researchResourcePath(writeWorkspaceRoot, researchFocus))
+        if (research && research.archived !== true && research.id !== current) {
+          sessions.select(writeWorkspaceRoot, research.id)
+          return
+        }
+      }
+    }
+    if (activeChanged && activeThreadId && activeThreadId !== current) {
+      const active = threads.find((thread) => thread.id === activeThreadId)
+      if (active && active.archived !== true &&
+        writeThreadBelongsToWorkspace(active, writeWorkspaceRoot, readWriteThreadRegistry())) {
+        sessions.select(writeWorkspaceRoot, activeThreadId)
+        return
+      }
+    }
+
+    if (!current) {
       if (activeThreadId) chatState.clearActiveThreadSelection()
       return
     }
     // A brand-new session is not listed until its first message lands.
-    if (pin && pin.threadId === activeThreadId) return
-    const pinnedThread = pin ? threads.find((thread) => thread.id === pin.threadId) ?? null : null
-    if (pinnedThread?.archived === true) useWorkSidebarStore.getState().clearPin()
-    else if (pinnedThread) {
-      if (runtimeConnection !== 'ready') return
-      if (pendingThreadIdRef.current === pinnedThread.id) return
-      pendingThreadIdRef.current = pinnedThread.id
-      void chatState.selectWriteThread(pinnedThread.id, writeWorkspaceRoot).finally(() => {
-        if (pendingThreadIdRef.current === pinnedThread.id) pendingThreadIdRef.current = null
-      })
+    if (current === activeThreadId) return
+    const thread = threads.find((candidate) => candidate.id === current) ?? null
+    if (thread?.archived === true) {
+      sessions.release(current)
       return
     }
-    if (activeWhiteboardId && activeWhiteboard) {
-      if (runtimeConnection !== 'ready') {
-        if (activeThreadId) chatState.clearActiveThreadSelection()
-        return
-      }
-      const associatedThreadIds = workWhiteboardThreadIds(activeWhiteboard)
-      const availableThreads = associatedThreadIds
-        .map((threadId) => threads.find((thread) => thread.id === threadId) ?? null)
-        .filter((thread): thread is NonNullable<typeof thread> => Boolean(thread))
-        .filter((thread) => thread.archived !== true)
-      const targetThread = availableThreads.find((thread) => thread.id === activeWhiteboard.threadId) ??
-        availableThreads[0] ?? null
-      if (targetThread?.id === activeThreadId) return
-      if (targetThread) {
-        if (pendingThreadIdRef.current === targetThread.id) return
-        pendingThreadIdRef.current = targetThread.id
-        const bind = targetThread.id !== activeWhiteboard.threadId && !activeWhiteboard.workflowId
-          ? useWriteWorkspaceStore.getState().bindWhiteboardThread(activeWhiteboardId, targetThread.id)
-          : Promise.resolve(true)
-        void bind.then((bound) => {
-          if (!bound) return
-          return chatState.selectWriteThread(targetThread.id, writeWorkspaceRoot)
-        }).finally(() => {
-          if (pendingThreadIdRef.current === targetThread.id) pendingThreadIdRef.current = null
-        })
-        return
-      }
-      if (associatedThreadIds.length > 0) {
-        if (activeThreadId) chatState.clearActiveThreadSelection()
-        return
-      }
-      if (pendingBoardIdRef.current === activeWhiteboardId) return
-      pendingBoardIdRef.current = activeWhiteboardId
-      // The board title is the whiteboard's own canonical metadata; seed the
-      // bound session with it and lock the session title (titleAuto: false) so
-      // the backend titler cannot overwrite the user-visible board name.
-      void chatState.createWriteThread(writeWorkspaceRoot, undefined, {
-        title: activeWhiteboard.title,
-        titleAuto: false
-      }).then(async (threadId) => {
-        if (threadId) {
-          await useWriteWorkspaceStore.getState().bindWhiteboardThread(activeWhiteboardId, threadId)
-        }
-      }).finally(() => {
-        if (pendingBoardIdRef.current === activeWhiteboardId) pendingBoardIdRef.current = null
-      })
-      return
-    }
-    // Docs surface keeps the legacy rule: no open file, no selected thread.
-    // On the papers surface the library/discover views fall through to the
-    // library-level (workspace) thread below.
-    if (!activeWriteFilePath && workSurface === 'docs') {
-      if (activeThreadId) chatState.clearActiveThreadSelection()
-      return
-    }
-    if (runtimeConnection !== 'ready') {
-      if (activeThreadId) chatState.clearActiveThreadSelection()
-      return
-    }
-
-    const resourcePath = paperConversationResourcePath({
-      surface: workSurface,
-      workspaceRoot: writeWorkspaceRoot,
-      activeFilePath: activeWriteFilePath,
-      unitDirs: Object.keys(usePaperStore.getState().unitsByDir),
-      entriesByDir: useWriteWorkspaceStore.getState().entriesByDir,
-      view: paperView,
-      researchSessionId
+    if (!thread || runtimeConnection !== 'ready') return
+    if (pendingThreadIdRef.current === current) return
+    pendingThreadIdRef.current = current
+    void chatState.selectThread(current).finally(() => {
+      if (pendingThreadIdRef.current === current) pendingThreadIdRef.current = null
     })
-    const target = activeWriteThreadForWorkspace(
-      writeWorkspaceRoot,
-      threads,
-      readWriteThreadRegistry(),
-      resourcePath
-    )
-    if (target?.id === activeThreadId) return
-    if (target) {
-      if (pendingThreadIdRef.current === target.id) return
-      pendingThreadIdRef.current = target.id
-      void chatState.selectWriteThread(target.id, writeWorkspaceRoot, resourcePath).finally(() => {
-        if (pendingThreadIdRef.current === target.id) pendingThreadIdRef.current = null
-      })
-    } else if (activeThreadId) {
-      chatState.clearActiveThreadSelection()
-    }
   }, [
     activeThreadId,
     activeWhiteboard,
-    activeWhiteboardId,
-    activeWriteFilePath,
-    paperView,
-    pinTransitions,
-    researchSessionId,
+    currentSessions,
+    researchFocus,
     route,
     runtimeConnection,
-    sessionPin,
-    sidebarView,
+    sessionTransitions,
     threads,
-    workSurface,
     writeWorkspaceRoot
   ])
+
+  // Remember each session's tabs so opening it again restores its workbench,
+  // and the documents opened in each space for the home cards.
+  useEffect(() => {
+    if (route !== 'write') return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const save = (): void => {
+      const write = useWriteWorkspaceStore.getState()
+      const sessionId = useWorkSessionStore.getState().current[writeWorkspaceKey(write.workspaceRoot)] ?? ''
+      if (!sessionId || sessionId !== useChatStore.getState().activeThreadId) return
+      rememberWorkSessionTabs(sessionId, write.workspaceRoot, write.editorLayout)
+    }
+    const unsubscribe = useWriteWorkspaceStore.subscribe((state, previous) => {
+      if (state.activeFilePath && state.activeFilePath !== previous.activeFilePath) {
+        recordWorkRecentDocument(state.workspaceRoot, state.activeFilePath)
+      }
+      if (state.editorLayout === previous.editorLayout) return
+      if (timer !== null) clearTimeout(timer)
+      timer = setTimeout(save, 400)
+    })
+    return () => {
+      unsubscribe()
+      if (timer !== null) clearTimeout(timer)
+    }
+  }, [route])
 
   return {
     resolvedWriteAssistantProviderId,

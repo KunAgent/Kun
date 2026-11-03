@@ -95,6 +95,23 @@ describe('effectiveHarnessId', () => {
 })
 
 describe('adeHarnessModelGroups', () => {
+  it('names the Agent\'s own sign-in after the Agent and a provider-supplied one after that provider', () => {
+    const base = harnessRow({ credentialModes: ['native-login'] })
+    const row = withHarnessReadiness(base, [{ harnessId: 'claude-code', credentialMode: 'native-login' },
+      { harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'claude-subscription' },
+      { harnessId: 'claude-code', credentialMode: 'native-login', providerId: 'removed-provider' }])
+    const groups = adeHarnessModelGroups({ row, models: ['opus'], hasConfiguredProvider: false, labels: { ...labels,
+      agentAccount: (agent) => `${agent} account`,
+      providerName: (id) => id === 'claude-subscription' ? { label: 'Claude subscription', presetSource: 'anthropic' } : undefined } })
+    expect(groups.map(({ providerId, label, agentIconId, presetSource }) => ({ providerId, label, agentIconId, presetSource }))).toEqual([
+      { providerId: 'ade-cred:native-login', label: 'Claude Code account', agentIconId: 'claude-code', presetSource: undefined },
+      { providerId: 'ade-cred:native-login:claude-subscription', label: 'Claude subscription', agentIconId: undefined, presetSource: 'anthropic' },
+      { providerId: 'ade-cred:native-login:removed-provider', label: 'Native sign-in · removed-provider', agentIconId: undefined, presetSource: undefined }
+    ])
+    // Callers without the hooks keep the plain label.
+    expect(adeHarnessModelGroups({ row, models: ['opus'], hasConfiguredProvider: false, labels })[0]?.label).toBe('Native sign-in')
+  })
+
   const exposable = [
     { providerId: 'deepseek', label: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
     { providerId: 'stepfun', label: 'StepFun', models: ['step-3'] }
@@ -138,6 +155,28 @@ describe('adeHarnessModelGroups', () => {
       hasConfiguredProvider: true
     })
     expect(groups.map((group) => group.providerId)).toEqual([credentialGroupKey('native-login')])
+  })
+
+  it('keeps a Cursor account catalog addressable by name and thinking level', () => {
+    const row = harnessRow({ id: 'cursor', credentialModes: ['provider'] })
+    row.definition.displayName = 'Cursor'
+    row.definition.transport = 'cursor-sdk'
+    const groups = adeHarnessModelGroups({
+      row, models: [], labels, hasConfiguredProvider: true,
+      providerGroups: [{ providerId: 'cursor-account', label: 'Cursor subscription', models: ['grok-4.6', 'composer-2.5'],
+        modelInfo: [
+          { id: 'grok-4.6', displayName: 'Grok 4.6', reasoningEfforts: ['high', 'max'], defaultReasoningEffort: 'high', inputModalities: ['text', 'image'] },
+          { id: 'composer-2.5', displayName: 'Composer 2.5', reasoningEfforts: [] }
+        ] }]
+    })
+    expect(groups).toHaveLength(1)
+    expect(groups[0]).toMatchObject({
+      nativeHarnessId: 'cursor',
+      label: 'Provider · Cursor subscription',
+      modelIds: ['grok-4.6', 'composer-2.5'],
+      modelInfo: { 'grok-4.6': { displayName: 'Grok 4.6', reasoningEfforts: ['high', 'max'] } }
+    })
+    expect(groups[0]?.modelProfiles?.['grok-4.6']?.inputModalities).toContain('image')
   })
 
   it('returns no groups for an unknown harness row', () => {

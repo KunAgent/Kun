@@ -50,7 +50,7 @@ import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
-  delegatedRouteKey,
+  delegatedProviderStateKey,
   priorItemsForDelegatedTurn,
   type DelegatedSessionPreparation
 } from '../delegated-session-binding.js'
@@ -90,9 +90,7 @@ export function createAgentSdkTurnRuntimeDeps(
         .find((item) => item.turnId === turnId && item.kind === 'user_message')
       const userText =
         userItem && 'text' in userItem ? String((userItem as { text?: unknown }).text ?? '') : ''
-      const managedPptScope = deps.allowSdkBuiltins === false &&
-        deps.toolContextBoundary?.pptWorkflowScope !== undefined
-      const modelUserText = managedPptScope || userItem?.kind !== 'user_message'
+      const modelUserText = userItem?.kind !== 'user_message'
         ? userText
         : userMessageTextWithComposerContexts(userItem)
       const attachmentIds =
@@ -115,7 +113,7 @@ export function createAgentSdkTurnRuntimeDeps(
       )
       // `kun-gateway` turns address the routed provider through the loopback
       // gateway as `kun/<provider>/<model>`; the grant only authorizes those
-      // routes (docs/ade/04 §5.5). Provider credentials never enter the env.
+      // routes. Provider credentials never enter the env.
       const gatewayMode = turn.credentialMode === 'kun-gateway'
       const rawModel = turn?.model || thread.model
       const gatewayAddress = gatewayMode && !turn.gatewayBinding ? parseGatewayModelId(rawModel) : null
@@ -271,7 +269,7 @@ export function createAgentSdkTurnRuntimeDeps(
       items = [...turnDynamicContext.historyItems]
       // The bridged catalog comes from the shared tool bridge host: same
       // capability snapshot, plan context, client surface, and overlap policy
-      // as the native loop (docs/ade/05 §3.2).
+      // as the native loop.
       const bridgedTools = await toolBridge.listTools(threadId, turnId, { scope })
 
       // A plan turn suppresses goal/todo continuation and injects the plan-mode
@@ -298,7 +296,8 @@ export function createAgentSdkTurnRuntimeDeps(
         await deps.turns.updateTurnMetadata(threadId, turnId, {
           ...memoryInjectionMetadata({
             memories: memoryContext.memories,
-            directives: memoryContext.directives
+            directives: memoryContext.directives,
+            relationContext: memoryContext.relationContext
           }),
           ...(instructionResolution ? {
             injectedInstructionSources: instructionResolution.sources,
@@ -308,15 +307,13 @@ export function createAgentSdkTurnRuntimeDeps(
       }
 
       const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread.additionalWorkspaces)
-      // P1-25: planning-phase harness menu as dynamic context (not the
+      // planning-phase harness menu as dynamic context (not the
       // stable delegated-session prefix).
       const graphHarnessInstruction =
         graphPolicy?.phase === 'planning'
           ? await deps.graphHarnessSummary?.().catch(() => undefined)
           : undefined
-      const contextInstructions = managedPptScope ? [
-        ...turnDynamicContext.instructions
-      ] : [
+      const contextInstructions = [
         ...historyReferenceInstructions(thread),
         ...dispatchGuidanceForTools(bridgedTools),
         buildClientSurfaceInstruction(clientSurface),
@@ -357,6 +354,11 @@ export function createAgentSdkTurnRuntimeDeps(
             }),
             workspace: thread.workspace,
             model: model ?? 'claude-default',
+            // The SDK applies `model` on every query, including a resumed one,
+            // so an explicit model change continues the same Claude session.
+            // Gateway turns already bind the session to the route through the
+            // credential identity, and no model at all is its own session.
+            ...(model && !gatewayEnv ? { modelScope: 'session' as const } : {}),
             capabilityFingerprint: delegatedCapabilityFingerprint({
               systemPrompt: deps.prefix.systemPrompt,
               threadPersona: thread.systemPrompt?.trim() || '',
@@ -385,7 +387,7 @@ export function createAgentSdkTurnRuntimeDeps(
           claudeConfigDir = deps.sessionCoordinator.store.providerStateDir(
             'agent-sdk',
             threadId,
-            delegatedRouteKey(preparation.route)
+            delegatedProviderStateKey(preparation.route)
           )
           await mkdir(claudeConfigDir, { recursive: true, mode: 0o700 })
         }
@@ -393,7 +395,7 @@ export function createAgentSdkTurnRuntimeDeps(
         sessionGoalContextKeysByTurn.set(skillTurnKey(threadId, turnId), goalContextKeyForHistory)
       }
 
-      // The deterministic handoff brief (docs/ade/08 §4) replaces the portable
+      // The deterministic handoff brief replaces the portable
       // transcript whenever the session is new/rebased or a parked session is
       // restored with a delta. Compatible native resumes send neither. The
       // closure is re-invoked after a rejected native resume to produce the
@@ -403,7 +405,6 @@ export function createAgentSdkTurnRuntimeDeps(
       ): TurnHandoff | undefined => {
         const resolved = resolveTurnHandoff({
           enabled: Boolean(deps.sessionCoordinator) &&
-            !managedPptScope &&
             deps.deterministicHandoff !== false,
           preparation: prep,
           items,
@@ -425,7 +426,7 @@ export function createAgentSdkTurnRuntimeDeps(
       // This is the portable rebase handoff. Compatible consecutive turns use
       // the official SDK resume id and do not send this transcript again.
       const historyTranscript =
-        managedPptScope || turnHandoff
+        turnHandoff
           ? ''
           : buildHistoryTranscript(
               items,
@@ -444,9 +445,6 @@ export function createAgentSdkTurnRuntimeDeps(
         workspace: thread.workspace,
         additionalWorkspaces: thread.additionalWorkspaces,
         userText: modelUserText,
-        ...(managedPptScope && turnDynamicContext.instructions.length === 0
-          ? { preserveExactUserPrompt: true }
-          : {}),
         threadPersona: thread.systemPrompt?.trim() || undefined,
         approvalPolicy,
         sandboxMode,
@@ -462,7 +460,7 @@ export function createAgentSdkTurnRuntimeDeps(
           graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || planMode || turn?.guiDesignArtifact?.kind === 'svg'
             ? false
             : deps.allowSdkBuiltins ?? true,
-        ...(graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) || managedPptScope ? { bridgeKunBuiltinOverlaps: true } : {}),
+        ...(graphPolicy || thread.roomContext || hasWorkbenchCapabilityConstraints(thread.workbenchOrigin?.capabilityCeiling) ? { bridgeKunBuiltinOverlaps: true } : {}),
         ...(graphPolicy ? { graphPhase: graphPolicy.phase } : {}),
         ...(turn?.guiDesignArtifact?.kind === 'svg' ? { requireSvgCompletion: true } : {}),
         // Claude Code only accepts Anthropic models; coerce a thread's non-Claude
@@ -478,7 +476,7 @@ export function createAgentSdkTurnRuntimeDeps(
         ...(claudeConfigDir ? { claudeConfigDir } : {}),
         ...(preparation ? { sessionPreparation: preparation } : {}),
         ...(deps.contextProfile
-          ? { contextProfile: deps.contextProfile(model ?? 'claude-default') }
+          ? { contextProfile: deps.contextProfile(model ?? 'claude-default', providerId) }
           : {}),
         oauthToken: token || undefined,
         ...(gatewayEnv ? { gateway: gatewayEnv } : {}),

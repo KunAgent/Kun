@@ -1,62 +1,51 @@
-import { useMemo, useState, type ReactElement } from 'react'
-import {
-  BadgeCheck,
-  BookMarked,
-  CheckSquare,
-  FileText,
-  Loader2,
-  Quote,
-  Send,
-  Square,
-  TriangleAlert
-} from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { BookMarked, ChevronDown, ChevronRight, ClipboardCopy, ExternalLink, FileText, Maximize2, Send } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type {
-  RendererPaperList,
-  RendererPaperListEntry
-} from '../../agent/paper-list-adapter'
-import { paperCardImportInput, paperCardImportMeta, paperCardUrl } from '../../agent/paper-list-adapter'
+import type { RendererPaperList, RendererPaperListEntry } from '../../agent/paper-list-adapter'
+import { paperCardUrl } from '../../agent/paper-list-adapter'
 import type { PaperUnitMetaV2 } from '@shared/paper/paper-meta-v2'
 import { generatePaperBibtex } from '@shared/paper/paper-bibtex'
+import { useChatStore } from '../../store/chat-store'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
-import { newPaperRequestId, usePaperStore } from '../../write/paper/paper-store'
-import { ImportButton } from '../paper/discover/PaperDiscoverParts'
-import { PaperImportFolderPicker } from '../paper/import/PaperImportFolderPicker'
-import { currentImportParentDir } from '../../paper/paper-import-target'
+import { candidateFromListEntry, useLibraryIndex } from '../../paper/paper-import-candidates'
+import { findImportItem, importJobCounts, undoPaperImport, usePaperImportJobs, revealPaperFolder } from '../../paper/paper-import-job'
+import type { ImportCandidate } from '../../paper/paper-import-plan'
+import { selectionHas, usePaperImportSelection, usePaperSelectionRecords } from '../../paper/paper-import-selection'
+import { listResearchSessions } from '../../paper/paper-research-sessions'
+import { openPaperResearchSession } from '../../paper/paper-research-actions'
+import { paperResearchStageActive } from '../../paper/paper-view'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { PaperImportAction } from '../paper/import/PaperImportAction'
+import { PaperImportStatus } from '../paper/import/PaperImportStatus'
+import { PaperMoreMenu } from '../paper/import/PaperMoreMenu'
+import { PaperCheck, PaperPickRow, PRIORITY_TONE } from '../paper/import/PaperPickRow'
+import { PaperListNextSteps } from './PaperListNextSteps'
 
 const PRIORITY_ORDER = { must: 0, should: 1, optional: 2 } as const
+/** Groups past this many rows start folded so a long report stays scannable. */
+const OPEN_ROW_BUDGET = 8
 
-const COLLAPSED_ENTRIES = 6
+type Item = { entry: RendererPaperListEntry; candidate: ImportCandidate }
+type Group = { label: string; items: Item[] }
 
-function entryImportInput(entry: RendererPaperListEntry): string | undefined {
-  return (entry.paper ? paperCardImportInput(entry.paper) : undefined) ?? entry.id
-}
-
-function entryUrl(entry: RendererPaperListEntry): string | undefined {
-  return entry.paper ? paperCardUrl(entry.paper) : undefined
-}
-
-function entryMetaLine(entry: RendererPaperListEntry): string {
+function metaLine(entry: RendererPaperListEntry): string {
   const paper = entry.paper
-  return [
-    paper?.authors?.slice(0, 4).join(', ') ?? '',
-    paper?.year ? String(paper.year) : '',
-    paper?.venue ?? ''
-  ].filter(Boolean).join(' · ')
+  const authors = paper?.authors ?? []
+  const names = authors.length > 2 ? `${authors.slice(0, 2).join(', ')} +${authors.length - 2}` : authors.join(', ')
+  return [names, paper?.year ? String(paper.year) : '', paper?.venue ?? ''].filter(Boolean).join(' · ')
 }
 
-/** Loose BibTeX projection: cards carry only the fields BibTeX needs. */
-function entryToBibtexMeta(entry: RendererPaperListEntry): PaperUnitMetaV2 {
-  const paper = entry.paper
+function bibtexMeta(item: Item): PaperUnitMetaV2 {
+  const paper = item.entry.paper
   return {
     version: 2,
-    slug: entry.id,
-    title: paper?.title ?? entry.title,
+    slug: item.entry.id,
+    title: paper?.title ?? item.entry.title,
     authors: paper?.authors ?? [],
     abstract: paper?.abstract,
     year: paper?.year !== undefined ? String(paper.year) : undefined,
     venue: paper?.venue,
-    doi: paper?.doi ?? (/^10\.\d{4,9}\//i.test(entry.id) ? entry.id : undefined),
+    doi: paper?.doi ?? (/^10\.\d{4,9}\//i.test(item.entry.id) ? item.entry.id : undefined),
     arxivId: paper?.arxivId,
     pdfUrl: paper?.pdfUrl,
     sourceUrl: paper?.url,
@@ -64,236 +53,263 @@ function entryToBibtexMeta(entry: RendererPaperListEntry): PaperUnitMetaV2 {
   }
 }
 
-function sendableText(entry: RendererPaperListEntry): string {
+function sendableText(item: Item): string {
+  const paper = item.entry.paper
   const ids = [
-    entry.paper?.arxivId ? `arXiv:${entry.paper.arxivId}` : '',
-    entry.paper?.doi ? `doi:${entry.paper.doi}` : '',
-    !entry.paper?.arxivId && !entry.paper?.doi ? `id:${entry.id}` : ''
+    paper?.arxivId ? `arXiv:${paper.arxivId}` : '',
+    paper?.doi ? `doi:${paper.doi}` : '',
+    !paper?.arxivId && !paper?.doi ? `id:${item.entry.id}` : ''
   ].filter(Boolean).join(' ')
-  return `- ${entry.title}${ids ? ` (${ids})` : ''} — ${entry.reason}`
+  return `- ${item.entry.title}${ids ? ` (${ids})` : ''} — ${item.entry.reason}`
+}
+
+function openExternal(url: string | undefined): void {
+  if (url) void window.kunGui?.openExternal?.(url)
 }
 
 /**
- * `paper_report` result card (plan P1.3): the curated list renders outside
- * the folded process timeline with checkboxes, batch import, BibTeX copy and
- * a send-to-assistant hand-off. Unverified ids stay visible but flagged.
+ * `paper_report` result card: the curated list renders outside the folded
+ * process timeline as compact rows grouped by direction. Selection is shared
+ * with the paper pool; every import goes through the one import sheet, and
+ * rows report their own import state afterwards.
  */
-export function PaperListCard({
-  list,
-  workspaceRoot
-}: {
-  list: RendererPaperList
-  workspaceRoot: string
-}): ReactElement {
+export function PaperListCard({ list }: { list: RendererPaperList; workspaceRoot?: string }): ReactElement {
   const { t } = useTranslation('common')
+  const scope = useChatStore((s) => s.activeThreadId) ?? ''
+  const threads = useChatStore((s) => s.threads)
+  const libraryRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
+  const index = useLibraryIndex()
+  const records = usePaperSelectionRecords(scope)
+  const job = usePaperImportJobs((s) => s.jobs[scope])
   const composer = usePaperModeStore((s) => s.composerBridge)
-  const refreshEntries = usePaperModeStore((s) => s.refreshEntries)
-  const [selected, setSelected] = useState<ReadonlySet<string>>(
-    () => new Set(list.papers.map((entry) => entry.id))
-  )
-  const [importing, setImporting] = useState(false)
+  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set())
   const [copied, setCopied] = useState(false)
-  const [expanded, setExpanded] = useState(false)
+  const stageActive = useWriteWorkspaceStore((s) => paperResearchStageActive(s))
 
-  const groups = useMemo(() => {
-    const out: Array<{ label: string; entries: RendererPaperListEntry[] }> = []
-    const byLabel = new Map<string, RendererPaperListEntry[]>()
-    for (const entry of [...list.papers].sort(
-      (a, b) => (PRIORITY_ORDER[a.priority ?? 'optional'] ?? 2) - (PRIORITY_ORDER[b.priority ?? 'optional'] ?? 2)
-    )) {
-      const label = entry.group?.trim() ?? ''
-      const bucket = byLabel.get(label)
-      if (bucket) bucket.push(entry)
-      else {
-        byLabel.set(label, [entry])
-        out.push({ label, entries: byLabel.get(label)! })
+  const items = useMemo<Item[]>(
+    () => [...list.papers]
+      .sort((a, b) => (PRIORITY_ORDER[a.priority ?? 'optional'] ?? 2) - (PRIORITY_ORDER[b.priority ?? 'optional'] ?? 2))
+      .map((entry) => ({ entry, candidate: candidateFromListEntry(entry, index) })),
+    [list.papers, index]
+  )
+  const groups = useMemo<Group[]>(() => {
+    const out: Group[] = []
+    const byLabel = new Map<string, Group>()
+    for (const item of items) {
+      const label = item.entry.group?.trim() ?? ''
+      let group = byLabel.get(label)
+      if (!group) {
+        group = { label, items: [] }
+        byLabel.set(label, group)
+        out.push(group)
       }
+      group.items.push(item)
     }
     return out
-  }, [list.papers])
+  }, [items])
 
-  // Long lists stay compact in the transcript; no nested scroll region.
-  const visibleGroups = useMemo(() => {
-    if (expanded) return groups
-    let budget = COLLAPSED_ENTRIES
-    const out: typeof groups = []
-    for (const group of groups) {
-      if (budget <= 0) break
-      out.push({ label: group.label, entries: group.entries.slice(0, budget) })
-      budget -= group.entries.length
-    }
-    return out
-  }, [expanded, groups])
+  // The Agent's recommendation is the starting selection: everything except
+  // "optional" papers and papers the library already has.
+  const signature = useMemo(() => list.papers.map((entry) => entry.id).join('|'), [list.papers])
+  useEffect(() => {
+    if (!scope) return
+    const preselected = items.filter((item) => item.entry.priority !== 'optional' && !item.candidate.owned)
+    usePaperImportSelection.getState().seed(scope, signature, preselected.map((item) => item.candidate.keys))
+    // `items` follows the library index; the seed must happen once per list.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, signature])
 
-  const verifiedCount = list.papers.filter((entry) => entry.verified).length
-  const selectedEntries = list.papers.filter((entry) => selected.has(entry.id))
-
-  const toggle = (id: string): void => {
-    setSelected((current) => {
-      const next = new Set(current)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+  const isChecked = (item: Item): boolean => selectionHas(records, item.candidate.keys)
+  const selected = items.filter(isChecked)
+  const locked = job?.running === true
+  const toggle = (item: Item): void => usePaperImportSelection.getState().toggle(scope, item.candidate.keys)
+  const setMany = (rows: Item[], on: boolean): void =>
+    usePaperImportSelection.getState().setMany(scope, rows.map((item) => item.candidate.keys), on)
+  const stateOf = (rows: Item[]): 'on' | 'off' | 'some' => {
+    const count = rows.filter(isChecked).length
+    return count === 0 ? 'off' : count === rows.length ? 'on' : 'some'
   }
 
-  const toggleAll = (): void => {
-    setSelected((current) =>
-      current.size === list.papers.length ? new Set() : new Set(list.papers.map((entry) => entry.id))
-    )
-  }
-
-  const importSelected = async (): Promise<void> => {
-    if (importing || !selectedEntries.length) return
-    setImporting(true)
-    try {
-      const items = selectedEntries.map((entry) => ({
-        input: entryImportInput(entry)!,
-        meta: entry.paper ? paperCardImportMeta(entry.paper) : undefined
-      }))
-      if (typeof window.kunGui?.paperImportBatch === 'function') {
-        const result = await window.kunGui.paperImportBatch({
-          workspaceRoot,
-          items,
-          parentDir: currentImportParentDir(),
-          requestId: newPaperRequestId()
-        })
-        if (result.ok) {
-          const imported = result.results.filter((r) => r.ok && !r.reused).length
-          const reused = result.results.filter((r) => r.ok && r.reused).length
-          const failed = result.results.filter((r) => !r.ok).length
-          usePaperStore.getState().setNotice({
-            tone: failed ? 'error' : 'info',
-            message: t('writePaperReportImportDone', { imported, reused, failed })
-          })
-          refreshEntries()
-        } else {
-          usePaperStore.getState().setNotice({ tone: 'error', message: result.message })
-        }
-      }
-    } finally {
-      setImporting(false)
-    }
-  }
+  const verified = list.papers.filter((entry) => entry.verified).length
+  const topic = list.title?.trim() || threadTitleOf(scope, threads)
+  const ownedSelected = selected.filter((item) => item.candidate.owned).length
+  const session = useMemo(
+    () => listResearchSessions(libraryRoot, threads).find((candidate) => candidate.threadId === scope),
+    [libraryRoot, threads, scope]
+  )
+  const canExpand = Boolean(session) && !stageActive
 
   const copyBibtex = async (): Promise<void> => {
-    const text = generatePaperBibtex(selectedEntries.map(entryToBibtexMeta))
+    const text = generatePaperBibtex(selected.map(bibtexMeta))
     if (!text) return
     await navigator.clipboard.writeText(text)
     setCopied(true)
     setTimeout(() => setCopied(false), 1600)
   }
-
   const sendToAssistant = (): void => {
-    if (!composer?.setInput || !selectedEntries.length) return
-    composer.setInput(
-      [list.title?.trim() || t('writePaperReportTitle'), '', ...selectedEntries.map(sendableText)].join('\n')
-    )
+    if (!composer?.setInput || !selected.length) return
+    composer.setInput([topic || t('writePaperReportTitle'), '', ...selected.map(sendableText)].join('\n'))
   }
 
+  let rowBudget = 0
+  const created = job && !job.undone ? importJobCounts(job).created : 0
+
   return (
-    <section className="overflow-hidden rounded-xl border border-ds-border-muted bg-ds-card">
-      <header className="flex items-center gap-2 border-b border-ds-border-muted px-3.5 py-2.5">
-        <BookMarked className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[13px] font-semibold text-ds-ink">
-            {list.title?.trim() || t('writePaperReportTitle')}
-          </p>
-          <p className="text-[11px] text-ds-faint">
-            {t('writePaperReportCount', { count: list.papers.length })}
-            {' · '}
-            {t('writePaperReportVerified', { count: verifiedCount })}
-          </p>
-        </div>
-      </header>
-
-      {list.summary ? (
-        <p className="border-b border-ds-border-muted px-3.5 py-2 text-[12px] leading-5 text-ds-muted">
-          {list.summary}
-        </p>
-      ) : null}
-
-      <div>
-        {visibleGroups.map((group) => (
-          <div key={group.label || '__none__'}>
-            {group.label ? (
-              <p className="px-3.5 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wide text-ds-faint">
-                {group.label}
-              </p>
-            ) : null}
-            <ul>
-              {group.entries.map((entry) => (
-                <PaperListRow
-                  key={entry.id}
-                  entry={entry}
-                  checked={selected.has(entry.id)}
-                  onToggle={() => toggle(entry.id)}
-                  workspaceRoot={workspaceRoot}
-                  t={t}
-                />
-              ))}
-            </ul>
+    <div>
+      <section className="overflow-hidden rounded-xl border border-ds-border-muted bg-ds-card">
+        <header className="flex items-center gap-2.5 px-3 py-2.5">
+          <PaperCheck
+            state={stateOf(items)}
+            disabled={locked}
+            onToggle={() => setMany(items, stateOf(items) !== 'on')}
+            label={t('writePaperReportSelectAll')}
+          />
+          <BookMarked className="h-4 w-4 shrink-0 text-[var(--ds-accent)]" strokeWidth={1.8} />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-semibold text-ds-ink">{t('writePaperReportTitle')}</p>
+            <p className="truncate text-[11.5px] text-ds-faint">
+              {t('writePaperReportCount', { count: list.papers.length })}
+              {groups.length > 1 || groups[0]?.label ? ` · ${t('paperReportDirections', { count: groups.length })}` : ''}
+              {' · '}
+              {t('writePaperReportVerified', { count: verified })}
+            </p>
           </div>
-        ))}
-        {list.papers.length > COLLAPSED_ENTRIES ? (
-          <button
-            type="button"
-            onClick={() => setExpanded((value) => !value)}
-            className="flex w-full items-center justify-center gap-1 border-t border-ds-border-muted py-1.5 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-          >
-            {expanded ? t('paperToolShowLess') : t('paperToolShowAll', { count: list.papers.length })}
-          </button>
-        ) : null}
-      </div>
+          {canExpand && session ? (
+            <button
+              type="button"
+              onClick={() => void openPaperResearchSession({ libraryRoot, sessionId: session.sessionId })}
+              title={t('paperReportOpenInDiscover')}
+              aria-label={t('paperReportOpenInDiscover')}
+              className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+            >
+              <Maximize2 className="h-3.5 w-3.5" strokeWidth={1.8} />
+            </button>
+          ) : null}
+        </header>
 
-      <footer className="flex flex-wrap items-center gap-1.5 border-t border-ds-border-muted px-3 py-2">
-        <button
-          type="button"
-          onClick={toggleAll}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-        >
-          {selected.size === list.papers.length ? (
-            <CheckSquare className="h-3.5 w-3.5" strokeWidth={1.8} />
-          ) : (
-            <Square className="h-3.5 w-3.5" strokeWidth={1.8} />
-          )}
-          {t('writePaperReportSelectAll')}
-        </button>
-        <span className="flex-1" />
-        <PaperImportFolderPicker />
-        <button
-          type="button"
-          onClick={() => void importSelected()}
-          disabled={importing || !selectedEntries.length}
-          className="inline-flex items-center gap-1 rounded-md bg-[var(--ds-control)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ds-control-foreground)] transition hover:opacity-90 disabled:opacity-50"
-        >
-          {importing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-          {t('writePaperReportImportSelected', { count: selectedEntries.length })}
-        </button>
-        <button
-          type="button"
-          onClick={() => void copyBibtex()}
-          disabled={!selectedEntries.length}
-          className="inline-flex items-center gap-1 rounded-md border border-ds-border px-2 py-1 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-50"
-        >
-          <Quote className="h-3 w-3" strokeWidth={1.8} />
-          {copied ? t('writePaperReportCopied') : t('writePaperReportCopyBibtex')}
-        </button>
-        {composer?.setInput ? (
-          <button
-            type="button"
-            onClick={sendToAssistant}
-            disabled={!selectedEntries.length}
-            title={t('writePaperReportSendHint')}
-            className="inline-flex items-center gap-1 rounded-md border border-ds-border px-2 py-1 text-[11.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-50"
-          >
-            <Send className="h-3 w-3" strokeWidth={1.8} />
-            {t('writePaperReportSend')}
-          </button>
+        {list.summary ? (
+          <p className="border-t border-ds-border-muted/70 px-3 py-2 text-[12px] leading-5 text-ds-muted">{list.summary}</p>
         ) : null}
-      </footer>
-    </section>
+
+        {created > 0 && job ? (
+          <div className="flex items-center gap-2 border-t border-ds-border-muted/70 bg-emerald-500/[0.07] px-3 py-1.5 text-[12px] text-emerald-800 dark:text-emerald-200">
+            <span className="min-w-0 flex-1 truncate">
+              {t('paperImportDoneToFolder', { count: created, folder: job.folder || t('paperImportFolderRoot') })}
+            </span>
+            <button type="button" onClick={() => revealPaperFolder(job.root, job.folder)} className="shrink-0 rounded px-1.5 py-0.5 font-medium hover:bg-emerald-500/10">
+              {t('paperImportOpenFolder')}
+            </button>
+            <button type="button" onClick={() => void undoPaperImport(scope, t)} className="shrink-0 rounded px-1.5 py-0.5 font-medium hover:bg-emerald-500/10">
+              {t('paperImportUndo')}
+            </button>
+          </div>
+        ) : null}
+
+        {groups.map((group) => {
+          const startFolded = rowBudget >= OPEN_ROW_BUDGET && group.label !== ''
+          rowBudget += group.items.length
+          const isFolded = folded.has(group.label) !== startFolded
+          const count = group.items.filter(isChecked).length
+          return (
+            <div key={group.label || '__none__'}>
+              {group.label ? (
+                <div className="flex h-8 items-center gap-2 border-t border-ds-border-muted/70 bg-ds-subtle/50 px-3 text-[12px] font-semibold text-ds-muted">
+                  <PaperCheck
+                    state={stateOf(group.items)}
+                    disabled={locked}
+                    onToggle={() => setMany(group.items, stateOf(group.items) !== 'on')}
+                    label={group.label}
+                  />
+                  <button
+                    type="button"
+                    aria-expanded={!isFolded}
+                    onClick={() => setFolded((current) => {
+                      const next = new Set(current)
+                      if (next.has(group.label)) next.delete(group.label)
+                      else next.add(group.label)
+                      return next
+                    })}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left"
+                  >
+                    {isFolded ? <ChevronRight className="h-3 w-3 shrink-0" strokeWidth={2} /> : <ChevronDown className="h-3 w-3 shrink-0" strokeWidth={2} />}
+                    <span className="truncate">{group.label}</span>
+                  </button>
+                  <span className="shrink-0 text-[11px] font-normal tabular-nums text-ds-faint">{count} / {group.items.length}</span>
+                </div>
+              ) : null}
+              {isFolded ? null : (
+                <ul>
+                  {group.items.map((item) => {
+                    const { entry, candidate } = item
+                    const state = findImportItem(job, candidate.keys)
+                    const url = entry.paper ? paperCardUrl(entry.paper) : undefined
+                    return (
+                      <PaperPickRow
+                        key={entry.id}
+                        checked={isChecked(item)}
+                        onToggle={() => (locked ? undefined : toggle(item))}
+                        checkLabel={entry.title}
+                        priority={entry.priority ? { label: t(`writePaperReportPriority_${entry.priority}`), tone: PRIORITY_TONE[entry.priority] ?? '' } : undefined}
+                        title={entry.title}
+                        meta={metaLine(entry)}
+                        reason={entry.reason}
+                        status={(
+                          <>
+                            <PaperImportStatus scope={scope} item={state} owned={candidate.owned} />
+                            {!entry.verified && !state && !candidate.owned ? (
+                              <span className="text-[11.5px] text-amber-700 dark:text-amber-300" title={t('writePaperReportUnverifiedTip')}>
+                                {t('paperReportUnverified')}
+                              </span>
+                            ) : null}
+                          </>
+                        )}
+                        actions={(
+                          <>
+                            {url ? (
+                              <button type="button" onClick={() => openExternal(url)} title={t('paperReportOpenPage')} aria-label={t('paperReportOpenPage')}
+                                className="grid h-6 w-6 place-items-center rounded-md border border-ds-border-muted text-ds-muted hover:bg-ds-hover hover:text-ds-ink">
+                                <ExternalLink className="h-3 w-3" strokeWidth={1.8} />
+                              </button>
+                            ) : null}
+                            {entry.paper?.pdfUrl ? (
+                              <button type="button" onClick={() => openExternal(entry.paper?.pdfUrl)} title="PDF" aria-label="PDF"
+                                className="grid h-6 w-6 place-items-center rounded-md border border-ds-border-muted text-ds-muted hover:bg-ds-hover hover:text-ds-ink">
+                                <FileText className="h-3 w-3" strokeWidth={1.8} />
+                              </button>
+                            ) : null}
+                          </>
+                        )}
+                      />
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          )
+        })}
+
+        <footer className="flex items-center gap-2 border-t border-ds-border-muted bg-ds-subtle/40 px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-[12px] text-ds-muted">
+            {t('paperResearchPoolSelected', { count: selected.length })}
+            {ownedSelected > 0 ? <span className="text-ds-faint">{` · ${t('paperReportOwnedCount', { count: ownedSelected })}`}</span> : null}
+          </span>
+          <PaperImportAction scope={scope} candidates={selected.map((item) => item.candidate)} topic={topic} />
+          <PaperMoreMenu
+            label={t('paperReportMore')}
+            items={[
+              { id: 'bibtex', label: copied ? t('writePaperReportCopied') : t('writePaperReportCopyBibtex'), icon: <ClipboardCopy className="h-3.5 w-3.5" strokeWidth={1.8} />, disabled: !selected.length, onSelect: () => void copyBibtex() },
+              { id: 'send', label: t('writePaperReportSend'), icon: <Send className="h-3.5 w-3.5" strokeWidth={1.8} />, disabled: !selected.length || !composer?.setInput, onSelect: sendToAssistant }
+            ]}
+          />
+        </footer>
+      </section>
+      <PaperListNextSteps scope={scope} />
+    </div>
   )
+}
+
+function threadTitleOf(threadId: string, threads: ReadonlyArray<{ id: string; title?: string }>): string {
+  return threads.find((thread) => thread.id === threadId)?.title?.trim() ?? ''
 }
 
 export function PaperListSkeleton({ title }: { title?: string }): ReactElement {
@@ -311,118 +327,5 @@ export function PaperListSkeleton({ title }: { title?: string }): ReactElement {
         <div className="h-8 rounded bg-ds-subtle" />
       </div>
     </section>
-  )
-}
-
-function PaperListRow({
-  entry,
-  checked,
-  onToggle,
-  workspaceRoot,
-  t
-}: {
-  entry: RendererPaperListEntry
-  checked: boolean
-  onToggle: () => void
-  workspaceRoot: string
-  t: (key: string, opts?: Record<string, unknown>) => string
-}): ReactElement {
-  const url = entryUrl(entry)
-  const input = entryImportInput(entry)
-  const metaLine = entryMetaLine(entry)
-  const paper = entry.paper
-  return (
-    <li className="flex items-start gap-2 px-3.5 py-2 transition hover:bg-ds-hover">
-      <button
-        type="button"
-        role="checkbox"
-        aria-checked={checked}
-        aria-label={entry.title}
-        onClick={onToggle}
-        className="mt-0.5 shrink-0 text-ds-faint transition hover:text-ds-ink"
-      >
-        {checked ? (
-          <CheckSquare className="h-3.5 w-3.5 text-accent" strokeWidth={1.8} />
-        ) : (
-          <Square className="h-3.5 w-3.5" strokeWidth={1.8} />
-        )}
-      </button>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-start gap-1.5">
-          {url ? (
-            <a
-              href="#"
-              onClick={(event) => {
-                event.preventDefault()
-                void window.kunGui?.openExternal?.(url)
-              }}
-              className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-ds-ink transition hover:text-accent"
-            >
-              {entry.title}
-            </a>
-          ) : (
-            <p className="min-w-0 flex-1 text-[12.5px] font-medium leading-5 text-ds-ink">{entry.title}</p>
-          )}
-          {entry.priority ? (
-            <span
-              className={`shrink-0 rounded px-1.5 py-px text-[10px] font-medium ${
-                entry.priority === 'must'
-                  ? 'bg-accent-tint/15 text-accent'
-                  : 'bg-ds-subtle text-ds-muted'
-              }`}
-            >
-              {t(`writePaperReportPriority_${entry.priority}`)}
-            </span>
-          ) : null}
-          <span
-            title={entry.verified ? t('writePaperReportVerifiedTip') : t('writePaperReportUnverifiedTip')}
-            className={`shrink-0 ${entry.verified ? 'text-emerald-600 dark:text-emerald-300' : 'text-amber-600 dark:text-amber-300'}`}
-          >
-            {entry.verified ? (
-              <BadgeCheck className="h-3.5 w-3.5" strokeWidth={1.8} />
-            ) : (
-              <TriangleAlert className="h-3.5 w-3.5" strokeWidth={1.8} />
-            )}
-          </span>
-        </div>
-        {metaLine ? <p className="mt-0.5 truncate text-[11px] text-ds-faint" title={metaLine}>{metaLine}</p> : null}
-        <p className="mt-0.5 text-[11.5px] italic leading-[1.4] text-ds-muted">{entry.reason}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {paper?.sources?.map((source) => (
-            <span key={source} className="rounded bg-ds-subtle px-1.5 py-px text-[10px] text-ds-muted">
-              {t(`writePaperSearchSource_${source}`)}
-            </span>
-          ))}
-          {typeof paper?.citations === 'number' ? (
-            <span className="inline-flex items-center gap-0.5 text-[10.5px] tabular-nums text-ds-faint">
-              <Quote className="h-2.5 w-2.5" strokeWidth={1.8} />
-              {paper.citations}
-            </span>
-          ) : null}
-          {paper?.pdfUrl ? (
-            <a
-              href="#"
-              onClick={(event) => {
-                event.preventDefault()
-                void window.kunGui?.openExternal?.(paper.pdfUrl!)
-              }}
-              className="inline-flex items-center gap-0.5 rounded px-1 py-px text-[10.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-            >
-              <FileText className="h-2.5 w-2.5" strokeWidth={1.8} />
-              PDF
-            </a>
-          ) : null}
-          <span className="flex-1" />
-          {input ? (
-            <ImportButton
-              input={input}
-              meta={paper ? paperCardImportMeta(paper) : undefined}
-              workspaceRoot={workspaceRoot}
-              t={t}
-            />
-          ) : null}
-        </div>
-      </div>
-    </li>
   )
 }

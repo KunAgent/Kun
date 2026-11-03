@@ -1,3 +1,4 @@
+import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { createHash } from 'node:crypto'
 import { PaperTurnContextSchema, type PaperTurnContext } from '../contracts/paper-turn-context.js'
 import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
@@ -5,6 +6,7 @@ import type {
   ActingTurnModelRoute,
   GuiDesignArtifactContextJson,
   GuiPlanContextJson,
+  InterruptedTurnResume,
   Turn,
   TurnClientSurface,
   TurnReasoningEffort,
@@ -40,6 +42,7 @@ export function createTurnRecord(input: {
   prompt: string
   messageSource?: UserMessageSource
   subagentResume?: SubagentResumeRequest
+  interruptedResume?: InterruptedTurnResume
   model?: string
   providerId?: string
   harnessId?: string
@@ -47,6 +50,7 @@ export function createTurnRecord(input: {
   gatewayBinding?: HarnessGatewayBinding
   credentialMode?: HarnessCredentialMode
   harnessAgentId?: string
+  harnessSettings?: Record<string, string | boolean>
   accountId?: string
   actingModelRoute?: ActingTurnModelRoute
   reasoningEffort?: TurnReasoningEffort
@@ -56,6 +60,7 @@ export function createTurnRecord(input: {
   sandboxMode?: SandboxMode
   approvalReviewer?: ApprovalReviewer
   attachmentIds?: string[]
+  attachmentAliases?: AttachmentAliases
   composerContexts?: ComposerContextAttachmentJson[]
   guiPlan?: GuiPlanContextJson
   guiDesignCanvas?: boolean
@@ -103,10 +108,12 @@ export function createTurnRecord(input: {
     } : {}),
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(input.subagentResume ? { subagentResume: { ...input.subagentResume } } : {}),
+    ...(input.interruptedResume ? { interruptedResume: { ...input.interruptedResume } } : {}),
     orchestration: input.orchestration ?? 'direct',
     steering: [],
     items: [],
     attachmentIds: [...(input.attachmentIds ?? [])],
+    ...(input.attachmentAliases !== undefined ? { attachmentAliases: structuredClone(input.attachmentAliases) } : {}),
     composerContexts: [...(input.composerContexts ?? [])],
     activeSkillIds: [],
     injectedMemoryIds: [],
@@ -121,6 +128,8 @@ export function createTurnRecord(input: {
       ? { collaborationEnabled: input.collaborationEnabled } : {}),
     ...(input.credentialMode ? { credentialMode: input.credentialMode } : {}),
     ...(input.harnessAgentId?.trim() ? { harnessAgentId: input.harnessAgentId.trim() } : {}),
+    ...(input.harnessSettings && Object.keys(input.harnessSettings).length
+      ? { harnessSettings: { ...input.harnessSettings } } : {}),
     ...(input.gatewayBinding ? { gatewayBinding: structuredClone(input.gatewayBinding) } : {}),
     ...(accountId ? { accountId } : {}),
     ...(input.actingModelRoute ? { actingModelRoute: { ...input.actingModelRoute } } : {}),

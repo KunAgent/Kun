@@ -1,4 +1,7 @@
+import type { ModelCapabilityMetadata } from '../../contracts/capabilities.js'
+import { fitModelRequestOutput, modelRequestCapacityFailure } from './model-request-capacity.js'
 import { randomUUID } from 'node:crypto'
+import { admitGmailAwareModelDispatch } from './gmail-aware-dispatch.js'
 import { goalContextTexts } from '../../contracts/items.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import {
@@ -40,6 +43,7 @@ export const GEMINI_CLI_CODE_ASSIST_API_VERSION = 'v1internal'
 
 export type GeminiCliApiModelClientConfig = {
   model: string
+  modelCapabilities?: (model: string) => ModelCapabilityMetadata
   modelProxyUrl?: string
   endpoint?: string
   apiVersion?: string
@@ -78,9 +82,11 @@ export class GeminiCliApiModelClient implements ModelClient {
   private readonly apiVersion: string
   private readonly retry: ReturnType<typeof normalizeModelRequestRetryConfig>
   private projectId: string | undefined
+  private readonly modelCapabilities?: (model: string) => ModelCapabilityMetadata
 
   constructor(config: GeminiCliApiModelClientConfig) {
     this.model = config.model
+    this.modelCapabilities = config.modelCapabilities
     this.endpoint = (config.endpoint ??
       process.env.CODE_ASSIST_ENDPOINT?.trim() ??
       GEMINI_CLI_CODE_ASSIST_ENDPOINT).replace(/\/+$/, '')
@@ -102,10 +108,14 @@ export class GeminiCliApiModelClient implements ModelClient {
   }
 
   async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const capability = this.modelCapabilities?.(request.model?.trim() || this.model)
+    const failure = modelRequestCapacityFailure(request, capability)
+    if (failure) { yield failure; return }
+    request = { ...request, maxTokens: fitModelRequestOutput(request, capability) }
     const round = await this.startDebugRound(request)
     try {
       for await (const chunk of this.streamInner(request, round)) {
-        safeDebug(() => this.debugSink?.captureChunk(round!, chunk))
+        if (round) safeDebug(() => this.debugSink?.captureChunk(round, chunk))
         yield chunk
       }
     } finally {
@@ -188,7 +198,8 @@ export class GeminiCliApiModelClient implements ModelClient {
       signal: request.abortSignal,
       round,
       attempt: ++attemptOrdinal,
-      reason
+      reason,
+      request
     })
     let result = await post('initial')
     let credentialRefreshAttempted = false
@@ -425,7 +436,7 @@ export class GeminiCliApiModelClient implements ModelClient {
   }
 
   private async startDebugRound(request: ModelRequest): Promise<LlmDebugRound | null> {
-    if (!this.debugSink) return null
+    if (!this.debugSink || request.googleWorkspaceData) return null
     return await startLlmDebugRoundIfEnabled(this.debugSink, {
       threadId: request.threadId,
       turnId: request.turnId,
@@ -517,6 +528,7 @@ export class GeminiCliApiModelClient implements ModelClient {
     round: LlmDebugRound | null
     attempt: number
     reason: 'initial' | 'credential_refresh' | 'transport_retry'
+    request: ModelRequest
   }): Promise<{ response?: Response; error?: string }> {
     const url = `${this.methodUrl('streamGenerateContent')}?alt=sse`
     const headers = geminiHeaders(input.accessToken)
@@ -532,11 +544,13 @@ export class GeminiCliApiModelClient implements ModelClient {
         }))
       : undefined
     try {
+      await admitGmailAwareModelDispatch(input.request, { body: input.body, protocol: 'gemini-cli-api' })
       const response = await this.fetchImpl(url, {
         method: 'POST',
         headers,
         body: JSON.stringify(input.body),
-        signal: input.signal
+        signal: input.signal,
+        redirect: 'error'
       })
       if (trace && input.round && this.debugSink) {
         safeDebug(() => this.debugSink!.captureHttpResponse(input.round!, trace, response))

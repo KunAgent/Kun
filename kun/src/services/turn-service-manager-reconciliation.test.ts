@@ -10,6 +10,7 @@ import { SequentialIdGenerator } from '../ports/id-generator.js'
 import type { ThreadExecutionLeasePort } from '../ports/thread-execution-lease.js'
 import { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import { TurnService } from './turn-service.js'
+import { scanThreadMetadata } from './thread-metadata-scan.js'
 
 async function fixture(owner: ThreadExecutionLeasePort['owner']) {
   const threadStore = new InMemoryThreadStore()
@@ -126,6 +127,36 @@ describe('managed Runtime restart reconciliation', () => {
         status: 'failed',
         error: 'Turn was interrupted by a runtime restart.'
       })
+  })
+
+  it('reports a failed orphan settlement and can retry after persistence recovers', async () => {
+    const test = await fixture(async () => null)
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    vi.spyOn(test.threadStore, 'upsert').mockRejectedValueOnce(new Error('persistence unavailable'))
+    try {
+      expect(await test.recovered.reconcileOrphanedTurns()).toEqual([])
+      expect(warning).toHaveBeenCalledWith('[kun] orphaned turn reconciliation failed', {
+        threadId: test.started.threadId,
+        turnId: test.started.turnId,
+        error: 'persistence unavailable'
+      })
+      expect(await test.recovered.reconcileOrphanedTurns()).toEqual([{
+        threadId: test.started.threadId, turnId: test.started.turnId
+      }])
+    } finally {
+      warning.mockRestore()
+    }
+  })
+
+  it('re-reads a thread whose shared startup scan still showed the turn running', async () => {
+    const test = await fixture(async () => null)
+    // The scan predates settlement, as when it is taken before the orphan sweep.
+    const scan = await scanThreadMetadata(test.threadStore)
+    expect(scan.metadata.get(test.started.threadId)?.turns[0]?.status).toBe('running')
+    await persistManagerSettlement(test)
+
+    await expect(test.recovered.reconcileManagerSettledInterruptions({ scan }))
+      .resolves.toEqual([{ threadId: test.started.threadId, turnId: test.started.turnId }])
   })
 
   it('persists a terminal code and checkpoints a Manager-settled turn without duplication', async () => {

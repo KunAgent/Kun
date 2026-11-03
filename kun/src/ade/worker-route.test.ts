@@ -15,6 +15,15 @@ const POOL: Record<string, WorkerProviderPoolEntry> = {
 const providerPool = async (providerId: string) => POOL[providerId]
 
 describe('resolveWorkerRoute', () => {
+  it('explains parent fallback without rerouting a rejected explicit pin', async () => {
+    let selections = 0
+    const result = await resolveWorkerRoute({ catalog, agent: { harnessId: 'missing-agent' },
+      select: async () => { selections++; return { error: 'must not run' } } })
+    expect(result).toMatchObject({ error: expect.stringContaining('original conversation with its own Agent and model') })
+    expect(result).toMatchObject({ error: expect.stringContaining('Do not bypass approval') })
+    expect(selections).toBe(0)
+  })
+
   it('resolves a structured alias without inheriting the manager provider or widening its account scope', async () => {
     const gatewayBinding = { main: { routeId: 'coding', allowedConnectionIds: ['one'] } }
     const resolved = await resolveWorkerRoute({ catalog, managerModel: 'private-model', managerProviderId: 'private-account',
@@ -22,7 +31,7 @@ describe('resolveWorkerRoute', () => {
       resolveGatewayAliases: async () => [{ routeId: 'coding', alias: 'route/coding', role: 'main', targets: [{ providerId: 'one', modelId: 'model' }] }] })
     expect(resolved).toEqual({ route: { harnessId: 'codex', model: 'route/coding', credentialMode: 'kun-gateway', gatewayBinding } })
     expect(await resolveWorkerRoute({ catalog, agent: { harnessId: 'codex', gatewayBinding },
-      resolveGatewayAliases: async () => { throw new Error('No approved target') } })).toEqual({ error: 'No approved target' })
+      resolveGatewayAliases: async () => { throw new Error('No approved target') } })).toEqual({ error: expect.stringContaining('No approved target') })
   })
   it('rejects a gateway route without an explicit export eligibility proof', async () => {
     for (const entry of [{ kind: 'http', models: ['model'] },
@@ -104,23 +113,33 @@ describe('resolveWorkerRoute', () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       probedModels: (def: HarnessDefinition) =>
-        def.id === 'gemini-cli' ? ['gemini-3-pro-preview'] : undefined,
-      agent: { harnessId: 'gemini-cli', model: 'gemini-3-pro-preview' }
+        def.id === 'devin' ? ['gemini-3-pro-preview'] : undefined,
+      agent: { harnessId: 'devin', model: 'gemini-3-pro-preview' }
     })
     expect('error' in resolved).toBe(false)
     if ('error' in resolved) return
     expect(resolved.route).toMatchObject({
-      harnessId: 'gemini-cli',
+      harnessId: 'devin',
       credentialMode: 'native-login',
       model: 'gemini-3-pro-preview'
     })
+  })
+
+  it('accepts the Agent default or an unverified explicit model when only the ACP fallback is known', async () => {
+    const base = { catalog: catalog as never, probedModels: () => ['default'] }
+    expect(await resolveWorkerRoute({ ...base, agent: { harnessId: 'devin' } }))
+      .toMatchObject({ route: { harnessId: 'devin', model: 'default', credentialMode: 'native-login' } })
+    expect(await resolveWorkerRoute({ ...base, agent: { harnessId: 'devin', model: 'user-model' } }))
+      .toMatchObject({ route: { harnessId: 'devin', model: 'user-model', credentialMode: 'native-login' } })
+    expect(await resolveWorkerRoute({ ...base, probedModels: () => ['real-model'], agent: { harnessId: 'devin', model: 'default' } }))
+      .toMatchObject({ route: { harnessId: 'devin', model: 'default' } })
   })
 
   it('rejects a model outside the probe result for probe harnesses', async () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       probedModels: () => ['gemini-3-pro-preview'],
-      agent: { harnessId: 'gemini-cli', model: 'made-up-model' }
+      agent: { harnessId: 'devin', model: 'made-up-model' }
     })
     expect(resolved).toMatchObject({ error: expect.stringContaining('made-up-model') })
   })
@@ -192,7 +211,7 @@ describe('resolveWorkerRoute', () => {
     })
   })
 
-  it('fills unpinned route fields from harnesses.defaults (P4-11)', async () => {
+  it('fills unpinned route fields from harnesses.defaults', async () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       providerPool,
@@ -254,7 +273,7 @@ describe('resolveWorkerRoute', () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       harnessDefaults: () => ({ credentialMode: 'kun-gateway' }),
-      agent: { harnessId: 'gemini-cli' }
+      agent: { harnessId: 'devin' }
     })
     expect(resolved).toMatchObject({
       error: expect.stringContaining('credentialMode kun-gateway is not supported')
@@ -265,7 +284,7 @@ describe('resolveWorkerRoute', () => {
     const resolved = await resolveWorkerRoute({
       catalog: catalog as never,
       providerPool,
-      agent: { harnessId: 'gemini-cli', credentialMode: 'kun-gateway', model: 'kun/deepseek/deepseek-chat' }
+      agent: { harnessId: 'devin', credentialMode: 'kun-gateway', model: 'kun/deepseek/deepseek-chat' }
     })
     expect(resolved).toMatchObject({
       error: expect.stringContaining('credentialMode kun-gateway is not supported')

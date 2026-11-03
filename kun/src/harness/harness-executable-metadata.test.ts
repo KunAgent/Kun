@@ -13,6 +13,24 @@ it('rejects a Grok alias named agent instead of routing it as Cursor', async () 
   expect(await detector.status(definition.id)).toMatchObject({ installed: 'no', reasonCode: 'not_installed' })
   expect(probeLogin).not.toHaveBeenCalled()
 })
+it('prefers qodercli over the desktop IDE launcher and never falls back to the bare qoder name', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'kun-qoder-detection-'))
+  try {
+    const ide = join(dir, 'Qoder.app/Contents/Resources/app/bin/qoder')
+    await mkdir(join(ide, '..'), { recursive: true }); await writeFile(ide, 'desktop launcher')
+    const qoder = BUILTIN_HARNESSES.find((value) => value.id === 'qoder')!
+    expect(qoder.detect?.command).toBe('qodercli')
+    expect(qoder.launch?.command).toBe('qodercli')
+    expect(qoder.setup?.login?.command).toBe('qodercli')
+    const probeLogin = vi.fn(async () => 'unknown' as const)
+    const make = (installed: boolean) => new HarnessDetector({ definitions: () => [qoder], overrides: () => ({}),
+      resolveExecutable: async (name) => name === 'qoder' ? ide : name === 'qodercli' && installed ? '/fixture/qodercli' : undefined,
+      spawnCaptured: vi.fn(async () => ({ stdout: '1.1.67', stderr: '', exitCode: 0, timedOut: false })),
+      probeLogin, nowMs: Date.now, nowIso: () => new Date().toISOString() })
+    expect(await make(true).status('qoder')).toMatchObject({ installed: 'yes', resolvedCommand: '/fixture/qodercli' })
+    expect(await make(false).status('qoder')).toMatchObject({ installed: 'no', message: 'command not found: qodercli' })
+  } finally { await rm(dir, { recursive: true, force: true }) }
+})
 it('does not launch a desktop Qoder script or self-updating Droid bootstrap during discovery', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'kun-cli-detection-'))
   try {

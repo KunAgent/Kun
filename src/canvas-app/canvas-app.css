@@ -1,0 +1,87 @@
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.kun-canvas-shell {
+  --kc-fg: #1f2328;
+  --kc-muted: #5b636e;
+  --kc-border: #e1e4e8;
+  --kc-surface: #ffffff;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  color: var(--kc-fg);
+}
+
+.kun-canvas-shell[data-theme="dark"] {
+  --kc-fg: #e6e8eb;
+  --kc-muted: #9aa1ab;
+  --kc-border: #33363c;
+  --kc-surface: #121212;
+}
+
+.kun-canvas-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--kc-border);
+  background: var(--kc-surface);
+}
+
+.kun-canvas-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.kun-canvas-status {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--kc-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kun-canvas-toolbar button {
+  flex: 0 0 auto;
+  border: 1px solid var(--kc-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--kc-fg);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 9px;
+  cursor: pointer;
+}
+
+.kun-canvas-toolbar button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.kun-canvas-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.kun-canvas-empty {
+  position: absolute;
+  inset: 40% 16px auto;
+  text-align: center;
+  color: var(--kc-muted);
+  pointer-events: none;
+}

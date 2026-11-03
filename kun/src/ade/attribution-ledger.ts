@@ -5,7 +5,7 @@ import { readAdeJson, writeAdeJson } from './ade-file.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
 
 /**
- * AI line attribution ledger (docs/ade/11 §6.2): each observed write stores
+ * AI line attribution ledger: each observed write stores
  * the content hash of every line inside its written range. Attribution is
  * reverse lookup — a current line belongs to the most recent entry whose
  * hashes contain it; lines a human rewrote simply stop matching.
@@ -41,7 +41,7 @@ export type AttributionLine = {
   dispatchId?: string
 }
 
-/** Trailing whitespace never participates in identity (11 §6.1). */
+/** Trailing whitespace never participates in identity. */
 export function normalizeLine(line: string): string {
   return line.replace(/\s+$/, '')
 }

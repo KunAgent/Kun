@@ -46,8 +46,10 @@ describe('generic Agent readiness', () => {
   it('does not derive credential evidence from a successful custom ACP handshake', async () => {
     const f = await fixture()
     const result = await f.service.test(f.catalog.get(f.id)!, { level: 'handshake', ...f.route })
-    expect(result).toMatchObject({ ok: false, readiness: { authentication: 'missing' } })
-    expect(result.readiness?.checks.find((check) => check.id === 'credentials')?.ok).toBe(false)
+    // Missing local evidence only warns; it is never turned into verified authentication.
+    expect(result).toMatchObject({ ok: true, readiness: { authentication: 'unverified' } })
+    expect(result.readiness?.checks.find((check) => check.id === 'credentials'))
+      .toMatchObject({ ok: true, detail: expect.stringContaining('No local credential found') })
   })
 
   it('rejects an unresolved explicit secret before protocol startup', async () => {

@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHmac } from 'node:crypto'
 import { closeSync, constants, fstatSync, lstatSync, openSync, readSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -6,7 +6,10 @@ import { parseEnv } from 'node:util'
 import { parseDocument } from 'yaml'
 
 const MAX_BYTES = 64 * 1024
-const fingerprintSalt = randomBytes(32)
+// Fixed domain separation, not a secret: this fingerprint only feeds the
+// readiness identity digest, which is persisted locally and never returned.
+// A per-process salt made every restored proof mismatch after a restart.
+const fingerprintKey = 'kun.readiness.deepseek-harness-profile.v1'
 
 export function deepSeekHarnessHome(env: Record<string, string | undefined> = process.env): string {
   const value = Object.fromEntries(Object.entries(env).map(([key, entry]) => [key.toUpperCase(), entry])).DSH_HOME?.trim()
@@ -62,12 +65,12 @@ export function hasDeepSeekHarnessNativeKey(env: Record<string, string | undefin
 
 /**
  * Bind readiness to native credentials and every accepted composition layer.
- * HMAC prevents a returned fingerprint from becoming an offline secret oracle.
+ * The value stays inside the readiness identity digest; it is never returned.
  * Metadata of invalid/unreadable files still invalidates an older proof.
  */
 export function deepSeekHarnessProfileFingerprint(env: Record<string, string | undefined> = process.env): string {
   const home = deepSeekHarnessHome(env)
-  const digest = createHmac('sha256', fingerprintSalt).update(home)
+  const digest = createHmac('sha256', fingerprintKey).update(home)
   const profile = join(home, 'profiles', 'acp')
   // First startup creates these directories and stock files. Those known
   // defaults are equivalent to absence; runtime cache/session writes must not

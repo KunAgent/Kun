@@ -102,7 +102,7 @@ export interface SdkTurnContext {
   oauthToken?: string
   /**
    * `kun-gateway` turns replace `oauthToken` entirely: the harness reaches the
-   * loopback kun serve gateway with this env injection (docs/ade/04 §5.5).
+   * loopback kun serve gateway with this env injection.
    */
   gateway?: import('./sdk-options-builder.js').SdkGatewayEnv
   /** Image attachments to forward to the model (base64 + media type). */
@@ -115,7 +115,7 @@ export interface SdkTurnContext {
    */
   historyTranscript?: string
   /**
-   * Deterministic handoff brief (docs/ade/08) — replaces `historyTranscript`
+   * Deterministic handoff brief — replaces `historyTranscript`
    * in the prompt when set.
    */
   handoffBrief?: string

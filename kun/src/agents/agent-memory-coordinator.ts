@@ -30,7 +30,11 @@ export class AgentMemoryCoordinator {
   async tick(): Promise<boolean> {
     if (this.closed || !this.deps.agentMemory || !this.deps.memoryStore) return false
     await this.deps.agentMemory.recoverEdits()
-    await this.deps.agentMemory.scrubForgotten()
+    // Applying a capture re-checks forgetting, so a failed pass only delays cleanup
+    // and retries on its own backoff; it must not stop capture or the room loop.
+    await this.deps.agentMemory.scrubForgotten().catch((error: unknown) => {
+      console.warn('[kun] agent memory scrub:', error instanceof Error ? error.message : String(error))
+    })
     await this.discover()
     if (this.active) {
       const row = await this.deps.store.get<AgentMemoryCapture>('agent_memory_job', this.active.jobId)
@@ -42,11 +46,17 @@ export class AgentMemoryCoordinator {
     if (!await this.deps.agentMemory.available()) return false
     const jobs = await this.deps.store.list<AgentMemoryCapture>('agent_memory_job', {
       phase: 'capture', status: ['pending', 'running'], limit: 50, order: 'asc' })
+    // Only real progress keeps the room loop on its one-second cadence. A job
+    // waiting for its peer topic to go idle is retried on the idle cadence or
+    // when room activity wakes the loop; counting it as work kept an idle
+    // desktop polling the Manager every second forever.
+    let progressed = false
     for (const row of jobs) {
       if (!await this.allowed(row.value)) { await this.save(row, { status: 'cancelled' }); continue }
       const topic = await this.deps.store.get<RoomPeerTopic>('peer_topic', row.value.rootRequestId)
       const request = await this.deps.store.get<RoomRequestState>('request', row.value.rootRequestId)
       if (topic && !['idle', 'paused'].includes(topic.value.status) || !topic && request?.value.status !== 'completed') continue
+      progressed = true
       if (row.value.status === 'running') {
         // No durable extraction handle exists after restart. Count the lost attempt; never acknowledge its source.
         const run = row.value.runId ? await this.deps.store.get('room_run', row.value.runId) : null
@@ -63,7 +73,7 @@ export class AgentMemoryCoordinator {
       await this.start(row)
       break
     }
-    return jobs.length > 0 || Boolean(this.active)
+    return progressed || Boolean(this.active)
   }
   private async save(row: RoomStoredDocument<AgentMemoryCapture>, patch: Partial<AgentMemoryCapture>) {
     await this.deps.store.commit({ requestId: agentStableId('memory-state', row.id, String(row.revision), JSON.stringify(patch)),
@@ -204,27 +214,36 @@ export class AgentMemoryCoordinator {
     let saved = 0, pending = 0
     if (allowed && !result.error) {
       for (const value of result.candidates) {
-        if (await this.deps.agentMemory!.store().isForgotten?.(agentMemoryCaptureInput(job, value.candidate))) continue
-        const candidateId = agentStableId('agent-memory-candidate', job.runId!, value.candidate.content)
+        const { reviewReason, ...decided } = value
+        if (await this.deps.agentMemory!.store().isForgotten?.(agentMemoryCaptureInput(job, decided.candidate))) continue
+        const candidateId = agentStableId('agent-memory-candidate', job.runId!, decided.candidate.content)
         const record: AgentMemoryCandidate = { id: candidateId, phase: 'candidate', participantAgentId: job.participantAgentId,
-          roomId: job.roomId, rootRequestId: job.rootRequestId, status: 'pending', ...value,
+          roomId: job.roomId, rootRequestId: job.rootRequestId, status: 'pending', ...decided,
+          captureScope: { conversationId: job.memoryConversationId ?? job.roomId, taskId: job.taskScopeId,
+            handoffId: job.memoryConversationId === job.roomId ? job.handoffId : undefined },
           runId: job.runId!, sourceMessageIds: job.messageIds }
-        if (value.action === 'create') {
+        if (decided.action === 'create' && !reviewReason) {
           const id = agentStableId('mem-agent-auto', job.participantAgentId, job.memoryConversationId ?? job.roomId, job.taskScopeId ?? '', job.handoffId ?? '',
-            value.candidate.sources.map((source) => source.id + ':' + source.contentHash).sort().join('|'), value.candidate.content)
+            decided.candidate.sources.map((source) => source.id + ':' + source.contentHash).sort().join('|'), decided.candidate.content)
           const store = this.deps.agentMemory!.store()
           if (!store.createWithId) throw new Error('idempotent memory storage unavailable')
-          const memory = await store.createWithId(id, { ...value.candidate, scope: 'user',
+          const memory = await store.createWithId(id, { ...decided.candidate, scope: 'user',
             agentContext: { schemaVersion: 1, agentId: job.participantAgentId, sourceConversationId: job.memoryConversationId ?? job.roomId,
               sourceHandoffId: job.memoryConversationId === job.roomId ? job.handoffId : undefined,
               sourceRootRequestId: job.rootRequestId, sourceTaskId: job.taskScopeId, shared: false, sharedConversationIds: [], sharedProjectRoots: [], locked: false,
-              originFingerprint: createHash('sha256').update(JSON.stringify(value.candidate.sources)).digest('hex') },
+              originFingerprint: createHash('sha256').update(JSON.stringify(decided.candidate.sources)).digest('hex') },
             provenance: { kind: 'inference', origin: 'agent-memory-capture:' + job.runId } })
           record.status = 'completed'; record.memoryId = memory.id; saved++
+        } else if (reviewReason) {
+          // Held for human review (e.g. its comparisons were quarantined at
+          // the extraction boundary): never auto-apply, even when the
+          // underlying decision was a plain create.
+          record.reason = reviewReason
+          pending++
         } else {
-          const target = value.targetId ? await this.deps.agentMemory!.find(job.participantAgentId, value.targetId) : null
+          const target = decided.targetId ? await this.deps.agentMemory!.find(job.participantAgentId, decided.targetId) : null
           record.reason = target && target.agentContext?.locked ? 'user_locked' :
-            target && canonicalMemoryHash(target) !== value.targetFingerprint ? 'source_changed' : 'conflicting_memory'
+            target && canonicalMemoryHash(target) !== decided.targetFingerprint ? 'source_changed' : 'conflicting_memory'
           pending++
         }
         await this.deps.store.commit({ requestId: candidateId,
@@ -235,7 +254,9 @@ export class AgentMemoryCoordinator {
     const run = await this.deps.store.get('room_run', job.runId!)
     const finished = RoomRunRecordSchema.parse({ ...(run!.value as object),
       status: !allowed ? 'cancelled' : result.error ? 'failed' : 'completed',
-      reason: !allowed ? 'source_cancelled' : result.error ?? saved + ' saved; ' + pending + ' need review',
+      reason: !allowed ? 'source_cancelled' : result.error ??
+        saved + ' saved; ' + pending + ' need review' +
+        (result.diagnostics?.length ? '; ' + result.diagnostics.join('; ') : ''),
       error: result.error, usage: result.usage, usageStatus: result.usage ? 'complete' : 'unavailable',
       elapsedMs: result.elapsedMs, endedAt: new Date().toISOString(), updatedAt: new Date().toISOString() })
     await this.deps.store.commit({ requestId: job.runId! + ':finished',

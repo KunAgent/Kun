@@ -3,6 +3,14 @@ import { ApprovalConsentVerifier } from '../../kun/src/server/approval-consent.j
 import { createApprovalConsentToken } from './approval-consent'
 
 describe('protected Kun approval consent', () => {
+  it('binds the exact provider option and cannot upgrade once to always', () => {
+    const token = createApprovalConsentToken({ runtimeToken: 'secret', approvalId: 'approval',
+      decision: 'allow', choice: { optionId: 'once' }, expiresAt: 40_000 })
+    const verifier = new ApprovalConsentVerifier('secret', () => 10_000)
+    expect(verifier.verifyAndConsume({ token, approvalId: 'approval', decision: 'allow' })).toBe(false)
+    expect(verifier.verifyAndConsume({ token, approvalId: 'approval', decision: 'allow', choice: { optionId: 'always' } })).toBe(false)
+    expect(verifier.verifyAndConsume({ token, approvalId: 'approval', decision: 'allow', choice: { optionId: 'once' } })).toBe(true)
+  })
   it('is action-bound, short-lived, and one-shot across Main and Kun', () => {
     const now = 10_000
     const token = createApprovalConsentToken({

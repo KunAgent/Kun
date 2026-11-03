@@ -7,9 +7,13 @@ const { join } = require('node:path')
 
 // This helper runs inside smoke-development-direct-chat's disposable profile.
 // Creating fixture identities and files never touches the signed-in Kun profile.
-async function openAgentPrivateChat({ page, switchCode, name = '小 Kun' }) {
+async function openAgentPrivateChat({ page, name = '小 Kun' }) {
   const before = await roomWorkbenchSnapshot(page)
-  if (before.route !== 'chat' && before.route !== 'agent-chat') await switchCode()
+  // Code tasks and Chats now have distinct sidebar scopes. Open the real Chats
+  // tab before looking for conversations, even when Code is already selected.
+  if (before.route !== 'agent-chat') {
+    await page.locator('[role="tab"][data-workspace-mode="chats"]').click()
+  }
   await page.locator('.sidebar-agent-chats').waitFor()
   const existing = page.locator('.sidebar-agent-chat-row').filter({ hasText: name }).first()
   if (await existing.count()) await existing.click()
@@ -19,7 +23,7 @@ async function openAgentPrivateChat({ page, switchCode, name = '小 Kun' }) {
     await page.locator('.direct-agent-choices button').filter({ hasText: name }).first().click()
   }
   await page.locator('.direct-header').waitFor()
-  await page.locator('[data-workspace-mode-trigger][data-workspace-mode="chat"]').first().waitFor()
+  await page.locator('[data-workspace-mode-trigger][data-workspace-mode="chats"]').first().waitFor()
   assert.equal((await roomWorkbenchSnapshot(page)).route, 'agent-chat')
 }
 
@@ -126,12 +130,10 @@ async function exerciseAgentChatWorkbench({ page, request, poll, capture, fixtur
   const projectScope = await roomWorkbenchSnapshot(page)
   assert.equal(projectScope.activeThreadId, project.id)
   assert.equal(projectScope.workspaceRoot, workspaceRoot)
-  await page.locator('[data-workspace-mode-trigger]').first().click()
-  assert.deepEqual(await page.locator('[role="menuitemradio"][data-workspace-mode]').evaluateAll((items) =>
-    items.map((item) => item.dataset.workspaceMode)), ['write', 'chat'], 'Rooms is no longer a workspace mode')
-  await page.keyboard.press('Escape')
+  assert.deepEqual(await page.locator('[role="tab"][data-workspace-mode]').evaluateAll((items) =>
+    items.map((item) => item.dataset.workspaceMode)), ['chat', 'write', 'chats'], 'Rooms is no longer a workspace route')
   await capture('workbench-01-project-task')
-  assertions.push('The workspace mode menu offers only Work and Code')
+  assertions.push('The mode pill offers only Code, Work and Chats')
   assertions.push(...await exerciseComposerModelPanel({ page, poll, capture, prefix: 'workbench-01b' }))
 
   await openPrivate()

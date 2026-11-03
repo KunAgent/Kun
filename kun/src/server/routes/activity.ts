@@ -153,7 +153,7 @@ export function activityEventStream(store: ActivityStore, request: Request): Res
 
 /**
  * POST /v1/activity/foreground — a client reports the thread currently in
- * its foreground; the mark expires after 30 s (docs/ade/06 §7.2 cond. 4).
+ * its foreground; the mark expires after 30 s.
  */
 export async function activityForegroundResponse(
   hibernation: ActivityHibernation,
@@ -175,7 +175,7 @@ type UserFactMutation = 'ack' | 'dismiss' | 'pin'
 /**
  * POST /v1/activity/:unitId/{ack,dismiss,pin} — persist the user fact and
  * apply it to the live row so every client sees the change. The row's
- * provenance is intentionally unchanged (docs/ade/06 §4.1).
+ * provenance is intentionally unchanged.
  */
 export async function activityFactResponse(
   store: ActivityStore,
@@ -226,7 +226,7 @@ export type ActivityHookDeps = {
 }
 
 /**
- * POST /v1/activity/hooks — managed-hook ingest (05 §6.2–6.3). Called by
+ * POST /v1/activity/hooks — managed-hook ingest. Called by
  * `kun worker hook <event>` inside the unit's own temporary config; the
  * `hook-ingest` grant pins the unit. The payload is already trimmed by the
  * CLI to event/sessionId/toolName/timestamp; unknown units and unknown

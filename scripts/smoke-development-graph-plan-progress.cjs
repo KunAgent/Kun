@@ -8,10 +8,10 @@
  *
  * Boots the development renderer against the built Main process, seeds a real
  * thread carrying a 19-item plan checklist through the Kun runtime, then:
- *   1. captures the stale reading the reporter saw ("Step 1 / 19");
+ *   1. captures the stale reading the reporter saw (tray segment step "1/19");
  *   2. puts a Graph run (11 nodes, 7 accepted, 1 running) on the thread;
  *   3. asserts the checklist demotes to "Plan outline · 19 steps" while the
- *      Graph card reports the authoritative "7/11 accepted · 1 running".
+ *      Graph tray segment reports the authoritative "7/11" accepted nodes.
  *
  * The Graph projection is seeded straight into the renderer Graph store through
  * the Vite dev module graph. Driving 11 real subagent nodes would need a live
@@ -53,9 +53,9 @@ const GRAPH_NODES = 11
 const GRAPH_ACCEPTED = 7
 const WINDOW_WIDTH = 1360
 const WINDOW_HEIGHT = 900
-const STALE_LABEL = `Step 1 / ${CHECKLIST_ITEMS}`
-const OUTLINE_LABEL = `Plan outline · ${CHECKLIST_ITEMS} steps`
-const GRAPH_LABEL = `${GRAPH_ACCEPTED}/${GRAPH_NODES} accepted`
+const STALE_LABEL = `1/${CHECKLIST_ITEMS}`
+const OUTLINE_LABEL = 'Plan outline'
+const GRAPH_LABEL = `${GRAPH_ACCEPTED}/${GRAPH_NODES}`
 
 async function main() {
   const repositoryRoot = resolve(join(__dirname, '..'))
@@ -241,7 +241,7 @@ async function main() {
       timeout: operationTimeoutMs
     })
     const outlineLabel = normalize(await todoChip.innerText())
-    if (!outlineLabel.includes(OUTLINE_LABEL)) {
+    if (!outlineLabel.includes(OUTLINE_LABEL) || !outlineLabel.includes(`${CHECKLIST_ITEMS}`)) {
       throw new Error(`Plan checklist chip did not demote to an outline: ${outlineLabel}`)
     }
     if (outlineLabel.includes(STALE_LABEL)) {
@@ -250,14 +250,14 @@ async function main() {
     const graphChip = page.locator('[data-composer-stack-item="graph"] button')
     await graphChip.waitFor({ state: 'visible', timeout: operationTimeoutMs })
     const graphLabel = normalize(await graphChip.innerText())
-    if (!graphLabel.includes(GRAPH_LABEL)) {
-      throw new Error(`Graph chip did not report ${GRAPH_LABEL}: ${graphLabel}`)
+    if (await graphChip.getAttribute('data-graph-progress') !== GRAPH_LABEL || !graphLabel.includes(GRAPH_LABEL)) {
+      throw new Error(`Graph segment did not report ${GRAPH_LABEL} accepted nodes: ${graphLabel}`)
     }
     await page.waitForTimeout(1_500)
     await page.screenshot({ path: join(evidenceRoot, '2-plan-outline-and-graph-progress.png') })
 
-    // Stage 3 — the detail popover has to say why the checklist stopped moving.
-    await todoChip.hover()
+    // Stage 3 — the outline sheet (opened by a click) says why the checklist stopped moving.
+    await todoChip.click()
     const hint = page.locator('[data-todo-plan-outline-hint]')
     await hint.waitFor({ state: 'visible', timeout: operationTimeoutMs })
     const hintText = normalize(await hint.innerText())
@@ -267,8 +267,8 @@ async function main() {
       }
     }
     await page.waitForTimeout(2_000)
-    await page.screenshot({ path: join(evidenceRoot, '3-plan-outline-popover-hint.png') })
-    await page.mouse.move(WINDOW_WIDTH / 2, 120)
+    await page.screenshot({ path: join(evidenceRoot, '3-plan-outline-sheet-hint.png') })
+    await page.keyboard.press('Escape')
     await page.waitForTimeout(1_000)
 
     // Stage 4 — once every Graph run is terminal the checklist owns its own
@@ -303,13 +303,13 @@ async function main() {
         beforeGraph: staleLabel,
         duringGraph: outlineLabel,
         graphChip: graphLabel,
-        popoverHint: hintText,
+        outlineHint: hintText,
         afterGraph: restoredLabel
       },
       screenshots: [
         join(evidenceRoot, '1-plan-checklist-before-graph.png'),
         join(evidenceRoot, '2-plan-outline-and-graph-progress.png'),
-        join(evidenceRoot, '3-plan-outline-popover-hint.png'),
+        join(evidenceRoot, '3-plan-outline-sheet-hint.png'),
         join(evidenceRoot, '4-checklist-restored-after-run.png')
       ]
     }

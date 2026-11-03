@@ -396,8 +396,6 @@
   "uiModeWorkshopDesc": "เลือกชุดมาสคอตของพื้นที่ทำงาน โหมด iKun ในตัวเป็นตัวอย่างปลั๊กอิน UI ที่ติดตั้งไว้ล่วงหน้า — สร้างและติดตั้งชุดของคุณเองพร้อมคู่มือนักพัฒนา (ชุดภาพที่ประกาศ ไม่มีโค้ดที่ปฏิบัติการได้)",
   "uiModeDefaultTitle": "ค่าเริ่มต้นคุน",
   "uiModeDefaultSubtitle": "นกน้อยสีฟ้า",
-  "uiPaletteRetromaOn": "เปิดจานสี Retroma — คลิกเพื่อใช้จานสีเริ่มต้น",
-  "uiPaletteRetromaOff": "เปลี่ยนไปใช้จานสีแผ่นหนัง Retroma",
   "uiPluginInstall": "ติดตั้งโฟลเดอร์ปลั๊กอิน...",
   "uiPluginActivate": "ใช้",
   "uiPluginActive": "ใช้งานอยู่",

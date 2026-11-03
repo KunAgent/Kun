@@ -1,7 +1,7 @@
-import { app, BrowserWindow, ipcMain, protocol, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import { PET_ASSET_SCHEME, PET_IPC, petAssetUrl, type PetActionRequest, type PetActionResult, type PetActivitySnapshot, type PetOverlayBootstrap } from '../../shared/pets'
+import { PET_IPC, petAssetUrl, type PetActionRequest, type PetActionResult, type PetActivitySnapshot, type PetOverlayBootstrap } from '../../shared/pets'
 import { developmentRendererUrl, mainState } from '../main-app-context'
 import { resolveNamedPreloadPath } from '../main-paths'
 import { runtimeRequest } from '../main-runtime-settings'
@@ -9,8 +9,9 @@ import { petStopConflict, validatePetStop } from './pet-actions'
 import { askPetFollowUp, settlePetFollowUp } from './pet-follow-up'
 import { detectCodexHome, localPetsRoot, refreshPetLibraries, resolveBuiltinPetsRoot } from './pet-importer'
 import { petEventAllowed, petIpcHandlers, type PetIpcEvent } from './pet-ipc'
-import { readPetAsset } from './pet-protocol'
+import { bindPetAssetReader } from './pet-protocol'
 import { PetStore } from './pet-store'
+import { petRendererTarget } from './pet-renderer-target'
 import { PetWindowController, type PetWindowLike } from './pet-window'
 
 let active: DesktopPets | null = null
@@ -81,7 +82,7 @@ class DesktopPetRuntime implements DesktopPets {
   }
 
   async start(): Promise<void> {
-    protocol.handle(PET_ASSET_SCHEME, (request) => readPetAsset(request.url, (id) => this.store.assetPath(id), this.store.libraryRoot()))
+    bindPetAssetReader({ lookup: (id) => this.store.assetPath(id), libraryRoot: this.store.libraryRoot() })
     this.controller = new PetWindowController({
       platform: process.platform,
       forwardMouseEvents: process.platform !== 'linux' || process.env.KUN_PET_FORWARD_MOUSE === '1',
@@ -126,7 +127,7 @@ class DesktopPetRuntime implements DesktopPets {
       ipcMain.removeHandler(channel)
       ipcMain.removeAllListeners(channel)
     }
-    try { protocol.unhandle(PET_ASSET_SCHEME) } catch { /* already unregistered */ }
+    bindPetAssetReader(null)
   }
 
   private api() {
@@ -296,13 +297,8 @@ class DesktopPetRuntime implements DesktopPets {
   }
 
   private loadOverlay(window: PetWindowLike): Promise<void> {
-    const devUrl = developmentRendererUrl()
-    if (!devUrl) return window.loadFile(path.join(__dirname, '../renderer/pet-overlay.html'))
-    const target = new URL(devUrl)
-    target.pathname = '/pet-overlay.html'
-    target.search = ''
-    target.hash = ''
-    return window.loadURL(target.toString())
+    const target = petRendererTarget({ appPath: app.getAppPath(), developmentUrl: developmentRendererUrl() })
+    return target.kind === 'file' ? window.loadFile(target.path) : window.loadURL(target.url)
   }
 
   private async openDirectory(dir: string): Promise<void> {

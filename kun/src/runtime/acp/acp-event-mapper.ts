@@ -1,7 +1,7 @@
 import { acpToolPresentation, type AcpToolEvidence } from './acp-tool-presentation.js'
 import type { DelegatedTerminalPresentation } from '../../contracts/delegated-tool-presentation.js'
 /**
- * ACP `session/update` → Kun runtime event drafts (docs/ade/03 §7).
+ * ACP `session/update` → Kun runtime event drafts.
  * The mapper is pure: it accumulates per-turn text/reasoning and the
  * tool-call state machine, and returns `RuntimeEventDraft[]` for
  * `acp-runtime.ts` to persist — no I/O, no process.
@@ -12,12 +12,11 @@ import type { DelegatedTerminalPresentation } from '../../contracts/delegated-to
  */
 import { AcpTextSegments } from './acp-text-segments.js'
 import type { TurnItem } from '../../contracts/items.js'
-import type { ThreadTodoList } from '../../contracts/threads.js'
+import { delegatedPlanTodoList } from '../delegated-plan-todos.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import type { UsageSnapshot } from '../../contracts/usage.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import {
-  acpConfigOptionValues,
   type AcpConfigOption,
   type AcpSessionModes,
   type SessionUpdate
@@ -28,30 +27,40 @@ import {
   toKunToolResult,
   type AcpToolCallWire
 } from './acp-tool-call-mapper.js'
+import { acpSessionSettings } from './acp-session-settings.js'
+import { boundedCommands, boundedConfigOptions } from './acp-session-state-bounds.js'
+import type { HarnessSessionSetting } from '../../contracts/harness-session-settings.js'
+import type { ExternalSubagentSource } from '../../contracts/external-subagent.js'
+import { AcpSubagentTracker } from './acp-subagent-tracker.js'
 
 export type AcpEventMapperContext = {
   threadId: string
   turnId: string
   /** Harness id for harness_session_state events. */
   harnessId?: string
+  /** Config option the definition's `acpPermission` drives; not a generic setting. */
+  permissionOptionId?: string
   /** Monotonic id generator, e.g. `(p) => `${p}_${++n}``. */
   nextId: (prefix: string) => string
   nowIso?: () => string
   /** Model id for usage/context drafts. */
   model?: string
   debug?: AcpDebugLog
+  /** Agents whose tool calls can spawn subagents (acp-subagent-tracker). */
+  subagents?: { source: ExternalSubagentSource; mirrorSteps: boolean }
 }
 
 type ToolCallPhase = 'seen' | 'started' | 'finished'
 
 type ToolCallState = {
   phase: ToolCallPhase
+  outcome?: 'completed' | 'failed' | 'interrupted'
   itemId: string
   /** Latest wire payload — result content is accumulated from updates. */
   call: AcpToolCallWire
 }
 
-/** Facts the runtime folds into capability derivation (03 §10). */
+/** Facts the runtime folds into capability derivation. */
 export type AcpObservedFacts = {
   sawAvailableCommands: boolean
   sawUsageTelemetry: boolean
@@ -73,8 +82,19 @@ export class AcpEventMapper {
     sawUsageTokens: false
   }
 
+  /** Subagent cards of this turn; undefined for Agents without subagents. */
+  readonly subagents?: AcpSubagentTracker
+
   constructor(private readonly ctx: AcpEventMapperContext) {
     this.messages = new AcpTextSegments(ctx)
+    if (ctx.subagents) {
+      this.subagents = new AcpSubagentTracker({ threadId: ctx.threadId, turnId: ctx.turnId, ...ctx.subagents,
+        ...(ctx.nowIso ? { nowIso: ctx.nowIso } : {}) })
+    }
+  }
+
+  private withSubagents(drafts: RuntimeEventDraft[]): RuntimeEventDraft[] {
+    return this.subagents ? this.subagents.decorate(drafts) : drafts
   }
 
   get observedFacts(): AcpObservedFacts {
@@ -82,6 +102,10 @@ export class AcpEventMapper {
   }
 
   apply(update: SessionUpdate | { sessionUpdate: string }): RuntimeEventDraft[] {
+    return this.withSubagents(this.applyUpdate(update))
+  }
+
+  private applyUpdate(update: SessionUpdate | { sessionUpdate: string }): RuntimeEventDraft[] {
     // The passthrough union member (`sessionUpdate: string`) defeats
     // discriminated narrowing, so each case casts to its validated variant.
     switch (update.sessionUpdate) {
@@ -137,10 +161,23 @@ export class AcpEventMapper {
    * that never reached a terminal status.
    */
   flush(): RuntimeEventDraft[] {
+    return this.withSubagents(this.flushTurn())
+  }
+
+  /**
+   * A prompt settled and a follow-up prompt of the same turn comes next:
+   * complete the open text/thought segment so its answer starts a new item.
+   */
+  closeSegment(): RuntimeEventDraft[] {
+    return this.withSubagents(this.messages.flush())
+  }
+
+  private flushTurn(): RuntimeEventDraft[] {
     const drafts = this.messages.flush()
     for (const [callId, state] of this.toolCalls) {
       if (state.phase === 'finished') continue
       state.phase = 'finished'
+      state.outcome = 'interrupted'
       drafts.push(this.toolFinished(
         callId,
         toKunToolResult({
@@ -174,7 +211,7 @@ export class AcpEventMapper {
       return this.messages.append(channel, `[${link.name || link.uri}](${link.uri})`)
     }
     // Binary/embedded content: attachment persistence is a runtime concern
-    // (P1-05); record a note so the update is not silently lost.
+    //; record a note so the update is not silently lost.
     this.debug(`agent_message_chunk content '${content.type}' not yet mapped`)
     return []
   }
@@ -237,7 +274,7 @@ export class AcpEventMapper {
     const drafts = existing ? [] : this.messages.flush()
     let state = existing
     if (!state) {
-      // Out-of-order update: create the placeholder first (03 §7.2).
+      // Out-of-order update: create the placeholder first.
       const itemId = this.ctx.nextId('item_tool')
       state = { phase: 'seen', itemId, call: update }
       this.toolCalls.set(callId, state)
@@ -288,6 +325,7 @@ export class AcpEventMapper {
       // state.call already carries this update's content — the caller merged
       // it before dispatching here; merging again would duplicate content.
       state.phase = 'finished'
+      state.outcome = status
       drafts.push(this.toolFinished(
         callId,
         toKunToolResult({
@@ -331,7 +369,7 @@ export class AcpEventMapper {
     if (state.phase === 'finished') {
       const itemId = this.resultItemId(callId)
       drafts.push(this.itemUpdated(itemId, toKunToolResult({ ...input, itemId,
-        outcome: state.call.status === 'failed' ? 'failed' : 'completed' })))
+        outcome: state.outcome ?? (state.call.status === 'failed' ? 'failed' : 'completed') })))
     }
     return drafts
   }
@@ -341,23 +379,20 @@ export class AcpEventMapper {
   private mapPlan(
     update: Extract<SessionUpdate, { sessionUpdate: 'plan' }>
   ): RuntimeEventDraft {
-    const now = this.nowIso()
-    const todos: ThreadTodoList = {
+    const todos = delegatedPlanTodoList({
       threadId: this.ctx.threadId,
-      items: (update.entries ?? []).map((entry, index) => ({
-        id: `acp_plan_${index}`,
-        content: entry.content.slice(0, 1_000),
+      idPrefix: 'acp_plan',
+      entries: (update.entries ?? []).map((entry) => ({
+        content: entry.content,
         status:
           entry.status === 'in_progress'
             ? 'in_progress'
             : entry.status === 'completed'
               ? 'completed'
-              : 'pending',
-        createdAt: now,
-        updatedAt: now
+              : 'pending'
       })),
-      updatedAt: now
-    }
+      now: this.nowIso()
+    })
     return {
       kind: 'todos_updated',
       threadId: this.ctx.threadId,
@@ -371,11 +406,7 @@ export class AcpEventMapper {
   ): RuntimeEventDraft[] {
     this.facts.sawAvailableCommands = true
     return [this.sessionState({
-      commands: update.availableCommands.slice(0, 200).map((command) => ({
-        name: command.name,
-        ...(command.description ? { description: command.description } : {}),
-        ...(command.input?.hint ? { inputHint: command.input.hint } : {})
-      }))
+      commands: boundedCommands(update.availableCommands)
     })]
   }
 
@@ -391,15 +422,9 @@ export class AcpEventMapper {
   ): RuntimeEventDraft[] {
     this.facts.configOptions = update.configOptions as AcpConfigOption[]
     return [this.sessionState({
-      configOptions: (update.configOptions as AcpConfigOption[]).slice(0, 32).map((option) => ({
-        id: option.id,
-        ...(option.name ? { name: option.name } : {}),
-        ...(option.category ? { category: option.category } : {}),
-        currentValue: option.currentValue,
-        ...(option.type === 'select'
-          ? { values: acpConfigOptionValues(option) }
-          : {})
-      }))
+      settings: acpSessionSettings(update.configOptions as AcpConfigOption[], this.ctx.permissionOptionId),
+      // Within the event's bounds: an Agent may list hundreds of models.
+      configOptions: boundedConfigOptions(update.configOptions as AcpConfigOption[])
     })]
   }
 
@@ -428,7 +453,9 @@ export class AcpEventMapper {
         toolCount: this.toolCalls.size,
         activeSkillIds: [],
         contextManagement: 'sdk-managed',
-        nativeHistory: 'known'
+        nativeHistory: 'known',
+        // The Agent's own occupancy; its compaction point is not reported.
+        occupancySource: 'agent'
       })
     }
     return drafts
@@ -444,17 +471,25 @@ export class AcpEventMapper {
     cachedWriteTokens?: number | null
   } | null | undefined): RuntimeEventDraft[] {
     if (!usage) return []
-    const prompt = Math.max(0, Math.trunc(usage.inputTokens ?? 0))
+    const input = Math.max(0, Math.trunc(usage.inputTokens ?? 0))
     const completion = Math.max(0, Math.trunc(usage.outputTokens ?? 0))
     const total = Math.max(
       0,
-      Math.trunc(usage.totalTokens ?? prompt + completion)
+      Math.trunc(usage.totalTokens ?? input + completion)
     )
-    if (prompt + completion + total <= 0) return []
+    if (input + completion + total <= 0) return []
     this.facts.sawUsageTokens = true
-    // ACP inputTokens includes cache reads (total = input + output), so the
-    // miss side is the remainder; never report more hits than input.
-    const cachedRead = usage.cachedReadTokens ? Math.min(prompt, Math.trunc(usage.cachedReadTokens)) : 0
+    // ACP leaves open whether inputTokens counts cache reads. Most engines do
+    // (total = input + output); OpenCode does not (total adds thought, cache
+    // reads and writes on top). Reads larger than the input, or a total that
+    // already adds them, mean the input is only the uncached part.
+    const reads = Math.max(0, Math.trunc(usage.cachedReadTokens ?? 0))
+    const writes = Math.max(0, Math.trunc(usage.cachedWriteTokens ?? 0))
+    const thought = Math.max(0, Math.trunc(usage.thoughtTokens ?? 0))
+    const inputExcludesCache = reads > 0 && (reads > input || total >= input + completion + thought + reads)
+    const prompt = inputExcludesCache ? input + reads + writes : input
+    // The miss side is the remainder; never report more hits than input.
+    const cachedRead = reads ? Math.min(prompt, reads) : 0
     const snapshot: UsageSnapshot = {
       promptTokens: prompt,
       completionTokens: completion,
@@ -554,6 +589,7 @@ export class AcpEventMapper {
       values?: string[]
     }>
     currentModeId?: string
+    settings?: HarnessSessionSetting[]
   }): RuntimeEventDraft {
     return {
       kind: 'harness_session_state',

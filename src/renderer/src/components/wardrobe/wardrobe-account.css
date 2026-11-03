@@ -1,0 +1,68 @@
+/* The wardrobe as a Kun account: sync chip, signed-out card, feather shop and invitations. */
+.kun-wardrobe { --account-sky: linear-gradient(180deg, #e4f0ff 0%, #eeecff 55%, #fdf4e8 100%); --feather-ink: #9a5b0c;
+  --feather-soft: color-mix(in srgb, var(--ds-warning, #d97706) 14%, transparent); --ok-ink: #17834a; --ok-soft: rgb(23 131 74 / .1); }
+[data-theme='dark'] .kun-wardrobe { --account-sky: linear-gradient(180deg, #111a2f 0%, #161a35 55%, #1d1a2a 100%); --feather-ink: #f5bd6e;
+  --ok-ink: #5fd68f; --ok-soft: rgb(74 222 128 / .12); }
+
+.kun-wardrobe-account-chip { display: inline-flex; flex: none; align-items: center; gap: 6px; height: 24px; padding: 0 9px; border-radius: 999px;
+  color: var(--ds-text-muted); background: var(--ds-surface-subtle); font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+.kun-wardrobe-account-chip > i { width: 6px; height: 6px; border-radius: 50%; background: var(--ds-text-faint); }
+.kun-wardrobe-account-chip[data-mode='account'] { color: var(--ok-ink); background: var(--ok-soft); }
+.kun-wardrobe-account-chip[data-mode='account'] > i { background: var(--ok-ink); }
+.kun-wardrobe-tabs > button > svg { flex: none; color: var(--ds-text-faint); }
+
+/* Signed out: the shelf's place holds the reason to sign in. */
+.kun-wardrobe-guest { display: grid; flex: none; gap: 12px; padding: 16px; border: 1px solid color-mix(in srgb, var(--ds-accent) 30%, var(--ds-border));
+  border-radius: 16px; background: linear-gradient(135deg, var(--ds-accent-soft), var(--ds-surface-card) 70%); }
+.kun-wardrobe-guest-head { display: flex; align-items: center; gap: 12px; }
+.kun-wardrobe-guest-text { display: grid; gap: 3px; min-width: 0; }
+.kun-wardrobe-guest-head strong { font-size: 14px; font-weight: 650; }
+.kun-wardrobe-guest-head small { color: var(--ds-text-muted); font-size: 12px; line-height: 1.55; }
+.kun-wardrobe-guest > p { margin: 0; color: var(--ds-text-faint); font-size: 11.5px; line-height: 1.5; }
+.kun-wardrobe-guest-sign-in { display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 18px; border-radius: 11px;
+  color: var(--ds-control-foreground, #fff); background: var(--ds-control, var(--ds-accent)); font-size: 13.5px; font-weight: 650;
+  box-shadow: 0 8px 18px -10px var(--ds-accent); transition: transform .15s, opacity .15s; }
+.kun-wardrobe-guest-sign-in:hover:not(:disabled) { transform: translateY(-1px); }
+.kun-wardrobe-guest-sign-in:disabled { opacity: .62; cursor: progress; }
+.kun-wardrobe-locked { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 48px 24px; text-align: center; }
+.kun-wardrobe-locked > strong { font-size: 15px; font-weight: 650; }
+.kun-wardrobe-locked > p { max-width: 380px; margin: 0 0 6px; color: var(--ds-text-muted); font-size: 12.5px; line-height: 1.6; }
+.kun-wardrobe-locked-icon { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 16px; color: var(--ds-accent); background: var(--ds-accent-soft); }
+
+/* Feather shop */
+.kun-wardrobe-shop, .kun-wardrobe-invite { display: flex; flex-direction: column; gap: 14px; padding-top: 14px; }
+/* The panels scroll; their cards keep their own height instead of shrinking into the column. */
+.kun-wardrobe-shop > *, .kun-wardrobe-invite > * { flex: none; }
+.kun-wardrobe-shop-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.kun-wardrobe-shop-head > p { flex: 1 1 260px; margin: 0; color: var(--ds-text-muted); font-size: 12.5px; line-height: 1.6; }
+.kun-wardrobe-shop-balance { display: inline-grid; grid-template-columns: auto auto; align-items: center; column-gap: 8px; padding: 8px 14px;
+  border-radius: 14px; color: var(--feather-ink); background: var(--feather-soft); }
+.kun-wardrobe-shop-balance > svg { grid-row: span 2; }
+.kun-wardrobe-shop-balance > b { font-size: 18px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.kun-wardrobe-shop-balance > small { font-size: 11px; }
+.kun-wardrobe-shop-shelf { display: grid; gap: 6px; width: 150px; padding: 9px 12px; border-radius: 14px; background: var(--ds-surface-subtle); }
+.kun-wardrobe-shop-shelf > small { color: var(--ds-text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.kun-wardrobe-shop-shelf > i { height: 5px; overflow: hidden; border-radius: 999px; background: var(--ds-border); }
+.kun-wardrobe-shop-shelf > i > b { display: block; height: 100%; border-radius: inherit; background: var(--ds-accent); }
+.kun-wardrobe-offers { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.kun-wardrobe-offer { display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: center; gap: 12px 14px; padding: 16px;
+  border: 1px solid var(--ds-border); border-radius: 18px; background: var(--ds-surface-card); }
+.kun-wardrobe-offer[data-many] { border-color: color-mix(in srgb, var(--ds-accent) 32%, var(--ds-border));
+  background: linear-gradient(140deg, var(--ds-accent-soft), var(--ds-surface-card) 62%); }
+.kun-wardrobe-offer-art { display: flex; align-items: flex-end; justify-content: center; height: 64px; }
+.kun-wardrobe-offer-art > .rooms-wardrobe-bottle-icon + .rooms-wardrobe-bottle-icon { margin-left: -22px; }
+.kun-wardrobe-offer-text { display: grid; gap: 3px; min-width: 0; }
+.kun-wardrobe-offer-text > strong { font-size: 14.5px; font-weight: 650; }
+.kun-wardrobe-offer-text > b { display: inline-flex; align-items: center; gap: 5px; color: var(--feather-ink); font-size: 19px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.kun-wardrobe-offer-text > small { color: var(--ds-text-muted); font-size: 11.5px; }
+.kun-wardrobe-offer > button { grid-column: 1 / -1; height: 38px; border-radius: 11px; color: var(--ds-control-foreground, #fff);
+  background: var(--ds-control, var(--ds-accent)); font-size: 13px; font-weight: 650; }
+.kun-wardrobe-offer > button:disabled { color: var(--ds-text-faint); background: var(--ds-surface-subtle); cursor: not-allowed; }
+.kun-wardrobe-shop-note { margin: 0; color: var(--ds-text-faint); font-size: 12px; line-height: 1.6; }
+.kun-wardrobe-shop-error { display: flex; align-items: center; gap: 10px; margin: 0; padding: 10px 12px; border-radius: 12px;
+  color: var(--ds-danger, #d14343); background: color-mix(in srgb, var(--ds-danger, #d14343) 10%, transparent); font-size: 12.5px; }
+.kun-wardrobe-shop-error > button { margin-left: auto; font-weight: 600; text-decoration: underline; }
+
+@container (max-width: 560px) {
+  .kun-wardrobe-account-chip { display: none; }
+}

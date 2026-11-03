@@ -1,0 +1,406 @@
+/* The sidebar account card (the whole footer block is the account) and the menu it opens. */
+
+.kun-account-card {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  height: 52px;
+  padding-right: 8px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.kun-account-card:hover {
+  background: var(--ds-sidebar-row-hover);
+}
+
+.kun-account-card[data-open],
+.kun-account-card[data-active] {
+  border-color: var(--ds-sidebar-row-ring, var(--ds-border));
+  background: var(--ds-sidebar-row-active, var(--ds-surface-card));
+  box-shadow: 0 1px 2px rgb(16 24 40 / 0.05);
+}
+
+.kun-account-card[data-variant='compact'] {
+  height: 36px;
+  padding-right: 10px;
+  border-radius: 9px;
+}
+
+.kun-account-card-main {
+  display: flex;
+  min-width: 0;
+  height: 100%;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  padding-left: 8px;
+  border-radius: inherit;
+  color: var(--ds-text);
+  text-align: left;
+  outline: none;
+}
+
+.kun-account-card[data-variant='compact'] .kun-account-card-main {
+  gap: 8px;
+  padding-left: 10px;
+}
+
+.kun-account-card-main:focus-visible,
+.kun-account-card-login:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 30%, transparent);
+}
+
+.kun-account-card-main:disabled {
+  cursor: default;
+}
+
+.kun-account-card-face {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+/* Kun's runtime state, the old "ready" line, rides on the avatar's corner. */
+.kun-account-presence {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px var(--ds-bg-sidebar);
+}
+
+.kun-account-presence[data-runtime='checking'],
+.kun-account-presence[data-runtime='idle'] {
+  background: #f59e0b;
+}
+
+.kun-account-presence[data-runtime='offline'] {
+  background: #9aa1ad;
+}
+
+.kun-account-card[data-variant='compact'] .kun-account-presence {
+  width: 9px;
+  height: 9px;
+}
+
+.kun-account-card-text {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.kun-account-card-name,
+.kun-account-card-hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kun-account-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 17px;
+}
+
+.kun-account-card-hint {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--ds-text-faint);
+}
+
+.kun-account-card-hint[data-tone='live'] {
+  color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text));
+}
+
+.kun-account-card-hint[data-tone='warn'] {
+  color: var(--kun-account-warn);
+}
+
+.kun-account-card-hint[data-tone='bad'] {
+  color: #c53a31;
+}
+
+[data-theme='dark'] .kun-account-card-hint[data-tone='bad'] {
+  color: #f8877f;
+}
+
+.kun-account-card-chevron {
+  flex: none;
+  color: var(--ds-text-faint);
+}
+
+.kun-account-card-skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--ds-surface-hover), var(--ds-surface-card), var(--ds-surface-hover));
+  background-size: 200% 100%;
+  animation: kun-account-shimmer 1.4s ease-in-out infinite;
+}
+
+.kun-account-card-skeleton.is-face {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 9px;
+}
+
+.kun-account-card-login {
+  position: relative;
+  display: inline-flex;
+  height: 28px;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 34%, var(--ds-border));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ds-accent) 10%, var(--ds-surface-card));
+  color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text));
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  outline: none;
+  transition: background 0.15s ease;
+}
+
+.kun-account-card-login:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-accent) 16%, var(--ds-surface-card));
+}
+
+.kun-account-card-login[data-badge]::after {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e5534b;
+  box-shadow: 0 0 0 2px var(--ds-bg-sidebar);
+  content: '';
+}
+
+/* Menu: the account header, three numbers, then the rows. */
+.kun-account-menu-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+  padding: 16px 16px 14px;
+  background: linear-gradient(160deg, #e9f2ff 0%, #f1efff 60%, #fdf6ec 100%);
+}
+
+[data-theme='dark'] .kun-account-menu-head {
+  background: linear-gradient(160deg, #16203a 0%, #1b1c38 60%, #221d2b 100%);
+}
+
+.kun-account-menu-head .kun-account-glow.is-a {
+  left: -40px;
+  top: -50px;
+  width: 140px;
+  height: 110px;
+}
+
+.kun-account-menu-head .kun-account-glow.is-b {
+  right: -30px;
+  bottom: -50px;
+  width: 120px;
+  height: 100px;
+}
+
+.kun-account-menu-face {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  border-radius: 12px;
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.75);
+}
+
+[data-theme='dark'] .kun-account-menu-face {
+  box-shadow: 0 0 0 3px rgb(255 255 255 / 0.08);
+}
+
+.kun-account-menu-who {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.kun-account-menu-who strong,
+.kun-account-menu-who span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kun-account-menu-who strong {
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 20px;
+}
+
+.kun-account-menu-who span {
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--ds-text-muted);
+}
+
+.kun-account-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 12px 12px 4px;
+}
+
+.kun-account-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column-reverse;
+  gap: 1px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--ds-surface-subtle);
+}
+
+.kun-account-stat[data-ready] {
+  background: linear-gradient(135deg, #fff1cf, #ffe2a8);
+  color: #5a3000;
+}
+
+.kun-account-stat dt {
+  overflow: hidden;
+  font-size: 11px;
+  color: var(--ds-text-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kun-account-stat[data-ready] dt {
+  color: #7a4a0c;
+}
+
+.kun-account-stat dd {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.kun-account-stat dd svg {
+  flex: none;
+  color: var(--ds-text-faint);
+}
+
+.kun-account-stat[data-ready] dd svg {
+  color: #a0620a;
+}
+
+.kun-account-menu .kun-account-rows {
+  padding-top: 6px;
+}
+
+.kun-account-menu .kun-account-warning,
+.kun-account-menu .kun-account-note {
+  margin: 8px 12px 0;
+}
+
+/* A row's trailing badge or tag keeps its own width; only the label column stretches. */
+.kun-account-row > .ds-sidebar-kun-bottles,
+.kun-account-row > .kun-account-row-tag {
+  flex: none;
+  flex-direction: row;
+}
+
+.kun-account-row-tag {
+  display: inline-flex;
+  height: 20px;
+  flex: none;
+  align-items: center;
+  padding: 0 7px;
+  border-radius: 9999px;
+  background: var(--ds-surface-subtle);
+  color: var(--ds-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.kun-account-row-tag[data-tone='here'] {
+  background: color-mix(in srgb, var(--ds-accent) 12%, transparent);
+  color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text));
+}
+
+.kun-account-menu-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 10px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--ds-border);
+  font-size: 11.5px;
+  color: var(--ds-text-faint);
+}
+
+.kun-account-menu-foot > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.kun-account-menu-foot i {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.kun-account-menu-foot i[data-runtime='checking'],
+.kun-account-menu-foot i[data-runtime='idle'] {
+  background: #f59e0b;
+}
+
+.kun-account-menu-foot i[data-runtime='offline'] {
+  background: #9aa1ad;
+}
+
+.kun-account-guest .kun-account-actions {
+  margin-top: 12px;
+}
+
+.kun-account-guest .kun-account-body {
+  padding-bottom: 12px;
+}
+
+.kun-account-guest .kun-account-separator {
+  display: block;
+  margin: 0 10px;
+}
+
+.kun-account-guest .kun-account-rows {
+  padding-top: 6px;
+}
+
+.kun-account-guest .kun-account-warning {
+  margin: 10px 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-account-card-skeleton {
+    animation: none;
+  }
+}

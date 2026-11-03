@@ -125,7 +125,7 @@ describe('terminal agent PTY launch', () => {
     const spawned = ptyModule.spawnArgs!
     expect(spawned.args[5]).toBe('/usr/local/bin/claude')
     const taskArg = spawned.args[8]
-    // The injected task carries the 05 §5.3 callback appendix.
+    // The injected task carries the callback appendix.
     expect(taskArg).toMatch(/^fix the flake\n---\nReporting back to Kun/)
     expect(taskArg).toContain('$KUN_CLI" worker progress')
     expect(spawned.args.slice(6)).toEqual([

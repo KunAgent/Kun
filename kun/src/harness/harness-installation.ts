@@ -5,7 +5,8 @@ import semver from 'semver'
 import type { HarnessInstallation } from '../contracts/harness-update.js'
 import type { HarnessStatus } from '../contracts/harness.js'
 import { harnessExecutableIdentity } from './harness-executable-identity.js'
-import { HARNESS_UPDATE_RECIPES } from './harness-update-recipes.js'
+import { harnessUpdateRecipe } from './harness-update-recipes.js'
+import { providerModule } from './providers/registry.js'
 import { resolveExecutable } from '../process/owned-process.js'
 import { harnessExecutableEnv } from './harness-executable-env.js'
 import { spawnCaptured } from './harness-detector.js'
@@ -15,7 +16,8 @@ export async function describeHarnessInstallation(id: string, status: HarnessSta
   home = homedir()): Promise<InstallationDetails> {
   const path = status.resolvedCommand
   const base = { path, version: status.version, fingerprint: harnessExecutableIdentity(path) }
-  if (id === 'cursor' && status.installed === 'yes') return { ...base, source: 'kun-bundled', owner: 'Kun' }
+  const installation = providerModule(id)?.installation
+  if (installation?.bundled && status.installed === 'yes') return { ...base, source: 'kun-bundled', owner: 'Kun' }
   if (!path) return { ...base, source: 'unavailable' }
   const target = await realpath(path).catch(() => path)
   const canonicalHome = await realpath(home).catch(() => resolve(home))
@@ -23,17 +25,19 @@ export async function describeHarnessInstallation(id: string, status: HarnessSta
   if (/\.app(?:\/Contents\/|$)/.test(normalized)) {
     return { ...base, source: 'application', owner: normalized.match(/([^/]+)\.app(?:\/Contents\/|$)/)?.[1] }
   }
-  if (normalized.includes('/node_modules/@anthropic-ai/claude-agent-sdk') || normalized.includes('/agent-sdk/')) {
+  if (installation?.bundledPathMarkers?.some((marker) => normalized.includes(marker))) {
     return { ...base, source: 'kun-bundled', owner: 'Kun' }
   }
   const managedRoot = resolve(canonicalHome, '.kun', 'agents', id)
   if (target.startsWith(managedRoot + sep)) return { ...base, source: 'managed', owner: 'Kun' }
-  const recipe = HARNESS_UPDATE_RECIPES[id]
+  const recipe = harnessUpdateRecipe(id)
   if (recipe?.cask && new RegExp(`/Caskroom/${recipe.cask.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/`).test(normalized)) {
     return { ...base, source: 'homebrew', owner: 'Homebrew' }
   }
-  if (id === 'claude-code' && target.startsWith(join(canonicalHome, '.local', 'share', 'claude', 'versions') + sep) &&
-    resolve(path) === join(home, '.local', 'bin', 'claude')) return { ...base, source: 'native', owner: 'Claude Code' }
+  const native = installation?.native?.({ home, canonicalHome })
+  if (native && target.startsWith(native.versionsDir + sep) && resolve(path) === native.launcher) {
+    return { ...base, source: 'native', owner: native.owner }
+  }
   // Match the actual package and npm prefix; never update whichever npm happens to own PATH.
   if (recipe?.packageName) {
     let folder = dirname(target)
@@ -54,8 +58,8 @@ export async function describeHarnessInstallation(id: string, status: HarnessSta
 }
 
 export async function localHarnessCandidate(id: string, current: HarnessInstallation): Promise<HarnessInstallation | undefined> {
-  if (!['claude-code', 'codex'].includes(id)) return undefined
-  const name = HARNESS_UPDATE_RECIPES[id]?.command
+  if (!providerModule(id)?.installation?.localCandidates) return undefined
+  const name = harnessUpdateRecipe(id)?.command
   if (!name) return undefined
   const paths = [await resolveExecutable(name, { env: harnessExecutableEnv() }), join(homedir(), '.local', 'bin', name)]
   let best: HarnessInstallation | undefined

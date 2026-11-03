@@ -12,8 +12,8 @@ export type ToolDispatchLeaseAuthority = {
 }
 
 /**
- * While the local lease deadline has fired and the runtime is renewing inside
- * its unilateral grace window, Manager may already have re-issued the lease
+ * When the Runtime heartbeat is uncertain or a thread is renewing inside its
+ * local deadline grace window, Manager may already have re-issued the lease
  * (and its fencing token) to another runtime. File mutations through Manager
  * routes are fenced, but external side effects (third-party APIs, browser
  * actions, shell commands) are not. Pause those dispatches until renewal
@@ -25,7 +25,8 @@ export async function awaitLeaseAuthorityForSideEffectingTool(input: {
   signal: AbortSignal
 }): Promise<'holder' | 'lost'> {
   const { authority, threadId, signal } = input
-  if (authority.authorityState(threadId) !== 'grace') return 'holder'
+  const state = authority.authorityState(threadId)
+  if (state !== 'grace') return state
   if (!authority.waitAuthorityResolution) return 'holder'
   const resolution = authority.waitAuthorityResolution(threadId)
   // Never leak: once we settle, detach our listener.

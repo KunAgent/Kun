@@ -72,6 +72,9 @@ type WorkbenchRightPanelElementOptions = Pick<
     | 'composerFastMode'
     | 'setComposerModel'
     | 'setComposerFastMode'
+    | 'executionSettings'
+    | 'executionSettingsApplying'
+    | 'onExecutionSettingsChange'
     | 'onNewConversation'
     | 'onPickWorkspace'
   >
@@ -115,8 +118,6 @@ type WorkbenchRightPanelElementOptions = Pick<
     | 'onScreenCreated'
     | 'onSvgCreated'
     | 'onUseElementAsContext'
-    | 'onRuntimeQualityFindings'
-    | 'onRequestQualityRepair'
   >
   file: Pick<
     FilePanelProps,

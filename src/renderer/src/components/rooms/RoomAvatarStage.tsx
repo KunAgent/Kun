@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
-import { Dices, Glasses, GraduationCap, Shirt, Sparkles, WandSparkles, X, type LucideIcon } from 'lucide-react'
+import { Dices, Glasses, GraduationCap, Shirt, WandSparkles, X, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
-  KUN_AVATAR_CATALOG, canonicalKunAvatarKey,
+  KUN_AVATAR_CATALOG, KUN_AVATAR_RARITY_LABELS, canonicalKunAvatarKey,
   type KunAvatarAccessoryCategory, type KunAvatarParts, type RoomAvatarReference
 } from '@shared/rooms-api'
 import { RoomAvatar } from './RoomAvatar'
@@ -19,7 +19,7 @@ export const AVATAR_SLOTS: ReadonlyArray<{ id: KunAvatarAccessoryCategory; label
 
 /** Keeps the last finished composition on screen while the next one renders, so try-ons never flash. */
 function StageComposition({ parts }: { parts: KunAvatarParts }) {
-  const url = useRoomComposedAvatar({ kind: 'composed', version: 1, parts }, MIRROR)
+  const url = useRoomComposedAvatar({ kind: 'composed', version: 1, parts }, MIRROR, true)
   const [shown, setShown] = useState(url)
   useEffect(() => { if (url) setShown(url) }, [url])
   return shown ? <img className="rooms-avatar-art" data-composed src={shown} alt="" aria-hidden="true" draggable={false} />
@@ -35,7 +35,7 @@ export function RoomAvatarStage({ id, label, user, avatar, parts, trying, active
 }): ReactElement {
   const { t } = useTranslation('common')
   const shownParts = trying ?? parts
-  const composed = Boolean(trying) || avatar?.kind === 'composed'
+  const composed = Boolean(trying) || avatar?.kind === 'composed' || (active && avatar?.kind === 'builtin')
   // A new committed look gets a small "ta-da"; hovering never replays it.
   const committed = avatar?.kind === 'composed' ? canonicalKunAvatarKey(avatar.parts) : JSON.stringify(avatar ?? null)
   const [pop, setPop] = useState(0)
@@ -50,9 +50,6 @@ export function RoomAvatarStage({ id, label, user, avatar, parts, trying, active
   const chatAvatar: RoomAvatarReference | null | undefined = trying ? { kind: 'composed', version: 1, parts: trying } : avatar
   return <section className="rooms-avatar-stage" aria-label={label}>
     <div className="rooms-avatar-stage-spot" data-pop={pop % 2} data-popped={pop > 0 || undefined}>
-      <Sparkles className="rooms-avatar-stage-sparkle" data-sparkle="1" size={18} aria-hidden="true" />
-      <Sparkles className="rooms-avatar-stage-sparkle" data-sparkle="2" size={13} aria-hidden="true" />
-      <Sparkles className="rooms-avatar-stage-sparkle" data-sparkle="3" size={15} aria-hidden="true" />
       <div className="rooms-avatar-composer-preview rooms-avatar-stage-mirror"
         data-transparent={composed && shownParts.bg === 'transparent' || undefined}>
         {content}
@@ -69,8 +66,9 @@ export function RoomAvatarStage({ id, label, user, avatar, parts, trying, active
       {AVATAR_SLOTS.map((slot) => {
         const item = active ? KUN_AVATAR_CATALOG[slot.id].find((entry) => entry.id === parts[slot.id]) : undefined
         const name = item?.label[language]
-        return <div key={slot.id} className="rooms-avatar-slot" data-filled={item ? true : undefined}>
+        return <div key={slot.id} className="rooms-avatar-slot" data-filled={item ? true : undefined} data-rarity={item?.rarity}>
           <button type="button" className="rooms-avatar-slot-open" disabled={disabled} onClick={() => onSlot(slot.id)}
+            aria-description={item ? KUN_AVATAR_RARITY_LABELS[item.rarity][language] : undefined}
             aria-label={item ? t('roomsAvatarSlotFilled', { slot: t(slot.label), item: name }) : t('roomsAvatarSlotEmpty', { slot: t(slot.label) })}>
             {item ? <RoomAvatarItemArt category={slot.id} id={item.id} size={38} /> : <slot.icon size={17} aria-hidden="true" />}
           </button>

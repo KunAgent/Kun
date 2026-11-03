@@ -9,7 +9,6 @@ const providerKeys = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', '
 
 /** Official native credential variables; only the selected Agent receives these. */
 export const NATIVE_AGENT_CREDENTIAL_ENV_KEYS: Readonly<Record<string, readonly string[]>> = {
-  'gemini-cli': ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
   kimi: ['KIMI_API_KEY'],
   copilot: ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'COPILOT_PROVIDER_API_KEY'],
   goose: providerKeys,
@@ -50,7 +49,6 @@ export function nativeAgentCredentialFiles(id: string, env: Env = process.env): 
   const home = env.HOME || env.USERPROFILE || homedir()
   const config = env.XDG_CONFIG_HOME || join(home, '.config')
   switch (id) {
-    case 'gemini-cli': return [join(home, '.gemini', 'oauth_creds.json')]
     case 'kimi': {
       const dir = kimiDir(env, home)
       return [join(dir, 'config.toml'), join(dir, 'credentials', 'kimi-code.json')]
@@ -108,7 +106,6 @@ export function nativeAgentCredentialsConfigured(id: string, env: Env): boolean 
   if (id !== 'kimi' && (NATIVE_AGENT_CREDENTIAL_ENV_KEYS[id] ?? []).some((key) => nonempty(env[key]))) return true
   const files = nativeAgentCredentialFiles(id, env)
   switch (id) {
-    case 'gemini-cli': return oauth(json(files[0]!))
     case 'droid': return oauth(json(files[0]!))
     case 'kimi': return kimiProviderKey(file(files[0]!), env) || oauth(json(files[1]!))
     case 'goose': {

@@ -15,13 +15,15 @@ import {
 import { legacyProviderKindFor } from '../harness/harness-provider-kind.js'
 import type { ManagerRuntimeDeps, ManagerToolContext } from './manager-runtime.js'
 import type { WorkerCreateInput } from './manager-worker-inputs.js'
+import type { WorkerRouteHealth } from './worker-route-health.js'
+import { rosterRefusal } from '../delegation/agent-roster.js'
 import {
   NoEligibleWorkerError,
   selectWorkerRoute,
   type WorkerRouteSelection
 } from './worker-selector.js'
 
-/** Route resolved for a new worker (10 §3): explicit pin, selection, or fallback. */
+/** Route resolved for a new worker: explicit pin, roster role, selection, or fallback. */
 export type ResolvedWorkerRoute = {
   route: HarnessRoute
   profileId?: string
@@ -40,18 +42,27 @@ export type WorkerProviderPoolEntry = {
 }
 
 /**
- * Resolve the worker route for `worker_create` (09 §4.1, 10 §3.2). An explicit
+ * Resolve the worker route for `worker_create`. An explicit
  * `agent` pin is validated against the harness definition and wins outright;
  * otherwise the injected `select` runs the deterministic selector, and when no
  * selector is wired the manager's own provider/model on the native Kun loop is
  * the fallback.
  *
- * Model validation follows the credential mode (P3-06): `kun-gateway` and
+ * Model validation follows the credential mode: `kun-gateway` and
  * `provider` modes check the configured provider pool instead of the harness's
  * static list; `native-login` on a `probe` harness uses the last cached probe
  * result and falls back to the static list when none is cached.
  */
-export async function resolveWorkerRoute(input: {
+export async function resolveWorkerRoute(input: Parameters<typeof resolveWorkerRouteInput>[0]): Promise<ResolvedWorkerRoute | { error: string }> {
+  const result = await resolveWorkerRouteInput(input)
+  if (input.agent?.harnessId && 'error' in result) {
+    // Omitting the pin invokes the selector, not necessarily the parent route.
+    return { error: `${result.error} Continue in the original conversation with its own Agent and model if authorized; explain the fallback. Do not bypass approval or cancellation.` }
+  }
+  return result
+}
+
+async function resolveWorkerRouteInput(input: {
   catalog: Pick<HarnessCatalog, 'get'>
   /** Manager thread's own model/provider; default for provider-sourced routes. */
   managerModel?: string
@@ -75,7 +86,7 @@ export async function resolveWorkerRoute(input: {
    */
   probedModels?: (definition: HarnessDefinition) => string[] | undefined
   /**
-   * `agents.kun.harnesses.defaults` lookup (p4 §3.6): fields the caller did
+   * `agents.kun.harnesses.defaults` lookup: fields the caller did
    * not pin explicitly fall back to the configured per-harness defaults.
    */
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
@@ -111,7 +122,8 @@ export async function resolveWorkerRoute(input: {
     // cached probe result when the modelSource probes, else the static table.
     const probed = def.modelSource === 'probe' ? input.probedModels?.(def) : undefined
     const known = probed && probed.length > 0 ? probed : def.staticModels
-    if (known.length > 0 && (!model || !known.includes(model))) {
+    const defaultOnly = def.transport === 'acp' && known.length === 1 && known[0] === 'default'
+    if (!defaultOnly && known.length > 0 && (model ? !(def.transport === 'acp' && model === 'default') && !known.includes(model) : def.transport !== 'acp')) {
       return {
         error: `model ${model || '(missing)'} is not in harness ${def.id}'s model list`
       }
@@ -125,7 +137,7 @@ export async function resolveWorkerRoute(input: {
     return {
       route: {
         harnessId: def.id,
-        model: model || known[0] || fallbackModel || '',
+        model: model || (def.transport === 'acp' ? 'default' : known[0]) || fallbackModel || '',
         ...(requested.providerId?.trim() || defaults?.providerId || fallbackProvider
           ? { providerId: requested.providerId?.trim() ?? defaults?.providerId ?? fallbackProvider }
           : {}),
@@ -164,9 +176,9 @@ export async function resolveWorkerRoute(input: {
 }
 
 /**
- * Manager-side route resolution for `worker_create` (09 §4.1): loads the
+ * Manager-side route resolution for `worker_create`: loads the
  * manager thread for provider/model fallback, then runs the deterministic
- * selector (10 §3.2) when no explicit `agent` pin was given.
+ * selector when no explicit `agent` pin was given.
  */
 export async function resolveManagerWorkerRoute(
   deps: Pick<
@@ -175,13 +187,20 @@ export async function resolveManagerWorkerRoute(
     | 'providerPool' | 'probedModels' | 'allowUnattendedFullAccess' | 'language'
     | 'harnessDefaults'
     | 'resolveGatewayAliases'
+    | 'roster'
   >,
   ctx: ManagerToolContext,
   input: WorkerCreateInput,
   isolated: boolean,
-  recentFailures: (teamId: string, harnessId: HarnessId) => Promise<number>
+  routeHealth: (teamId: string, route: HarnessRoute) => Promise<WorkerRouteHealth>
 ): Promise<ResolvedWorkerRoute | { error: string }> {
   const managerThread = await deps.threads.get(ctx.threadId).catch(() => null)
+  if (input.profile?.trim()) {
+    return resolveRosterWorkerRoute(deps, ctx, input, input.profile.trim(), {
+      model: managerThread?.model?.trim() || undefined,
+      providerId: managerThread?.providerId?.trim() || undefined
+    })
+  }
   const selector = deps.selector
   return resolveWorkerRoute({
     catalog: deps.catalog,
@@ -209,8 +228,7 @@ export async function resolveManagerWorkerRoute(
                   model: managerThread?.model?.trim() || undefined,
                   providerId: managerThread?.providerId?.trim() || undefined
                 }),
-                recentFailures: (teamId, harnessId) =>
-                  recentFailures(teamId, harnessId),
+                routeHealth,
                 language: deps.language
               },
               {
@@ -231,7 +249,64 @@ export async function resolveManagerWorkerRoute(
 }
 
 /**
- * `provider`/`kun-gateway` route (P3-06): the model addresses a configured
+ * `worker_create.profile`: the roster decides whether the role may run as a
+ * worker and which engine it is bound to. An explicit `agent.harnessId` still
+ * wins for the engine; every engine route is validated like a manual pin.
+ */
+async function resolveRosterWorkerRoute(
+  deps: Parameters<typeof resolveManagerWorkerRoute>[0],
+  ctx: ManagerToolContext,
+  input: WorkerCreateInput,
+  profileId: string,
+  manager: { model?: string; providerId?: string }
+): Promise<ResolvedWorkerRoute | { error: string }> {
+  if (!deps.roster) return { error: 'The agent roster is unavailable; omit profile or pin agent.harnessId.' }
+  const resolution = await deps.roster.resolve(profileId, {
+    lane: 'worker',
+    workspace: ctx.workspace,
+    parent: manager,
+    engineOverridden: Boolean(input.agent?.harnessId)
+  })
+  if (!resolution.ok) return { error: rosterRefusal(profileId, 'worker', resolution) }
+  const engine = input.agent?.harnessId ? input.agent : resolution.route && {
+    harnessId: resolution.route.harnessId,
+    model: resolution.route.model,
+    ...(resolution.route.providerId ? { providerId: resolution.route.providerId } : {}),
+    credentialMode: resolution.route.credentialMode,
+    ...(resolution.route.gatewayBinding ? { gatewayBinding: resolution.route.gatewayBinding } : {})
+  }
+  if (!engine) {
+    // A role without an engine binding runs on the native loop with its own
+    // model override, else the manager's route.
+    const model = resolution.profile.model?.trim() || manager.model || ''
+    const providerId = resolution.profile.model?.trim()
+      ? resolution.profile.providerId?.trim() || manager.providerId
+      : manager.providerId
+    return {
+      route: {
+        harnessId: 'kun' as HarnessRoute['harnessId'],
+        model,
+        ...(providerId ? { providerId } : {}),
+        credentialMode: 'provider'
+      },
+      profileId: resolution.id
+    }
+  }
+  const pinned = await resolveWorkerRoute({
+    catalog: deps.catalog,
+    managerModel: manager.model,
+    managerProviderId: manager.providerId,
+    agent: engine,
+    providerPool: deps.providerPool,
+    probedModels: deps.probedModels,
+    harnessDefaults: deps.harnessDefaults,
+    resolveGatewayAliases: deps.resolveGatewayAliases
+  })
+  return 'error' in pinned ? pinned : { ...pinned, profileId: resolution.id }
+}
+
+/**
+ * `provider`/`kun-gateway` route: the model addresses a configured
  * provider — `kun/<provider>/<model>` or a bare model plus providerId (the
  * manager's own provider when neither is pinned). The provider must be a
  * configured model connection, and when its model list is known the requested

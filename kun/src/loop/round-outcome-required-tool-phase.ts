@@ -1,9 +1,7 @@
 import type { ToolResultTurnItem } from '../contracts/items.js'
-import { makeErrorItem, makeToolCallItem } from '../domain/item.js'
+import { makeErrorItem } from '../domain/item.js'
 import type { ToolCallLike } from '../ports/tool-host.js'
-import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
 import { GRAPH_DEFINE_PLAN_TOOL_NAME } from '../adapters/tool/graph-define-plan-tool.js'
-import { latestUserMessageText } from './continuation-instructions.js'
 import { isPlanClarifyingQuestion } from './plan-mode.js'
 import type {
   ModelRoundOutcome,
@@ -32,13 +30,6 @@ export abstract class RoundOutcomeRequiredToolPhase extends RoundOutcomeState {
     input: RoundOutcomeInput,
     assistantText: string
   ): Promise<ModelRoundOutcome> {
-    if (isPptWorkflowCompletionTool(input.softRequiredToolName)) {
-      const attempts = this.pptNoToolRecoveryByTurn.get(input.turnId) ?? 0
-      if (attempts === 0) {
-        this.pptNoToolRecoveryByTurn.set(input.turnId, 1)
-        return 'continue'
-      }
-    }
     if (input.softRequiredToolName === GRAPH_DEFINE_PLAN_TOOL_NAME) {
       if (assistantText.trim() && isPlanClarifyingQuestion(assistantText)) return 'stop'
       const attempts = this.graphPlanNoToolRecoveryByTurn.get(input.turnId) ?? 0
@@ -48,76 +39,8 @@ export abstract class RoundOutcomeRequiredToolPhase extends RoundOutcomeState {
       }
       return 'stop'
     }
-    if (input.softRequiredToolName === CREATE_PLAN_TOOL_NAME && assistantText.trim()) {
-      // Ambiguous plan requests may legitimately require a user clarification;
-      // do not turn that question into a bogus plan artifact.
-      if (isPlanClarifyingQuestion(assistantText)) return 'stop'
 
-      const callId = this.deps.ids.next('call_plan')
-      const provider = input.toolProviderMetadata.get(CREATE_PLAN_TOOL_NAME)
-      const toolKind = input.toolKinds.get(CREATE_PLAN_TOOL_NAME)
-      const activePlanContext = input.prepared.activePlanContext
-      const sourceRequest = activePlanContext?.sourceRequest ||
-        latestUserMessageText(input.prepared.history, input.turnId) ||
-        input.turn.prompt ||
-        ''
-      const argumentsForFallback: Record<string, unknown> = activePlanContext
-        ? {
-            markdown: assistantText.trim(),
-            operation: activePlanContext.operation,
-            plan_id: activePlanContext.planId,
-            plan_relative_path: activePlanContext.relativePath,
-            ...(sourceRequest ? { source_request: sourceRequest } : {}),
-            ...(activePlanContext.title ? { title: activePlanContext.title } : {})
-          }
-        : {
-            markdown: assistantText.trim(),
-            operation: 'draft',
-            ...(sourceRequest ? { source_request: sourceRequest } : {})
-          }
-      const call: ToolCallLike = {
-        callId,
-        toolName: CREATE_PLAN_TOOL_NAME,
-        ...(provider?.providerId ? { providerId: provider.providerId } : {}),
-        toolKind,
-        arguments: argumentsForFallback
-      }
-      const itemId = `item_tool_${input.turnId}_${callId}`
-      await this.deps.turns.applyItem(
-        input.threadId,
-        makeToolCallItem({
-          id: itemId,
-          turnId: input.turnId,
-          threadId: input.threadId,
-          callId,
-          toolName: CREATE_PLAN_TOOL_NAME,
-          toolKind,
-          arguments: argumentsForFallback,
-          summary: 'Materialized assistant plan text into the required Kun plan.'
-        })
-      )
-      await this.deps.events.record({
-        kind: 'tool_call_ready',
-        threadId: input.threadId,
-        turnId: input.turnId,
-        itemId,
-        callId,
-        toolName: CREATE_PLAN_TOOL_NAME,
-        readyCount: 1
-      })
-      const dispatched = await this.deps.dispatchToolCalls(
-        this.toolDispatchInput(input, [call], false)
-      )
-      if (dispatched === 'aborted') return 'aborted'
-      if (dispatched === 'budget_exhausted') return 'failed'
-      if (dispatched === 'all_suppressed') return this.advanceToolSuppressionRecovery(input)
-      this.toolSuppressionRecoveryStepsByTurn.delete(input.turnId)
-      return 'continue'
-    }
-
-    const message = isPptWorkflowCompletionTool(input.softRequiredToolName)
-      ? `PPT child did not call the expected \`${input.softRequiredToolName}\` completion tool.`
-      : `Model did not call the expected \`${input.softRequiredToolName}\` tool for this Plan-mode turn.`
+    const message = `Model did not call the expected \`${input.softRequiredToolName}\` tool.`
     await this.deps.events.record({
       kind: 'error',
       threadId: input.threadId,
@@ -330,13 +253,6 @@ export abstract class RoundOutcomeRequiredToolPhase extends RoundOutcomeState {
       ...(failureSummary ? { failureSummary } : {})
     })
   }
-}
-
-function isPptWorkflowCompletionTool(toolName: string | undefined): boolean {
-  return toolName === 'ppt_create_direction_bundle' ||
-    toolName === 'ppt_create_review_bundle' ||
-    toolName === 'ppt_generate_previews' ||
-    toolName === 'ppt_export'
 }
 
 export function graphCreateRunResultRetryable(output: unknown): boolean {

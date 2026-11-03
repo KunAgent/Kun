@@ -1,8 +1,11 @@
+import { isDeepStrictEqual } from 'node:util'
 import { accountModelRequest } from './request-attempt-accounting.js'
-import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
+import { sameDispatchTarget } from './model-dispatch-identity.js'
+import type { GoogleWorkspaceModelFence, ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { GatewayRouteChangedError } from '../../domain/model-gateway-export-policy.js'
 import { ProviderRequestScheduler, ProviderAdmissionError } from '../../services/provider-request-scheduler.js'
 import type { ProviderAdmission } from '../../contracts/provider-configuration.js'
+import { GMAIL_CONVERSATION_RECIPIENT } from '../../contracts/gmail.js'
 
 export type ModelClientRouterInput = {
   default: ModelClient
@@ -59,13 +62,29 @@ export class MultiProviderModelClient implements ModelClient {
   }
 
   replace(input: ModelClientRouterInput): void {
-    this.gatewayGeneration = {}
+    // Settings apply rebuilds every client even when nothing changed (the
+    // desktop re-applies its settings on every start). Only a real routing
+    // change may fence requests that were already selected.
+    if (!this.routesUnchanged(input)) this.gatewayGeneration = {}
     this.default_ = input.default
     this.providers = canonicalProviders(input.providers)
     this.gatewayClients = canonicalProviders(input.gatewayClients)
     this.model = input.default.model
     this.admission = input.admission ?? new Map()
     this.defaultProviderId = input.defaultProviderId ?? 'default'
+  }
+
+  private routesUnchanged(input: ModelClientRouterInput): boolean {
+    const sameClients = (next: Map<string, ModelClient>, current: Map<string, ModelClient>) =>
+      next.size === current.size && [...next].every(([id, client]) => {
+        const live = current.get(id)
+        return live !== undefined && sameDispatchTarget(client, live)
+      })
+    return sameDispatchTarget(input.default, this.default_) &&
+      (input.defaultProviderId ?? 'default') === this.defaultProviderId &&
+      sameClients(canonicalProviders(input.providers), this.providers) &&
+      sameClients(canonicalProviders(input.gatewayClients), this.gatewayClients) &&
+      isDeepStrictEqual(input.admission ?? new Map(), this.admission)
   }
 
   register(providerId: string, client: ModelClient): () => void {
@@ -113,27 +132,50 @@ export class MultiProviderModelClient implements ModelClient {
     const guard = client.paperReadOnlyDispatchGuard(request)
     const generation = this.gatewayGeneration
     return () => {
-      if (generation !== this.gatewayGeneration || client !== this.resolve(request.providerId)) {
+      if (generation !== this.gatewayGeneration || !sameDispatchTarget(this.resolve(request.providerId), client)) {
         throw new Error('Paper provider changed after disclosure; submit again with the new selection')
       }
       guard()
     }
   }
 
+  googleWorkspaceDispatchGuard(_request: Pick<ModelRequest, 'model' | 'providerId'>): GoogleWorkspaceModelFence {
+    return Object.assign(() => undefined, { mode: 'configured-models' as const, recipient: GMAIL_CONVERSATION_RECIPIENT })
+  }
+
   /** Exact review clients retain account scheduling and cannot silently adopt a replacement credential client. */
   capture(providerId?: string): ModelClient {
     const client = this.resolve(providerId)
     const sourceId = !providerId || providerId === 'default' ? this.defaultProviderId : providerId.toLowerCase()
-    const assertCurrent = () => { if (this.resolve(providerId) !== client) throw new GatewayRouteChangedError() }
+    const assertCurrent = () => { if (!sameDispatchTarget(this.resolve(providerId), client)) throw new GatewayRouteChangedError() }
     return { provider: client.provider, model: client.model, stream: (request) => {
       assertCurrent()
       return accountModelRequest(request, (accounted) => this.streamAdmitted(client, { ...accounted, beforeProviderDispatch: async () => {
         assertCurrent(); if (this.dispatchAuthority) await this.dispatchAuthority(); await request.beforeProviderDispatch?.()
+        assertCurrent()
       } }, this.admission.get(sourceId)))
     } }
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    const selected = this.selectRequest(request)
+    if (!this.dispatchAuthority) return this.streamSelected(request, selected)
+    return this.streamAfterConfiguration(request)
+  }
+
+  private async *streamAfterConfiguration(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    request.abortSignal.throwIfAborted()
+    // Applying an external registry revision can replace every client. Select
+    // and pin only after it finishes; this is still before any model request.
+    await this.dispatchAuthority?.()
+    request.abortSignal.throwIfAborted()
+    yield* this.streamSelected(request, this.selectRequest(request))
+  }
+
+  private selectRequest(request: ModelRequest) {
+    if (request.googleWorkspaceData) {
+      request.googleWorkspaceData.assertCurrent()
+    }
     request.paperReadOnly?.assertCurrent()
     request.gatewayRouting?.assertCurrent?.()
     const providerId = request.providerId?.trim().toLowerCase() || 'default'
@@ -166,6 +208,11 @@ export class MultiProviderModelClient implements ModelClient {
     if (!client || (request.gatewayRouting && (!request.gatewayRouting.assertCurrent || this.gatewayClients.get(providerId) !== client))) {
       throw new GatewayRouteChangedError()
     }
+    return { client, providerId, pinKey, label, selection, pinned }
+  }
+
+  private streamSelected(request: ModelRequest, selected: ReturnType<MultiProviderModelClient['selectRequest']>): AsyncIterable<ModelStreamChunk> {
+    const { client, providerId, pinKey, label, selection, pinned } = selected
     this.turnPins.set(request.turnId, {
       client,
       pinKey,
@@ -176,12 +223,21 @@ export class MultiProviderModelClient implements ModelClient {
     })
     const pin = this.turnPins.get(request.turnId)!
     this.pruneTurnPins()
+    const current = () => providerId === 'default' && !request.gatewayRouting ? this.default_ : this.providers.get(providerId)
+    const assertCurrent = () => {
+      if (!pin.admitted && !sameDispatchTarget(current(), client)) throw new GatewayRouteChangedError()
+    }
     const admitted = { ...request, beforeProviderDispatch: async () => {
-      const current = providerId === 'default' && !request.gatewayRouting ? this.default_ : this.providers.get(providerId)
-      if (!pin.admitted && current !== client) throw new GatewayRouteChangedError()
+      assertCurrent()
       if (this.dispatchAuthority) await this.dispatchAuthority()
       await request.beforeProviderDispatch?.()
-      pin.admitted = true
+      assertCurrent()
+      if (!pin.admitted) {
+        // A rebuild with the same route and credential is not a configuration
+        // change: send this attempt, then follow the live client for the turn.
+        pin.client = current() ?? client
+        pin.admitted = true
+      }
     } }
     const admission = this.admission.get(providerId === 'default' ? this.defaultProviderId : providerId)
     return this.streamAdmitted(client, admitted, admission)

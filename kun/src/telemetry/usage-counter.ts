@@ -203,14 +203,15 @@ function foldTiming(agg: TimingAgg, snapshot: UsageSnapshot): TimingAgg {
     agg.ttftCalls += 1
   }
   const generation = snapshot.requestGenerationMs
+  const tokens = snapshot.requestGenerationTokens ?? snapshot.completionTokens
   if (
     typeof generation === 'number' &&
     Number.isFinite(generation) &&
     generation >= 0 &&
-    snapshot.completionTokens > 0
+    tokens > 0
   ) {
     agg.generationSumMs += generation
-    agg.completionTokensSum += snapshot.completionTokens
+    agg.completionTokensSum += tokens
     agg.tpsCalls += 1
   }
   return agg

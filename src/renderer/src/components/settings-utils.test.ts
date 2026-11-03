@@ -309,4 +309,39 @@ describe('diffSettingsPatch', () => {
     expect(roundTripped.contextCompaction.summaryModel).toBeUndefined()
     expect(roundTripped.contextCompaction.summaryProviderId).toBeUndefined()
   })
+
+  it('sends whole Agent defaults so a cleared permission level is persisted', () => {
+    const harnesses = settings().agents.kun.harnesses!
+    const base = coerceRendererSettings(settings({ harnesses: { ...harnesses, defaults: {
+      cursor: { providerId: 'cursor-subscription' },
+      'cursor-cli': { permissionMode: 'agent' }
+    } } }))
+    const next = mergeSettings(base, {
+      agents: { kun: { harnesses: { defaults: { cursor: { providerId: 'cursor-subscription' } } } } }
+    })
+
+    const patch = diffSettingsPatch(base, next)
+
+    expect(patch).toEqual({
+      agents: { kun: { harnesses: { defaults: { cursor: { providerId: 'cursor-subscription' } } } } }
+    })
+    expect(mergeSettings(base, patch).agents.kun.harnesses?.defaults).toEqual({
+      cursor: { providerId: 'cursor-subscription' }
+    })
+  })
+
+  it('keeps sibling Agent defaults when one Agent picks a permission level', () => {
+    const harnesses = settings().agents.kun.harnesses!
+    const base = settings({ harnesses: { ...harnesses, defaults: {
+      cursor: { providerId: 'cursor-subscription' },
+      'cursor-cli': { model: 'auto' }
+    } } })
+    const defaults = {
+      cursor: { providerId: 'cursor-subscription' },
+      'cursor-cli': { model: 'auto', permissionMode: 'ask' }
+    }
+    const next = mergeSettings(base, { agents: { kun: { harnesses: { defaults } } } })
+
+    expect(mergeSettings(base, diffSettingsPatch(base, next)).agents.kun.harnesses?.defaults).toEqual(defaults)
+  })
 })

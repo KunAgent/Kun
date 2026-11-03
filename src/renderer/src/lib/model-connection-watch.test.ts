@@ -12,11 +12,12 @@ import {
   subscribeModelConnectionWatch
 } from './model-connection-watch'
 
-function snapshotBody(revision: number): string {
+function snapshotBody(revision: number, metadataRevision = 0): string {
   return JSON.stringify({
     schemaVersion: 1,
     proxyRoutingVersion: 1,
     revision,
+    metadataRevision,
     providers: [],
     defaultProviderId: 'deepseek',
     defaultModel: 'deepseek-v4-pro'
@@ -160,6 +161,21 @@ describe('subscribeModelConnectionWatch', () => {
     await vi.waitFor(() => {
       expect(seen).toEqual([3])
     })
+    stop()
+  })
+
+  it('advances its metadata cursor and notifies consumers when configuration stays unchanged', async () => {
+    const runtimeRequest = vi.fn((path: string) => {
+      if (path === '/v1/model-connections') return Promise.resolve({ ok: true, status: 200, body: snapshotBody(3, 4) })
+      if (path.includes('since_metadata_revision=4')) return Promise.resolve({ ok: true, status: 200,
+        body: JSON.stringify({ changed: true, snapshot: JSON.parse(snapshotBody(3, 5)) }) })
+      return new Promise(() => undefined)
+    })
+    vi.stubGlobal('window', { kunGui: { runtimeRequest, cancelRuntimeRequest: vi.fn(async () => true) } })
+    const seen: number[] = []
+    const stop = subscribeModelConnectionWatch((snapshot) => { seen.push(snapshot.metadataRevision ?? 0) })
+    await vi.waitFor(() => expect(seen).toEqual([4, 5]))
+    expect(runtimeRequest.mock.calls.map(([path]) => path)).toContain('/v1/model-connections/events?since_revision=3&since_metadata_revision=5&wait_ms=25000')
     stop()
   })
 

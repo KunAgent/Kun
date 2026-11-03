@@ -3,7 +3,7 @@ import { mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
-import { fetchSdkModels, parseModelIds } from './claude-subscription-models'
+import { fetchSdkModels, parseModelIds, parseModelCatalog } from './claude-subscription-models'
 
 const MARK = '<<<KUN_MODELS>>>'
 
@@ -21,7 +21,7 @@ describe('parseModelIds', () => {
     ])
   })
 
-  test('derives concrete version ids from the description (dedupes default+sonnet)', () => {
+  test('preserves SDK aliases instead of changing request IDs from description text', () => {
     const payload = JSON.stringify([
       { value: 'default', description: 'Sonnet 4.6 · Efficient for routine tasks' },
       { value: 'sonnet', description: 'Sonnet 4.6 · Efficient for routine tasks' },
@@ -29,15 +29,22 @@ describe('parseModelIds', () => {
       { value: 'haiku', description: 'Haiku 4.5 · Fastest for quick answers' }
     ])
     expect(parseModelIds(`${MARK}${payload}${MARK}`)).toEqual([
-      'claude-sonnet-4-6',
-      'claude-opus-4-8',
-      'claude-haiku-4-5'
+      'default', 'sonnet', 'opus', 'haiku'
     ])
   })
 
   test('falls back to the alias value when the description has no version', () => {
     const payload = JSON.stringify([{ value: 'sonnet' }, { value: 'claude-opus-4-8', description: 'custom' }])
     expect(parseModelIds(`${MARK}${payload}${MARK}`)).toEqual(['sonnet', 'claude-opus-4-8'])
+  })
+
+  test('keeps explicit resolved identifiers and labels description inference as a hint', () => {
+    const models = parseModelCatalog(`${MARK}${JSON.stringify([
+      { value: 'sonnet', modelId: 'claude-official-id', description: 'Sonnet 4.6', context_window: 200_000 },
+      { value: 'opus', description: 'Opus 4.8' }
+    ])}${MARK}`)
+    expect(models[0]).toMatchObject({ id: 'claude-official-id', aliases: ['sonnet', 'claude-sonnet-4-6'], profile: { contextWindowTokens: 200_000 } })
+    expect(models[1]).toMatchObject({ id: 'opus', inferredModelId: 'claude-opus-4-8' })
   })
 
   test('returns [] when the frame or JSON is absent/garbage', () => {

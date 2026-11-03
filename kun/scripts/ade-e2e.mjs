@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * ADE end-to-end acceptance script (docs/ade/impl/p3-review-followup.md P3-13).
- * Drives a real `kun serve` over HTTP through the 13 §8 P1 items and prints a
- * versioned markdown result table to append to the review doc's §4.
+ * ADE end-to-end acceptance script.
+ * Drives a real `kun serve` over HTTP through the P1 items and prints a
+ * versioned markdown result table.
  * Serve-lifecycle and HTTP/SSE helpers live in ./ade-e2e-client.mjs.
  *
  * Manual/nightly tool only — needs real provider credentials and installed
@@ -333,7 +333,7 @@ async function itemP13() {
   if (!turn.ok) { feed.close(); return report(id, title, 'fail', [...notes, `startTurn ${turn.status}: ${turn.error}`]) }
 
   // Wait for the team roster to fill, then for every dispatch to settle.
-  // Worker approvals are the user's lane (09 §6.5) — answer them as workers
+  // Worker approvals are the user's lane — answer them as workers
   // appear or unattended dispatches would stall in `accepted` forever.
   const deadline = Date.now() + SETTLE_MS * 2
   const approvalWatches = new Map()
@@ -421,7 +421,7 @@ async function itemP14() {
   if (!turn.ok) { feed.close(); return report(id, title, 'fail', [...notes, `startTurn ${turn.status}: ${turn.error}`]) }
 
   // Wait for an open question, answer it as the user, watch the worker finish.
-  // Worker approvals are the same user lane (09 §6.5) — answer them too.
+  // Worker approvals are the same user lane — answer them too.
   const deadline = Date.now() + SETTLE_MS * 2
   const approvalWatches = new Map()
   const answered = new Set()
@@ -512,9 +512,9 @@ try {
   }
 }
 
-// Versioned result table for docs/ade/impl/p3-review-followup.md §4.
+// Versioned result table.
 const today = new Date().toISOString().slice(0, 10)
-console.log('\n--- paste into p3-review-followup.md §4 ---')
+console.log('\n--- results ---')
 for (const r of results) {
   const note = r.notes.join('; ').replace(/\|/g, '/')
   console.log(`| ${today} | kun ${ctx.version} | ${r.id} ${r.title} | ${r.status} | ${note} |`)

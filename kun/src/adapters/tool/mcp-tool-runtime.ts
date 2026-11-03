@@ -1,4 +1,5 @@
 import type { McpCapabilityConfig, McpServerConfig } from '../../contracts/capabilities.js'
+import { mcpAppToolOutputMeta } from '../../contracts/mcp-apps.js'
 import { assertBuiltinGitHubMcpCallAllowed } from '../../contracts/builtin-mcp.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
@@ -10,6 +11,8 @@ import { projectMcpSchemaForModel } from './mcp-schema-projection.js'
 import type { McpClientLike, McpServerDiagnostic, McpToolDescriptor } from './mcp-types.js'
 import type { McpSearchCatalogRecord } from './mcp-tool-search.js'
 import type { McpBackgroundReconnectOptions, McpConnectionState } from './mcp-tool-provider.js'
+import { canUseMcpBrowserTool, DESIGN_PREVIEW_INSTRUCTION } from '../../shared/design-preview-policy.js'
+import { mcpCallTimeoutMs } from './mcp-call-budget.js'
 
 const DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS = 5
 const DEFAULT_MCP_RECONNECT_BASE_DELAY_MS = 4_000
@@ -114,8 +117,12 @@ export function createMcpLocalTool(
       ? { sideEffect: 'read-only' as const }
       : {}),
     policy: policyFromAnnotations(descriptor.annotations),
-    shouldAdvertise: (context: ToolHostContext) => canUseMcpServer(state.server, context.workspace),
+    shouldAdvertise: (context: ToolHostContext) => canUseMcpServer(state.server, context.workspace) &&
+      canUseMcpBrowserTool(descriptor.name, context),
     execute: async (args, context) => {
+      if (!canUseMcpBrowserTool(descriptor.name, context)) {
+        return { output: { error: DESIGN_PREVIEW_INSTRUCTION }, isError: true }
+      }
       if (!isMcpServerVisible(state.server, context.workspace)) {
         return {
           output: { error: `MCP server ${state.serverId} is not enabled for this workspace` },
@@ -133,15 +140,19 @@ export function createMcpLocalTool(
         state,
         { name: descriptor.name, arguments: args },
         context,
-        state.server.timeoutMs,
+        mcpCallTimeoutMs(state.server),
         isMcpReplaySafe(descriptor.annotations)
       )
+      const mcpApp = mcpAppToolOutputMeta(state.serverId, descriptor)
       return {
         output: {
           serverId: state.serverId,
           toolName: descriptor.name,
           result
         },
+        // UI-only sideband: lets the desktop render the tool's MCP App page
+        // without adding anything to the model-facing output.
+        ...(mcpApp ? { meta: { mcpApp } } : {}),
         isError: typeof result === 'object' && result !== null && (result as { isError?: boolean }).isError === true
       }
     }
@@ -264,23 +275,31 @@ export async function connectAndLoadCatalog(
   }
 }
 
-async function callMcpToolWithReconnect(
+export async function callMcpToolWithReconnect(
   state: McpConnectionState,
   input: { name: string; arguments: Record<string, unknown> },
   context: ToolHostContext | undefined,
-  timeout = state.server.timeoutMs,
+  timeout = mcpCallTimeoutMs(state.server),
   /** Whether this call is locally known to be replay-safe after a drop. */
   replaySafe = false
 ): Promise<unknown> {
   const signal = context?.abortSignal
+  // Runtime supplies provenance out of band; the model's arguments never choose a source turn.
+  const provenance = state.serverId === 'kun_assistants' && input.name === 'assign_assistant_task' && context?.activeToolCallId
+    ? { _meta: { kunSource: { threadId: context.threadId, turnId: context.turnId, callId: context.activeToolCallId } } }
+    : {}
+  const outbound = { ...input, ...provenance }
   // Track whether the request actually reached `callTool`. A failure while
   // (re)connecting BEFORE the request was sent means the tool definitely did
   // not run, so retrying it on the fresh connection is always safe.
   let sentToServer = false
   try {
     await ensureMcpConnectionForCall(state, signal)
+    // A deferred stdio client spawns its server here; a failure at this point
+    // means the request never left, so it stays safe to retry.
+    await state.client.ready?.()
     sentToServer = true
-    return await state.client.callTool(input, { signal, timeout, context })
+    return await state.client.callTool(outbound, { signal, timeout, context })
   } catch (error) {
     if (signal?.aborted) throw error
     // Deterministic server-side failures (validation errors, bad
@@ -297,7 +316,7 @@ async function callMcpToolWithReconnect(
       // Either the request never left (safe) or a locally trusted allow-list
       // marked it replay-safe — replay it on the reconnected client.
       const client = await reconnectMcpConnection(state, signal)
-      return client.callTool(input, { signal, timeout, context })
+      return client.callTool(outbound, { signal, timeout, context })
     }
     // A non-idempotent tool dropped mid-flight: it may already have run on the
     // server. Preserve that primary fact even when reconnect also fails: future
@@ -314,7 +333,7 @@ async function callMcpToolWithReconnect(
  * declaring itself read-only or idempotent. There is currently no local
  * replay allow-list, so mid-flight calls are always treated as unknown.
  */
-function isMcpReplaySafe(_annotations: McpToolDescriptor['annotations']): boolean {
+export function isMcpReplaySafe(_annotations: McpToolDescriptor['annotations']): boolean {
   return false
 }
 
@@ -490,7 +509,7 @@ export function shouldUseMcpSearch(config: NonNullable<McpCapabilityConfig['sear
   return toolCount >= config.autoThresholdToolCount
 }
 
-function policyFromAnnotations(annotation: McpToolDescriptor['annotations']): LocalTool['policy'] {
+export function policyFromAnnotations(annotation: McpToolDescriptor['annotations']): LocalTool['policy'] {
   // MCP annotations come from the remote server and are not an authorization
   // signal. Keep a uniform confirmation boundary regardless of what it says.
   void annotation

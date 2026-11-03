@@ -69,7 +69,10 @@ export function createDesignWorkspaceDocumentActions({
 }: StoreBridge): DocumentActions {
   return {
     createDocument: (title, options) => {
-      const id = createDesignDocumentId()
+      const requestedId = options?.id?.trim()
+      const id = requestedId && !get().documents.some((document) => document.id === requestedId)
+        ? requestedId
+        : createDesignDocumentId()
       const createdAt = new Date().toISOString()
       if (!options?.transient) markDesignDocumentUserCreated(get().workspaceRoot, id)
       set((state) => {

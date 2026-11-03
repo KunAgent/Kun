@@ -1,5 +1,5 @@
 /**
- * Async front-end for `parseWorkDocument` (implementation §3.9/§11).
+ * Async front-end for `parseWorkDocument`.
  * Documents up to `WORK_PARSE_WORKER_THRESHOLD` parse synchronously — a
  * worker round-trip costs more than the parse at that size. Larger
  * documents go through a shared Web Worker so agent-streamed snapshots and

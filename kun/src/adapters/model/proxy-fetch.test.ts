@@ -195,3 +195,30 @@ describe('proxy fetch pre-aborted signals', () => {
     expect(cachedProxyAgentCountForTests()).toBe(0)
   })
 })
+
+describe('proxy fetch bodiless responses', () => {
+  it('resolves a streamed request answered with 204 instead of crashing the process', async () => {
+    const server: Server = createServer((req, res) => {
+      req.on('error', () => {})
+      req.resume()
+      req.on('end', () => { res.writeHead(204); res.end() })
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', () => resolve()))
+    const address = server.address()
+    const port = typeof address === 'object' && address ? address.port : 0
+    try {
+      const proxied = createProxyFetch(`http://127.0.0.1:${port}`)!
+      const bodyStream = new ReadableStream<Uint8Array>({
+        start(controller) { controller.enqueue(new TextEncoder().encode('x')); controller.close() }
+      })
+      const response = await proxied('http://example.test/no-content', {
+        method: 'POST', body: bodyStream, duplex: 'half'
+      } as RequestInit & { duplex: 'half' })
+      expect(response.status).toBe(204)
+      expect(await response.text()).toBe('')
+    } finally {
+      server.closeAllConnections()
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+})

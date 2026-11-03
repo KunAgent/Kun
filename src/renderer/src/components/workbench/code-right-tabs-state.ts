@@ -1,6 +1,7 @@
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   isRightPanelContributionId,
+  isWorkerSessionTabId,
   normalizeStoredRightPanelId,
   type RightPanelContributionId,
   type RightPanelMode
@@ -40,11 +41,13 @@ export function emptyCodeRightTabsState(): CodeRightTabsState {
   }
 }
 
+// Worker conversation tabs belong to one manager thread's team and reopen
+// from Collaboration, so a restored layout does not bring them back.
 function uniqueValidTabs(value: unknown): RightPanelContributionId[] {
   if (!Array.isArray(value)) return []
   const tabs: RightPanelContributionId[] = []
   for (const candidate of value) {
-    if (!isCodeRightTabContributionId(candidate)) continue
+    if (!isCodeRightTabContributionId(candidate) || isWorkerSessionTabId(candidate)) continue
     const target = codeTabTarget(candidate)
     if (!tabs.includes(target)) tabs.push(target)
   }

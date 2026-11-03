@@ -11,7 +11,7 @@ import {
 } from './handoff-types.js'
 
 /**
- * Deterministic handoff brief builder (docs/ade/08 §3). Fixed templates only —
+ * Deterministic handoff brief builder. Fixed templates only —
  * no timestamps, no random ids — so identical inputs produce identical bytes.
  */
 
@@ -192,7 +192,7 @@ export function buildHandoffBrief(input: BuildHandoffInput): HandoffBriefResult 
     ].filter((section) => section.length > 0).join('\n\n')
 
   let text = assemble()
-  // Fit order (08 §3.2): drop oldest digest lines → shrink the per-message
+  // Fit order: drop oldest digest lines → shrink the per-message
   // cap → drop verbatim turns (min 1) → hard-truncate as a last resort. The
   // work-state and footer sections are never reduced.
   while (utf8Bytes(text) > budgets.totalCap) {

@@ -33,15 +33,10 @@ import type { ModelClient } from '../ports/model-client.js'
 import { RandomIdGenerator } from '../ports/id-generator.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
-import {
-  childDirectionBundle,
-  childDeckArtifact,
-  childReviewBundle
-} from './child-ppt-result-extraction.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHost } from '../ports/tool-host.js'
-import { findSessionEvent } from '../adapters/session-event-query.js'
+import { findSessionEvent, findTurnLimitStop } from '../adapters/session-event-query.js'
 import type { SkillRuntime } from '../skills/skill-runtime.js'
 import type { InstructionRuntime } from '../instructions/instruction-runtime.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -144,7 +139,10 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
   return async (input) => {
     const fastContextTaskCount = input.fastContextTasks?.length ?? 1
     const toolHost = input.fastContext
-      ? createFastContextToolHost(options.toolHost, fastContextTaskCount)
+      ? createFastContextToolHost(options.toolHost, fastContextTaskCount, {
+        ...(input.fastContextHintPaths ? { hintPaths: input.fastContextHintPaths } : {}),
+        ...(input.fastContextTasks ? { tasks: input.fastContextTasks } : {})
+      })
       : options.toolHost
     // Fast Context source calls are confined to a parent-minted read scope.
     // An omitted scope still means the captured workspace only, never the host,
@@ -277,8 +275,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(blockedSkillIds.length ? { blockedSkillIds } : {}),
       skillsEnabled: input.skillsEnabled !== false,
       instructionsEnabled: input.security?.instructionsEnabled !== false,
-      memoryEnabled: input.security?.memoryEnabled !== false,
-      ...(input.pptWorkflowScope ? { pptWorkflowScope: input.pptWorkflowScope } : {})
+      memoryEnabled: input.security?.memoryEnabled !== false
     })
     const loop = new AgentLoop({
       threadStore,
@@ -318,7 +315,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(input.security?.allowedArtifactIds
         ? { allowedArtifactIds: input.security.allowedArtifactIds }
         : {}),
-      ...(input.pptWorkflowScope ? { pptWorkflowScope: input.pptWorkflowScope } : {}),
       ...(blockedToolNames.length ? { blockedToolNames } : {}),
       ...(blockedProviderIds.length ? { blockedProviderIds } : {}),
       ...(blockedSkillIds.length ? { blockedSkillIds } : {}),
@@ -341,7 +337,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(options.tokenEconomy ? { tokenEconomy: options.tokenEconomy } : {}),
       turnLimits: resolveChildEpisodeLimits(
         options.runtime?.turnLimits,
-        shouldUseFastContextEpisodeBudget({ fastContext: input.fastContext, profile: input.profile })
+        shouldUseFastContextEpisodeBudget({ fastContext: input.fastContext })
       ),
       ...(input.fastContext
         ? {
@@ -514,9 +510,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       parentThreadId: input.parentThreadId,
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {})
     })
-    const reviewBundle = childReviewBundle(items, started.turnId)
-    const directionBundle = childDirectionBundle(items, started.turnId)
-    const deckArtifact = childDeckArtifact(items, started.turnId)
     const evidencePack = input.fastContext && input.fastContextTasks?.length
       ? buildFastContextEvidencePack({
           tasks: input.fastContextTasks,
@@ -542,9 +535,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     }
     const structuredResult = {
       ...result,
-      ...(directionBundle !== undefined ? { directionBundle } : {}),
-      ...(reviewBundle !== undefined ? { reviewBundle } : {}),
-      ...(deckArtifact !== undefined ? { deckArtifact } : {}),
       ...(evidencePack ? { evidencePack } : {})
     }
     // Only a FATAL error fails the child. Recoverable tool errors — a tool
@@ -595,16 +585,17 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
         : childToolEvidence(items, started.turnId)
       : undefined
     if (status !== 'completed') {
-      throw new ChildResultExecutionError(result.summary || `child agent ${status}`, structuredResult, {
-        ...settlement,
-        failure: { source: 'runtime' }
-      })
+      const limit = status === 'failed'
+        ? await findTurnLimitStop(sessionStore, thread.id, started.turnId).catch(() => null)
+        : null
+      throw new ChildResultExecutionError(
+        limit ? `Child stopped: ${limit.message}` : result.summary || `child agent ${status}`,
+        structuredResult,
+        { ...settlement, failure: { source: 'runtime', ...(limit ? { code: limit.code } : {}) } }
+      )
     }
     return {
       ...result,
-      ...(directionBundle !== undefined ? { directionBundle } : {}),
-      ...(reviewBundle !== undefined ? { reviewBundle } : {}),
-      ...(deckArtifact !== undefined ? { deckArtifact } : {}),
       ...(evidence ? { evidence } : {}),
       ...(evidencePack ? { evidencePack } : {}),
       usage: childUsage,

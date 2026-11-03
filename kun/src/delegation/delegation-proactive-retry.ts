@@ -60,6 +60,11 @@ export function formatDetachedChildNotice(
       `count="${retry.count}" limit="${retry.limit}" remaining="${retry.remaining}" />`
     )
   }
+  // Cost and effort let the parent judge a runaway or truncated child.
+  lines.push(
+    `<usage total_tokens="${record.usage.totalTokens}" tool_calls="${record.toolInvocations ?? 0}" ` +
+    `duration_ms="${record.durationMs ?? 0}" />`
+  )
   if (record.summary?.trim()) {
     lines.push(`<summary>${escapeXml(record.summary.trim())}</summary>`)
   }

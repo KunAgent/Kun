@@ -31,7 +31,7 @@ vi.mock('../../store/harness-store', () => ({
     getState: () => fixture.harnesses
   }),
   harnessRowAvailable: () => true, harnessRowRunsTurns: () => true, harnessRowUnavailableCode: () => null, harnessModelFingerprint: () => '',
-  loadHarnessModels: vi.fn(), loadHarnessProviderGroups: vi.fn(), loadHarnesses: vi.fn()
+  loadHarnessModels: vi.fn(), loadHarnessProviderGroups: vi.fn(), loadHarnesses: vi.fn(), warmHarnessReadiness: vi.fn()
 }))
 vi.mock('../../store/task-workspace-store', () => ({ useTaskWorkspaceStore: () => undefined }))
 vi.mock('../../history-reference/use-codex-reference-enabled', () => ({ useCodexReferenceEnabled: () => false }))
@@ -185,7 +185,7 @@ describe('external Agent model discovery', () => {
         status: { harnessId: 'claude-code', installed: 'yes', login: 'signed-in', checkedAt: '' } })]
       fixture.harnesses.models = { 'claude-code': { models: ['sonnet'], loading: false } }
       await act(async () => root.render(createElement(Probe)))
-      expect(result.modelGroups).toEqual([{ providerId: 'ade-cred:native-login', label: 'adeCredential.nativeLogin', modelIds: ['sonnet'] }])
+      expect(result.modelGroups).toEqual([{ providerId: 'ade-cred:native-login', label: 'adeCredential.agentAccount', agentIconId: 'claude-code', modelIds: ['sonnet'] }])
       expect(result.pickList).toEqual(['sonnet'])
       fixture.chat.composerHarnessId = 'kun'
       await act(async () => root.render(createElement(Probe)))

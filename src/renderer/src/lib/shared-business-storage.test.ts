@@ -515,7 +515,7 @@ describe('shared business storage synchronization', () => {
 
     await installSharedBusinessStorage()
     const callsAfterInstall = read.mock.calls.length
-    await vi.advanceTimersByTimeAsync(1_500)
+    await vi.advanceTimersByTimeAsync(2_500)
     expect(read.mock.calls.length).toBeGreaterThan(callsAfterInstall)
     vi.useRealTimers()
     delete (window as unknown as { kunGui?: unknown }).kunGui
@@ -539,5 +539,22 @@ describe('shared business storage synchronization', () => {
     expect(read.mock.calls.length).toBe(callsAfterInstall)
     vi.useRealTimers()
     delete (window as unknown as { kunGui?: unknown }).kunGui
+  })
+
+  it('does not rewrite the durable journal on an idle tick', async () => {
+    const storage = new MemoryStorage()
+    vi.stubGlobal('localStorage', storage)
+    const api = {
+      read: vi.fn(async () => ({ revision: 3, value: { [DESIGN_REGISTRY_KEY]: '{"a":1}' } })),
+      write: vi.fn()
+    }
+    const first = await syncSharedBusinessStorageOnce(api, { baseline: {}, revision: 0 })
+    expect(storage.getItem(DESIGN_REGISTRY_KEY)).toBe('{"a":1}')
+    expect(first.retry).toBe(false)
+    const setItem = vi.spyOn(storage, 'setItem')
+    const second = await syncSharedBusinessStorageOnce(api, first)
+    expect(second).toEqual(first)
+    expect(setItem).not.toHaveBeenCalled()
+    expect(api.write).not.toHaveBeenCalled()
   })
 })

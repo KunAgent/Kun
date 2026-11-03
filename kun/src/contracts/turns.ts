@@ -1,11 +1,18 @@
+import { AttachmentAliasesSchema } from './attachment-aliases.js'
+import { GraphLeadLifecycleSchema, GraphPlanningLifecycleSchema } from './turn-graph-lifecycle.js'
+export { GraphLeadLifecycleSchema, GraphPlanningLifecycleSchema, type GraphLeadLifecycle, type GraphPlanningLifecycle } from './turn-graph-lifecycle.js'
+import { QueuedEditSchema } from './queued-edit.js'
 import { RequiredToolGateSchema } from './turn-required-tool-gate.js'
 export { RequiredToolGateSchema, type RequiredToolGate } from './turn-required-tool-gate.js'
 import { PaperTurnContextSchema, validatePaperTurnCombination } from './paper-turn-context.js'
 import { HarnessGatewayBindingSchema, HarnessGatewayAliasGrantSchema } from './harness-gateway-binding.js'
 import { z } from 'zod'
+import { MemoryRelationAnnotation, MEMORY_CONTEXT_MAX_RELATIONS } from './memory-working-context.js'
 import { SteeringDeliverySchema } from './steering-delivery.js'
 import { TurnItem, UserFileReferenceSchema, UserMessageSource } from './items.js'
-import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
+import { GuiDesignArtifactContextSchema, GuiPlanContextSchema } from './turn-gui-context.js'
+export { GuiDesignArtifactContextSchema, GuiPlanContextSchema, GuiPlanOperationSchema } from './turn-gui-context.js'
+export type { GuiDesignArtifactContextJson, GuiPlanContextJson, GuiPlanOperationJson } from './turn-gui-context.js'
 import {
   ApprovalPolicySchema,
   ApprovalReviewerSchema,
@@ -17,8 +24,8 @@ import {
   MAX_COMPOSER_CONTEXT_ATTACHMENTS
 } from './composer-context.js'
 import { GraphOrchestrationStrategySchema } from './graph.js'
-import { GraphPlanningDraftStatusSchema } from './graph-planning.js'
 import { TurnReasoningEffortSchema } from './turn-reasoning.js'
+import { TurnModelTimingSchema } from './turn-model-timing.js'
 import { ThreadRetentionPolicySchema } from './thread-retention.js'
 import {
   DesignDocumentTargetSchema,
@@ -31,9 +38,11 @@ import { HarnessCredentialModeSchema, HarnessIdSchema } from './harness.js'
 import { HarnessNativeAgentIdSchema } from './harness-native-agents.js'
 import { ActingTurnModelRouteSchema } from './turn-acting-route.js'
 import { ManagerLeaseSettlementSchema } from './turn-manager-lease.js'
+import { HarnessSettingValuesSchema } from './harness-session-settings.js'
 export * from './turn-manager-lease.js'
 
 export { TurnReasoningEffortSchema } from './turn-reasoning.js'
+export { TurnModelTimingSchema, type TurnModelTiming } from './turn-model-timing.js'
 export type { TurnReasoningEffort } from './turn-reasoning.js'
 
 /**
@@ -55,6 +64,16 @@ export const SubagentResumeRequestSchema = z.object({
   expectedResumeCount: z.number().int().nonnegative()
 }).strict()
 export type SubagentResumeRequest = z.infer<typeof SubagentResumeRequestSchema>
+/**
+ * Runtime-authored provenance for a restart auto-resume turn. It keeps the
+ * continuation chain bounded: a turn that only exists to recover an interrupted
+ * turn must never be auto-resumed again.
+ */
+export const InterruptedTurnResumeSchema = z.object({
+  /** The interrupted turn this continuation was launched for. */
+  sourceTurnId: z.string().trim().min(1).max(256)
+}).strict()
+export type InterruptedTurnResume = z.infer<typeof InterruptedTurnResumeSchema>
 /** Canonical Codex/API request value. The legacy UI label is "fast". */
 export const TurnServiceTierSchema = z.literal('priority')
 export type TurnServiceTier = z.infer<typeof TurnServiceTierSchema>
@@ -63,46 +82,6 @@ export type TurnClientSurface = z.infer<typeof TurnClientSurfaceSchema>
 
 export { ActingTurnModelRouteSchema, type ActingTurnModelRoute } from './turn-acting-route.js'
 
-/**
- * Plan operation kinds the renderer can advertise on a plan turn.
- * Mirrors the shared renderer contract so request metadata stays
- * stable across reconnects and replays.
- */
-export const GuiPlanOperationSchema = z.enum(['draft', 'refine'])
-export type GuiPlanOperationJson = z.infer<typeof GuiPlanOperationSchema>
-
-/**
- * Plan context the renderer can attach to a `StartTurnRequest`. The
- * thread mode is carried on the thread record; this struct adds the
- * reserved path and source request needed to scope `create_plan`.
- */
-export const GuiPlanContextSchema = z.object({
-  operation: GuiPlanOperationSchema,
-  workspaceRoot: z.string().min(1),
-  relativePath: z
-    .string()
-    .min(1)
-    .refine(isGuiPlanRelativePath, {
-      message: 'relativePath must be a direct Markdown file under .kunsdd/plan'
-    }),
-  planId: z.string().min(1), fixedPath: z.boolean().optional(),
-  sourceRequest: z.string().optional(),
-  title: z.string().optional()
-})
-export type GuiPlanContextJson = z.infer<typeof GuiPlanContextSchema>
-
-export const GuiDesignArtifactContextSchema = z.object({
-  kind: z.literal('svg'),
-  artifactId: z.string().min(1),
-  relativePath: z.string().min(1).refine((value) => {
-    const normalized = value.replaceAll('\\', '/')
-    return normalized === value &&
-      normalized.startsWith('.kun-design/') &&
-      !normalized.split('/').includes('..') &&
-      /\/v\d+\.svg$/i.test(normalized)
-  }, { message: 'relativePath must be a versioned SVG file under .kun-design' })
-})
-export type GuiDesignArtifactContextJson = z.infer<typeof GuiDesignArtifactContextSchema>
 
 export const TurnStatus = z.enum([
   'queued',
@@ -128,32 +107,6 @@ export const InjectedInstructionSourceSchema = z.object({
 export type InjectedInstructionSource = z.infer<typeof InjectedInstructionSourceSchema>
 
 
-/**
- * Durable ownership state for a Graph source Lead. The turn remains logically
- * running while its process-local execution lease is suspended between
- * material Graph events.
- */
-export const GraphLeadLifecycleSchema = z.object({
-  version: z.literal(1),
-  runId: z.string().min(1),
-  state: z.enum(['supervising', 'awaiting_user', 'finalizing']),
-  lastDeliveredSeq: z.number().int().nonnegative().default(0),
-  suspendedAt: z.string().optional(),
-  resumedAt: z.string().optional()
-}).strict()
-export type GraphLeadLifecycle = z.infer<typeof GraphLeadLifecycleSchema>
-
-export const GraphPlanningLifecycleSchema = z.object({
-  version: z.literal(1),
-  draftId: z.string().min(1),
-  reservedRunId: z.string().min(1),
-  state: GraphPlanningDraftStatusSchema,
-  draftRevision: z.number().int().positive(),
-  /** Process shutdown parked execution without changing the durable draft state. */
-  suspendedAt: z.string().optional()
-}).strict()
-export type GraphPlanningLifecycle = z.infer<typeof GraphPlanningLifecycleSchema>
-
 export const TurnSchema = z.object({
   id: z.string().min(1),
   threadId: z.string().min(1),
@@ -177,6 +130,8 @@ export const TurnSchema = z.object({
   messageSource: UserMessageSource.optional(),
   /** Explicit one-click continuation request for an interrupted generic child. */
   subagentResume: SubagentResumeRequestSchema.optional(),
+  /** Set only on restart auto-resume turns. */
+  interruptedResume: InterruptedTurnResumeSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
   /** Frozen harness identity; inferred at admission when absent on legacy records. */
@@ -187,6 +142,7 @@ export const TurnSchema = z.object({
   credentialMode: HarnessCredentialModeSchema.optional(),
   /** Native Agent (OpenCode primary agent) frozen for this turn; absent keeps permission mapping. */
   harnessAgentId: HarnessNativeAgentIdSchema.optional(),
+  harnessSettings: HarnessSettingValuesSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
   gatewayAliasGrants: z.array(HarnessGatewayAliasGrantSchema).max(2).optional(),
   accountId: z.string().min(1).optional(),
@@ -203,6 +159,9 @@ export const TurnSchema = z.object({
   /** Steered text queued by the user mid-turn. Cleared on completion. */
   steering: z.array(z.string()).default([]),
   steeringDeliveries: z.array(SteeringDeliverySchema).max(256).optional(),
+  queueEdit: QueuedEditSchema.optional(),
+  /** Trusted shared-turn view metadata; never parsed from StartTurnRequest. */
+  attachmentAliases: AttachmentAliasesSchema.optional(),
   steeredToTurnId: z.string().optional(),
   createdAt: z.string(),
   startedAt: z.string().optional(),
@@ -211,12 +170,15 @@ export const TurnSchema = z.object({
   /** Fresh input admitted after Stop when no older queued input existed. */
   queueResumeSourceTurnId: z.string().optional(),
   finishedAt: z.string().optional(),
+  /** Average TTFT and tok/s over this turn's model calls; set when it settles. */
+  modelTiming: TurnModelTimingSchema.optional(),
   items: z.array(TurnItem).default([]),
   attachmentIds: z.array(z.string().min(1)).default([]),
   composerContexts: z.array(ComposerContextAttachmentSchema).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),
   activeSkillIds: z.array(z.string().min(1)).default([]),
   injectedMemoryIds: z.array(z.string().min(1)).default([]),
   injectedMemorySummaries: z.array(InjectedMemorySummarySchema).default([]),
+  injectedMemoryRelations: z.array(MemoryRelationAnnotation).max(MEMORY_CONTEXT_MAX_RELATIONS).optional(),
   /** User-approved standing rules injected this turn; see injectedMemoryIds. */
   injectedDirectiveIds: z.array(z.string().min(1)).default([]),
   injectedDirectiveSummaries: z.array(InjectedMemorySummarySchema).default([]),
@@ -285,7 +247,7 @@ export const TurnSchema = z.object({
   disableUserInput: z.boolean().optional(),
   /** IM-bridge turn; gates IM-only tools such as outbound attachment delivery. */
   imContext: z.boolean().optional(),
-  /** Managed plan build (07 §10): selects the `plan-build` admission usage. */
+  /** Managed plan build: selects the `plan-build` admission usage. */
   planBuild: z.boolean().optional(),
   /** Optional stable machine-readable reason for a terminal turn. */
   terminalCode: z.string().trim().min(1).max(128).optional(),
@@ -309,6 +271,8 @@ export const StartTurnRequest = z.object({
   messageSource: UserMessageSource.optional(),
   /** Binds this turn to one interrupted child and its last observed attempt. */
   subagentResume: SubagentResumeRequestSchema.optional(),
+  /** Marks a restart auto-resume turn and the turn it continues. */
+  interruptedResume: InterruptedTurnResumeSchema.optional(),
   model: z.string().optional(),
   providerId: z.string().optional(),
   /**
@@ -320,6 +284,8 @@ export const StartTurnRequest = z.object({
   credentialMode: HarnessCredentialModeSchema.optional(),
   /** Native Agent for harnesses that declare `nativeAgents`; ignored by others. */
   harnessAgentId: HarnessNativeAgentIdSchema.optional(),
+  /** Values for Agent-published settings; unknown ids are ignored. */
+  harnessSettings: HarnessSettingValuesSchema.optional(),
   gatewayBinding: HarnessGatewayBindingSchema.optional(),
   accountId: z.string().min(1).optional(),
   reasoningEffort: TurnReasoningEffortSchema.optional(),
@@ -367,7 +333,7 @@ export const StartTurnRequest = z.object({
     )
     .default([]),
   /**
-   * ADE manager threads (09 §6.2): pending worker-notice ids attached via
+   * ADE manager threads: pending worker-notice ids attached via
    * composerContexts, acked after admission. Request-scoped, not persisted.
    */
   ackNoticeIds: z.array(z.string().trim().min(1).max(256)).max(1_024).optional(),
@@ -415,7 +381,7 @@ export const StartTurnRequest = z.object({
    * IM-only tool exposure separately from generic headless turns.
    */
   imContext: z.boolean().optional(),
-  /** External-harness plan build (07 §10): admission enforces the host worktree. */
+  /** External-harness plan build: admission enforces the host worktree. */
   planBuild: z.boolean().optional(),
   /**
    * When true and the thread already has an active turn, the request is

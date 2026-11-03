@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { ReviewRevisionSchema } from './review-revision.js'
 
-/** Host-managed task workspaces (docs/ade/07 §4). */
+/** Host-managed task workspaces. */
 
 export const TaskWorkspaceIsolationSchema = z.enum([
   'worktree',     // host-created git worktree (default)
@@ -39,7 +39,7 @@ export const TaskWorkspaceSetupSchema = z.object({
 }).strict()
 export type TaskWorkspaceSetup = z.infer<typeof TaskWorkspaceSetupSchema>
 
-/** Result of sharing/copying ignored paths into a new worktree (07 §6). */
+/** Result of sharing/copying ignored paths into a new worktree. */
 export const TaskWorkspaceEnvironmentFillSchema = z.object({
   shared: z.array(z.string().max(4_096)).max(256).default([]),
   copied: z.array(z.string().max(4_096)).max(256).default([]),
@@ -54,7 +54,7 @@ export const TaskWorkspaceEnvironmentFillSchema = z.object({
 }).strict()
 export type TaskWorkspaceEnvironmentFill = z.infer<typeof TaskWorkspaceEnvironmentFillSchema>
 
-/** One CI check row from the forge's status rollup (11 §7.2). */
+/** One CI check row from the forge's status rollup. */
 export const ChangeRequestCheckSchema = z.object({
   name: z.string().max(256),
   status: z.enum(['pending', 'in_progress', 'completed']),
@@ -83,7 +83,7 @@ export type ChangeRequestSnapshot = z.infer<typeof ChangeRequestSnapshotSchema>
 export const TaskWorkspaceRecordSchema = z.object({
   workspaceId: z.string().regex(/^tws_[a-z0-9]{8,32}$/),
   ownerThreadId: z.string().min(1),          // initiator: manager thread, one-to-one thread, or Graph thread
-  unitId: z.string().optional(),             // bound execution unit (docs/ade/06)
+  unitId: z.string().optional(),             // bound execution unit
   label: z.string().max(120).optional(),
   isolation: TaskWorkspaceIsolationSchema,
   sourceRoot: z.string().max(4_096),         // project directory the user picked
@@ -101,7 +101,7 @@ export const TaskWorkspaceRecordSchema = z.object({
   environmentFill: TaskWorkspaceEnvironmentFillSchema.optional(),
   changedFiles: z.array(z.string().max(4_096)).max(10_000).default([]),
   patchArtifactId: z.string().optional(),
-  /** Latest known forge change-request state (11 §7.2); refreshed on poll. */
+  /** Latest known forge change-request state; refreshed on poll. */
   changeRequest: ChangeRequestSnapshotSchema.optional(),
   lastError: z.string().max(2_048).optional(),
   /** User-facing recovery steps set alongside lastError on conflicts. */
@@ -141,7 +141,7 @@ export const TaskWorkspaceIntegrateOutcomeSchema = z.enum([
 ])
 export type TaskWorkspaceIntegrateOutcome = z.infer<typeof TaskWorkspaceIntegrateOutcomeSchema>
 
-/** POST /v1/task-workspaces/:id/change-request body (11 §7.2). */
+/** POST /v1/task-workspaces/:id/change-request body. */
 export const CreateChangeRequestSchema = z.object({
   base: z.string().min(1).max(256).optional(),
   title: z.string().min(1).max(256).optional(),
@@ -161,7 +161,7 @@ export type ChangeRequestStatus = {
 }
 
 /**
- * GET /v1/task-workspaces/:id/integrate-preview response (11 §7.1).
+ * GET /v1/task-workspaces/:id/integrate-preview response.
  * Computed with read-only git commands; never mutates workspace or repo.
  */
 export const TaskWorkspaceIntegratePreviewSchema = z.object({
@@ -194,7 +194,7 @@ export type PreservedBranchInfo = {
 /**
  * Runtime event emitted on every progress/state transition, attached to
  * `threadId = ownerThreadId` so the ActivityStore can refresh the row's
- * workspace fields (docs/ade/07 §5, docs/ade/06 §4.2).
+ * workspace fields.
  */
 export const TaskWorkspaceEventPayloadSchema = z.object({
   workspaceId: z.string().min(1).max(128),

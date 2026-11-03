@@ -22,7 +22,6 @@ import {
   writeDocumentKey,
   writeEditorItemForKey,
   writeEditorItemKey,
-  writePaperViewIdFromTabKey,
   writePaperViewTabKey,
   writeWhiteboardIdFromTabKey
 } from './write-editor-layout'
@@ -339,7 +338,7 @@ export function createWriteEditorGroupActions(
     /**
      * Open (or activate) a papers-surface virtual tab. Paper views are
      * singletons: the tab is removed from the other group first so a view
-     * never shows twice. The library tab is pinned at index 0.
+     * never shows twice. The library page opens first to stay leftmost.
      */
     openPaperViewTab: (view, groupId) => {
       const state = get()
@@ -392,8 +391,6 @@ export function createWriteEditorGroupActions(
     },
 
     closeTab: async (groupId, path, force = false) => {
-      // The paper library tab is pinned and cannot be closed (U4).
-      if (writePaperViewIdFromTabKey(path) === 'library') return false
       const rawSnapshot = get()
       const snapshot = { ...rawSnapshot, documentsByPath: captureFocusedDocument(rawSnapshot) }
       const filePath = isWriteVirtualTabKey(path) ? null : path

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { HarnessDetector } from './harness-detector.js'
 import { ACP_DEFAULT_CAPABILITIES } from './builtin-harnesses.js'
+import { DEEPSEEK_HARNESS_DEFINITION } from './deepseek-harness-definition.js'
 import type { HarnessDefinition, HarnessId } from '../contracts/harness.js'
 import type { HarnessLoginState } from './harness-login-probes.js'
 
@@ -49,6 +50,7 @@ function makeDetector(input: {
     clear(id: HarnessId): Promise<void>
   }
   login?: HarnessLoginState
+  nowMs?: () => number
 }) {
   return new HarnessDetector({
     definitions: () => input.defs,
@@ -64,12 +66,12 @@ function makeDetector(input: {
     probeReady: input.probeReady,
     ...(input.readinessCache ? { readinessCache: input.readinessCache } : {}),
     probeLogin: async () => input.login ?? 'unknown',
-    nowMs: () => Date.now(),
+    nowMs: input.nowMs ?? (() => Date.now()),
     nowIso: () => new Date().toISOString()
   })
 }
 
-describe('HarnessDetector readiness (P3-11)', () => {
+describe('HarnessDetector readiness', () => {
   it('marks an ACP harness ready when initialize succeeds', async () => {
     const detector = makeDetector({
       defs: [acpDef()],
@@ -141,7 +143,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(status.message).toBe('command not found: codex-acp')
   })
 
-  it('reports a probe timeout as inconclusive, not a failure (P4-03)', async () => {
+  it('reports a probe timeout as inconclusive, not a failure', async () => {
     const detector = makeDetector({
       defs: [acpDef()],
       probeReady: async () => ({ ready: 'unknown', detail: 'probe timed out after 30000ms' })
@@ -321,7 +323,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(detector.cachedStatus('opencode')?.ready).toBe('no')
   })
 
-  it('P4-13: terminal agents skip the version probe entirely', async () => {
+  it('terminal agents skip the version probe entirely', async () => {
     // Interactive CLIs often ignore `--version` and wait on stdin — running
     // it would hang the 5s timeout and mask an installed agent.
     const spawned: string[] = []
@@ -343,7 +345,7 @@ describe('HarnessDetector readiness (P3-11)', () => {
     expect(spawned).toEqual([])
   })
 
-  it('P4-13: a terminal agent whose command is missing stays not_installed', async () => {
+  it('a terminal agent whose command is missing stays not_installed', async () => {
     const detector = makeDetector({
       defs: [acpDef({ transport: 'terminal' })],
       resolve: async () => undefined
@@ -384,6 +386,17 @@ describe('safe current detection evidence', () => {
     expect(probeReady).toHaveBeenCalledTimes(supported ? 1 : 0)
   })
 
+  it.each([
+    ['0.1.9', false], ['0.2.0-rc.1', false], ['0.2.0-rc.2', true], ['0.2.0-rc.3', true],
+    ['0.2.0', true], ['0.2.1-rc.2', true], ['0.3.0', true]
+  ])('accepts DeepSeek Harness %s only at or above its minimum version', async (version, supported) => {
+    const probeReady = vi.fn(async () => ({ ready: 'yes' as const }))
+    const detector = makeDetector({ defs: [acpDef({ detect: { ...DEEPSEEK_HARNESS_DEFINITION.detect!, command: 'fixture' } })], probeReady,
+      spawnCaptured: async () => ({ stdout: `dsh ${version}`, stderr: '', timedOut: false, exitCode: 0 }) })
+    expect(await detector.status('opencode')).toMatchObject({ version, versionSupported: supported })
+    expect(probeReady).toHaveBeenCalledTimes(supported ? 1 : 0)
+  })
+
   it('freshly probes repeated status requests even when version and definition are unchanged', async () => {
     const probeReady = vi.fn().mockResolvedValueOnce({ ready: 'yes' }).mockResolvedValueOnce({ ready: 'no' })
     const detector = makeDetector({ defs: [acpDef()], probeReady })
@@ -410,6 +423,18 @@ describe('safe current detection evidence', () => {
       secretEnv: [{ name: 'API_KEY', secretRef: 'rotating-ref' }] } })] })
     await detector.status('opencode')
     expect(detector.cachedStatus('opencode')).toBeUndefined()
+    expect(detector.lastKnownStatus('opencode')).toBeUndefined()
+  })
+
+  it('keeps the last settled verdict for advisory listings after the TTL', async () => {
+    let now = 1_000_000
+    const detector = makeDetector({ defs: [acpDef()], probeReady: async () => ({ ready: 'yes' }), nowMs: () => now })
+    expect(detector.lastKnownStatus('opencode')).toBeUndefined()
+    await detector.status('opencode')
+    expect(detector.cachedStatus('opencode')?.installed).toBe('yes')
+    now += 61_000
+    expect(detector.cachedStatus('opencode')).toBeUndefined()
+    expect(detector.lastKnownStatus('opencode')?.installed).toBe('yes')
   })
 
   it('honors pre-aborted detection without resolving or spawning', async () => {
@@ -445,5 +470,19 @@ describe('safe current detection evidence', () => {
     finish({ ready: 'yes' })
     await Promise.resolve()
     expect(detector.cachedStatus('opencode')).toBeUndefined()
+  })
+
+  it('falls back to an alias when the primary command name belongs to another vendor', async () => {
+    // Cursor installs both `agent` and `cursor-agent`; Grok also ships an `agent`.
+    const def = acpDef({ detect: { command: 'agent', aliases: ['cursor-agent'], versionArgs: ['--version'],
+      identityPattern: '(?:^|\\n)(?:Cursor(?: Agent)?\\b|\\d{4}\\.\\d{1,2}\\.\\d{1,2})' } })
+    const detector = makeDetector({
+      defs: [def],
+      resolve: async (command) => command === 'agent' ? '/home/.grok/bin/agent' : '/home/.local/bin/cursor-agent',
+      spawnCaptured: async (command) => ({ stdout: command.includes('grok') ? 'grok 1.0.5 (5115b46)\n' : '2026.10.01-e373342\n',
+        stderr: '', timedOut: false, exitCode: 0 }),
+      probeReady: async () => ({ ready: 'yes' })
+    })
+    expect(await detector.status('opencode')).toMatchObject({ installed: 'yes', resolvedCommand: '/home/.local/bin/cursor-agent' })
   })
 })

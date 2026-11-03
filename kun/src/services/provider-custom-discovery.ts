@@ -1,3 +1,4 @@
+import { parseProviderModelDescriptor, type ModelDiscoveryResult } from './provider-model-descriptors.js'
 import { ProviderDiscoveryResponseError } from './provider-discovery-error.js'
 import type { ProviderDiscovery } from '../contracts/provider-configuration.js'
 import { readLimitedResponseText } from '../adapters/model/compat-model-support.js'
@@ -12,13 +13,19 @@ function atPointer(value: unknown, pointer: string): unknown {
   return current
 }
 
-export async function discoverCustomModels(input: {
+type Input = {
   discovery: Extract<ProviderDiscovery, { mode: 'custom' }>
   baseUrl: string
   headers: Record<string, string>
   fetcher: typeof fetch
   signal?: AbortSignal
-}): Promise<string[]> {
+}
+
+export async function discoverCustomModels(input: Input): Promise<string[]> {
+  return (await discoverCustomModelDescriptors(input)).models
+}
+
+export async function discoverCustomModelDescriptors(input: Input): Promise<ModelDiscoveryResult> {
   const { discovery } = input
   const endpoint = new URL(discovery.modelsUrl)
   const base = new URL(input.baseUrl)
@@ -28,6 +35,7 @@ export async function discoverCustomModels(input: {
   }
   const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(15_000)]) : AbortSignal.timeout(15_000)
   const models = new Set<string>(), cursors = new Set<string>()
+  const modelProfiles: ModelDiscoveryResult['modelProfiles'] = Object.create(null)
   let cursor: string | undefined
   let remainingBytes = 2_000_000
   for (let page = 0; page < discovery.maxPages; page++) {
@@ -45,10 +53,13 @@ export async function discoverCustomModels(input: {
       const id = atPointer(row, discovery.idPointer)
       if (typeof id !== 'string' || !id.trim() || id.length > 512) throw new ProviderDiscoveryResponseError('Model discovery returned an invalid model identifier')
       models.add(id.trim())
+      modelProfiles[id.trim()] = parseProviderModelDescriptor(row)
+      const name = discovery.namePointer ? atPointer(row, discovery.namePointer) : undefined
+      if (typeof name === 'string' && name.trim() && name.length <= 256) modelProfiles[id.trim()].name = name.trim()
       if (models.size > 2_000) throw new ProviderDiscoveryResponseError('Model discovery exceeded its model limit')
     }
     const next = discovery.nextCursorPointer ? atPointer(value, discovery.nextCursorPointer) : undefined
-    if (next === undefined || next === null || next === '') return [...models]
+    if (next === undefined || next === null || next === '') return { models: [...models], modelProfiles, source: 'provider', lastAttemptStatus: 'success' }
     if (typeof next !== 'string' || next.length > 2_048 || !discovery.cursorParameter || cursors.has(next)) {
       throw new ProviderDiscoveryResponseError('Model discovery returned an invalid or repeated pagination cursor')
     }

@@ -13,7 +13,7 @@ import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 
 /**
- * /v1/activity client surface (docs/ade/06 §9): snapshot + long-poll feed,
+ * /v1/activity client surface: snapshot + long-poll feed,
  * per-unit user facts, and the foreground report used by dormancy. Kept as
  * a standalone client the provider delegates to so kun-runtime.ts stays
  * under the file-size gate.
@@ -35,7 +35,7 @@ export function createKunActivityClient() {
   }
 
   return {
-    /** Execution-unit activity snapshot (docs/ade/06 §9). */
+    /** Execution-unit activity snapshot. */
     async getActivitySnapshot(options: {
       scope?: 'all' | 'workspace'
       workspace?: string
@@ -80,7 +80,7 @@ export function createKunActivityClient() {
     },
 
     /**
-     * Pending approval requests, optionally scoped to one thread (P3-19).
+     * Pending approval requests, optionally scoped to one thread.
      * The mobile attention surface resolves approval ids per waiting row.
      */
     async listPendingApprovals(threadId?: string): Promise<PendingApprovalItem[]> {
@@ -108,7 +108,7 @@ export function createKunActivityClient() {
     pinActivity: (unitId: string, pinned = true): Promise<void> =>
       mutateActivityFact(unitId, 'pin', JSON.stringify({ pinned })),
 
-    /** Report the thread currently in this client's foreground (06 §7.2). */
+    /** Report the thread currently in this client's foreground. */
     async reportActivityForeground(threadId: string): Promise<void> {
       const response = await rendererRuntimeClient.runtimeRequest(
         KUN_ACTIVITY_FOREGROUND_PATH,

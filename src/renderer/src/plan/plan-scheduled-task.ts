@@ -81,3 +81,14 @@ export function planScheduleCountdown(atTime: string, nowMs = Date.now()): PlanS
     minutes: totalMinutes % 60
   }
 }
+
+/** A scheduled external handoff that already opened its build conversation. */
+export function startedPlanScheduledHandoff(
+  tasks: readonly ScheduledTaskV1[],
+  planId: string
+): { task: ScheduledTaskV1; threadId: string } | null {
+  const task = tasks
+    .filter((entry) => entry.sourcePlanId === planId && entry.harness && entry.lastThreadId.trim())
+    .sort((left, right) => right.lastRunAt.localeCompare(left.lastRunAt))[0]
+  return task ? { task, threadId: task.lastThreadId.trim() } : null
+}

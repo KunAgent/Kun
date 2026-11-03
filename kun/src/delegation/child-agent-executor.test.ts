@@ -64,28 +64,6 @@ class ApprovalToolModel implements ModelClient {
   }
 }
 
-class PptExportModel implements ModelClient {
-  readonly provider = 'test'
-  readonly model = 'ppt-export-child-model'
-  requests = 0
-
-  async *stream(_request: ModelRequest): AsyncIterable<ModelStreamChunk> {
-    this.requests += 1
-    if (this.requests === 1) {
-      yield {
-        kind: 'tool_call_complete',
-        callId: 'call_export',
-        toolName: 'ppt_export',
-        arguments: { input: 'deck.pptd', output: 'deck.pptx' }
-      }
-      yield { kind: 'completed', stopReason: 'tool_calls' }
-      return
-    }
-    yield { kind: 'assistant_text_delta', text: 'validated deck ready' }
-    yield { kind: 'completed', stopReason: 'stop' }
-  }
-}
-
 class HistoryModel implements ModelClient {
   readonly provider = 'test'
   readonly model = 'history-child-model'
@@ -390,51 +368,6 @@ describe('createChildAgentExecutor', () => {
       toolInvocations: 1
     })
     expect(approvalGate.get(pending.id)?.status).toBe('allowed')
-  })
-
-  it('returns the validated ppt_export result as a structured deck artifact', async () => {
-    const pptExport = LocalToolHost.defineTool({
-      name: 'ppt_export',
-      description: 'test exporter',
-      toolKind: 'file_change',
-      policy: 'auto',
-      sideEffect: 'unknown',
-      inputSchema: { type: 'object', properties: {}, additionalProperties: true },
-      execute: async () => ({
-        output: {
-          output: 'deck.pptx',
-          absolutePath: '/tmp/workspace/deck.pptx',
-          slides: 1,
-          editableSlides: 1,
-          validated: true
-        }
-      })
-    })
-    const executor = createChildAgentExecutor({
-      model: new PptExportModel(),
-      toolHost: new LocalToolHost({ tools: [pptExport] }),
-      prefix: createImmutablePrefix({ systemPrompt: 'test system prompt' }),
-      defaultModel: 'ppt-export-child-model',
-      approvalPolicy: 'auto'
-    })
-
-    await expect(executor({
-      childId: 'child_ppt_export',
-      parentThreadId: 'thr_parent',
-      parentTurnId: 'turn_parent',
-      prompt: 'export the deck',
-      workspace: '/tmp/workspace',
-      toolPolicy: 'inherit',
-      signal: new AbortController().signal
-    })).resolves.toMatchObject({
-      summary: 'validated deck ready',
-      deckArtifact: {
-        output: 'deck.pptx',
-        slides: 1,
-        editableSlides: 1,
-        validated: true
-      }
-    })
   })
 
   it('expires a shared child approval when the parent aborts', async () => {

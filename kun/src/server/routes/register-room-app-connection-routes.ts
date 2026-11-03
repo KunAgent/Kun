@@ -1,3 +1,5 @@
+import { githubReady } from '../../contracts/github-app.js'
+import { githubRequestScope } from './github-app.js'
 import { isRoomImApp } from '../../rooms/room-app-connection-tools.js'
 import { z } from 'zod'
 import type { RoomRuntime } from '../../rooms/room-runtime.js'
@@ -10,6 +12,8 @@ import { markRoomAppConnectionResumed, roomAppConnectionMessage, setRoomAppConne
 import type { RouteContext } from '../router.js'
 import { readJsonBody } from '../read-json-body.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { gmailReady } from '../../rooms/room-app-connection-tools.js'
+import { assertModelAccess, gmailRequestScope } from './gmail.js'
 
 type Add = (method: string, path: string, handle: (rooms: RoomRuntime, request: Request, context: RouteContext) => Promise<unknown> | unknown) => void
 
@@ -29,15 +33,34 @@ export function registerRoomAppConnectionRoutes(add: Add, runtime: ServerRuntime
       const before = await roomAppConnectionMessage(rooms.deps.store, params.roomId, messageId)
       const serverId = before.row.value.appConnection!.serverId
       const hiddenGoogleApp = isHiddenRoomGoogleApp(serverId)
+      const nativeGmail = serverId === 'google_gmail'
+      const nativeGitHub = serverId === 'github'
       if (action === 'complete' && isRoomImApp(serverId)) throw new RoomStoreConflictError('Complete the official IM setup from the native connection card')
       if (action === 'complete') {
         if (hiddenGoogleApp && before.row.value.appConnection!.status === 'requested') {
           throw new RoomStoreConflictError('This app is unavailable in private Rooms; skip the connection to continue')
         }
-        if (!hiddenGoogleApp && (!runtime.mcpConfig || !runtime.mcpOAuth || !runtime.toolDiagnostics)) {
+        if (nativeGmail) {
+          if (!runtime.gmail) throw new RoomStoreConflictError('Gmail is unavailable in Kun')
+          let bound: Awaited<ReturnType<typeof gmailRequestScope>>
+          try { bound = await gmailRequestScope(runtime, { roomId: params.roomId, messageId }) }
+          catch { throw new RoomStoreConflictError('The Gmail card no longer belongs to an active Agent') }
+          try { await assertModelAccess(runtime, bound) }
+          catch { throw new RoomStoreConflictError('Gmail conversation data protection is unavailable') }
+          if (!gmailReady(await runtime.gmail.status(bound.scopeId))) {
+            throw new RoomStoreConflictError('Connect Gmail and allow this conversation’s model to use mail before continuing')
+          }
+        }
+        if (nativeGitHub) {
+          const scope = await githubRequestScope(runtime, { roomId: params.roomId, messageId })
+          if (!runtime.githubApp || !githubReady(await runtime.githubApp.status(scope, true))) {
+            throw new RoomStoreConflictError('Connect GitHub and allow this conversation before continuing')
+          }
+        }
+        if (!nativeGmail && !nativeGitHub && !hiddenGoogleApp && (!runtime.mcpConfig || !runtime.mcpOAuth || !runtime.toolDiagnostics)) {
           throw new RoomStoreConflictError('app connection status is unavailable')
         }
-        if (!hiddenGoogleApp) {
+        if (!nativeGmail && !nativeGitHub && !hiddenGoogleApp) {
           if (!runtime.mcpConfig!().servers[serverId]?.enabled) throw new RoomStoreConflictError('app is not enabled in Kun')
           const oauth = await runtime.mcpOAuth!()
           if (!oauth.some((item) => item.serverId === serverId && item.status === 'authorized')) {

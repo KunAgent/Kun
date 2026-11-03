@@ -3,6 +3,7 @@ import type {
   WritePaperModeSettingsPatchV1,
   WritePaperModeSettingsV1
 } from './app-settings-types-paper-mode'
+import type { ColorPaletteSettingsPatchV1, ColorPaletteSettingsV1 } from './app-settings-color-palette'
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { LocalWhisperDownloadSourceId } from './local-whisper'
@@ -17,6 +18,9 @@ import type {
 } from '../../kun/src/contracts/policy.js'
 import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { BrowserUseMode } from './browser-use'
+import type { TerminalSettingsPatchV1, TerminalSettingsV1 } from './app-settings-types-terminal'
+
+export * from './app-settings-types-terminal'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
 
@@ -533,41 +537,6 @@ export type GuiUpdateConfigV1 = {
   channel: GuiUpdateChannel
 }
 
-export type TerminalColorMode = 'native' | 'none' | 'custom'
-
-export type TerminalColorSettingsV1 = {
-  /** 'native' = built-in app theme colors; 'none' = monochrome; 'custom' = use user-defined colors. */
-  colorMode: TerminalColorMode
-  foreground: string
-  background: string
-  cursor: string
-  selectionBackground: string
-  black: string
-  red: string
-  green: string
-  yellow: string
-  blue: string
-  magenta: string
-  cyan: string
-  white: string
-  brightBlack: string
-  brightRed: string
-  brightGreen: string
-  brightYellow: string
-  brightBlue: string
-  brightMagenta: string
-  brightCyan: string
-  brightWhite: string
-}
-
-export type TerminalSettingsV1 = {
-  colors: TerminalColorSettingsV1
-}
-
-export type TerminalSettingsPatchV1 = {
-  colors?: Partial<TerminalColorSettingsV1>
-}
-
 export type DarkUiColorsV1 = {
   background: string
   border: string
@@ -588,8 +557,12 @@ export type AppSettingsV1 = {
   composerSendKey: ComposerSendKey
   cursorSpotlight?: boolean
   cursorSpotlightColor?: string
+  /** Glyph field with click ripples behind the Code home; on unless explicitly false. */
+  homeGlyphRipple?: boolean
   /** Legacy snapshots omit this field; normalized settings always populate it. */
   darkUiColors?: DarkUiColorsV1
+  /** Legacy snapshots omit this field; normalized settings always populate it. */
+  colorPalette?: ColorPaletteSettingsV1
   provider: ModelProviderSettingsV1
   agents: KunSettingsEnvelopeV1
   workspaceRoot: string
@@ -625,9 +598,10 @@ export type AppSettingsV1 = {
 }
 
 export type AppSettingsPatch = Partial<
-  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'remote' | 'darkUiColors'>
+  Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal' | 'remote' | 'darkUiColors' | 'colorPalette'>
 > & {
   darkUiColors?: DarkUiColorsPatchV1
+  colorPalette?: ColorPaletteSettingsPatchV1
   provider?: ModelProviderSettingsPatchV1
   agents?: KunSettingsEnvelopePatchV1
   log?: Partial<LogConfigV1>

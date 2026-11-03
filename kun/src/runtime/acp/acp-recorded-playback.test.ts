@@ -1,5 +1,5 @@
 /**
- * Playback tests over real recorded ACP wire traffic (docs/ade impl P3-12).
+ * Playback tests over real recorded ACP wire traffic.
  * Recordings live in `__fixtures__/recorded/` as sanitized JSONL journals
  * produced by `kun/scripts/record-acp-session.mjs`; each frame is replayed
  * through the production schemas and the event mapper so upstream drift in
@@ -59,7 +59,7 @@ function makeMapper(): AcpEventMapper {
   })
 }
 
-describe('recorded ACP sessions (P3-12)', () => {
+describe('recorded ACP sessions', () => {
   test('opencode 1.1.47: initialize + session/new parse and the update maps', () => {
     const all = frames('opencode-1.1.47.jsonl')
 
@@ -101,19 +101,5 @@ describe('recorded ACP sessions (P3-12)', () => {
       'review',
       'compact'
     ])
-  })
-
-  test('gemini 0.52.0: initialize succeeds; session/new reports the upstream block', () => {
-    const all = frames('gemini-0.52.0-session-new-blocked.jsonl')
-    const init = AcpInitializeResultSchema.safeParse(
-      all.find((f) => f.id === 1 && f.result)?.result
-    )
-    expect(init.success).toBe(true)
-    expect(init.data?.protocolVersion).toBe(1)
-    // Individual Google accounts are refused at session/new by Gemini Code
-    // Assist — the wire error must remain a well-formed JSON-RPC error frame.
-    const sessionNew = all.find((f) => f.id === 2 && 'error' in f)
-    expect(sessionNew?.error).toMatchObject({ code: -32000 })
-    expect(String(sessionNew?.error?.message)).toContain('no longer supported')
   })
 })

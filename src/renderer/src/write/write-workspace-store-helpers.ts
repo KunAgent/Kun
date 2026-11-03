@@ -291,6 +291,8 @@ export function initialState(): Pick<
   | 'documentsByPath'
   | 'whiteboards'
   | 'whiteboardsLoading'
+  | 'whiteboardsLoadedRoot'
+  | 'whiteboardsLoadError'
   | 'editorLayout'
   | 'presentationViewByGroup'
   | 'activeFilePath'
@@ -326,6 +328,8 @@ export function initialState(): Pick<
     documentsByPath: {},
     whiteboards: {},
     whiteboardsLoading: false,
+    whiteboardsLoadedRoot: null,
+    whiteboardsLoadError: null,
     presentationViewByGroup: {},
     editorLayout: {
       version: 1,

@@ -8,7 +8,7 @@ import type { FileDispatchStore } from './dispatch-store.js'
 import { lineHashesFor, type AttributionLedger } from './attribution-ledger.js'
 
 /**
- * Ledger feed (docs/ade/11 §6.1): watches `item_created` events for
+ * Ledger feed: watches `item_created` events for
  * file-change tool items across every runtime — Kun `write`/`edit` args,
  * ACP `fs/write_text_file` + tool-call `diff` content, and Claude/Cursor
  * SDK edit-tool arguments (their new-text fragments).

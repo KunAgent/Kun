@@ -48,9 +48,27 @@ export const AgentMemoryPage = z.object({
 }).strict()
 const Cursor = z.object({ agentId: Id, updatedAt: z.string(), id: z.string().max(256) }).strict()
 
+/**
+ * Pending capture snapshots are scrubbed against the forgetting ledger. Every
+ * check is a Manager RPC that re-reads the ledger, and the room loop ticks
+ * every 1-15 s, so the full pass runs at most this often unless a local edit
+ * (forget/erase) marks it due. Applying a capture re-checks forgetting anyway.
+ */
+export const AGENT_MEMORY_SCRUB_INTERVAL_MS = 5 * 60_000
+/**
+ * A failed pass stays due but waits this long, doubling per consecutive
+ * failure up to the scrub interval. Retrying on every room tick turned one
+ * rejected record into a request every second for days.
+ */
+export const AGENT_MEMORY_SCRUB_RETRY_MS = 30_000
+
 export class AgentMemoryService {
+  private scrubbedAt = 0
+  private scrubDue = true
+  private scrubFailures = 0
+  private scrubRetryAt = 0
   constructor(readonly agents: AgentIdentityService, private readonly storage: () => MemoryStore | undefined,
-    private readonly enabled: () => boolean = () => true) {}
+    private readonly enabled: () => boolean = () => true, private readonly now: () => number = Date.now) {}
   store(): MemoryStore {
     const store = this.storage()
     if (!store) throw new Error('agent memory storage is unavailable')
@@ -94,7 +112,7 @@ export class AgentMemoryService {
       if (!row || row.roomId !== conversationId || row.value.status !== 'final') throw new Error('agent memory source message not found')
       sources.push({ id, kind: row.value.authorKind === 'user' ? 'user' as const : 'inference' as const,
         locator: 'room:' + conversationId + '/message:' + id,
-        excerpt: row.value.body.slice(0, 512),
+        ...(row.value.body.trim() ? { excerpt: row.value.body.slice(0, 512) } : {}),
         contentHash: createHash('sha256').update(row.value.body).digest('hex'),
         trust: row.value.authorKind === 'user' ? 'explicit-user' as const : 'inferred' as const })
     }
@@ -128,9 +146,28 @@ export class AgentMemoryService {
     return { memory, fingerprint: canonicalMemoryHash(memory) }
   }
   async edit(agentId: string, id: string, raw: unknown) {
-    return editAgentMemory(this, agentId, id, raw)
+    try {
+      return await editAgentMemory(this, agentId, id, raw)
+    } finally {
+      this.scrubDue = true
+    }
   }
-  async scrubForgotten() { return scrubForgottenAgentMemory(this) }
+  async scrubForgotten(options: { force?: boolean } = {}) {
+    const now = this.now()
+    if (!options.force && (now < this.scrubRetryAt ||
+      !this.scrubDue && now - this.scrubbedAt < AGENT_MEMORY_SCRUB_INTERVAL_MS)) return
+    this.scrubDue = false
+    this.scrubbedAt = now
+    try {
+      await scrubForgottenAgentMemory(this, { force: options.force, now })
+      this.scrubFailures = 0
+      this.scrubRetryAt = 0
+    } catch (error) {
+      this.scrubDue = true
+      this.scrubRetryAt = now + Math.min(AGENT_MEMORY_SCRUB_INTERVAL_MS, AGENT_MEMORY_SCRUB_RETRY_MS * 2 ** this.scrubFailures++)
+      throw error
+    }
+  }
   async recoverEdits() { return recoverAgentMemoryEdits(this) }
 
   async context(agentId: string, conversationId: string, query: string, project?: string, handoffId?: string, byteBudget = 4000, taskId?: string) {

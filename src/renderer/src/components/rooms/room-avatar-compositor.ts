@@ -1,29 +1,41 @@
 import {
   canonicalKunAvatarKey,
+  kunAvatarBodyClip,
+  kunAvatarFraming,
   kunAvatarLayerKeys,
+  kunAvatarScene,
   normalizeKunAvatarParts,
-  type KunAvatarParts
+  type KunAvatarFraming,
+  type KunAvatarParts,
+  type KunAvatarRenderOptions
 } from '@shared/rooms-api'
 import rawManifest from '../../../../asset/img/kun-avatar/manifest.json'
 import { AvatarCompositionCache, type AvatarCompositionResource } from './room-avatar-composition-cache'
 import { renderAvatarComposition } from './room-avatar-composition-canvas'
-
-interface AvatarManifest {
-  version: string
-  canvas: number
-  anchors: { faceBox: number[] }
-  assets: Record<string, { webp: Record<string, string> }>
-}
+import { activeArtManifest } from './art-asset-store'
+import { loadAvatarManifest, type AvatarManifest } from './room-avatar-manifest'
 
 export interface AvatarRenderRequest {
   key: string
+  manifest: AvatarManifest
+  releaseId?: string
+  layers: string[]
+  bodyClip: ReturnType<typeof kunAvatarBodyClip>
+  background: string
   parts: KunAvatarParts
   pixels: number
-  compact: boolean
+  framing: KunAvatarFraming
+  size: number
+  effects: boolean
 }
 
-const manifest: AvatarManifest = rawManifest
 const assetPrefix = '../../../../asset/img/kun-avatar/'
+const manifestGroups = import.meta.glob('../../../../asset/img/kun-avatar/manifests/*.json', {
+  eager: true, import: 'default'
+}) as Record<string, unknown>
+const bundledManifest = loadAvatarManifest(rawManifest, Object.fromEntries(
+  Object.entries(manifestGroups).map(([path, value]) => [path.slice(assetPrefix.length), value])
+))
 const assetUrls = import.meta.glob('../../../../asset/img/kun-avatar/**/*.webp', {
   eager: true,
   // Even tiny layers stay external: opening the app must not inline every outfit.
@@ -33,25 +45,36 @@ const assetUrls = import.meta.glob('../../../../asset/img/kun-avatar/**/*.webp',
 
 export const composedAvatarCache = new AvatarCompositionCache()
 
-export function avatarRenderRequest(parts: KunAvatarParts, size: number, dpr: number): AvatarRenderRequest {
+export function avatarRenderRequest(parts: KunAvatarParts, size: number, dpr: number, effects = false,
+  framing: KunAvatarFraming = kunAvatarFraming(size)): AvatarRenderRequest {
+  const remote = activeArtManifest()
+  const manifest: AvatarManifest = remote ? { ...remote, version: remote.releaseId } : bundledManifest
   const normalized = normalizeKunAvatarParts(parts)
   const pixels = Math.max(1, Math.min(2048, Math.ceil(size * Math.max(1, dpr || 1))))
-  const compact = size <= 48
+  const showEffects = effects && size >= 96
   return {
-    key: `${manifest.version}:${canonicalKunAvatarKey(normalized)}:${pixels}:${compact ? 'face' : 'full'}`,
+    manifest, releaseId: remote?.releaseId,
+    layers: kunAvatarLayerKeys(normalized, { size, effects: showEffects, framing }),
+    bodyClip: kunAvatarBodyClip(normalized),
+    background: kunAvatarScene(normalized.bg) ? 'transparent' : normalized.bg,
+    key: `${manifest.version}:${canonicalKunAvatarKey(normalized)}:${pixels}:${size}:${framing}:${showEffects ? 'effects' : 'plain'}`,
     parts: normalized,
     pixels,
-    compact
+    framing,
+    size,
+    effects: showEffects
   }
 }
 
-export function composedAvatarLayers(parts: KunAvatarParts): string[] {
-  return kunAvatarLayerKeys(parts)
+export function composedAvatarLayers(parts: KunAvatarParts, options: KunAvatarRenderOptions = {}): string[] {
+  return kunAvatarLayerKeys(parts, options)
 }
 
 export function composedAvatarSourceTier(request: AvatarRenderRequest): 128 | 256 | 512 {
-  const cropWidth = manifest.anchors.faceBox[2] - manifest.anchors.faceBox[0]
-  const required = request.pixels * (request.compact ? manifest.canvas / cropWidth : 1)
+  const manifest = request.manifest
+  const crop = manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox
+  const cropWidth = crop[2] - crop[0]
+  const required = request.pixels * (request.framing === 'face' ? manifest.canvas / cropWidth : 1)
   return required <= 128 ? 128 : required <= 256 ? 256 : 512
 }
 
@@ -73,24 +96,29 @@ async function composeQueued(request: AvatarRenderRequest, isNeeded: () => boole
 }
 
 /** One bundled layer by manifest key; the wardrobe shows accessories on their own. */
-export function composedAvatarLayerUrl(key: string, tier: 128 | 256 | 512): string | undefined {
-  const path = manifest.assets[key]?.webp[String(tier)]
-  return path ? assetUrls[`${assetPrefix}${path}`] : undefined
+export function composedAvatarLayerUrl(key: string, tier: 96 | 128 | 256 | 512): string | undefined {
+  const remote = activeArtManifest()
+  const path = (remote ?? bundledManifest).assets[key]?.webp[String(tier)]
+  return path ? remote ? `kun-asset://${remote.releaseId}/${path}` : assetUrls[`${assetPrefix}${path}`] : undefined
 }
 
 export async function composeAvatar(request: AvatarRenderRequest): Promise<AvatarCompositionResource> {
   const tier = composedAvatarSourceTier(request)
-  const urls = composedAvatarLayers(request.parts).map((key) => {
+  const manifest = request.manifest
+  const keys = request.layers
+  const urls = keys.map((key) => {
     const path = manifest.assets[key]?.webp[String(tier)]
-    const url = path && assetUrls[`${assetPrefix}${path}`]
+    const url = path && (request.releaseId ? `kun-asset://${request.releaseId}/${path}` : assetUrls[`${assetPrefix}${path}`])
     if (!url) throw new Error(`Missing avatar layer: ${key} (${tier})`)
     return url
   })
+  const bodyClip = request.bodyClip
   return renderAvatarComposition(urls, {
     pixels: request.pixels,
     canvas: manifest.canvas,
-    crop: request.compact ? manifest.anchors.faceBox : undefined,
-    bg: request.parts.bg
+    crop: request.framing === 'face' ? manifest.anchors.compactFaceBox ?? manifest.anchors.faceBox : undefined,
+    layerClips: bodyClip ? { [keys.indexOf(`base/${request.parts.color}`)]: bodyClip } : undefined,
+    bg: request.background
   })
 }
 

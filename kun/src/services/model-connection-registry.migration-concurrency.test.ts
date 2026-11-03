@@ -310,10 +310,13 @@ describe('ModelConnectionRegistry', () => {
         revision: number
         profiles: Record<string, {
           credentialRef?: string
-          modelCapabilities?: Record<string, { maxOutputTokens?: number }>
+          modelCapabilities?: Record<string, { maxOutputTokens?: number; metadata?: unknown }>
         }>
       }
       const credentialRef = historical.profiles.zenmux?.credentialRef
+      // Emulate a pre-metadata Registry; current metadata retains the original
+      // valid override independently from its flat compatibility projection.
+      delete historical.profiles.zenmux!.modelCapabilities!['qwen/qwen3.5-flash']!.metadata
       historical.profiles.zenmux!.modelCapabilities!['qwen/qwen3.5-flash']!.maxOutputTokens = 1_020_000
       await writeFile(registryPath, `${JSON.stringify(historical, null, 2)}\n`)
 

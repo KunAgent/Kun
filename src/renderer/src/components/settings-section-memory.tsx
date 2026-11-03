@@ -4,6 +4,7 @@ import {
 } from '@shared/memory-import-export'
 import {
   Database,
+  ScanText,
   LayoutDashboard,
   Sparkles
 } from 'lucide-react'
@@ -20,6 +21,7 @@ import {
 } from './settings-controls'
 import { MemoryImportDialog, MemoryRecordDialog } from './settings-section-memory-dialogs'
 import { ProjectKnowledgePanel } from './memory/ProjectKnowledgePanel'
+import { MemoryWorkingContextPanel } from './memory/MemoryWorkingContextPanel'
 import { MemoryDiagnosticsPanel } from './settings-section-memory-diagnostics'
 import { MemoryCandidatesPanel } from './settings-section-memory-candidates'
 import { MemoryRecordList, projectForMemory } from './settings-section-memory-list'
@@ -29,7 +31,7 @@ import {
   type MemoryScope
 } from './settings-section-memory-import'
 
-type MemorySettingsTab = 'overview' | 'records' | 'candidates'
+type MemorySettingsTab = 'overview' | 'records' | 'candidates' | 'context'
 
 export type MemoryDraft = {
   content: string
@@ -369,7 +371,8 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
         items={[
           { id: 'overview', label: t('memoryOverview'), icon: LayoutDashboard },
           { id: 'records', label: t('memoryRecords'), icon: Database },
-          { id: 'candidates', label: t('memoryCandidates'), icon: Sparkles }
+          { id: 'candidates', label: t('memoryCandidates'), icon: Sparkles },
+          { id: 'context', label: t('memoryContextTitle'), icon: ScanText }
         ]}
         value={activeTab}
         onChange={setActiveTab}
@@ -421,6 +424,17 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
             fallbackRecordCount={memoryRecords?.length ?? 0}
             t={t}
           />
+        </SettingsCard>
+      </SettingsTabPanel>
+
+      <SettingsTabPanel baseId="memory-settings" tabId="context" active={activeTab === 'context'}>
+        <SettingsCard title={t('memoryContextTitle')}>
+          <SettingRow title={t('memoryContextEnable')} description={t('memoryContextEnableDesc')}
+            control={<Toggle checked={kun?.memoryRelationContextEnabled === true}
+              disabled={kun?.memoryEnabled !== true}
+              onChange={(checked: boolean) => updateKun({ memoryRelationContextEnabled: checked })} />} />
+          <MemoryWorkingContextPanel enabled={kun?.memoryEnabled === true}
+            automaticEnabled={kun?.memoryRelationContextEnabled === true} t={t} />
         </SettingsCard>
       </SettingsTabPanel>
 

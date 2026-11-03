@@ -1,5 +1,6 @@
 import type { ChatBlock, ToolBlock } from '../../agent/types'
 import type { CanvasDocument } from './canvas-types'
+import { isPptBoardToolName } from './ppt-tool-results'
 import {
   codeCanvasReplayKey,
   userBlockHasDesignDocumentTarget
@@ -142,7 +143,7 @@ export function replayDurablePptCanvasToolBlocks(options: {
 }): void {
   for (const turn of durableCodeCanvasTurns(options.blocks)) {
     for (const block of turn.blocks) {
-      if (block.kind !== 'tool' || block.status !== 'success' || block.meta?.toolName !== 'ppt_agent') continue
+      if (block.kind !== 'tool' || block.status !== 'success' || !isPptBoardToolName(block.meta?.toolName)) continue
       options.onToolBlock(
         block,
         turn.blocks,

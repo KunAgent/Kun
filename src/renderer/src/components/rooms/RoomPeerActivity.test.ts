@@ -136,6 +136,28 @@ describe('Peer discussion controls', () => {
     expect(renderer.toJSON()).toBeNull()
     expect(JSON.stringify(renderer.toJSON())).not.toContain('32')
   })
+  it('counts only execution work on the Tasks button, not members discussing', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(RoomPeerSummary, {
+          topics: [topic],
+          loading: false,
+          onOpen: vi.fn(),
+          onTasks: vi.fn(),
+          taskCounts: { taskRunningCount: 0, attentionCount: 0 }
+        })
+      )
+    })
+    const tasks = renderer.root.findAllByType('button').at(-1)!
+    expect(tasks.children.join('')).toBe(i18n.t('roomsTasks', { ns: 'common' }))
+    await act(async () => {
+      renderer.update(createElement(RoomPeerSummary, {
+        topics: [topic], loading: false, onOpen: vi.fn(), onTasks: vi.fn(),
+        taskCounts: { taskRunningCount: 1, attentionCount: 0 }
+      }))
+    })
+    expect(JSON.stringify(renderer.toJSON())).toContain(' · 1 ' + i18n.t('roomsState_running', { ns: 'common' }))
+  })
   it('does not turn retained stopped or paused inboxes into active pending work', async () => {
     await act(async () => {
       renderer = create(

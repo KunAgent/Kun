@@ -21,7 +21,7 @@ describe('write right panel state', () => {
   it('opens and collapses without losing the active tool', () => {
     const collapsed = collapseWriteRightPanelState({ expanded: true, activeId: 'review' })
     expect(collapsed).toEqual({ expanded: false, activeId: 'review' })
-    expect(openWriteRightPanelState(collapsed, 'history')).toEqual({ expanded: true, activeId: 'history' })
+    expect(openWriteRightPanelState(collapsed, 'subagents')).toEqual({ expanded: true, activeId: 'subagents' })
   })
 
   it('projects the legacy assistantOpen flag', () => {

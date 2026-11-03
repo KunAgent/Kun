@@ -334,9 +334,9 @@ describe('FloatingComposer model controls', () => {
     })).toBe('medium')
   })
 
-  it('uses the legacy effort set when no model reasoning profile is available', () => {
-    expect(normalizeComposerReasoningEffort('auto')).toBe('max')
-    expect(normalizeComposerReasoningEffort('medium')).toBe('medium')
+  it('uses automatic effort when no model reasoning information is available', () => {
+    expect(normalizeComposerReasoningEffort('auto')).toBe('auto')
+    expect(normalizeComposerReasoningEffort('medium')).toBe('auto')
   })
 
   it('enables ambient energy motion only for the deeper semantic efforts', () => {

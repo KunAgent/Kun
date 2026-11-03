@@ -1,10 +1,7 @@
 import type { ReactElement } from 'react'
-import {
-  InlineNoticeView,
-  SettingRow,
-  SettingsCard,
-  Toggle
-} from './settings-controls'
+import { AppWindow } from 'lucide-react'
+import { SettingRow, Toggle } from './settings-controls'
+import { SettingsFeatureCard } from './settings-feature-card'
 
 type Translate = (key: string) => string
 
@@ -22,38 +19,28 @@ export function ContextWindowSettingsPanel({
   onWindowModeChange: (windowModeEnabled: boolean) => void
 }): ReactElement {
   return (
-    <div className="mt-6">
-      <SettingsCard title={t('labContextCompressionTitle')}>
-        <div className="space-y-3 px-3 py-4">
-          <InlineNoticeView notice={{
-            tone: 'info',
-            message: t('labContextCompressionDescription')
-          }} />
-        </div>
-        <SettingRow
-          title={t('labModelInitiatedCompactionEnabled')}
-          description={t('labModelInitiatedCompactionEnabledDesc')}
-          control={
-            <Toggle
-              checked={modelInitiatedCompactionEnabled}
-              onChange={onModelInitiatedChange}
-              ariaLabel={t('labModelInitiatedCompactionEnabled')}
-            />
-          }
-        />
-        <SettingRow
-          title={t('labContextWindowEnabled')}
-          description={t('labContextWindowEnabledDesc')}
-          control={
-            <Toggle
-              checked={windowModeEnabled}
-              onChange={onWindowModeChange}
-              disabled={!modelInitiatedCompactionEnabled}
-              ariaLabel={t('labContextWindowEnabled')}
-            />
-          }
-        />
-      </SettingsCard>
-    </div>
+    <SettingsFeatureCard
+      icon={AppWindow}
+      tone="blue"
+      title={t('labContextCompressionTitle')}
+      description={t('labContextCompressionDescription')}
+      enabled={modelInitiatedCompactionEnabled}
+      onEnabledChange={onModelInitiatedChange}
+      toggleLabel={t('labModelInitiatedCompactionEnabled')}
+      enabledLabel={t('settingsIaFeatureOn')}
+    >
+      <SettingRow
+        title={t('labContextWindowEnabled')}
+        description={t('labContextWindowEnabledDesc')}
+        control={
+          <Toggle
+            checked={windowModeEnabled}
+            onChange={onWindowModeChange}
+            disabled={!modelInitiatedCompactionEnabled}
+            ariaLabel={t('labContextWindowEnabled')}
+          />
+        }
+      />
+    </SettingsFeatureCard>
   )
 }

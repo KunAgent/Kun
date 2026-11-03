@@ -10,7 +10,7 @@ import type {
 } from '../contracts/harness.js'
 
 /**
- * Kun's product permission ladder, strictest to widest (docs/ade/09 §7.1).
+ * Kun's product permission ladder, strictest to widest.
  * Harness permission modes map onto it through HarnessPermissionMode.
  */
 export const PERMISSION_RANK = {
@@ -36,7 +36,7 @@ export type PermissionClamp = {
   downgraded: boolean
   /**
    * Interactive turns may escalate to full-access past the manager's rank —
-   * the host must ask the user (§7.2) before dispatching at the requested mode.
+   * the host must ask the user before dispatching at the requested mode.
    */
   needsUserConfirmation: boolean
   /** The resolved harness mode the caller asked for, when it was refused. */
@@ -82,7 +82,7 @@ export function authorityFromTurn(
 
 /**
  * Effective worker permission = manager authority intersected with the
- * harness's declared modes (docs/ade/09 §7.1). The worker's sandbox and tool
+ * harness's declared modes. The worker's sandbox and tool
  * allow-lists are clamped separately by ChildSecuritySnapshot rules.
  */
 export function clampPermission(

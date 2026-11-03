@@ -1,5 +1,5 @@
 /**
- * `<kun_assignment>` first-turn input for ADE workers (09 §4.3, 12 §6.3).
+ * `<kun_assignment>` first-turn input for ADE workers.
  * The host renders the persisted dispatch record into a tagged markdown
  * block; the renderer folds it into a collapsed AssignmentCard while the
  * original text stays in history. Malformed or foreign text returns null so
@@ -41,7 +41,7 @@ function taskSectionTitle(body: string): string | undefined {
 /**
  * Parse the assignment wrapper out of a user message. Returns null when the
  * message carries no `<kun_assignment>` tag or the wrapper is malformed —
- * callers then render the message as an ordinary user bubble (12 §6.3).
+ * callers then render the message as an ordinary user bubble.
  */
 export function parseAssignmentCard(text: string): AssignmentCardData | null {
   const open = text.indexOf(OPEN_TAG)

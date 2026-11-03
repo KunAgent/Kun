@@ -112,6 +112,24 @@ describe('AgentLoop empty model response safety net', () => {
     const items = await harness.sessionStore.loadItems('thr_empty')
     expect(items.some((item) => item.kind === 'error' && item.code === 'model_empty_response'))
       .toBe(true)
+    // The loop's own error item and turn settlement must not both render a card.
+    expect(items.filter((item) => item.kind === 'error' && item.turnId === started.turnId)).toHaveLength(1)
+  })
+
+  it('still fails a genuine worker_update turn that returns nothing', async () => {
+    const harness = createHarness(new UsageOnlyModel())
+    const started = await startTurn(harness, 'thr_worker_update', undefined, 'worker_update')
+
+    await expect(harness.loop.runTurn('thr_worker_update', started.turnId)).resolves.toBe('failed')
+
+    const events = harness.eventBus.snapshotSince('thr_worker_update', 0)
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'error',
+        code: 'model_empty_response',
+        severity: 'error'
+      })
+    ]))
   })
 
   it('does not misclassify reasoning-only responses as empty', async () => {
@@ -190,7 +208,8 @@ function createHarness(model: ModelClient, options: { toolHost?: LocalToolHost }
 async function startTurn(
   harness: ReturnType<typeof createHarness>,
   threadId: string,
-  roomContext?: Parameters<typeof createThreadRecord>[0]['roomContext']
+  roomContext?: Parameters<typeof createThreadRecord>[0]['roomContext'],
+  messageSource?: 'worker_update'
 ) {
   await harness.threadStore.upsert(createThreadRecord({
     id: threadId,
@@ -201,6 +220,10 @@ async function startTurn(
   }))
   return harness.turns.startTurn({
     threadId,
-    request: { prompt: 'please answer', model: harness.model.model }
+    request: {
+      prompt: 'please answer',
+      model: harness.model.model,
+      ...(messageSource ? { messageSource } : {})
+    }
   })
 }

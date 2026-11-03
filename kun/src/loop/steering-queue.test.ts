@@ -67,6 +67,27 @@ describe('SteeringQueue', () => {
     expect(queue.peek('turn_a')).toEqual([{ text: 'new' }, { text: 'next' }])
   })
 
+  it('notifies subscribers when guidance may have become pending', () => {
+    const queue = new SteeringQueue()
+    const seen: string[] = []
+    const unsubscribe = queue.subscribe('turn_a', () => seen.push('a'))
+    queue.subscribe('turn_b', () => seen.push('b'))
+
+    queue.enqueue('turn_a', { text: 'look here' })
+    queue.enqueue('turn_a', { text: '   ' })
+    queue.holdAdmission('turn_a')()
+    queue.replace('turn_a', [{ text: 'replaced' }])
+    expect(seen).toEqual(['a', 'a', 'a'])
+
+    unsubscribe()
+    queue.enqueue('turn_a', { text: 'later' })
+    queue.enqueue('turn_b', { text: 'other turn' })
+    expect(seen).toEqual(['a', 'a', 'a', 'b'])
+    queue.clear('turn_b')
+    queue.enqueue('turn_b', { text: 'after clear' })
+    expect(seen).toEqual(['a', 'a', 'a', 'b'])
+  })
+
   it('preserves attachment ids by value and includes them in byte accounting', () => {
     const attachmentIds = ['att_0123456789abcdef01234567']
     const queue = new SteeringQueue({ maxBytesPerTurn: 128 })

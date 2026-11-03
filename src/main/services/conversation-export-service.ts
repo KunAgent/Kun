@@ -1,7 +1,9 @@
 import { app, BrowserWindow, dialog } from 'electron'
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import type {
+  ConversationExportBatchPayload,
+  ConversationExportBatchResult,
   ConversationExportFormat,
   ConversationExportPayload,
   ConversationExportResult
@@ -86,6 +88,98 @@ export async function exportConversation(
       path: targetPath,
       format: payload.format,
       exportedAt: new Date().toISOString()
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      canceled: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+async function createUniqueDirectory(parent: string, name: string): Promise<string> {
+  for (let attempt = 1; attempt <= 99; attempt += 1) {
+    const candidate = join(parent, attempt === 1 ? name : `${name} (${attempt})`)
+    try {
+      await mkdir(candidate)
+      return candidate
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    }
+  }
+  throw new Error('Could not create a unique export folder')
+}
+
+function uniqueFileName(baseName: string, extension: string, used: Set<string>): string {
+  for (let attempt = 1; ; attempt += 1) {
+    const candidate = `${attempt === 1 ? baseName : `${baseName} (${attempt})`}.${extension}`
+    const key = candidate.toLowerCase()
+    if (!used.has(key)) {
+      used.add(key)
+      return candidate
+    }
+  }
+}
+
+/** Writes one file per conversation into a new dated folder inside a user-picked directory. */
+export async function exportConversationBatch(
+  payload: ConversationExportBatchPayload,
+  options?: { parentWindow?: BrowserWindow | null; downloadsPath?: string }
+): Promise<ConversationExportBatchResult> {
+  try {
+    const downloadsPath = options?.downloadsPath ?? app.getPath('downloads')
+    const dialogOptions: Electron.OpenDialogOptions = {
+      title: 'Export conversations',
+      defaultPath: downloadsPath,
+      properties: ['openDirectory', 'createDirectory']
+    }
+    const dialogResult = options?.parentWindow
+      ? await dialog.showOpenDialog(options.parentWindow, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
+    const parent = dialogResult.filePaths[0]
+    if (dialogResult.canceled || !parent) return { ok: false, canceled: true }
+
+    const folderName = sanitizeConversationExportFileName(payload.folderName) || FALLBACK_FILE_NAME
+    const directory = await createUniqueDirectory(parent, folderName)
+    const used = new Set<string>()
+    const failed: Array<{ title: string; message: string }> = []
+    let written = 0
+
+    for (const item of payload.items) {
+      try {
+        const baseName =
+          sanitizeConversationExportFileName(item.defaultFileName) ||
+          sanitizeConversationExportFileName(item.title) ||
+          FALLBACK_FILE_NAME
+        const fileName = uniqueFileName(baseName, payload.format, used)
+        const targetPath = join(directory, fileName)
+        if (payload.format === 'md') {
+          await writeFile(targetPath, item.markdown, 'utf8')
+        } else {
+          const pdf = await renderMarkdownDocumentToPdf({
+            sourcePath: join(directory, `${baseName}.md`),
+            content: item.markdown,
+            title: item.title
+          })
+          await writeFile(targetPath, pdf)
+        }
+        written += 1
+      } catch (error) {
+        failed.push({
+          title: item.title,
+          message: error instanceof Error ? error.message : String(error)
+        })
+      }
+    }
+
+    return {
+      ok: true,
+      directory,
+      format: payload.format,
+      exportedAt: new Date().toISOString(),
+      written,
+      failed
     }
   } catch (error) {
     return {

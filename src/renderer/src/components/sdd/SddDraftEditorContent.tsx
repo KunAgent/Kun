@@ -1,3 +1,4 @@
+import type { SelectionMenuProps } from '../write/selection-menu/menu-types'
 import type {
   MutableRefObject,
   ReactElement,
@@ -34,6 +35,7 @@ import {
 type Translate = (key: string, values?: Record<string, unknown>) => string
 
 type SddDraftEditorContentProps = {
+  menuProps?: Partial<SelectionMenuProps>
   leftSidebarCollapsed: boolean
   assistantOpen: boolean
   onToggleLeftSidebar: () => void
@@ -92,6 +94,7 @@ type SddDraftEditorContentProps = {
 }
 
 export function SddDraftEditorContent({
+  menuProps,
   leftSidebarCollapsed,
   assistantOpen,
   onToggleLeftSidebar,
@@ -257,6 +260,7 @@ export function SddDraftEditorContent({
           {upgrading ? <div className="sdd-editor-progress" /> : null}
           {content.length > WRITE_SAFE_MARKDOWN_RENDER_MAX_CHARS ? (
             <WriteMarkdownEditor
+              key={editorFilePath}
               value={content}
               workspaceRoot={activeDraft.workspaceRoot}
               filePath={editorFilePath}
@@ -285,6 +289,7 @@ export function SddDraftEditorContent({
             />
           ) : (
           <WriteRichEditor
+            key={editorFilePath}
             value={content}
             workspaceRoot={activeDraft.workspaceRoot}
             filePath={editorFilePath}
@@ -319,6 +324,10 @@ export function SddDraftEditorContent({
       {selectionAction ? (
         <WriteInlineAgent
           action={selectionAction}
+          {...menuProps}
+          activeFormats={selection.activeFormats}
+          richMode={Boolean(richHandleRef.current)}
+          editEnabled={!readOnly}
           formattingEnabled={!readOnly}
           onApplyFormat={applyInlineFormat}
           blockType={selection.blockType}

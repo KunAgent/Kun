@@ -1,0 +1,210 @@
+:root {
+  color-scheme: light;
+  font-family:
+    Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --tray-bg: #ededed;
+  --tray-panel: #f8f8f8;
+  --tray-panel-strong: #ffffff;
+  --tray-subtle: #f1f1f1;
+  --tray-hover: #e6e6e6;
+  --tray-text: #3c3f43;
+  --tray-muted: #5f6268;
+  --tray-faint: #686b72;
+  --tray-border: #dcdfe3;
+  --tray-border-strong: #c8cbd0;
+  --tray-control: #3c3f43;
+  --tray-control-hover: #2f3236;
+  --tray-control-foreground: #fcfcfc;
+  --tray-focus: #417cdd;
+  --tray-progress: #5f6268;
+  --tray-good: #128a4a;
+  --tray-good-soft: rgba(18, 138, 74, 0.1);
+  --tray-warn: #b66a0a;
+  --tray-warn-soft: rgba(182, 106, 10, 0.1);
+  --tray-danger: #d6493f;
+  --tray-danger-soft: rgba(214, 73, 63, 0.1);
+  --tray-radius-control: 8px;
+  --tray-radius-card: 12px;
+  --tray-radius-pill: 9999px;
+  --tray-duration: 150ms;
+  background: transparent;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --tray-bg: var(--kun-dark-ui-background, #181818);
+  --tray-panel: var(--kun-dark-ui-panel, #2c2c2c);
+  --tray-panel-strong: color-mix(in srgb, var(--kun-dark-ui-panel, #2c2c2c) 96%, white);
+  --tray-subtle: color-mix(in srgb, var(--kun-dark-ui-panel, #2c2c2c) 98%, white);
+  --tray-hover: color-mix(in srgb, var(--kun-dark-ui-panel, #2c2c2c) 96%, white);
+  --tray-text: #d4d4d4;
+  --tray-muted: #bfc1c4;
+  --tray-faint: #999ba0;
+  --tray-border: var(--kun-dark-ui-border, #272727);
+  --tray-border-strong: color-mix(in srgb, var(--kun-dark-ui-border, #272727) 90%, white);
+  --tray-control: #eeeeee;
+  --tray-control-hover: #ffffff;
+  --tray-control-foreground: #252222;
+  --tray-focus: #78a3ea;
+  --tray-progress: #bfc1c4;
+  --tray-good: #40c977;
+  --tray-good-soft: rgba(64, 201, 119, 0.14);
+  --tray-warn: #f2a23f;
+  --tray-warn-soft: rgba(242, 162, 63, 0.14);
+  --tray-danger: #f8736a;
+  --tray-danger-soft: rgba(248, 115, 106, 0.14);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: transparent;
+  color: var(--tray-text);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+}
+
+button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--tray-focus) 72%, transparent);
+  outline-offset: 2px;
+}
+
+.tray-quota-popover {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--tray-border);
+  border-radius: var(--tray-radius-card);
+  background: var(--tray-bg);
+  box-shadow: none;
+  transition: opacity var(--tray-duration) ease;
+}
+
+.tray-quota-popover[data-context-ready="false"] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+:root[data-platform="win32"] .tray-quota-popover {
+  border-radius: var(--tray-radius-card);
+  background: var(--tray-bg);
+  box-shadow: none;
+}
+
+:root[data-platform="win32"] button:focus-visible {
+  outline: 2px solid var(--tray-focus);
+  outline-offset: 2px;
+}
+
+/* The shared allowance cards read the tray palette. */
+.tray-quota-popover {
+  --kq-text: var(--tray-text);
+  --kq-muted: var(--tray-muted);
+  --kq-faint: var(--tray-faint);
+  --kq-card: var(--tray-panel-strong);
+  --kq-subtle: var(--tray-subtle);
+  --kq-hover: var(--tray-hover);
+  --kq-border: var(--tray-border);
+  --kq-border-strong: var(--tray-border-strong);
+  --kq-track: color-mix(in srgb, var(--tray-text) 12%, transparent);
+  --kq-accent: var(--tray-progress);
+  --kq-ring: var(--tray-progress);
+  --kq-warn: var(--tray-warn);
+  --kq-warn-soft: var(--tray-warn-soft);
+  --kq-danger: var(--tray-danger);
+  --kq-focus: var(--tray-focus);
+  --kq-control: var(--tray-control);
+  --kq-control-foreground: var(--tray-control-foreground);
+  --kq-radius-card: var(--tray-radius-card);
+  --kq-duration: var(--tray-duration);
+}
+
+.tray-quota-header {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--tray-border);
+  padding: 12px 12px 12px 16px;
+}
+
+.tray-quota-heading-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tray-quota-heading-copy h1 {
+  margin: 0;
+  color: var(--tray-text);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
+.tray-quota-heading-copy > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--tray-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tray-icon-button {
+  width: 30px;
+  height: 30px;
+}
+
+.tray-icon-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.tray-quota-content {
+  min-height: 0;
+  flex: 1;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px 12px 14px 16px;
+  scrollbar-color: color-mix(in srgb, var(--tray-text) 22%, transparent) transparent;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.tray-quota-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tray-quota-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tray-quota-content::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tray-text) 22%, transparent);
+  background-clip: padding-box;
+}

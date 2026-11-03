@@ -1,83 +1,102 @@
 // @vitest-environment jsdom
 import { act, createElement } from 'react'
-import { createRoot } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
-import { defaultKunHarnessSettings } from '@shared/app-settings-kun-harness'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { AdeHarnessRow } from '@shared/ade-harnesses'
 import type { HarnessUpdateState } from '../../../../../kun/src/contracts/harness-update'
-const f = vi.hoisted(() => ({ request: vi.fn(), load: vi.fn(), models: vi.fn(), invalidate: vi.fn(), wait: vi.fn(async () => undefined) }))
+const f = vi.hoisted(() => ({ request: vi.fn() }))
 vi.mock('../../agent/runtime-client', () => ({ rendererRuntimeClient: { runtimeRequest: f.request } }))
-vi.mock('../../store/harness-store', () => ({ loadHarnesses: f.load, loadHarnessModels: f.models, invalidateHarnessModels: f.invalidate }))
-vi.mock('./agent-enablement-settings', () => ({ waitForAgentSettings: f.wait }))
+vi.mock('../../store/harness-store', () => ({ loadHarnesses: vi.fn(), loadHarnessModels: vi.fn(), invalidateHarnessModels: vi.fn(),
+  applyHarnessEnablementSettings: vi.fn(), harnessIdsWithChangedLaunchSettings: () => [], useHarnessStore: { getState: () => ({ rows: [] }) } }))
+vi.mock('./agent-enablement-settings', () => ({ waitForAgentSettings: vi.fn(async () => undefined) }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: { getState: () => ({ openSettings: vi.fn() }) } }))
+vi.mock('./AgentUpdateHelpButton', () => ({ AgentUpdateHelpButton: ({ request }: { request: unknown }) =>
+  createElement('div', { 'data-ask-kun-update': JSON.stringify(request) }) }))
 vi.mock('./AgentSetupHelpButton', () => ({ AgentSetupHelpButton: ({ issue }: { issue: unknown }) =>
   createElement('div', { 'data-ask-kun-issue': JSON.stringify(issue) }) }))
 import { AgentUpdateControl } from './AgentUpdateControl'
 import { receiveHarnessUpdate, useHarnessUpdateStore } from '../../store/harness-update-store'
+import { resetAgentUpdateRunner, useAgentUpdateRunner } from '../../store/harness-update-runner'
+
 const row = { definition: { id: 'claude-code' }, status: { installed: 'yes', resolvedCommand: '/old' } } as AdeHarnessRow
 const initial: HarnessUpdateState = { harnessId: 'claude-code', current: { path: '/old', source: 'kun-bundled', version: '2.1.220', fingerprint: 'old' },
-  candidate: { path: '/new', source: 'native', version: '2.1.281', fingerprint: 'new' }, status: 'available', latestVersion: '2.1.281', channel: 'latest', canUpdate: false, canInstallManaged: true }
-afterEach(() => { vi.clearAllMocks(); useHarnessUpdateStore.setState({ entries: {} }) })
-it('shows the effective source and verifies the server activation plan before saving a new path', async () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  status: 'available', latestVersion: '2.1.281', channel: 'latest', canUpdate: true, canInstallManaged: true }
+const t = (key: string, options?: Record<string, unknown>): string => options?.version ? `${key}:${options.version}` : key
+let host: HTMLDivElement, root: Root
+beforeEach(() => {
+  vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+  host = document.createElement('div'); root = createRoot(host)
+})
+afterEach(async () => {
+  await act(async () => root.unmount())
+  vi.clearAllMocks(); vi.unstubAllGlobals()
+  resetAgentUpdateRunner()
+  useHarnessUpdateStore.setState({ entries: {} })
+})
+const render = () => act(async () => root.render(createElement(AgentUpdateControl, { row, t })))
+const button = (selector: string) => host.querySelector<HTMLButtonElement>(selector)
+
+it('replaces the offer with the steps the moment the update is clicked', async () => {
   receiveHarnessUpdate(initial)
-  const patch = vi.fn(), root = createRoot(document.createElement('div'))
-  const ready: HarnessUpdateState = { ...initial, job: { id: 'job', action: 'use-local', status: 'ready', startedAt: '', output: '',
-    previousPath: '/old', activationPath: '/new', activationFingerprint: 'new', version: '2.1.281' } }
-  f.request.mockImplementation(async (path: string) => ({ ok: true, status: 200,
-    body: JSON.stringify(path.endsWith('/activate') ? { ok: true } : ready) }))
-  try {
-    await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch,
-      beforeCheck: async () => true, t: (key: string) => key })))
-    expect(patch).not.toHaveBeenCalled()
-    await act(async () => receiveHarnessUpdate(ready))
-    expect(patch).toHaveBeenCalledWith({ binaryPaths: { 'claude-code': '/new' } })
-    expect(f.request.mock.calls[0][0]).toBe('/v1/harnesses/claude-code/updates')
-    expect(f.request.mock.calls.some(([path]) => path.endsWith('/activate'))).toBe(true)
-    expect(f.invalidate).toHaveBeenCalledWith('claude-code')
-    expect(f.models).toHaveBeenCalledWith('claude-code', true)
-  } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
+  let release: (value: unknown) => void = () => undefined
+  f.request.mockImplementation((path: string) => String(path).endsWith('/start')
+    ? new Promise((resolve) => { release = resolve }) : Promise.resolve({ ok: true, status: 200, body: JSON.stringify(initial) }))
+  await render()
+  expect(button('[data-agent-update-start]')?.textContent).toBe('agentUpdate.updateTo:2.1.281')
+  await act(async () => button('[data-agent-update-start]')!.click())
+  // The runtime has not answered yet, and the page already shows the work.
+  expect(host.querySelector('[data-agent-update-available]')).toBeNull()
+  expect(host.querySelector('[data-agent-update-run="starting"]')).not.toBeNull()
+  expect(host.querySelector('[data-agent-update-step="wait"]')?.getAttribute('data-state')).toBe('active')
+  expect(host.textContent).toContain('agentCenter.activity.leaveHint')
+  await act(async () => release({ ok: true, status: 200, body: JSON.stringify({ ...initial, job: { id: 'run', action: 'update', status: 'running',
+    startedAt: new Date().toISOString(), output: 'Updating to 2.1.281...\n' } }) }))
+  expect(host.querySelector('[data-agent-update-step="install"]')?.getAttribute('data-state')).toBe('active')
+  expect(host.querySelector('[data-agent-update-last-line]')?.textContent).toBe('Updating to 2.1.281...')
+  expect(host.querySelector('details')?.open).toBe(true)
 })
-it('does not activate an installation on the basis of a stale update notice', async () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  const patch = vi.fn(), root = createRoot(document.createElement('div'))
-  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(initial) })
-  receiveHarnessUpdate({ ...initial, job: { id: 'stale-job', action: 'use-local', status: 'ready', startedAt: '', output: '',
-    previousPath: '/old', activationPath: '/unverified', activationFingerprint: 'fake' } })
-  try {
-    await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch, t: (key: string) => key })))
-    expect(patch.mock.calls.some(([value]) => value.binaryPaths?.['claude-code'] === '/unverified')).toBe(false)
-  } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
-})
-it('restores the prior effective executable and releases maintenance if activation loses account readiness', async () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  const patch = vi.fn(), root = createRoot(document.createElement('div')), beforeCheck = vi.fn(async () => true)
-  const ready: HarnessUpdateState = { ...initial, job: { id: 'failed-activation', action: 'use-local', status: 'ready', startedAt: '', output: '',
-    previousPath: '/old', activationPath: '/new', activationFingerprint: 'new', version: '2.1.281' } }
-  f.request.mockImplementation(async (path: string) => path.endsWith('/activate')
-    ? { ok: false, status: 409, body: JSON.stringify({ message: 'Native account unavailable' }) }
-    : { ok: true, status: 200, body: JSON.stringify(path.endsWith('/cancel') ? { ok: true } : ready) })
-  receiveHarnessUpdate(ready)
-  try {
-    await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch,
-      beforeCheck, t: (key: string) => key })))
-    expect(patch.mock.calls.map(([value]) => value.binaryPaths['claude-code'])).toEqual(['/new', '/old'])
-    expect(beforeCheck).toHaveBeenCalledTimes(2)
-    expect(f.request.mock.calls.some(([path]) => path.endsWith('/cancel'))).toBe(true)
-  } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
-})
-it('offers 小 Kun with versions, error and installer log when an update fails', async () => {
-  ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
-  const host = document.createElement('div'), root = createRoot(host)
+
+it('offers a retry and 小 Kun with versions, error and installer log when an update fails', async () => {
   const failed: HarnessUpdateState = { ...initial, job: { id: 'failed-update', action: 'update', status: 'failed', startedAt: '',
     output: 'npm warn cleanup EACCES', error: 'Agent compatibility verification failed; the current selection was kept', version: '2.1.281' } }
   f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(failed) })
   receiveHarnessUpdate(failed)
-  try {
-    await act(async () => root.render(createElement(AgentUpdateControl, { row, settings: defaultKunHarnessSettings(), patch: vi.fn(), t: (key: string) => key })))
-    expect(JSON.parse(host.querySelector('[data-ask-kun-issue]')!.getAttribute('data-ask-kun-issue')!)).toEqual({
-      harnessId: 'claude-code', operation: 'update', error: 'Agent compatibility verification failed; the current selection was kept',
-      output: 'npm warn cleanup EACCES', currentVersion: '2.1.220', currentPath: '/old', targetVersion: '2.1.281'
-    })
-  } finally { await act(async () => root.unmount()); (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false }
+  await render()
+  expect(useAgentUpdateRunner.getState().items['claude-code']?.phase).toBe('failed')
+  expect(host.querySelector('[data-agent-update-error]')?.textContent).toBe('Agent compatibility verification failed; the current selection was kept')
+  expect(button('[data-agent-update-retry]')).not.toBeNull()
+  expect(JSON.parse(host.querySelector('[data-ask-kun-issue]')!.getAttribute('data-ask-kun-issue')!)).toEqual({
+    harnessId: 'claude-code', operation: 'update', error: 'Agent compatibility verification failed; the current selection was kept',
+    output: 'npm warn cleanup EACCES', currentVersion: '2.1.220', currentPath: '/old', targetVersion: '2.1.281'
+  })
+})
+
+it('disables actions while a status check may replace the installation they were offered for', async () => {
+  receiveHarnessUpdate(initial)
+  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(initial) })
+  await render()
+  await act(async () => useHarnessUpdateStore.setState({ entries: { 'claude-code': { info: initial, loading: true } } }))
+  expect(button('[data-agent-update-start]')?.disabled).toBe(true)
+  expect(button('[data-agent-update-check]')?.getAttribute('aria-busy')).toBe('true')
+})
+
+it('offers 小 Kun on the current-version row with what the card knows, except while updating or failed', async () => {
+  receiveHarnessUpdate(initial)
+  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(initial) })
+  await render()
+  expect(JSON.parse(host.querySelector('[data-ask-kun-update]')!.getAttribute('data-ask-kun-update')!)).toEqual({
+    harnessId: 'claude-code', currentVersion: '2.1.220', currentPath: '/old', source: 'kun-bundled', latestVersion: '2.1.281'
+  })
+
+  await act(async () => useAgentUpdateRunner.setState({ items: { 'claude-code': { phase: 'failed', action: 'update', startedAt: 1, error: 'boom' } as never } }))
+  expect(host.querySelector('[data-ask-kun-update]')).toBeNull()
+  expect(host.querySelector('[data-ask-kun-issue]')).not.toBeNull()
+})
+
+it('has no 小 Kun update button when the Agent is already current', async () => {
+  const current: HarnessUpdateState = { ...initial, status: 'current', canUpdate: false }
+  receiveHarnessUpdate(current)
+  f.request.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify(current) })
+  await render()
+  expect(host.querySelector('[data-ask-kun-update]')).toBeNull()
 })

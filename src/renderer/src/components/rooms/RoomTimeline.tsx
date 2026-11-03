@@ -7,6 +7,7 @@ import { readBrowserStorageItem, writeBrowserStorageItem } from '../../lib/brows
 import { mergeRoomMessages, roomPath, roomRequestId, roomsRequest } from './rooms-client'
 import { RoomMessageRow } from './RoomMessageRow'
 import { roomMessageLayout } from './room-message-layout'
+import { privateTurnPositions, type RoomTurnPosition } from './room-turn-steps'
 import { roomButtonClass } from './RoomSettings'
 import { RoomTimelineSearch } from './RoomTimelineSearch'
 import { captureTimelinePosition, restoreTimelinePosition, type RoomTimelinePosition } from './room-timeline-position'
@@ -35,7 +36,7 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
   const [awayFromBottom, setAwayFromBottom] = useState(false), [error, setError] = useState('')
   const [contextMessages, setContextMessages] = useState<RoomMessage[]>([])
   const [selectedId, setSelectedId] = useState<string>(), [pendingJump, setPendingJump] = useState<string>()
-  const [contextBusy, setContextBusy] = useState(false)
+  const [contextBusy, setContextBusy] = useState(false), [flashId, setFlashId] = useState<string>()
   const lookup = useRef<AbortController | null>(null)
   const prepend = useRef<{ height: number; top: number; firstId?: string } | null>(null)
   const savedPosition = useRef<RoomTimelinePosition | null>(null)
@@ -44,6 +45,8 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
   const restorePending = useRef<RoomTimelinePosition | null>(null)
   const rows = useMemo(() => mergeRoomMessages(contextMessages, messages), [contextMessages, messages])
   const messageById = useMemo(() => new Map(rows.map((message) => [message.id, message])), [rows])
+  const privateChat = room.conversationKind === 'user_agent'
+  const turns = useMemo(() => privateChat ? privateTurnPositions(rows) : undefined, [privateChat, rows])
   const virtual = rows.length > 40
   const virtualizer = useVirtualizer({ count: rows.length, getScrollElement: () => scrollRef.current,
     estimateSize: () => 160, overscan: 6, getItemKey: (index) => rows[index].id })
@@ -67,13 +70,20 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
     } catch (cause) { if (!controller.signal.aborted) setError(String(cause)) }
     finally { if (!controller.signal.aborted) setContextBusy(false) }
   }, [room.id, t])
-  const jump = useCallback((id: string, surrounding = false) => {
+  // Automatic jumps (first unread, restored position) only scroll; explicit ones also flash the target row.
+  const jump = useCallback((id: string, surrounding = false, highlight = true) => {
     lookup.current?.abort(); setContextBusy(false)
     atBottom.current = false; setAwayFromBottom(true); setSelectedId(id)
+    if (highlight) setFlashId(id)
     if (surrounding || !messageById.has(id)) void loadContext(id)
     else setPendingJump(id)
   }, [loadContext, messageById])
 
+  useEffect(() => {
+    if (!flashId) return
+    const timer = setTimeout(() => setFlashId(undefined), 2000)
+    return () => clearTimeout(timer)
+  }, [flashId])
   useEffect(() => {
     const controller = new AbortController()
     try { savedPosition.current = JSON.parse(readBrowserStorageItem(`kun.rooms.anchor.${room.id}`) ?? 'null') } catch { /* legacy scroll below */ }
@@ -112,7 +122,7 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
       setAwayFromBottom(!saved.atBottom)
       restorePending.current = saved
       if (restoreTimelinePosition(scroller, saved)) restorePending.current = null
-      else if (saved.messageId) jump(saved.messageId)
+      else if (saved.messageId) jump(saved.messageId, false, false)
     }
     searchWasOpen.current = searchOpen
   }, [searchOpen, jump])
@@ -135,9 +145,9 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
         setAwayFromBottom(!saved.atBottom)
         if (!restoreTimelinePosition(scroller, saved) && saved.messageId) {
           restorePending.current = saved
-          jump(saved.messageId)
+          jump(saved.messageId, false, false)
         }
-      } else if (firstUnreadId) jump(firstUnreadId)
+      } else if (firstUnreadId) jump(firstUnreadId, false, false)
       else {
         const top = readBrowserStorageItem(`kun.rooms.scroll.${room.id}`)
         scroller.scrollTop = top === null ? scroller.scrollHeight : Number(top) || 0
@@ -151,6 +161,8 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
         if (virtual) virtualizer.scrollToIndex(index, { align: 'center' })
         else document.getElementById('room-message-' + pendingJump)?.scrollIntoView({ block: 'center' })
         if (restorePending.current && restoreTimelinePosition(scroller, restorePending.current)) restorePending.current = null
+        // A chat that fits on one screen never leaves the bottom; don't show latest/unread pills for it.
+        if (scroller.scrollHeight <= scroller.clientHeight + 1) { atBottom.current = true; setAwayFromBottom(false) }
         setPendingJump(undefined)
       }
     } else if (prepend.current && prepend.current.firstId !== messages[0]?.id) {
@@ -175,8 +187,8 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
     thread: (message: RoomMessage) => actions.current.onReplyThread?.(message),
     viewReply: (id: string) => actions.current.jump(id)
   }), [])
-  const renderMessage = (message: RoomMessage, continuation: boolean) => message.presentationKind === 'choice' && renderChoice
-    ? renderChoice(message) : <StableMessageRow room={room} message={message} continuation={continuation}
+  const renderMessage = (message: RoomMessage, continuation: boolean, turn?: RoomTurnPosition) => message.presentationKind === 'choice' && renderChoice
+    ? renderChoice(message) : <StableMessageRow room={room} message={message} continuation={continuation} turn={turn}
       member={room.members.find((member) => member.id === message.authorMemberId)} task={tasks.find((task) => task.id === message.taskId)}
       referencedMessage={message.replyToMessageId ? messageById.get(message.replyToMessageId) : undefined}
       onOpenContent={onOpenContent} onHandoff={onHandoff} onRun={onRun ? stableActions.run : undefined}
@@ -206,14 +218,17 @@ export function RoomTimeline({ room, messages, tasks, cursor, moreBusy, loadEarl
           paddingBottom: Math.max(0, totalSize - (rendered.at(-1)?.end ?? 0)) } : undefined}>
           {rendered.map((row) => {
             const message = rows[row.index], layout = roomMessageLayout(rows[row.index - 1], message)
+            // A private turn keeps one header for all its messages and starts a new one for the next run.
+            const turn = turns?.get(message.id)
+            const continuation = turn ? !turn.first && !layout.newDay : layout.continuation
             return <div key={row.key} data-index={row.index} data-timeline-id={message.id}
               ref={virtual ? virtualizer.measureElement : undefined}
-              className={`rooms-timeline-row${selectedId === message.id ? ' is-message-target' : ''}`}>
+              className={`rooms-timeline-row${flashId === message.id ? ' is-message-target' : ''}`}>
               {layout.newDay ? <div className="rooms-timeline-day" role="separator">
                 {new Date(message.createdAt).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })}</div> : null}
               {row.index === unreadIndex ? <div role="separator" className="rooms-unread-boundary">
                 {t('roomsUnreadBoundary', { defaultValue: 'Unread messages' })}</div> : null}
-              {renderMessage(message, layout.continuation)}
+              {renderMessage(message, continuation, turn)}
             </div>
           })}
         </div>{afterMessages}</div>
@@ -234,5 +249,6 @@ const StableMessageRow = memo(function StableMessageRow(props: Parameters<typeof
   return <RoomMessageRow {...props} />
 }, (a, b) => a.message === b.message && a.room === b.room && a.member === b.member && a.task === b.task &&
   a.referencedMessage === b.referencedMessage && a.continuation === b.continuation && a.onPin === b.onPin && a.onTask === b.onTask &&
+  a.turn?.runId === b.turn?.runId && a.turn?.first === b.turn?.first && a.turn?.last === b.turn?.last && a.turn?.since === b.turn?.since &&
   a.onMember === b.onMember && a.onOpenContent === b.onOpenContent && a.onHandoff === b.onHandoff &&
   a.onReply === b.onReply && a.onThread === b.onThread && a.onRun === b.onRun && a.onViewReply === b.onViewReply)

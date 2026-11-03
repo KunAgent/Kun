@@ -5,7 +5,7 @@ import type { ManagerRuntime, ManagerRuntimeDeps, ManagerToolContext } from './m
 import type { WorkerCreateResult } from './manager-runtime.js'
 
 /**
- * GUI-originated worker create (11 §4.4 'new-worker' review target): the
+ * GUI-originated worker create: the
  * manager thread is the task workspace's owner; no caller turn exists, so
  * authority projects from the thread alone and escalation declines closed.
  */

@@ -1,0 +1,505 @@
+/*
+ * Interrupt card: ask-user and approval requests take the composer shell's
+ * place with the same width, radius, border and surface. Tokens
+ * (--ds-composer-option-selected, --ds-composer-chip-shadow) live in
+ * ../composer-tray/composer-tray.css, which the primitives import too.
+ */
+
+/*
+ * Radius of the main composer shell the card replaces. Mirrors
+ * `.ds-chat-composer` (24px in base-shell/window-navigation-logo.css, 20px in
+ * the `max-height: 820px` block of base-shell/session-sidebar-shell.css); keep
+ * them in step. The compact shell uses --ds-radius-card, like the compact card.
+ */
+:root {
+  --ds-composer-shell-radius: 24px;
+}
+
+@media (max-height: 820px) {
+  :root {
+    --ds-composer-shell-radius: 20px;
+  }
+}
+
+/*
+ * Flex column capped at 70dvh: header, question and footer keep their size
+ * while InterruptCardBody (min-height 0) scrolls, so long previews never push
+ * the options or the footer out of the window.
+ */
+.ds-interrupt-card {
+  position: relative;
+  display: flex;
+  max-height: 70dvh;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-composer-shell-radius, 24px);
+  background: var(--ds-surface-elevated, var(--ds-surface-card));
+  box-shadow:
+    0 1px 2px color-mix(in srgb, var(--ds-text) 4%, transparent),
+    0 10px 28px -8px color-mix(in srgb, var(--ds-text) 12%, transparent);
+  color: var(--ds-text);
+  outline: none;
+  animation: ds-interrupt-card-in 220ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+[data-theme='dark'] .ds-interrupt-card {
+  box-shadow: 0 10px 28px -8px color-mix(in srgb, #000 55%, transparent);
+}
+
+.ds-interrupt-card[data-compact='true'] {
+  border-radius: var(--ds-radius-card, 18px);
+}
+
+.ds-interrupt-card > :not(.ds-interrupt-card-body) {
+  flex-shrink: 0;
+}
+
+.ds-interrupt-card-body {
+  display: flex;
+  min-height: 0;
+  flex: 0 1 auto;
+  flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@keyframes ds-interrupt-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ds-interrupt-card-header {
+  display: flex;
+  min-width: 0;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 0 16px;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-card-header {
+  min-height: 26px;
+  gap: 6px;
+  padding: 10px 10px 0 14px;
+}
+
+.ds-interrupt-card-header-lead {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.ds-interrupt-card-header-trail {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.ds-interrupt-badge {
+  display: inline-flex;
+  height: 22px;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border-radius: 7px;
+  box-shadow: inset 0 0 0 1px var(--ds-border);
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ds-interrupt-pager {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--ds-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ds-interrupt-pager-position {
+  min-width: 40px;
+  text-align: center;
+}
+
+.ds-interrupt-icon-button {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ds-text-muted);
+  cursor: pointer;
+}
+
+.ds-interrupt-icon-button:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.ds-interrupt-icon-button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.ds-interrupt-countdown {
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  border-radius: 7px;
+  background: var(--ds-warning-soft);
+  color: var(--ds-status-warning);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ds-interrupt-question {
+  margin: 8px 16px 4px;
+  color: var(--ds-text);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 23px;
+  overflow-wrap: anywhere;
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-question {
+  margin: 6px 14px 4px;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+.ds-interrupt-note {
+  margin: 0 16px 10px;
+  color: var(--ds-text-muted);
+  font-size: 13px;
+  line-height: 20px;
+  overflow-wrap: anywhere;
+}
+
+.ds-interrupt-note[data-tone='faint'] {
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-note {
+  margin: 0 14px 8px;
+}
+
+.ds-interrupt-preview {
+  margin: 0 16px 10px;
+  overflow: hidden;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 12px;
+  background: var(--ds-surface-subtle);
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-preview {
+  margin: 0 14px 8px;
+}
+
+.ds-interrupt-preview-header {
+  display: flex;
+  min-width: 0;
+  height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--ds-border-muted);
+  color: var(--ds-text-muted);
+  font-size: 12px;
+}
+
+.ds-interrupt-preview-status {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--ds-text-faint);
+}
+
+/* Options */
+.ds-interrupt-options {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 8px;
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-options {
+  padding: 0 6px;
+}
+
+.ds-interrupt-listbox {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  outline: none;
+}
+
+.ds-interrupt-option {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--ds-text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 21px;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease-out;
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-option {
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.ds-interrupt-option:hover,
+.ds-interrupt-option[data-active='true'] {
+  background: var(--ds-surface-hover);
+}
+
+.ds-interrupt-option[data-selected='true']:not([data-multi='true']) {
+  background: var(--ds-composer-option-selected);
+}
+
+.ds-interrupt-option[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ds-interrupt-listbox:focus-visible .ds-interrupt-option[data-active='true'] {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+.ds-interrupt-option-number {
+  width: 18px;
+  flex-shrink: 0;
+  color: var(--ds-text-faint);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.ds-interrupt-option[data-selected='true'] .ds-interrupt-option-number {
+  color: var(--ds-text);
+}
+
+.ds-interrupt-option-text {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.ds-interrupt-option-label {
+  font-weight: 500;
+}
+
+.ds-interrupt-option-description {
+  margin-left: 8px;
+  color: var(--ds-text-muted);
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-option-description {
+  display: block;
+  margin-left: 0;
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.ds-interrupt-recommended {
+  display: inline-flex;
+  height: 18px;
+  align-items: center;
+  margin-left: 8px;
+  padding: 0 6px;
+  border-radius: 6px;
+  background: var(--ds-accent-soft);
+  color: var(--ds-accent);
+  font-size: 11px;
+  font-weight: 600;
+  vertical-align: 1px;
+}
+
+.ds-interrupt-check {
+  display: flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2.5px;
+  border: 1.5px solid var(--ds-border);
+  border-radius: 4px;
+  background: var(--ds-surface-card);
+  color: var(--ds-control-foreground);
+}
+
+.ds-interrupt-check[data-checked='true'] {
+  border: 0;
+  background: var(--ds-control);
+}
+
+.ds-interrupt-check[data-dashed='true'] {
+  border-style: dashed;
+}
+
+.ds-interrupt-freetext {
+  cursor: text;
+}
+
+.ds-interrupt-freetext-input {
+  min-width: 0;
+  flex: 1 1 auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ds-text);
+  font: inherit;
+  line-height: inherit;
+  resize: none;
+  outline: none;
+}
+
+.ds-interrupt-freetext-input::placeholder {
+  color: var(--ds-text-faint);
+}
+
+/* Footer */
+.ds-interrupt-footer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 10px 10px 10px 16px;
+  border-top: 1px solid var(--ds-border-muted);
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-footer {
+  margin-top: 4px;
+  padding: 8px 8px 8px 14px;
+}
+
+.ds-interrupt-hint {
+  display: inline-flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--ds-text-faint);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.ds-interrupt-hint-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ds-interrupt-button {
+  display: inline-flex;
+  height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ds-text-muted);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+.ds-interrupt-card[data-compact='true'] .ds-interrupt-button {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 8px;
+}
+
+.ds-interrupt-button[data-variant='ghost']:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+
+.ds-interrupt-button[data-variant='outline'] {
+  background: var(--ds-surface-card);
+  box-shadow: inset 0 0 0 1px var(--ds-border);
+  color: var(--ds-text);
+}
+
+.ds-interrupt-button[data-variant='outline']:hover:not(:disabled) {
+  background: var(--ds-surface-hover);
+}
+
+.ds-interrupt-button[data-variant='primary'] {
+  background: var(--ds-control);
+  color: var(--ds-control-foreground);
+  font-weight: 600;
+}
+
+.ds-interrupt-button[data-variant='primary']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-control) 88%, var(--ds-surface-card));
+}
+
+.ds-interrupt-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.ds-interrupt-button:focus-visible,
+.ds-interrupt-icon-button:focus-visible,
+.ds-interrupt-countdown:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 45%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-interrupt-card {
+    animation: none;
+  }
+
+  .ds-interrupt-option,
+  .ds-interrupt-button {
+    transition: none;
+  }
+}

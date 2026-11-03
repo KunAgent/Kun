@@ -1,7 +1,7 @@
-import { harnessExecutableIdentity } from '../../harness/harness-executable-identity.js'
+import { acpLaunchIdentity, acpPermissionSelection } from '../../harness/acp-launch-args.js'
 import { sessionInstructions } from '../../session/session-instructions.js'
 /**
- * ACP delegated runtime (docs/ade/03 §6). `runTurn` owns a full Kun turn
+ * ACP delegated runtime. `runTurn` owns a full Kun turn
  * against an external ACP agent: pool-acquire a connection by
  * (harnessId, credentialIdentity), ensure/resume the ACP session, forward the
  * prompt (deterministic handoff brief first on fresh sessions), mediate the
@@ -10,22 +10,19 @@ import { sessionInstructions } from '../../session/session-instructions.js'
  * by the `session/prompt` result — worker self-reports never end a turn.
  */
 import type { HarnessRoute } from '../../contracts/harness.js'
-import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
+import { resolveSessionUserInput } from '../../session/session-user-input.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import { makeDelegatedAwaitApproval } from '../../ade/delegated-approval.js'
 import { resolveTurnClientSurface } from '../../loop/turn-context-resolver.js'
 import type { TurnRunOutcome } from '../../loop/turn-execution-types.js'
 import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
-import {
-  recordHandoffInjected,
-  resolveTurnHandoff
-} from '../../handoff/turn-handoff.js'
+import { resolveTurnHandoff } from '../../handoff/turn-handoff.js'
+import { recordAcpHandoff } from './acp-continuation.js'
 import type {
   DelegatedRuntimeCapabilities,
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
-import type { DelegatedSessionCoordinator } from '../delegated-session-binding.js'
-import { resolveSessionTurnContext } from '../../session/session-turn-context.js'
+import { resolveSessionTurnContext, type SessionTurnContext } from '../../session/session-turn-context.js'
 
 import {
   buildHistoryTranscript,
@@ -40,8 +37,14 @@ import {
 } from './acp-session-manager.js'
 import { AcpEventMapper } from './acp-event-mapper.js'
 import { nativeAgentsFromAcpModes } from '../../contracts/harness-native-agents.js'
+import { acpSessionModeSelector } from './acp-session-modes.js'
 import { AcpDraftEmitter } from './acp-turn-emitter.js'
-import { buildAcpPromptBlocks, attachmentFallbackPaths } from './acp-prompt.js'
+import { maybeExternalSubagentRouting } from '../external-subagent-routing.js'
+import { acpSubagentSource } from './acp-subagent-source.js'
+import { openCodeDatabasePath, startOpenCodeChildSessions } from './opencode-child-sessions.js'
+import { devinSessionDatabasePath } from './devin-session-usage.js'
+import { buildAcpPromptBlocks } from './acp-prompt.js'
+import { resolveAcpDocuments } from './acp-attachment-documents.js'
 import type { AcpSpawnFn } from './acp-process.js'
 import {
   acpLegacyCapabilities,
@@ -49,6 +52,7 @@ import {
   finishAcpTrace,
   kunToolsDescriptorOf,
   mapAcpFailure,
+  missingAcpCoordinator,
   resolveAcpCredentialContext,
   startAcpTrace,
   type AcpCredentialEnvInput,
@@ -80,6 +84,12 @@ export type { AcpCredentialEnvInput }
 
 export type { AcpRuntimeDeps } from './acp-runtime-deps.js'
 import type { AcpRuntimeDeps } from './acp-runtime-deps.js'
+import { acpSessionSettings } from './acp-session-settings.js'
+import { emitTolerantSessionState } from './acp-session-state-bounds.js'
+import { harnessTurnTiming } from '../harness-turn-timing.js'
+import { acpPromptResultUsage, beginAcpSessionUsage, collectAcpSessionUsage } from './acp-session-usage.js'
+import { acpLiveSteeringEnabled, openAcpGuidance, startAcpTurnCompanions, type AcpTurnCompanions } from './acp-turn-companions.js'
+import type { AcpLiveSteering } from './acp-live-steering.js'
 
 export class AcpRuntime implements DelegatedTurnRuntime {
   private readonly pool: AcpConnectionPool
@@ -92,7 +102,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     this.sessions =
       deps.sessionManager ??
       new AcpSessionManager({
-        coordinator: deps.sessionCoordinator ?? missingCoordinator(),
+        coordinator: deps.sessionCoordinator ?? missingAcpCoordinator(),
         debug: deps.debug
       })
   }
@@ -111,7 +121,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
   }
 
   capabilitiesV2() {
-    // kunTools is honest (P3-09): only claim it when this runtime can hand
+    // kunTools is honest: only claim it when this runtime can hand
     // the agent an MCP descriptor — i.e. it is serve-hosted.
     return acpStaticCapabilities(this.deps.kunToolsMcp?.canDeliver() === true)
   }
@@ -132,7 +142,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     turnId: string,
     signal: AbortSignal
   ): Promise<TurnRunOutcome> {
-    // P6-02: the protocol-agnostic front half (thread/turn/items, goal
+    // the protocol-agnostic front half (thread/turn/items, goal
     // context, history, model route, credentials, permission mode) is shared
     // with the native session transports via kun/src/session/.
     const resolved = await resolveSessionTurnContext(this.deps, {
@@ -146,6 +156,26 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       resolveCredentialContext: resolveAcpCredentialContext
     })
     if (!resolved.ok) return resolved.outcome
+    // The loop sealed steering before handing the turn over. Reopen it now so
+    // guidance sent while the Agent starts up waits for the run.
+    const guidance = openAcpGuidance(this.deps.turns, {
+      harnessId: resolved.ctx.definition.id, threadId, turnId,
+      debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
+    })
+    try {
+      return await this.runResolvedTurn(threadId, turnId, signal, resolved.ctx, guidance)
+    } finally {
+      await guidance?.finish({ followUp: false }).catch(() => undefined)
+    }
+  }
+
+  private async runResolvedTurn(
+    threadId: string,
+    turnId: string,
+    signal: AbortSignal,
+    ctx: SessionTurnContext,
+    guidance: AcpLiveSteering | undefined
+  ): Promise<TurnRunOutcome> {
     const {
       thread,
       turn,
@@ -162,24 +192,25 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       sandboxMode,
       approvalReviewer,
       credentialIdentity,
+      credentialMode,
       credentialEnv,
       secretEnv,
       poolKey: basePoolKey,
       limits,
       intent,
       redactedRequestValues
-    } = resolved.ctx
+    } = ctx
     const command = this.deps.readiness?.commandForTurn(threadId, turnId) ?? this.deps.binaryPath?.(definition.id) ?? definition.launch?.command
     // Single-session ACP servers can continue one thread, but must never host
     // another thread's active session on the same connection.
     const scopedPoolKey = definition.poolScope === 'thread'
       ? `${basePoolKey}:thread:${JSON.stringify([threadId, workspace])}` : basePoolKey
-    const poolKey = `${scopedPoolKey}:executable:${harnessExecutableIdentity(command)}`
+    const poolKey = `${scopedPoolKey}:executable:${acpLaunchIdentity(command, definition, permissionModeId)}`
     await this.pool.retireIdlePrefix?.(`${scopedPoolKey}:executable:`, poolKey)
-    let items = resolved.ctx.items
-
+    let items = ctx.items
     const lease = await acquireAcpConnection(this.deps, this.pool, this.host, this.sessions, {
       poolKey,
+      permissionModeId,
       definition,
       command: this.deps.readiness?.commandForTurn(threadId, turnId),
       validateLaunch: () => this.deps.readiness?.validateTurn(threadId, turnId, signal) ?? Promise.resolve(),
@@ -189,7 +220,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       signal
     }).catch(async (error) => {
       // A user abort is not a harness defect; everything else observed at
-      // launch outweighs any earlier probe verdict (P4-03).
+      // launch outweighs any earlier probe verdict.
       if (!signal.aborted && !(error instanceof AcpError && error.code === 'request_aborted')) {
         this.deps.onLaunchFailure?.(
           definition.id,
@@ -202,22 +233,29 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     })
     if (!lease) return signal.aborted ? 'aborted' : 'failed'
     const conn = lease.connection
+    const subagentSource = acpSubagentSource(definition.id)
+    const childSessionDb = openCodeDatabasePath(definition.id, { ...process.env, ...definition.launch?.env })
+    const devinSessionDb = devinSessionDatabasePath(definition.id, { ...process.env, ...definition.launch?.env })
     const mapper = new AcpEventMapper({
+      ...(subagentSource ? { subagents: { source: subagentSource, mirrorSteps: Boolean(childSessionDb) } } : {}),
       threadId,
       turnId,
       harnessId: definition.id,
+      ...(definition.acpPermission?.configOptionId ? { permissionOptionId: definition.acpPermission.configOptionId } : {}),
       model: model ?? 'default',
       nextId: (prefix) => this.deps.ids.next(prefix),
       nowIso: this.deps.nowIso,
       debug: this.deps.debug
     })
     const emitter = new AcpDraftEmitter(
-      { turns: this.deps.turns, events: this.deps.events },
+      { turns: this.deps.turns, events: this.deps.events, subagents: maybeExternalSubagentRouting(this.deps) },
       threadId,
       turnId,
-      // credentialEnv is non-empty only for kun-gateway routes (native login is {}).
-      { gatewayMetered: Object.keys(credentialEnv).length > 0 }
+      // Only a kun-gateway route is metered call by call by the loopback gateway; a
+      // native login (which may carry its own API key in the environment) reports its own usage.
+      { gatewayMetered: credentialMode === 'kun-gateway' }
     )
+    const timing = harnessTurnTiming(threadId, turnId)
     let emitQueue: Promise<void> = Promise.resolve()
     let acceptEvidence = true
     let streamError: AcpError | undefined
@@ -239,7 +277,10 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         failStream(error)
         return
       }
-      emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+      timing.observe(drafts)
+      // A mirror of Agent controls or plan never fails the turn; everything else does.
+      emitQueue = emitQueue.then(() => emitTolerantSessionState(drafts, (draft) => emitter.emit(draft), (error, kind) =>
+        this.deps.debug?.({ direction: 'note', summary: `${kind} dropped: ${String(error).slice(0, 300)}` }))).catch(failStream)
     }
 
     let kunToolsServers: import('./acp-schema.js').McpServer[] = []
@@ -267,11 +308,13 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           workspacePath: workspace,
           harnessId: definition.id,
           model,
-          permissionModeId,
-          ...(resolved.ctx.nativeAgentId ? { nativeAgentId: resolved.ctx.nativeAgentId } : {}),
+          ...acpPermissionSelection(definition, permissionModeId, this.deps.harnessDefaults?.(definition.id)?.permissionMode),
+          ...(ctx.nativeAgentId ? { nativeAgentId: ctx.nativeAgentId } : {}),
           acpPermission: definition.acpPermission,
           reasoningEffort: turn.reasoningEffort,
+          ...(turn.harnessSettings ? { harnessSettings: turn.harnessSettings } : {}),
           sessionMcpServers,
+          recordContinuationEvent: (event) => this.deps.events.record(event),
           items,
           validateLaunch: async () => {
             await this.deps.readiness?.validateTurn(threadId, turnId, signal)
@@ -291,7 +334,13 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       await this.failFromAcpError(threadId, turnId, error, true, definition.id)
       return 'failed'
     }
-    // Protocol errors on this session's traffic fail the turn (§9).
+    // A subagent's own steps live in the Agent's session store, not on ACP.
+    const childSessions = childSessionDb && mapper.subagents ? startOpenCodeChildSessions({
+      dbPath: childSessionDb, acpSessionId: session.sessionId, tracker: mapper.subagents,
+      emit: (drafts) => { emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream) },
+      debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
+    }) : undefined
+    // Protocol errors on this session's traffic fail the turn.
     const unsubscribeSessionErrors = conn.subscribeSession(session.sessionId, {
       onUpdate: () => undefined,
       onError: failStream
@@ -310,10 +359,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           harnessName: definition.displayName
         })
       : undefined
-    await recordHandoffInjected(
-      (event) => this.deps.events.record(event),
+    await recordAcpHandoff(
+      this.deps.events,
       { threadId, turnId, harnessId: definition.id },
-      turnHandoff
+      turnHandoff,
+      session
     )
     await recordAcpDelegatedRuntime(this.deps.events, {
       threadId,
@@ -322,6 +372,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       preparation,
       initResult: conn.initResult,
       declaredCapabilities: definition.capabilities,
+      liveSteering: acpLiveSteeringEnabled(definition.id),
       session: {
         configOptions: session.configOptions,
         modes: session.modes,
@@ -330,15 +381,26 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       },
       sandbox: definition.capabilities.facts?.sandbox ?? 'native'
     })
-    // Workspace-local Agents only appear in a real session; refresh the picker.
-    const nativeAgents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(session.modes) : []
-    if (nativeAgents.length) {
-      await emitter.emitAll([{ kind: 'harness_session_state', threadId, turnId, harnessId: definition.id, agents: nativeAgents,
-        ...(session.modes?.currentModeId ? { currentModeId: session.modes.currentModeId } : {}) }]).catch(() => undefined)
+    // Workspace-local Agents and generic settings only appear in a real
+    // session; refresh the composer controls and native model catalog.
+    if (credentialMode === 'native-login' && (!actingModelRoute.providerId || actingModelRoute.providerId === 'default')) {
+      try { this.deps.onNativeSession?.(definition, session) } catch { /* The catalog is advisory. */ }
+    }
+    const modeSelector = acpSessionModeSelector(session)
+    const nativeAgents = definition.nativeAgents === 'session-modes' ? nativeAgentsFromAcpModes(modeSelector) : []
+    const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
+    if (nativeAgents.length || settings.length || (credentialMode === 'native-login' && (!actingModelRoute.providerId || actingModelRoute.providerId === 'default'))) {
+      await emitter.emitAll([{ kind: 'harness_session_state', threadId, turnId, harnessId: definition.id,
+        ...(nativeAgents.length ? { agents: nativeAgents } : {}), ...(settings.length ? { settings } : {}),
+        ...(nativeAgents.length && modeSelector?.currentModeId ? { currentModeId: modeSelector.currentModeId } : {}) }]).catch(() => undefined)
     }
 
     const imageCapable =
       conn.initResult?.agentCapabilities?.promptCapabilities?.image === true
+    const userInput = await resolveSessionUserInput({
+      userItem, pending: preparation.pendingUserMessages,
+      attachmentStore: this.deps.attachmentStore, threadId, workspace, imageCapable
+    })
     const prompt = buildAcpPromptBlocks({
       handoffBrief: turnHandoff?.brief.text,
       historyTranscript:
@@ -352,17 +414,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       instructionBlocks: sessionInstructions(preparation, [
         ...instructionBlocks, buildClientSurfaceInstruction(resolveTurnClientSurface(turn))
       ], false, turnDynamicContext.instructions),
-      userText: userMessageTextWithComposerContexts(userItem),
-      images: await resolveAcpImages(
-        this.deps.attachmentStore,
-        threadId,
-        workspace,
-        userItem.attachmentIds ?? [],
-        imageCapable
-      ),
-      attachmentPaths: attachmentFallbackPaths(userItem),
+      ...userInput,
       imageCapable,
-      fileReferences: userItem.fileReferences ?? [],
       workspacePath: workspace
     })
 
@@ -377,17 +430,12 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         sandboxMode,
         approvalReviewer,
         actingModelRoute,
+        reviewSource: { harnessId: definition.id, credentialMode },
         intent,
         signal
       }
     )
-    const approve = async (
-      approval: ApprovalRequest
-    ): Promise<'allow' | 'deny'> => {
-      const resolution = await approveCore(approval)
-      if (resolution === 'allow' || resolution === 'deny') return resolution
-      return resolution.decision === 'allow' ? 'allow' : 'deny'
-    }
+    const approve = (approval: ApprovalRequest) => approveCore(approval)
     const context: AcpClientContext = {
       sessionId: session.sessionId,
       threadId,
@@ -439,6 +487,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     })
 
     let promptSettled = false
+    let companions: AcpTurnCompanions | undefined
     let cancelTimer: ReturnType<typeof setTimeout> | undefined
     const onAbort = (): void => {
       this.host.cancelPendingPermissions(session.sessionId)
@@ -457,14 +506,54 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       await this.deps.readiness?.validateTurn(threadId, turnId, signal)
       signal.throwIfAborted()
       if (streamError) throw streamError
-      const raw = await Promise.race([conn.rpc.request(
-        ACP_AGENT_METHODS.sessionPrompt,
-        { sessionId: session.sessionId, prompt },
-        { timeoutMs: limits.maxWallTimeMs }
-      ), streamFailure])
+      const sessionUsage = await beginAcpSessionUsage(definition.id, {
+        sessionId: session.sessionId, workspace, env: { ...process.env, ...definition.launch?.env }
+      })
+      const sendPrompt = (blocks: typeof prompt) => conn.rpc.request(
+        ACP_AGENT_METHODS.sessionPrompt, { sessionId: session.sessionId, prompt: blocks }, { timeoutMs: limits.maxWallTimeMs })
+      companions = startAcpTurnCompanions({
+        harnessId: definition.id, threadId, turnId, model: model ?? 'default', acpSessionId: session.sessionId,
+        ...(childSessionDb ? { sessionDbPath: childSessionDb } : {}),
+        ...(devinSessionDb ? { devinSessionDbPath: devinSessionDb } : {}),
+        gatewayMetered: credentialMode === 'kun-gateway', ...(guidance ? { guidance } : {}),
+        emitLive: (drafts) => {
+          mapper.observedFacts.sawUsageTokens = true
+          timing.observe(drafts)
+          emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+        },
+        sendGuidance: async (entries) => {
+          const guidanceDocuments = await resolveAcpDocuments(
+            this.deps.attachmentStore, threadId, workspace,
+            entries.flatMap((entry) => entry.attachmentIds ?? [])
+          )
+          return sendPrompt(buildAcpPromptBlocks({
+            instructionBlocks: [], userText: entries.map((entry) => entry.text).join('\n\n'),
+            images: await resolveAcpImages(this.deps.attachmentStore, threadId, workspace,
+              entries.flatMap((entry) => entry.attachmentIds ?? []), imageCapable),
+            attachmentPaths: [], imageCapable, fileReferences: [], workspacePath: workspace,
+            documents: guidanceDocuments.documents, unreadableDocuments: guidanceDocuments.unreadable
+          }))
+        },
+        beforeFollowUp: () => {
+          // The previous prompt settled; its answer gets its own item.
+          const drafts = mapper.closeSegment()
+          timing.requestStarted()
+          emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
+          return emitQueue
+        },
+        canFollowUp: () => !signal.aborted && !streamError,
+        debug: (summary) => this.deps.debug?.({ direction: 'note', summary })
+      })
+      timing.requestStarted()
+      const raw = await Promise.race([sendPrompt(prompt), streamFailure])
+      const stopReason = AcpPromptResultSchema.safeParse(raw).data?.stopReason
+      await Promise.race([companions.afterPrompt({
+        followUp: !signal.aborted && stopReason !== 'cancelled' && stopReason !== 'refusal'
+      }), streamFailure])
       promptSettled = true
       this.host.terminals.flushForTurn(turnId)
       acceptEvidence = false
+      await childSessions?.stop()
       await emitQueue
       const parsed = AcpPromptResultSchema.safeParse(raw)
       if (!parsed.success) {
@@ -473,7 +562,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           'session/prompt response is missing required fields'
         )
       }
-      await emitter.emitAll(mapper.applyPromptResult(parsed.data.usage))
+      const resultDrafts = companions.settleUsage(acpPromptResultUsage(definition.id, parsed.data),
+        (usage) => mapper.applyPromptResult(usage))
+      timing.observe(resultDrafts)
+      await emitter.emitAll(resultDrafts)
+      await emitter.emitAll(await collectAcpSessionUsage(sessionUsage, mapper.observedFacts, { threadId, turnId, harnessId: definition.id, ...(model ? { model } : {}) }))
       await emitter.emitAll(mapper.flush())
       if (streamError) throw streamError
       await commitAcpSession(
@@ -519,7 +612,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         conn.rpc.notify(ACP_AGENT_METHODS.sessionCancel, { sessionId: session.sessionId })
         this.pool.markUnhealthy(poolKey)
       }
+      await childSessions?.stop().catch(() => undefined)
       await emitQueue.catch(() => undefined)
+      if (companions) await emitter.emitAll(await companions.abandon()).catch(() => undefined)
       await emitter.emitAll(mapper.flush()).catch(() => undefined)
       await finishAcpTrace(trace, { kind: 'error', error })
       trace = undefined
@@ -543,6 +638,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       return 'failed'
     } finally {
       acceptEvidence = false
+      void childSessions?.stop().catch(() => undefined)
+      companions?.stop()
       if (cancelTimer) clearTimeout(cancelTimer)
       signal.removeEventListener('abort', onAbort)
       unsubscribeSessionErrors()
@@ -583,8 +680,4 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       severity: 'error'
     })
   }
-}
-
-function missingCoordinator(): DelegatedSessionCoordinator {
-  throw new Error('AcpRuntime requires sessionCoordinator')
 }

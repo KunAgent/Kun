@@ -1,0 +1,27 @@
+{
+  "composerTrayTodo": {
+    "title": "รายการงาน",
+    "segmentAria": "รายการงาน: {{step}} · ขั้นที่ {{current}} จาก {{total}}",
+    "fromPlan": "จาก",
+    "outlineLabel": "โครงร่างแผน",
+    "outlineSteps_one": "{{count}} ขั้น",
+    "outlineSteps_other": "{{count}} ขั้น",
+    "outlineNote": "การประสานงานแบบ Graph กำลังทำงานอยู่ นี่คือโครงร่างแผน ไม่ใช่ความคืบหน้าการทำงานแบบสด",
+    "inProgress": "กำลังทำ",
+    "inProgressFor": "กำลังทำ · {{duration}}",
+    "upNext": "ถัดไป",
+    "foldDone_one": "เสร็จแล้ว {{count}}",
+    "foldDone_other": "เสร็จแล้ว {{count}}",
+    "foldEarlier_one": "ก่อนหน้า {{count}}",
+    "foldEarlier_other": "ก่อนหน้า {{count}}",
+    "foldRemaining_one": "เหลืออีก {{count}}",
+    "foldRemaining_other": "เหลืออีก {{count}}",
+    "foldLater_one": "อีก {{count}}",
+    "foldLater_other": "อีก {{count}}",
+    "blockedCount_one": "ติดขัด {{count}}",
+    "blockedCount_other": "ติดขัด {{count}}",
+    "failedCount_one": "ล้มเหลว {{count}}",
+    "failedCount_other": "ล้มเหลว {{count}}",
+    "ownerTitle": "ผู้รับผิดชอบ: {{name}}"
+  }
+}

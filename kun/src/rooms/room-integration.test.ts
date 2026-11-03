@@ -11,6 +11,9 @@ import type { ModelClient, ModelStreamChunk } from '../ports/model-client.js'
 import { RoomMemberSchema } from '../contracts/rooms.js'
 import type { RoomStoreCommit } from './room-store.js'
 
+// These tests run real git subprocesses; the default 5s is too tight when the whole suite runs in parallel.
+vi.setConfig({ testTimeout: 30_000 })
+
 const fixtures: Awaited<ReturnType<typeof productGitFixture>>[] = []
 afterEach(async () => { for (const f of fixtures.splice(0)) await f.close() })
 async function fixture(model?: ModelClient) { const f = await productGitFixture(model); fixtures.push(f); return f }

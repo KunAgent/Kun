@@ -1,3 +1,4 @@
+import { GitHubRequestedCards } from './github-tool-card'
 import type { ReactElement, RefObject } from 'react'
 import type { ToolBlock } from '../../agent/types'
 import type {
@@ -6,9 +7,12 @@ import type {
 } from './derive-turn-sections'
 import { MessageBubble } from './message-timeline-bubbles'
 import { WorkMetaRow } from './message-timeline-cards'
-import { ProcessSectionRow } from './message-timeline-process'
+import { VirtualProcessTimeline } from './VirtualProcessTimeline'
 import { TimelineRuntimeError } from './message-timeline-jump-preview'
 import type { OpenChildThreadHandler } from './SubagentCallCard'
+import { GmailRequestedCards } from './gmail-tool-card'
+import { AgentDispatchGroup } from './AgentDispatchCard'
+import { PptDeckCards } from './PptDeckCard'
 
 export type OrderedTurnTimelineProps = {
   entries: readonly TurnTimelineEntry[]
@@ -132,23 +136,22 @@ export function OrderedTurnTimeline({
               />
             ) : null}
             {showSections ? (
-              <div className="flex flex-col gap-1">
-                {sections.map((item) => (
-                  <ProcessSectionRow
-                    key={item.section.id}
-                    section={item.section}
-                    processing={isProcessing}
-                    reasoningDurationMs={reasoningDurationMs}
-                    singleReasoningSection={reasoningSectionCount === 1}
-                    workspaceRoot={workspaceRoot}
-                    viewportRef={viewportRef}
-                    onOpenChildThread={onOpenChildThread}
-                    onCancelToolCall={onCancelToolCall}
-                    allowThreadActions={allowThreadActions}
-                  />
-                ))}
-              </div>
+              <VirtualProcessTimeline
+                entries={sections}
+                processing={isProcessing}
+                reasoningDurationMs={reasoningDurationMs}
+                singleReasoningSection={reasoningSectionCount === 1}
+                workspaceRoot={workspaceRoot}
+                viewportRef={viewportRef}
+                onOpenChildThread={onOpenChildThread}
+                onCancelToolCall={onCancelToolCall}
+                allowThreadActions={allowThreadActions}
+              />
             ) : null}
+            {!isProcessing && !expanded ? <><GmailRequestedCards blocks={segment.blocks} /><GitHubRequestedCards blocks={segment.blocks} /></> : null}
+            {!isProcessing && !expanded
+              ? <AgentDispatchGroup blocks={segment.blocks} readOnly={!allowThreadActions} /> : null}
+            {!isProcessing ? <PptDeckCards blocks={segment.blocks} readOnly={!allowThreadActions} /> : null}
             {runtimeErrors.map((item) => (
               <TimelineRuntimeError
                 key={item.block.id}

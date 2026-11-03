@@ -31,6 +31,7 @@ type UseWriteWorkspaceLifecycleOptions = {
   saveStatus: WriteWorkspaceState['saveStatus']
   workspaceReady: boolean
   readOnly: boolean
+  selectionEditActive?: boolean
   reviewActive: boolean
   pendingAgentReview: PendingAgentReview | null
   reviewSurfaceKey: string
@@ -56,6 +57,7 @@ export function useWriteWorkspaceLifecycle({
   saveStatus,
   workspaceReady,
   readOnly,
+  selectionEditActive = false,
   reviewActive,
   pendingAgentReview,
   reviewSurfaceKey,
@@ -73,7 +75,7 @@ export function useWriteWorkspaceLifecycle({
   autoSaveEnabledRef.current = autoSaveEnabled
 
   useEffect(() => {
-    if (!pendingAgentReview) return
+    if (!pendingAgentReview || selectionEditActive) return
     const current = useWriteWorkspaceStore.getState()
     if (!pendingWriteAgentReviewMatches(current, pendingAgentReview)) {
       clearPendingAgentReview()
@@ -115,6 +117,7 @@ export function useWriteWorkspaceLifecycle({
     clearPendingAgentReview,
     documentHandleRef,
     pendingAgentReview,
+    selectionEditActive,
     reviewSurfaceKey,
     setFileContent,
     setFileError,

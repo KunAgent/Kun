@@ -1,5 +1,5 @@
 /**
- * Renderer-facing mirror of the /v1/teams surface (docs/ade/09 §9).
+ * Renderer-facing mirror of the /v1/teams surface.
  * The wire shape is owned by kun/src/contracts/ade.ts; keep names aligned.
  */
 import type { ReviewRevision } from './review-revision'
@@ -18,7 +18,7 @@ export type AdeTeamWorker = {
   permissionMode?: string
   lifecycle?: 'persistent' | 'ephemeral'
   taskWorkspaceId?: string
-  /** Ephemeral cross-reviewer inspecting this dispatch (10 §5). */
+  /** Ephemeral cross-reviewer inspecting this dispatch. */
   reviewOf?: string
   control: 'manager' | 'user'
   state: 'active' | 'released' | 'detached'
@@ -29,13 +29,13 @@ export type AdeTeamRecord = {
   managerThreadId: string
   status: 'active' | 'ended'
   workers: AdeTeamWorker[]
-  /** Token budget written at team creation (P3-15). */
+  /** Token budget written at team creation. */
   budget?: { softTokens?: number; hardTokens?: number }
   createdAt: string
   updatedAt: string
 }
 
-/** Summed worker-thread usage + budget verdicts (P3-15). */
+/** Summed worker-thread usage + budget verdicts. */
 export type AdeTeamUsage = {
   totalTokens: number
   perWorker: Array<{ workerId: string; label: string; totalTokens: number }>
@@ -69,7 +69,7 @@ export type AdeQualityVerdict = {
   revision?: ReviewRevision
 }
 
-/** POST /v1/teams/workers/:workerId/run-checks (docs/ade/10 §4.2). */
+/** POST /v1/teams/workers/:workerId/run-checks. */
 export type AdeRunWorkerChecksResult = {
   ok: boolean
   refusal?:
@@ -111,7 +111,7 @@ export type AdeQuestionRecord = {
   updatedAt: string
 }
 
-/** Same-task race record (docs/ade/10 §6). */
+/** Same-task race record. */
 export type AdeRaceContender = {
   dispatchId?: string
   workerId?: string
@@ -135,7 +135,7 @@ export type AdeRaceRecord = {
   updatedAt: string
 }
 
-/** One column in the compare view (docs/ade/11 §5). */
+/** One column in the compare view. */
 export type AdeRaceCompareContender = AdeRaceContender & {
   dispatchState?: AdeDispatchRecord['state']
   timedOut: boolean
@@ -168,6 +168,6 @@ export type AdeTeamOverview = {
   dispatches: AdeDispatchRecord[]
   questions: AdeQuestionRecord[]
   races?: AdeRaceRecord[]
-  /** Team usage rollup (P3-15); absent when usage tracking is unwired. */
+  /** Team usage rollup; absent when usage tracking is unwired. */
   usage?: AdeTeamUsage
 }

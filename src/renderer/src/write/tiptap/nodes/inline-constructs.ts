@@ -1,5 +1,5 @@
 /**
- * Inline atom nodes for Work constructs (implementation §7):
+ * Inline atom nodes for Work constructs:
  *
  * - `wikiLink`: `[[target#heading|alias]]` / `![[embed]]`, carries the
  *   verbatim `raw` so serialization never reconstructs the syntax.

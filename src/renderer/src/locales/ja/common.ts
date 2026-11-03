@@ -1,8 +1,12 @@
+import writeSelectionMenu from './common/write-selection-menu.json'
 import agentUpdates from './common/agent-updates.json'
 import shellWorkflow from './common/shell-workflow.json'
 import workflowConnect from './common/workflow-connect.json'
 import phoneComposer from './common/phone-composer.json'
+import pluginMarket from './common/plugin-market.json'
+import pluginsPage from './common/plugins-page.json'
 import composerFastMode from './common/composer-fast-mode.json'
+import composerPromptEnhance from './common/composer-prompt-enhance.json'
 import commandsSdd from './common/commands-sdd.json'
 import providerErrors from './common/provider-errors.json'
 import sddFrameworks from './common/sdd-frameworks.json'
@@ -17,16 +21,60 @@ import remoteAccess from './common/remote-access.json'
 
 import paper from './common/paper.json'
 import paperWorkspace from './common/paper-workspace.json'
+import paperSpace from './common/paper-space.json'
 import ade from './common/ade.json'
 import workLayout from './common/work-layout.json'
 import workSidebar from './common/work-sidebar.json'
+import workMainline from './common/work-mainline.json'
+import usagePanel from './common/usage-panel.json'
+import conversationExport from './common/conversation-export.json'
+import paperSearch from './common/paper-search.json'
+import wardrobePage from './common/wardrobe-page.json'
+import kunAccount from './common/kun-account.json'
+import wardrobeAccount from './common/wardrobe-account.json'
+import wardrobeShare from './common/wardrobe-share.json'
+import whatsNew from './common/whats-new.json'
+import wardrobeInvite from './common/wardrobe-invite.json'
+import guidedTours from './common/guided-tours.json'
+import messageQuote from './common/message-quote.json'
+import appSurfaces from './common/app-surfaces.json'
+import designAgent from './common/design-agent.json'
+import designCanvasChrome from './common/design-canvas-chrome.json'
+import artifactsLibrary from './common/artifacts-library.json'
+import artifactsChat from './common/artifacts-chat.json'
+import workspaceFiles from './common/workspace-files.json'
+import changesCommit from './common/changes-commit.json'
+import turnUndo from './common/turn-undo.json'
+import taskSuggestion from './common/task-suggestion.json'
+import assistantMailbox from './common/assistant-mailbox.json'
+import terminalDock from './common/terminal-dock.json'
+import pptDeck from './common/ppt-deck.json'
+import workersPanel from './common/workers-panel.json'
+import officeViewer from './common/office-viewer.json'
+import composerTray from './common/composer-tray.json'
+import composerTrayTodo from './common/composer-tray-todo.json'
+import composerTrayGraph from './common/composer-tray-graph.json'
+import composerTrayWorkers from './common/composer-tray-workers.json'
+import composerTrayShells from './common/composer-tray-shells.json'
+import composerTrayGoal from './common/composer-tray-goal.json'
+import composerQueue from './common/composer-queue.json'
+import composerAsk from './common/composer-ask.json'
+import composerApproval from './common/composer-approval.json'
+import composerRecords from './common/composer-records.json'
+import toast from './common/toast.json'
+import workTabMenu from './common/work-tab-menu.json'
 
 const common = {
+  ...writeSelectionMenu,
+  ...taskSuggestion,
   ...agentUpdates,
   ...shellWorkflow,
   ...workflowConnect,
   ...phoneComposer,
+  ...pluginMarket,
+  ...pluginsPage,
   ...composerFastMode,
+  ...composerPromptEnhance,
   ...commandsSdd,
   ...providerErrors,
   ...sddFrameworks,
@@ -40,9 +88,47 @@ const common = {
   ...remoteAccess,
   ...paper,
   ...paperWorkspace,
+  ...paperSpace,
   ...ade,
   ...workLayout,
   ...workSidebar,
+  ...workMainline,
+  ...usagePanel,
+  ...conversationExport,
+  ...paperSearch,
+  ...wardrobePage,
+  ...kunAccount,
+  ...wardrobeAccount,
+  ...wardrobeShare,
+  ...whatsNew,
+  ...wardrobeInvite,
+  ...guidedTours,
+  ...messageQuote,
+  ...appSurfaces,
+  ...designAgent,
+  ...designCanvasChrome,
+  ...artifactsLibrary,
+  ...artifactsChat,
+  ...workspaceFiles,
+  ...changesCommit,
+  ...turnUndo,
+  ...assistantMailbox,
+  ...terminalDock,
+  ...pptDeck,
+  ...workersPanel,
+  ...officeViewer,
+  ...composerTray,
+  ...composerTrayTodo,
+  ...composerTrayGraph,
+  ...composerTrayWorkers,
+  ...composerTrayShells,
+  ...composerTrayGoal,
+  ...composerQueue,
+  ...composerAsk,
+  ...composerApproval,
+  ...composerRecords,
+  ...toast,
+  ...workTabMenu
 }
 
 export default common

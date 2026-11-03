@@ -13,6 +13,7 @@ import { resolveChatWelcomeTitle, type ClawImChannelV1 } from '@shared/app-setti
 import { useChatWelcomeMessageSetting } from '../../lib/chat-welcome-message-settings'
 import { KunStateFigure } from './AnimatedWorkLogo'
 import { AdeReadinessCard } from '../ade/AdeReadinessCard'
+import { ExternalSubagentReturnBar } from './ExternalSubagentReturnBar'
 /**
  * Empty / hero states rendered by `MessageTimeline` when there is no
  * turn content yet. Lifted out of the timeline component so the main
@@ -221,7 +222,7 @@ function ChatEmptyHero({
 }
 
 /**
- * P4-14: an empty ADE thread leads with the readiness checklist and replaces
+ * an empty ADE thread leads with the readiness checklist and replaces
  * the Code welcome copy with an explanation of the two ADE session kinds —
  * the manager session that plans and dispatches workers, and the one-to-one
  * session that runs a single chosen agent.
@@ -273,6 +274,22 @@ function AdeSessionHero({
       </div>
     </div>
   )
+}
+
+/**
+ * Whether the timeline leads with its empty hero. A first Code send shows its
+ * bubble before the new thread id lands; the hero leaves with the home layout
+ * then, not a create-thread round trip later. Connect phone keeps its hero
+ * above local turns until it has a thread.
+ */
+export function shouldShowTimelineEmptyHero(state: {
+  hasContent: boolean
+  hasHistoryReference: boolean
+  activeThreadId: string | null
+  route: 'chat' | 'claw'
+}): boolean {
+  if (!state.hasContent && !state.hasHistoryReference) return true
+  return !state.activeThreadId && (!state.hasContent || state.route === 'claw')
 }
 
 export function MessageTimelineEmptyHero({
@@ -393,14 +410,20 @@ export function ThreadForkBanner({ parentTitle }: { parentTitle: string }): Reac
 export function SubagentReturnBar({
   parentTitle,
   onBack,
-  variant = 'subagent'
+  variant = 'subagent',
+  agentName
 }: {
   parentTitle: string
   onBack: () => void
   /** Explore child sessions get stronger "process / back to main" copy. */
-  variant?: 'explore' | 'subagent'
+  variant?: 'explore' | 'subagent' | 'external'
+  /** The external Agent that ran this subagent (variant `external`). */
+  agentName?: string
 }): ReactElement {
   const { t } = useTranslation('common')
+  if (variant === 'external' && agentName) {
+    return <ExternalSubagentReturnBar parentTitle={parentTitle} onBack={onBack} agentName={agentName} />
+  }
   const isExplore = variant === 'explore'
   return (
     <button

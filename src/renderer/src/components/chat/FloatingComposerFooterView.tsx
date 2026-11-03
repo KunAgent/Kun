@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { summarizeThreadMoney, type MoneySummaryItem } from '../../hooks/use-thread-usage'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
+import { CodeTourReplayButton } from '../code-tour/CodeTourReplayButton'
 
 type AnimatedCacheValueState = {
   current: string
@@ -99,12 +100,19 @@ export function FloatingComposerFooterView({
   context: FloatingComposerRenderContext
 }): ReactElement | null {
   const {
-    BarChart3, FloatingComposerUsageHistory, activeThreadId, compact,
-    primaryCacheHitRate, footerHint, formatCompactNumber, formatPercent, formatTps,
-    formatTtftSeconds, i18n, showUsageHistoryFooter, t, threadUsage, threadUsageState,
+    BarChart3, FloatingComposerUsageHistory, activeThreadId, agentSwitcher, busy, canEditComposer, compact,
+    composerInterrupt, composerSendKey, primaryCacheHitRate, footerHint, formatCompactNumber, formatPercent, formatTps,
+    formatTtftSeconds, i18n, route, showUsageHistoryFooter, t, threadUsage, threadUsageState,
     timingThreadUsage
   } = context
-  if (compact) return null
+  if (compact) {
+    if (route !== 'write' || !agentSwitcher || busy || composerInterrupt || !canEditComposer) return null
+    return (
+      <div className="work-composer-shortcut">
+        {t(composerSendKey === 'shiftEnter' ? 'composerShortcutShiftEnter' : 'composerShortcut')}
+      </div>
+    )
+  }
   // External Agents report their own token counts and bill through their own
   // account or subscription; an absent local price is expected, not an error.
   const agentBilled = context.adeComposerEnabled === true && Boolean(context.adeComposer) &&
@@ -173,7 +181,7 @@ export function FloatingComposerFooterView({
                 {timingThreadUsage?.avgTtftMs != null ? (
                   <span
                     className="ds-composer-usage-metric ds-composer-usage-ttft shrink-0 tabular-nums"
-                    title={t('sessionUsageAvgMetricsTitle')}
+                    title={t(agentBilled ? 'agentUpdate.usageTimingByAgent' : 'sessionUsageAvgMetricsTitle')}
                   >
                     {t('sessionUsageFooterTtft', {
                       ttft: formatTtftSeconds(timingThreadUsage.avgTtftMs) ?? '-'
@@ -183,7 +191,7 @@ export function FloatingComposerFooterView({
                 {timingThreadUsage?.avgTokensPerSecond != null ? (
                   <span
                     className="ds-composer-usage-metric ds-composer-usage-tps shrink-0 tabular-nums"
-                    title={t('sessionUsageAvgMetricsTitle')}
+                    title={t(agentBilled ? 'agentUpdate.usageTimingByAgent' : 'sessionUsageAvgMetricsTitle')}
                   >
                     {t('sessionUsageFooterTps', {
                       tps: formatTps(timingThreadUsage.avgTokensPerSecond) ?? '-'
@@ -224,6 +232,7 @@ export function FloatingComposerFooterView({
             )}
           </FloatingComposerUsageHistory>
         ) : null}
+        {context.emptyTaskLayout && context.taskSurface === 'code' ? <CodeTourReplayButton /> : null}
       </div>
       {footerHint ? (
         <div className="ds-composer-footer-hint">

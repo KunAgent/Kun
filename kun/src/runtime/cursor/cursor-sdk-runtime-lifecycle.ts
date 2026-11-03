@@ -1,5 +1,6 @@
 import { cursorSessionPrompt } from './cursor-session-prompt.js'
 import { cursorTurnFailure } from './cursor-turn-failure.js'
+import { harnessTurnTiming } from '../harness-turn-timing.js'
 import type { Run, SDKAgent, SDKUserMessage } from '@cursor/sdk'
 import { goalContextTexts } from '../../contracts/items.js'
 import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
@@ -10,14 +11,16 @@ import { buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.j
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import { buildHistoryTranscript, DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES } from '../agent-sdk/sdk-context-assembler.js'
 import { filterGoalContextsForGoalKey, goalContextKey } from '../../loop/continuation-instructions.js'
-import { delegatedCapabilityFingerprint, delegatedCredentialIdentity, delegatedRouteKey, priorItemsForDelegatedTurn, type DelegatedSessionPreparation } from '../delegated-session-binding.js'
+import { delegatedCapabilityFingerprint, delegatedCredentialIdentity, delegatedProviderStateKey, priorItemsForDelegatedTurn, type DelegatedSessionPreparation } from '../delegated-session-binding.js'
 import { recordHandoffInjected, resolveTurnHandoff, type TurnHandoff } from '../../handoff/turn-handoff.js'
 import { delegatedGraphCompletionCheck, delegatedGraphRecoveryInstruction, parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 import { CursorSdkEventMapper } from './cursor-sdk-event-mapper.js'
+import { cursorContextSnapshot, observeCursorCheckpointContext } from './cursor-checkpoint-context.js'
 import {
   CURSOR_AUTH_RECOVERY_PROMPT,
   CursorTurnInterruptedError,
   cursorAgentExecutionOptions,
+  cursorTurnModelParams,
   cursorSdkErrorCode,
   resolveCursorSdkImages,
   resolveCursorTurnCredentials,
@@ -192,6 +195,7 @@ export async function runCursorSdkTurnOwned(
       workspace: thread.workspace,
       apiKey,
       model,
+      modelParams: await cursorTurnModelParams({ apiKey, modelId: model, effort: turn.reasoningEffort }),
       name: `Kun · ${thread.title || thread.id}`.slice(0, 120),
       planMode,
       approvalPolicy,
@@ -222,6 +226,7 @@ export async function runCursorSdkTurnOwned(
           }),
           workspace: thread.workspace,
           model,
+          modelScope: 'session',
           capabilityFingerprint: delegatedCapabilityFingerprint({
             systemPrompt: deps.systemPrompt?.trim() || '',
             threadPersona: thread.systemPrompt?.trim() || '',
@@ -294,7 +299,7 @@ export async function runCursorSdkTurnOwned(
       capabilitiesV2: capabilitiesV2FromLegacy(capabilities, CURSOR_CAPABILITIES)
     })
     await recordHandoff()
-    const contextProfile = deps.contextProfile?.(model)
+    const contextProfile = deps.contextProfile?.(model, resolvedProviderId)
     const recordContextSnapshot = async (resumed: boolean): Promise<void> => {
       if (!contextProfile) return
       const system = estimateDelegatedTokens(instructionBlocks.join('\n'))
@@ -365,17 +370,13 @@ export async function runCursorSdkTurnOwned(
           ])
       const attachIsolatedStore = (): void => {
         if (!deps.sessionCoordinator || !sdk.JsonlLocalAgentStore || !preparation) return
-        const store = new sdk.JsonlLocalAgentStore(
-          deps.sessionCoordinator.store.providerStateDir(
-            'cursor-sdk',
-            threadId,
-            delegatedRouteKey(preparation.route)
-          )
-        )
-        options = {
-          ...options,
-          local: { ...options.local, store }
-        }
+        const dir = deps.sessionCoordinator.store.providerStateDir('cursor-sdk', threadId, delegatedProviderStateKey(preparation.route))
+        // Each step's checkpoint carries Cursor's own context count: the live gauge.
+        const store = observeCursorCheckpointContext(new sdk.JsonlLocalAgentStore(dir), (details) => {
+          void Promise.resolve(deps.events.record(cursorContextSnapshot({ threadId, turnId, model, providerId: resolvedProviderId,
+            toolCount: kunContext.tools.length, activeSkillIds: kunContext.activeSkillIds }, details))).catch(() => undefined)
+        })
+        options = { ...options, local: { ...options.local, store } }
       }
       if (deps.sessionCoordinator && !sdk.JsonlLocalAgentStore) {
         if (resumeNativeSession && preparation?.resumed) {
@@ -482,8 +483,10 @@ export async function runCursorSdkTurnOwned(
         let runAccepted = false
         try {
           await deps.readiness?.validateTurn(threadId, turnId, signal)
+          harnessTurnTiming(threadId, turnId).requestStarted()
           run = await Promise.race([
             agent.send(attemptMessage, {
+              model: options.model,
               mode: options.mode,
               local: {
                 ...(forceRecoveryRun ? { force: true } : {}),
@@ -525,7 +528,9 @@ export async function runCursorSdkTurnOwned(
           if (result.status === 'error') {
             throw cursorRunError(result)
           }
-          for (const draft of mapper.finalize(result.result, result.usage)) {
+          const finalDrafts = mapper.finalize(result.result, result.usage)
+          harnessTurnTiming(threadId, turnId).observe(finalDrafts)
+          for (const draft of finalDrafts) {
             await emitCursorDraft(deps,threadId, draft)
           }
           finishCursorTraceChunks(trace, mapper.text, result.usage, resolvedProviderId, model)

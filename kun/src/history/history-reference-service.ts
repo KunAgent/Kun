@@ -17,6 +17,7 @@ import {
 import { HistoryReferenceStore, historyKey } from './history-reference-store.js'
 import { invalidateCodexIndexCache } from './codex-index-cache.js'
 import { readHistoryAttachment } from './history-reference-attachments.js'
+import { classifyBorrowedGoogleHistory } from '../gmail/thread-data-state.js'
 
 export const CreateReferenceBranchSchema = z.object({
   sourceProvider: HistorySourceProviderSchema.optional(),
@@ -221,6 +222,7 @@ export class HistoryReferenceService {
     }
     const result = await readSourceHistory(await this.requireReference(thread.historyRefId), input)
     await this.requireReference(thread.historyRefId)
+    if (this.options.threadStore) await classifyBorrowedGoogleHistory(this.options.threadStore, threadId, result)
     return result
   }
 

@@ -1,0 +1,114 @@
+/* The sidebar footer dock: the account card with Settings on its edge, above the tool row. */
+
+.kun-account-dock {
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--kun-radius-md);
+  background: color-mix(in srgb, var(--ds-surface-card) 45%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, white 55%, transparent);
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.kun-account-dock:hover,
+.kun-account-dock:has(.kun-account-card[data-open]) {
+  background: color-mix(in srgb, var(--ds-surface-card) 88%, transparent);
+  box-shadow:
+    0 1px 2px rgb(16 24 40 / 0.06),
+    0 6px 16px rgb(16 24 40 / 0.06),
+    0 0 0 1px color-mix(in srgb, white 70%, transparent);
+}
+
+[data-theme='dark'] .kun-account-dock {
+  box-shadow: none;
+}
+
+.kun-account-dock .kun-account-card {
+  height: 48px;
+  gap: 4px;
+  padding-right: 3px;
+  border: 0;
+  border-radius: 12px;
+}
+
+/* The dock is already the surface; an open menu only tints the account row. */
+.kun-account-dock .kun-account-card[data-open],
+.kun-account-dock .kun-account-card[data-active] {
+  background: var(--ds-sidebar-row-hover);
+  box-shadow: none;
+}
+
+.kun-account-dock .kun-account-card-main {
+  padding-left: 6px;
+}
+
+.kun-account-dock .kun-account-presence {
+  box-shadow: 0 0 0 2px var(--ds-sidebar-row-active);
+}
+
+.kun-account-dock-settings {
+  flex: none;
+}
+
+.kun-account-dock .kun-account-card:hover .kun-account-dock-settings {
+  color: var(--ds-text);
+}
+
+.kun-account-dock-bar {
+  margin-top: 3px;
+  padding: 4px 1px 0;
+  border-top: 1px solid var(--ds-sidebar-divider);
+}
+
+/* Focus mode: no frame, one quiet row; the face is the account entry. */
+.kun-account-focus-row {
+  padding: 0 2px;
+}
+
+.kun-account-mini {
+  display: inline-flex;
+  flex: none;
+}
+
+.kun-account-mini-face {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  outline: none;
+  transition: background 0.15s ease;
+}
+
+.kun-account-mini-face:hover,
+.kun-account-mini[data-open] .kun-account-mini-face {
+  background: var(--ds-sidebar-row-hover);
+}
+
+.kun-account-mini-face:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--ds-accent) 30%, transparent);
+}
+
+.kun-account-mini .kun-account-presence {
+  right: 2px;
+  bottom: 2px;
+  width: 8px;
+  height: 8px;
+  box-shadow: 0 0 0 2px var(--ds-bg-sidebar);
+}
+
+[data-theme='dark'] .kun-account-dock {
+  background: color-mix(in srgb, var(--ds-surface-card) 55%, transparent);
+  box-shadow: inset 0 0 0 1px var(--kun-hair-1);
+}
+
+[data-theme='dark'] .kun-account-dock:hover,
+[data-theme='dark'] .kun-account-dock:has(.kun-account-card[data-open]) {
+  background: color-mix(in srgb, var(--ds-surface-card) 92%, transparent);
+  box-shadow: 0 0 0 1px var(--kun-hair-2);
+}

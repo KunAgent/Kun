@@ -25,7 +25,7 @@ const ARCHIVED_CLOSED_EVICT_MS = 7 * 24 * 60 * 60_000
  * Only these producers may drive `mainState` for a unit kind. Everyone
  * else may still write supplementary fields — and the question-wait
  * exception workers use to surface a `question` wait to the manager and to
- * leave it once the answer arrives (docs/ade/06 §4.1, 09 §6.4).
+ * leave it once the answer arrives.
  */
 const AUTHORITY: Record<ExecutionUnitKind, readonly ActivityProvenance[]> = {
   thread: ['runtime'],
@@ -45,7 +45,7 @@ export type ActivityStoreOptions = {
   /**
    * Maps a `event.child.childId` to the owning execution-unit row when the
    * unit id differs from the child thread id (graph attempts are keyed by
-   * attemptId; docs/ade/impl p1-manager §P1-25).
+ * attemptId).
    */
   unitIdForChild?: (childId: string) => string | undefined
   maxRows?: number
@@ -80,6 +80,7 @@ export class ActivityStore implements RuntimeEventObserver {
       ...(input.roomId ? { roomId: input.roomId } : {}),
       ...(input.metadataPending ? { metadataPending: true } : {}),
       ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
+      ...(input.childLauncher ? { childLauncher: input.childLauncher } : {}),
       ...(input.teamId ? { teamId: input.teamId } : {}),
       harnessId: input.harnessId,
       title: input.title,
@@ -172,7 +173,7 @@ export class ActivityStore implements RuntimeEventObserver {
   }
 
   /**
-   * Most recent runtime-event time for a unit (06 §6 quiet window). Not part
+   * Most recent runtime-event time for a unit. Not part
    * of the row — excluded from row equality and emitted rows.
    */
   lastEventAt(unitId: string): number | undefined {
@@ -263,13 +264,13 @@ export class ActivityStore implements RuntimeEventObserver {
   }
 
   /**
-   * Rebuild structured rows from durable thread/turn state after a restart
-   * (docs/ade/06 §8). Only threads touched in the last 7 days are rebuilt;
+   * Rebuild structured rows from durable thread/turn state after a restart.
+   * Only threads touched in the last 7 days are rebuilt;
    * the persisted turn status is the truth, so rows are not marked
    * restoredUnconfirmed.
    */
   async hydrate(store: {
-    list(options?: { limit?: number }): Promise<Array<{ id: string }>>
+    list(options?: { limit?: number }): Promise<Array<{ id: string; updatedAt?: string }>>
     getMetadata?(threadId: string): Promise<ThreadRecord | null>
   }): Promise<void> {
     const cutoff = Date.now() - 7 * 24 * 60 * 60_000
@@ -277,6 +278,9 @@ export class ActivityStore implements RuntimeEventObserver {
     const threads = await store.list({ limit }).catch(() => [])
     for (const summary of threads) {
       if (this.rows.has(summary.id)) continue
+      // Summaries carry updatedAt; old threads skip the per-thread metadata
+      // read, which is a Manager round trip in managed mode.
+      if (summary.updatedAt && Date.parse(summary.updatedAt) < cutoff) continue
       const record = await store.getMetadata?.(summary.id).catch(() => null)
       if (!record) continue
       if (Date.parse(record.updatedAt) < cutoff) continue
@@ -312,7 +316,7 @@ export class ActivityStore implements RuntimeEventObserver {
   private applyRuntime(event: RuntimeEvent, unitId: string, patch: ActivityPatch): void {
     const row = this.rows.get(unitId)
     if (row?.stalled) patch = { stalled: false, ...patch }
-    // Any fresh runtime activity wakes a dormant unit (06 §7.2).
+    // Any fresh runtime activity wakes a dormant unit.
     if (row?.residency === 'dormant') patch = { residency: 'live', ...patch }
     this.apply(unitId, patch, 'runtime')
   }
@@ -348,6 +352,7 @@ export class ActivityStore implements RuntimeEventObserver {
         threadId: child.childId,
         ...(this.options.threadMetadata ? { metadataPending: true } : {}),
         parentThreadId: child.parentThreadId,
+        ...(child.childLauncher ? { childLauncher: child.childLauncher } : {}),
         harnessId: 'kun',
         title: (child.childLabel ?? child.childId).slice(0, 200),
         workspace: { path: '', kind: 'directory' }
@@ -442,7 +447,7 @@ export class ActivityStore implements RuntimeEventObserver {
   }
 
   /**
-   * Over-capacity eviction (docs/ade/06 §8): archived+closed rows idle for
+   * Over-capacity eviction: archived+closed rows idle for
    * 7+ days go first, then the oldest idle rows.
    */
   private evict(): void {

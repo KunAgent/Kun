@@ -1,4 +1,4 @@
-import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui'
+import { truncateToWidth, visibleWidth } from './ansi-text.js'
 import { sanitizeTerminalText } from './layout.js'
 
 const RESET = '\x1b[0m'

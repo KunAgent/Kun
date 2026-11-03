@@ -1,0 +1,143 @@
+/* Collaboration list and worker tabs. Tinted surfaces use color-mix:
+   Tailwind 3.4 silently drops opacity modifiers on var() colors. */
+
+/* Seat tile: solid hue with a white seat glyph. Dark hues stay dark enough for white. */
+.ds-worker-avatar {
+  --worker-hue: #4561e0;
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--worker-hue);
+  color: #fff;
+}
+.ds-worker-avatar[data-hue='1'] { --worker-hue: #0f766e; }
+.ds-worker-avatar[data-hue='2'] { --worker-hue: #6d4fd8; }
+.ds-worker-avatar[data-hue='3'] { --worker-hue: #be3455; }
+.ds-worker-avatar[data-hue='4'] { --worker-hue: #8a6a1f; }
+.ds-worker-avatar[data-hue='5'] { --worker-hue: #0369a1; }
+[data-theme='dark'] .ds-worker-avatar { --worker-hue: #5b74e8; }
+[data-theme='dark'] .ds-worker-avatar[data-hue='1'] { --worker-hue: #14897f; }
+[data-theme='dark'] .ds-worker-avatar[data-hue='2'] { --worker-hue: #7c62e0; }
+[data-theme='dark'] .ds-worker-avatar[data-hue='3'] { --worker-hue: #cc4664; }
+[data-theme='dark'] .ds-worker-avatar[data-hue='4'] { --worker-hue: #9c7b2b; }
+[data-theme='dark'] .ds-worker-avatar[data-hue='5'] { --worker-hue: #0b7fbf; }
+
+/* Status on the tile: a ring while it works or waits on you, a badge once it settles. */
+.ds-worker-avatar[data-ring]::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 999px;
+  border: 2px solid transparent;
+  pointer-events: none;
+}
+.ds-worker-avatar[data-ring='running']::before {
+  border-top-color: var(--ds-status-running);
+  border-right-color: var(--ds-status-running);
+  animation: ds-worker-spin 1.1s linear infinite;
+}
+.ds-worker-avatar[data-ring='warning']::before { border-color: var(--ds-status-warning); }
+.ds-worker-avatar[data-status='released'],
+.ds-worker-avatar[data-status='idle'] { opacity: 0.55; }
+.ds-worker-avatar-harness {
+  position: absolute;
+  left: -4px;
+  bottom: -4px;
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 2px solid var(--ds-surface-card);
+  border-radius: 999px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text);
+}
+.ds-worker-avatar-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
+  border: 2px solid var(--ds-surface-card);
+  border-radius: 999px;
+  color: #fff;
+}
+.ds-worker-avatar-badge svg { width: 8px; height: 8px; }
+.ds-worker-avatar-badge[data-tone='success'] { background: var(--ds-status-success); }
+.ds-worker-avatar-badge[data-tone='danger'] { background: var(--ds-status-danger); }
+@keyframes ds-worker-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .ds-worker-avatar[data-ring='running']::before { animation: none; }
+}
+
+/* The "needs you" group reads as one tinted block above the working and finished rows. */
+.ds-worker-section-alert {
+  background: color-mix(in srgb, var(--ds-status-warning) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ds-status-warning) 22%, transparent);
+}
+
+/* One tone per status: text, soft pill, dot and progress segment. */
+.ds-worker-tone {
+  --tone: var(--ds-status-muted);
+  --tone-dot: var(--ds-status-dot-muted);
+  --tone-ink: var(--tone);
+}
+.ds-worker-tone[data-tone='running'] { --tone: var(--ds-status-running); --tone-dot: var(--ds-status-dot-running); }
+.ds-worker-tone[data-tone='success'] { --tone: var(--ds-status-success); --tone-dot: var(--ds-status-dot-success); }
+.ds-worker-tone[data-tone='danger'] { --tone: var(--ds-status-danger); --tone-dot: var(--ds-status-dot-danger); }
+.ds-worker-tone[data-tone='warning'] {
+  --tone: var(--ds-status-warning);
+  --tone-dot: var(--ds-status-dot-warning);
+  /* Amber needs depth to stay readable as small text on light surfaces. */
+  --tone-ink: color-mix(in srgb, var(--ds-status-warning) 80%, #000);
+}
+[data-theme='dark'] .ds-worker-tone[data-tone='warning'] { --tone-ink: var(--ds-status-warning); }
+.ds-worker-tone-text { color: var(--tone-ink); }
+.ds-worker-tone-pill {
+  color: var(--tone-ink);
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+}
+.ds-worker-tone-dot { background: var(--tone-dot); }
+.ds-worker-tone-dot[data-ring] { box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone-dot) 18%, transparent); }
+
+.ds-worker-question {
+  border: 1px solid color-mix(in srgb, var(--ds-status-warning) 28%, transparent);
+  background: color-mix(in srgb, var(--ds-status-warning) 9%, var(--ds-surface-card));
+}
+.ds-worker-question[data-variant='header'] { border-width: 0 0 1px; }
+.ds-worker-question-option {
+  border: 1px solid color-mix(in srgb, var(--ds-status-warning) 30%, transparent);
+  background: var(--ds-surface-card);
+}
+.ds-worker-question-option:hover:not(:disabled) { border-color: var(--ds-status-warning); }
+.ds-worker-composer[data-question] { border-color: color-mix(in srgb, var(--ds-status-warning) 32%, var(--ds-border)); }
+.ds-worker-answer-button { background: color-mix(in srgb, var(--ds-status-warning) 78%, #000); }
+[data-theme='dark'] .ds-worker-answer-button { background: color-mix(in srgb, var(--ds-status-warning) 62%, #000); }
+
+.ds-worker-menu-danger { color: var(--ds-status-danger); }
+.ds-worker-menu-danger:hover,
+.ds-worker-menu-danger[data-armed] { background: color-mix(in srgb, var(--ds-status-danger) 10%, transparent); }
+
+.ds-worker-control-chip[data-control='user'] {
+  color: var(--ds-accent);
+  background: color-mix(in srgb, var(--ds-accent) 10%, transparent);
+}
+
+/* The worker transcript reuses the chat timeline at panel scale. */
+.ds-worker-transcript .ds-markdown { font-size: 13.5px; line-height: 1.62; }
+.ds-worker-transcript .text-\[15px\] { font-size: 13px; }
+.ds-worker-transcript .text-\[14px\] { font-size: 12.5px; }
+.ds-worker-transcript .ds-markdown pre { font-size: 12px; }
+
+.ds-worker-field:focus-within,
+.ds-worker-composer:focus-within { border-color: var(--ds-border-strong); }
+
+.ds-worker-alert {
+  color: var(--ds-status-danger);
+  background: color-mix(in srgb, var(--ds-status-danger) 9%, transparent);
+}

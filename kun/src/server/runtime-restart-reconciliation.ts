@@ -1,6 +1,7 @@
 import { latestExecutedTurn } from '../domain/queue-execution-state.js'
 import type { ServerRuntime } from './routes/server-runtime.js'
 import type { RestartRecoverySource } from '../loop/restart-recovery-source.js'
+import { scanThreadMetadata } from '../services/thread-metadata-scan.js'
 
 export type RestartReconciliationReport = {
   orphanedChildren: number
@@ -38,13 +39,17 @@ export async function reconcileRuntimeAfterRestart(
     console.warn('[kun] orphaned child-run reconciliation failed:', error)
   }
 
-  const orphanedSources = await runtime.turnService.reconcileOrphanedTurns()
+  // One parallel metadata read per thread, shared by every sweep below.
+  // Taken after child settlement, which can change side-thread turns.
+  const scan = runtime.threadStore ? await scanThreadMetadata(runtime.threadStore) : undefined
+  const orphanedSources = await runtime.turnService.reconcileOrphanedTurns({ scan })
   const orphanedThreadIds = orphanedSources.map((source) => source.threadId)
   if (orphanedThreadIds.length > 0) {
     console.warn(`[kun] marked orphaned turn(s) on ${orphanedThreadIds.length} thread(s) as failed after restart`)
   }
   const managerSettledSources = await runtime.turnService.reconcileManagerSettledInterruptions({
-      settledAfter: options.managerSettledAfter
+      settledAfter: options.managerSettledAfter,
+      scan
     })
   const managerSettledThreadIds = managerSettledSources.map((source) => source.threadId)
   if (managerSettledThreadIds.length > 0) {
@@ -132,7 +137,7 @@ export async function reconcileRuntimeAfterRestart(
   // checkpointing applies to them. Drain every thread that still owns one.
   if (runtime.queuedTurnDispatcher) {
     const queuedThreads = await runtime.queuedTurnDispatcher
-      .drainAllQueued()
+      .drainAllQueued({ scan, recheck: sourceTurnIdsByThread.keys() })
       .catch((error) => {
         console.warn('[kun] queued-turn restart sweep failed:', error)
         return 0

@@ -4,7 +4,6 @@ import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
-import type { PptWorkflowScope } from '../ports/tool-host.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 
 export type ChildDelegatedRuntimeFactory = (input: {
@@ -31,7 +30,6 @@ export type ChildDelegatedRuntimeFactory = (input: {
   skillsEnabled: boolean
   instructionsEnabled: boolean
   memoryEnabled: boolean
-  pptWorkflowScope?: PptWorkflowScope
 }) => {
   /** Legacy provider-inference view (used when the harness router is off). */
   delegated?: DelegatedTurnRuntime

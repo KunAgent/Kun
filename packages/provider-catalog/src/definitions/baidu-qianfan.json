@@ -60,6 +60,11 @@
       "glm-5.1",
       "glm-5"
     ],
-    "credentialUrl": "https://console.bce.baidu.com/qianfan/resource/token-plan"
+    "credentialUrl": "https://console.bce.baidu.com/qianfan/resource/token-plan",
+    "discovery": {
+      "strategy": "preset",
+      "sourceUrl": "https://cloud.baidu.com/doc/qianfan/s/Dmrabu8b6",
+      "checkedAt": "2026-10-08"
+    }
   }
 }

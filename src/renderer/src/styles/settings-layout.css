@@ -16,6 +16,12 @@
   background: var(--ds-surface-card);
 }
 
+/* The Agent list takes the window's height at most, so a long list scrolls inside its column.
+   Body zoom leaves `100vh` unscaled, hence the division; 8rem covers the card header above. */
+.ds-agent-rail {
+  max-height: max(20rem, calc(100vh / var(--ds-ui-scale, 1) - 8rem));
+}
+
 .ds-provider-workspace > .ds-settings-tab-panel:not([hidden]) {
   gap: 0;
 }

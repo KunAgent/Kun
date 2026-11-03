@@ -71,9 +71,8 @@ export function selectionFromOfficeDom(
 
 export function pageFromDocxNode(node: Node | null, root: HTMLElement): number | undefined {
   const element = node instanceof Element ? node : node?.parentElement
-  const page = element?.closest<HTMLElement>('section.docx')
-  if (!page) return undefined
-  const pages = Array.from(root.querySelectorAll('section.docx'))
-  const index = pages.indexOf(page)
-  return index >= 0 ? index + 1 : undefined
+  const page = element?.closest<HTMLElement>('[data-docx-page-wrapper]')
+  if (!page || !root.contains(page)) return undefined
+  const index = Number(page.dataset.docxPageIndex)
+  return Number.isInteger(index) && index >= 0 ? index + 1 : undefined
 }

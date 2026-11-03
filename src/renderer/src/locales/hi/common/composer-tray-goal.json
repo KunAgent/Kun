@@ -1,0 +1,20 @@
+{
+  "composerTrayGoal": {
+    "label": "लक्ष्य",
+    "segmentAria": "लक्ष्य ({{status}}): {{objective}}",
+    "status": {
+      "active": "सक्रिय",
+      "paused": "रुका हुआ",
+      "blocked": "अवरुद्ध",
+      "usageLimited": "उपयोग सीमा पर",
+      "budgetLimited": "बजट सीमा पर",
+      "complete": "पूरा"
+    },
+    "edit": "संपादित करें",
+    "elapsed": "बीता समय",
+    "tokens": "टोकन",
+    "tokensOfBudget": "टोकन / बजट",
+    "panelHintEmpty": "नीचे दिए इनपुट में लक्ष्य लिखें, फिर “लक्ष्य के रूप में निर्धारित करें” चुनें।",
+    "panelHintReplace": "इसकी जगह लेने के लिए नीचे दिए इनपुट में नया लक्ष्य लिखें।"
+  }
+}

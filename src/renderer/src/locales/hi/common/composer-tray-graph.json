@@ -1,0 +1,25 @@
+{
+  "composerTrayGraph": {
+    "segmentLabel": "Graph · {{titles}}",
+    "segmentLabelStatus": "Graph · {{status}}",
+    "titleSeparator": ", ",
+    "segmentAria": "Graph रन: {{total}} में से {{accepted}} नोड स्वीकृत, {{running}} चल रहे हैं",
+    "segmentAriaQuiet": "Graph रन: {{total}} में से {{accepted}} नोड स्वीकृत। एक चल रहा नोड कुछ देर से शांत है",
+    "segmentAriaAsking": "Graph रन: {{total}} में से {{accepted}} नोड स्वीकृत। एक नोड आपके जवाब का इंतज़ार कर रहा है",
+    "segmentAriaAwaiting": "Graph रन: {{total}} में से {{accepted}} नोड स्वीकृत। रन आपका इंतज़ार कर रहा है",
+    "segmentAriaFlagged": "Graph रन: {{total}} में से {{accepted}} नोड स्वीकृत। एक नोड पर ध्यान देने की ज़रूरत है",
+    "sheetTitle": "Graph रन",
+    "acceptedSummary": "{{total}} में से {{accepted}} नोड स्वीकृत",
+    "runningSummary_one": "{{count}} चल रहा है",
+    "runningSummary_other": "{{count}} चल रहे हैं",
+    "nodeRetry": "पुनः प्रयास {{number}}",
+    "lastActivitySeconds": "आखिरी गतिविधि {{seconds}} सेकंड पहले",
+    "lastActivityAgo": "आखिरी गतिविधि {{ago}}",
+    "stillWaiting": "अब भी मॉडल या टूल के जवाब का इंतज़ार है",
+    "elapsedTitle": "{{duration}} से चल रहा है",
+    "correctionAria": "Graph योजना रुकी है: योजना को आपके इनपुट की ज़रूरत है",
+    "correctionNote": "ड्राफ़्ट सहेज लिया गया है। चैट में निर्देश जोड़ें, फिर योजना आगे बढ़ाएँ।",
+    "correctionMore_one": "{{count}} और समस्या",
+    "correctionMore_other": "{{count}} और समस्याएँ"
+  }
+}

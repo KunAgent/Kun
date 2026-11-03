@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /**
- * `marks/` per paper unit (plan §5.4):
+ * `marks/` per paper unit:
  *   <unit>/marks/annotations.json  { version: 1, items: Highlight[] }
  *   <unit>/marks/<id>.json         translate / ask cards
  *   <unit>/marks/assets/           reserved for PM6 clip images

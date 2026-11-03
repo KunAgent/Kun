@@ -43,7 +43,7 @@ function isRecent(entry: PaperLibraryEntry, now: number): boolean {
   return now - opened <= PAPER_RECENT_WINDOW_DAYS * 24 * 60 * 60 * 1000
 }
 
-/** Apply the sidebar/table filter to a scanned entry list (§3.3 chips). */
+/** Apply the sidebar/table filter to a scanned entry list. */
 export function filterPaperEntries(
   entries: readonly PaperLibraryEntry[],
   filter: PaperLibraryFilter,

@@ -31,6 +31,7 @@ import litellmIconUrl from '../assets/provider-icons/litellm.svg?url'
 import lmstudioIconUrl from '../assets/provider-icons/lmstudio.svg?url'
 import localServerIconUrl from '../assets/provider-icons/local-server.svg?url'
 import longcatIconUrl from '../assets/provider-icons/longcat.svg?url'
+import magpieIconUrl from '../assets/provider-icons/magpie.svg?url'
 import mimoIconUrl from '../assets/provider-icons/mimo.svg?url'
 import minimaxIconUrl from '../assets/provider-icons/minimax.svg?url'
 import mistralIconUrl from '../assets/provider-icons/mistral.svg?url'
@@ -83,6 +84,7 @@ export type ProviderBrandIconKey =
   | 'lmstudio'
   | 'local-server'
   | 'longcat'
+  | 'magpie'
   | 'mimo'
   | 'minimax'
   | 'mistral'
@@ -134,6 +136,7 @@ const PROVIDER_ICON_ASSETS: Readonly<Record<ProviderBrandIconKey, string>> = {
   lmstudio: lmstudioIconUrl,
   'local-server': localServerIconUrl,
   longcat: longcatIconUrl,
+  magpie: magpieIconUrl,
   mimo: mimoIconUrl,
   minimax: minimaxIconUrl,
   mistral: mistralIconUrl,
@@ -182,6 +185,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   lmstudio: 'lmstudio',
   'local-openai': 'local-server',
   longcat: 'longcat',
+  magpie: 'magpie',
   minimax: 'minimax',
   'mistral-api': 'mistral',
   modelscope: 'modelscope',

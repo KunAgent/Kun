@@ -1,0 +1,420 @@
+{
+  "icon/headwear/detective-hat": {
+    "png": "icon/headwear/detective-hat.png",
+    "webp": {
+      "128": "128/icon/headwear/detective-hat.webp",
+      "256": "256/icon/headwear/detective-hat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-epic-hats-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 443,
+        "width": 443,
+        "height": 444
+      }
+    }
+  },
+  "icon/headwear/beret": {
+    "png": "icon/headwear/beret.png",
+    "webp": {
+      "128": "128/icon/headwear/beret.webp",
+      "256": "256/icon/headwear/beret.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 450,
+        "top": 0,
+        "width": 385,
+        "height": 450
+      }
+    }
+  },
+  "icon/headwear/hard-hat": {
+    "png": "icon/headwear/hard-hat.png",
+    "webp": {
+      "128": "128/icon/headwear/hard-hat.webp",
+      "256": "256/icon/headwear/hard-hat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 2,
+      "crop": {
+        "left": 835,
+        "top": 0,
+        "width": 419,
+        "height": 450
+      }
+    }
+  },
+  "icon/headwear/baseball-cap": {
+    "png": "icon/headwear/baseball-cap.png",
+    "webp": {
+      "128": "128/icon/headwear/baseball-cap.webp",
+      "256": "256/icon/headwear/baseball-cap.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 3,
+      "crop": {
+        "left": 0,
+        "top": 450,
+        "width": 450,
+        "height": 385
+      }
+    }
+  },
+  "icon/headwear/pilot-cap": {
+    "png": "icon/headwear/pilot-cap.png",
+    "webp": {
+      "128": "128/icon/headwear/pilot-cap.webp",
+      "256": "256/icon/headwear/pilot-cap.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-epic-hats-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 443,
+        "top": 443,
+        "width": 444,
+        "height": 444
+      }
+    }
+  },
+  "icon/headwear/sailor-hat": {
+    "png": "icon/headwear/sailor-hat.png",
+    "webp": {
+      "128": "128/icon/headwear/sailor-hat.webp",
+      "256": "256/icon/headwear/sailor-hat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-icons-clothes-hats.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 78,
+        "top": 228,
+        "width": 798,
+        "height": 480
+      }
+    }
+  },
+  "icon/headwear/straw-hat": {
+    "png": "icon/headwear/straw-hat.png",
+    "webp": {
+      "128": "128/icon/headwear/straw-hat.webp",
+      "256": "256/icon/headwear/straw-hat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-a.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 6,
+      "crop": {
+        "left": 0,
+        "top": 835,
+        "width": 450,
+        "height": 419
+      }
+    }
+  },
+  "icon/headwear/chef-hat": {
+    "png": "icon/headwear/chef-hat.png",
+    "webp": {
+      "128": "128/icon/headwear/chef-hat.webp",
+      "256": "256/icon/headwear/chef-hat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-perspective-icons.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 808,
+        "top": 75,
+        "width": 580,
+        "height": 552
+      }
+    }
+  },
+  "icon/headwear/nurse-cap": {
+    "png": "icon/headwear/nurse-cap.png",
+    "webp": {
+      "128": "128/icon/headwear/nurse-cap.webp",
+      "256": "256/icon/headwear/nurse-cap.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-icons-clothes-hats.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 987,
+        "top": 265,
+        "width": 711,
+        "height": 434
+      }
+    }
+  },
+  "icon/headwear/sports-headband": {
+    "png": "icon/headwear/sports-headband.png",
+    "webp": {
+      "128": "128/icon/headwear/sports-headband.webp",
+      "256": "256/icon/headwear/sports-headband.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 0,
+        "width": 450,
+        "height": 450
+      }
+    }
+  },
+  "icon/headwear/beanie": {
+    "png": "icon/headwear/beanie.png",
+    "webp": {
+      "128": "128/icon/headwear/beanie.webp",
+      "256": "256/icon/headwear/beanie.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 450,
+        "top": 0,
+        "width": 385,
+        "height": 450
+      }
+    }
+  },
+  "icon/headwear/hood": {
+    "png": "icon/headwear/hood.png",
+    "webp": {
+      "128": "128/icon/headwear/hood.webp",
+      "256": "256/icon/headwear/hood.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-epic-hats-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 887,
+        "top": 443,
+        "width": 443,
+        "height": 444
+      }
+    }
+  },
+  "icon/headwear/wizard-hat": {
+    "png": "icon/headwear/wizard-hat.png",
+    "webp": {
+      "128": "128/icon/headwear/wizard-hat.webp",
+      "256": "256/icon/headwear/wizard-hat.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-legendary-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 512,
+        "top": 512,
+        "width": 512,
+        "height": 512
+      }
+    }
+  },
+  "icon/headwear/newsboy-cap": {
+    "png": "icon/headwear/newsboy-cap.png",
+    "webp": {
+      "128": "128/icon/headwear/newsboy-cap.webp",
+      "256": "256/icon/headwear/newsboy-cap.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-b.png",
+      "grid": [
+        3,
+        3
+      ],
+      "cell": 4,
+      "crop": {
+        "left": 450,
+        "top": 450,
+        "width": 385,
+        "height": 385
+      }
+    }
+  },
+  "icon/headwear/welding-goggles": {
+    "png": "icon/headwear/welding-goggles.png",
+    "webp": {
+      "128": "128/icon/headwear/welding-goggles.webp",
+      "256": "256/icon/headwear/welding-goggles.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-epic-hats-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1330,
+        "top": 443,
+        "width": 444,
+        "height": 444
+      }
+    }
+  },
+  "icon/headwear/laurel": {
+    "png": "icon/headwear/laurel.png",
+    "webp": {
+      "128": "128/icon/headwear/laurel.webp",
+      "256": "256/icon/headwear/laurel.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-legendary-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 1024,
+        "top": 512,
+        "width": 512,
+        "height": 512
+      }
+    }
+  },
+  "icon/headwear/astronaut-helmet": {
+    "png": "icon/headwear/astronaut-helmet.png",
+    "webp": {
+      "128": "128/icon/headwear/astronaut-helmet.webp",
+      "256": "256/icon/headwear/astronaut-helmet.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-material-legendary-refined.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 0,
+        "top": 512,
+        "width": 512,
+        "height": 512
+      }
+    }
+  },
+  "icon/headwear/headset": {
+    "png": "icon/headwear/headset.png",
+    "webp": {
+      "128": "128/icon/headwear/headset.webp",
+      "256": "256/icon/headwear/headset.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "v2-perspective-icons.png",
+      "grid": [
+        1,
+        1
+      ],
+      "cell": 0,
+      "crop": {
+        "left": 67,
+        "top": 55,
+        "width": 605,
+        "height": 585
+      }
+    }
+  },
+  "icon/headwear/headphones": {
+    "png": "icon/headwear/headphones.png",
+    "webp": {
+      "128": "128/icon/headwear/headphones.webp",
+      "256": "256/icon/headwear/headphones.webp"
+    },
+    "canvas": 512,
+    "source": {
+      "file": "polish-icons-headwear-c.png",
+      "grid": [
+        2,
+        1
+      ],
+      "cell": 1,
+      "crop": {
+        "left": 887,
+        "top": 0,
+        "width": 887,
+        "height": 887
+      }
+    }
+  }
+}

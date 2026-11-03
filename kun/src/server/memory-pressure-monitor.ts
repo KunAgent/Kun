@@ -56,6 +56,8 @@ export const DEFAULT_MEMORY_PRESSURE_SUBAGENT_PARALLEL_LIMIT = 2
 export const DEFAULT_MEMORY_PRESSURE_WARN_HOST_FRACTION = 0.65
 export const DEFAULT_MEMORY_PRESSURE_CRITICAL_HOST_FRACTION = 0.8
 const MEMORY_PRESSURE_RECOVERY_FRACTION = 0.85
+const MEMORY_HIGH_WATER_LOG_FLOOR_BYTES = 512 * 1024 * 1024
+const MEMORY_HIGH_WATER_LOG_STEP_BYTES = 256 * 1024 * 1024
 
 export type MemoryPressureMonitor = {
   stop: () => void
@@ -128,11 +130,21 @@ export function startMemoryPressureMonitor(deps: MemoryPressureMonitorDeps): Mem
   const sweptIdleThreads = new Set<string>()
 
   const log = deps.log ?? ((message: string) => console.warn(`[kun] ${message}`))
+  // One log line per new RSS high-water step makes user memory reports
+  // actionable without logging on every poll.
+  let reportedRssStep = Math.floor(MEMORY_HIGH_WATER_LOG_FLOOR_BYTES / MEMORY_HIGH_WATER_LOG_STEP_BYTES)
 
   const poll = (): void => {
     if (stopped) return
     try {
       const rss = process.memoryUsage().rss
+      const rssStep = Math.floor(rss / MEMORY_HIGH_WATER_LOG_STEP_BYTES)
+      if (rssStep > reportedRssStep) {
+        reportedRssStep = rssStep
+        const memory = memorySnapshot()
+        log(`memory high-water: rss=${memory.rssMiB}MiB heapUsed=${memory.heapUsedMiB}MiB ` +
+          `heapTotal=${memory.heapTotalMiB}MiB external=${memory.externalMiB}MiB`)
+      }
       const nextLevel = memoryPressureLevel({ rss, currentLevel, warnRssBytes, criticalRssBytes })
       const previous = currentLevel
       currentLevel = nextLevel

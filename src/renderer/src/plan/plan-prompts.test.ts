@@ -174,3 +174,13 @@ describe('plan-prompts', () => {
     expect(extractGuiPlanMarkdown('intro\n<gui_plan>\n# Streaming')).toBe('# Streaming')
   })
 })
+
+describe('prompt worktree dependency reuse', () => {
+  it('tells the agent to clone dependencies instead of reinstalling', () => {
+    const prompt = buildPlanBuildPrompt('plan.md', 'body', 'direct', {
+      repositoryRoot: '/repo', targetBranch: 'develop', branchPrefix: 'kun/', dirtyCount: 0, planTitle: 'T'
+    })
+    expect(prompt).toContain('cp -c -R')
+    expect(prompt).toContain('Do not run a fresh dependency install')
+  })
+})

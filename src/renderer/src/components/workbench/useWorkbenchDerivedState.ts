@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { useDevPreviewRequestStore } from '../../lib/dev-preview-request'
 import type { ChatBlock } from '../../agent/types'
 import type { ChatState } from '../../store/chat-store-types'
 import { isCodeSidebarThread } from '../../store/chat-store-runtime'
@@ -57,7 +58,8 @@ export function useWorkbenchDerivedState({
     () => extractLatestTurnAutoOpenDevPreviewSignal(devPreviewBlocks),
     [devPreviewBlocks]
   )
-  const latestDevPreviewUrl = detectedDevPreviewUrls[0] ?? null
+  const requestedDevPreviewUrl = useDevPreviewRequestStore((state) => state.url)
+  const latestDevPreviewUrl = requestedDevPreviewUrl ?? detectedDevPreviewUrls[0] ?? null
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? null,
     [activeClawChannelId, clawChannels]

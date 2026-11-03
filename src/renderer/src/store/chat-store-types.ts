@@ -14,6 +14,7 @@ import type {
   ThreadUsageSnapshot,
   KnowledgeBaseIndexStatus,
   KnowledgeBaseMount,
+  UserFileReference,
   UserInputAnswer
 } from '../agent/types'
 import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
@@ -37,6 +38,7 @@ import type {
   ExtensionComposerContextEvent,
   PendingComposerContextEvent
 } from '@shared/extension-ipc'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 import type { DesignTaskProfile } from '../agent/design-task-profile'
 import type { ThreadRecoveryOptions } from './thread-recovery-coordinator'
 import type { CodeWorkspaceFolderSetsRegistry } from '../lib/code-workspace-folder-sets'
@@ -44,7 +46,20 @@ import type { RemovedCodeWorkspacesRegistry } from '../lib/removed-code-workspac
 
 import type { SettingsRouteSection } from './settings-route-sections'
 export type { SettingsRouteSection }
+/**
+ * The Work assistant composer's choice a new session starts with: an external
+ * Agent is pinned on the thread; Kun's choice is remembered for the composer.
+ */
+export type WorkThreadRoute = {
+  harnessId?: string
+  credentialMode?: string
+  gatewayBinding?: HarnessGatewayBinding
+  model?: string
+  providerId?: string
+  accountId?: string
+}
 import type {
+  ExternalPlanBuildDispatchResult,
   ClearDesignHistoryOptions,
   ClearDesignHistoryResult,
   CreateDesignThreadOptions,
@@ -68,7 +83,7 @@ export type {
   SendMessageOverrides,
   WriteAssistantMessageContext
 }
-export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade'
+export type AppRoute = 'chat' | 'agent-chat' | 'write' | 'papers' | 'rooms' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'board' | 'schedule' | 'workflow' | 'ade' | 'wardrobe' | 'artifacts'
 export type ThreadCompletionOutcome = 'completed' | 'failed'
 export type CompletionAttentionRegistry = Record<string, ThreadCompletionOutcome | boolean>
 export type ScheduledThreadActivity = {
@@ -91,6 +106,15 @@ export type PluginHostRoute = 'chat' | 'claw'
 export type SideConversation = {
   threadId: string
   parentThreadId: string
+  /** Branch-owned Agent; changing it must never write the main composer. */
+  harnessId: string
+  /** Credential path on `harnessId`; absent = that Agent's default. */
+  credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
+  gatewayBinding?: HarnessGatewayBinding
+  /** Per-turn execution policy; never mirrored into the runtime global settings. */
+  approvalPolicy?: ApprovalPolicy
+  sandboxMode?: SandboxMode
+  approvalReviewer?: ApprovalReviewer
   /** Retargeted immutable profile owned by this independently cloned branch. */
   designProfile?: DesignTaskProfile
   designWorkspaceRoot?: string
@@ -118,6 +142,7 @@ export type SideConversation = {
   fastMode: boolean
   attachments: AttachmentReference[]
   busy: boolean
+  submitting?: boolean
   turnId: string | null
   userItemId: string | null
   error: string | null
@@ -133,13 +158,25 @@ export type SidePanelState = {
   activeSideId: string | null
 }
 
-export type SideConversationDraftOptions = {
-  model?: string
-  providerId?: string
-  reasoningEffort?: string
-  fastMode?: boolean
+export type SideConversationDraftOptions = SideComposerConfigPatch & {
   attachments?: AttachmentReference[]
+  /** Context for the seed turn only, e.g. the passage the side chat quotes. */
+  composerContexts?: ComposerContextAttachment[]
 }
+
+export type SideMessageSendOptions = {
+  composerContexts?: ComposerContextAttachment[]
+  config?: SideComposerConfigPatch
+}
+
+/**
+ * Branch-owned composer configuration. Applied by side id only, so a branch
+ * change can never leak into the main composer store or another branch.
+ */
+export type SideComposerConfigPatch = Partial<Pick<SideConversation,
+  'harnessId' | 'credentialMode' | 'gatewayBinding' | 'model' | 'providerId' |
+  'reasoningEffort' | 'fastMode' | 'approvalPolicy' | 'sandboxMode' | 'approvalReviewer'
+>>
 
 export type ChatState = {
   route: AppRoute
@@ -201,7 +238,7 @@ export type ChatState = {
    */
   adeThreads: NormalizedThread[]
   /** Relationship of the active thread (e.g. `side` for a subagent's own session). */
-  activeThreadRelation: 'primary' | 'fork' | 'side' | null
+  activeThreadRelation: 'primary' | 'fork' | 'side' | 'task' | null
   /** Parent thread of the active thread, when it is a `side`/`fork` branch. */
   activeThreadParentId: string | null
   activeThreadGoal: ThreadGoal | null
@@ -302,7 +339,7 @@ export type ChatState = {
   composerGatewayBinding?: HarnessGatewayBinding
   composerCredentialMode: string
   /**
-   * ADE new-session isolation (12 §7.3): 'local' binds the picked workspace
+   * ADE new-session isolation: 'local' binds the picked workspace
    * directly; 'worktree' asks the host to prepare a fresh task workspace.
    */
   composerIsolation: 'local' | 'worktree'
@@ -361,11 +398,11 @@ export type ChatState = {
    * ADE-only: switch the harness (and optional credential mode) used by the
    * next turn or next new thread. Confirmed switches on a non-empty thread
    * apply to subsequent turns only — the runtime opens a fresh native
-   * session with a deterministic handoff summary (docs/ade/08).
+   * session with a deterministic handoff summary.
    */
   setComposerGatewayBinding: (binding?: HarnessGatewayBinding) => void
   setComposerHarness: (harnessId: string, credentialMode?: string) => void
-  /** ADE-only: pick the isolation used by the next new session (12 §7.3). */
+  /** ADE-only: pick the isolation used by the next new session. */
   setComposerIsolation: (
     isolation: 'local' | 'worktree',
     startFrom?: import('@shared/task-workspace').TaskWorkspaceStartFrom
@@ -396,7 +433,8 @@ export type ChatState = {
   createWriteThread: (
     workspaceRoot?: string,
     activeFilePath?: string,
-    options?: { title?: string; titleAuto?: boolean }
+    /** `route` pins the session to the Work assistant's Agent, like a new Code task. */
+    options?: { title?: string; titleAuto?: boolean; route?: WorkThreadRoute }
   ) => Promise<string | null>
   ensureDesignThreadForWorkspace: (workspaceRoot?: string, docId?: string) => Promise<string | null>
   createDesignThread: (
@@ -495,6 +533,13 @@ export type ChatState = {
   reindexThreadKnowledgeBase: (threadId: string, knowledgeBaseId: string) => Promise<boolean>
   setThreadSearch: (query: string) => void
   setShowArchivedThreads: (show: boolean) => void
+  /**
+   * Clears a non-empty conversation so New task can show its blank page before
+   * the thread exists. A project row's New session passes its `workspaceRoot`:
+   * when that differs from the project in view, the blank page switches to it
+   * renderer-locally. Returns true when the selection was cleared.
+   */
+  leaveThreadForNewTask: (options?: { workspaceRoot?: string }) => boolean
   createThread: (options?: {
     workspaceRoot?: string
     forceNew?: boolean
@@ -508,12 +553,12 @@ export type ChatState = {
     useWorktreePool?: boolean
     worktreeBranch?: string
     /**
-     * ADE one-to-one threads (00 §5): pin the thread to this harness from
+     * ADE one-to-one threads: pin the thread to this harness from
      * creation instead of inferring a route from the composer model.
      */
     harnessId?: string
     gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
-    /** Explicit provider/model pins for the new thread (p4 §3.6 defaults). */
+    /** Explicit provider/model pins for the new thread. */
     providerId?: string
     model?: string
     /**
@@ -545,25 +590,36 @@ export type ChatState = {
   sendMessage: (text: string, mode?: string, overrides?: SendMessageOverrides) => Promise<boolean>
   /**
    * Run a plan build on an external harness inside a host-managed task
-   * worktree (07 §10): creates the ADE build thread, parks the
+   * worktree: creates the ADE build thread, parks the
    * `planBuild`-marked turn until the worktree is ready, and flags the
    * Review panel when the turn settles.
    */
-  dispatchExternalPlanBuild: (input: ExternalPlanBuildRequest) => Promise<boolean>
+  dispatchExternalPlanBuild: (input: ExternalPlanBuildRequest) => Promise<ExternalPlanBuildDispatchResult>
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>
-  drainQueuedMessages: () => Promise<void>
+  drainQueuedMessages: (threadId?: string) => Promise<void>
   removeQueuedMessage: (id: string) => Promise<void> | void
   restoreQueuedMessage: (id: string, accept?: (message: QueuedUserMessage) => boolean | Promise<boolean>) => Promise<QueuedUserMessage | null>
   reorderQueuedMessage: (id: string, targetId: string, position: 'before' | 'after') => Promise<void> | void
   /** Resume a runtime queue paused by an interrupt. */
   resumeQueuedTurns: () => Promise<boolean>
+  /** Resume every paused queued message (runtime-owned and local) in order. */
+  resumePausedQueuedMessages: () => Promise<boolean>
   guideQueuedMessage: (id: string) => Promise<boolean>
   attachExtensionComposerContext: (event: ExtensionComposerContextEvent) => void
   removeExtensionComposerContext: (attachmentId: string) => void
   attachComposerContext: (event: PendingComposerContextEvent) => void
   removeComposerContext: (attachmentId: string) => void
   clearComposerContexts: (filter?: { source?: 'dev-preview'; threadId?: string }) => void
-  rewindAndResend: (userBlockId: string, newText: string) => Promise<void>
+  /**
+   * Edit an earlier message and resend it. `resetFiles` also undoes the file
+   * changes of that turn and every later one when all of them are safe to
+   * restore; otherwise only the conversation is reset.
+   */
+  rewindAndResend: (
+    userBlockId: string,
+    newText: string,
+    options?: { resetFiles?: boolean; fileReferences?: UserFileReference[] }
+  ) => Promise<void>
   rollbackWorkspaceToCheckpoint: (checkpointId: string) => Promise<void>
   interrupt: (options?: { discard?: boolean }) => Promise<void>
   cancelToolCall: (threadId: string, turnId: string, callId: string) => Promise<boolean>
@@ -599,7 +655,7 @@ export type ChatState = {
    * thread. The first draft send will create the side thread.
    */
   openSideConversationDraft: () => void
-  sendSideMessage: (sideId: string, text: string) => Promise<boolean>
+  sendSideMessage: (sideId: string, text: string, options?: SideMessageSendOptions) => Promise<boolean>
   interruptSide: (sideId: string) => Promise<void>
   resolveSideUserInput: (
     sideId: string,
@@ -607,6 +663,11 @@ export type ChatState = {
     action: { kind: 'submit'; answers: UserInputAnswer[] } | { kind: 'cancel' }
   ) => Promise<void>
   setSideInput: (sideId: string, text: string) => void
+  /**
+   * Apply an Agent/model/permission change to one branch. Refused while that
+   * branch is running, and it never writes main composer state.
+   */
+  setSideComposerConfig: (sideId: string, patch: SideComposerConfigPatch) => void
   setSideModel: (sideId: string, model: string, providerId?: string) => void
   setSideReasoningEffort: (sideId: string, effort: string) => void
   setSideFastMode: (sideId: string, enabled: boolean) => void
@@ -621,7 +682,7 @@ export type ChatState = {
     options?: { model?: string; mode?: string }
   ) => Promise<string | null>
   deleteThread: (threadId: string) => Promise<void>
-  resolveApproval: (blockId: string, decision: 'allow' | 'deny') => Promise<void>
+  resolveApproval: (blockId: string, decision: 'allow' | 'deny', choice?: import('@shared/approval-choice').ApprovalChoice) => Promise<void>
   resolveUserInput: (
     blockId: string,
     action: { kind: 'submit'; answers: UserInputAnswer[] } | { kind: 'cancel' }

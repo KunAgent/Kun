@@ -131,7 +131,7 @@
 .kun-mobile-app .ds-markdown :is(img, video) { max-width: 100%; height: auto; }
 
 /* Markdown and tool chrome: 22–24px icon buttons get a 32px visual size and
- * an ::after ring that widens the hit area to ~44px (plan §1.5). */
+ * an ::after ring that widens the hit area to ~44px. */
 .kun-mobile-app :is(
   .ds-code-block-action,
   [data-streamdown='code-block-actions'] button,

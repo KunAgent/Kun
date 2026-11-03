@@ -2,10 +2,10 @@ import type { ActivityRow } from '@shared/activity-row'
 import { displayBucket } from '@shared/activity-display'
 
 /**
- * Single ActivityStore→visual mapping (docs/ade/12 §3). Every surface —
+ * Single ActivityStore→visual mapping. Every surface —
  * Mission Control cards, the Workers panel, sidebar rows — resolves state
  * through here instead of re-deciding locally. Bucket comes from
- * `displayBucket` (06 §10); only the presentation lives here.
+ * `displayBucket`; only the presentation lives here.
  */
 export type ActivityGlyphTone =
   | 'running'
@@ -21,7 +21,7 @@ export type ActivityGlyph = {
   mark: ActivityGlyphMark
   /** i18n key under common:*. */
   labelKey: string
-  /** Adds the "可能卡住" clock hint inside the row's own bucket (12 §3). */
+  /** Adds the "可能卡住" clock hint inside the row's own bucket. */
   stalled: boolean
 }
 

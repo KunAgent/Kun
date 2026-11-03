@@ -334,6 +334,7 @@ describe('DelegationRuntime abort handling', () => {
       expect(notice).toContain('<code>http_520</code>')
       expect(notice).toContain('<resumable>true</resumable>')
       expect(notice).toContain('proactive_retry enabled="true" eligible="true"')
+      expect(notice).toMatch(/<usage total_tokens="\d+" tool_calls="\d+" duration_ms="\d+" \/>/)
       expect(runTurn).toHaveBeenCalledTimes(1)
     } finally {
       await rm(dir, { recursive: true, force: true })

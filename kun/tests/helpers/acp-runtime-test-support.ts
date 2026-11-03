@@ -53,6 +53,8 @@ export async function makeHarness(scenarioFile: string, input: {
   definition?: Partial<HarnessDefinition>
   /** Invoked inside applyAssistantDelta — lets tests abort mid-stream. */
   onDelta?: () => void
+  /** Extra TurnService members for the runtime (e.g. openDelegatedSteering). */
+  turns?: Record<string, unknown>
 } = {}): Promise<{
   runtime: AcpRuntime
   definition: HarnessDefinition
@@ -173,7 +175,8 @@ export async function makeHarness(scenarioFile: string, input: {
         finished.push(args)
       },
       updateTurnMetadata: async () => ({}),
-      ensureGoalContext: async () => undefined
+      ensureGoalContext: async () => undefined,
+      ...input.turns
     } as unknown as AcpRuntimeDeps['turns'],
     events: {
       record: async (event: RuntimeEvent) => {

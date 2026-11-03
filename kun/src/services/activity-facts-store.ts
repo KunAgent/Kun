@@ -4,8 +4,8 @@ import { withManagerDataMutex } from '../manager/data-mutex.js'
 
 /**
  * Cross-client user facts for activity rows (acknowledged / dismissed /
- * pinned) — the only ActivityStore state persisted across restarts
- * (docs/ade/06 §8). Lives at dataDir/ade/activity-facts.json and is
+ * pinned) — the only ActivityStore state persisted across restarts.
+ * Lives at dataDir/ade/activity-facts.json and is
  * written through the Manager data mutex with a 2s debounce.
  */
 export type ActivityUserFact = {

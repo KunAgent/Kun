@@ -15,6 +15,7 @@ import {
   workspaceRootIdentityKey
 } from '../../lib/workspace-path'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { threadDisplayUpdatedAtMs } from '../../lib/empty-thread-activation'
 import {
   projectPathForWorktreeRecord,
   resolveProjectWorkspacePath,
@@ -47,6 +48,11 @@ export type SidebarThreadActivityContext = {
   unreadThreadIds: CompletionAttentionRegistry
   scheduledThreadActivities?: Record<string, ScheduledThreadActivity>
   awaitingUserInputThreadIds?: Record<string, true>
+  /**
+   * Background execution units still working or waiting under a thread.
+   * Keeps a row marked as active after the turn's reply has finished.
+   */
+  backgroundActivityByThread?: Record<string, 'running' | 'waiting'>
 }
 
 /**
@@ -62,11 +68,14 @@ export function sidebarThreadActivity(
 ): SidebarThreadActivity {
   const id = thread.id.trim()
   if (context.awaitingUserInputThreadIds?.[id] === true) return 'awaiting-input'
+  const background = context.backgroundActivityByThread?.[id]
+  if (background === 'waiting') return 'awaiting-input'
   const running =
     threadLooksRunning(thread) ||
     context.watchTurnCompletion[id] === true ||
     (context.activeThreadId === id && context.busy) ||
-    context.scheduledThreadActivities?.[id]?.state === 'running'
+    context.scheduledThreadActivities?.[id]?.state === 'running' ||
+    background === 'running'
   if (running) return 'running'
   const attention = context.activeThreadId === id
     ? null
@@ -496,7 +505,9 @@ export function sortSidebarThreads(threads: NormalizedThread[]): NormalizedThrea
   return [...threads].sort((a, b) => {
     if (a.pinned === true && b.pinned !== true) return -1
     if (b.pinned === true && a.pinned !== true) return 1
-    return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
+    // A reused empty session sorts by its New-session activation, not by the
+    // older content timestamp the runtime left on the thread.
+    return threadDisplayUpdatedAtMs(b) - threadDisplayUpdatedAtMs(a)
   })
 }
 

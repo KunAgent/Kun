@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import {
+  CONVERSATION_EXPORT_BATCH_MAX_ITEMS,
+  CONVERSATION_EXPORT_BATCH_MAX_TOTAL_CHARS,
   CONVERSATION_EXPORT_FORMATS,
   CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS
 } from '../../../shared/conversation-export'
@@ -15,6 +17,7 @@ import {
   MAX_WORKSPACE_SPREADSHEET_MUTATION_BYTES,
   MAX_WORKSPACE_SPREADSHEET_MUTATIONS
 } from '../../../shared/workspace-spreadsheet'
+import { WORKSPACE_TEXT_ENCODINGS, WORKSPACE_TEXT_PREVIEW_MAX_BYTES } from '../../../shared/workspace-file'
 import {
   MAX_BODY_BYTES,
   MAX_BRANCH_LENGTH,
@@ -206,6 +209,11 @@ export const workspaceFileTargetPayloadSchema = z
     column: z.number().int().positive().max(1_000_000).optional()
   })
   .strict()
+
+export const workspaceFileReadPayloadSchema = workspaceFileTargetPayloadSchema.extend({
+  encoding: z.enum(WORKSPACE_TEXT_ENCODINGS).optional(),
+  maxBytes: z.number().int().positive().max(WORKSPACE_TEXT_PREVIEW_MAX_BYTES).optional()
+})
 
 /**
  * Unlike generic file reads, Office previews are always scoped to an
@@ -509,6 +517,31 @@ export const conversationExportPayloadSchema = z
     defaultFileName: trimmedString(200)
   })
   .strict()
+
+export const conversationExportBatchPayloadSchema = z
+  .object({
+    format: z.enum(CONVERSATION_EXPORT_FORMATS),
+    folderName: trimmedString(200),
+    items: z
+      .array(
+        z
+          .object({
+            title: trimmedString(200),
+            markdown: z.string().min(1).max(CONVERSATION_EXPORT_MAX_MARKDOWN_CHARS),
+            defaultFileName: trimmedString(200)
+          })
+          .strict()
+      )
+      .min(1)
+      .max(CONVERSATION_EXPORT_BATCH_MAX_ITEMS)
+  })
+  .strict()
+  .refine(
+    (payload) =>
+      payload.items.reduce((total, item) => total + item.markdown.length, 0) <=
+      CONVERSATION_EXPORT_BATCH_MAX_TOTAL_CHARS,
+    { message: 'Conversation export batch is too large' }
+  )
 
 export const memoryMarkdownExportPayloadSchema = z
   .object({

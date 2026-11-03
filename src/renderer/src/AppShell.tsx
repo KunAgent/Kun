@@ -1,10 +1,13 @@
+import { useProductAnalyticsLifecycle } from './product-analytics/lifecycle'
 import { lazy, Suspense, useEffect } from 'react'
 import { useQuotaReminderNotifications } from './hooks/useQuotaReminderNotifications'
 import { appWindowTitleForFlavor } from '@shared/app-environment'
 import { resolveDesktopTitleBarMode, usesCustomDesktopTitleBar } from '@shared/desktop-title-bar'
 import { installSidebarActivityLifecycle } from './sidebar-activity-lifecycle'
 import { useChatStore } from './store/chat-store'
-import { RuntimeStatusBanner } from './components/RuntimeStatusBanner'
+import { startBackgroundThreadSync } from './store/chat-background-sync'
+import { RuntimeStatusToast } from './components/RuntimeStatusToast'
+import { ToastDock } from './toast/ToastDock'
 import i18n from './i18n'
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
@@ -12,6 +15,9 @@ import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-
 import { createInitialWorkbenchPreparer } from './initial-workbench-preparation'
 import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 import { SpeakDownloadToast } from './components/SpeakDownloadToast'
+import { WhatsNewHost } from './components/whats-new/WhatsNewHost'
+import { AgentActivityToasts } from './components/ade/AgentActivityToasts'
+import { MobilePairingDialog } from './components/remote/MobilePairingDialog'
 import { useRoomEvents } from './components/rooms/useRoomEvents'
 import { useWorkbenchDirectorySync } from './components/rooms/workbench-bridge-actions'
 import { WorkbenchFlash } from './components/rooms/workbench-flash'
@@ -24,12 +30,13 @@ import {
   startActivityNotifications,
   stopActivityNotifications
 } from './store/activity-notifications'
-import { syncAppBadgeCount } from './store/app-badge'
+import { appBadgeInputFromChatState, syncAppBadgeCount } from './store/app-badge'
 import { useAdeEnabled } from './components/ade/use-ade-enabled'
 import { KunLoader } from './components/KunLoader'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
+const GuidedTourHost = lazy(() => import('./components/guided-tour/GuidedTourHost').then((module) => ({ default: module.GuidedTourHost })))
 const DesktopShellChrome = lazy(() => import('./DesktopShellChrome').then((module) => ({ default: module.DesktopShellChrome })))
 
 type WorkbenchComponent = (typeof import('./components/Workbench'))['Workbench']
@@ -90,6 +97,7 @@ function RouteFallback(): React.ReactElement {
 }
 
 export default function AppShell(): React.ReactElement {
+  useProductAnalyticsLifecycle()
   useRoomEvents()
   useRemoteReconnectRecovery()
   const route = useChatStore((s) => s.route)
@@ -111,12 +119,13 @@ export default function AppShell(): React.ReactElement {
   const MobileApp = preparedMobileAppShell ?? MobileAppShell
 
   useEffect(() => installSidebarActivityLifecycle(useChatStore), [])
+  useEffect(() => startBackgroundThreadSync(), [])
 
-  // The ADE activity feed is app-level (06 §9): while the lab flag is on it
+  // The ADE activity feed is app-level: while the lab flag is on it
   // stays live across routes so worker completions and waits still notify —
   // and badge counts stay fresh — after the user leaves the ADE view. The
   // Mission Control popout owns its own window's feed; the mobile surface
-  // runs the same feed (P3-19) but keeps local notifications desktop-only.
+  // runs the same feed but keeps local notifications desktop-only.
   useEffect(() => {
     if (!adeEnabled) return
     startActivityFeed()
@@ -134,10 +143,18 @@ export default function AppShell(): React.ReactElement {
   }, [surface])
 
   useEffect(() => {
-    let previousUnread = useChatStore.getState().unreadThreadIds
-    const syncBadge = (unread: typeof previousUnread): void => {
-      // Dock badge = unread completions + ADE "needs you" rows (12 §notifications).
-      syncAppBadgeCount(unread, useActivityStore.getState().rows)
+    // Streaming updates touch unrelated state many times a second; only the
+    // inputs that can change the attention list are worth a recompute.
+    let lastInputs: unknown[] = []
+    const syncBadge = (): void => {
+      const state = useChatStore.getState()
+      const rows = useActivityStore.getState().rows
+      const inputs = [state.threads, state.unreadThreadIds, state.awaitingUserInputThreadIds,
+        state.watchTurnCompletion, state.scheduledThreadActivities, state.activeThreadId, state.busy, rows]
+      if (inputs.length === lastInputs.length && inputs.every((value, index) => value === lastInputs[index])) return
+      lastInputs = inputs
+      // Dock badge = the same "needs you" list the sidebar panel renders.
+      syncAppBadgeCount(appBadgeInputFromChatState(state, rows))
     }
     const clearVisible = (): void => {
       const state = useChatStore.getState()
@@ -145,26 +162,26 @@ export default function AppShell(): React.ReactElement {
       if (unreadThreadIds !== state.unreadThreadIds) useChatStore.setState({ unreadThreadIds })
     }
     const onAttentionChanged = (): void => clearVisible()
+    // Threads, archive flags, pending inputs and background work can all change
+    // the list without touching the unread registry, so recompute on any store
+    // change; the badge itself skips duplicate writes.
     const unsubscribe = useChatStore.subscribe((state) => {
       const visibleCleared = clearCurrentlyVisibleUnreadCompletions(state.unreadThreadIds, state)
       if (visibleCleared !== state.unreadThreadIds) {
         useChatStore.setState({ unreadThreadIds: visibleCleared })
         return
       }
-      if (state.unreadThreadIds === previousUnread) return
-      previousUnread = state.unreadThreadIds
-      syncBadge(previousUnread)
+      syncBadge()
     })
     const unsubscribeActivity = useActivityStore.subscribe(
       (state, prevState) => {
         if (state.rows === prevState.rows) return
-        syncBadge(previousUnread)
+        syncBadge()
       }
     )
 
     clearVisible()
-    previousUnread = useChatStore.getState().unreadThreadIds
-    syncBadge(previousUnread)
+    syncBadge()
     window.addEventListener('focus', onAttentionChanged)
     window.addEventListener('blur', onAttentionChanged)
     document.addEventListener('visibilitychange', onAttentionChanged)
@@ -191,7 +208,6 @@ export default function AppShell(): React.ReactElement {
           <DesktopShellChrome platform={platform} titleBar={hasDesktopTitleBar} />
         </Suspense> : null}
         <div className="flex min-h-0 flex-1 flex-col">
-          <RuntimeStatusBanner />
           <DataMigrationActivityIndicator />
           <Suspense fallback={<RouteFallback />}>
             {route === 'settings' && surface !== 'mobile' ? (
@@ -205,7 +221,13 @@ export default function AppShell(): React.ReactElement {
             ) : surface === 'mobile' ? <MobileApp /> : <WorkbenchView />}
           </Suspense>
         </div>
+        <ToastDock />
+        <RuntimeStatusToast />
         <SpeakDownloadToast />
+        {surface === 'desktop' ? <AgentActivityToasts /> : null}
+        {surface === 'desktop' && !window.kunGui?.isRemoteWeb ? <MobilePairingDialog /> : null}
+        {surface === 'desktop' ? <WhatsNewHost /> : null}
+        {surface === 'desktop' && !initialSetupOpen ? <Suspense fallback={null}><GuidedTourHost /></Suspense> : null}
         <WorkbenchFlash />
         {initialSetupOpen ? (
           surface === 'mobile' ? (

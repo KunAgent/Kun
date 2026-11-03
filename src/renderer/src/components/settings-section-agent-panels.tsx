@@ -1,5 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
-import { InlineNoticeView, SettingsCard, SettingRow, Toggle } from './settings-controls'
+import { Globe2, Monitor } from 'lucide-react'
+import { InlineNoticeView, SettingsCard, SettingRow, SettingsReveal, Toggle } from './settings-controls'
+import { SettingsFeatureCard } from './settings-feature-card'
 import type { KunBrowserUseSettingsV1 } from '@shared/app-settings'
 
 type BrowserUseRuntimeCapability = {
@@ -18,17 +20,22 @@ export function ComputerUseSettingsPanel({
   permissionRow: ReactNode
   onChange: (patch: Record<string, unknown>) => void
 }): ReactElement {
-  return <SettingsCard title={t('computerUseTitle')}>
-    <div className="space-y-4 px-3 py-4">
-      <InlineNoticeView notice={{ tone: 'info', message: t('computerUseHint') }} />
-      <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-700 dark:text-amber-200">
-        <div className="font-semibold">{t('computerUseModelQualityTitle')}</div>
-        <div className="mt-1">{t('computerUseModelQualityBody')}</div>
+  return <SettingsFeatureCard
+    icon={Monitor}
+    tone="blue"
+    title={t('computerUseTitle')}
+    description={t('computerUseHint')}
+    enabled={value.enabled}
+    onEnabledChange={(enabled) => onChange({ enabled })}
+    toggleLabel={t('computerUseEnable')}
+    enabledLabel={t('settingsIaFeatureOn')}
+  >
+      <div className="px-3 py-3">
+        <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-700 dark:text-amber-200">
+          <div className="font-semibold">{t('computerUseModelQualityTitle')}</div>
+          <div className="mt-1">{t('computerUseModelQualityBody')}</div>
+        </div>
       </div>
-    </div>
-    <SettingRow title={t('computerUseEnable')} description={t('computerUseEnableDesc')}
-      control={<Toggle checked={value.enabled} onChange={(enabled) => onChange({ enabled })} />} />
-    {value.enabled ? <>
       <SettingRow title={t('computerUseMode')} description={t('computerUseModeDesc')} control={
         <select className={selectControlClass} value={value.mode} onChange={(event) => onChange({ mode: event.target.value })}>
           <option value="auto">{t('computerUseModeAuto')}</option>
@@ -36,8 +43,7 @@ export function ComputerUseSettingsPanel({
           <option value="off">{t('computerUseModeOff')}</option>
         </select>} />
       {permissionRow}
-    </> : null}
-  </SettingsCard>
+  </SettingsFeatureCard>
 }
 
 export function BrowserUseSettingsPanel({
@@ -60,21 +66,23 @@ export function BrowserUseSettingsPanel({
       : 'standard'
   const runtimeStatus = browserUseRuntimeStatus(t, value.enabled, capability)
 
-  return <SettingsCard title={t('browserUseSettingsTitle')}>
-    <div className="space-y-3 px-3 py-4">
-      <InlineNoticeView notice={runtimeStatus} />
-      <InlineNoticeView notice={{ tone: 'info', message: t('browserUseSettingsHint') }} />
-      <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-[12px] leading-5 text-emerald-800 dark:text-emerald-200">
-        <div className="font-semibold">{t('browserUseZeroTrustTitle')}</div>
-        <div className="mt-1">{t('browserUseZeroTrustBody')}</div>
+  return <SettingsFeatureCard
+    icon={Globe2}
+    tone="teal"
+    title={t('browserUseSettingsTitle')}
+    description={t('browserUseSettingsHint')}
+    enabled={value.enabled}
+    onEnabledChange={(enabled) => onChange({ enabled })}
+    toggleLabel={t('browserUseSettingsEnable')}
+    enabledLabel={t('settingsIaFeatureOn')}
+  >
+      <div className="space-y-3 px-3 py-3">
+        <InlineNoticeView notice={runtimeStatus} />
+        <div className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-[12px] leading-5 text-emerald-800 dark:text-emerald-200">
+          <div className="font-semibold">{t('browserUseZeroTrustTitle')}</div>
+          <div className="mt-1">{t('browserUseZeroTrustBody')}</div>
+        </div>
       </div>
-    </div>
-    <SettingRow
-      title={t('browserUseSettingsEnable')}
-      description={t('browserUseSettingsEnableDesc')}
-      control={<Toggle checked={value.enabled} onChange={(enabled) => onChange({ enabled })} />}
-    />
-    {value.enabled ? <>
       <SettingRow
         title={t('browserUseSettingsMode')}
         description={value.mode === 'public'
@@ -208,8 +216,7 @@ export function BrowserUseSettingsPanel({
           </select>
         }
       />
-    </> : null}
-  </SettingsCard>
+  </SettingsFeatureCard>
 }
 
 function browserUseRuntimeStatus(
@@ -264,11 +271,13 @@ export function DesignQualitySettingsPanel({
     <div className="px-3 py-4"><InlineNoticeView notice={{ tone: 'info', message: t('designQualityHint') }} /></div>
     <SettingRow title={t('designQualityEnable')} description={t('designQualityEnableDesc')}
       control={<Toggle checked={value.enabled} onChange={(enabled) => onChange({ enabled })} />} />
-    {value.enabled ? <SettingRow title={t('designQualityStrictness')} description={t('designQualityStrictnessDesc')} control={
-      <select className={selectControlClass} value={value.strictness} onChange={(event) => onChange({ strictness: event.target.value })}>
-        <option value="relaxed">{t('designQualityStrictnessRelaxed')}</option>
-        <option value="standard">{t('designQualityStrictnessStandard')}</option>
-        <option value="strict">{t('designQualityStrictnessStrict')}</option>
-      </select>} /> : null}
+    <SettingsReveal open={value.enabled}>
+      <SettingRow title={t('designQualityStrictness')} description={t('designQualityStrictnessDesc')} control={
+        <select className={selectControlClass} value={value.strictness} onChange={(event) => onChange({ strictness: event.target.value })}>
+          <option value="relaxed">{t('designQualityStrictnessRelaxed')}</option>
+          <option value="standard">{t('designQualityStrictnessStandard')}</option>
+          <option value="strict">{t('designQualityStrictnessStrict')}</option>
+        </select>} />
+    </SettingsReveal>
   </SettingsCard>
 }

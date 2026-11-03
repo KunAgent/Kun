@@ -152,7 +152,7 @@ describe('ReviewDiffBlock attribution', () => {
       typeof b.props['aria-label'] === 'string'
         && /export attribution/i.test(b.props['aria-label']))
     expect(exportButton).toBeTruthy()
-    // The export control must not live inside the toggle button (11 §6).
+    // The export control must not live inside the toggle button.
     expect(exportButton!.parent?.type).toBe('div')
     await act(async () => exportButton!.props.onClick())
   })

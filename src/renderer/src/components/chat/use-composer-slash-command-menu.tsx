@@ -61,7 +61,7 @@ type Options = {
   hasReviewCommand: boolean
   skillCommands: ComposerSkillCommand[]
   disabledSkillIds?: string[]
-  /** Native commands the active harness advertised (12 §7.4); ADE only. */
+  /** Native commands the active harness advertised; ADE only. */
   harnessCommands?: { harnessLabel: string; commands: AdeHarnessCommand[] }
   onDismiss: () => void
 }
@@ -293,7 +293,7 @@ export function buildComposerSlashCommands({
           })
 
       // Harness-native commands advertised via `harness_session_state`
-      // (12 §7.4): a separate, scope-labeled section after the builtins.
+      //: a separate, scope-labeled section after the builtins.
       if (harnessCommands && harnessCommands.commands.length > 0) {
         const seen = new Set<string>()
         commands.push(...harnessCommands.commands

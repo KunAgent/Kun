@@ -523,6 +523,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         models: [
           {
             id: 'gpt-oss:120b',
+            matchSpecificity: 'exact',
             reasoning: true,
             toolCalling: true,
             inputModalities: ['text'],
@@ -588,6 +589,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         contextWindowTokens: 131_072,
         maxOutputTokens: 32_768,
         supportsToolCalling: true,
+        supportsReasoning: true,
         reasoning: {
           supportedEfforts: ['auto'],
           defaultEffort: 'auto',

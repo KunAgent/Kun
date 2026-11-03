@@ -19,7 +19,7 @@ async function fixture(id: string) {
 
 describe('known native Agent credential evidence', () => {
   it.each([
-    ['gemini-cli', 'GEMINI_API_KEY'], ['copilot', 'COPILOT_GITHUB_TOKEN'],
+    ['copilot', 'COPILOT_GITHUB_TOKEN'],
     ['goose', 'OPENAI_API_KEY'], ['droid', 'FACTORY_API_KEY'],
     ['qoder', 'QODER_PERSONAL_ACCESS_TOKEN'], ['qoder-cn', 'QODERCN_PERSONAL_ACCESS_TOKEN']
   ])('recognizes only the selected %s token and forwards it under that profile', async (id, key) => {
@@ -32,12 +32,12 @@ describe('known native Agent credential evidence', () => {
     expect(nativeHarnessCredentialEnv({ id }, env)).not.toHaveProperty('UNRELATED_API_KEY')
   })
 
-  it('requires both real Gemini OAuth token fields, never an account name alone', async () => {
-    const f = await fixture('gemini-cli')
+  it('requires both real OAuth token fields, never an account name alone', async () => {
+    const f = await fixture('droid')
     await writeFile(f.files[0]!, JSON.stringify({ access_token: 'fixture-access', refresh_token: 'fixture-refresh' }))
-    expect(nativeAgentCredentialsConfigured('gemini-cli', f.env)).toBe(true)
+    expect(nativeAgentCredentialsConfigured('droid', f.env)).toBe(true)
     await writeFile(f.files[0]!, JSON.stringify({ account: 'account', access_token: '' }))
-    expect(nativeAgentCredentialsConfigured('gemini-cli', f.env)).toBe(false)
+    expect(nativeAgentCredentialsConfigured('droid', f.env)).toBe(false)
   })
 
   it('does not borrow a global Qoder token for the independent Qoder CN account', async () => {
@@ -96,14 +96,14 @@ describe('known native Agent credential evidence', () => {
   })
 
   it('rejects linked and oversized credential files', async () => {
-    const f = await fixture('gemini-cli')
+    const f = await fixture('droid')
     const target = join(f.dir, 'linked.json')
     await writeFile(target, JSON.stringify({ access_token: 'access', refresh_token: 'refresh' }))
     await symlink(target, f.files[0]!)
-    expect(nativeAgentCredentialsConfigured('gemini-cli', f.env)).toBe(false)
+    expect(nativeAgentCredentialsConfigured('droid', f.env)).toBe(false)
     await rm(f.files[0]!)
     await writeFile(f.files[0]!, ' '.repeat(65 * 1024))
-    expect(nativeAgentCredentialsConfigured('gemini-cli', f.env)).toBe(false)
+    expect(nativeAgentCredentialsConfigured('droid', f.env)).toBe(false)
   })
 
   it('changes readiness identity when a native credential file rotates', async () => {

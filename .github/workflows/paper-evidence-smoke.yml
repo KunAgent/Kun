@@ -65,6 +65,8 @@ jobs:
           src/main/services/paper/paper-matrix-service.test.ts
           src/main/ipc/register-app-paper-evidence-ipc-handlers.test.ts
           src/renderer/src/paper/paper-evidence-actions.test.ts
+      - name: Verify immutable math fixture assets
+        run: node --test scripts/math-rendering-server.test.mjs
       - name: Ensure native Electron binary
         run: npm run ensure:electron
       - name: Exercise actual evidence, matrix and purpose-dialog components

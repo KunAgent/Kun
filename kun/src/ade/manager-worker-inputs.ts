@@ -1,11 +1,13 @@
 import { HarnessGatewayBindingSchema } from '../contracts/harness-gateway-binding.js'
 import { z } from 'zod'
 
-/** `worker_create` tool input (09 §4.2). */
+/** `worker_create` tool input. */
 export const WorkerCreateInputSchema = z
   .object({
     label: z.string().min(1).max(64),
     role: z.string().max(64).optional(),
+    /** Agent roster id: the role this worker plays (and its bound engine). */
+    profile: z.string().min(1).max(128).optional(),
     task: z.string().min(1).max(32_000),
     context: z
       .object({
@@ -28,14 +30,14 @@ export const WorkerCreateInputSchema = z
     workspace: z
       .object({
         isolation: z.enum(['worktree', 'local']).optional(),
-        /** Reuse a live task workspace instead of creating one (11 §4.4). */
+        /** Reuse a live task workspace instead of creating one. */
         reuseTaskWorkspaceId: z.string().min(1).max(256).optional(),
         startFrom: z
           .discriminatedUnion('kind', [
             z.object({ kind: z.literal('default-branch') }).strict(),
             z.object({ kind: z.literal('current-head') }).strict(),
             z.object({ kind: z.literal('branch'), name: z.string().min(1).max(256) }).strict(),
-            // Pre-resolved pin — races fork every contender from the same sha (10 §6).
+            // Pre-resolved pin — races fork every contender from the same sha.
             z.object({ kind: z.literal('commit'), sha: z.string().regex(/^[a-f0-9]{7,64}$/) }).strict()
           ])
           .optional()

@@ -2,6 +2,7 @@ import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost } from './local-tool-host.js'
 import type { HistoryReferenceService } from '../../history/history-reference-service.js'
 import { z } from 'zod'
+import { assertNoGoogleHistorySdkExport } from '../../gmail/thread-data-state.js'
 
 const ReadHistoryInput = z.object({
   operation: z.enum(['recent', 'search', 'read']),
@@ -38,7 +39,9 @@ export function buildHistoryReferenceToolProvider(service: Pick<HistoryReference
       execute: async (args, context) => {
         try {
           if (!service.isEnabled()) throw new Error('Source history references are unavailable for this turn.')
-          return { output: await service.readForThread(context.threadId, ReadHistoryInput.parse(args)) }
+          const output = await service.readForThread(context.threadId, ReadHistoryInput.parse(args))
+          if ((context.harnessId ?? 'kun') !== 'kun') assertNoGoogleHistorySdkExport(output)
+          return { output }
         } catch (error) {
           return { output: { error: error instanceof Error ? error.message : String(error) }, isError: true }
         }

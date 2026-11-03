@@ -49,6 +49,7 @@ import {
 } from './agent-sdk-runtime-trace.js'
 import {
   SdkAssistantDeltaEventCoalescer,
+  SdkItemDeltaLane,
   agentSdkCapabilities,
   abortError,
   awaitAbortable,
@@ -150,41 +151,15 @@ export class AgentSdkRuntime {
         maxPendingToolCalls: sdkStreamLimits?.maxPendingToolCalls ?? limits.maxToolCallsPerStep
       }
     })
-    let emittedText = ''
-    let emittedReasoning = ''
-    let queuedTextChars = 0
-    let queuedReasoningChars = 0
+    const textLane = new SdkItemDeltaLane('text')
+    const reasoningLane = new SdkItemDeltaLane('reasoning')
     const deltaEvents = new SdkAssistantDeltaEventCoalescer(async (delta) => {
-      if (delta.kind === 'assistant_text_delta') {
-        if (delta.textOffset !== emittedText.length) {
-          throw new Error(
-            `Agent SDK assistant text delta offset mismatch: expected ${emittedText.length}, ` +
-            `got ${delta.textOffset}`
-          )
-        }
-        emittedText += delta.text
-        await this.deps.applyAssistantDelta(
-          threadId,
-          makeAssistantTextItem({
-            id: delta.itemId, threadId, turnId, text: emittedText, status: 'running'
-          }),
-          delta.text,
-          delta.textOffset
-        )
-        return
-      }
-      if (delta.textOffset !== emittedReasoning.length) {
-        throw new Error(
-          `Agent SDK assistant reasoning delta offset mismatch: expected ${emittedReasoning.length}, ` +
-          `got ${delta.textOffset}`
-        )
-      }
-      emittedReasoning += delta.text
+      const isText = delta.kind === 'assistant_text_delta'
+      const text = (isText ? textLane : reasoningLane).emit(delta)
+      const make = isText ? makeAssistantTextItem : makeAssistantReasoningItem
       await this.deps.applyAssistantDelta(
         threadId,
-        makeAssistantReasoningItem({
-          id: delta.itemId, threadId, turnId, text: emittedReasoning, status: 'running'
-        }),
+        make({ id: delta.itemId, threadId, turnId, text, status: 'running' }),
         delta.text,
         delta.textOffset
       )
@@ -328,14 +303,11 @@ export class AgentSdkRuntime {
         { threadId, turnId, harnessId: 'claude-code' },
         ctx.handoffEvent
       )
-      const recordContextSnapshot = (): Promise<void> =>
+      const recordContextSnapshot = (live?: ReturnType<SdkEventMapper['getContextOccupancy']>): Promise<void> =>
         recordAgentSdkContextSnapshot({
-          ctx,
-          threadId,
-          turnId,
+          ctx, threadId, turnId, live,
           resumed: Boolean(resumeSessionId),
-          historyText:
-            ctx.handoffBrief ?? (resumeSessionId ? '' : ctx.historyTranscript ?? ''),
+          historyText: ctx.handoffBrief ?? (resumeSessionId ? '' : ctx.historyTranscript ?? ''),
           selectedKunTools,
           record: (draft) => this.deps.recordEvent(draft),
           kunSystemPrompt: () => this.deps.kunSystemPrompt()
@@ -431,26 +403,19 @@ export class AgentSdkRuntime {
               attemptFinalSeen = true
               attemptTurns = sdkResultTurnCount(message)
             }
-            for (const draft of mapper.map(message)) {
+            for (const draft of observeSdkMessage(threadId, turnId, message, mapper.map(message))) {
               captureAgentSdkTraceDraft(trace, draft)
               const delta = assistantDeltaOf(draft)
               if (delta) {
-                const textOffset = delta.kind === 'assistant_text_delta'
-                  ? queuedTextChars
-                  : queuedReasoningChars
-                await deltaEvents.append({ ...delta, textOffset })
-                if (delta.kind === 'assistant_text_delta') {
-                  queuedTextChars += delta.text.length
-                } else {
-                  queuedReasoningChars += delta.text.length
-                }
+                const lane = delta.kind === 'assistant_text_delta' ? textLane : reasoningLane
+                await deltaEvents.append({ ...delta, textOffset: lane.nextOffset(delta.itemId, delta.text.length) })
                 continue
               }
               // Preserve the mapper's exact event order: milestones, tools,
               // usage, and errors may not overtake pending assistant deltas.
               await deltaEvents.flush()
               // Gateway mode: the loopback gateway already recorded this usage
-              // (docs/ade/04 §6); the SDK report stays trace telemetry only.
+              //; the SDK report stays trace telemetry only.
               if (ctx.gateway && draft.kind === 'usage') continue
               const item = itemOf(draft)
               if (ctx.requireSvgCompletion && item) observeSvgToolResult(svgCompletion, item)
@@ -468,6 +433,8 @@ export class AgentSdkRuntime {
             // `result` is terminal and already carries usage/final status. Give
             // the Query a bounded chance to clean up before a recovery query starts.
             if (attemptFinalSeen) {
+              const live = mapper.getContextOccupancy()
+              if (live) await recordContextSnapshot(live)
               const closed = await closeIterator(iterator, abort.signal)
               if (!closed) interruptActiveStream()
               break
@@ -697,3 +664,4 @@ export class AgentSdkRuntime {
   }
 }
 import { createOwnedSdkProcessSpawner } from './owned-sdk-process.js'
+import { observeSdkMessage } from './agent-sdk-timing.js'

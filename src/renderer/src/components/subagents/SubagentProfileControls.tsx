@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { Bot, Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, Pencil, Plus, Power, Trash2, X } from 'lucide-react'
 import type { KunSubagentProfileV1, ModelReasoningEffort } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { AgentKun } from './AgentKun'
@@ -14,16 +14,14 @@ export function SubagentPanelHeader({
 }): ReactElement {
   const { t } = useTranslation('common')
   return (
-    <div className="flex shrink-0 items-center gap-2 border-b border-ds-border px-4 py-3.5">
-      <Bot className="h-[17px] w-[17px] text-accent" strokeWidth={2} />
-      <b className="text-[14px] font-semibold text-ds-heading">{t('subagents', 'Subagents')}</b>
-      <span className="text-[11px] text-ds-faint">· {t('subagentsPanel.configModel', 'configure model')}</span>
+    <div className="flex shrink-0 items-center gap-2 px-4 pb-2 pt-3.5">
+      <b className="text-[15px] font-semibold text-ds-ink">{t('subagents', 'Subagents')}</b>
       <button data-settings-action="ghost" data-settings-size="icon"
         type="button"
         onClick={onCollapse}
         title={t('agentsView.cancel', 'Close')}
         aria-label={t('agentsView.cancel', 'Close')}
-        className="ml-auto rounded-md p-1 text-ds-faint transition hover:bg-ds-subtle hover:text-ds-heading"
+        className="ml-auto rounded-md p-1 text-ds-faint transition hover:bg-ds-subtle hover:text-ds-ink"
       >
         <X className="h-4 w-4" strokeWidth={2} />
       </button>
@@ -64,7 +62,7 @@ export function Row({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-[13.5px] font-semibold text-ds-heading">{name}</span>
+          <span className="truncate text-[13.5px] font-semibold text-ds-ink">{name}</span>
           {builtin ? (
             <span
               className="shrink-0 rounded-full px-1.5 py-px text-[9.5px] font-semibold"
@@ -118,7 +116,7 @@ export function RowActions({
         type="button"
         onClick={onEdit}
         title={t('agentsView.edit', 'Edit')}
-        className="rounded p-1.5 text-ds-muted hover:bg-ds-subtle hover:text-ds-heading"
+        className="rounded p-1.5 text-ds-muted hover:bg-ds-subtle hover:text-ds-ink"
       >
         <Pencil className="h-3.5 w-3.5" />
       </button>
@@ -182,7 +180,7 @@ export function ModelSelect({
   const activeGroup = groups.find((g) => g.providerId === picked)
 
   const triggerCls = stretch
-    ? 'flex h-9 w-full items-center justify-between rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] pl-3 pr-2.5 text-sm text-ds-heading disabled:opacity-50'
+    ? 'flex h-9 w-full items-center justify-between rounded-md border border-ds-border bg-[var(--ds-surface-elevated)] pl-3 pr-2.5 text-sm text-ds-ink disabled:opacity-50'
     : `flex h-8 w-[132px] items-center justify-between gap-1 rounded-[9px] border bg-[var(--ds-surface-elevated)] pl-3 pr-2 text-[12px] font-semibold disabled:opacity-50 ${
         small ? 'border-emerald-200 text-emerald-700 dark:border-emerald-900/60 dark:text-emerald-300' : 'border-ds-border text-accent'
       }`

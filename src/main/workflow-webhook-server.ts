@@ -13,6 +13,7 @@ import {
 } from './schedule-runtime-helpers'
 import { summarizeWorkflowForAgent } from './workflow-runtime-helpers'
 import type { WorkflowPayload } from './workflow-expression'
+import { describeLocalListenError } from './local-listen-error'
 
 type WorkflowWebhookOptions = {
   loadSettings: () => Promise<AppSettingsV1>
@@ -53,8 +54,11 @@ export class WorkflowWebhookServer {
 
   sync(settings: AppSettingsV1): void {
     // The same local server hosts webhook-trigger paths, /workflow/internal/* (agent
-    // tool) and the public POST /workflow/run, so listen whenever workflows are on.
-    const shouldListen = settings.workflow.enabled && settings.workflow.workflows.length > 0
+    // tool) and the public POST /workflow/run, so listen whenever Workflow is on.
+    // It must not additionally require a saved workflow: the agent tools read an
+    // empty list from here, and requiring one turned "enabled but empty" into an
+    // unreachable port and a network error instead of "no workflows".
+    const shouldListen = settings.workflow.enabled
     if (!shouldListen) {
       this.close()
       return
@@ -66,9 +70,7 @@ export class WorkflowWebhookServer {
       void this.handleWebhookRequest(req, res)
     })
     server.on('error', (error) => {
-      this.options.logError('workflow-webhook', 'Webhook server failed', {
-        message: error instanceof Error ? error.message : String(error)
-      })
+      this.options.logError('workflow-webhook', 'Webhook server failed', describeLocalListenError(error, settings.workflow.webhookPort, 'Settings > Workflows'))
       if (this.server === server) this.close()
     })
     // Bind to localhost only — never expose the listener to the network.

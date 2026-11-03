@@ -23,14 +23,13 @@ export type PaperTabLabel = {
  * surface or for files that are not inside a known unit.
  */
 export function usePaperTabLabel(path: string | null): PaperTabLabel | null {
-  const surface = useWriteWorkspaceStore((s) => s.workSurface)
   const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const entriesByDir = useWriteWorkspaceStore((s) => s.entriesByDir)
   const unitsByDir = usePaperStore((s) => s.unitsByDir)
   const entries = usePaperModeStore((s) => s.entries)
 
   return useMemo(() => {
-    if (surface !== 'papers' || !path || !workspaceRoot) return null
+    if (!path || !workspaceRoot) return null
     const unitAbs =
       findPaperUnitDir(workspaceRoot, path, entriesByDir) ??
       paperUnitDirFromKnownUnits(workspaceRoot, path, entries.map((e) => e.unitDir)) ??
@@ -49,5 +48,5 @@ export function usePaperTabLabel(path: string | null): PaperTabLabel | null {
             ? 'pdf'
             : 'other'
     return { title, kind }
-  }, [surface, path, workspaceRoot, entriesByDir, unitsByDir, entries])
+  }, [path, workspaceRoot, entriesByDir, unitsByDir, entries])
 }

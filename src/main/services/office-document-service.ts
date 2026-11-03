@@ -5,7 +5,7 @@ import { basename, join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow } from 'electron'
-import sharp from 'sharp'
+import { loadSharp } from './lazy-sharp'
 import {
   MAX_RUNTIME_DOCUMENT_SOURCE_BYTES,
   MAX_RUNTIME_DOCUMENT_TEXT_CHARS,
@@ -61,7 +61,7 @@ export type OfficeCliResult = {
 
 type OfficePreviewSelection = { page?: number; sheetIndex?: number }
 
-type OfficeDocumentSemanticReadResult =
+export type OfficeDocumentSemanticReadResult =
   | OfficeDocumentReadSuccess<OfficeDocumentPreviewFormat>
   | OfficeDocumentReadFailure
 
@@ -88,6 +88,14 @@ export async function readLocalOfficeDocument(
   // workspace route opts into legacy conversion below without widening uploads.
   const result = await readOfficeDocument(target, dependencies, false)
   return result as LocalOfficeDocumentReadResult
+}
+
+/** First page (or first sheet) of a workspace document, for library thumbnails. */
+export async function readOfficeDocumentFirstPage(
+  target: LocalOfficeDocumentTarget,
+  dependencies: OfficeDocumentServiceDependencies = {}
+): Promise<OfficeDocumentSemanticReadResult> {
+  return readOfficeDocument(target, dependencies, true, { page: 1 })
 }
 
 async function readOfficeDocument(
@@ -466,7 +474,7 @@ async function encodePreviewWithinLimit(
   let dimension = Math.min(VISUAL_PREVIEW_MAX_DIMENSION, Math.max(sourceWidth, sourceHeight))
   for (;;) {
     for (const quality of [82, 74, 66, 58, 50, 42, 34]) {
-      const encoded = await sharp(png)
+      const encoded = await (await loadSharp())(png)
         .resize({ width: dimension, height: dimension, fit: 'inside', withoutEnlargement: true })
         .webp({ quality, effort: 4 })
         .toBuffer({ resolveWithObject: true })

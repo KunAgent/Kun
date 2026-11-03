@@ -1,20 +1,23 @@
 import type { CSSProperties, ReactElement } from 'react'
-import { Check, ChevronDown, FilePlus2, FileText, Folder, Import, MessageSquareQuote, Presentation, Search, Shapes, Table2 } from 'lucide-react'
+import { Check, ChevronDown, FilePlus2, Folder, Import, Search, Shapes } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import kunLaptopUrl from '../../../../asset/img/kun_laptop.png'
 import { RoomAvatarPortrait } from '../rooms/RoomAvatar'
 import { RoomPopover } from '../rooms/RoomPopover'
 import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../write/write-workspace-store'
-import { createWorkDraftDocument, ensureWorkSpaceMounted, mountWorkSpace, openPaperImport, openPaperView } from '../../write/work-session-actions'
+import { createWorkDraftDocument, ensureWorkSpaceMounted, mountWorkSpace, openPaperImport, startWorkPaperSearch } from '../../write/work-session-actions'
 import { useWorkWhiteboardCreation } from './use-work-whiteboard-creation'
 import { WorkWhiteboardTitleDialog } from './WorkWhiteboardTitleDialog'
 
-/** Kun's face for the Work assistant (quill) and paper contexts (glasses). */
+/** Kun's face for the Work assistant (quill) and paper contexts (glasses); hidden in Focus mode. */
 export function WorkKunAvatar({ variant = 'writer', size = 22 }: {
   variant?: 'writer' | 'researcher'
   size?: number
-}): ReactElement {
+}): ReactElement | null {
+  const focusMode = useFocusModeStore((state) => state.enabled)
+  if (focusMode) return null
   return (
     <span className="work-kun-avatar rooms-avatar" aria-hidden="true"
       style={{ '--rooms-avatar-size': `${size}px` } as CSSProperties}>
@@ -29,19 +32,20 @@ export function WorkKunAvatar({ variant = 'writer', size = 22 }: {
  */
 export function WorkHomeHero(): ReactElement {
   const { t } = useTranslation('common')
+  const focusMode = useFocusModeStore((state) => state.enabled)
   const workspaceRoot = useWriteWorkspaceStore((s) => s.workspaceRoot)
   const whiteboard = useWorkWhiteboardCreation({ workspaceRoot, onNeedWorkspace: async () => undefined })
   const actions = [
     { id: 'document', label: t('workSidebarNewDocument'), Icon: FilePlus2,
       run: () => void createWorkDraftDocument(t('writeUntitledDraft')) },
-    { id: 'import', label: t('workSidebarImportPaper'), Icon: Import, run: () => void openPaperImport() },
     { id: 'whiteboard', label: t('writeCreateWhiteboard'), Icon: Shapes,
       run: () => void ensureWorkSpaceMounted().then((ok) => { if (ok) void whiteboard.openNewWhiteboardDialog() }) },
-    { id: 'search', label: t('writePaperDiscoverTab_search'), Icon: Search, run: () => void openPaperView('discover:search') }
+    { id: 'import', label: t('workSidebarImportPaper'), Icon: Import, run: () => void openPaperImport() },
+    { id: 'search', label: t('writePaperDiscoverTab_search'), Icon: Search, run: () => void startWorkPaperSearch() }
   ]
   return (
     <div className="work-home-hero" data-work-home>
-      <img src={kunLaptopUrl} alt="" className="work-home-mascot" draggable={false} />
+      {focusMode ? null : <img src={kunLaptopUrl} alt="" className="work-home-mascot" draggable={false} />}
       <h2 className="work-home-title">{t('workHomeTitle')}</h2>
       <p className="work-home-subtitle">{t('workHomeSubtitle')}</p>
       <div className="work-home-actions">
@@ -59,27 +63,6 @@ export function WorkHomeHero(): ReactElement {
           onClose={() => { if (!whiteboard.creatingWhiteboard) whiteboard.closeNewWhiteboardDialog() }}
         />
       ) : null}
-    </div>
-  )
-}
-
-/** Starter prompts under the home composer; they fill the input, never send. */
-export function WorkHomeStarters({ onPrompt }: { onPrompt: (prompt: string) => void }): ReactElement {
-  const { t } = useTranslation('common')
-  const starters = [
-    { label: t('writeStarterSummarize'), prompt: t('writeStarterSummarizePrompt'), Icon: FileText },
-    { label: t('writeStarterPdf'), prompt: t('writeStarterPdfPrompt'), Icon: MessageSquareQuote },
-    { label: t('writeStarterSpreadsheet'), prompt: t('writeStarterSpreadsheetPrompt'), Icon: Table2 },
-    { label: t('writeStarterPresentation'), prompt: t('writeStarterPresentationPrompt'), Icon: Presentation }
-  ]
-  return (
-    <div className="work-home-starters" aria-label={t('writeStarterActionsLabel')}>
-      {starters.map(({ label, prompt, Icon }) => (
-        <button key={label} type="button" className="work-home-starter" onClick={() => onPrompt(prompt)}>
-          <Icon className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-          <span>{label}</span>
-        </button>
-      ))}
     </div>
   )
 }

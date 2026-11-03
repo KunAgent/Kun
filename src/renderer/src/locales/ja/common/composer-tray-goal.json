@@ -1,0 +1,20 @@
+{
+  "composerTrayGoal": {
+    "label": "目標",
+    "segmentAria": "目標（{{status}}）：{{objective}}",
+    "status": {
+      "active": "進行中",
+      "paused": "一時停止中",
+      "blocked": "ブロック中",
+      "usageLimited": "利用量の上限に到達",
+      "budgetLimited": "予算の上限に到達",
+      "complete": "完了"
+    },
+    "edit": "編集",
+    "elapsed": "経過時間",
+    "tokens": "tokens",
+    "tokensOfBudget": "tokens / 予算",
+    "panelHintEmpty": "下の入力欄に目標を入力し、「目標として設定する」を選んでください。",
+    "panelHintReplace": "下の入力欄に新しい目標を入力すると、現在の目標を置き換えます。"
+  }
+}

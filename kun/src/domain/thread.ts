@@ -36,8 +36,8 @@ import { resolveThreadLockedTaskSurface } from './task-surface-lock.js'
  */
 export type ThreadEntity = ThreadRecord
 
-const LEGACY_WRITE_THREAD_TITLE = 'Write Assistant'
-const LEGACY_WRITE_CONTEXT_HEADING = '[写作上下文]'
+export const LEGACY_WRITE_THREAD_TITLE = 'Write Assistant'
+export const LEGACY_WRITE_CONTEXT_HEADING = '[写作上下文]'
 const LEGACY_WRITE_INTERACTION_LIMIT =
   '交互限制: 当前 GUI 无法提交 request_user_input 的 HTTP 响应；需要更多信息时，直接用普通文本向用户提问，不要调用 request_user_input。'
 const LEGACY_WRITE_INTERACTION_AGREEMENT =
@@ -46,6 +46,7 @@ const LEGACY_WRITE_INTERACTION_AGREEMENT =
 export function createThreadRecord(input: {
   roomContext?: ThreadRecord['roomContext']
   workbenchOrigin?: ThreadRecord['workbenchOrigin']
+  taskOrigin?: ThreadRecord['taskOrigin']
   historyRefId?: string
   id: string
   title: string
@@ -131,6 +132,7 @@ export function createThreadRecord(input: {
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
     ...(input.roomContext ? { roomContext: input.roomContext } : {}),
     ...(input.workbenchOrigin ? { workbenchOrigin: input.workbenchOrigin } : {}),
+    ...(input.taskOrigin ? { taskOrigin: input.taskOrigin } : {}),
     mode: input.mode ?? 'agent',
     status: input.status ?? 'idle',
     approvalPolicy: input.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,
@@ -217,6 +219,7 @@ export function toThreadSummary(
     ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
     ...(thread.executionUnit ? { executionUnit: thread.executionUnit } : {}),
     ...(thread.workbenchOrigin ? { workbenchOrigin: thread.workbenchOrigin } : {}),
+    ...(thread.taskOrigin ? { taskOrigin: thread.taskOrigin } : {}),
     ...(thread.planBuildRunId ? { planBuildRunId: thread.planBuildRunId } : {}),
     ...(thread.planBuildAdmissionFingerprint
       ? { planBuildAdmissionFingerprint: thread.planBuildAdmissionFingerprint }
@@ -236,6 +239,7 @@ export function toThreadSummary(
     ...(thread.goal ? { goal: thread.goal } : {}),
     ...(thread.executionTasks ? { todos: executionTasksAsTodos(thread.id, thread.executionTasks) }
       : thread.todos ? { todos: thread.todos } : {}),
+    ...(Array.isArray(thread.turns) ? { turnCount: thread.turns.length } : {}),
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt
   }

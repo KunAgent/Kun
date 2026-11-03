@@ -3,14 +3,17 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorkerNotice } from '../contracts/ade.js'
+import type { DispatchRecord, WorkerNotice } from '../contracts/ade.js'
 import type { StartTurnResponse } from '../contracts/turns.js'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../domain/thread.js'
 import { FileDispatchStore } from './dispatch-store.js'
 import { FileTeamStore } from './team-store.js'
 import { FileWorkerNoticeStore } from './worker-notice-store.js'
+import { QualityVerdicts } from './quality-verdict.js'
 import { WorkerNoticeCoordinator } from './worker-notice-coordinator.js'
+import { workerDispatchIds } from './worker-dispatch-ids.js'
+import type { AgentDispatchIntent } from '../contracts/agent-dispatch-intents.js'
 
 let dataDir: string
 let teams: FileTeamStore
@@ -78,7 +81,10 @@ function managerThread(turns: Array<{ status: string }> = []) {
 
 type StartCall = { request: { prompt: string; clientRequestId: string; messageSource?: string } }
 
-function harness(input: { startImpl?: (call: StartCall) => Promise<StartTurnResponse> } = {}) {
+function harness(input: {
+  startImpl?: (call: StartCall) => Promise<StartTurnResponse>
+  intent?: AgentDispatchIntent
+} = {}) {
   // Emulate the real contract: onAdmitted fires only for a newly admitted
   // turn; a repeated clientRequestId replays the stored response instead.
   const admitted = new Set<string>()
@@ -94,18 +100,45 @@ function harness(input: { startImpl?: (call: StartCall) => Promise<StartTurnResp
     return response
   })
   const runTurn = vi.fn(async () => 'completed')
+  const dispatches = new FileDispatchStore(dataDir, () => NOW)
   const coordinator = new WorkerNoticeCoordinator({
     notices,
     teams,
     threads,
-    dispatches: new FileDispatchStore(dataDir, () => NOW),
+    dispatches,
+    ...(input.intent ? { agentDispatchService: { get: async () => input.intent! } } : {}),
     turns: { startTurn: startTurn as never },
     runTurn: () => runTurn,
     nowIso: () => NOW,
     language: () => 'en'
   })
   coordinators.add(coordinator)
-  return { coordinator, startTurn, runTurn }
+  return { coordinator, startTurn, runTurn, dispatches }
+}
+
+function seedDispatch(dispatches: FileDispatchStore, overrides: Partial<DispatchRecord> = {}) {
+  return dispatches.create({
+    dispatchId: 'dsp_1',
+    teamId: MANAGER,
+    workerId: 'wrk_1',
+    parentTurnId: 'turn_0',
+    title: 'worker task',
+    task: 'finish the task',
+    mode: 'queue',
+    state: 'completed',
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...overrides
+  })
+}
+
+function verdictsFor(dispatches: FileDispatchStore): QualityVerdicts {
+  return new QualityVerdicts({
+    teams,
+    dispatches,
+    nowIso: () => NOW,
+    language: () => 'en'
+  })
 }
 
 describe('WorkerNoticeCoordinator', () => {
@@ -125,6 +158,40 @@ describe('WorkerNoticeCoordinator', () => {
     expect(call.request.prompt).toContain('dispatch ntc_1')
     expect(call.request.prompt).toContain('dispatch ntc_3')
     expect(runTurn).toHaveBeenCalledWith(MANAGER, 'turn_new')
+  })
+
+  it('lets informational notices ride the next wake-up instead of starting one', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn } = harness()
+    await coordinator.enqueue(notice('ntc_released', { kind: 'worker_released' }))
+    await vi.advanceTimersByTimeAsync(3_000)
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).not.toHaveBeenCalled()
+    expect(await notices.pending(MANAGER)).toHaveLength(1)
+    await coordinator.enqueue(notice('ntc_done'))
+    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+    const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
+    expect(call.request.prompt).toContain('dispatch ntc_released')
+    expect(call.request.prompt).toContain('dispatch ntc_done')
+  })
+
+  it('drops a failure its dispatch card already rerouted to another Agent', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const intent = { intentId: 'dispatch_1', startRequestId: 'dispatch_1:start', replacementCount: 0,
+      takenOver: false, cancellationRequested: false, payload: { items: [{ fallbackCount: 1 }, {}] } } as unknown as AgentDispatchIntent
+    const { coordinator, startTurn } = harness({ intent })
+    await coordinator.enqueue(notice('ntc_rerouted', { kind: 'dispatch_failed', dispatchIntentId: 'dispatch_1',
+      workerId: workerDispatchIds(intent, 0).workerId }))
+    await coordinator.enqueue(notice('ntc_sibling', { dispatchIntentId: 'dispatch_1', workerId: workerDispatchIds(intent, 1).workerId }))
+    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+    const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
+    expect(call.request.prompt).toContain('dispatch ntc_sibling')
+    expect(call.request.prompt).not.toContain('dispatch ntc_rerouted')
   })
 
   it('waits for durable acknowledgement after admission while a write is still pending', async () => {
@@ -289,6 +356,188 @@ describe('WorkerNoticeCoordinator', () => {
     }), expect.anything())
   })
 
+
+  it('does not wake after a verdict consumed the notice during the main turn', async () => {
+    vi.useFakeTimers()
+    const thread = managerThread([{ status: 'running' }])
+    await threads.upsert(thread)
+    const { coordinator, startTurn, runTurn, dispatches } = harness()
+    await seedDispatch(dispatches)
+    await coordinator.enqueue(notice('ntc_handled', { dispatchId: 'dsp_1' }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).not.toHaveBeenCalled()
+
+    const verdict = await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_1', status: 'passed' }
+    )
+    expect(verdict.ok).toBe(true)
+    thread.turns = []
+    await threads.upsert(thread)
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+    expect(startTurn).not.toHaveBeenCalled()
+    expect(runTurn).not.toHaveBeenCalled()
+  })
+
+  it('does not wake for a completion notice that arrives after the verdict', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, runTurn, dispatches } = harness()
+    await seedDispatch(dispatches)
+    await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_1', status: 'needs_changes' }
+    )
+    await coordinator.enqueue(notice('ntc_late', { dispatchId: 'dsp_1' }))
+    await vi.advanceTimersByTimeAsync(3_000)
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+    expect(startTurn).not.toHaveBeenCalled()
+    expect(runTurn).not.toHaveBeenCalled()
+  })
+
+  it('replays a handled completion without waking after restart', async () => {
+    await teams.ensure(MANAGER)
+    await threads.upsert(managerThread())
+    const dispatches = new FileDispatchStore(dataDir, () => NOW)
+    await seedDispatch(dispatches)
+    await notices.enqueue(notice('ntc_restart', { dispatchId: 'dsp_1' }))
+    await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_1', status: 'rejected' }
+    )
+    const { coordinator, startTurn, runTurn } = harness()
+    expect(await coordinator.replayPending()).toBe(1)
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+    expect(startTurn).not.toHaveBeenCalled()
+    expect(runTurn).not.toHaveBeenCalled()
+  })
+
+  it('wakes only for unhandled results in a mixed batch', async () => {
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, dispatches } = harness()
+    await seedDispatch(dispatches, { dispatchId: 'dsp_old', title: 'old dispatch' })
+    await seedDispatch(dispatches, { dispatchId: 'dsp_new', title: 'new dispatch' })
+    await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_old', status: 'passed' }
+    )
+    await coordinator.enqueue(notice('ntc_old', { dispatchId: 'dsp_old', title: 'old dispatch' }))
+    await coordinator.enqueue(notice('ntc_new', { dispatchId: 'dsp_new', title: 'new dispatch' }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).toHaveBeenCalledTimes(1)
+    const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
+    expect(call.request.prompt).toContain('new dispatch')
+    expect(call.request.prompt).not.toContain('old dispatch')
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+  })
+
+  it('lets a later dispatch for the same worker wake again', async () => {
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, dispatches } = harness()
+    await seedDispatch(dispatches, { dispatchId: 'dsp_first', title: 'first dispatch' })
+    await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_first', status: 'passed' }
+    )
+    await coordinator.enqueue(notice('ntc_first', { dispatchId: 'dsp_first', title: 'first dispatch' }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).not.toHaveBeenCalled()
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+
+    await seedDispatch(dispatches, { dispatchId: 'dsp_second', title: 'second dispatch' })
+    await coordinator.enqueue(notice('ntc_second', { dispatchId: 'dsp_second', title: 'second dispatch' }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).toHaveBeenCalledTimes(1)
+    const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
+    expect(call.request.prompt).toContain('second dispatch')
+  })
+
+  it('keeps handled notices retryable when the consuming ACK fails', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, runTurn, dispatches } = harness()
+    await seedDispatch(dispatches)
+    await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_1', status: 'waived' }
+    )
+    const ack = notices.ack.bind(notices)
+    let failures = 1
+    vi.spyOn(notices, 'ack').mockImplementation(async (...args) => {
+      if (failures > 0) {
+        failures -= 1
+        throw new Error('notice ack io')
+      }
+      return ack(...args)
+    })
+    await coordinator.enqueue(notice('ntc_retry', { dispatchId: 'dsp_1' }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).not.toHaveBeenCalled()
+    const stored = await notices.pending(MANAGER)
+    expect(stored).toHaveLength(1)
+    expect(stored[0]?.attempts).toBe(1)
+    expect(stored[0]?.lastError).toContain('notice ack io')
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+    expect(startTurn).not.toHaveBeenCalled()
+    expect(runTurn).not.toHaveBeenCalled()
+  })
+
+  it('keeps a completion notice pending when the dispatch read fails', async () => {
+    vi.useFakeTimers()
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, dispatches } = harness()
+    await seedDispatch(dispatches)
+    vi.spyOn(dispatches, 'get').mockRejectedValueOnce(new Error('dispatch store unavailable'))
+    await coordinator.enqueue(notice('ntc_read_fail', { dispatchId: 'dsp_1', title: 'read failed' }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).not.toHaveBeenCalled()
+    const stored = await notices.pending(MANAGER)
+    expect(stored[0]?.attempts).toBe(1)
+    expect(stored[0]?.lastError).toContain('dispatch store unavailable')
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    await vi.waitFor(() => expect(startTurn).toHaveBeenCalledTimes(1))
+    await vi.waitFor(async () => expect(await notices.pending(MANAGER)).toHaveLength(0))
+  })
+
+  it('still wakes for a review result after the dispatch result was handled', async () => {
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, dispatches } = harness()
+    await seedDispatch(dispatches)
+    await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_1', status: 'passed' }
+    )
+    await coordinator.enqueue(notice('ntc_review', {
+      kind: 'review_completed',
+      dispatchId: 'dsp_1',
+      title: 'review finished'
+    }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).toHaveBeenCalledTimes(1)
+    const call = startTurn.mock.calls[0]![0] as { request: StartCall['request'] }
+    expect(call.request.prompt).toContain('review finished')
+  })
+
+  it('does not treat a mismatched worker association as handled', async () => {
+    await threads.upsert(managerThread())
+    const { coordinator, startTurn, dispatches } = harness()
+    await seedDispatch(dispatches)
+    await verdictsFor(dispatches).workerVerdict(
+      { threadId: MANAGER },
+      { dispatchId: 'dsp_1', status: 'passed' }
+    )
+    await coordinator.enqueue(notice('ntc_mismatch', {
+      dispatchId: 'dsp_1',
+      workerId: 'wrk_other',
+      title: 'mismatched worker'
+    }))
+    await coordinator.deliverForManager(MANAGER)
+    expect(startTurn).toHaveBeenCalledTimes(1)
+  })
 
   it('returns results to the originating external turn route and account', async () => {
     const thread = managerThread([{ status: 'completed' }])

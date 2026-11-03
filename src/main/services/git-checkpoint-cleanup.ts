@@ -142,7 +142,11 @@ export async function cleanupUnusedGitCheckpoints(params: {
       ? Math.max(1, Math.min(100, Math.floor(params.maxPerThread)))
       : DEFAULT_MAX_CHECKPOINTS_PER_THREAD
   const root = resolveCheckpointsRoot(params.dataDir, params.checkpointsRoot)
-  const referenced = await collectReferencedCheckpointIds(params.dataDir)
+  // Collecting references reads every thread log (gigabytes on a large
+  // history) and only matters for a checkpoint that would otherwise be
+  // deleted, so it runs at most once and only when such a checkpoint exists.
+  let referencedScan: Promise<Set<string>> | undefined
+  const referencedIds = () => (referencedScan ??= collectReferencedCheckpointIds(params.dataDir))
   const result: GitCheckpointCleanupResult = {
     scanned: 0,
     kept: 0,
@@ -168,12 +172,6 @@ export async function cleanupUnusedGitCheckpoints(params: {
     const createdMs = await resolveCheckpointCreatedMs(root, checkpointId)
     const expiredByAge =
       maxAgeMs != null && createdMs != null && nowMs - createdMs >= maxAgeMs
-    // A message may expose this checkpoint as its rollback target. Retain it
-    // regardless of its age so cleanup can never leave a broken rollback link.
-    if (referenced.has(checkpointId)) {
-      result.kept += 1
-      continue
-    }
     if (!expiredByAge && graceMs > 0) {
       try {
         const dirStat = await stat(join(root, checkpointId))
@@ -185,6 +183,12 @@ export async function cleanupUnusedGitCheckpoints(params: {
       } catch {
         // Cannot stat (e.g. removed concurrently); fall through to the delete.
       }
+    }
+    // A message may expose this checkpoint as its rollback target. Retain it
+    // regardless of its age so cleanup can never leave a broken rollback link.
+    if ((await referencedIds()).has(checkpointId)) {
+      result.kept += 1
+      continue
     }
     try {
       await rm(join(root, checkpointId), { recursive: true, force: true })
@@ -199,7 +203,7 @@ export async function cleanupUnusedGitCheckpoints(params: {
   // Keep all checkpoints that remain reachable from thread history. The cap is
   // deliberately a soft limit over unreferenced directories only: deleting a
   // referenced checkpoint would turn an existing rollback action into data loss.
-  const pruned = await pruneAllThreadCheckpoints(root, maxPerThread, referenced)
+  const pruned = await pruneAllThreadCheckpoints(root, maxPerThread, referencedScan ? await referencedScan : undefined)
   for (const checkpointId of pruned.deleted) {
     if (result.deletedIds.includes(checkpointId)) continue
     result.deleted += 1

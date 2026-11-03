@@ -4,6 +4,7 @@ import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import type { BrowserStorageLike } from '../lib/browser-storage'
 import {
   rememberThreadComposerMode,
+  rememberThreadComposerReasoning,
   rememberThreadComposerSelection
 } from './chat-store-helpers'
 import {
@@ -421,6 +422,21 @@ describe('thread composer state restoration', () => {
     expect(restored.composerHarnessId).toBe('codex')
     expect(restored.composerModel).toBe('gpt-6.1-sol')
     expect(restored.composerReasoningEffort).toBe('auto')
+  })
+
+  it('restores the level picked in an external Agent thread together with its model', () => {
+    const { state } = buildHarness()
+    const harness = { harnessId: 'codex', credentialMode: 'provider' }
+    rememberThreadComposerSelection('thread-a', 'gpt-6.1-sol', 'qiniu', 'user', harness)
+    rememberThreadComposerReasoning('thread-a', 'high')
+    // A later same-model update (e.g. on send) keeps the level; a model switch drops it.
+    rememberThreadComposerSelection('thread-a', 'gpt-6.1-sol', 'qiniu', 'user', harness)
+    state.threads = [{ ...thread('thread-a'), harnessId: 'codex' }]
+    state.composerPickList = ['gpt-6.1-sol']
+    expect(resolveThreadComposerState(state, state.threads[0]).composerReasoningEffort).toBe('high')
+
+    rememberThreadComposerSelection('thread-a', 'gpt-6 luna', 'qiniu', 'user', harness)
+    expect(resolveThreadComposerState(state, state.threads[0]).composerReasoningEffort).not.toBe('high')
   })
 
   it('restores a native Agent model the Kun catalog does not list', () => {

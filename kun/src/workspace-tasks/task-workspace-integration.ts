@@ -15,7 +15,7 @@ import {
   type TaskWorkspaceRecord
 } from '../contracts/task-workspace.js'
 
-/** Capture/integrate/discard/cleanup for task workspaces (docs/ade/07 §8-10). */
+/** Capture/integrate/discard/cleanup for task workspaces. */
 
 export type TaskWorkspaceArtifacts = {
   put(input: {
@@ -100,8 +100,8 @@ function touch(
 const CAPTURABLE = new Set(['ready', 'captured', 'conflict'])
 
 /**
- * Snapshot of source-checkout dirty files for the merge safety assertion
- * (docs/ade/07 §8): keys are the uncommitted/untracked paths.
+ * Snapshot of source-checkout dirty files for the merge safety assertion:
+ * keys are the uncommitted/untracked paths.
  */
 export async function porcelainSnapshot(repoRoot: string): Promise<Record<string, string>> {
   return workspaceChangeSnapshot(repoRoot, undefined)
@@ -207,7 +207,7 @@ async function integrateApplyPatch(
   ctx: WorkspaceIntegrationContext,
   record: TaskWorkspaceRecord
 ): Promise<TaskWorkspaceIntegrateResult> {
-  // Re-capture so integrate always applies the latest diff (07 §8.1).
+  // Re-capture so integrate always applies the latest diff.
   const captured = await ctx.lifecycle.capture({
     path: record.path,
     baseRevision: record.baseRevision as string

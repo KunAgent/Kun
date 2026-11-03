@@ -186,9 +186,9 @@ export const threadServiceExecutionConfigOperations = {
           'soft worker and token limits must not exceed their hard limits')
       }
       const activeTeam = await this['hasActiveTeam']?.(threadId) ?? false
-      const routeChanged = JSON.stringify(next.route) !== JSON.stringify(
-        (thread.pendingExecutionConfig ?? current).route
-      )
+      // A reasoning depth alone does not hand the task to another Agent.
+      const routeKey = ({ reasoningEffort: _effort, ...route }: ThreadExecutionConfig['route']) => JSON.stringify(route)
+      const routeChanged = routeKey(next.route) !== routeKey((thread.pendingExecutionConfig ?? current).route)
       if (routeChanged && activeTeam) {
         throw new TaskExecutionConfigConflict('active_team_route_locked',
           'finish or detach the active team before changing the main Agent')

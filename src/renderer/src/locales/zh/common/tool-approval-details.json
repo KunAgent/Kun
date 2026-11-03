@@ -1,0 +1,10 @@
+{
+  "approvalOption_allow_once": "允许一次",
+  "approvalOption_allow_always": "始终允许",
+  "approvalOption_reject_once": "拒绝一次",
+  "approvalOption_reject_always": "始终拒绝",
+  "approvalCancelRequest": "取消请求",
+  "externalSubagentControlsAtSource": "如需单独停止此子代理，请在 {{agent}} 中操作。",
+  "externalSubagentSourceApproval": "在 {{agent}} 中审批",
+  "externalSubagentKunApproval": "请在父会话中处理待审批请求。"
+}

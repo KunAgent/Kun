@@ -4,7 +4,7 @@ import { useChatStore } from '../../store/chat-store'
 import { FloatingComposer } from './FloatingComposer'
 import type { QueuedComposerMessage } from './FloatingComposerQueuedMessages'
 
-export type ComposerQueueSmokeScenario = 'single' | 'multi' | 'long' | 'failed'
+export type ComposerQueueSmokeScenario = 'single' | 'multi' | 'long' | 'failed' | 'paused'
 
 let mountedRoot: Root | null = null
 let settleRetry: (() => void) | null = null
@@ -49,7 +49,8 @@ function ComposerQueueFixture({
   const [input, setInput] = useState('')
   const [mode, setMode] = useState<'plan' | 'agent' | 'auto'>('agent')
   const [messages, setMessages] = useState<QueuedComposerMessage[]>(() => fixtureMessages(scenario))
-  const running = scenario !== 'failed'
+  // Failed and paused rows wait for an idle composer (Retry / Continue).
+  const running = scenario !== 'failed' && scenario !== 'paused'
 
   return (
     <main
@@ -84,6 +85,9 @@ function ComposerQueueFixture({
         }}
         onReorderQueuedMessage={(id, targetId, position) => {
           setMessages((current) => reorderMessages(current, id, targetId, position))
+        }}
+        onResumeQueuedMessages={() => {
+          setMessages((current) => current.map((message) => ({ ...message, deliveryState: 'pending' })))
         }}
         onGuideQueuedMessage={(id) => {
           if (scenario !== 'failed' && scenario !== 'multi') return Promise.resolve()
@@ -122,6 +126,12 @@ function fixtureMessages(scenario: ComposerQueueSmokeScenario): QueuedComposerMe
       deliveryState: 'failed', errorCode: 'runtime_unhealthy',
       errorMessage: 'Runtime temporarily unavailable'
     })]
+  }
+  if (scenario === 'paused') {
+    return [
+      message('queue-paused-first', 'Review the current implementation', { deliveryState: 'paused' }),
+      message('queue-paused-second', 'Then run the focused renderer tests', { deliveryState: 'paused' })
+    ]
   }
   if (scenario === 'multi') {
     return [

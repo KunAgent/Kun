@@ -20,7 +20,7 @@ import { rendererRuntimeClient } from './runtime-client'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 
 /**
- * /v1/task-workspaces client surface (docs/ade/07 §11, 11 §3): bound
+ * /v1/task-workspaces client surface: bound
  * workspace lookup plus the review diff endpoints consumed by the review
  * panel. Standalone client the provider delegates to for the file gate.
  */
@@ -58,7 +58,7 @@ export function createKunTaskWorkspaceClient() {
     },
 
     /**
-     * New task workspace for a composer-picked isolation (07 §5). Returns the
+     * New task workspace for a composer-picked isolation. Returns the
      * `creating` record immediately; readiness arrives via `task_workspace`.
      */
     createTaskWorkspace(
@@ -75,7 +75,7 @@ export function createKunTaskWorkspaceClient() {
       return post(kunTaskWorkspacePath(workspaceId, '/retry'), {}, 'failed to retry task workspace')
     },
 
-    /** Per-file diff stats after a fresh capture (docs/ade/11 §3). */
+    /** Per-file diff stats after a fresh capture. */
     getTaskWorkspaceDiff(workspaceId: string): Promise<TaskWorkspaceDiffListResponse> {
       return get(
         kunTaskWorkspacePath(workspaceId, '/diff'),
@@ -95,7 +95,7 @@ export function createKunTaskWorkspaceClient() {
       )
     },
 
-    /** Per-line AI authorship for the file's current content (11 §6). */
+    /** Per-line AI authorship for the file's current content. */
     getTaskWorkspaceAttribution(
       workspaceId: string,
       path: string
@@ -107,7 +107,7 @@ export function createKunTaskWorkspaceClient() {
       )
     },
 
-    /** Forge availability + persisted/fresh PR snapshot (11 §7.2). */
+    /** Forge availability + persisted/fresh PR snapshot. */
     getChangeRequest(workspaceId: string): Promise<ChangeRequestStatus> {
       return get(
         kunTaskWorkspacePath(workspaceId, '/change-request'),
@@ -127,7 +127,7 @@ export function createKunTaskWorkspaceClient() {
       )
     },
 
-    /** Read-only availability for the review primary action (11 §7.1). */
+    /** Read-only availability for the review primary action. */
     getTaskWorkspaceIntegratePreview(
       workspaceId: string
     ): Promise<TaskWorkspaceIntegratePreviewResponse> {
@@ -191,7 +191,7 @@ export function createKunTaskWorkspaceClient() {
       )
     },
 
-    /** Branches cleanup declined to delete; users review them (07 §8.3). */
+    /** Branches cleanup declined to delete; users review them. */
     listPreservedBranches(repoRoot: string): Promise<PreservedBranchesResponse> {
       return get(
         `${KUN_TASK_WORKSPACES_PATH}/preserved-branches${buildQuery({ repo: repoRoot })}`,

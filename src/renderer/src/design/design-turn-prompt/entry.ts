@@ -8,6 +8,7 @@ import {
 import { formatDesignHtmlQualityFindings } from "../design-html-quality"
 import type { DesignTurnOptions, ParallelDesignPagesPromptOptions, ScreenTurnOptions } from './shared'
 import {
+  RUNTIME_PAGE_POLICY_LINE,
   formatDerivedTokenLines,
   formatContextLocationLines,
   formatDesignTargetFrameLines,
@@ -104,6 +105,7 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
   if (options.target === 'screen') {
     return buildScreenTurnPrompt(options as ScreenTurnOptions)
   }
+  const runtimePolicy = options.runtimeModePolicy === true
   const requirements = options.customPrompt?.trim() || WRITE_PROTOTYPE_DEFAULT_PROMPT
   const editableFiles = options.designNotesPath
     ? `\`${options.artifactRelativePath}\` and \`${options.designNotesPath}\``
@@ -130,21 +132,25 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
     'Hard rules:',
     `- Modify ONLY ${editableFiles} during this turn. Do not create or modify any other file.`,
     `- Produce ONE complete standalone HTML document at \`${options.artifactRelativePath}\`; it has already been pre-created so the canvas can preview it while you work.`,
-    '- Make the HTML responsive to arbitrary canvas frame sizes: use fluid layout, min/max constraints, media queries, and avoid fixed viewport wrappers unless the brief explicitly asks for one.',
-    '- If a canvas frame context is listed above, treat that width/height as the real webview viewport. Lay out the page to that viewport; content may scroll vertically when needed, but do not shrink the design to compensate for overflowing content.',
-    ...DESIGN_RESIZE_RESPONSIVE_LINES,
-    '- Build the complete document efficiently: prefer one coherent `write` when it fits the available tool limits; otherwise use a small bounded number of section-level `edit` calls. Do not fragment the page into dozens of micro-edits.',
-    '- Write HTML ONLY through Write/Edit tool calls to the artifact file — never dump HTML into assistant text or into `design_canvas` blocks.',
+    ...(runtimePolicy ? [RUNTIME_PAGE_POLICY_LINE] : [
+      '- Make the HTML responsive to arbitrary canvas frame sizes: use fluid layout, min/max constraints, media queries, and avoid fixed viewport wrappers unless the brief explicitly asks for one.',
+      '- If a canvas frame context is listed above, treat that width/height as the real webview viewport. Lay out the page to that viewport; content may scroll vertically when needed, but do not shrink the design to compensate for overflowing content.',
+      ...DESIGN_RESIZE_RESPONSIVE_LINES,
+      '- Build the complete document efficiently: prefer one coherent `write` when it fits the available tool limits; otherwise use a small bounded number of section-level `edit` calls. Do not fragment the page into dozens of micro-edits.',
+      '- Write HTML ONLY through Write/Edit tool calls to the artifact file — never dump HTML into assistant text or into `design_canvas` blocks.'
+    ]),
     ...formatHtmlIterationEditDisciplineLines(options),
     ...(options.designNotesPath
       ? [
           `- Keep \`${options.designNotesPath}\` aligned with the final screen: brief, visual direction, interactions, assumptions, and handoff notes.`
         ]
       : []),
-    '- The file content must be raw HTML — no markdown fences, no commentary inside the file.',
-    '- Finish with the document ending in `</html>`, then reply with a one-paragraph summary of what you designed and the interactions you implemented.'
+    ...(runtimePolicy ? [] : [
+      '- The file content must be raw HTML — no markdown fences, no commentary inside the file.',
+      '- Finish with the document ending in `</html>`, then reply with a one-paragraph summary of what you designed and the interactions you implemented.'
+    ])
   ]
-  const manifestLines = formatScreenManifestLines(options.screenManifest, options.artifactRelativePath)
+  const manifestLines = formatScreenManifestLines(options.screenManifest, options.artifactRelativePath, { runtimeModePolicy: runtimePolicy })
   if (manifestLines.length > 0) {
     lines.push('', ...manifestLines)
   }
@@ -165,7 +171,7 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
     lines.push('', ...qualityLines)
   }
   lines.push(...formatDerivedTokenLines(options.derivedTokens))
-  lines.push('', ...DESIGN_DELIVERY_LINES, '', ...DESIGN_CRAFT_LINES)
+  if (!runtimePolicy) lines.push('', ...DESIGN_DELIVERY_LINES, '', ...DESIGN_CRAFT_LINES)
   if (options.mode === 'image') {
     lines.push(
       '',

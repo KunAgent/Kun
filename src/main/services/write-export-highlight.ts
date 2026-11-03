@@ -1,5 +1,5 @@
 /**
- * Shiki pre-highlighting for the write export pipeline (implementation §10):
+ * Shiki pre-highlighting for the write export pipeline:
  * every non-mermaid fenced block is rendered with `codeToHtml` and keyed by
  * its exact source so `renderWorkMarkdownToHtml` can splice the markup back
  * in document order.

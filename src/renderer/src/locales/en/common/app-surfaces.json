@@ -1,0 +1,21 @@
+{
+  "appSurfaceDesktopOnly": "Interactive pages are available in the Kun desktop app.",
+  "appSurfaceRetry": "Retry",
+  "appSurfacePageError": "Page error: {{message}}",
+  "appSurfaceWidgetAria": "Interactive widget: {{title}}",
+  "appSurfaceCopyImage": "Copy as image",
+  "appSurfaceCopied": "Copied",
+  "appSurfaceExpand": "Open in App panel",
+  "appSurfaceOpenInPanel": "Shown in the App panel. Click to open it again.",
+  "appSurfaceFollowUpConfirm": "Send this message from \"{{app}}\"?",
+  "appSurfaceOpenLinkConfirm": "\"{{app}}\" wants to open this link in your browser.",
+  "appSurfaceToolConsent": "Allow \"{{app}}\" to run its tools in this conversation?",
+  "appSurfaceToolConsentDetail": "The page can call tools of its own MCP server, for example to save or change its documents. It cannot reach other servers, files or the conversation history.",
+  "appSurfaceWidgetStateChip": "{{title}} state",
+  "appSurfaceWidgetStateSummary": "Choices saved in the interactive widget",
+  "appSurfaceAppContextChip": "{{title}} context",
+  "appSurfaceAppContextSummary": "Context selected in the app",
+  "appSurfaceDownloadConfirm": "\"{{app}}\" wants to save a file to your computer.",
+  "appSurfacePanelTab": "App",
+  "appSurfacePanelEmpty": "No app is open. Open an interactive card from the conversation."
+}

@@ -52,7 +52,7 @@ function readShowIdle(): boolean {
 }
 
 /**
- * ADE home board (docs/ade/12 §5): ActivityStore rows grouped by the shared
+ * ADE home board: ActivityStore rows grouped by the shared
  * displayBucket into needs-you / working / review / done / idle columns.
  * Card stats and question data hydrate lazily; only the two actionable
  * columns are tinted.
@@ -96,7 +96,7 @@ export function MissionControlView(): ReactElement {
     [buckets, filters, verdictOf]
   )
 
-  // Same-task races reported by manager overviews (10 §6); opens compare view.
+  // Same-task races reported by manager overviews; opens compare view.
   const races = useMemo(
     () =>
       Object.values(lazy.overviews)
@@ -214,7 +214,7 @@ export function MissionControlView(): ReactElement {
           ) : null}
         </span>
       </div>
-      {/* P4-14: the readiness checklist anchors the ADE home; the popout
+      {/* the readiness checklist anchors the ADE home; the popout
           window keeps its lean board-only surface. */}
       {popout ? null : <AdeReadinessCard />}
       <MissionToolbar

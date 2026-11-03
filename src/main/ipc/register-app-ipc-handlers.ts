@@ -1,3 +1,7 @@
+import { registerProductAnalytics } from '../product-analytics/register'
+import { registerMobileLink } from '../mobile-link/register'
+import { registerAssistantMailbox } from '../assistant-mailbox/register'
+import { registerKunArtIpc } from './register-kun-art-ipc'
 import { ipcMain } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -7,7 +11,11 @@ import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { registerAppContentIpcHandlers } from './register-app-content-ipc-handlers'
 import { registerAppFileIpcHandlers } from './register-app-file-ipc-handlers'
 import { registerAppGitIpcHandlers } from './register-app-git-ipc-handlers'
+import { registerAppGitCommitIpcHandlers } from './register-app-git-commit-ipc-handlers'
+import { registerAppGitTurnUndoIpcHandlers } from './register-app-git-turn-undo-ipc-handlers'
+import { registerAppStorageCleanupIpcHandlers } from './register-app-storage-cleanup-ipc-handlers'
 import { registerAppKunConfigIpcHandlers } from './register-app-kun-config-ipc-handlers'
+import { registerAppMarketIpcHandlers } from './register-app-market-ipc-handlers'
 import { registerAppPaperIpcHandlers } from './register-app-paper-ipc-handlers'
 import { registerAppPaperLibraryIpcHandlers } from './register-app-paper-library-ipc-handlers'
 import { registerAppPaperWorkspaceIpcHandlers } from './register-app-paper-workspace-ipc-handlers'
@@ -19,11 +27,22 @@ import { registerAppUiPluginIpcHandlers } from './register-app-ui-plugin-ipc-han
 import { registerAppWorkspaceIpcHandlers } from './register-app-workspace-ipc-handlers'
 import { configureRuntimeModelExecutor } from '../services/runtime-model-requests'
 import { registerAgentIntegrationIpcHandlers } from './register-agent-integration-ipc-handlers'
+import { registerKunAccountIpc } from './register-kun-account-ipc'
+import { registerAppSandboxIpcHandlers } from '../app-sandbox/app-sandbox-host'
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
-  configureRuntimeModelExecutor(async (input) => {
+  const accountAccess = registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
+    options.runtimeRequest(path, method, body, undefined, { priority: 'background' }))
+  registerProductAnalytics(options, accountAccess)
+  registerMobileLink(options, accountAccess)
+  registerAssistantMailbox(options, accountAccess)
+  registerKunArtIpc(options.getMainWindow, (path, method, body) =>
+    options.runtimeRequest(path, method, body, undefined, { priority: 'background' }), accountAccess)
+  configureRuntimeModelExecutor(async (input, request) => {
+    // Closing the HTTP request aborts the Runtime's provider stream, so a caller's cancel reaches the provider.
+    const timeout = AbortSignal.timeout((input.timeoutMs ?? 30_000) + 5_000)
     const response = await options.runtimeRequest('/v1/model-requests', 'POST', JSON.stringify(input), undefined,
-      { signal: AbortSignal.timeout((input.timeoutMs ?? 30_000) + 5_000), priority: 'background' })
+      { signal: request?.signal ? AbortSignal.any([request.signal, timeout]) : timeout, priority: 'background' })
     if (!response.ok) return { ok: false, message: `Model runtime request failed (HTTP ${response.status}). Check provider configuration.` }
     const value = JSON.parse(response.body) as { ok?: unknown; text?: unknown; message?: unknown }
     return value.ok === true && typeof value.text === 'string' ? { ok: true, text: value.text }
@@ -41,9 +60,13 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppRuntimeIpcHandlers(options)
   registerAgentIntegrationIpcHandlers(options)
   registerAppWorkspaceIpcHandlers(options)
+  registerAppMarketIpcHandlers()
   registerAppUiPluginIpcHandlers(options)
   registerAppKunConfigIpcHandlers(options)
   registerAppGitIpcHandlers(options)
+  registerAppGitCommitIpcHandlers(options)
+  registerAppGitTurnUndoIpcHandlers(options)
+  registerAppStorageCleanupIpcHandlers(options)
   registerAppFileIpcHandlers(options)
   registerAppPaperIpcHandlers(options)
   registerAppPaperLibraryIpcHandlers(options)
@@ -51,4 +74,8 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppPaperReaderIpcHandlers(options)
   registerAppPaperEvidenceIpcHandlers(options)
   registerAppContentIpcHandlers(options)
+  registerAppSandboxIpcHandlers({
+    getMainWindow: options.getMainWindow,
+    runtimeRequest: (path, method, body) => options.runtimeRequest(path, method, body)
+  })
 }

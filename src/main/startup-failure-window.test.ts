@@ -3,12 +3,16 @@ import {
   parseStartupFailureAction,
   sanitizeStartupFailureMessage,
   startupFailurePresentation,
-  startupFailureHtml
+  startupFailureHtml,
+  startupFailureDiagnostics
 } from './startup-failure-content'
 import {
   ClientRuntimeOwnerBusyError,
   KunHandoffError
 } from './runtime/kun-installed-build-handoff'
+import { OrphanedAppSessionError } from '../../kun/src/manager/app-session-reservation.js'
+import { ManagerStartLockError } from '../../kun/src/manager/manager-start-lock-diagnostics.js'
+import { homedir } from 'node:os'
 
 const electron = vi.hoisted(() => {
   const webHandlers = new Map<string, (...args: unknown[]) => void>()
@@ -31,12 +35,14 @@ const electron = vi.hoisted(() => {
     app: {
       isPackaged: true,
       getVersion: vi.fn(() => '0.3.10'),
+      getLocale: vi.fn(() => 'en-US'),
       relaunch: vi.fn(),
       quit: vi.fn()
     },
     BrowserWindow: vi.fn(function MockBrowserWindow(_options?: unknown) {
       return window
     }),
+    clipboard: { writeText: vi.fn() },
     dialog: { showErrorBox: vi.fn() },
     shell: { openPath: vi.fn().mockResolvedValue('') },
     webHandlers,
@@ -48,6 +54,7 @@ const electron = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: electron.app,
   BrowserWindow: electron.BrowserWindow,
+  clipboard: electron.clipboard,
   dialog: electron.dialog,
   shell: electron.shell
 }))
@@ -61,7 +68,7 @@ vi.mock('./logger', () => ({
   logWarn: vi.fn()
 }))
 
-import { showStartupFailureWindow } from './startup-failure-window'
+import { showStartupFailureWindow, STARTUP_RECOVERY_TIMEOUT_MS } from './startup-failure-window'
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -195,6 +202,70 @@ it('presents a typed handoff failure with safe owner details and task continuity
 })
 
 describe('showStartupFailureWindow', () => {
+  it('presents orphan recovery as Runtime cleanup followed by data-service cleanup', async () => {
+    const recoverRetry = vi.fn(async () => undefined)
+    showStartupFailureWindow(new OrphanedAppSessionError('/tmp/profile', 'owner exited'), '/tmp/logs', { recoverRetry })
+    expect(lastRenderedHtml()).toContain('Recover Kun')
+    expect(lastRenderedHtml()).toContain('stops its recorded leftover Runtime processes, then stops its data service')
+    expect(lastRenderedHtml()).not.toContain('Live Runtime processes block recovery')
+    expect(lastRenderedHtml()).toContain('Saved conversations and settings are preserved')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    expect(lastRenderedHtml()).toContain('Recovering leftover Kun processes')
+    await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledOnce())
+  })
+
+  it('ends a stalled retry and never relaunches on its late success', async () => {
+    vi.useFakeTimers()
+    try {
+      let finish!: () => void
+      const recoverRetry = vi.fn((_signal: AbortSignal) => new Promise<void>((resolve) => { finish = resolve }))
+      showStartupFailureWindow(new Error('failed'), '/tmp/logs', { recoverRetry })
+      const navigate = electron.webHandlers.get('will-navigate')!
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      expect(recoverRetry).toHaveBeenCalledOnce()
+      await vi.advanceTimersByTimeAsync(STARTUP_RECOVERY_TIMEOUT_MS)
+      expect(lastRenderedHtml()).toContain('Recovery timed out')
+      expect(lastRenderedHtml()).not.toContain('>Retry Kun</a>')
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      expect(recoverRetry).toHaveBeenCalledOnce()
+      expect(recoverRetry.mock.calls[0]![0].aborted).toBe(true)
+      finish()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(electron.app.relaunch).not.toHaveBeenCalled()
+      recoverRetry.mockResolvedValueOnce(undefined)
+      navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+      await vi.advanceTimersByTimeAsync(0)
+      expect(electron.app.relaunch).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('restores the retry action when cleanup throws synchronously', () => {
+    showStartupFailureWindow(new Error('failed'), '/tmp/logs', {
+      recoverRetry: () => { throw new Error('synchronous cleanup failure') }
+    })
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    expect(lastRenderedHtml()).toContain('Retry failed: synchronous cleanup failure')
+    expect(lastRenderedHtml()).toContain('Retry Kun')
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('cancels recovery when the user quits and does not relaunch on completion', async () => {
+    let finish!: () => void
+    showStartupFailureWindow(new Error('failed'), '/tmp/logs', {
+      recoverRetry: () => new Promise<void>((resolve) => { finish = resolve })
+    })
+    const navigate = electron.webHandlers.get('will-navigate')!
+    navigate({ preventDefault: vi.fn() }, 'kun-startup-action:retry')
+    navigate({ preventDefault: vi.fn() }, 'kun-startup-action:quit')
+    finish()
+    await vi.waitFor(() => expect(lastRenderedHtml()).toContain('Recovery cancelled by Quit'))
+    expect(electron.app.quit).toHaveBeenCalledOnce()
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+
   it('keeps a real recovery window alive without automatically quitting', () => {
     const window = showStartupFailureWindow(new Error('manager failed'), 'C:\\Kun\\logs')
 
@@ -366,7 +437,7 @@ describe('showStartupFailureWindow', () => {
     expect(electron.app.quit).not.toHaveBeenCalled()
   })
 
-  it('finishes a successful handoff even if the recovery window was closed', async () => {
+  it('does not relaunch after the user closes the recovery window', async () => {
     let finishRecovery!: () => void
     const recoverHandoff = vi.fn(() => new Promise<void>((resolve) => {
       finishRecovery = resolve
@@ -377,10 +448,12 @@ describe('showStartupFailureWindow', () => {
       'kun-startup-action:retry'
     )
     electron.window.isDestroyed.mockReturnValue(true)
+    electron.windowHandlers.get('closed')?.()
 
     finishRecovery()
-    await vi.waitFor(() => expect(electron.app.relaunch).toHaveBeenCalledOnce())
-    expect(electron.app.quit).toHaveBeenCalledOnce()
+    await new Promise((resolve) => setImmediate(resolve))
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+    expect(electron.app.quit).not.toHaveBeenCalled()
   })
 
   it('keeps the recovery page without any privileged preload', () => {
@@ -406,5 +479,47 @@ describe('showStartupFailureWindow', () => {
 
     expect(recoverHandoff).not.toHaveBeenCalled()
     expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+  it('copies a sanitized diagnostics report and confirms it on the page', () => {
+    showStartupFailureWindow(new Error('Owned Manager exited before readiness; managerToken=secret'), '/tmp/kun-missing-logs')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:copy-diagnostics')
+
+    const report = electron.clipboard.writeText.mock.calls[0]?.[0] as string
+    expect(report).toContain('manager-exited')
+    expect(report).toContain('0.3.10')
+    expect(report).not.toContain('secret')
+    expect(lastRenderedHtml()).toContain('Diagnostics copied to the clipboard.')
+    expect(electron.app.relaunch).not.toHaveBeenCalled()
+  })
+
+  it('opens only the log file named by the diagnostic message', async () => {
+    showStartupFailureWindow(
+      new Error('Owned Manager exited before readiness; inspect /tmp/kun-missing/control/manager.log'),
+      '/tmp/kun-logs'
+    )
+    expect(lastRenderedHtml()).toContain('No log file was found.')
+    electron.webHandlers.get('will-navigate')?.({ preventDefault: vi.fn() }, 'kun-startup-action:open-log-file')
+    await Promise.resolve()
+    expect(electron.shell.openPath).toHaveBeenCalledWith('/tmp/kun-missing/control/manager.log')
+  })
+})
+
+
+describe('structured startup diagnostics', () => {
+  it('copies only startup facts and redacts the home directory', () => {
+    const error = new ManagerStartLockError('unverifiable', {
+      scope: 'settingsPath', path: homedir() + '/Kun/settings.election/.manager-start.lock',
+      phase: 'inspect', waitedMs: 123, attemptId: 'attempt-a', ownerState: 'unknown', ownerPid: 42
+    })
+    Object.assign(error, { environment: { SECRET: 'never-copy' }, managerToken: 'never-copy', cause: 'chat contents' })
+    const diagnostic = startupFailureDiagnostics(error)
+    expect(diagnostic).toContain('[home]')
+    expect(diagnostic).toContain('attempt-a')
+    expect(diagnostic).not.toContain(homedir())
+    expect(diagnostic).not.toContain('never-copy')
+    expect(diagnostic).not.toContain('chat contents')
+    expect(startupFailurePresentation(error).message).toContain('cannot verify')
+    expect(parseStartupFailureAction('kun-startup-action:copy-diagnostics')).toBe('copy-diagnostics')
+    expect(startupFailureHtml('failed', '/logs')).toContain('Copy diagnostics')
   })
 })

@@ -192,7 +192,7 @@ export interface SdkPromptParts {
   /** Prior-conversation transcript ('' when none). */
   historyTranscript?: string
   /**
-   * Deterministic handoff brief (docs/ade/08). When set it replaces
+   * Deterministic handoff brief. When set it replaces
    * `historyTranscript` — the brief already carries the prior-conversation
    * digest plus the recent originals.
    */

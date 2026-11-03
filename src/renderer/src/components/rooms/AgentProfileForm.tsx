@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AgentIdentity } from '@shared/rooms-api'
+import type { AgentIdentity, RoomAvatarReference } from '@shared/rooms-api'
 import { RoomAvatarPicker } from './RoomAvatarPicker'
 import { AgentPicker } from './AgentPicker'
 import { agentMember, agentPath, useAgentResource } from './agent-client'
@@ -38,6 +38,17 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const pending = useRef<{ hash: string; id: string } | null>(null)
   const preview = agentMember({ ...(agent ?? {}), id: agent?.id ?? 'new-agent', name, avatar, defaultRole: role, presetId } as AgentIdentity)
+  // An existing Agent's new look is saved the moment the studio confirms it; every conversation icon follows at once.
+  const applyAvatar = async (next: RoomAvatarReference | undefined) => {
+    setAvatar(next)
+    if (!agent || busy) return
+    setBusy(true); setError('')
+    try {
+      const result = await roomsRequest<{ agent: AgentIdentity }>(agentPath(agent.id), 'PATCH',
+        { avatar: next ?? null, expectedRevision: agent.revision, clientRequestId: roomRequestId() })
+      setAgent(result.agent)
+    } catch (cause) { setError(String(cause)) } finally { setBusy(false) }
+  }
   const save = async () => {
     if (busy) return
     const advanced = { ...templateRef, defaultRole: role, presetId,
@@ -69,7 +80,7 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
           <option key={template.templateId} value={template.templateId}>{template.name}</option>)}</select></label>
       </section> : null}
       <section className="agent-profile-section agent-profile-identity">
-        <RoomAvatarPicker id={preview.id} label={preview.displayName} avatar={avatar} onChange={setAvatar} />
+        <RoomAvatarPicker id={preview.id} label={preview.displayName} avatar={avatar} onChange={(next) => void applyAvatar(next)} />
         <label className="agent-profile-field">{t('agentsName')}<input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} /></label>
         <label className="agent-profile-field">{t('agentsTitle')}<input maxLength={160} value={title} onChange={(e) => setTitle(e.target.value)} /></label>
       </section>

@@ -182,9 +182,9 @@ describe('modelContextProfilesByProvider', () => {
 
       expect(resolveModelContextProfile('sparse-model', profilesByProvider.get('custom-provider')))
         .toMatchObject({
-          contextWindowTokens: 32_000,
-          softThreshold: 24_000,
-          hardThreshold: 27_200,
+          contextWindowTokens: 1_000_000,
+          softThreshold: 750_000,
+          hardThreshold: 850_000,
           pricing: { inputUsdPerMillion: 0.1, outputUsdPerMillion: 0.2 }
         })
     } finally {

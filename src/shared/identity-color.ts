@@ -1,5 +1,5 @@
 /**
- * Fixed 10-color identity palette (docs/ade/12 §2): answers only "who",
+ * Fixed 10-color identity palette: answers only "who",
  * never "how" — status keeps its own tokens. Mid-saturation hexes legible
  * on both light and dark surfaces; red is omitted (destructive-only) and
  * green is omitted (diff-add background).

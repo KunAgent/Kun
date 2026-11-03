@@ -84,6 +84,7 @@ export type RunPromptOptions = {
   workspaceRoot: string
   /** Existing thread that should receive the scheduled turn instead of creating a new one. */
   threadId?: string
+  clientRequestId?: string
   model: string
   /** Optional provider id; routed via Kun's MultiProviderModelClient. */
   providerId?: string
@@ -353,6 +354,7 @@ export type RunPromptViaRuntimeOptions = {
   workspaceRoot: string
   /** Existing thread that should receive the scheduled turn instead of creating a new one. */
   threadId?: string
+  clientRequestId?: string
   model: string
   /**
    * Optional provider id override. Forwarded to Kun's `POST /v1/threads` so
@@ -411,6 +413,7 @@ export async function runPromptViaRuntime(
     prompt: options.prompt,
     mode: options.mode,
     clientSurface: 'api',
+    ...(options.clientRequestId ? { clientRequestId: options.clientRequestId } : {}),
     // Headless turns — nobody can answer a user_input prompt; a turn that asks
     // one hangs until the response timeout.
     disableUserInput: true,

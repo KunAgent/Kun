@@ -1,9 +1,16 @@
 import type { ReactElement } from 'react'
-import { Focus } from 'lucide-react'
+import { ChevronRight, Focus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { kunWardrobeRules } from '@shared/rooms-api'
 import { useChatStore } from '../../store/chat-store'
 import { useUiPluginStore } from '../../store/ui-plugin-store'
-import { RoomAvatarPortrait } from '../rooms/RoomAvatar'
+import { RoomAvatar } from '../rooms/RoomAvatar'
+import { WardrobeBottleIcon } from '../rooms/RoomWardrobeBottle'
+import { useRoomUserProfileSync } from '../rooms/room-user-profile'
+import { useWardrobe, wardrobeShelf } from '../rooms/room-wardrobe'
+import { toggleWardrobePage } from '../wardrobe/wardrobe-route'
+import '../rooms/room-wardrobe.css'
+import './sidebar-focus-switch.css'
 
 /**
  * Theme packs with their own sidebar scene chrome style the original
@@ -25,23 +32,37 @@ const STATUS_KEYS = {
   offline: 'sidebarKunStatusOffline'
 } as const
 
-/** Kun as a small companion: its face and what the runtime is doing. */
-export function SidebarKunStatus({ onOpen }: { onOpen: () => void }): ReactElement {
+/**
+ * Kun as a small companion: the user's own dressed-up look and what the runtime is doing.
+ * The desktop app shows the account card instead; this stays for the remote browser client,
+ * which has no account. It opens the wardrobe page (a second click goes back) and carries
+ * the count of bottles waiting on the shelf.
+ */
+export function SidebarKunStatus({ onOpen = toggleWardrobePage }: { onOpen?: () => void }): ReactElement {
   const { t } = useTranslation('common')
   const connection = useChatStore((state) => state.runtimeConnection)
+  const active = useChatStore((state) => state.route === 'wardrobe')
+  // The face is the avatar the user dresses in the wardrobe, so it follows every change.
+  useRoomUserProfileSync()
+  const wardrobe = useWardrobe().wardrobe
+  const bottles = wardrobeShelf(wardrobe).length
+  const ready = Boolean(wardrobe?.progress?.tenPull) && bottles >= kunWardrobeRules(wardrobe).tenPull
   const label = t(STATUS_KEYS[connection] ?? STATUS_KEYS.checking)
+  const shelf = bottles ? t(ready ? 'wardrobePageBadgeReadyHint' : 'wardrobePageBadgeHint', { n: bottles }) : ''
   return (
     <button
       type="button"
       data-cursor-spotlight-target
       data-runtime-connection={connection}
+      data-active={active || undefined}
+      aria-current={active ? 'page' : undefined}
       onClick={onOpen}
       title={t('sidebarKunStatusOpen')}
-      aria-label={`Kun · ${label}. ${t('sidebarKunStatusOpen')}`}
+      aria-label={`Kun · ${label}. ${t('sidebarKunStatusOpen')}${shelf ? `. ${shelf}` : ''}`}
       className="ds-sidebar-kun-status group flex w-full items-center gap-2.5 rounded-[10px] px-2 py-1.5 text-left outline-none transition hover:bg-[var(--ds-sidebar-row-hover)] focus-visible:ring-2 focus-visible:ring-accent-tint/25"
     >
-      <span className="ds-sidebar-kun-face rooms-avatar" aria-hidden="true">
-        <RoomAvatarPortrait index={0} />
+      <span className="ds-sidebar-kun-face" aria-hidden="true">
+        <RoomAvatar user id="user" label="" size={30} />
       </span>
       <span className="min-w-0 flex-1">
         <span className="block text-[13px] font-semibold leading-4 text-ds-ink">Kun</span>
@@ -50,11 +71,21 @@ export function SidebarKunStatus({ onOpen }: { onOpen: () => void }): ReactEleme
           <span className="truncate">{label}</span>
         </span>
       </span>
+      {bottles ? (
+        <span className="ds-sidebar-kun-bottles" data-ready={ready || undefined} data-sidebar-bottles={bottles} title={shelf} aria-hidden="true">
+          <WardrobeBottleIcon size={16} state="sealed" />
+          {ready ? t('wardrobePageBadgeReady') : bottles}
+        </span>
+      ) : null}
+      {active ? <ChevronRight className="ds-sidebar-kun-open h-3.5 w-3.5 shrink-0" strokeWidth={2} aria-hidden="true" /> : null}
     </button>
   )
 }
 
-/** Focus mode as an icon switch beside the phone and theme buttons. */
+/**
+ * Focus mode uses a label and track without a redundant icon. Narrow footer bars
+ * replace both with one icon; the accessible switch name and state stay intact.
+ */
 export function SidebarFocusModeSwitch({ enabled, onChange }: {
   enabled: boolean
   onChange: (enabled: boolean) => void
@@ -67,13 +98,15 @@ export function SidebarFocusModeSwitch({ enabled, onChange }: {
       role="switch"
       aria-checked={enabled}
       aria-label={t('focusModeToggleLabel')}
-      title={`${t('focusModeToggleTitle')} · ${enabled ? t('switchOn') : t('switchOff')}`}
+      title={t('focusModeToggleTitle')}
       onClick={() => onChange(!enabled)}
-      className={`ds-focus-mode-switch inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-[var(--ds-radius-control)] outline-none transition focus-visible:ring-2 focus-visible:ring-accent-tint/25 ${
-        enabled ? 'bg-accent-soft text-accent' : 'text-ds-muted hover:bg-[var(--ds-sidebar-row-hover)] hover:text-ds-ink'
-      }`}
+      className="ds-focus-mode-switch"
     >
-      <Focus className="h-4 w-4" strokeWidth={1.75} aria-hidden="true" />
+      <Focus className="ds-focus-mode-switch-icon" strokeWidth={1.8} aria-hidden="true" />
+      <span className="ds-focus-mode-switch-label">{t('focusMode')}</span>
+      <span className="ds-focus-mode-switch-track" aria-hidden="true">
+        <span className="ds-focus-mode-switch-thumb" />
+      </span>
     </button>
   )
 }

@@ -127,6 +127,10 @@ describe('Extension Platform packaged release resources', () => {
         unpackedRoot,
         `kun/node_modules/@cursor/sdk-${platform}-${context.arch}/package.json`
       ))
+      touch(join(
+        unpackedRoot,
+        `kun/node_modules/@opentui/core-${platform}-${context.arch}/package.json`
+      ))
       touch(join(unpackedRoot, 'node_modules/better-sqlite3/package.json'))
       writeBundledExtensionResources(context)
 

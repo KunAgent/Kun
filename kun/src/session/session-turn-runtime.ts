@@ -1,7 +1,7 @@
 import { harnessExecutableIdentity } from '../harness/harness-executable-identity.js'
 import { sessionInstructions } from './session-instructions.js'
 /**
- * `SessionTurnRuntime` (docs/ade/impl/p6a §1.2): the shared
+ * `SessionTurnRuntime`: the shared
  * `DelegatedTurnRuntime` for session-protocol transports
  * (`codex-app-server`, `pi-rpc`). It owns the full Kun turn against a pooled
  * `HarnessAgent`: resolve the shared turn context, acquire the pooled agent
@@ -10,7 +10,7 @@ import { sessionInstructions } from './session-instructions.js'
  * turn through the adapter's `HarnessSession`, and commit the binding.
  *
  * ACP keeps its own proven `AcpRuntime`; this class is the common layer the
- * new native transports are built on (P6-13 evaluates migrating ACP onto it).
+ * new native transports are built on (evaluates migrating ACP onto it).
  */
 import { resolveCodexExecutable } from '../harness/codex-executable.js'
 import type { TurnItem } from '../contracts/items.js'
@@ -19,7 +19,7 @@ import type { HarnessTransport } from '../contracts/harness.js'
 import type { ApprovalRequest } from '../domain/approval.js'
 import { makeDelegatedAwaitApproval } from '../ade/delegated-approval.js'
 import { resolveTurnClientSurface } from '../loop/turn-context-resolver.js'
-import { userMessageTextWithComposerContexts } from '../domain/composer-context.js'
+import { resolveSessionUserInput, sessionUserItem, sessionUserTextWithDocuments } from './session-user-input.js'
 import { buildClientSurfaceInstruction } from '../prompt/kun-prompt-context.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
@@ -52,8 +52,12 @@ import type {
 } from '../runtime/delegated-turn-runtime.js'
 import type { HarnessCapabilities } from '../contracts/harness-capabilities.js'
 import { AcpDraftEmitter } from '../runtime/acp/acp-turn-emitter.js'
+import { acpDiagnosticText } from '../runtime/acp/acp-diagnostic-text.js'
+import { maybeExternalSubagentRouting } from '../runtime/external-subagent-routing.js'
 
 import { HarnessAgentPool } from './harness-pool.js'
+import type { KunToolsMcpProvider } from '../runtime/acp/kun-tools-mcp.js'
+import type { McpServer } from '../runtime/acp/acp-schema.js'
 import {
   resolveDelegatedCredentialContext
 } from './delegated-credentials.js'
@@ -69,8 +73,11 @@ import {
   type DelegatedTrace
 } from './delegated-trace.js'
 import { KunTimelineTurnSink } from './turn-sink.js'
+import { followUpTurnInput, SessionLiveSteering } from './session-live-steering.js'
+import { harnessTurnTiming } from '../runtime/harness-turn-timing.js'
 import {
   HarnessTransportError,
+  HarnessSessionUnavailableError,
   type HarnessAgent,
   type HarnessAgentFactory,
   type HarnessSession,
@@ -112,6 +119,8 @@ export type SessionTurnRuntimeDeps = SessionTurnContextDeps & {
   buildTurnInput?: (ctx: SessionTurnContext, session: HarnessSession) => HarnessTurnInput
   /** Images support declared by the transport (static for now). */
   imageCapable?: boolean
+  /** Turn-scoped Kun Tools MCP grants (main runtime only; dispatched workers get none). */
+  kunToolsMcp?: KunToolsMcpProvider
 }
 
 export class SessionTurnRuntime implements DelegatedTurnRuntime {
@@ -240,6 +249,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       await validateLaunch()
       session = await this.ensureSession(agent, ctx, signal)
     } catch (error) {
+      this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
       if (signal.aborted) {
         await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
@@ -250,11 +260,12 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     }
 
     const emitter = new AcpDraftEmitter(
-      { turns: this.deps.turns, events: this.deps.events },
+      { turns: this.deps.turns, events: this.deps.events, subagents: maybeExternalSubagentRouting(this.deps) },
       threadId,
       turnId,
-      // credentialEnv is non-empty only for kun-gateway routes (native login is {}).
-      { gatewayMetered: Object.keys(ctx.credentialEnv).length > 0 }
+      // Only a kun-gateway route is metered by the loopback gateway; a native login
+      // (which may carry its own API key in the environment) reports its own usage.
+      { gatewayMetered: ctx.credentialMode === 'kun-gateway' }
     )
     const approveCore = makeDelegatedAwaitApproval(
       {
@@ -267,6 +278,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         sandboxMode: ctx.sandboxMode,
         approvalReviewer: ctx.approvalReviewer,
         actingModelRoute: ctx.actingModelRoute,
+        reviewSource: { harnessId: ctx.definition.id, credentialMode: ctx.credentialMode },
         intent: ctx.intent,
         signal
       }
@@ -306,9 +318,10 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     )
     await this.recordDelegatedRuntime(ctx, session)
 
+    const inputContext = { ...ctx, userItem: sessionUserItem(ctx.userItem, session.preparation.pendingUserMessages) }
     const input = this.deps.buildTurnInput
-      ? this.deps.buildTurnInput(ctx, session)
-      : this.defaultTurnInput(ctx, session, turnHandoff?.brief.text)
+      ? this.deps.buildTurnInput(inputContext, session)
+      : await this.defaultTurnInput(inputContext, session, turnHandoff?.brief.text)
 
     let trace = await startDelegatedTrace(this.deps.debugSink, {
       threadId,
@@ -325,6 +338,16 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       capabilities: this.deps.capabilities
     })
 
+    // An engine that takes input mid-run gets the composer's guidance; the
+    // loop sealed steering before this turn was handed over.
+    const live = this.deps.capabilitiesV2.statuses?.sameTurnSteer?.supported === true &&
+      typeof session.steer === 'function' && typeof this.deps.turns.openDelegatedSteering === 'function'
+      ? new SessionLiveSteering({
+          steering: this.deps.turns.openDelegatedSteering(threadId, turnId),
+          steer: (text) => session.steer!(text),
+          diagnostic: (summary) => this.debug(summary)
+        })
+      : undefined
     let interruptTimer: ReturnType<typeof setTimeout> | undefined
     const onAbort = (): void => {
       void session.interrupt().catch(() => undefined)
@@ -338,7 +361,19 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
 
     try {
       await validateLaunch()
-      const result = await session.runTurn(input, sink, signal)
+      harnessTurnTiming(threadId, turnId).requestStarted()
+      live?.begin()
+      let result = await session.runTurn(input, sink, signal)
+      // Guidance the engine never received (the run ended first) is answered
+      // by a follow-up run of the same turn; admission closes once drained.
+      while (live) {
+        const late = await live.end()
+        if (late.length && result.status === 'completed' && !signal.aborted) {
+          harnessTurnTiming(threadId, turnId).requestStarted()
+          live.begin()
+          result = await session.runTurn(followUpTurnInput(input, late), sink, signal)
+        } else if (live.sealIfEmpty()) break
+      }
       await sink.flush()
       await finishDelegatedTrace(
         trace,
@@ -400,14 +435,16 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       await this.failFromError(threadId, turnId, error, false)
       return 'failed'
     } finally {
+      live?.dispose()
       if (interruptTimer) clearTimeout(interruptTimer)
       signal.removeEventListener('abort', onAbort)
       session.detach()
+      this.deps.kunToolsMcp?.revokeTurn(turnId)
       lease.release()
     }
   }
 
-  /** Coordinator.prepare → resume or start; resume failure rebases portable. */
+  /** Coordinator.prepare -> resume or start; only confirmed loss permits rebase. */
   private async ensureSession(
     agent: HarnessAgent,
     ctx: SessionTurnContext,
@@ -429,11 +466,15 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         credentialIdentity: ctx.credentialIdentity,
         workspace: ctx.workspace,
         model: ctx.model ?? 'default',
+        // Codex sends the model with every turn and Pi sets it per session,
+        // so a model change keeps the native session (no handoff brief).
+        modelScope: 'session',
         capabilityFingerprint: delegatedCapabilityFingerprint(
           caps.fingerprint ?? {}
         ),
         continuationMode: caps.continuation
       },
+      replayPendingUserMessages: true,
       allowNativeCapabilityResume: this.deps.transport === 'codex-app-server',
       priorItems: priorItemsForDelegatedTurn(ctx.items, ctx.turn.id)
     })
@@ -451,6 +492,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         buildClientSurfaceInstruction(resolveTurnClientSurface(ctx.turn))
       ],
       preparation,
+      ...this.kunToolServers(ctx),
       signal
     }
     const validateSession = async (): Promise<void> => {
@@ -463,13 +505,44 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       try {
         return await agent.resumeSession(input)
       } catch (error) {
-        this.debug(`native resume failed, rebasing: ${String(error)}`)
+        signal.throwIfAborted()
+        const cause = error instanceof HarnessSessionUnavailableError ? error.detail : error
+        const detail = cause instanceof HarnessTransportError ? cause.detail : undefined
+        console.warn('[harness-continuation]', JSON.stringify({
+          threadId: ctx.thread.id, turnId: ctx.turn.id, harnessId: ctx.definition.id,
+          stage: 'session/resume', rebase: error instanceof HarnessSessionUnavailableError,
+          code: cause instanceof HarnessTransportError ? cause.code : 'unknown',
+          rpcCode: typeof detail === 'object' && detail !== null && 'code' in detail && typeof detail.code === 'number'
+            ? detail.code : undefined,
+          message: acpDiagnosticText(cause instanceof Error ? cause.message : String(cause))
+        }))
+        if (!(error instanceof HarnessSessionUnavailableError)) throw error
+        await validateSession()
         const rebased = await coordinator.rejectResume(preparation)
         await validateSession()
         return agent.startSession({ ...input, preparation: rebased })
       }
     }
     return agent.startSession(input)
+  }
+
+  /**
+   * Kun Tools for this turn: one descriptor per Kun thread (same bearer every
+   * turn, so a native session keeps working after resume) whose grant is
+   * re-pinned to the running turn and revoked when it ends.
+   */
+  private kunToolServers(ctx: SessionTurnContext): { kunToolServers?: McpServer[] } {
+    const provider = this.deps.kunToolsMcp
+    if (!provider?.canDeliver()) return {}
+    const servers = provider.servers({
+      threadId: ctx.thread.id,
+      turnId: ctx.turn.id,
+      harnessId: ctx.definition.id,
+      credentialIdentity: `${this.deps.transport}:${ctx.definition.id}`,
+      sessionKey: `session-turn:${ctx.thread.id}`,
+      mcpCapabilities: { http: true }
+    })
+    return servers.length > 0 ? { kunToolServers: servers } : {}
   }
 
   private async commitBinding(
@@ -493,21 +566,28 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     }
   }
 
-  private defaultTurnInput(
+  private async defaultTurnInput(
     ctx: SessionTurnContext,
     session: HarnessSession,
     handoffBrief: string | undefined
-  ): HarnessTurnInput {
+  ): Promise<HarnessTurnInput> {
+    const userInput = await resolveSessionUserInput({
+      userItem: ctx.userItem,
+      attachmentStore: this.deps.attachmentStore,
+      threadId: ctx.thread.id,
+      workspace: ctx.workspace,
+      imageCapable: this.deps.imageCapable === true
+    })
     return {
       instructionBlocks: sessionInstructions(session.preparation, ctx.definition.id === 'codex'
         ? ctx.turnDynamicContext?.instructions ?? [] : [
         ...ctx.instructionBlocks,
         buildClientSurfaceInstruction(resolveTurnClientSurface(ctx.turn))
       ], false, ctx.turnDynamicContext?.instructions ?? []),
-      userText: userMessageTextWithComposerContexts(ctx.userItem),
-      images: [],
-      attachmentPaths: [],
-      fileReferences: ctx.userItem.fileReferences ?? [],
+      userText: sessionUserTextWithDocuments(userInput),
+      images: userInput.images,
+      attachmentPaths: userInput.attachmentPaths,
+      fileReferences: userInput.fileReferences,
       workspacePath: ctx.workspace,
       model: ctx.wireModel ?? ctx.model,
       reasoningEffort: ctx.turn.reasoningEffort,

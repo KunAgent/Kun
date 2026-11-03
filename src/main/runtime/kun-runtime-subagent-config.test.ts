@@ -18,7 +18,7 @@ describe('subagentProfilesForRuntime proactive retry', () => {
 })
 
 describe('subagentProfilesForRuntime ADE harness binding', () => {
-  it('round-trips harnessId/credentialMode/delegationNotes through config parse (10 §3.1)', () => {
+  it('round-trips harnessId/credentialMode/delegationNotes through config parse', () => {
     const config = subagentProfilesForRuntime({
       enabled: true,
       profiles: [{
@@ -127,5 +127,23 @@ describe('subagentProfilesForRuntime ADE harness binding', () => {
     expect(config.profiles.bad?.harnessId).toBeUndefined()
     expect(config.profiles.bad?.credentialMode).toBeUndefined()
     expect(config.profiles.bad?.delegationNotes).toBeUndefined()
+  })
+})
+
+describe('subagentProfilesForRuntime agent roster fields', () => {
+  it('carries owns and an explicit engine-binding opt-out, dropping oversized owns', () => {
+    const config = subagentProfilesForRuntime({
+      enabled: true,
+      honorEngineBinding: false,
+      profiles: [
+        { id: 'reviewer', enabled: true, name: 'Reviewer', mode: 'subagent', toolPolicy: 'readOnly', owns: 'owns code review.' },
+        { id: 'verbose', enabled: true, name: 'Verbose', mode: 'subagent', toolPolicy: 'readOnly', owns: 'x'.repeat(301) }
+      ]
+    })
+    expect(config.honorEngineBinding).toBe(false)
+    expect(config.profiles.reviewer?.owns).toBe('owns code review.')
+    expect(config.profiles.verbose).toBeDefined()
+    expect(config.profiles.verbose?.owns).toBeUndefined()
+    expect(subagentProfilesForRuntime({ enabled: true, profiles: [] }).honorEngineBinding).toBeUndefined()
   })
 })

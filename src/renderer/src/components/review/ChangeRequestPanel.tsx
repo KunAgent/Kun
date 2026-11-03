@@ -37,7 +37,7 @@ function formatDuration(ms: number | undefined): string {
 }
 
 /**
- * Forge change-request strip inside the review panel (docs/ade/11 §7.2):
+ * Forge change-request strip inside the review panel:
  * PR title/state, CI check list, and a one-click "send the failed check
  * back to the worker" action. Polls `gh` every 60s only while a request
  * exists and the panel is mounted.
@@ -67,7 +67,7 @@ export function ChangeRequestPanel({
   const request = status?.request ?? binding.changeRequest
 
   // Poll only while a request exists AND the panel is mounted — closing
-  // the panel stops `gh` calls entirely (11 §7.2).
+  // the panel stops `gh` calls entirely.
   const hasRequest = request !== undefined
   useEffect(() => {
     if (!hasRequest) return

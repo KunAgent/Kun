@@ -4,11 +4,17 @@ export const ROOM_REQUEST_ATTENTION_STATUSES = [
   'recovery_required'
 ] as const
 
-/** Only the latest private request is surfaced by direct chat; peer roots track their latest request. */
+/**
+ * Only the latest private request is surfaced by direct chat, and a failure
+ * the user has already seen stops counting until the request changes again;
+ * peer roots track their latest request.
+ */
 export function roomCurrentAttentionRequestSql(alias: string): string {
   return `(CASE WHEN json_extract(${alias}.document,'$.privateProtocol') IS NOT NULL THEN
     ${alias}.id=(SELECT latest.id FROM room_documents latest WHERE latest.kind='request' AND latest.room_id=${alias}.room_id
       AND json_extract(latest.document,'$.privateProtocol') IS NOT NULL ORDER BY latest.seq DESC LIMIT 1)
+      AND NOT (${alias}.status='failed' AND
+        COALESCE(json_extract(${alias}.document,'$.failureAcknowledgedRevision'),-1)=${alias}.revision)
     ELSE (COALESCE(json_extract(${alias}.document,'$.collaborationProtocol'),'')<>'peer' OR
       ${alias}.id=COALESCE((SELECT COALESCE(json_extract(root.document,'$.peerLatestRequestId'),root.id)
         FROM room_documents root WHERE root.kind='request' AND root.id=COALESCE(json_extract(${alias}.document,'$.rootRequestId'),${alias}.id)),${alias}.id)) END)`

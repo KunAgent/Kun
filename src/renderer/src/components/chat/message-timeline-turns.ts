@@ -33,7 +33,7 @@ export function isDesignContinuationBlock(block: ChatBlock): boolean {
   return block.kind === 'user' && block.meta?.messageSource === 'design_continuation'
 }
 
-/** ADE manager wake-up batch (09 §6.2) — card content, not a user bubble. */
+/** ADE manager wake-up batch — card content, not a user bubble. */
 export function isWorkerUpdateNoticeBlock(block: ChatBlock): boolean {
   return block.kind === 'user' && isWorkerUpdateNoticeUserMessage(block)
 }
@@ -127,15 +127,38 @@ export function activeTimelineTurnIndex(
 ): number {
   const normalizedTurnId = currentTurnId?.trim()
   if (normalizedTurnId) {
-    const index = turns.findIndex((turn) => turn.turnId === normalizedTurnId)
+    const index = turns.findIndex((turn) => turn.turnId === normalizedTurnId ||
+      turn.blocks.some((block) => block.turnId === normalizedTurnId))
     if (index >= 0) return index
   }
   const normalizedUserId = currentTurnUserId?.trim()
   if (normalizedUserId) {
-    const index = turns.findIndex((turn) => turn.user?.id === normalizedUserId)
+    const index = turns.findIndex((turn) => turn.user?.id === normalizedUserId ||
+      turn.blocks.some((block) => block.kind === 'user' && block.id === normalizedUserId))
     if (index >= 0) return index
   }
   return turns.length - 1
+}
+
+/** Keep the visible task's wall clock across runtime wake-ups, including waiting gaps. */
+export function timelineTaskStartedAtMs(
+  turn: Turn,
+  starts: Record<string, number>,
+  runtimeStartedAtMs?: number
+): number | undefined {
+  const user = turn.user
+  const recordedStart = user ? starts[user.id] : undefined
+  const hasContinuation = turn.blocks.some((block) =>
+    isBackgroundNoticeBlock(block) && block.turnId !== turn.turnId)
+  // createdAt survives reloads; only use it instead of a runtime start for a
+  // continuation, since a queued user's creation can precede actual execution.
+  const createdAt = user?.createdAt ? Date.parse(user.createdAt) : NaN
+  const taskStart = recordedStart ?? (
+    (hasContinuation || runtimeStartedAtMs === undefined) && Number.isFinite(createdAt)
+      ? createdAt : undefined
+  )
+  if (taskStart === undefined) return runtimeStartedAtMs
+  return runtimeStartedAtMs === undefined ? taskStart : Math.min(taskStart, runtimeStartedAtMs)
 }
 
 export function stableTurnKey(turn: Turn, fallbackIndex: number): string {

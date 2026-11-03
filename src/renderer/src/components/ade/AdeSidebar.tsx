@@ -121,7 +121,7 @@ export function AdeSidebar({
     () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
   )
   const [renameState, setRenameState] = useState<RenameThreadDialogState | null>(null)
-  // P3-17: 一对一先选 agent;按项目分组开关;worker 线程默认折叠。
+  // 一对一先选 agent;按项目分组开关;worker 线程默认折叠。
   const [oneOnOneOpen, setOneOnOneOpen] = useState(false)
   const [groupMode, setGroupMode] = useState<'status' | 'project'>('status')
   const [expandedParents, setExpandedParents] = useState<ReadonlySet<string>>(new Set())
@@ -166,7 +166,7 @@ export function AdeSidebar({
   // Worker threads nest under their manager row instead of listing flat.
   const { roots, childrenByParent } = useMemo(() => indexAdeThreads(threads), [threads])
 
-  // ADE 侧栏分组:待你处理 / 待审查 / 进行中 / 已完成 / 会话 / 已归档,或按项目分组(00 §4)。
+  // ADE 侧栏分组:待你处理 / 待审查 / 进行中 / 已完成 / 会话 / 已归档,或按项目分组。
   const groups = useMemo(() => {
     const byStatus = new Map<AdeStatusGroup, NormalizedThread[]>(
       ADE_STATUS_GROUP_ORDER.map((key) => [key, []])
@@ -220,7 +220,7 @@ export function AdeSidebar({
         <button
           type="button"
           data-ade-worker-toggle={thread.id}
-          className="flex w-full items-center gap-1 rounded-sm px-3 py-0.5 text-left text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-text"
+          className="flex w-full items-center gap-1 rounded-sm px-3 py-0.5 text-left text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
           onClick={() =>
             setExpandedParents((prev) => {
               const next = new Set(prev)
@@ -385,7 +385,7 @@ export function AdeSidebar({
           type="button"
           data-ade-group-toggle
           title={t('adeGroupToggleHint')}
-          className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-text"
+          className="flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-[11px] text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
           onClick={() => setGroupMode((m) => (m === 'status' ? 'project' : 'status'))}
         >
           <Folder className="h-3 w-3" strokeWidth={1.75} />

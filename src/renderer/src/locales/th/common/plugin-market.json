@@ -1,0 +1,5 @@
+{
+  "marketSkillInstalled": "ติดตั้ง {{name}} จาก {{source}} แล้ว: {{path}}",
+  "marketSkillInstallFailed": "ติดตั้ง {{name}} ไม่สำเร็จ: {{message}}",
+  "marketMcpPlanFailed": "เตรียม {{name}} ไม่สำเร็จ: {{message}}"
+}

@@ -1,3 +1,4 @@
+import type { SettingsCategory } from './settings-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { AppSettingsV1 } from '@shared/app-settings'
 import type {
@@ -14,7 +15,7 @@ export function useSettingsGuiUpdate({
   form,
   t
 }: {
-  category: 'general' | 'providers' | 'integrations' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'agents' | 'laboratory' | 'subagents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal' | 'storage' | 'dataMigration' | 'uninstall'
+  category: SettingsCategory
   channel: GuiUpdateChannel | undefined
   form: AppSettingsV1 | null
   t: (key: string, values?: Record<string, unknown>) => string

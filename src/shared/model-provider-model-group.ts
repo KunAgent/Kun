@@ -10,6 +10,8 @@ export type ModelProviderModelGroup = {
   modelIds: string[]
   modelProfiles?: Record<string, ModelProviderModelProfileV1>
   nativeHarnessId?: string
+  /** Agent whose own sign-in this group uses; the picker shows that Agent's mark. */
+  agentIconId?: string
   modelInfo?: Record<string, import('../../kun/src/contracts/harness-models').HarnessModelInfo>
   /** Opaque account reference used only for an acknowledged extension binding. */
   accountId?: string

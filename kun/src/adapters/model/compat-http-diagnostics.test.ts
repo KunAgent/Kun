@@ -45,6 +45,19 @@ describe('compat HTTP diagnostics', () => {
     expect(headers['x-opencode-session']).toBe('runtime-thread')
   })
 
+  it('labels Magpie requests as Kun unless the caller already set a User-Agent', () => {
+    expect(buildCompatRequestHeaders({
+      apiKey: 'magpie-kun', stream: true, endpointFormat: 'chat_completions'
+    })['User-Agent']).toBe('Kun')
+    expect(buildCompatRequestHeaders({
+      apiKey: 'sk-other', stream: true, endpointFormat: 'chat_completions'
+    })['User-Agent']).toBeUndefined()
+    expect(buildCompatRequestHeaders({
+      apiKey: 'magpie-kun', stream: true, endpointFormat: 'chat_completions',
+      customHeaders: { 'User-Agent': 'Custom/1' }
+    })['User-Agent']).toBe('Custom/1')
+  })
+
   it('omits every auth header for an anonymous (empty-key) request', () => {
     const headers = buildCompatRequestHeaders({
       apiKey: '', stream: true, endpointFormat: 'chat_completions'

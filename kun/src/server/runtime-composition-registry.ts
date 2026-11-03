@@ -1,4 +1,5 @@
 import { nativeAgentNetworkEnv } from '../harness/native-agent-network.js'
+import { acpSessionCatalog } from '../harness/acp-model-catalog.js'
 import {
   join,
   CapabilityRegistry,
@@ -12,12 +13,12 @@ import {
   buildDiagramVisualizationToolProvider,
   buildConversationVisualizationToolProvider,
   buildChartToolProvider,
+  buildGenUiToolProvider,
   protocolSupportsImageEdit,
   buildRuntimeCapabilityManifest,
   DEFAULT_APPROVAL_REVIEWER,
   mergeBuiltinSubagentProfiles,
   buildFastContextToolProvider,
-  buildPptAgentToolProvider,
   DelegationRuntime,
   FileDelegationStore,
   createChildAgentExecutor,
@@ -31,6 +32,10 @@ import { diffUsage, hasUsage } from '../domain/usage.js'
 import { roomResultProvider } from '../rooms/room-result-tools.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
+import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
+import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
+import { buildCodexAppServerDeps, type CodexRuntimeSharedDeps } from './runtime-composition-codex.js'
+import { buildPiRpcDeps } from './runtime-composition-pi.js'
 
 export function createRuntimeRegistry(
   services: Awaited<ReturnType<typeof createRuntimeServices>>
@@ -72,9 +77,26 @@ export function createRuntimeRegistry(
     defaultIsAntigravity,
     defaultIsCursorSdk
   } = services
-  // Per-turn `kun-tools` grants for ACP child sessions (P3-08); the bridge
+  // Per-turn `kun-tools` grants for ACP child sessions; the bridge
   // host still narrows execution to each child's read/write boundary.
   const kunToolsMcp = services.kunToolsMcp
+  const sessionLayerDeps = (child: Parameters<ChildDelegatedRuntimeFactory>[0]): CodexRuntimeSharedDeps => ({
+    sessionCoordinator: delegatedSessions,
+    threadStore: child.threadStore,
+    sessionStore: child.sessionStore,
+    turns: child.turns,
+    events: child.events,
+    ids: child.ids,
+    credentialEnv: services.acpCredentialEnv,
+    systemPrompt: child.prefix.systemPrompt,
+    approvalGate,
+    approvalReview: approvalReviewService,
+    userInputGate: core.userInputGate,
+    ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
+    ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {}),
+    ...(llmDebug ? { debugSink: llmDebug } : {}),
+    nowIso
+  })
   const createChildDelegatedRuntime: ChildDelegatedRuntimeFactory = (child) => {
     const childRuntimes = buildHarnessRuntimes({
     usage: usageService,
@@ -95,7 +117,7 @@ export function createRuntimeRegistry(
           prefix: child.prefix,
           readiness: services.harnesses.readiness,
           providerConfigs: core.activeOptions.providers ?? {},
-          pathToClaudeCodeExecutable: core.activeOptions.harnesses?.binaryPaths?.['claude-code'] ?? process.env.KUN_CLAUDE_BINARY,
+          pathToClaudeCodeExecutable: claudeCodeSdkExecutable(harnessCommandOverride(core.activeOptions.harnesses, 'claude-code')),
           agentSdkProviderIds,
           defaultApprovalPolicy: core.activeOptions.approvalPolicy,
           defaultSandboxMode: core.activeOptions.sandboxMode,
@@ -122,7 +144,6 @@ export function createRuntimeRegistry(
             ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
-            ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
             ...(child.blockedProviderIds ? { blockedProviderIds: child.blockedProviderIds } : {}),
             ...(child.blockedToolNames ? { blockedToolNames: child.blockedToolNames } : {}),
             ...(child.blockedSkillIds ? { blockedSkillIds: child.blockedSkillIds } : {})
@@ -137,8 +158,8 @@ export function createRuntimeRegistry(
           ...(services.attachmentStore
             ? { attachmentStore: services.attachmentStore }
             : {}),
-          ...(process.env.KUN_CLAUDE_BINARY
-            ? { pathToClaudeCodeExecutable: process.env.KUN_CLAUDE_BINARY }
+          ...(claudeCodeSdkExecutable()
+            ? { pathToClaudeCodeExecutable: claudeCodeSdkExecutable() }
             : {}),
           nowIso,
           sessionCoordinator: delegatedSessions,
@@ -165,7 +186,7 @@ export function createRuntimeRegistry(
           defaultModel: core.activeOptions.model,
           systemPrompt: child.prefix.systemPrompt,
           binaryPath:
-            core.activeOptions.harnesses?.binaryPaths?.antigravity ?? process.env.KUN_ANTIGRAVITY_BINARY ??
+            harnessCommandOverride(core.activeOptions.harnesses, 'antigravity') ?? process.env.KUN_ANTIGRAVITY_BINARY ??
             resolveAntigravityCliCommand(core.activeOptions.dataDir)?.command,
           threadStore: child.threadStore,
           sessionStore: child.sessionStore,
@@ -222,7 +243,6 @@ export function createRuntimeRegistry(
             ...(child.allowHostReads ? { allowHostReads: true } : {}),
             ...(child.allowedWritePaths ? { allowedWritePaths: child.allowedWritePaths } : {}),
             ...(child.allowedArtifactIds ? { allowedArtifactIds: child.allowedArtifactIds } : {}),
-            ...(child.pptWorkflowScope ? { pptWorkflowScope: child.pptWorkflowScope } : {}),
             ...(child.blockedProviderIds ? { blockedProviderIds: child.blockedProviderIds } : {}),
             ...(child.blockedToolNames ? { blockedToolNames: child.blockedToolNames } : {}),
             ...(child.blockedSkillIds ? { blockedSkillIds: child.blockedSkillIds } : {})
@@ -242,9 +262,10 @@ export function createRuntimeRegistry(
     // narrow to the child's declared read/write boundary.
     acp: {
       catalog: services.harnesses.catalog,
+      onNativeSession: (definition, session) => services.harnesses.acpModels.seed(definition, acpSessionCatalog(definition, session)),
       readiness: services.harnesses.readiness,
       binaryPath: (harnessId: string) =>
-        core.activeOptions.harnesses?.binaryPaths?.[harnessId],
+        harnessCommandOverride(core.activeOptions.harnesses, harnessId),
       threadStore: child.threadStore,
       sessionStore: child.sessionStore,
       turns: child.turns,
@@ -279,7 +300,13 @@ export function createRuntimeRegistry(
       ...(llmDebug ? { debugSink: llmDebug } : {}),
       nowIso,
       ...(core.taskWorkspaces ? { taskWorkspaces: core.taskWorkspaces } : {})
-    }
+    },
+    // Session-layer transports (codex app-server, pi rpc): dispatched workers
+    // pinned to Codex/Pi run here, so the child map must register them too.
+    codexAppServer: { ...buildCodexAppServerDeps(core.activeOptions, services.harnesses, sessionLayerDeps(child)),
+      enforceReadOnly: child.toolPolicy === 'readOnly' },
+    piRpc: { ...buildPiRpcDeps(core.activeOptions, services.harnesses, sessionLayerDeps(child)),
+      enforceReadOnly: child.toolPolicy === 'readOnly' }
     })
     const childRouter = new HarnessRouter({
       enabled: () => core.activeOptions.ade?.harnessRouter !== false,
@@ -311,6 +338,8 @@ export function createRuntimeRegistry(
 	        turns: turnService,
 	        artifactStore,
 	        nowIso,
+	        // Background siblings that settle together (a failed batch) wake the parent once.
+	        detachedNoticeMergeMs: 2_000,
 	        executor: createChildAgentExecutor({
             providerKinds: services.providerKinds, harnessCatalog: services.harnesses.catalog,
 	          model: timedModelClient,
@@ -450,20 +479,6 @@ export function createRuntimeRegistry(
       delegationRuntime,
       () => core.activeOptions.fastContext
     ),
-    ...buildPptAgentToolProvider(
-      delegationRuntime,
-      () => ({
-        ...core.activeOptions.lab?.pptAgent,
-        imageGenAvailable: services.imageGenProviders.available,
-        imageGenReason: services.imageGenProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason,
-        imageGenSupportsReferenceEdit: protocolSupportsImageEdit(core.activeOptions.capabilities?.imageGen?.protocol),
-        toolIncompatibleProviderIds: [
-          ...new Set([...antigravityProviderIds, ...cursorSdkProviderIds])
-        ],
-        defaultProviderLacksManagedTools: defaultIsAntigravity || defaultIsCursorSdk
-      }),
-      turnService
-    ),
     ...buildComponentDesignToolProviders(delegationRuntime),
     ...buildDiagramVisualizationToolProvider(
       () => core.activeOptions.lab?.conversationVisualization,
@@ -475,6 +490,7 @@ export function createRuntimeRegistry(
     ...buildChartToolProvider(
       () => core.activeOptions.lab?.conversationVisualization
     ),
+    ...buildGenUiToolProvider(() => core.genUiStore),
     ...buildPaperSearchToolProvider({
       proxyUrl: () => core.activeOptions.modelProxyUrl,
       enabledSources: () => core.activeOptions.capabilities?.paperSearch?.enabledSources,

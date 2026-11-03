@@ -7,6 +7,8 @@ const LOCAL_URL_CANDIDATE_RE =
   /\b(?:https?:\/\/)?(?:localhost|(?:[\w-]+\.)?localhost|host\.docker\.internal|[\w.-]+\.local|127(?:\.\d{1,3}){3}|0\.0\.0\.0|10(?:\.\d{1,3}){3}|192\.168(?:\.\d{1,3}){2}|172\.(?:1[6-9]|2\d|3[01])(?:\.\d{1,3}){2}|\[::1\])(?::\d{2,5})?(?:\/[^\s'"<>)\]]*)?/gi
 const DEV_SERVER_COMMAND_RE =
   /\b(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|preview)|vite(?:\s|$)|next\s+dev|nuxt\s+dev|astro\s+dev|remix\s+dev|webpack(?:-dev-server|\s+serve)|react-scripts\s+start|storybook(?:\s+dev)?|svelte-kit\s+dev)\b/i
+const EXECUTED_DEV_SERVER_COMMAND_RE =
+  /(?:^|[;&|\n])\s*(?:exec\s+)?(?:[\w]+=\S+\s+)*(?:(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?(?:dev|start|serve|preview)|(?:npx\s+)?vite|next\s+dev|nuxt\s+dev|astro\s+dev|remix\s+dev|webpack(?:-dev-server|\s+serve)|react-scripts\s+start|storybook(?:\s+dev)?|svelte-kit\s+dev)\b/i
 const DEV_SERVER_OUTPUT_RE =
   /\b(?:vite v?\d|local:\s*https?:\/\/|network:\s*https?:\/\/|ready in \d+(?:\.\d+)?\s*(?:ms|s)|ready on\s+https?:\/\/|started server|server started|compiled successfully|webpack compiled|app running at|serving at|listening on\s+https?:\/\/)\b/i
 const DEV_PREVIEW_ASSISTANT_ACTION_RE =
@@ -25,17 +27,23 @@ export type DevPreviewAutoOpenSignal = {
 
 function textFromBlock(block: ChatBlock, mode?: DevPreviewExtractionMode): string {
   if (block.kind === 'tool') {
-    // Auto-open must only trust real command output (summary/detail). The meta
-    // JSON embeds the command string itself, which can combine a bare local IP
-    // with dev-server keywords and produce a false dev-server signal.
-    const includeMeta = mode !== 'auto_open'
-    let meta = ''
-    if (includeMeta) {
+    // Arguments, summaries, and arbitrary JSON fields are not server output.
+    if (mode === 'auto_open') {
+      if (block.meta?.sourceItemKind && block.meta.sourceItemKind !== 'tool_result') return ''
+      const detail = block.detail ?? ''
       try {
-        meta = block.meta ? JSON.stringify(block.meta) : ''
+        const output = JSON.parse(detail) as Record<string, unknown> | null
+        if (!output || typeof output !== 'object' || Array.isArray(output)) return ''
+        return [output.stdout, output.stderr, output.output].filter((value) => typeof value === 'string').join('\n')
       } catch {
-        meta = ''
+        return detail
       }
+    }
+    let meta = ''
+    try {
+      meta = block.meta ? JSON.stringify(block.meta) : ''
+    } catch {
+      meta = ''
     }
     return [block.summary, block.detail, meta].filter(Boolean).join('\n')
   }
@@ -98,7 +106,7 @@ function blockCanAdvertiseDevPreview(
 ): boolean {
   if (block.kind === 'assistant') {
     const outputLooksLikeDevServer = DEV_SERVER_OUTPUT_RE.test(text)
-    if (mode === 'auto_open') return outputLooksLikeDevServer
+    if (mode === 'auto_open') return false
     if (outputLooksLikeDevServer) return true
     if (NON_PREVIEW_CONTEXT_RE.test(text)) return false
     return assistantContextCanShowPreview(text)
@@ -110,6 +118,13 @@ function blockCanAdvertiseDevPreview(
   const commandText = commandTextFromBlock(block)
   const commandLooksLikeDevServer = DEV_SERVER_COMMAND_RE.test(commandText)
   const outputLooksLikeDevServer = DEV_SERVER_OUTPUT_RE.test(text)
+
+  if (mode === 'auto_open') {
+    // Quoted search patterns and shell comments are not executable commands.
+    const executableText = commandText.replace(/'[^']*'|"(?:\\.|[^"\\])*"|\\.|#[^\n]*/gs, ' ')
+    return block.toolKind === 'command_execution' && block.status !== 'error' &&
+      EXECUTED_DEV_SERVER_COMMAND_RE.test(executableText) && outputLooksLikeDevServer
+  }
 
   if (!commandLooksLikeDevServer && !outputLooksLikeDevServer) return false
   if (block.status === 'error' && !outputLooksLikeDevServer) return false
@@ -151,7 +166,10 @@ function collectDetectedDevPreviewUrls(
       ) {
         continue
       }
-      if (mode === 'auto_open' && !autoOpenUrlCandidateIsExplicit(match[0])) continue
+      if (mode === 'auto_open') {
+        const context = surroundingUrlContext(text, match.index ?? 0, match[0].length)
+        if (!autoOpenUrlCandidateIsExplicit(match[0]) || !DEV_SERVER_OUTPUT_RE.test(context) || NON_PREVIEW_CONTEXT_RE.test(context)) continue
+      }
       const normalized = normalizeDevPreviewUrlInput(trimUrlCandidate(match[0]))
       if (!normalized || !urlLooksLikePagePreview(normalized) || seen.has(normalized)) continue
       seen.add(normalized)

@@ -1,3 +1,4 @@
+import { pendingPublicCatalog } from './provider-model-progressive-import'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderProfileV1
@@ -17,7 +18,7 @@ import {
   type ProbeState
 } from './settings-section-providers-profile'
 import {
-  requestSharedModelConnectionProbe,
+  requestSharedModelConnectionProbeDetails,
   shouldUseSharedModelConnectionProbe,
   type SharedModelConnection
 } from './settings-section-providers-shared-api'
@@ -90,7 +91,9 @@ export async function discoverProviderModels(
             ? barrier.error
             : String(barrier.error)
       }
-      modelIds = await requestSharedModelConnectionProbe(target.id)
+      const discovered = await requestSharedModelConnectionProbeDetails(target.id)
+      modelIds = discovered.models
+      discoveredModelProfiles = discovered.modelProfiles
     } else {
       const sharedCredentialReady = sharedModelConnectionHasUsableCredential(
         sharedConnectionFor(target.id)
@@ -113,16 +116,10 @@ export async function discoverProviderModels(
       modelIds = [...result.modelIds]
       discoveredModelProfiles = result.modelProfiles ?? {}
     }
-    let catalogResult = await fetchModelsDevCatalogFor(target)
-    // Unmapped custom/relay providers get a second pass with the discovered
-    // model ids so family rules can attach catalog metadata.
-    if (catalogResult.status === 'unmapped' && modelIds.length > 0) {
-      catalogResult = await fetchModelsDevCatalogFor(
-        target,
-        modelIds.map((id) => ({ id, displayName: id })),
-        false
-      )
-    }
+    // Live account discovery is sufficient to add the models. Runtime owns
+    // subsequent catalog enrichment; public downloads must not hold quick-add.
+    void fetchModelsDevCatalogFor(target, modelIds.map((id) => ({ id, displayName: id })), false).catch(() => undefined)
+    const catalogResult = pendingPublicCatalog()
     const entries = buildProviderModelImportEntries(target, modelIds, catalogResult)
     const chatEntries = entries.filter(
       (entry) => entry.kind === 'chat' && entry.sources.includes('provider-api')

@@ -1,3 +1,4 @@
+import type { GuiDesignArtifactMessageContext } from '../store/chat-store-message-types'
 import type { PaperTurnContext } from '@shared/paper/paper-turn-context'
 import type { HarnessGatewayBinding } from '../../../../kun/src/contracts/harness-gateway-binding.js'
 import { getKunThreadDetail } from './kun-runtime-thread-detail'
@@ -25,7 +26,6 @@ import {
   KUN_MEMORY_DIAGNOSTICS_PATH,
   KUN_MEMORY_PATH,
   KUN_MCP_OAUTH_PATH,
-  KUN_MODEL_CONNECTIONS_PATH,
   KUN_RUNTIME_INFO_PATH,
   KUN_RUNTIME_TOOLS_PATH,
   KUN_SKILLS_PATH,
@@ -97,10 +97,12 @@ import {
   threadFromCore
 } from './kun-mapper'
 import { rendererRuntimeClient } from './runtime-client'
+import { sharedDefaultModelSelection } from './kun-runtime-shared-default'
 import type { ComposerContextAttachment } from '@kun/extension-api'
 import { KunRuntimeThreadServices } from './kun-runtime-thread-services'
 import { readRuntimeError, readRuntimeJson } from './kun-runtime-services'
 import { harnessAgentRequestField } from '../lib/harness-native-agent'
+import { harnessSettingsRequestField } from '../lib/harness-session-settings'
 import type {
   DesignDocumentTarget,
   DesignImagePlacementTarget,
@@ -119,62 +121,6 @@ function normalizeApprovalPolicy(value: string | undefined): NormalizedThread['a
       return value
     default:
       return undefined
-  }
-}
-
-async function sharedDefaultModelSelection(): Promise<{
-  registryAvailable: boolean
-  providerId?: string
-  accountId?: string
-  model?: string
-  providers?: Array<{
-    id: string
-    accountId?: string
-    configured: boolean
-    models: string[]
-  }>
-}> {
-  const response = await rendererRuntimeClient.runtimeRequest(KUN_MODEL_CONNECTIONS_PATH, 'GET')
-  if (!response.ok) return { registryAvailable: false }
-  try {
-    const value = JSON.parse(response.body) as {
-      defaultProviderId?: unknown
-      defaultAccountId?: unknown
-      defaultModel?: unknown
-      providers?: unknown
-    }
-    return {
-      registryAvailable: true,
-      ...(typeof value.defaultProviderId === 'string' && value.defaultProviderId.trim()
-        ? { providerId: value.defaultProviderId.trim() }
-        : {}),
-      ...(typeof value.defaultAccountId === 'string' && value.defaultAccountId.trim()
-        ? { accountId: value.defaultAccountId.trim() }
-        : {}),
-      ...(typeof value.defaultModel === 'string' && value.defaultModel.trim()
-        ? { model: value.defaultModel.trim() }
-        : {}),
-      providers: Array.isArray(value.providers)
-        ? value.providers.flatMap((entry) => {
-            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return []
-            const profile = entry as Record<string, unknown>
-            if (typeof profile.id !== 'string' || !profile.id.trim()) return []
-            return [{
-              id: profile.id.trim(),
-              ...(typeof profile.accountId === 'string' && profile.accountId.trim()
-                ? { accountId: profile.accountId.trim() }
-                : {}),
-              configured: profile.configured === true,
-              models: Array.isArray(profile.models)
-                ? profile.models.filter((model): model is string =>
-                    typeof model === 'string' && Boolean(model.trim()))
-                : []
-            }]
-          })
-        : []
-    }
-  } catch {
-    return { registryAvailable: false }
   }
 }
 
@@ -275,7 +221,9 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
         ...(cursor ? { cursor } : {})
       })
       if (options.workbenchScope && page.workbenchScopeApplied !== true) {
-        throw new Error('Kun runtime does not support the unified Code workbench query')
+        throw new Error(options.workbenchScope === 'code'
+          ? 'Kun runtime does not support the unified Code workbench query'
+          : 'Kun runtime does not support the Work workbench query')
       }
       threads.push(...page.threads)
       cursor = page.hasMore ? page.nextCursor : undefined
@@ -311,7 +259,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
     const body = readRuntimeJson<{
       threads: CoreThreadSummaryJson[]
-      workbenchScope?: 'code'
+      workbenchScope?: 'code' | 'work'
       nextCursor?: string
       hasMore?: boolean
       total?: number
@@ -330,7 +278,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
     }
   }
 
-  /** Execution-unit activity surface (docs/ade/06 §9, §7.2 foreground). */
+  /** Execution-unit activity surface. */
   private readonly activity = createKunActivityClient()
   readonly getActivitySnapshot = this.activity.getActivitySnapshot
   readonly pollActivity = this.activity.pollActivity
@@ -340,7 +288,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly reportActivityForeground = this.activity.reportActivityForeground
   readonly listPendingApprovals = this.activity.listPendingApprovals
 
-  /** Host task-workspace surface (docs/ade/07 §11, 11 §3 review diff). */
+  /** Host task-workspace surface. */
   private readonly taskWorkspaces = createKunTaskWorkspaceClient()
   readonly listTaskWorkspaces = this.taskWorkspaces.listTaskWorkspaces
   readonly createTaskWorkspace = this.taskWorkspaces.createTaskWorkspace
@@ -382,7 +330,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
   readonly updateReviewComment = this.reviews.updateReviewComment
   readonly sendReview = this.reviews.sendReview
 
-  /** Rebuild a recorded handoff brief on demand (docs/ade/impl §P0-14). */
+  /** Rebuild a recorded handoff brief on demand. */
   async getHandoffPreview(threadId: string, turnId: string): Promise<{
     turnId: string
     reason: string
@@ -501,6 +449,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       accountId?: string
       /** ADE harness override for this turn; absent inherits the thread. */
       harnessId?: string
+      inheritHarnessPreferences?: boolean
       /** Harness credential path; absent = the harness's default. */
       gatewayBinding?: HarnessGatewayBinding; credentialMode?: 'native-login' | 'provider' | 'kun-gateway'
       reasoningEffort?: string
@@ -527,11 +476,7 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       designProfile?: DesignTaskProfileInput
       designDocumentTarget?: DesignDocumentTarget
       designImagePlacementTarget?: DesignImagePlacementTarget
-      guiDesignArtifact?: {
-        kind: 'svg'
-        artifactId: string
-        relativePath: string
-      }
+      guiDesignArtifact?: GuiDesignArtifactMessageContext
       attachmentIds?: string[]
       /** Queue this turn durably when the thread already has an active turn. */
       enqueueIfBusy?: boolean
@@ -576,7 +521,10 @@ export class KunRuntimeProvider extends KunRuntimeThreadServices implements Agen
       ...(selectedModel ? { model: selectedModel } : {}),
       ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
       ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
-      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim(), ...harnessAgentRequestField(options.harnessId) } : {}),
+      ...(options?.harnessId?.trim() ? { harnessId: options.harnessId.trim(),
+        ...(options.inheritHarnessPreferences === false ? {} : {
+          ...harnessAgentRequestField(options.harnessId), ...harnessSettingsRequestField(options.harnessId)
+        }) } : {}),
       ...(options?.credentialMode ? { credentialMode: options.credentialMode } : {}),
       ...(options?.gatewayBinding ? { gatewayBinding: options.gatewayBinding } : {}),
       approvalPolicy: options?.approvalPolicy ?? runtime.approvalPolicy,

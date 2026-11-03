@@ -1,3 +1,5 @@
+import { runExternalPlanBuildViaRuntime } from './schedule-runtime-external-plan'
+import { runAuditedSchedule } from './schedule-run-audit'
 import type {
   AppSettingsV1,
   ClawImChannelV1,
@@ -379,6 +381,16 @@ export class ScheduleExecutionQueue {
       const settings = await this.loadSettings()
       const clawChannel = this.resolveTaskClawChannel(settings, task)
       let workspaceRoot = this.resolveTaskWorkspaceRoot(settings, task, clawChannel)
+      if (!task.useWorktree && task.harness) {
+        const harness = task.harness
+        // Handed-off plan build: the Agent gets its own conversation and task worktree.
+        const handoff = await runAuditedSchedule(this.deps, settings, task.id, (clientRequestId) =>
+          runExternalPlanBuildViaRuntime(this.deps, settings, {
+            harness, prompt: task.prompt, title: task.title, displayText: scheduledThreadTitle(task.title),
+            workspaceRoot, clientRequestId, signal: this.stopController.signal
+          }))
+        return await this.settleStartedTask(task, handoff)
+      }
       if (task.useWorktree) {
         const projectPath = workspaceRoot
         const poolIndex = await findAvailablePoolIndex({ projectPath })
@@ -420,7 +432,8 @@ export class ScheduleExecutionQueue {
         model: task.model,
         reasoningEffort: task.reasoningEffort
       })
-      const result = await this.runPrompt(settings, {
+      const result = await runAuditedSchedule(this.deps, settings, task.id, (clientRequestId) => this.runPrompt(settings, {
+        clientRequestId,
         prompt: task.prompt,
         title: scheduledThreadTitle(task.title),
         workspaceRoot,
@@ -434,37 +447,8 @@ export class ScheduleExecutionQueue {
         waitForResult: false,
         responseTimeoutMs: TASK_RESPONSE_TIMEOUT_MS,
         signal: this.stopController.signal
-      })
-      if (this.stopped) return { ok: false, message: 'Schedule runtime stopped.' }
-      if (!result.ok) {
-        const finishedAt = new Date()
-        await this.updateTask(task.id, (current) => ({
-          ...current,
-          ...(current.schedule.kind === 'at' ? { enabled: false } : {}),
-          lastRunAt: finishedAt.toISOString(),
-          nextRunAt: current.schedule.kind === 'at' ? '' : computeScheduleNextRunAt(current, finishedAt),
-          lastStatus: 'error',
-          lastMessage: result.message,
-          updatedAt: finishedAt.toISOString()
-        }))
-        this.runningTaskIds.delete(task.id)
-        await this.releaseTaskWorktree(task.id)
-        void this.drainQueue()
-        return result
-      }
-
-      const startedAt = new Date()
-      await this.updateTask(task.id, (current) => ({
-        ...current,
-        lastRunAt: startedAt.toISOString(),
-        nextRunAt: '',
-        lastStatus: 'running',
-        lastMessage: result.message ?? 'Started',
-        lastThreadId: result.threadId,
-        updatedAt: startedAt.toISOString()
       }))
-      this.trackTask(Promise.resolve(this.monitorTaskTurn(task.id, result.threadId, result.turnId ?? '')))
-      return result
+      return await this.settleStartedTask(task, result)
     } catch (error) {
       if (this.stopped) return { ok: false, message: 'Schedule runtime stopped.' }
       const message = error instanceof Error ? error.message : String(error)
@@ -540,6 +524,40 @@ export class ScheduleExecutionQueue {
     })
   }
 
+  /** Record a started (or refused) run and hand the turn to the monitor. */
+  private async settleStartedTask(task: ScheduledTaskV1, result: ScheduleRunResult): Promise<ScheduleRunResult> {
+    if (this.stopped) return { ok: false, message: 'Schedule runtime stopped.' }
+    if (!result.ok) {
+      const finishedAt = new Date()
+      await this.updateTask(task.id, (current) => ({
+        ...current,
+        ...(current.schedule.kind === 'at' ? { enabled: false } : {}),
+        lastRunAt: finishedAt.toISOString(),
+        nextRunAt: current.schedule.kind === 'at' ? '' : computeScheduleNextRunAt(current, finishedAt),
+        lastStatus: 'error',
+        lastMessage: result.message,
+        updatedAt: finishedAt.toISOString()
+      }))
+      this.runningTaskIds.delete(task.id)
+      await this.releaseTaskWorktree(task.id)
+      void this.drainQueue()
+      return result
+    }
+
+    const startedAt = new Date()
+    await this.updateTask(task.id, (current) => ({
+      ...current,
+      lastRunAt: startedAt.toISOString(),
+      nextRunAt: '',
+      lastStatus: 'running',
+      lastMessage: result.message ?? 'Started',
+      lastThreadId: result.threadId,
+      updatedAt: startedAt.toISOString()
+    }))
+    this.trackTask(Promise.resolve(this.monitorTaskTurn(task.id, result.threadId, result.turnId ?? '')))
+    return result
+  }
+
   runPrompt(settings: AppSettingsV1, options: RunPromptOptions): Promise<ScheduleRunResult> {
     const prompt = options.clawChannel
       ? buildClawRuntimePrompt(settings, options.prompt, { channel: options.clawChannel })
@@ -550,6 +568,7 @@ export class ScheduleExecutionQueue {
       workspaceRoot: options.workspaceRoot.trim() || this.resolveDefaultWorkspaceRoot(settings),
       ...(options.threadId ? { threadId: options.threadId } : {}),
       model: options.model,
+      ...(options.clientRequestId ? { clientRequestId: options.clientRequestId } : {}),
       ...(options.providerId ? { providerId: options.providerId } : {}),
       reasoningEffort: options.reasoningEffort,
       mode: options.mode,

@@ -3,7 +3,7 @@ import type { TaskWorkspaceRecord } from '../contracts/task-workspace.js'
 import type { ReportLanguage } from './user-report.js'
 
 /**
- * The worker's first-turn input (09 §4.3). Rendered by the host from the
+ * The worker's first-turn input. Rendered by the host from the
  * persisted dispatch/worker/workspace records — never model-authored. The
  * `<kun_assignment>` wrapper lets the renderer fold it into an
  * AssignmentCard while keeping the original text in history.
@@ -95,7 +95,7 @@ function workspaceLines(input: AssignmentTemplateInput, language: ReportLanguage
 }
 
 /**
- * Callback channel wording (09 §4.3): workers on the native loop see the
+ * Callback channel wording: workers on the native loop see the
  * tools directly; external harnesses reach the same tools through the Kun
  * MCP bridge, where client-side prefixes may decorate the names.
  */

@@ -9,10 +9,9 @@ import {
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import type { TurnUsageSummary } from '../../hooks/use-turn-usage'
-import {
-  formatProviderLocalCostAmount,
-  formatProviderLocalCostCount
-} from '../provider-local-cost-summary'
+import { Coins } from 'lucide-react'
+import { formatCompactNumber } from '../../hooks/use-thread-usage'
+import { formatProviderLocalCostAmount } from '../provider-local-cost-summary'
 import { TurnUsageDetailsCard } from './TurnUsageDetailsCard'
 import { formatTurnActualCost } from './turn-usage-format'
 import {
@@ -158,10 +157,11 @@ export function TurnUsageRow({
       <button
         ref={triggerRef}
         type="button"
-        className="turn-usage-row ds-no-drag self-start cursor-help rounded-md border-0 bg-transparent px-1 py-0.5 text-left text-[11.5px] text-ds-faint outline-none transition hover:bg-ds-hover/70 focus-visible:bg-ds-hover focus-visible:ring-2 focus-visible:ring-accent/25"
+        className="turn-usage-row ds-no-drag group -ml-1.5 self-start cursor-help rounded-md border-0 bg-transparent px-1.5 py-0.5 text-left text-[11px] text-ds-faint outline-none transition hover:bg-ds-hover hover:text-ds-muted focus-visible:bg-ds-hover focus-visible:ring-2 focus-visible:ring-accent/25 data-[pinned=true]:bg-ds-hover"
         data-turn-usage={usage.turnId}
         data-estimate-coverage={usage.estimateCoverage}
         data-stale={stale ? 'true' : 'false'}
+        data-turn-usage-unavailable={unavailable ? 'true' : undefined}
         data-pinned={pinned ? 'true' : 'false'}
         aria-expanded={visible}
         aria-controls={detailsId}
@@ -179,9 +179,10 @@ export function TurnUsageRow({
         onClick={togglePinned}
       >
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="whitespace-nowrap tabular-nums">
+          <span className="inline-flex items-center gap-1 whitespace-nowrap tabular-nums">
+            <Coins className="h-3 w-3 shrink-0 opacity-70" strokeWidth={1.8} aria-hidden />
             {t('sessionUsageFooterTokens', {
-              tokens: formatProviderLocalCostCount(usage.totalTokens, locale)
+              tokens: formatCompactNumber(usage.totalTokens)
             })}
           </span>
           {usage.actualCost ? (
@@ -203,7 +204,6 @@ export function TurnUsageRow({
               {t('turnUsageEstimatePartial')}
             </span>
           ) : null}
-          {unavailable ? <span className="whitespace-nowrap" data-turn-usage-unavailable>{t('sessionUsagePriceUnavailable')}</span> : null}
           {stale ? <span className="whitespace-nowrap" data-turn-usage-stale>{t('turnUsageStale')}</span> : null}
         </span>
       </button>

@@ -132,7 +132,10 @@ export function reduceChatProjection(
         : currentOptimisticUserId
           ? event.itemId
           : optimisticUserId ?? event.itemId
-      const startedAt = runtimeEventStartedAt(event.createdAt, context.now)
+      const executionStartedAt = Date.parse(event.startedAt ?? '')
+      const startedAt = Number.isFinite(executionStartedAt) && executionStartedAt <= context.now + 5_000
+        ? executionStartedAt
+        : runtimeEventStartedAt(event.createdAt, context.now)
       const statusThreads = !backgroundNotice && event.turnId && state.activeThreadId
         ? updateProjectedThreadStatus(
             state.threads,
@@ -183,8 +186,10 @@ export function reduceChatProjection(
         busyUnconfirmed: false,
         currentTurnId: event.turnId ?? state.currentTurnId,
         currentTurnUserId,
+        // A background notice can start a new runtime turn without a new
+        // visible user bubble; only same-turn notices retain the old clock.
         currentTurnStartedAtMs:
-          backgroundNotice || (event.turnId != null && event.turnId === state.currentTurnId)
+          (event.turnId ? event.turnId === state.currentTurnId : backgroundNotice)
             ? state.currentTurnStartedAtMs
             : startedAt,
         turnStartedAtByUserId: backgroundNotice

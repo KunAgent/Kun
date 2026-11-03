@@ -55,7 +55,8 @@ export function resolveThreadExecutionConfig(input: {
         ...(request.providerId ? { providerId: request.providerId } : {}),
         ...(request.harnessId ? { harnessId: request.harnessId } : {}),
         ...(request.credentialMode ? { credentialMode: request.credentialMode } : {}),
-        ...(request.gatewayBinding ? { gatewayBinding: structuredClone(request.gatewayBinding) } : {})
+        ...(request.gatewayBinding ? { gatewayBinding: structuredClone(request.gatewayBinding) } : {}),
+        ...(request.reasoningEffort ? { reasoningEffort: request.reasoningEffort } : {})
       }
   const collaborationEnabled = request.collaboration?.enabled ??
     project?.collaborationEnabled ?? ((request.agentSurface ?? 'code') === 'code')

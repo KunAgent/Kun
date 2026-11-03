@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it } from 'vitest'
 import i18n from '../../i18n'
-import { MessageTimelineEmptyHero } from './message-timeline-empty'
+import { MessageTimelineEmptyHero, shouldShowTimelineEmptyHero } from './message-timeline-empty'
 
 function renderHero(options: {
   route?: 'chat' | 'claw'
@@ -61,5 +61,16 @@ describe('MessageTimeline empty hero routing', () => {
     })
 
     expect(html).toContain('The runtime port is already in use.')
+  })
+
+  it('drops the Code hero with the first optimistic bubble, before the thread id lands', () => {
+    const state = { hasContent: false, hasHistoryReference: false, activeThreadId: null, route: 'chat' as const }
+    expect(shouldShowTimelineEmptyHero(state)).toBe(true)
+    expect(shouldShowTimelineEmptyHero({ ...state, hasContent: true })).toBe(false)
+    expect(shouldShowTimelineEmptyHero({ ...state, hasContent: true, activeThreadId: 't1' })).toBe(false)
+    expect(shouldShowTimelineEmptyHero({ ...state, activeThreadId: 't1' })).toBe(true)
+    expect(shouldShowTimelineEmptyHero({ ...state, hasHistoryReference: true, activeThreadId: 't1' })).toBe(false)
+    // Connect phone keeps its hero above local turns until it has a thread.
+    expect(shouldShowTimelineEmptyHero({ ...state, hasContent: true, route: 'claw' })).toBe(true)
   })
 })

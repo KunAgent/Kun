@@ -1,5 +1,11 @@
+import { clearAbandonedSelectionReview } from '../../write/selection-review-state'
+import { useFrozenSelection } from './selection-menu/use-frozen-selection'
+import { useSelectionEdit } from './selection-menu/use-selection-edit'
+import { SelectionEditLayer } from './selection-menu/SelectionEditLayer'
+import { WriteExportToast } from './WriteExportToast'
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { saveWorkDocumentExplicitly } from '../../product-analytics/work'
 import { FileCode2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
@@ -53,7 +59,6 @@ import { WriteEditorGroups } from './WriteEditorGroups'
 import { useWriteEditorGroupFileWatches } from './use-write-editor-group-file-watches'
 import { shouldShowWriteInlineAgent } from './write-inline-agent-visibility'
 import { usePaperSurfaceSlots } from './use-paper-surface-slots'
-import { openPaperView } from '../../write/work-session-actions'
 
 type Props = {
   leftSidebarCollapsed: boolean; onToggleLeftSidebar: () => void
@@ -95,7 +100,6 @@ export function WriteWorkspaceView({
     inlineCompletionApiReady,
     selectionAssist,
     paperReading,
-    workSurface,
     imageGenReady,
     fileContent,
     fileSize,
@@ -104,7 +108,7 @@ export function WriteWorkspaceView({
     fileLoading,
     saveStatus,
     previewMode,
-    selection,
+    selection: liveSelection,
     recentEdits,
     loadWriteSettings,
     setInlineCompletionEnabled,
@@ -150,7 +154,6 @@ export function WriteWorkspaceView({
       inlineCompletionApiReady: s.inlineCompletionApiReady,
       selectionAssist: s.selectionAssist,
       paperReading: s.paperReading,
-      workSurface: s.workSurface,
       agentPresets: s.agentPresets,
       assistantAgentPresetId: s.assistantAgentPresetId,
       setAssistantAgentPresetId: s.setAssistantAgentPresetId,
@@ -192,7 +195,7 @@ export function WriteWorkspaceView({
   const exportNoticeTimerRef = useRef<number | null>(null)
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
-  // Unified diff-review surface (§6.1): whichever editor is mounted answers
+  // Unified diff-review surface: whichever editor is mounted answers
   // review calls; only one handle is non-null at a time.
   const documentHandleRef = useRef<WriteDocumentReviewHandle | null>(null)
   Object.defineProperty(documentHandleRef, 'current', {
@@ -202,7 +205,6 @@ export function WriteWorkspaceView({
   })
   const [pointerSelecting, setPointerSelecting] = useState(false)
   const resolvedAgentPresets = agentPresets.map((preset) => resolveWriteAgentPreset(preset))
-  const [inlineEditInFlight, setInlineEditInFlight] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [documentFocusMode, setDocumentFocusMode] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
@@ -233,7 +235,7 @@ export function WriteWorkspaceView({
     fileSize,
     truncated: fileTruncated
   })
-  // Single-view surface decision (§8.2/§8.3): the document editor handles
+  // Single-view surface decision: the document editor handles
   // markdown up to the safety cap; everything else renders plain text.
   const { surface: editorSurface } = resolveWriteEditorSurface({
     path: activeFilePath ?? '',
@@ -276,8 +278,25 @@ export function WriteWorkspaceView({
     : renderSafety.readOnly ? t('writeReadOnly') : formatSaveLabel(saveStatus, t)
   // Only surface the toolbar once the selection gesture settles: while the
   // pointer is down (dragging to select) it stays hidden to avoid flicker.
-  const selectionAction = shouldShowWriteInlineAgent(selection, pointerSelecting)
-    ? inlineAgentPosition(selection, { compact: activeFileIsPdf || activeFileIsOffice })
+  const documentEpoch = useWriteWorkspaceStore((state) => state.documentEpoch)
+  const documentKey = `${workspaceRoot}:${activeFilePath}:${documentEpoch}:${previewMode}`
+  const frozen = useFrozenSelection(liveSelection, documentKey)
+  const selection = frozen.selection
+  const selectionEdit = useSelectionEdit({ documentKey, filePath: activeFilePath ?? '', workspaceRoot,
+    fileContent, selection, readOnly: !activeFileIsText || !isMarkdown || renderSafety.readOnly,
+    model: inlineCompletion.model, recentEdits,
+    getHandle: () => documentHandleRef.current,
+    getEditContent: () => richHandleRef.current?.getProjectionText() ?? useWriteWorkspaceStore.getState().fileContent,
+    setSelection, setError: setFileError, recordEdits: recordRecentEdits,
+    onReviewInvalidated: () => { if (activeFilePath) clearAbandonedSelectionReview(activeFilePath) },
+    toChat: (instruction, snapshot) => {
+      setSelection(snapshot); quoteCurrentSelection(workspaceRoot); setAssistantOpen(true)
+      if (onSubmitPrompt) onSubmitPrompt(instruction)
+      else setInput(input.trim() ? `${input.trim()}\n\n${instruction}` : instruction)
+    }
+  })
+  const selectionAction = !selectionEdit.session && !reviewActive && !frozen.dismissed && shouldShowWriteInlineAgent(selection, pointerSelecting)
+    ? inlineAgentPosition(selection)
     : null
   const activeFileLabel = activeFilePath
     ? writeRelativeToWorkspace(workspaceRoot, activeFilePath)
@@ -367,6 +386,7 @@ export function WriteWorkspaceView({
     reviewActive,
     pendingAgentReview,
     reviewSurfaceKey: previewMode,
+    selectionEditActive: Boolean(selectionEdit.session),
     saveTimerRef,
     documentHandleRef,
     flushSave,
@@ -379,11 +399,10 @@ export function WriteWorkspaceView({
   })
   useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout })
 
-  const { paperBar, paperDialog, openPaperImport } = usePaperSurfaceSlots({
+  const { paperBar, inPaperUnit, openPaperImport } = usePaperSurfaceSlots({
     workspaceRoot,
     paperReading,
     activeFilePath,
-    surface: workSurface,
     input,
     setInput,
     onSubmitPrompt,
@@ -427,31 +446,26 @@ export function WriteWorkspaceView({
     generateInfographic,
     quoteSelectionToAssistant,
     runQuickAction,
-    submitInlineEdit
+    submitInlineEdit,
+    submitInlineAgent
   } = createWriteWorkspaceInlineActions({
     t,
+    startSelectionEdit: selectionEdit.start,
     workspaceReady,
     workspaceRoot,
     activeFilePath,
     renderReadOnly: renderSafety.readOnly,
     richModeActive,
-    fileContent,
     selection,
-    inlineCompletion,
-    recentEdits,
-    inlineEditInFlight,
     input,
     setInput,
     onSubmitPrompt,
     richHandleRef,
     markdownHandleRef,
-    documentHandleRef,
     setAssistantOpen,
-    setInlineEditInFlight,
     setFileContent,
     setFileError,
     setSelection,
-    recordRecentEdits,
     quoteCurrentSelection,
     showExportNotice
   })
@@ -527,7 +541,7 @@ export function WriteWorkspaceView({
   // files; chat-mode actions (which only quote into the sidebar) still apply.
   const inlineQuickActions = resolveWriteQuickActions(selectionAssist.quickActions, t)
     .filter((quickAction) => (
-      quickAction.mode !== 'edit' || activeFileIsOffice || (activeFileIsText && !renderSafety.readOnly)
+      quickAction.mode !== 'edit' || activeFileIsOffice || (activeFileIsText && isMarkdown && !renderSafety.readOnly)
     ))
     .map((quickAction) => activeFileIsOffice
       ? { ...quickAction, mode: 'chat' as const }
@@ -536,16 +550,15 @@ export function WriteWorkspaceView({
 
   const saveNow = (): void => {
     if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
-    void flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' })
+    void saveWorkDocumentExplicitly(() => flushSave(workspaceRoot, { resolveExternalConflict: 'keep-local' }))
   }
   const focusedStatusBar = activeFileIsText ? (
     <WriteDocumentStatusBar documentStatsLabel={documentStatsLabel} saveLabel={saveLabel} saveStatus={saveStatus}
       readOnly={renderSafety.readOnly} reviewActive={reviewActive} onSave={saveNow} />
   ) : null
-  // U1: on the papers surface the reader owns its chrome — the 52px file
-  // toolbar is replaced by the PDF reader's floating capsules; unit-file
-  // actions live in the sidebar info panel instead of the paper strip.
-  const hidePaperReaderChrome = workSurface === 'papers' && activeFileIsPdf
+  // A paper's PDF owns its chrome: the reader's floating capsules replace the
+  // 52px file toolbar; unit actions live in the info drawer.
+  const hidePaperReaderChrome = activeFileIsPdf && inPaperUnit
   const focusedToolbar = hidePaperReaderChrome ? null : (
     <WriteWorkspaceToolbar
         embedded
@@ -617,13 +630,24 @@ export function WriteWorkspaceView({
           onboardingDecision={onboardingDecision}
           onAskAssistant={setAssistantPrompt}
           onCreateDraft={() => void createDraftFile()}
-          onImportPaper={workSurface === 'papers' ? openPaperImport : () => void openPaperView('library')}
+          onImportPaper={openPaperImport}
           onPickWorkspace={() => void pickWriteWorkspace()}
         />
       </div>
       {selectionAction && activeFilePath && (activeFileIsText || activeFileIsPdf || activeFileIsOffice) ? (
         <WriteInlineAgent
           action={selectionAction}
+          key={documentKey}
+          richMode={richModeActive}
+          activeFormats={selection.activeFormats}
+          editEnabled={activeFileIsText && isMarkdown && !renderSafety.readOnly}
+          readOnlyNote={!activeFileIsOffice && inlineQuickActions.length < resolveWriteQuickActions(selectionAssist.quickActions, t).length}
+          onAskEdit={(instruction) => { void submitInlineEdit(instruction) }}
+          onAskChat={submitInlineAgent}
+          onFreezeSelection={frozen.freeze}
+          onReleaseSelection={frozen.release}
+          onRestoreSelection={() => { if (selection.ranges[0]) documentHandleRef.current?.restoreSelection(selection.ranges[0]) }}
+          onDismiss={frozen.dismiss}
           preferAbove={activeFileIsPdf || activeFileIsOffice}
           formattingEnabled={activeFileIsText && isMarkdown && !renderSafety.readOnly}
           onApplyFormat={applyInlineFormat}
@@ -642,24 +666,13 @@ export function WriteWorkspaceView({
         />
       ) : null}
 
+      <SelectionEditLayer controller={selectionEdit} focusMode={documentFocusMode} />
       {fileError ? (
         <div className={`pointer-events-none fixed bottom-5 left-1/2 -translate-x-1/2 rounded-full border border-red-200/70 bg-red-50/92 px-4 py-2 text-[13px] text-red-700 shadow-[0_14px_32px_rgba(20,47,95,0.12)] dark:border-red-900/60 dark:bg-red-950/84 dark:text-red-200 ${writeFocusModeFloatingLayerClassName(documentFocusMode, 'z-40')}`}>
           {fileError}
         </div>
       ) : null}
-      {paperDialog}
-      {exportNotice ? (
-        <div
-          className={`pointer-events-none fixed left-1/2 -translate-x-1/2 rounded-full border px-4 py-2 text-[13px] shadow-[0_14px_32px_rgba(20,47,95,0.12)] ${writeFocusModeFloatingLayerClassName(documentFocusMode, 'z-40')} ${
-            exportNotice.tone === 'error'
-              ? 'border-red-200/70 bg-red-50/92 text-red-700 dark:border-red-900/60 dark:bg-red-950/84 dark:text-red-200'
-              : 'border-emerald-200/80 bg-emerald-50/92 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/84 dark:text-emerald-200'
-          }`}
-          style={{ bottom: fileError ? 68 : 20 }}
-        >
-          {exportNotice.message}
-        </div>
-      ) : null}
+      <WriteExportToast notice={exportNotice} onDismiss={() => setExportNotice(null)} />
     </div>
   )
 }

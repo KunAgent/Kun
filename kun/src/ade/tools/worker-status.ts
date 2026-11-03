@@ -1,6 +1,6 @@
 import type { ManagerRuntime, ManagerToolContext } from '../manager-runtime.js'
 
-/** `worker_status` — read-only worker/dispatch/activity view (09 §4). */
+/** `worker_status` — read-only worker/dispatch/activity view. */
 export async function workerStatus(
   runtime: ManagerRuntime,
   ctx: ManagerToolContext,

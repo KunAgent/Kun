@@ -76,6 +76,8 @@ const dispatchingIntentIds = new Set<string>()
 const startingScopes = new Set<string>()
 export const AUTO_PLAN_RECOVERY_MISMATCH_ERROR =
   'Automatic build recovery could not prove a matching successful plan result.'
+export const AUTO_PLAN_MISSING_PLAN_ERROR =
+  'Automatic build stopped because the plan turn finished without writing a plan. Nothing was built; send the request again or ask for a plan first.'
 export const LEGACY_AUTO_PLAN_DUPLICATE_ERROR =
   'This task already has an Automatic plan build waiting to finish.'
 
@@ -352,13 +354,17 @@ async function reconcileIntent(intent: AutoPlanBuildIntentV1): Promise<void> {
     detail.latestTurnStatus !== 'running'
   )
   if (exactPlanTurnSettled) {
-    const error = AUTO_PLAN_RECOVERY_MISMATCH_ERROR
-    patchAutoPlanBuildIntent(intent.id, {
-      status: 'needs_attention',
-      error
-    })
+    if (activeAutoPlanBuildIntent(intent.threadId)?.id !== intent.id) return
+    // A settled plan turn with no plan artifact is a final outcome, not a
+    // transient recovery gap: there is nothing for Automatic build to
+    // dispatch. Retire the intent so later recovery sweeps cannot re-raise
+    // the same banner.
+    removeAutoPlanBuildIntent(intent.id)
+    // An aborted plan turn is the user's own stop; it needs no extra banner.
+    const status = detail.latestTurnStatus?.trim().toLowerCase()
+    if (status === 'aborted' || status === 'cancelled' || status === 'canceled') return
     if (useChatStore.getState().activeThreadId === intent.threadId) {
-      useChatStore.getState().setError(error)
+      useChatStore.getState().setError(AUTO_PLAN_MISSING_PLAN_ERROR)
     }
   }
 }

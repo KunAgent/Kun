@@ -105,8 +105,12 @@ describe('gateway concrete dispatch fence', () => {
       const routed = new RoutePoolModelClient(direct, [], capability)
       const finished = drain(routed.stream(request({ gatewayRouting: resolved!.gatewayRouting })))
       await started
-      if (mutation === 'router-generation') direct.replace({ default: http, providers, gatewayClients: providers })
-      else revision += 1
+      if (mutation === 'router-generation') {
+        // Re-applying identical clients is not a change; adding a connection is.
+        const added = new CompatModelClient({ baseUrl: 'https://new.example', apiKey: '', model: 'model', fetchImpl })
+        const next = new Map<string, ModelClient>([['key', http], ['added', added]])
+        direct.replace({ default: http, providers: next, gatewayClients: next })
+      } else revision += 1
       release()
       expect((await finished).at(-1)).toMatchObject({ kind: 'error', code: 'gateway_route_changed',
         failure: { failoverAllowed: false } })
