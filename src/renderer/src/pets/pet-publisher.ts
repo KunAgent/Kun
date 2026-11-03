@@ -1,8 +1,13 @@
+import type { ActivityRow } from '@shared/activity-row'
 import { showWorkbenchFlash } from '../components/rooms/workbench-flash'
+import { summarizeToolLiveAction } from '../components/chat/message-timeline-tool-action'
+import i18n from '../i18n'
 import { deliverPetFollowUp } from './pet-follow-up'
 import { activityFeedGeneration, setPetOverlayActivityLive, useActivityStore } from '../store/activity-store'
 import { useChatStore } from '../store/chat-store'
-import { applyPetResultText, latestAssistantPreview, projectPetActivity, semanticSnapshotKey, type PetThreadSupplement } from './pet-activity'
+import type { ChatState } from '../store/chat-store-types'
+import type { ToolBlock } from '../agent/types'
+import { applyPetResultText, latestAssistantPreview, petWorkProcessText, presentPetRunningItem, projectPetActivity, semanticSnapshotKey, type PetThreadSupplement } from './pet-activity'
 import { loadPetConversationThreads, petConversationSupplements } from './pet-conversation-threads'
 import { PET_OPEN_SETTINGS_EVENT, queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import type { PetActionRequest } from '@shared/pets'
@@ -60,9 +65,10 @@ export function startPetActivityPublisher(): void {
         nowMs: Date.now(),
         bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) })
       })
-      const livePreview = state.activeThreadId ? latestAssistantPreview(state.blocks) : ''
-      const items = applyPetResultText(projected.items, (threadId) => {
-        if (threadId === state.activeThreadId && livePreview) return livePreview
+      const withProcess = projected.items.map((item) => presentRunningPetItem(item, state, rows))
+      const livePreview = state.activeThreadId ? latestAssistantPreview(state.blocks, 180, state.busy ? state.currentTurnId : null) : ''
+      const items = applyPetResultText(withProcess, (threadId) => {
+        if (threadId === state.activeThreadId && livePreview && !state.busy) return livePreview
         return state.threads.find((thread) => thread.id === threadId)?.preview
       })
       const snapshot = items === projected.items ? projected : { ...projected, items }
@@ -185,6 +191,102 @@ function refreshConversationThreads(publish: () => void): void {
       conversationLoading = false
       publish()
     })
+}
+
+function presentRunningPetItem(
+  item: ReturnType<typeof projectPetActivity>['items'][number],
+  state: ChatState,
+  rows: readonly ActivityRow[]
+) {
+  if (item.status !== 'running') return item
+  const row = rows.find((candidate) => candidate.unitId === item.unitId)
+  const live = item.threadId === state.activeThreadId && state.busy && !state.busyUnconfirmed
+  if (live) {
+    const assistant = currentTurnAssistantText(state)
+    if (assistant) return presentPetRunningItem(item, { assistantText: assistant })
+    return presentPetRunningItem(item, {
+      processText: liveProcessText(state, row),
+      liveSinceMs: liveSinceMs(state, item.stateSince)
+    })
+  }
+  if (item.subtitle?.trim()) return item
+  return presentPetRunningItem(item, {
+    processText: liveProcessText(state, row, false),
+    liveSinceMs: Date.parse(item.stateSince)
+  })
+}
+
+function currentTurnAssistantText(state: ChatState): string {
+  const turnId = state.currentTurnId
+  const fromBlocks = turnId ? latestAssistantPreview(state.blocks, 180, turnId) : ''
+  const live = state.liveAssistant.replace(/\s+/g, ' ').trim()
+  const liveMatches = !state.liveAssistantTurnId || !turnId || state.liveAssistantTurnId === turnId
+  const liveText = liveMatches ? live : ''
+  if (liveText.length > fromBlocks.length) {
+    return liveText.length > 180 ? `${liveText.slice(0, 180).trimEnd()}…` : liveText
+  }
+  return fromBlocks
+}
+
+function liveProcessText(state: ChatState, row: ActivityRow | undefined, live = true): string {
+  const tool = live ? runningToolBlock(state) : undefined
+  const toolAction = tool
+    ? summarizeToolLiveAction(tool, translatePet)
+    : toolActionName(row?.currentTool)
+  const thinking = live && !toolAction && hasCurrentReasoning(state)
+  return petWorkProcessText({
+    toolAction,
+    progressNote: live ? undefined : row?.progressNote,
+    thinking,
+    workingLabel: i18n.t('workingSprint', { ns: 'common' }),
+    thinkingLabel: i18n.t('thinkingNow', { ns: 'common' }),
+    toolLabel: (action) => i18n.t('workingToolAction', { ns: 'common', action })
+  })
+}
+
+function runningToolBlock(state: ChatState): ToolBlock | undefined {
+  const turnId = state.currentTurnId
+  for (let index = state.blocks.length - 1; index >= 0; index -= 1) {
+    const block = state.blocks[index]
+    if (block?.kind !== 'tool' || block.status !== 'running') continue
+    if (turnId && block.turnId && block.turnId !== turnId) continue
+    return block
+  }
+  return undefined
+}
+
+function hasCurrentReasoning(state: ChatState): boolean {
+  const turnId = state.currentTurnId
+  const live = state.liveReasoning.trim()
+  if (live && (!state.liveReasoningTurnId || !turnId || state.liveReasoningTurnId === turnId)) return true
+  return state.blocks.some((block) =>
+    block.kind === 'reasoning' && (!turnId || block.turnId === turnId) && block.text.trim().length > 0
+  )
+}
+
+function toolActionName(name: string | undefined): string | undefined {
+  const toolName = name?.trim()
+  if (!toolName) return undefined
+  return summarizeToolLiveAction({
+    kind: 'tool',
+    id: 'pet-process',
+    summary: toolName,
+    status: 'running',
+    meta: { toolName }
+  }, translatePet)
+}
+
+function translatePet(key: string, opts?: Record<string, unknown>): string {
+  const defaultValue = typeof opts?.defaultValue === 'string' ? opts.defaultValue : undefined
+  return i18n.t(key, { ns: 'common', ...opts, defaultValue })
+}
+
+function liveSinceMs(state: ChatState, stateSince: string): number | undefined {
+  const started = state.currentTurnStartedAtMs
+    ?? (state.currentTurnUserId ? state.turnStartedAtByUserId[state.currentTurnUserId] : undefined)
+  if (typeof started === 'number' && Number.isFinite(started)) return started
+  const parsed = Date.parse(stateSince)
+  return Number.isFinite(parsed) ? parsed : undefined
 }
 
 function preferenceFor(item: { status: string; stalled: boolean }): boolean {

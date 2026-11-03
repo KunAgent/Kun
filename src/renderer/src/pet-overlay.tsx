@@ -132,6 +132,12 @@ function PetOverlayApp(): React.JSX.Element {
     const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, welcome - Date.now()))
     return () => window.clearTimeout(timer)
   }, [welcome])
+  const trackProcess = notifications.some((item) => item.status === 'running' && typeof item.liveSinceMs === 'number')
+  useEffect(() => {
+    if (!trackProcess) return undefined
+    const timer = window.setInterval(() => setNow(Date.now()), 200)
+    return () => window.clearInterval(timer)
+  }, [trackProcess])
   useEffect(() => {
     if (nextExpiry === null) return undefined
     const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, nextExpiry - Date.now() + 1))
@@ -269,6 +275,7 @@ function PetOverlayApp(): React.JSX.Element {
             queued={queued}
             sending={sending}
             errors={errors}
+            now={now}
             onOpen={(item) => {
               if (!expanded && notifications.length > 1) {
                 setExpanded(true)

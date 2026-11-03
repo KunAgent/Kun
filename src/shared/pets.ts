@@ -87,6 +87,8 @@ export type PetActivityItem = {
   stateSince: string
   title: string
   subtitle?: string
+  /** Start of the live process row, so the bubble can tick elapsed time itself. */
+  liveSinceMs?: number
   stalled: boolean
   navigable: boolean
   bubbleAllowed: boolean

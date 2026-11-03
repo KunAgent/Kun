@@ -255,6 +255,7 @@ export class ActivityStore implements RuntimeEventObserver {
       if (!this.rows.has(unitId)) {
         this.autoRegister(event, unitId)
       }
+      if (event.kind === 'turn_started') this.clearPreview(unitId)
       if (projection.patch.lastMessagePreview !== undefined) {
         if (event.kind === 'item_created' || event.kind === 'item_completed') {
           this.replacePreview(unitId, projection.patch.lastMessagePreview)
@@ -402,6 +403,17 @@ export class ActivityStore implements RuntimeEventObserver {
     const timer = setTimeout(() => this.flushPreview(unitId), remaining)
     timer.unref?.()
     this.previewTimers.set(unitId, timer)
+  }
+
+  private clearPreview(unitId: string): void {
+    const timer = this.previewTimers.get(unitId)
+    if (timer) {
+      clearTimeout(timer)
+      this.previewTimers.delete(unitId)
+    }
+    this.pendingPreview.delete(unitId)
+    this.lastPreviewAt.delete(unitId)
+    if (this.rows.get(unitId)?.lastMessagePreview) this.apply(unitId, { lastMessagePreview: '' }, 'runtime')
   }
 
   private replacePreview(unitId: string, text: string): void {

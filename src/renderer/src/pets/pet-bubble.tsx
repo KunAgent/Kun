@@ -1,6 +1,6 @@
 import type { MouseEvent, ReactElement } from 'react'
 import type { PetActivityItem } from '@shared/pets'
-import { petBubbleBody } from './pet-follow-up'
+import { petBubbleBody, petBubbleClock } from './pet-follow-up'
 
 export function PetWorkBubbles(props: {
   notifications: PetActivityItem[]
@@ -11,6 +11,7 @@ export function PetWorkBubbles(props: {
   queued: Record<string, string>
   sending: ReadonlySet<string>
   errors: Record<string, string>
+  now: number
   onOpen: (item: PetActivityItem) => void
   onEdit: (threadId: string) => void
   onDraft: (threadId: string, value: string) => void
@@ -43,7 +44,12 @@ export function PetWorkBubbles(props: {
                   {item.title}
                 </span>
                 <span className="pet-work-bubble-body">
-                  {petBubbleBody({ status: item.status, stalled: item.stalled, subtitle: item.subtitle, queued, sending: props.sending.has(id) })}
+                  {petBubbleClock(
+                    petBubbleBody({ status: item.status, stalled: item.stalled, subtitle: item.subtitle, queued, sending: props.sending.has(id) }),
+                    item.status,
+                    item.liveSinceMs,
+                    props.now
+                  )}
                 </span>
               </button>
               <button type="button" className="pet-round-action" aria-label="输入跟进消息" aria-pressed={props.editing === id} onClick={() => props.onEdit(id)}>

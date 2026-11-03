@@ -57,7 +57,7 @@ export function projectPetActivity(input: {
 export function semanticSnapshotKey(snapshot: PetActivitySnapshot): string {
   return JSON.stringify([snapshot.profileKey, snapshot.generation, snapshot.items.map((item) => [
     item.unitId, item.threadId, item.turnId, item.status, item.stateSince, item.stalled, item.bubbleAllowed,
-    item.title, item.subtitle, item.ownerThreadId, item.roomId, item.navigable
+    item.title, item.subtitle, item.liveSinceMs, item.ownerThreadId, item.roomId, item.navigable
   ])])
 }
 
@@ -69,15 +69,49 @@ export function petNotificationExpiresAtMs(item: PetActivityItem, nowMs = Date.n
   return transitionMs(item) + PET_NOTIFICATION_TTL_MS[item.status]
 }
 
-export function latestAssistantPreview(blocks: readonly { kind: string; text?: string }[], max = 180): string {
+export function latestAssistantPreview(
+  blocks: readonly { kind: string; text?: string; turnId?: string }[],
+  max = 180,
+  turnId?: string | null
+): string {
   for (let index = blocks.length - 1; index >= 0; index -= 1) {
     const block = blocks[index]
     if (block?.kind !== 'assistant' || typeof block.text !== 'string') continue
+    if (turnId && block.turnId && block.turnId !== turnId) continue
     const text = block.text.replace(/\s+/g, ' ').trim()
     if (!text) continue
     return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text
   }
   return ''
+}
+
+export function petWorkProcessText(input: {
+  toolAction?: string
+  progressNote?: string
+  thinking: boolean
+  workingLabel: string
+  thinkingLabel: string
+  toolLabel: (action: string) => string
+}): string {
+  const tool = input.toolAction?.replace(/\s+/g, ' ').trim()
+  if (tool) return input.toolLabel(tool)
+  const note = input.progressNote?.replace(/\s+/g, ' ').trim()
+  if (note) return note
+  if (input.thinking) return input.thinkingLabel
+  return input.workingLabel
+}
+
+export function presentPetRunningItem(item: PetActivityItem, input: {
+  assistantText?: string
+  processText?: string
+  liveSinceMs?: number
+}): PetActivityItem {
+  if (item.status !== 'running') return item
+  const assistant = input.assistantText?.replace(/\s+/g, ' ').trim() ?? ''
+  if (assistant) return withRunningSubtitle(item, assistant)
+  const process = input.processText?.replace(/\s+/g, ' ').trim() ?? ''
+  if (!process) return item
+  return withRunningSubtitle(item, process, input.liveSinceMs)
 }
 
 export function applyPetResultText(
@@ -86,6 +120,7 @@ export function applyPetResultText(
 ): PetActivityItem[] {
   let changed = false
   const next = items.map((item) => {
+    if (item.status === 'running') return item
     const text = (textFor(item.threadId) ?? '').replace(/\s+/g, ' ').trim()
     if (!text || text.length <= (item.subtitle?.trim().length ?? 0)) return item
     changed = true
@@ -148,7 +183,7 @@ function projectRow(row: ActivityRow, input: Parameters<typeof projectPetActivit
     turnId: row.turnId ?? null,
     stateSince: row.stateSince,
     title: row.title || 'Task',
-    subtitle: mapped.subtitle ?? row.progressNote ?? row.lastMessagePreview,
+    subtitle: mapped.subtitle ?? runningRowSubtitle(mapped.status, row) ?? row.progressNote ?? row.lastMessagePreview,
     stalled: mapped.stalled,
     updatedAtMs: Date.parse(row.updatedAt) || input.nowMs
   }, input.bubbleAllowed)
@@ -185,6 +220,20 @@ function finishItem(
     navigable: true,
     bubbleAllowed: bubbleAllowed ? bubbleAllowed(item) : true
   }
+}
+
+function withRunningSubtitle(item: PetActivityItem, subtitle: string, liveSinceMs?: number): PetActivityItem {
+  const since = typeof liveSinceMs === 'number' && Number.isFinite(liveSinceMs) ? liveSinceMs : undefined
+  if (item.subtitle === subtitle && item.liveSinceMs === since) return item
+  const next = { ...item, subtitle }
+  if (since === undefined) delete next.liveSinceMs
+  else next.liveSinceMs = since
+  return next
+}
+
+function runningRowSubtitle(status: PetActivityItem['status'], row: ActivityRow): string | undefined {
+  if (status !== 'running') return undefined
+  return row.lastMessagePreview?.trim() || row.progressNote?.trim() || undefined
 }
 
 function mapRowStatus(row: ActivityRow): { status: PetActivityItem['status']; stalled: boolean; subtitle?: string } | null {

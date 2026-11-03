@@ -130,6 +130,7 @@ export function parsePetActivitySnapshot(value: unknown): PetPayloadResult<PetAc
       stateSince,
       title,
       ...(typeof row.subtitle === 'string' ? { subtitle: row.subtitle.slice(0, MAX_TEXT) } : {}),
+      ...(typeof row.liveSinceMs === 'number' && Number.isFinite(row.liveSinceMs) ? { liveSinceMs: row.liveSinceMs } : {}),
       stalled: row.stalled === true,
       navigable: row.navigable !== false,
       bubbleAllowed: row.bubbleAllowed !== false,

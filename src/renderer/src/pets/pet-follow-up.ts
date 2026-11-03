@@ -19,6 +19,19 @@ export function petBubbleBody(input: {
   return input.subtitle || FALLBACK_BODY[input.status] || ''
 }
 
+export function petBubbleClock(body: string, status: string, liveSinceMs: number | undefined, nowMs: number): string {
+  if (status !== 'running' || typeof liveSinceMs !== 'number' || !Number.isFinite(liveSinceMs)) return body
+  const elapsed = formatPetElapsed(Math.max(0, nowMs - liveSinceMs))
+  return body ? `${body} · ${elapsed}` : elapsed
+}
+
+function formatPetElapsed(ms: number): string {
+  if (ms < 1000) return `${Math.max(1, Math.round(ms))}ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
+  const totalSeconds = Math.round(ms / 1000)
+  return `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`
+}
+
 export async function deliverPetFollowUp(input: {
   threadId: string
   prompt: string

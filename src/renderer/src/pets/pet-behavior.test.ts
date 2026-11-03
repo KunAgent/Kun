@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { ActivityRow } from '@shared/activity-row'
 import { PET_NOTIFICATION_TTL_MS, PET_ROWS } from '@shared/pets'
 import { frameAtElapsedMs, frameDurationMs, staticFrame, totalCycleDurationMs } from './pet-animation'
-import { acceptPetSnapshot, applyPetResultText, highestPetStatus, latestAssistantPreview, projectPetActivity, semanticSnapshotKey, visiblePetNotifications } from './pet-activity'
+import { acceptPetSnapshot, applyPetResultText, highestPetStatus, latestAssistantPreview, petWorkProcessText, presentPetRunningItem, projectPetActivity, semanticSnapshotKey, visiblePetNotifications } from './pet-activity'
 import { petConversationSupplements } from './pet-conversation-threads'
 import { queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import { petContextMenuLabels } from './pet-menu-labels'
 import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, pointInsidePetHit, welcomeUntil } from './pet-pointer'
-import { deliverPetFollowUp, petBubbleBody } from './pet-follow-up'
+import { deliverPetFollowUp, petBubbleBody, petBubbleClock } from './pet-follow-up'
 import { petBubbleAllowed } from './pet-publisher'
 
 describe('pet animation and interaction', () => {
@@ -111,6 +111,25 @@ describe('pet activity projection', () => {
     })
     expect(visiblePetNotifications(review, new Set(), Date.parse(since) + PET_NOTIFICATION_TTL_MS.review + 1_000)).toMatchObject([{ subtitle: '你好，我在。' }])
     expect(latestAssistantPreview([{ kind: 'user', text: '问候' }, { kind: 'assistant', text: '你好，我在。' }])).toBe('你好，我在。')
+    expect(latestAssistantPreview([
+      { kind: 'assistant', turnId: 'old', text: '我是 Kun，一个 AI 编程助手' },
+      { kind: 'assistant', turnId: 'now', text: '' }
+    ], 180, 'now')).toBe('')
+    const running = projectPetActivity({
+      generation: 1,
+      profileKey: 'profile',
+      nowMs: Date.parse(since),
+      rows: [row({ state: 'working', stateSince: since, lastMessagePreview: '我是 Kun，一个 AI 编程助手' })],
+      supplements: []
+    }).items[0]
+    const labels = { workingLabel: '分析中…', thinkingLabel: '思考中…', toolLabel: (action: string) => `正在${action}` }
+    expect(petWorkProcessText({ thinking: false, ...labels })).toBe('分析中…')
+    expect(petWorkProcessText({ thinking: true, toolAction: '读取', ...labels })).toBe('正在读取')
+    const process = presentPetRunningItem(running, { processText: '分析中…', liveSinceMs: 1_000 })
+    expect(process).toMatchObject({ subtitle: '分析中…', liveSinceMs: 1_000 })
+    expect(presentPetRunningItem(process, { assistantText: '新的回答' }).liveSinceMs).toBeUndefined()
+    expect(petBubbleClock('分析中…', 'running', 1_000, 8_300)).toBe('分析中… · 7.3s')
+    expect(applyPetResultText([process], () => '我是 Kun，一个 AI 编程助手')).toMatchObject([{ subtitle: '分析中…' }])
     expect(applyPetResultText(review.items, () => '这是完整的回答')).toMatchObject([{ subtitle: '这是完整的回答' }])
     const nextSince = '2026-01-01T00:00:10.000Z'
     const next = projectPetActivity({
