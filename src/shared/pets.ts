@@ -104,6 +104,9 @@ export type PetActionRequest =
   | { type: 'stop'; threadId: string; turnId: string; unitId?: string }
   | { type: 'reply'; threadId: string; unitId?: string; roomId?: string }
   | { type: 'open'; threadId: string; unitId?: string; roomId?: string }
+  | { type: 'follow-up'; threadId: string; prompt: string; unitId?: string; roomId?: string }
+
+export type PetFollowUpRequest = { requestId: string; threadId: string; prompt: string }
 
 export type PetActionResult =
   | { ok: true }
@@ -143,6 +146,8 @@ export type PetDesktopBridge = {
   onPetNavigationRequested: (handler: (target: PetActionRequest) => void) => () => void
   takePendingNavigation: () => Promise<PetActionRequest | null>
   getPetInteraction: () => Promise<{ mode: PetInteractionMode; note: string | null }>
+  onFollowUpRequested: (handler: (request: PetFollowUpRequest) => void) => () => void
+  completeFollowUp: (requestId: string, result: PetActionResult) => void
 }
 
 export type PetOverlayBridge = {
@@ -220,6 +225,8 @@ export const PET_IPC = {
   catalogChanged: 'kun:pets:catalog-changed',
   navigationRequested: 'kun:pets:navigation-requested',
   navigationPending: 'kun:pets:navigation-pending',
+  followUpRequested: 'kun:pets:follow-up-requested',
+  followUpResult: 'kun:pets:follow-up-result',
   interaction: 'kun:pets:interaction',
   overlayBootstrap: 'kun:pets:overlay:bootstrap',
   overlayBootstrapChanged: 'kun:pets:overlay:bootstrap-changed',

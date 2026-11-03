@@ -11,6 +11,7 @@ import {
 } from '@shared/pets'
 import { frameAtElapsedMs, staticFrame } from './pets/pet-animation'
 import { acceptPetSnapshot, earliestPetNotificationExpiry, visiblePetNotifications } from './pets/pet-activity'
+import { PetWorkBubbles } from './pets/pet-bubble'
 import { effectivePetBusinessState, nextDragDirection, resolveOverlayAnimationState, type PetDragDirection } from './pets/pet-overlay-state'
 import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, welcomeUntil } from './pets/pet-pointer'
 import './pet-overlay.css'
@@ -26,15 +27,19 @@ function PetOverlayApp(): React.JSX.Element {
   const [dragging, setDragging] = useState(false)
   const [dragDirection, setDragDirection] = useState<PetDragDirection>('right')
   const [expanded, setExpanded] = useState(false)
-  const [focusedHidden, setFocusedHidden] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
+  const [editing, setEditing] = useState<string | null>(null)
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const [queued, setQueued] = useState<Record<string, string>>({})
+  const [errors, setErrors] = useState<Record<string, string>>({})
+  const [sending, setSending] = useState<Set<string>>(new Set())
   const [closedKeys, setClosedKeys] = useState<string[]>([])
+  const inFlight = useRef(new Set<string>())
   const [reduced, setReduced] = useState(false)
   const [frameClock, setFrameClock] = useState(0)
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
   const hitRef = useRef<HTMLDivElement | null>(null)
   const started = useRef(0)
-  const snapshotRef = useRef<PetActivitySnapshot | null>(null)
-  snapshotRef.current = snapshot
 
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
@@ -59,14 +64,15 @@ function PetOverlayApp(): React.JSX.Element {
     })
     const stopFocus = bridge.onMainWindowFocused(() => {
       setExpanded(false)
-      setFocusedHidden(snapshotRef.current?.items[0]?.key ?? null)
+      setSelected(null)
+      setEditing(null)
     })
     return () => { cancelled = true; stopBootstrap(); stopActivity(); stopFocus(); media?.removeEventListener('change', onChange) }
   }, [bridge])
 
   useEffect(() => {
-    bridge.setPointerInteractive(hover || dragging || expanded)
-  }, [bridge, hover, dragging, expanded])
+    bridge.setPointerInteractive(hover || dragging || expanded || editing !== null)
+  }, [bridge, hover, dragging, expanded, editing])
 
   useEffect(() => {
     const element = hitRef.current
@@ -79,12 +85,13 @@ function PetOverlayApp(): React.JSX.Element {
     return () => observer.disconnect()
   }, [bridge, bootstrap?.petId, expanded])
 
-  const dismissed = new Set([...(bootstrap?.dismissedNotificationKeys ?? []), ...closedKeys, ...(focusedHidden ? [focusedHidden] : [])])
-  const notifications = snapshot ? visiblePetNotifications(snapshot, dismissed, now) : []
+  const dismissed = new Set([...(bootstrap?.dismissedNotificationKeys ?? []), ...closedKeys])
+  const retained = new Set([...(editing ? [editing] : []), ...Object.keys(queued)])
+  const notifications = snapshot ? visiblePetNotifications(snapshot, dismissed, now, retained) : []
   const active = notifications[0] ?? null
   const business = effectivePetBusinessState({ activeStatus: active?.status ?? null, welcomeUntilMs: welcome, nowMs: now })
   const animation: PetAnimationState = resolveOverlayAnimationState({ resizeMode: false, dragging, dragDirection, hover, effectiveBusinessState: business })
-  const nextExpiry = earliestPetNotificationExpiry(notifications)
+  const nextExpiry = earliestPetNotificationExpiry(notifications, now)
   useEffect(() => {
     if (!welcome) return undefined
     const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, welcome - Date.now()))
@@ -140,6 +147,35 @@ function PetOverlayApp(): React.JSX.Element {
     void bridge.dismissNotification({ key })
   }
 
+  useEffect(() => {
+    if (!active) setExpanded(false)
+  }, [active])
+
+  useEffect(() => {
+    for (const [threadId, prompt] of Object.entries(queued)) {
+      const item = snapshot?.items.find((candidate) => candidate.threadId === threadId)
+      if (!item || item.status === 'running' || item.status === 'waiting' || inFlight.current.has(threadId)) continue
+      inFlight.current.add(threadId)
+      setSending((current) => new Set([...current, threadId]))
+      void bridge.performAction({ type: 'follow-up', threadId, prompt, unitId: item.unitId, roomId: item.roomId }).then((result) => {
+        if (!result.ok) {
+          setErrors((current) => ({ ...current, [threadId]: '发送失败，请按回车重试' }))
+          return
+        }
+        setDrafts((current) => ({ ...current, [threadId]: '' }))
+        setErrors((current) => ({ ...current, [threadId]: '' }))
+      }).finally(() => {
+        setQueued((current) => {
+          const next = { ...current }
+          delete next[threadId]
+          return next
+        })
+        setSending((current) => new Set([...current].filter((id) => id !== threadId)))
+        inFlight.current.delete(threadId)
+      })
+    }
+  }, [bridge, queued, snapshot])
+
   const runKey = (key: string): void => {
     const action = overlayKeyAction(key)
     if (action === 'close') void bridge.closeOverlay()
@@ -158,21 +194,55 @@ function PetOverlayApp(): React.JSX.Element {
 
   return (
     <div className="pet-overlay">
-      <div className="pet-hit" ref={hitRef} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <div className={`pet-hit${active ? ' pet-hit-with-bubble' : ''}`} ref={hitRef} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
         {bootstrap?.interactionNote ? <p className="pet-note">{bootstrap.interactionNote}</p> : null}
-        {welcome && now < welcome ? <div className="pet-bubble" role="status">Hello, I am {bootstrap?.displayName ?? 'your pet'}.</div> : null}
         {active ? (
-          <div className="pet-bubble" role="status">
-            <strong>{active.title}</strong>
-            <p>{active.stalled ? 'Stalled' : active.subtitle || active.status}</p>
-            {expanded ? <p>{active.stateSince}</p> : null}
-            <div className="pet-actions">
-              <button type="button" onClick={() => setExpanded((value) => !value)}>Details</button>
-              <button type="button" onClick={() => void bridge.performAction({ type: 'reply', threadId: active.threadId, unitId: active.unitId, roomId: active.roomId })}>Reply</button>
-              {active.status === 'running' && active.turnId ? <button type="button" onClick={() => void bridge.performAction({ type: 'stop', threadId: active.threadId, turnId: active.turnId ?? '', unitId: active.unitId })}>Stop</button> : null}
-              <button type="button" onClick={() => dismissNotification(active.key)}>Close</button>
-            </div>
-          </div>
+          <PetWorkBubbles
+            notifications={notifications}
+            mascotWidth={width}
+            expanded={expanded}
+            selected={selected}
+            editing={editing}
+            drafts={drafts}
+            queued={queued}
+            sending={sending}
+            errors={errors}
+            onToggle={(threadId) => {
+              if (!expanded && notifications.length > 1) {
+                setExpanded(true)
+                return
+              }
+              const showActions = selected === threadId
+              setSelected(showActions ? null : threadId)
+              if (editing !== threadId || showActions) setEditing(null)
+            }}
+            onEdit={(threadId) => setEditing(editing === threadId ? null : threadId)}
+            onDraft={(threadId, value) => setDrafts((current) => ({ ...current, [threadId]: value }))}
+            onQueue={(threadId, prompt) => {
+              setErrors((current) => ({ ...current, [threadId]: '' }))
+              setQueued((current) => ({ ...current, [threadId]: prompt }))
+            }}
+            onStop={(item) => {
+              if (!item.turnId) return
+              setErrors((current) => ({ ...current, [item.threadId]: '' }))
+              void bridge.performAction({ type: 'stop', threadId: item.threadId, turnId: item.turnId, unitId: item.unitId }).then((result) => {
+                if (!result.ok) setErrors((current) => ({ ...current, [item.threadId]: '终止失败，请重试' }))
+              })
+            }}
+            onDismiss={(item, event) => {
+              event.stopPropagation()
+              dismissNotification(item.key)
+            }}
+            onAnswer={(item) => {
+              setClosedKeys((current) => current.includes(item.key) ? current : [...current, item.key])
+              void bridge.performAction({ type: 'open', threadId: item.threadId, unitId: item.unitId, roomId: item.roomId })
+            }}
+            onCollapse={() => {
+              setExpanded(false)
+              setSelected(null)
+              setEditing(null)
+            }}
+          />
         ) : null}
         <button
           type="button"
