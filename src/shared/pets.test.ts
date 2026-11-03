@@ -43,6 +43,11 @@ describe('pet contracts', () => {
       ok: true,
       value: { type: 'reply', threadId: 'thr' }
     })
+    expect(parsePetActionRequest({ type: 'follow-up', threadId: 'thr', prompt: '继续' })).toMatchObject({
+      ok: true,
+      value: { type: 'follow-up', threadId: 'thr', prompt: '继续' }
+    })
+    expect(parsePetActionRequest({ type: 'follow-up', threadId: 'thr', prompt: ' ' }).ok).toBe(false)
     expect(parsePetActionRequest({ type: 'approve', threadId: 'thr' }).ok).toBe(false)
     const snapshot = parsePetActivitySnapshot({
       generation: 2,

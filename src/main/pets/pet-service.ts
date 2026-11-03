@@ -1,11 +1,12 @@
 import { app, BrowserWindow, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import { PET_IPC, petAssetUrl, type PetActionRequest, type PetActivitySnapshot, type PetOverlayBootstrap } from '../../shared/pets'
+import { PET_IPC, petAssetUrl, type PetActionRequest, type PetActionResult, type PetActivitySnapshot, type PetOverlayBootstrap } from '../../shared/pets'
 import { developmentRendererUrl, mainState } from '../main-app-context'
 import { resolveNamedPreloadPath } from '../main-paths'
 import { runtimeRequest } from '../main-runtime-settings'
 import { petStopConflict, validatePetStop } from './pet-actions'
+import { askPetFollowUp, settlePetFollowUp } from './pet-follow-up'
 import { detectCodexHome, localPetsRoot, refreshPetLibraries, resolveBuiltinPetsRoot } from './pet-importer'
 import { petEventAllowed, petIpcHandlers, type PetIpcEvent } from './pet-ipc'
 import { bindPetAssetReader } from './pet-protocol'
@@ -107,7 +108,7 @@ class DesktopPetRuntime implements DesktopPets {
     this.controller.setSpriteWidth(this.store.getSettings().mascotWidthPx)
     const api = this.api()
     for (const [channel, handler] of Object.entries(petIpcHandlers(api))) {
-      if (channel === PET_IPC.updateActivity || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayDragCancel) {
+      if (channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayDragCancel) {
         ipcMain.on(channel, (event, ...args) => { void handler(toEvent(event, this.classify(event.sender.id)), ...args) })
       } else {
         ipcMain.handle(channel, (event, ...args) => handler(toEvent(event, this.classify(event.sender.id)), ...args))
@@ -162,6 +163,7 @@ class DesktopPetRuntime implements DesktopPets {
       finishResize: (width: number) => this.controller?.finishResize(width) ?? Promise.resolve(),
       reportBounds: (bounds: { width: number; height: number; anchorX: number; anchorY: number }) => this.controller?.reportBounds(bounds),
       performAction: (request: PetActionRequest) => this.perform(request),
+      completeFollowUp: (requestId: string, result: PetActionResult) => settlePetFollowUp(requestId, result),
       dismiss: async (key: string) => {
         await this.store.dismissNotification(key)
         this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
@@ -182,6 +184,7 @@ class DesktopPetRuntime implements DesktopPets {
   }
 
   private async perform(request: PetActionRequest) {
+    if (request.type === 'follow-up') return this.deliverFollowUp(request)
     if (request.type === 'stop') {
       const stale = validatePetStop({ request, snapshot: this.snapshot })
       if (stale) return stale
@@ -199,6 +202,15 @@ class DesktopPetRuntime implements DesktopPets {
     this.reveal()
     this.mainWindow?.webContents.send(PET_IPC.navigationRequested, request)
     return { ok: true as const }
+  }
+
+  private deliverFollowUp(request: Extract<PetActionRequest, { type: 'follow-up' }>) {
+    const prompt = request.prompt.trim()
+    const known = this.snapshot?.items.some((item) => item.threadId === request.threadId)
+    if (!known || !prompt || prompt.length > 16_000 || !this.mainWindow || this.mainWindow.isDestroyed()) {
+      return Promise.resolve({ ok: false as const, code: 'rejected' as const, message: '无法发送跟进消息' })
+    }
+    return askPetFollowUp(this.mainWindow, request)
   }
 
   private reveal(): void {

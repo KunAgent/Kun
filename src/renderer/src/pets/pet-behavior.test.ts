@@ -3,8 +3,10 @@ import type { ActivityRow } from '@shared/activity-row'
 import { PET_NOTIFICATION_TTL_MS, PET_ROWS } from '@shared/pets'
 import { frameAtElapsedMs, frameDurationMs, staticFrame, totalCycleDurationMs } from './pet-animation'
 import { acceptPetSnapshot, highestPetStatus, projectPetActivity, semanticSnapshotKey, visiblePetNotifications } from './pet-activity'
+import { petConversationSupplements } from './pet-conversation-threads'
 import { queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, welcomeUntil } from './pet-pointer'
+import { deliverPetFollowUp, petBubbleBody } from './pet-follow-up'
 import { petBubbleAllowed } from './pet-publisher'
 
 describe('pet animation and interaction', () => {
@@ -50,12 +52,34 @@ describe('pet activity projection', () => {
       supplements: [{ threadId: 'thr', title: 'Duplicate', latestTurnStatus: 'running' }, { threadId: 'plain', title: 'Plain', latestTurnStatus: 'failed', latestTurnId: 'turn-9' }]
     })
     expect(snapshot.items.map((item) => item.unitId).sort()).toEqual(['child', 'plain', 'stalled', 'wait'])
+    const finished = projectPetActivity({
+      generation: 4,
+      profileKey: 'profile',
+      nowMs: now,
+      rows: [row({ unitId: 'idle-row', threadId: 'chat', state: 'idle', mainState: 'idle' })],
+      supplements: [{ threadId: 'chat', title: 'Chat', status: 'idle', latestTurnStatus: 'completed', updatedAt: '2026-01-01T00:00:00.000Z' }]
+    })
+    expect(finished.items).toMatchObject([{ threadId: 'chat', status: 'review' }])
+    const privateChat = projectPetActivity({
+      generation: 5,
+      profileKey: 'profile',
+      nowMs: now + PET_NOTIFICATION_TTL_MS.review + 5_000,
+      rows: [row({ unitId: 'old-done', threadId: 'dm', state: 'done', stateSince: new Date(now).toISOString() })],
+      supplements: [{ threadId: 'dm', title: '小 Kun', status: 'running', latestTurnStatus: 'running', updatedAt: new Date(now).toISOString() }]
+    })
+    expect(privateChat.items).toEqual(expect.arrayContaining([expect.objectContaining({ threadId: 'dm', status: 'running' })]))
+    expect(visiblePetNotifications(privateChat, new Set(), now + 10 * 60_000).some((item) => item.threadId === 'dm' && item.status === 'running')).toBe(true)
+    expect(petConversationSupplements([
+      { id: 'dm', title: '小 Kun', status: 'running', relation: 'side', updatedAt: '2026-01-01T00:00:00.000Z', roomContext: { roomId: 'room', memberId: 'member', kind: 'coordination' } },
+      { id: 'proj', title: 'Project', status: 'running', relation: 'primary', updatedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'gone', title: 'Archived', status: 'running', relation: 'side', archived: true, updatedAt: '2026-01-01T00:00:00.000Z' }
+    ], new Set(['proj']))).toEqual([expect.objectContaining({ threadId: 'dm', roomId: 'room', title: '小 Kun' })])
     expect(snapshot.items.find((item) => item.unitId === 'stalled')).toMatchObject({ status: 'failed', stalled: true, subtitle: 'Stalled' })
     expect(highestPetStatus(snapshot.items)).toBe('waiting')
     expect(acceptPetSnapshot(snapshot, { ...snapshot, generation: 2 })).toBe(snapshot)
   })
 
-  it('expires from the transition time, keeps the next turn, and limits replay', () => {
+  it('expires from the transition time, keeps the next turn, and limits replay', async () => {
     const since = '2026-01-01T00:00:00.000Z'
     const snapshot = projectPetActivity({
       generation: 1,
@@ -77,8 +101,21 @@ describe('pet activity projection', () => {
       supplements: []
     })
     expect(visiblePetNotifications(next, dismissed, Date.parse(nextSince) + 1_000)).toHaveLength(1)
-    expect(petBubbleAllowed({ threadId: 'thr', preferenceEnabled: false, foregroundVisible: false })).toBe(false)
-    expect(petBubbleAllowed({ threadId: 'thr', preferenceEnabled: true, foregroundVisible: true })).toBe(false)
+    expect(visiblePetNotifications(next, dismissed, Date.parse(nextSince) + 1_000, new Set(['other']))).toHaveLength(1)
+    expect(visiblePetNotifications(snapshot, new Set(), Date.parse(since) + PET_NOTIFICATION_TTL_MS.failed + 1, new Set(['thr']))).toHaveLength(1)
+    expect(petBubbleBody({ status: 'running', stalled: false, sending: false, queued: '继续' })).toBe('跟进消息将在本轮结束后发送')
+    expect(petBubbleBody({ status: 'waiting', stalled: false, sending: true, queued: '继续' })).toBe('正在发送…')
+    expect(petBubbleBody({ status: 'failed', stalled: true, sending: false })).toBe('这次运行遇到阻塞')
+    expect(petBubbleAllowed({ preferenceEnabled: false })).toBe(false)
+    expect(petBubbleAllowed({ preferenceEnabled: true })).toBe(true)
+    await expect(deliverPetFollowUp({
+      threadId: 'thr', prompt: '继续', knownThreadIds: new Set(['thr']),
+      selectThread: async () => undefined, sendMessage: async () => true
+    })).resolves.toEqual({ ok: true })
+    await expect(deliverPetFollowUp({
+      threadId: 'missing', prompt: '继续', knownThreadIds: new Set(['thr']),
+      selectThread: async () => undefined, sendMessage: async () => true
+    })).resolves.toMatchObject({ ok: false })
   })
 
   it('keeps dismissals across feed restarts while publishing changed summaries', () => {

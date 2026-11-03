@@ -32,7 +32,7 @@ export function projectPetActivity(input: {
   for (const row of input.rows) {
     const projected = projectRow(row, input)
     if (!projected) continue
-    covered.add(row.threadId)
+    if (input.nowMs <= petNotificationExpiresAtMs(projected, input.nowMs)) covered.add(row.threadId)
     items.push(projected)
   }
   for (const supplement of input.supplements) {
@@ -55,22 +55,31 @@ export function semanticSnapshotKey(snapshot: PetActivitySnapshot): string {
   ])])
 }
 
-export function petNotificationExpiresAtMs(item: PetActivityItem): number {
+export function petNotificationExpiresAtMs(item: PetActivityItem, nowMs = Date.now()): number {
+  // Awaken keeps a live run visible by refreshing its clock. A finished item
+  // still expires from the transition that produced it.
+  if (item.status === 'running' || item.status === 'waiting') return nowMs + PET_NOTIFICATION_TTL_MS[item.status]
   return transitionMs(item) + PET_NOTIFICATION_TTL_MS[item.status]
 }
 
-export function earliestPetNotificationExpiry(items: readonly PetActivityItem[]): number | null {
+export function earliestPetNotificationExpiry(items: readonly PetActivityItem[], nowMs: number): number | null {
   let earliest: number | null = null
   for (const item of items) {
-    const expires = petNotificationExpiresAtMs(item)
+    const expires = petNotificationExpiresAtMs(item, nowMs)
+    if (!Number.isFinite(expires) || expires <= nowMs) continue
     if (earliest === null || expires < earliest) earliest = expires
   }
   return earliest
 }
 
-export function visiblePetNotifications(snapshot: PetActivitySnapshot, dismissed: ReadonlySet<string>, nowMs: number): PetActivityItem[] {
+export function visiblePetNotifications(
+  snapshot: PetActivitySnapshot,
+  dismissed: ReadonlySet<string>,
+  nowMs: number,
+  retainedThreadIds: ReadonlySet<string> = new Set()
+): PetActivityItem[] {
   return snapshot.items
-    .filter((item) => item.bubbleAllowed && !dismissed.has(item.key) && nowMs <= petNotificationExpiresAtMs(item))
+    .filter((item) => item.bubbleAllowed && !dismissed.has(item.key) && (retainedThreadIds.has(item.threadId) || nowMs <= petNotificationExpiresAtMs(item, nowMs)))
     .sort((a, b) => {
       const priority = STATUS_PRIORITY.indexOf(a.status) - STATUS_PRIORITY.indexOf(b.status)
       if (priority) return priority
@@ -156,12 +165,17 @@ function mapRowStatus(row: ActivityRow): { status: PetActivityItem['status']; st
 }
 
 function mapSupplementStatus(thread: PetThreadSupplement): PetActivityItem['status'] | null {
-  const status = `${thread.latestTurnStatus ?? ''} ${thread.status ?? ''}`.toLowerCase()
+  return mapStatusText(thread.latestTurnStatus) ?? mapStatusText(thread.status)
+}
+
+function mapStatusText(value: string | undefined): PetActivityItem['status'] | null {
+  const status = (value ?? '').toLowerCase()
+  if (!status) return null
   if (/(waiting|question|approval|input)/.test(status)) return 'waiting'
   if (/(fail|error)/.test(status)) return 'failed'
-  if (/(cancel|archived|idle|closed)/.test(status)) return null
   if (/(done|complete|finish|review)/.test(status)) return 'review'
   if (/(run|working|streaming|pending)/.test(status)) return 'running'
+  if (/(cancel|archived|idle|closed)/.test(status)) return null
   return null
 }
 

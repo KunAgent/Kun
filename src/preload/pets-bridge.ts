@@ -24,5 +24,11 @@ export const petsPreloadApi: PetDesktopBridge = {
     return () => ipcRenderer.removeListener(PET_IPC.navigationRequested, wrapped)
   },
   takePendingNavigation: () => ipcRenderer.invoke(PET_IPC.navigationPending),
-  getPetInteraction: () => ipcRenderer.invoke(PET_IPC.interaction)
+  getPetInteraction: () => ipcRenderer.invoke(PET_IPC.interaction),
+  onFollowUpRequested: (handler) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, value: Parameters<typeof handler>[0]): void => handler(value)
+    ipcRenderer.on(PET_IPC.followUpRequested, wrapped)
+    return () => ipcRenderer.removeListener(PET_IPC.followUpRequested, wrapped)
+  },
+  completeFollowUp: (requestId, result) => ipcRenderer.send(PET_IPC.followUpResult, { requestId, result })
 }

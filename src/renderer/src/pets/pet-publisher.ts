@@ -1,24 +1,25 @@
-import type { ActivityRow } from '@shared/activity-row'
 import { showWorkbenchFlash } from '../components/rooms/workbench-flash'
-import { activityRowCurrentlyVisible } from '../store/activity-notifications'
+import { deliverPetFollowUp } from './pet-follow-up'
 import { activityFeedGeneration, setPetOverlayActivityLive, useActivityStore } from '../store/activity-store'
 import { useChatStore } from '../store/chat-store'
-import { projectPetActivity, semanticSnapshotKey } from './pet-activity'
+import { projectPetActivity, semanticSnapshotKey, type PetThreadSupplement } from './pet-activity'
+import { loadPetConversationThreads, petConversationSupplements } from './pet-conversation-threads'
 import { queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import type { PetActionRequest } from '@shared/pets'
 
 export function petBubbleAllowed(input: {
-  threadId: string
   preferenceEnabled: boolean
-  foregroundVisible: boolean
 }): boolean {
-  return input.preferenceEnabled && !input.foregroundVisible
+  return input.preferenceEnabled
 }
 
 let stopPublisher: (() => void) | null = null
 let lastKey = ''
 let navigationMessage: string | null = null
 let preferences = { waiting: true, failed: true, done: true, stalled: true }
+let conversationSupplements: PetThreadSupplement[] = []
+let conversationLoadedAt = 0
+let conversationLoading = false
 
 export function petNavigationNotice(): string | null {
   return navigationMessage
@@ -29,21 +30,22 @@ export function startPetActivityPublisher(): void {
   const pets = window.kunGui.pets
   let ready = true
   let overlayOpen = false
+  let active = true
   let pending: PetActionRequest | null = null
   const publish = (): void => {
+    if (!active) return
     setPetOverlayActivityLive(overlayOpen)
     if (!overlayOpen) return
+    refreshConversationThreads(publish)
     void Promise.resolve().then(() => {
       const state = useChatStore.getState()
       const rows = Object.values(useActivityStore.getState().rows)
-      const covered = new Set(rows.map((row) => row.threadId))
       const snapshot = projectPetActivity({
         generation: activityFeedGeneration(),
         profileKey: window.kunGui.appEnvironment?.profilePath || 'desktop',
         rows,
-        supplements: state.threads
-          .filter((thread) => !covered.has(thread.id))
-          .map((thread) => ({
+        supplements: [
+          ...state.threads.map((thread) => ({
             threadId: thread.id,
             title: thread.title,
             status: thread.status,
@@ -53,12 +55,10 @@ export function startPetActivityPublisher(): void {
             archived: thread.archived,
             roomId: thread.roomContext?.roomId
           })),
+          ...conversationSupplements
+        ],
         nowMs: Date.now(),
-        bubbleAllowed: (item) => petBubbleAllowed({
-          threadId: item.threadId,
-          preferenceEnabled: preferenceFor(item),
-          foregroundVisible: documentVisible(item.threadId, rows)
-        })
+        bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) })
       })
       const key = semanticSnapshotKey(snapshot)
       if (key === lastKey) return
@@ -95,15 +95,26 @@ export function startPetActivityPublisher(): void {
     }).catch(() => undefined)
   }
   const unsubscribeNavigation = pets.onPetNavigationRequested(pullNavigation)
+  const unsubscribeFollowUp = pets.onFollowUpRequested((request) => {
+    void deliverPetFollowUp({
+      threadId: request.threadId,
+      prompt: request.prompt,
+      knownThreadIds: new Set(useChatStore.getState().threads.map((thread) => thread.id)),
+      selectThread: (threadId) => useChatStore.getState().selectThread(threadId),
+      sendMessage: (prompt) => useChatStore.getState().sendMessage(prompt)
+    }).then((result) => pets.completeFollowUp(request.requestId, result))
+  })
   const onFocus = (): void => { ready = true; if (pending) { const next = pending; pending = null; void deliver(next) } }
   window.addEventListener('focus', onFocus)
   refreshSettings()
   pullNavigation()
   stopPublisher = () => {
+    active = false
     unsubscribeActivity()
     unsubscribeChat()
     unsubscribeCatalog()
     unsubscribeNavigation()
+    unsubscribeFollowUp()
     window.removeEventListener('kun-pet-settings-changed', refreshSettings)
     window.removeEventListener('focus', onFocus)
     setPetOverlayActivityLive(false)
@@ -116,7 +127,7 @@ export function stopPetActivityPublisher(): void {
 }
 
 async function deliver(request: PetActionRequest): Promise<void> {
-  if (request.type === 'stop') return
+  if (request.type === 'stop' || request.type === 'follow-up') return
   const threads = new Set(useChatStore.getState().threads.map((thread) => thread.id))
   const target = resolvePetThreadTarget({ request, knownThreadIds: threads })
   if (!target.ok) {
@@ -128,19 +139,28 @@ async function deliver(request: PetActionRequest): Promise<void> {
   await useChatStore.getState().selectThread(target.threadId)
 }
 
+function refreshConversationThreads(publish: () => void): void {
+  if (conversationLoading || Date.now() - conversationLoadedAt < 1500) return
+  conversationLoading = true
+  void loadPetConversationThreads()
+    .then((threads) => {
+      const known = new Set(useChatStore.getState().threads.map((thread) => thread.id))
+      conversationSupplements = petConversationSupplements(threads, known)
+    })
+    .catch(() => undefined)
+    .finally(() => {
+      conversationLoadedAt = Date.now()
+      conversationLoading = false
+      publish()
+    })
+}
+
 function preferenceFor(item: { status: string; stalled: boolean }): boolean {
   if (item.status === 'running') return true
   if (item.stalled) return preferences.stalled
   if (item.status === 'waiting') return preferences.waiting
   if (item.status === 'failed') return preferences.failed
   return preferences.done
-}
-
-function documentVisible(threadId: string, rows: ActivityRow[]): boolean {
-  if (typeof document === 'undefined') return false
-  const row = rows.find((candidate) => candidate.threadId === threadId)
-  if (!row) return useChatStore.getState().activeThreadId === threadId && document.hasFocus()
-  return activityRowCurrentlyVisible(row, useChatStore.getState(), document)
 }
 
 export function setPetNotificationPreferences(next: typeof preferences): void {

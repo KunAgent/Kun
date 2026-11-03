@@ -1,6 +1,7 @@
 import {
   PET_IPC,
   type PetActionRequest,
+  type PetActionResult,
   type PetActivitySnapshot,
   type PetImportReport,
   type PetOverlayBootstrap,
@@ -16,6 +17,7 @@ import {
   parsePetOverlayOpenPayload,
   parsePetSelectPayload
 } from '../../shared/pets-payload'
+import { parseFollowUpResult } from './pet-follow-up'
 import { petSenderAllowed } from './pet-protocol'
 
 export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 'main' | 'overlay' | 'other' }
@@ -46,6 +48,7 @@ export type PetIpcApi = {
   takePendingNavigation(): Promise<PetActionRequest | null>
   openMainWindow(): void
   closeOverlay(): void
+  completeFollowUp(requestId: string, result: PetActionResult): void
   allows(event: PetIpcEvent, kinds: Array<'main' | 'overlay'>): boolean
 }
 
@@ -130,7 +133,12 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     },
     [PET_IPC.navigationPending]: async (event) => { main(event); return api.takePendingNavigation() },
     [PET_IPC.overlayOpenMain]: (event) => { overlay(event); api.openMainWindow() },
-    [PET_IPC.overlayClose]: async (event) => { overlay(event); api.closeOverlay() }
+    [PET_IPC.overlayClose]: async (event) => { overlay(event); api.closeOverlay() },
+    [PET_IPC.followUpResult]: (event, payload) => {
+      main(event)
+      const parsed = parseFollowUpResult(payload)
+      if (parsed) api.completeFollowUp(parsed.requestId, parsed.result)
+    }
   }
 }
 

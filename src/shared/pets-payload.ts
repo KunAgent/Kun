@@ -70,6 +70,12 @@ export function parsePetActionRequest(value: unknown): PetPayloadResult<PetActio
     if (!turnId) return { ok: false, error: 'invalid turn id' }
     return { ok: true, value: { type: 'stop', threadId, turnId, ...(unitId ? { unitId } : {}) } }
   }
+  if (candidate.type === 'follow-up') {
+    if (typeof candidate.prompt !== 'string') return { ok: false, error: 'invalid follow-up' }
+    const prompt = candidate.prompt.trim()
+    if (!prompt || prompt.length > 16_000) return { ok: false, error: 'invalid follow-up' }
+    return { ok: true, value: { type: 'follow-up', threadId, prompt, ...(unitId ? { unitId } : {}), ...(roomId ? { roomId } : {}) } }
+  }
   if (candidate.type === 'reply' || candidate.type === 'open') {
     return {
       ok: true,
