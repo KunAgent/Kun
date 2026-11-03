@@ -11,5 +11,8 @@ export const mobileLink: MobileLinkApi = {
   resetIdentity: () => ipcRenderer.invoke(channels.resetIdentity),
   confirm: (id, scopes) => ipcRenderer.invoke(channels.confirm, id, scopes),
   setScopes: (id, scopes) => ipcRenderer.invoke(channels.setScopes, id, scopes),
+  desktopStatus: () => ipcRenderer.invoke(channels.desktopStatus),
+  desktopConfigure: value => ipcRenderer.invoke(channels.desktopConfigure, value),
+  desktopStop: () => ipcRenderer.invoke(channels.desktopStop),
   revoke: (id) => ipcRenderer.invoke(channels.revoke, id)
 }

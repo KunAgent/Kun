@@ -4,11 +4,14 @@ import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-option
 import { EventCoalescer } from './event-coalescer'
 import { LiveHistory, type LiveKind } from './live-history'
 import { MobileDirectorySubscriptions } from './directory-subscriptions'
-export type SubscriptionAuthority = { accountId: string; deviceId: string; authorizationId: string; scopes: readonly string[] }
+import { forwardCodeSync } from './history-sync'
+import { validateHistorySyncSubscription, type HistorySyncSubscription } from '@kun/remote-protocol'
+export type SubscriptionAuthority = { accountId: string; deviceId: string; authorizationId: string; syncKey?: string; scopes: readonly string[] }
 /** Runtime stream markers that never change a history page. */
 const QUIET_EVENTS = new Set(['heartbeat', 'replay_synchronized'])
 export class MobileSubscriptions {
   private streams = new Map<string, AbortController>()
+  private syncIds = new Map<string, string>()
   /** Live pages by `device:kind:id`, so a phone's own write can refresh the page it watches. */
   private lives = new Map<string, LiveHistory>()
   private directory: MobileDirectorySubscriptions
@@ -24,7 +27,7 @@ export class MobileSubscriptions {
   clear(device?: string) {
     this.directory.clear(device)
     for (const [key, control] of this.streams) if (!device || key.startsWith(device + ':')) {
-      control.abort(); this.streams.delete(key)
+      control.abort(); this.streams.delete(key); this.syncIds.delete(key)
     }
   }
   /** Re-reads a phone's live page soon, as if the runtime had reported a change. False when it watches no live page. */
@@ -41,6 +44,7 @@ export class MobileSubscriptions {
       since?: number
       active?: boolean
       live?: boolean
+      sync?: HistorySyncSubscription
     }
     if (
       !p ||
@@ -53,9 +57,15 @@ export class MobileSubscriptions {
     )
       throw new Error('INVALID_SUBSCRIPTION')
     if (p.kind === 'group' && !authority?.scopes.includes('groups.read')) throw new Error('REMOTE_SCOPE_REQUIRED')
+    if (p.sync !== undefined) {
+      validateHistorySyncSubscription(p.sync)
+      if (p.kind !== 'code' || !authority) throw new Error('INVALID_SUBSCRIPTION')
+    }
     const key = device + ':' + p.kind + ':' + p.id
+    if (p.active === false && this.syncIds.has(key) && this.syncIds.get(key) !== p.sync?.subscriptionId) return
     this.streams.get(key)?.abort()
     this.streams.delete(key)
+    this.syncIds.delete(key)
     if (p.active === false) return
     if (
       this.streams.size >= 16 ||
@@ -65,6 +75,14 @@ export class MobileSubscriptions {
       throw new Error('SUBSCRIPTION_LIMIT')
     const control = new AbortController()
     this.streams.set(key, control)
+    if (p.sync && authority) {
+      this.syncIds.set(key, p.sync.subscriptionId)
+      try { await forwardCodeSync({ id: p.id, sync: p.sync }, authority, control.signal, this.deps) }
+      finally {
+        if (this.streams.get(key) === control) { this.streams.delete(key); this.syncIds.delete(key) }
+      }
+      return
+    }
     let relay: EventCoalescer | undefined, live: LiveHistory | undefined, cancel = () => {}
     try {
       let since = p.since ?? 0

@@ -1,3 +1,4 @@
+import { dispatchMobileInvoke } from './invoke-dispatch'
 import { appendHostMetadata } from './catalog-metadata'
 import { MobileShareHosts } from './share-host'
 import { desktopScheduleDescriptors } from './desktop-schedules'
@@ -140,8 +141,10 @@ export class MobileLinkService {
     this.client?.stop()
     this.client = undefined
     this.subscriptions.clear()
+    void this.deps.desktop?.stopAll('transport_closed').catch(() => {})
     this.peers.clear()
     this.authorities.clear()
+    void this.deps.desktop?.stopAll('host_stopped').catch(() => {})
     this.notifications.stop()
     this.shared.stop()
     this.grantPeers.clear()
@@ -202,6 +205,7 @@ export class MobileLinkService {
     this.online = false
     this.authorizationId = randomUUID()
     this.subscriptions.clear()
+    void this.deps.desktop?.stopAll('transport_closed').catch(() => {})
     this.peers.clear()
   }
   private transportCurrent(generation: number, epoch: number, signal?: AbortSignal) {
@@ -228,7 +232,7 @@ export class MobileLinkService {
   /** Relay notices: a phone that went away no longer needs its streams; changed grants are re-read now. */
   private relayNotice(notice: RelayNotice, refresh: () => Promise<void>) {
     if (notice.relay === 'presence') {
-      for (const peer of notice.peers) if (!peer.online) this.subscriptions.clear(peer.deviceId)
+      for (const peer of notice.peers) if (!peer.online) { this.subscriptions.clear(peer.deviceId); this.deps.desktop?.authorityChanged(peer.deviceId) }
     } else if (notice.relay === 'authorization') {
       void refresh().catch(() => this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED'))
     }
@@ -513,9 +517,11 @@ export class MobileLinkService {
   }
   private peerAuthority(peer: string) {
     const grantId = [...this.grantPeers].find(([, controllerId]) => controllerId === peer)?.[0]
-    return { id: this.authorities.identity(this.authorizationId, peer, grantId), scopes: this.authorities.scopes(peer, grantId) }
+    return { id: this.authorities.identity(this.authorizationId, peer, grantId),
+      syncKey: this.authorities.identity('', peer, grantId), scopes: this.authorities.scopes(peer, grantId) }
   }
   private permissionsChanged(peer: string) {
+    this.deps.desktop?.authorityChanged(peer)
     ++this.grantsVersion
     this.statusRequest = undefined
     this.subscriptions.clear(peer)
@@ -531,6 +537,7 @@ export class MobileLinkService {
     ++this.grantsVersion
     this.deniedGrants.set(id, peer)
     if (peer) {
+      this.deps.desktop?.authorityChanged(peer)
       this.peers.delete(peer)
       this.deniedPeers.add(peer)
       this.authorities.remove(peer)
@@ -554,127 +561,15 @@ export class MobileLinkService {
     if (frame.kind === 'subscribe') {
       const authority = this.peerAuthority(src)
       void this.subscriptions.subscribe(src, frame.payload, { accountId: this.owner!, deviceId: src,
-        authorizationId: authority.id, scopes: authority.scopes }).catch(() => {})
+        authorizationId: authority.id, syncKey: authority.syncKey, scopes: authority.scopes }).catch(() => {})
       return
     }
     if (frame.kind !== 'invoke' || !frame.id) return
-    let fileReserved = false
-    let release: (() => void) | undefined
-    let control = false,
-      size = 0
     const authority = this.peerAuthority(src)
-    const current = () =>
-      generation === this.generation &&
-      this.online &&
-      Date.now() < this.authorizationExpiresAt &&
-      authority.id === this.peerAuthority(src).id &&
-      this.peers.has(src)
-    try {
-      // An optional read version is answered here; the runtime envelope never sees it.
-      const { call, ifVersion } = conditionalCall(validateCall(frame.payload))
-      if (call.requestId !== frame.id) throw new Error('INVALID_REQUEST')
-      if (!hasRemoteOperationScope(call.method, authority.scopes)) throw new Error('REMOTE_SCOPE_REQUIRED')
-      if (call.method.startsWith('attachment.')) {
-        if (this.filePeers.size >= 2 || this.filePeers.has(src))
-          throw new Error('BACKPRESSURE')
-        this.filePeers.add(src)
-        fileReserved = true
-      }
-      control = call.method === 'execution.stop'
-      size = Buffer.byteLength(JSON.stringify(call))
-      const releasePeer = this.requestBudget.reserve(src, size, control)
-      try {
-        const releaseTotal = this.totalRequestBudget.reserve('all', size, control)
-        release = () => { releasePeer(); releaseTotal() }
-      } catch (error) { releasePeer(); throw error }
-      if (call.expiresAt < Date.now() && !READ_METHODS.has(call.method))
-        throw new Error('REQUEST_EXPIRED')
-      const lease = await this.deps.lease()
-      if (!current()) return
-      let result: unknown
-      if (
-        call.method === 'attachment.receive' ||
-        call.method === 'attachment.export'
-      ) {
-        if (!this.deps.files || !this.api || !this.owner)
-          throw new Error('UNSUPPORTED_OPERATION')
-        result = await this.deps.files(
-          {
-            api: this.api,
-            peer: src,
-            owner: this.owner,
-            authorizationId: authority.id,
-            current,
-            lease: async () => lease
-          },
-          call
-        )
-      } else if (call.method === 'shares.list' || call.method === 'shares.manage') {
-        result = await this.shared.ownerInvoke(call.method, call, src, current)
-      } else if (call.method.startsWith('desktop.schedule.')) {
-        if (!this.deps.desktopSchedules || !this.owner) throw new Error('UNSUPPORTED_OPERATION')
-        result = await this.deps.desktopSchedules(call.method, call.params, {
-          accountId: this.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes }, lease)
-      } else {
-        const shareReceipt = call.method === 'request.get' ? await this.shared.ownerInvoke(call.method, call, src, current) : null
-        const response = shareReceipt ? { ok: true, status: 200, body: JSON.stringify(shareReceipt) } : await lease.request(
-          '/v1/remote/invoke',
-          'POST',
-          JSON.stringify({
-            accountId: this.owner,
-            deviceId: src,
-            authorizationId: authority.id,
-            scopes: authority.scopes,
-            call
-          })
-        )
-        const value = JSON.parse(response.body)
-        if (!response.ok)
-          throw new Error(
-            typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED'
-          )
-        if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []),
-          ...(this.deps.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...this.shared.descriptors(authority.scopes)]
-        if (call.method === 'catalog.get' && Array.isArray(value.capabilities))
-          value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY]
-        result = call.method === 'catalog.get' ? appendHostMetadata(value, {
-          deviceId: this.identity?.id, appVersion: this.deps.appVersion, platform: this.deps.platform }) : value
-      }
-      if (current())
-        this.client?.send({
-          kind: 'result',
-          id: frame.id,
-          dst: src,
-          payload: conditionalResult(call.method, result, ifVersion)
-        })
-      // The phone's own message should reach its live page now, not after the runtime's next event.
-      if (current()) refreshAfterWrite(this.subscriptions, src, call.method, call.params, result)
-    } catch (error) {
-      if (current()) {
-        try {
-          const code =
-            error instanceof Error && /^[A-Z_]+$/.test(error.message)
-              ? error.message
-              : 'REMOTE_ERROR'
-          this.client?.send({
-            kind: 'result',
-            id: frame.id,
-            dst: src,
-            payload: {
-              error: {
-                code,
-                uncertain:
-                  Boolean(release) &&
-                  !READ_METHODS.has(frame.payload?.method) &&
-                  !CERTAIN_REJECTIONS.has(code)
-              }
-            }
-          })
-        } catch { /* best-effort error reply; the peer may be gone */ }
-      }
-    } finally {
-      if (fileReserved) this.filePeers.delete(src)
-      release?.()
-    }
+    const current = () => generation === this.generation && this.online && Date.now() < this.authorizationExpiresAt &&
+      authority.id === this.peerAuthority(src).id && this.peers.has(src)
+    await dispatchMobileInvoke(frame, src, authority, current, { link: this.deps, owner: this.owner, hostId: this.identity?.id, api: this.api,
+      filePeers: this.filePeers, requestBudget: this.requestBudget, totalRequestBudget: this.totalRequestBudget, shared: this.shared, subscriptions: this.subscriptions,
+      authorizationRemaining: () => Math.max(0, this.authorizationExpiresAt - Date.now()), send: value => this.client?.send(value) })
   }
 }

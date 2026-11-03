@@ -270,6 +270,7 @@ module.exports = {
     // runtime to send media, and that chain resolves openclaw/plugin-sdk/*.
   ],
   extraResources: [
+    ...(process.platform === 'darwin' ? [{ from: 'resources/native/remote-desktop-input', to: 'native/remote-desktop-input' }] : []),
     {
       // Ship third-party prompt attribution with packaged applications, not
       // only in source checkouts.

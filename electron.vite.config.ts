@@ -60,7 +60,9 @@ export default defineConfig({
           'storage-relocation-recovery': resolve('src/preload/storage-relocation-recovery.ts'),
           'runtime-data-recovery': resolve('src/preload/runtime-data-recovery.ts'),
           'tray-quota': resolve('src/preload/tray-quota.ts'),
-          'pet-overlay': resolve('src/preload/pet-overlay.ts')
+          'pet-overlay': resolve('src/preload/pet-overlay.ts'),
+          'remote-desktop-capture': resolve('src/preload/remote-desktop-capture.ts'),
+          'remote-desktop-indicator': resolve('src/preload/remote-desktop-indicator.ts')
         },
         output: {
           format: 'cjs',
@@ -111,7 +113,8 @@ export default defineConfig({
         input: {
           index: resolve('src/renderer/index.html'),
           'tray-quota': resolve('src/renderer/tray-quota.html'),
-          'pet-overlay': resolve('src/renderer/pet-overlay.html')
+          'pet-overlay': resolve('src/renderer/pet-overlay.html'),
+          'remote-desktop-capture': resolve('src/renderer/remote-desktop-capture.html')
         }
       }
     },

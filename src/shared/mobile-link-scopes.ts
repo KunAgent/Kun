@@ -1,6 +1,6 @@
 /** Protocol scope names. Only trusted desktop UI may choose advanced permissions. */
 export const MOBILE_LINK_SCOPES = ['personal', 'groups.read', 'groups.write', 'collaboration.read',
-  'collaboration.control', 'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage'] as const
+  'collaboration.control', 'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage', 'desktop.view', 'desktop.control'] as const
 export type MobileLinkScope = typeof MOBILE_LINK_SCOPES[number]
 export function mobileLinkScopes(raw: unknown): MobileLinkScope[] {
   if (raw === undefined) return ['personal']
@@ -12,5 +12,6 @@ export function mobileLinkScopes(raw: unknown): MobileLinkScope[] {
     throw new Error('INVALID_SCOPES')
   if (scopes.includes('collaboration.control') && !scopes.includes('collaboration.read')) throw new Error('INVALID_SCOPES')
   if (scopes.includes('extensions.control') && !scopes.includes('extensions.read')) throw new Error('INVALID_SCOPES')
+  if (scopes.includes('desktop.control') && !scopes.includes('desktop.view')) throw new Error('INVALID_SCOPES')
   return scopes
 }

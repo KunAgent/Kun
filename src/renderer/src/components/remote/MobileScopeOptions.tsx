@@ -8,7 +8,9 @@ const OPTIONS: Array<{ id: MobileLinkScope; zh: string; en: string }> = [
   { id: 'schedules.read', zh: '阅读 Agent 和桌面自动运行及其历史', en: 'Read Agent and desktop schedules and their run history' },
   { id: 'extensions.read', zh: '阅读已装插件及桌面面板信息', en: 'Read installed plugins and desktop panel information' },
   { id: 'extensions.control', zh: '启用或停用已装插件（全局开关，项目覆盖保持有效）', en: 'Enable or disable installed plugins globally (project overrides remain active)' },
-  { id: 'shares.manage', zh: '管理单任务跨账号共享及访客权限', en: 'Manage single-task sharing and guest permissions' }
+  { id: 'shares.manage', zh: '管理单任务跨账号共享及访客权限', en: 'Manage single-task sharing and guest permissions' },
+  { id: 'desktop.view', zh: '查看已批准显示器的桌面', en: 'View the approved desktop display' },
+  { id: 'desktop.control', zh: '接管桌面的鼠标和键盘', en: 'Control desktop mouse and keyboard' }
 ]
 export function selectMobileScope(current: MobileLinkScope[], id: MobileLinkScope, checked: boolean): MobileLinkScope[] {
   const next = new Set(current)
@@ -18,11 +20,13 @@ export function selectMobileScope(current: MobileLinkScope[], id: MobileLinkScop
     if (['groups.write', 'collaboration.read', 'collaboration.control'].includes(id)) next.add('groups.read')
     if (id === 'collaboration.control') next.add('collaboration.read')
     if (id === 'extensions.control') next.add('extensions.read')
+    if (id === 'desktop.control') next.add('desktop.view')
   } else {
     next.delete(id)
     if (id === 'groups.read') for (const scope of ['groups.write', 'collaboration.read', 'collaboration.control'] as const) next.delete(scope)
     if (id === 'collaboration.read') next.delete('collaboration.control')
     if (id === 'extensions.read') next.delete('extensions.control')
+    if (id === 'desktop.view') next.delete('desktop.control')
   }
   return [...next]
 }

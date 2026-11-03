@@ -1,5 +1,6 @@
 import { registerSharedTaskRoutes } from './sharing/routes.js'
 import { registerRemoteDirectoryRoutes } from './directory/routes.js'
+import { registerCodeSyncRoutes } from './history/routes.js'
 import { registerRemoteAvatarRoute } from './agents/avatar-route.js'
 import { registerDesktopScheduleAudit } from './schedules/desktop-audit.js'
 import { RemoteNotificationFeed } from './notifications/feed.js'
@@ -21,6 +22,7 @@ import { remoteAttachmentContent } from './files/access.js'
 export function registerRemoteRoutes(router: Router, runtime: ServerRuntime) {
   if (!runtime.rooms) return
   const facade = new RemoteFacade(runtime, router)
+  registerCodeSyncRoutes(router, runtime, facade)
   registerDesktopScheduleAudit(router, runtime)
   registerSharedTaskRoutes(router, runtime)
   registerRemoteAvatarRoute(router, runtime)

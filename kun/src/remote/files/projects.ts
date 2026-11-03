@@ -8,6 +8,7 @@ import type { ServerRuntime } from '../../server/routes/server-runtime.js'
 import type { RemoteScope } from '../contracts.js'
 import { projects } from './project-directory.js'
 import { FILE_MAX_BYTES, inside, fileRevision, rootRevision, checkedProjectRead } from './project-content.js'
+import { projectFileIdentity } from './identity.js'
 const TTL = 10 * 60 * 1000
 const MIME: Record<string, string> = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json', '.md': 'text/markdown',
@@ -15,7 +16,7 @@ const MIME: Record<string, string> = { '.pdf': 'application/pdf', '.png': 'image
 // These are credential/configuration authorities, not source-code exclusions.
 const PRIVATE = new Set(['.git', '.codex', '.claude', '.gemini', '.ssh', '.aws', '.azure', '.gnupg', '.npmrc', '.netrc', '.pypirc',
   '.git-credentials', '.docker', '.kube', 'credentials.json', 'service-account.json'])
-type Entry = { fileRef: string; name: string; kind: 'file' | 'directory'; revision: string;
+type Entry = { fileRef: string; fileId: string; name: string; kind: 'file' | 'directory'; revision: string;
   available: boolean; size?: number; mimeType?: string; displayPath?: string; parentRef?: string }
 type Handle = { scope: string; projectId: string; root: string; rootVersion: string; path: string; entry: Entry; expires: number }
 type Scan = { scope: string; projectId: string; root: string; rootVersion: string; rootRef: string; parentRef?: string;
@@ -88,6 +89,7 @@ export class RemoteProjectFiles {
     const info = await stat(await realpath(path))
     if (!info.isDirectory() && !info.isFile()) return null
     const entry: Entry = { fileRef: 'file_' + randomUUID().replaceAll('-', ''), name: basename(path),
+      fileId: projectFileIdentity(this.runtime.rooms!.deps.dataDir, scan.projectId, scan.rootVersion, await realpath(path)),
       kind: info.isDirectory() ? 'directory' : 'file', revision: fileRevision(info), parentRef,
       displayPath: relative(scan.root, path), available: info.isDirectory() || info.size > 0 && info.size <= FILE_MAX_BYTES,
       ...(info.isFile() ? { size: info.size, mimeType: MIME[extname(path).toLowerCase()] ?? 'application/octet-stream' } : {}) }

@@ -46,6 +46,9 @@ vi.mock('./service', () => ({ MobileLinkService: class {
   reconnect = mock.reconnect
   dispose = mock.dispose
 } }))
+vi.mock('../remote-desktop/engine', () => ({ createDesktopEngine: () => ({
+  status: vi.fn(), configure: vi.fn(), stopAll: vi.fn(async () => {})
+}) }))
 import { registerMobileLink } from './register'
 import { RESUME_RETRY_MS } from './relay-resume'
 

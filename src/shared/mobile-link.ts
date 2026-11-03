@@ -17,6 +17,9 @@ export type MobileLinkApi = {
   resetIdentity(): Promise<MobileLinkStatus>
   confirm(id: string, scopes?: MobileLinkScope[]): Promise<MobileLinkStatus>
   setScopes(id: string, scopes: MobileLinkScope[]): Promise<MobileLinkStatus>
+  desktopStatus?(): Promise<import('./remote-desktop').DesktopAccessStatus>
+  desktopConfigure?(value: import('./remote-desktop').DesktopConfiguration): Promise<import('./remote-desktop').DesktopAccessStatus>
+  desktopStop?(): Promise<void>
   revoke(id: string): Promise<MobileLinkStatus>
 }
 export const MOBILE_LINK_CHANNELS = {
@@ -27,5 +30,8 @@ export const MOBILE_LINK_CHANNELS = {
   resetIdentity: 'mobile-link:reset-identity',
   confirm: 'mobile-link:confirm',
   revoke: 'mobile-link:revoke',
-  setScopes: 'mobile-link:set-scopes'
+  setScopes: 'mobile-link:set-scopes',
+  desktopStatus: 'mobile-link:desktop-status',
+  desktopConfigure: 'mobile-link:desktop-configure',
+  desktopStop: 'mobile-link:desktop-stop'
 } as const

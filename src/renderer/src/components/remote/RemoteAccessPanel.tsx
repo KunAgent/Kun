@@ -4,6 +4,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useTranslation } from 'react-i18next'
 import type { RemoteAccessConfigPatch, RemoteAccessStatus, RemoteTailscaleInfo } from '@shared/remote-access'
 import { MobileChannelRow, MobileGrantRows, MobilePairingRequests } from './RemoteMobileLink'
+import { RemoteDesktopAccess } from './RemoteDesktopAccess'
 import { RemoteSettingsGroup } from './RemoteSettingsGroup'
 import { useMobileLink } from './useMobileLink'
 import {
@@ -195,6 +196,7 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
                 />
               </RemoteRow>
               <MobileChannelRow link={link} />
+              <RemoteDesktopAccess zh={link.zh} signedIn={link.signedIn} />
             </RemoteGroup>
           </RemoteSection>
 

@@ -1,4 +1,5 @@
 import { VERSION as REMOTE_PROTOCOL_VERSION, DIRECTORY_LIVE_CAPABILITY, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
+import { FILE_IDENTITY_CAPABILITY, CODE_HISTORY_SYNC_CAPABILITY } from '@kun/remote-protocol'
 import { KUN_VERSION, KUN_RELEASE_CHANNEL } from '../version.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Envelope } from './contracts.js'
@@ -103,7 +104,8 @@ export async function remoteCatalog(runtime: ServerRuntime, scope: Envelope, mod
     projects: list.map(({ id, name }) => ({ id, name })), models: availableModels,
     defaultModel: runtime.defaultModel,
     agents: await codeAgents(runtime, availableModels),
-    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, 'approvals', 'attachments',
+    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, FILE_IDENTITY_CAPABILITY, 'approvals', 'attachments',
+      ...(runtime.sessionStore.iterateEventsSince ? [CODE_HISTORY_SYNC_CAPABILITY] : []),
       ...(runtime.threadActivity ? [DIRECTORY_LIVE_CAPABILITY] : [])],
     scopes: scope.scopes, capabilityDescriptors: await descriptors(), attachmentMaxBytes: 10 * 1024 * 1024
   }

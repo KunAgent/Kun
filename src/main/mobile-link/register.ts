@@ -17,6 +17,7 @@ import { RelayPreference } from './relay-preference'
 import { MobileRelayResume } from './relay-resume'
 import { logInfo, logWarn } from '../logger'
 import { MobileLinkSockets } from './socket'
+import { createDesktopEngine } from '../remote-desktop/engine'
 const networkKey = () => Object.entries(networkInterfaces()).flatMap(([name, addresses]) =>
   (addresses ?? []).filter((address) => !address.internal && !address.address.startsWith('fe80:'))
     .map((address) => name + ':' + address.family + ':' + address.address)).sort().join('|')
@@ -49,6 +50,28 @@ export function registerMobileLink(
   const sockets = new MobileLinkSockets(undefined, diagnostic)
   const links = join(app.getPath('userData'), 'mobile-link')
   const desktopSchedules = new MobileDesktopSchedules(options)
+  const desktop = createDesktopEngine(async authority => {
+    const state = await account.getState()
+    if (!hasKunAccountSession(state) || state.user?.id !== authority.accountId || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+    const [identity, token] = await Promise.all([loadIdentity(join(links, authority.accountId, 'identity.enc')), account.accessToken()])
+    if (!token || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+    const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 5000)
+    try {
+      const response = await net.fetch('https://api-kun-server.com/api/remote/v1/desktop/ice', { method: 'POST', signal: abort.signal,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Kun-Device': identity.id, 'X-Kun-Device-Credential': identity.credential }, body: JSON.stringify({ peerDeviceId: authority.deviceId }) })
+      if (!response.ok || !authority.current()) throw Error('DESKTOP_ICE_UNAVAILABLE')
+      const value = await response.json() as { schemaVersion?: number; iceServers?: unknown[]; expiresAt?: number }
+      if (value.schemaVersion !== 1 || !Array.isArray(value.iceServers) || !value.iceServers.length || value.iceServers.length > 8 || !value.expiresAt || value.expiresAt <= Date.now()) throw Error('DESKTOP_ICE_UNAVAILABLE')
+      return value.iceServers
+    } finally { clearTimeout(timer) }
+  }, async (authority, resource) => {
+    const lease = await options.acquireRuntimeRequestLease()
+    if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+    const response = await lease.request('/v1/remote/invoke', 'POST', JSON.stringify({ accountId: authority.accountId,
+      deviceId: authority.deviceId, authorizationId: authority.authorizationId, scopes: authority.scopes,
+      call: { method: `${resource.kind}.history`, params: resource.kind === 'code' ? { threadId: resource.id } : { agentId: resource.id }, requestId: crypto.randomUUID(), expiresAt: Date.now() + 15000 } }))
+    if (!response.ok || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+  })
   const service = new MobileLinkService({
     account,
     requireMembership: (owner) => requireAccountFeature(account, (input, init) => net.fetch(String(input), init), 'mobileRemote', owner),
@@ -74,6 +97,7 @@ export function registerMobileLink(
     socket: (url, headers) => sockets.open(url, headers),
     lease: options.acquireRuntimeRequestLease,
     diagnostic,
+    desktop,
     desktopSchedules: (method, params, scope, lease) => desktopSchedules.invoke(method, params, scope, lease),
     sharedFiles: transferSharedFiles,
     files: transferFiles
@@ -147,6 +171,9 @@ export function registerMobileLink(
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return service.revoke(id)
   })
+  ipcMain.handle(channels.desktopStatus, event => { assertTrustedWorkbenchSender(event, options.getMainWindow); return desktop.status() })
+  ipcMain.handle(channels.desktopConfigure, (event, value) => { assertTrustedWorkbenchSender(event, options.getMainWindow); return desktop.configure(value) })
+  ipcMain.handle(channels.desktopStop, event => { assertTrustedWorkbenchSender(event, options.getMainWindow); return desktop.stopAll('host_user_ended') })
   // Sign-in alone never starts remote access; only a start the user left on resumes after a relaunch.
   app.once('before-quit', () => { recovery.dispose(); resume.dispose(); sockets.dispose() })
 }
