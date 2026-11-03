@@ -46,6 +46,7 @@ class DesktopPetRuntime implements DesktopPets {
   private mainWindow: BrowserWindow | null = null
   private detachMain: (() => void) | null = null
   private pendingNavigation: PetActionRequest | null = null
+  private pendingSettings = false
   private snapshot: PetActivitySnapshot | null = null
   private readonly allowed = new Set<number>()
   private controller: PetWindowController | null = null
@@ -62,7 +63,9 @@ class DesktopPetRuntime implements DesktopPets {
     if (!window || window.isDestroyed()) return
     this.allowed.add(window.webContents.id)
     const onLoad = (): void => {
-      if (this.pendingNavigation && !window.isDestroyed()) window.webContents.send(PET_IPC.navigationRequested, this.pendingNavigation)
+      if (window.isDestroyed()) return
+      if (this.pendingNavigation) window.webContents.send(PET_IPC.navigationRequested, this.pendingNavigation)
+      if (this.pendingSettings) window.webContents.send(PET_IPC.settingsRequested, {})
     }
     const onFocus = (): void => { this.controller?.send(PET_IPC.overlayFocused, {}) }
     const onClosed = (): void => {
@@ -108,7 +111,7 @@ class DesktopPetRuntime implements DesktopPets {
     this.controller.setSpriteWidth(this.store.getSettings().mascotWidthPx)
     const api = this.api()
     for (const [channel, handler] of Object.entries(petIpcHandlers(api))) {
-      if (channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayDragCancel) {
+      if (channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayOpenSettings || channel === PET_IPC.overlayDragCancel) {
         ipcMain.on(channel, (event, ...args) => { void handler(toEvent(event, this.classify(event.sender.id)), ...args) })
       } else {
         ipcMain.handle(channel, (event, ...args) => handler(toEvent(event, this.classify(event.sender.id)), ...args))
@@ -174,7 +177,17 @@ class DesktopPetRuntime implements DesktopPets {
         this.pendingNavigation = null
         return Promise.resolve(pending)
       },
+      takePendingSettings: () => {
+        const pending = this.pendingSettings
+        this.pendingSettings = false
+        return Promise.resolve(pending)
+      },
       openMainWindow: () => this.reveal(),
+      openPetSettings: () => {
+        this.pendingSettings = true
+        this.reveal()
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send(PET_IPC.settingsRequested, {})
+      },
       closeOverlay: async () => { await this.store.setOverlayOpen(false); this.controller?.close() },
       allows: (event: PetIpcEvent, kinds: Array<'main' | 'overlay'>) =>
         (event.senderKind === 'main' || event.senderKind === 'overlay') &&

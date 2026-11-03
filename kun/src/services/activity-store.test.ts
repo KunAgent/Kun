@@ -331,6 +331,17 @@ describe('ActivityStore', () => {
     expect(store.get('t1')?.lastMessagePreview).toBe('frag-99')
   })
 
+  it('replaces a pending fragment with the finished assistant message immediately', () => {
+    const store = makeStore({ previewThrottleMs: 2_000 })
+    registerThread(store, 't1')
+    store.record(ev('assistant_text_delta', 't1', { item: { kind: 'assistant_text', text: '你好' } }))
+    store.record(ev('assistant_text_delta', 't1', { item: { kind: 'assistant_text', text: '，' } }))
+    store.record(ev('item_created', 't1', { item: { kind: 'assistant_text', text: '你好，我在。' } }))
+    expect(store.get('t1')?.lastMessagePreview).toBe('你好，我在。')
+    vi.advanceTimersByTime(2_000)
+    expect(store.get('t1')?.lastMessagePreview).toBe('你好，我在。')
+  })
+
   it('processes a hot delta stream within a generous bound', () => {
     vi.useRealTimers()
     const store = makeStore()

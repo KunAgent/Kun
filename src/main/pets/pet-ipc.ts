@@ -46,7 +46,9 @@ export type PetIpcApi = {
   dismiss(key: string): Promise<void>
   recordWelcomed(petId: string): Promise<void>
   takePendingNavigation(): Promise<PetActionRequest | null>
+  takePendingSettings(): Promise<boolean>
   openMainWindow(): void
+  openPetSettings(): void
   closeOverlay(): void
   completeFollowUp(requestId: string, result: PetActionResult): void
   allows(event: PetIpcEvent, kinds: Array<'main' | 'overlay'>): boolean
@@ -132,7 +134,9 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
       if (typeof petId === 'string' && petId.trim()) await api.recordWelcomed(petId)
     },
     [PET_IPC.navigationPending]: async (event) => { main(event); return api.takePendingNavigation() },
+    [PET_IPC.settingsPending]: async (event) => { main(event); return api.takePendingSettings() },
     [PET_IPC.overlayOpenMain]: (event) => { overlay(event); api.openMainWindow() },
+    [PET_IPC.overlayOpenSettings]: (event) => { overlay(event); api.openPetSettings() },
     [PET_IPC.overlayClose]: async (event) => { overlay(event); api.closeOverlay() },
     [PET_IPC.followUpResult]: (event, payload) => {
       main(event)

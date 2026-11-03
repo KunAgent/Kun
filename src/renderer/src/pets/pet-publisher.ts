@@ -2,9 +2,9 @@ import { showWorkbenchFlash } from '../components/rooms/workbench-flash'
 import { deliverPetFollowUp } from './pet-follow-up'
 import { activityFeedGeneration, setPetOverlayActivityLive, useActivityStore } from '../store/activity-store'
 import { useChatStore } from '../store/chat-store'
-import { projectPetActivity, semanticSnapshotKey, type PetThreadSupplement } from './pet-activity'
+import { applyPetResultText, latestAssistantPreview, projectPetActivity, semanticSnapshotKey, type PetThreadSupplement } from './pet-activity'
 import { loadPetConversationThreads, petConversationSupplements } from './pet-conversation-threads'
-import { queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
+import { PET_OPEN_SETTINGS_EVENT, queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import type { PetActionRequest } from '@shared/pets'
 
 export function petBubbleAllowed(input: {
@@ -40,7 +40,7 @@ export function startPetActivityPublisher(): void {
     void Promise.resolve().then(() => {
       const state = useChatStore.getState()
       const rows = Object.values(useActivityStore.getState().rows)
-      const snapshot = projectPetActivity({
+      const projected = projectPetActivity({
         generation: activityFeedGeneration(),
         profileKey: window.kunGui.appEnvironment?.profilePath || 'desktop',
         rows,
@@ -60,6 +60,12 @@ export function startPetActivityPublisher(): void {
         nowMs: Date.now(),
         bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) })
       })
+      const livePreview = state.activeThreadId ? latestAssistantPreview(state.blocks) : ''
+      const items = applyPetResultText(projected.items, (threadId) => {
+        if (threadId === state.activeThreadId && livePreview) return livePreview
+        return state.threads.find((thread) => thread.id === threadId)?.preview
+      })
+      const snapshot = items === projected.items ? projected : { ...projected, items }
       const key = semanticSnapshotKey(snapshot)
       if (key === lastKey) return
       lastKey = key
@@ -94,7 +100,18 @@ export function startPetActivityPublisher(): void {
       if (queued.deliver) void deliver(queued.deliver)
     }).catch(() => undefined)
   }
+  const openPetSettings = (): void => {
+    if (typeof pets.takePendingSettings !== 'function') return
+    void pets.takePendingSettings().then((pending) => {
+      if (!pending) return
+      useChatStore.getState().openSettings('pets')
+      window.dispatchEvent(new Event(PET_OPEN_SETTINGS_EVENT))
+    }).catch(() => undefined)
+  }
   const unsubscribeNavigation = pets.onPetNavigationRequested(pullNavigation)
+  const unsubscribeSettings = typeof pets.onPetSettingsRequested === 'function'
+    ? pets.onPetSettingsRequested(openPetSettings)
+    : () => undefined
   const unsubscribeFollowUp = pets.onFollowUpRequested((request) => {
     void deliverPetFollowUp({
       threadId: request.threadId,
@@ -108,12 +125,14 @@ export function startPetActivityPublisher(): void {
   window.addEventListener('focus', onFocus)
   refreshSettings()
   pullNavigation()
+  openPetSettings()
   stopPublisher = () => {
     active = false
     unsubscribeActivity()
     unsubscribeChat()
     unsubscribeCatalog()
     unsubscribeNavigation()
+    unsubscribeSettings()
     unsubscribeFollowUp()
     window.removeEventListener('kun-pet-settings-changed', refreshSettings)
     window.removeEventListener('focus', onFocus)
@@ -126,17 +145,30 @@ export function stopPetActivityPublisher(): void {
   stopPublisher?.()
 }
 
+function knownPetThreadIds(): Set<string> {
+  const state = useChatStore.getState()
+  const ids = new Set<string>([
+    ...state.threads.map((thread) => thread.id),
+    ...(state.adeThreads ?? []).map((thread) => thread.id),
+    ...conversationSupplements.map((thread) => thread.threadId)
+  ])
+  for (const row of Object.values(useActivityStore.getState().rows)) ids.add(row.threadId)
+  if (state.activeThreadId) ids.add(state.activeThreadId)
+  return ids
+}
+
 async function deliver(request: PetActionRequest): Promise<void> {
   if (request.type === 'stop' || request.type === 'follow-up') return
-  const threads = new Set(useChatStore.getState().threads.map((thread) => thread.id))
-  const target = resolvePetThreadTarget({ request, knownThreadIds: threads })
+  const target = resolvePetThreadTarget({ request, knownThreadIds: knownPetThreadIds() })
   if (!target.ok) {
     navigationMessage = 'That task is no longer available.'
     showWorkbenchFlash(navigationMessage, 'error')
     return
   }
   navigationMessage = null
-  await useChatStore.getState().selectThread(target.threadId)
+  const store = useChatStore.getState()
+  if (store.route !== 'chat') store.setRoute('chat')
+  await store.selectThread(target.threadId)
 }
 
 function refreshConversationThreads(publish: () => void): void {

@@ -20,6 +20,8 @@
   "petsOpenCodexDir": "Открыть папку питомцев Codex",
   "petsSourceMissing": "Исходный пакет отсутствует",
   "petsReport": "Ошибок: {{failed}}, отсутствует: {{missing}}",
+  "petsContextSettings": "Настройки",
+  "petsContextHide": "Скрыть",
   "petsSource": {
     "kun-builtin": "Встроенный",
     "kun-local": "Локальный",

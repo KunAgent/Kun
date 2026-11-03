@@ -145,6 +145,8 @@ export type PetDesktopBridge = {
   onPetCatalogChanged: (handler: () => void) => () => void
   onPetNavigationRequested: (handler: (target: PetActionRequest) => void) => () => void
   takePendingNavigation: () => Promise<PetActionRequest | null>
+  onPetSettingsRequested: (handler: () => void) => () => void
+  takePendingSettings: () => Promise<boolean>
   getPetInteraction: () => Promise<{ mode: PetInteractionMode; note: string | null }>
   onFollowUpRequested: (handler: (request: PetFollowUpRequest) => void) => () => void
   completeFollowUp: (requestId: string, result: PetActionResult) => void
@@ -167,6 +169,7 @@ export type PetOverlayBridge = {
   dismissNotification: (input: { key: string }) => Promise<void>
   recordPetWelcomed: (petId: string) => Promise<void>
   openMainWindow: () => void
+  openPetSettings: () => void
   closeOverlay: () => void
 }
 
@@ -225,6 +228,8 @@ export const PET_IPC = {
   catalogChanged: 'kun:pets:catalog-changed',
   navigationRequested: 'kun:pets:navigation-requested',
   navigationPending: 'kun:pets:navigation-pending',
+  settingsRequested: 'kun:pets:settings-requested',
+  settingsPending: 'kun:pets:settings-pending',
   followUpRequested: 'kun:pets:follow-up-requested',
   followUpResult: 'kun:pets:follow-up-result',
   interaction: 'kun:pets:interaction',
@@ -244,6 +249,7 @@ export const PET_IPC = {
   overlayDismiss: 'kun:pets:overlay:dismiss',
   overlayWelcomed: 'kun:pets:overlay:welcomed',
   overlayOpenMain: 'kun:pets:overlay:open-main',
+  overlayOpenSettings: 'kun:pets:overlay:open-settings',
   overlayClose: 'kun:pets:overlay:close'
 } as const
 

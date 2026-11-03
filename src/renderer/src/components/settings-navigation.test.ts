@@ -99,6 +99,7 @@ describe('settings navigation model', () => {
     expect(settingsCategoryForRouteSection('worktree')).toBe('code')
     expect(settingsCategoryForRouteSection('imageGeneration')).toBe('mediaGeneration')
     expect(settingsCategoryForRouteSection('speak')).toBe('mediaGeneration')
+    expect(settingsCategoryForRouteSection('pets')).toBe('pets')
     expect(settingsCategoryForRouteSection(null)).toBe('agents')
   })
 })

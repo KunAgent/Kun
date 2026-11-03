@@ -20,6 +20,8 @@
   "petsOpenCodexDir": "Codex のペットフォルダを開く",
   "petsSourceMissing": "元のパッケージがありません",
   "petsReport": "失敗 {{failed}}、欠損 {{missing}}",
+  "petsContextSettings": "設定",
+  "petsContextHide": "隠す",
   "petsSource": {
     "kun-builtin": "内蔵",
     "kun-local": "ローカル",

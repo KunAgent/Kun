@@ -75,6 +75,10 @@ function selfPatch(event: RuntimeEvent): ActivityPatch | null {
       return event.item.kind === 'assistant_text'
         ? { lastMessagePreview: event.item.text.slice(-PREVIEW_MAX) }
         : null
+    case 'item_created':
+    case 'item_updated':
+    case 'item_completed':
+      return assistantTextPreview(event)
     case 'turn_completed':
       return {
         mainState: 'done',
@@ -127,6 +131,12 @@ function selfPatch(event: RuntimeEvent): ActivityPatch | null {
     default:
       return null
   }
+}
+
+function assistantTextPreview(event: RuntimeEvent): ActivityPatch | null {
+  if (!('item' in event) || !event.item || event.item.kind !== 'assistant_text') return null
+  const text = event.item.text.replace(/\s+/g, ' ').trim()
+  return text ? { lastMessagePreview: text.slice(0, PREVIEW_MAX) } : null
 }
 
 function childStatusPatch(

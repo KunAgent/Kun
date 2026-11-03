@@ -25,6 +25,7 @@ const api: PetOverlayBridge = {
   dismissNotification: (input) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayDismiss, input),
   recordPetWelcomed: (petId) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayWelcomed, petId),
   openMainWindow: () => ipcRenderer.send(PET_OVERLAY_IPC.overlayOpenMain),
+  openPetSettings: () => ipcRenderer.send(PET_OVERLAY_IPC.overlayOpenSettings),
   closeOverlay: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayClose)
 }
 

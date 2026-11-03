@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest'
 import type { ActivityRow } from '@shared/activity-row'
 import { PET_NOTIFICATION_TTL_MS, PET_ROWS } from '@shared/pets'
 import { frameAtElapsedMs, frameDurationMs, staticFrame, totalCycleDurationMs } from './pet-animation'
-import { acceptPetSnapshot, highestPetStatus, projectPetActivity, semanticSnapshotKey, visiblePetNotifications } from './pet-activity'
+import { acceptPetSnapshot, applyPetResultText, highestPetStatus, latestAssistantPreview, projectPetActivity, semanticSnapshotKey, visiblePetNotifications } from './pet-activity'
 import { petConversationSupplements } from './pet-conversation-threads'
 import { queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
-import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, welcomeUntil } from './pet-pointer'
+import { petContextMenuLabels } from './pet-menu-labels'
+import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, pointInsidePetHit, welcomeUntil } from './pet-pointer'
 import { deliverPetFollowUp, petBubbleBody } from './pet-follow-up'
 import { petBubbleAllowed } from './pet-publisher'
 
@@ -24,6 +25,12 @@ describe('pet animation and interaction', () => {
     expect(classifyPointerGesture({ cancelled: true, dx: 1, dy: 1 })).toBe('cancel')
     expect(classifyPointerGesture({ cancelled: false, dx: 3, dy: 0 })).toBe('click')
     expect(classifyPointerGesture({ cancelled: false, dx: 4, dy: 0 })).toBe('drag')
+    const hit = { left: 10, top: 20, right: 80, bottom: 120 }
+    expect(pointInsidePetHit({ x: 10, y: 20 }, hit)).toBe(true)
+    expect(pointInsidePetHit({ x: 80, y: 120 }, hit)).toBe(true)
+    expect(pointInsidePetHit({ x: 9, y: 40 }, hit)).toBe(false)
+    expect(pointInsidePetHit({ x: 40, y: 40 }, null)).toBe(false)
+    expect(pointInsidePetHit({ x: 0, y: 0 }, { left: 0, top: 0, right: 0, bottom: 10 })).toBe(false)
     expect(welcomeUntil('kun:dot', [], 1_000)).toBe(9_000)
     expect(welcomeUntil('kun:dot', ['kun:dot'], 1_000)).toBeNull()
     expect(nextMascotWidth(80, -1)).toBe(80)
@@ -31,6 +38,9 @@ describe('pet animation and interaction', () => {
     expect(nextMascotWidth(224, 1)).toBe(224)
     expect(overlayKeyAction('Enter')).toBe('reply')
     expect(overlayKeyAction('Escape')).toBe('close')
+    expect(petContextMenuLabels('zh-CN')).toEqual({ settings: '设置', hide: '隐藏' })
+    expect(petContextMenuLabels('en-US').settings).toBe('Settings')
+    expect(petContextMenuLabels('fr').hide).toBe('Hide')
   })
 })
 
@@ -91,7 +101,17 @@ describe('pet activity projection', () => {
     const key = snapshot.items[0].key
     const dismissed = new Set([key])
     expect(visiblePetNotifications(snapshot, dismissed, Date.parse(since) + 1_000)).toEqual([])
-    expect(visiblePetNotifications(snapshot, new Set(), Date.parse(since) + PET_NOTIFICATION_TTL_MS.failed + 1)).toEqual([])
+    expect(visiblePetNotifications(snapshot, new Set(), Date.parse(since) + PET_NOTIFICATION_TTL_MS.failed + 1)).toHaveLength(1)
+    const review = projectPetActivity({
+      generation: 1,
+      profileKey: 'profile',
+      nowMs: Date.parse(since),
+      rows: [row({ state: 'done', stateSince: since, lastMessagePreview: '你好，我在。' })],
+      supplements: []
+    })
+    expect(visiblePetNotifications(review, new Set(), Date.parse(since) + PET_NOTIFICATION_TTL_MS.review + 1_000)).toMatchObject([{ subtitle: '你好，我在。' }])
+    expect(latestAssistantPreview([{ kind: 'user', text: '问候' }, { kind: 'assistant', text: '你好，我在。' }])).toBe('你好，我在。')
+    expect(applyPetResultText(review.items, () => '这是完整的回答')).toMatchObject([{ subtitle: '这是完整的回答' }])
     const nextSince = '2026-01-01T00:00:10.000Z'
     const next = projectPetActivity({
       generation: 1,

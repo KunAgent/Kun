@@ -28,17 +28,23 @@ export function projectPetActivity(input: {
   bubbleAllowed?: (item: { threadId: string; status: PetActivityItem['status']; stalled: boolean }) => boolean
 }): PetActivitySnapshot {
   const covered = new Set<string>()
+  const finished = new Set<string>()
   const items: PetActivityItem[] = []
   for (const row of input.rows) {
     const projected = projectRow(row, input)
     if (!projected) continue
-    if (input.nowMs <= petNotificationExpiresAtMs(projected, input.nowMs)) covered.add(row.threadId)
+    if (input.nowMs <= petNotificationExpiresAtMs(projected, input.nowMs)) {
+      if (projected.status === 'running' || projected.status === 'waiting') covered.add(row.threadId)
+      else finished.add(row.threadId)
+    }
     items.push(projected)
   }
   for (const supplement of input.supplements) {
     if (covered.has(supplement.threadId) || supplement.archived) continue
     const projected = projectSupplement(supplement, input)
-    if (projected) items.push(projected)
+    if (!projected) continue
+    if (finished.has(supplement.threadId) && (projected.status === 'review' || projected.status === 'failed')) continue
+    items.push(projected)
   }
   return {
     generation: input.generation,
@@ -56,10 +62,36 @@ export function semanticSnapshotKey(snapshot: PetActivitySnapshot): string {
 }
 
 export function petNotificationExpiresAtMs(item: PetActivityItem, nowMs = Date.now()): number {
-  // Awaken keeps a live run visible by refreshing its clock. A finished item
-  // still expires from the transition that produced it.
+  // A finished result stays until the person opens or dismisses it. Live work
+  // keeps refreshing its own clock so an active run does not time out underneath them.
+  if (item.status === 'review' || item.status === 'failed') return Number.POSITIVE_INFINITY
   if (item.status === 'running' || item.status === 'waiting') return nowMs + PET_NOTIFICATION_TTL_MS[item.status]
   return transitionMs(item) + PET_NOTIFICATION_TTL_MS[item.status]
+}
+
+export function latestAssistantPreview(blocks: readonly { kind: string; text?: string }[], max = 180): string {
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index]
+    if (block?.kind !== 'assistant' || typeof block.text !== 'string') continue
+    const text = block.text.replace(/\s+/g, ' ').trim()
+    if (!text) continue
+    return text.length > max ? `${text.slice(0, max).trimEnd()}…` : text
+  }
+  return ''
+}
+
+export function applyPetResultText(
+  items: readonly PetActivityItem[],
+  textFor: (threadId: string) => string | undefined
+): PetActivityItem[] {
+  let changed = false
+  const next = items.map((item) => {
+    const text = (textFor(item.threadId) ?? '').replace(/\s+/g, ' ').trim()
+    if (!text || text.length <= (item.subtitle?.trim().length ?? 0)) return item
+    changed = true
+    return { ...item, subtitle: text }
+  })
+  return changed ? next : items as PetActivityItem[]
 }
 
 export function earliestPetNotificationExpiry(items: readonly PetActivityItem[], nowMs: number): number | null {

@@ -6,13 +6,12 @@ export function PetWorkBubbles(props: {
   notifications: PetActivityItem[]
   mascotWidth: number
   expanded: boolean
-  selected: string | null
   editing: string | null
   drafts: Record<string, string>
   queued: Record<string, string>
   sending: ReadonlySet<string>
   errors: Record<string, string>
-  onToggle: (threadId: string) => void
+  onOpen: (item: PetActivityItem) => void
   onEdit: (threadId: string) => void
   onDraft: (threadId: string, value: string) => void
   onQueue: (threadId: string, prompt: string) => void
@@ -29,7 +28,6 @@ export function PetWorkBubbles(props: {
     >
       {visible.map((item) => {
         const id = item.threadId
-        const showActions = props.selected === id
         const queued = props.queued[id]
         return (
           <div key={item.key} className="pet-work-bubble">
@@ -37,8 +35,8 @@ export function PetWorkBubbles(props: {
               <button
                 type="button"
                 className="pet-work-bubble-content"
-                aria-expanded={props.expanded || showActions}
-                onClick={() => props.onToggle(id)}
+                aria-expanded={props.expanded}
+                onClick={() => props.onOpen(item)}
               >
                 <span className="pet-work-bubble-title">
                   {item.status === 'review' ? <ReviewMark /> : null}
@@ -48,21 +46,17 @@ export function PetWorkBubbles(props: {
                   {petBubbleBody({ status: item.status, stalled: item.stalled, subtitle: item.subtitle, queued, sending: props.sending.has(id) })}
                 </span>
               </button>
-              {showActions ? (
-                <>
-                  <button type="button" className="pet-round-action" aria-label="输入跟进消息" aria-pressed={props.editing === id} onClick={() => props.onEdit(id)}>
-                    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M20 5v5a4 4 0 0 1-4 4H4m5-5-5 5 5 5" />
-                    </svg>
-                  </button>
-                  {item.status === 'running' && item.turnId ? (
-                    <button type="button" className="pet-round-action" aria-label="终止当前运行" onClick={() => props.onStop(item)}>
-                      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" /></svg>
-                    </button>
-                  ) : null}
-                  <button type="button" className="pet-bubble-dismiss" aria-label="关闭气泡" onClick={(event) => props.onDismiss(item, event)}>×</button>
-                </>
+              <button type="button" className="pet-round-action" aria-label="输入跟进消息" aria-pressed={props.editing === id} onClick={() => props.onEdit(id)}>
+                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20 5v5a4 4 0 0 1-4 4H4m5-5-5 5 5 5" />
+                </svg>
+              </button>
+              {item.status === 'running' && item.turnId ? (
+                <button type="button" className="pet-round-action" aria-label="终止当前运行" onClick={() => props.onStop(item)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" /></svg>
+                </button>
               ) : null}
+              <button type="button" className="pet-bubble-dismiss" aria-label="关闭气泡" onClick={(event) => props.onDismiss(item, event)}>×</button>
             </div>
             {props.editing === id ? (
               <input
@@ -83,7 +77,7 @@ export function PetWorkBubbles(props: {
                 }}
               />
             ) : null}
-            {showActions && item.status === 'waiting' ? (
+            {item.status === 'waiting' ? (
               <button type="button" className="pet-bubble-collapse" onClick={() => props.onAnswer(item)}>在会话中回答</button>
             ) : null}
             {props.errors[id] ? <div className="pet-bubble-error" role="alert">{props.errors[id]}</div> : null}

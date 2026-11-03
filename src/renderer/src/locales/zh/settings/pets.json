@@ -20,6 +20,8 @@
   "petsOpenCodexDir": "打开 Codex 宠物目录",
   "petsSourceMissing": "原始宠物包已缺失",
   "petsReport": "{{failed}} 个失败，{{missing}} 个来源缺失",
+  "petsContextSettings": "设置",
+  "petsContextHide": "隐藏",
   "petsSource": {
     "kun-builtin": "内置",
     "kun-local": "本地",

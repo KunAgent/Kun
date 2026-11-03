@@ -1,5 +1,12 @@
 import { PET_DRAG_THRESHOLD_PX, PET_FIRST_AWAKE_TTL_MS, clampMascotWidth } from '@shared/pets'
 
+export type PetHitRect = { left: number; top: number; right: number; bottom: number }
+
+export function pointInsidePetHit(point: { x: number; y: number }, rect: PetHitRect | null): boolean {
+  if (!rect || rect.right <= rect.left || rect.bottom <= rect.top) return false
+  return point.x >= rect.left && point.x <= rect.right && point.y >= rect.top && point.y <= rect.bottom
+}
+
 export function classifyPointerGesture(input: {
   cancelled: boolean
   dx: number

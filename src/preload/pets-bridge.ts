@@ -24,6 +24,8 @@ export const petsPreloadApi: PetDesktopBridge = {
     return () => ipcRenderer.removeListener(PET_IPC.navigationRequested, wrapped)
   },
   takePendingNavigation: () => ipcRenderer.invoke(PET_IPC.navigationPending),
+  onPetSettingsRequested: (handler) => listen(PET_IPC.settingsRequested, handler),
+  takePendingSettings: () => ipcRenderer.invoke(PET_IPC.settingsPending),
   getPetInteraction: () => ipcRenderer.invoke(PET_IPC.interaction),
   onFollowUpRequested: (handler) => {
     const wrapped = (_event: Electron.IpcRendererEvent, value: Parameters<typeof handler>[0]): void => handler(value)

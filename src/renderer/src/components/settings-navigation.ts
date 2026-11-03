@@ -333,6 +333,7 @@ const ROUTE_SECTION_CATEGORIES: Record<SettingsRouteSection, SettingsCategory> =
   mcp: 'mcp',
   shortcuts: 'shortcuts',
   easterEgg: 'easterEgg',
+  pets: 'pets',
   claw: 'claw',
   updates: 'updates',
   terminal: 'terminal',

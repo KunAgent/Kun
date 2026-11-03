@@ -13,7 +13,8 @@ import { frameAtElapsedMs, staticFrame } from './pets/pet-animation'
 import { acceptPetSnapshot, earliestPetNotificationExpiry, visiblePetNotifications } from './pets/pet-activity'
 import { PetWorkBubbles } from './pets/pet-bubble'
 import { effectivePetBusinessState, nextDragDirection, resolveOverlayAnimationState, type PetDragDirection } from './pets/pet-overlay-state'
-import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, welcomeUntil } from './pets/pet-pointer'
+import { petContextMenuLabels } from './pets/pet-menu-labels'
+import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, pointInsidePetHit, welcomeUntil } from './pets/pet-pointer'
 import './pet-overlay.css'
 
 function PetOverlayApp(): React.JSX.Element {
@@ -24,10 +25,10 @@ function PetOverlayApp(): React.JSX.Element {
   const [now, setNow] = useState(() => Date.now())
   const [welcome, setWelcome] = useState<number | null>(null)
   const [hover, setHover] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dragDirection, setDragDirection] = useState<PetDragDirection>('right')
   const [expanded, setExpanded] = useState(false)
-  const [selected, setSelected] = useState<string | null>(null)
   const [editing, setEditing] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [queued, setQueued] = useState<Record<string, string>>({})
@@ -40,6 +41,9 @@ function PetOverlayApp(): React.JSX.Element {
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
   const hitRef = useRef<HTMLDivElement | null>(null)
   const started = useRef(0)
+  const draggingRef = useRef(false)
+  const interactiveRef = useRef(false)
+  draggingRef.current = dragging
 
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
@@ -64,15 +68,46 @@ function PetOverlayApp(): React.JSX.Element {
     })
     const stopFocus = bridge.onMainWindowFocused(() => {
       setExpanded(false)
-      setSelected(null)
       setEditing(null)
+      setMenuOpen(false)
     })
     return () => { cancelled = true; stopBootstrap(); stopActivity(); stopFocus(); media?.removeEventListener('change', onChange) }
   }, [bridge])
 
   useEffect(() => {
-    bridge.setPointerInteractive(hover || dragging || expanded || editing !== null)
-  }, [bridge, hover, dragging, expanded, editing])
+    const wants = hover || dragging || expanded || editing !== null || menuOpen
+    if (interactiveRef.current === wants) return
+    interactiveRef.current = wants
+    bridge.setPointerInteractive(wants)
+  }, [bridge, hover, dragging, expanded, editing, menuOpen])
+
+  useEffect(() => {
+    let leaveTimer = 0
+    const onMove = (event: MouseEvent): void => {
+      const hit = hitRef.current
+      const target = event.target
+      const inside = pointInsidePetHit(
+        { x: event.clientX, y: event.clientY },
+        hit ? hit.getBoundingClientRect() : null
+      ) || (target instanceof Element && Boolean(target.closest('.pet-hit')))
+      if (inside || draggingRef.current) {
+        window.clearTimeout(leaveTimer)
+        if (!interactiveRef.current) {
+          interactiveRef.current = true
+          bridge.setPointerInteractive(true)
+        }
+        setHover(true)
+        return
+      }
+      window.clearTimeout(leaveTimer)
+      leaveTimer = window.setTimeout(() => setHover(false), 180)
+    }
+    window.addEventListener('mousemove', onMove, true)
+    return () => {
+      window.clearTimeout(leaveTimer)
+      window.removeEventListener('mousemove', onMove, true)
+    }
+  }, [bridge])
 
   useEffect(() => {
     const element = hitRef.current
@@ -115,8 +150,36 @@ function PetOverlayApp(): React.JSX.Element {
   const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
   const rows = petSheetRowsForVersion(version)
 
+  useEffect(() => {
+    if (!menuOpen) return undefined
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopPropagation()
+      setMenuOpen(false)
+    }
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target
+      if (target instanceof Element && target.closest('.pet-menu, .pet-sprite')) return
+      setMenuOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('pointerdown', onPointerDown)
+    }
+  }, [menuOpen])
+  useEffect(() => {
+    if (!menuOpen || hover) return undefined
+    const timer = window.setTimeout(() => setMenuOpen(false), 280)
+    return () => window.clearTimeout(timer)
+  }, [menuOpen, hover])
+
+  const menuLabels = petContextMenuLabels(window.navigator?.language ?? 'en')
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>): void => {
     if (event.button !== 0) return
+    setMenuOpen(false)
     event.currentTarget.setPointerCapture(event.pointerId)
     dragOrigin.current = { x: event.screenX, y: event.screenY }
     bridge.beginDrag({ x: event.screenX, y: event.screenY })
@@ -194,27 +257,24 @@ function PetOverlayApp(): React.JSX.Element {
 
   return (
     <div className="pet-overlay">
-      <div className={`pet-hit${active ? ' pet-hit-with-bubble' : ''}`} ref={hitRef} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
+      <div className={`pet-hit${active ? ' pet-hit-with-bubble' : ''}`} ref={hitRef}>
         {bootstrap?.interactionNote ? <p className="pet-note">{bootstrap.interactionNote}</p> : null}
         {active ? (
           <PetWorkBubbles
             notifications={notifications}
             mascotWidth={width}
             expanded={expanded}
-            selected={selected}
             editing={editing}
             drafts={drafts}
             queued={queued}
             sending={sending}
             errors={errors}
-            onToggle={(threadId) => {
+            onOpen={(item) => {
               if (!expanded && notifications.length > 1) {
                 setExpanded(true)
                 return
               }
-              const showActions = selected === threadId
-              setSelected(showActions ? null : threadId)
-              if (editing !== threadId || showActions) setEditing(null)
+              void bridge.performAction({ type: 'open', threadId: item.threadId, unitId: item.unitId, roomId: item.roomId })
             }}
             onEdit={(threadId) => setEditing(editing === threadId ? null : threadId)}
             onDraft={(threadId, value) => setDrafts((current) => ({ ...current, [threadId]: value }))}
@@ -239,15 +299,26 @@ function PetOverlayApp(): React.JSX.Element {
             }}
             onCollapse={() => {
               setExpanded(false)
-              setSelected(null)
               setEditing(null)
             }}
           />
+        ) : null}
+        {menuOpen ? (
+          <div className="pet-menu" role="menu" data-pet-menu onContextMenu={(event) => event.preventDefault()}>
+            <button type="button" role="menuitem" className="pet-menu-item" data-pet-menu-settings onClick={() => { setMenuOpen(false); bridge.openPetSettings() }}>
+              {menuLabels.settings}
+            </button>
+            <button type="button" role="menuitem" className="pet-menu-item" data-pet-menu-hide onClick={() => { setMenuOpen(false); void bridge.closeOverlay() }}>
+              {menuLabels.hide}
+            </button>
+          </div>
         ) : null}
         <button
           type="button"
           className="pet-sprite"
           aria-label={bootstrap?.displayName ?? 'Desktop pet'}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
           style={{
             width,
             height,
@@ -259,7 +330,11 @@ function PetOverlayApp(): React.JSX.Element {
           onPointerMove={onPointerMove}
           onPointerUp={(event) => finishPointer(event, false)}
           onPointerCancel={(event) => finishPointer(event, true)}
-          onKeyDown={(event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }}
+          onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setMenuOpen((open) => !open) }}
+          onKeyDown={(event) => {
+            if (menuOpen && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return }
+            if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) }
+          }}
         />
       </div>
     </div>

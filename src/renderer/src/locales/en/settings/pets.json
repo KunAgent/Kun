@@ -20,6 +20,8 @@
   "petsOpenCodexDir": "Open Codex pets folder",
   "petsSourceMissing": "Original package missing",
   "petsReport": "{{failed}} failed, {{missing}} missing",
+  "petsContextSettings": "Settings",
+  "petsContextHide": "Hide",
   "petsSource": {
     "kun-builtin": "Built-in",
     "kun-local": "Local",

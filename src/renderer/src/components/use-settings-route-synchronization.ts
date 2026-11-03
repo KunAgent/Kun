@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import type { SettingsRouteSection } from '../store/chat-store'
+import { PET_OPEN_SETTINGS_EVENT } from '../pets/pet-navigation'
 import { settingsCategoryForRouteSection } from './settings-navigation'
 
 /**
@@ -15,4 +16,12 @@ export function useSettingsRouteSynchronization(scope: Record<string, any>): voi
     setCategory(settingsCategoryForRouteSection(settingsSection))
     if (settingsSection && settingsSection !== 'general') markArrival?.()
   }, [settingsSection])
+  useEffect(() => {
+    const openPets = (): void => {
+      setCategory('pets')
+      markArrival?.()
+    }
+    window.addEventListener(PET_OPEN_SETTINGS_EVENT, openPets)
+    return () => window.removeEventListener(PET_OPEN_SETTINGS_EVENT, openPets)
+  }, [setCategory, markArrival])
 }

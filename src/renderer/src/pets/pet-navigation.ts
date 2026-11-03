@@ -1,5 +1,7 @@
 import type { PetActionRequest } from '@shared/pets'
 
+export const PET_OPEN_SETTINGS_EVENT = 'kun-pet-open-settings'
+
 export type PetNavigationResult =
   | { ok: true; threadId: string }
   | { ok: false; reason: 'missing' }

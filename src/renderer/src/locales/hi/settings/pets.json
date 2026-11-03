@@ -20,6 +20,8 @@
   "petsOpenCodexDir": "Codex पालतू फ़ोल्डर खोलें",
   "petsSourceMissing": "मूल पैकेज गायब है",
   "petsReport": "{{failed}} विफल, {{missing}} गायब",
+  "petsContextSettings": "सेटिंग्स",
+  "petsContextHide": "छिपाएँ",
   "petsSource": {
     "kun-builtin": "अंतर्निहित",
     "kun-local": "स्थानीय",
