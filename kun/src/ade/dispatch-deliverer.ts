@@ -202,16 +202,25 @@ export class DispatchDeliverer {
     return { accepted: false, failureReason: reason }
   }
 
-  private async notifyFailure(dispatch: DispatchRecord): Promise<void> {
-    if (!dispatch.failureReason) return
+  async notifyFailure(dispatch: DispatchRecord): Promise<void> {
+    if (dispatch.state !== 'failed' || !dispatch.failureReason) return
     const worker = await this.deps.teams.worker(dispatch.teamId, dispatch.workerId)
     if (worker && (worker.control === 'user' || worker.state !== 'active')) return
+    if (!worker) {
+      const intent = dispatch.dispatchIntentId ? await this.deps.agentDispatchService?.get(dispatch.dispatchIntentId) : undefined
+      if (intent?.cancellationRequested || intent?.takenOver) return
+      const source = await this.deps.threads.get(dispatch.teamId)
+      if (!source || source.status === 'archived' || source.status === 'deleted') return
+      const turn = source.turns.find(turn => turn.id === dispatch.parentTurnId)
+      if (turn?.status === 'aborted') return
+    }
     await this.deps.notices?.enqueue({
       noticeId: `ntc_${dispatch.dispatchId}`,
       teamId: dispatch.teamId,
       workerId: dispatch.workerId,
       parentTurnId: dispatch.parentTurnId,
       dispatchId: dispatch.dispatchId,
+      ...(dispatch.dispatchIntentId ? { dispatchIntentId: dispatch.dispatchIntentId } : {}),
       kind: 'dispatch_failed',
       title: dispatch.title,
       detail: dispatch.failureReason,

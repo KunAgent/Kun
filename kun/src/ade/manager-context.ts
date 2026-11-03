@@ -1,3 +1,4 @@
+import { capacityForTeam } from './team-execution-policy.js'
 /**
  * ADE manager per-turn context:
  * a length-bounded dynamic-context block injected after the stable prefix
@@ -30,6 +31,8 @@ export type AdeManagerContextDeps = {
   dispatchIntents?: { list(threadId: string): Promise<AgentDispatchIntent[]> }
   /** The user's Agent/model preferences for new work, read live from settings. */
   dispatchPreference?: () => string | undefined
+  capacity?: (threadId: string) => Promise<import('../contracts/ade.js').WorkerCapacity>
+  language?: () => string | undefined
   nowMs?: () => number
 }
 
@@ -179,6 +182,10 @@ export function createAdeManagerContext(
     ])
     const canStartNewWork = newWorkAllowed !== false && deps.canStartNewWork?.() !== false
     const sections: string[] = [canStartNewWork ? ROLE_GUIDANCE : EXISTING_TEAM_GUIDANCE]
+    const capacity = deps.capacity ? await deps.capacity(threadId) : capacityForTeam(team)
+    sections.push(deps.language?.()?.toLowerCase().startsWith('zh')
+      ? `Worker 容量：${capacity.active}/${capacity.limit}，可用 ${capacity.available}。此快照不预留名额，启动时复核。`
+      : `Worker capacity: ${capacity.active}/${capacity.limit} active; ${capacity.available} available. Snapshot only; admission rechecks capacity.`)
     const preference = canStartNewWork ? dispatchPreferenceSection(deps.dispatchPreference?.()) : ''
     if (preference) sections.push(preference)
     if (team && team.status === 'active') {

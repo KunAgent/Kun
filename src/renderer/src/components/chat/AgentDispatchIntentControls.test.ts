@@ -26,6 +26,15 @@ afterEach(async () => {
 })
 
 describe('Agent dispatch intervention controls', () => {
+  it.each(['Team worker capacity limit is full (8/8); no worker was created.',
+    '团队 worker 名额已满（8/8），未创建 worker。'])('renders the prelaunch refusal in the card: %s', async error => {
+    state.intent = { ...fixture('failed'), error }
+    await act(async () => { renderer = create(createElement(AgentDispatchIntentControls, { intentId: 'intent', showStatus: false })) })
+    expect(renderer!.root.findByProps({ role: 'alert' }).children).toContain(error)
+    expect(renderer!.root.findAllByType('button')).toHaveLength(0)
+    expect(state.act).not.toHaveBeenCalled()
+  })
+
   it('displays the host deadline without executing from the renderer', async () => {
     await act(async () => { renderer = create(createElement(AgentDispatchIntentControls, { intentId: 'intent' })) })
     expect(JSON.stringify(renderer!.toJSON())).toContain('60s')

@@ -78,6 +78,15 @@ async function render(): Promise<string> {
 }
 
 describe('Agent dispatch card', () => {
+  it.each(['Team worker capacity limit is full (8/8); no worker was created.',
+    '团队 worker 名额已满（8/8），未创建 worker。'])('shows prelaunch refusal without a running worker: %s', async error => {
+    state.intent = fixture({ state: 'failed', error, target: { threadId: 'parent', workerIds: ['preallocated'], dispatchIds: ['refused'] } })
+    const text = await render()
+    expect(renderer!.root.findByType(AgentDispatchIntentControls).props.initial.error).toBe(error)
+    expect(text).not.toContain('dispatchIntent.worker.running')
+    expect(preview).not.toHaveBeenCalled()
+  })
+
   const header = () => renderer!.root.findByType('header')
   const headerIcons = () => header().findAll((node) => typeof node.type === 'string' && node.props['data-agent-icon'])
 

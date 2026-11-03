@@ -1,3 +1,5 @@
+import { withAdeTeamMutex } from './ade-file.js'
+import { workerCapacity, workerLimitReport } from './team-execution-policy.js'
 import { newManagerWorkRefusal } from './new-work-admission.js'
 import { z } from 'zod'
 import {
@@ -100,11 +102,8 @@ export class ReviewRequests {
         ? '该 worker 不在此团队中。'
         : 'That worker is not in this team.')
     }
-    if (team.workers.filter((entry) => entry.state === 'active').length >= team.limits.hardWorkers) {
-      return this.refuse('worker_limit', language === 'zh'
-        ? `已达到 worker 数量上限（${team.limits.hardWorkers}），未创建审查者。`
-        : `Worker limit reached (${team.limits.hardWorkers}); no reviewer was created.`)
-    }
+    const capacity = await workerCapacity(this.deps, ctx.threadId)
+    if (!capacity.available) return this.refuse('worker_limit', workerLimitReport(capacity, language))
     const reviewed = await this.reviewedDispatch(team.teamId, input)
     if ('error' in reviewed) {
       const message = {
@@ -205,7 +204,13 @@ export class ReviewRequests {
       state: 'active',
       createdAt: now
     }
-    await this.deps.teams.upsertWorker(team.teamId, reviewer)
+    const refusal = await withAdeTeamMutex(team.teamId, async () => {
+      const capacity = await workerCapacity(this.deps, ctx.threadId)
+      if (!capacity.available) return this.refuse('worker_limit', workerLimitReport(capacity, language))
+      await this.deps.teams.upsertWorker(team.teamId, reviewer)
+      return undefined
+    })
+    if (refusal) return refusal
     this.deps.activity?.register({
       unitId: workerId,
       kind: 'worker',
