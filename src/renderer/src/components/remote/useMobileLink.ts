@@ -25,6 +25,9 @@ export function useMobileLink() {
   owner.current = accountId
   const membership = useAccountEntitlements(accountId)
   const mobileAllowed = membership.value?.features.mobileRemote === true
+  const membershipState = !signedIn ? 'signedOut' : membership.value
+    ? mobileAllowed ? 'active' : 'free'
+    : membership.failed ? 'unavailable' : 'loading'
   const membershipUnknown = zh ? '暂时无法确认会员权益，手机远控已暂停。请刷新会员状态后再试。' : 'Membership could not be verified. Remote access is paused. Refresh membership and try again.'
   const vipRequired = zh ? '手机远控需要 Plus、Pro 或 Max 会员。开通或续期后重新连接。' : 'Mobile remote access requires Plus, Pro or Max. Reconnect after activating or renewing membership.'
   const unavailable = zh
@@ -97,6 +100,7 @@ export function useMobileLink() {
     canStop,
     enabled,
     connectionError,
+    membershipState,
     mobileAllowed,
     refreshMembership: membership.refresh,
     retryVip: () => api && void action(() => api.reconnect(), 'start'),

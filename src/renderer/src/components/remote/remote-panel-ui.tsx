@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useState, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -7,7 +7,7 @@ export const REMOTE_INPUT_CLASS =
 export const REMOTE_BUTTON_CLASS =
   'inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg border border-ds-border-muted bg-ds-card px-2.5 text-[12px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-50'
 export const REMOTE_PRIMARY_BUTTON_CLASS =
-  'inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg bg-accent px-3 text-[12px] font-medium text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
+  'inline-flex h-7 shrink-0 items-center justify-center gap-1 rounded-lg bg-control px-3 text-[12px] font-medium text-control-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50'
 
 /** A captioned section: small heading above a white grouped list. */
 export function RemoteSection({
@@ -32,7 +32,7 @@ export function RemoteSection({
 
 export function RemoteGroup({ children }: { children: ReactNode }): ReactElement {
   return (
-    <div className="flex flex-col divide-y divide-ds-border-muted overflow-hidden rounded-xl border border-ds-border-muted bg-ds-card">
+    <div className="flex flex-col divide-y divide-ds-border-muted overflow-hidden rounded-2xl bg-ds-card">
       {children}
     </div>
   )
@@ -87,7 +87,7 @@ export function RemoteSwitch({
   checked: boolean
   disabled?: boolean
   label: string
-  onToggle: () => void
+  onToggle: (event: MouseEvent<HTMLButtonElement>) => void
 }): ReactElement {
   return (
     <button
@@ -98,12 +98,12 @@ export function RemoteSwitch({
       title={label}
       disabled={disabled}
       onClick={onToggle}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition ${
+      className={`relative h-5 w-9 shrink-0 rounded-full before:absolute before:-inset-x-1 before:-inset-y-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 motion-safe:transition ${
         checked ? 'bg-accent' : 'bg-[var(--ds-border-strong)]'
       } ${disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
     >
       <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow motion-safe:transition-all ${
           checked ? 'left-[18px]' : 'left-0.5'
         }`}
       />
