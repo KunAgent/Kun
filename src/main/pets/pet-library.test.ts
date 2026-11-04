@@ -181,6 +181,7 @@ describe('pet packages', () => {
       'nezukocoder:v1',
       'snowy:v1',
       'trae:v2',
+      'xiao-kun:v1',
       'yi-er:v1',
       'zodiac-pig:v1'
     ])
@@ -189,12 +190,12 @@ describe('pet packages', () => {
   it('loads the offline built-in pet from a packaged resource root', async () => {
     const root = await temp()
     const packaged = path.join(root, 'Resources', 'pets')
-    const source = path.resolve('resources/pets/anya')
+    const source = path.resolve('resources/pets/xiao-kun')
     await mkdir(packaged, { recursive: true })
     const { cp } = await import('node:fs/promises')
-    await cp(source, path.join(packaged, 'anya'), { recursive: true })
-    const validated = await validatePetPackage(path.join(packaged, 'anya'), 'anya')
-    expect(validated).toMatchObject({ sourceId: 'anya', spriteVersionNumber: 1 })
+    await cp(source, path.join(packaged, 'xiao-kun'), { recursive: true })
+    const validated = await validatePetPackage(path.join(packaged, 'xiao-kun'), 'xiao-kun')
+    expect(validated).toMatchObject({ sourceId: 'xiao-kun', spriteVersionNumber: 1 })
     const store = new PetStore(path.join(root, 'user', 'pets'))
     await store.initialize()
     const report = await refreshPetLibraries({
@@ -204,8 +205,10 @@ describe('pet packages', () => {
       codexHome: path.join(root, 'no-codex'),
       importCodexPets: false
     })
-    expect(report.imported.map((pet) => pet.sourceId)).toContain('anya')
-    expect(store.assetPath(petIdForSource('kun-builtin', 'anya'))).toBeTruthy()
+    expect(report.imported.map((pet) => pet.sourceId)).toContain('xiao-kun')
+    await store.applyFirstRunDefault(true)
+    expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: true })
+    expect(store.assetPath(petIdForSource('kun-builtin', 'xiao-kun'))).toBeTruthy()
   })
 
   it('finds Codex pets through CODEX_HOME and packaged resource roots', () => {

@@ -65,6 +65,9 @@ import {
 } from './desktop-instance-identity'
 import { resolveManagedRuntimeStartupTarget } from './runtime/managed-runtime-startup-attach'
 import { join, resolve } from 'node:path'
+import { homedir } from 'node:os'
+import { detectAnalyticsInstallation } from './product-analytics/storage'
+import { settingsReadCandidates } from './settings-file-paths'
 import { attachModelsDevDiskCache } from './models-dev-catalog'
 import { recoverUpdateBeforeRuntimeStart } from './update-bootstrap-recovery'
 import { installHostPowerRecovery } from './host-power-recovery'
@@ -238,6 +241,12 @@ export function startMainApp(): Promise<void> {
       await explainConflictingDesktopInstance()
       return
     }
+    // Capture this before Chromium storage, migrations, or the Manager create
+    // data. A development profile still shares the production installation.
+    const installation = await detectAnalyticsInstallation(app.getPath('userData'), join(homedir(), '.kun'), [
+      join(homedir(), '.deepseekgui'),
+      ...settingsReadCandidates(join(app.getPath('appData'), 'Kun'))
+    ])
     if (!runningClawScheduleMcpServer) publishDesktopInstanceIdentity()
     const disposeHostPowerRecovery = installHostPowerRecovery()
     app.once('before-quit', disposeHostPowerRecovery)
@@ -262,6 +271,7 @@ export function startMainApp(): Promise<void> {
         mainState.startupState.transition('services_starting', 'Preparing the desktop-owned Kun Runtime...')
         return initializeMainServices({
           productionSettingsPath: shell.productionSettingsPath,
+          isFreshInstall: installation === 'fresh',
           onPhase: (phase, detail) => {
             try {
               mainState.startupState.transition(phase, detail)

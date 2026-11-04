@@ -4,13 +4,14 @@ const assert = require('node:assert/strict')
 const { readdirSync, readFileSync, statSync } = require('node:fs')
 const { join } = require('node:path')
 const test = require('node:test')
+const { createHash } = require('node:crypto')
 const sharp = require('sharp')
 
 const petsRoot = join(__dirname, '..', 'resources', 'pets')
 const MIB = 1024 * 1024
 // These already-compressed images enter both DMG and ZIP nearly unchanged.
 // Keep enough headroom under the existing macOS arm64 artifact budgets.
-const BUNDLED_PETS_BUDGET = 6 * MIB
+const BUNDLED_PETS_BUDGET = 7 * MIB
 
 function bytesUnder(dir) {
   return readdirSync(dir, { withFileTypes: true }).reduce((total, entry) => {
@@ -22,7 +23,7 @@ function bytesUnder(dir) {
 test('bundled pet assets fit within the macOS installer allowance', () => {
   const bytes = bytesUnder(petsRoot)
   assert(bytes <= BUNDLED_PETS_BUDGET,
-    `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 6 MiB. Optimize new sheets before packaging.`)
+    `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 7 MiB. Optimize new sheets before packaging.`)
 })
 
 test('every bundled pet retains a decodable transparent Codex sprite layout', async () => {
@@ -38,5 +39,43 @@ test('every bundled pet retains a decodable transparent Codex sprite layout', as
     assert.equal(metadata.height, version === 2 ? 2288 : 1872, entry.name)
     assert.equal(metadata.hasAlpha, true, entry.name)
     await image.raw().toBuffer()
+  }
+})
+
+test('Xiao Kun fits its allowance and has all 57 animation frames with clear cell margins', async () => {
+  const dir = join(petsRoot, 'xiao-kun')
+  assert(bytesUnder(dir) <= MIB, 'Xiao Kun must fit within 1 MiB')
+  const manifest = JSON.parse(readFileSync(join(dir, 'pet.json'), 'utf8'))
+  assert.equal(manifest.id, 'xiao-kun')
+  assert.equal(manifest.spriteVersionNumber, 1)
+  const { data, info } = await sharp(join(dir, manifest.spritesheetPath)).ensureAlpha().raw()
+    .toBuffer({ resolveWithObject: true })
+  const frameCounts = [6, 8, 8, 4, 5, 8, 6, 6, 6]
+  for (let row = 0; row < frameCounts.length; row++) {
+    const distinct = new Set()
+    for (let col = 0; col < 8; col++) {
+      const label = `Xiao Kun row ${row + 1}, frame ${col + 1}`
+      const frame = Buffer.alloc(192 * 208 * 4)
+      let visible = 0
+      for (let y = 0; y < 208; y++) {
+        const offset = ((row * 208 + y) * info.width + col * 192) * 4
+        data.copy(frame, y * 192 * 4, offset, offset + 192 * 4)
+        for (let x = 0; x < 192; x++) {
+          const alpha = data[offset + x * 4 + 3]
+          if (alpha > 16) visible++
+          if (x < 6 || x >= 186 || y < 6 || y >= 202) {
+            assert(alpha <= 16, `${label}: artwork touches cell margin`)
+          }
+        }
+      }
+      if (col >= frameCounts[row]) {
+        assert.equal(visible, 0, `${label}: unused cell must be transparent`)
+      } else {
+        assert(visible > 192 * 208 * 0.15, `${label}: missing or undersized artwork`)
+        assert(visible < 192 * 208 * 0.8, `${label}: opaque background`)
+        distinct.add(createHash('sha256').update(frame).digest('hex'))
+      }
+    }
+    assert(distinct.size >= 3, `Xiao Kun row ${row + 1}: needs distinct animation poses`)
   }
 })

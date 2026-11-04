@@ -10,7 +10,7 @@ import { askPetFollowUp, settlePetFollowUp } from './pet-follow-up'
 import { detectCodexHome, localPetsRoot, refreshPetLibraries, resolveBuiltinPetsRoot } from './pet-importer'
 import { petEventAllowed, petIpcHandlers, type PetIpcEvent } from './pet-ipc'
 import { bindPetAssetReader } from './pet-protocol'
-import { PetStore } from './pet-store'
+import { DEFAULT_BUILTIN_PET_ID, PetStore } from './pet-store'
 import { petRendererTarget } from './pet-renderer-target'
 import { PetWindowController, type PetWindowLike } from './pet-window'
 
@@ -21,12 +21,12 @@ export type DesktopPets = {
   noteMainWindow(window: BrowserWindow | null): void
 }
 
-export async function startDesktopPets(): Promise<DesktopPets> {
+export async function startDesktopPets(options: { isFreshInstall?: boolean } = {}): Promise<DesktopPets> {
   if (active) return active
   const store = new PetStore(path.join(app.getPath('userData'), 'pets'))
   await store.initialize()
   const pets = new DesktopPetRuntime(store)
-  await pets.start()
+  await pets.start(options.isFreshInstall === true)
   active = pets
   pets.noteMainWindow(mainState.mainWindow)
   return pets
@@ -84,7 +84,7 @@ class DesktopPetRuntime implements DesktopPets {
     }
   }
 
-  async start(): Promise<void> {
+  async start(isFreshInstall: boolean): Promise<void> {
     bindPetAssetReader({ lookup: (id) => this.store.assetPath(id), libraryRoot: this.store.libraryRoot() })
     this.controller = new PetWindowController({
       platform: process.platform,
@@ -117,8 +117,7 @@ class DesktopPetRuntime implements DesktopPets {
         ipcMain.handle(channel, (event, ...args) => handler(toEvent(event, this.classify(event.sender.id)), ...args))
       }
     }
-    await this.refresh()
-    if (this.store.getSettings().overlayOpen) await this.controller.openAtSaved(savedPlacement(this.store))
+    await this.refresh(isFreshInstall)
   }
 
   async shutdown(): Promise<void> {
@@ -232,7 +231,7 @@ class DesktopPetRuntime implements DesktopPets {
     this.mainWindow.show()
   }
 
-  private async refresh() {
+  private async refresh(isFreshInstall = false) {
     const settings = this.store.getSettings()
     const report = await refreshPetLibraries({
       store: this.store,
@@ -241,6 +240,9 @@ class DesktopPetRuntime implements DesktopPets {
       codexHome: detectCodexHome(),
       importCodexPets: settings.importCodexPets
     })
+    const defaultImported = [...report.imported, ...report.updated, ...report.unchanged]
+      .some((pet) => pet.id === DEFAULT_BUILTIN_PET_ID)
+    if (defaultImported) await this.store.applyFirstRunDefault(isFreshInstall)
     this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
     await this.syncOverlay()
     return report
@@ -248,7 +250,7 @@ class DesktopPetRuntime implements DesktopPets {
 
   private async syncOverlay(): Promise<void> {
     const settings = this.store.getSettings()
-    if (!settings.overlayOpen) {
+    if (!settings.overlayOpen || !settings.selectedPetId || !this.store.getManifest(settings.selectedPetId)) {
       this.controller?.close()
       return
     }

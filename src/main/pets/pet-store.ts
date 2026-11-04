@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
   boundDismissedKeys
@@ -20,11 +20,13 @@ import { spritesheetFileName } from './pet-validator'
 
 const SETTINGS_FILE = 'settings.json'
 const LIBRARY_DIR = 'library'
+export const DEFAULT_BUILTIN_PET_ID = petIdForSource('kun-builtin', 'xiao-kun')
 
 export class PetStore {
   private settings: PetSettings = defaultPetSettings()
   private catalog = new Map<string, PetManifest>()
   private writeChain: Promise<void> = Promise.resolve()
+  private settingsMissing = false
   private readonly settingsPath: string
   private readonly libraryDir: string
 
@@ -66,6 +68,17 @@ export class PetStore {
 
   libraryRoot(): string {
     return this.libraryDir
+  }
+
+  async applyFirstRunDefault(isFreshInstall: boolean): Promise<void> {
+    await this.enqueue(async () => {
+      if (!isFreshInstall || !this.settingsMissing) return
+      const pet = this.catalog.get(DEFAULT_BUILTIN_PET_ID)
+      if (!pet || pet.sourceMissing) return
+      this.settings.selectedPetId = pet.id
+      this.settings.overlayOpen = true
+      await this.writeSettings()
+    })
   }
 
   async selectPet(petId: string | null): Promise<PetSettings> {
@@ -258,11 +271,17 @@ export class PetStore {
   }
 
   private async readSettings(): Promise<PetSettings> {
+    this.settingsMissing = false
     try {
       const text = await readFile(this.settingsPath, 'utf8')
       return normalizeSettings(JSON.parse(text))
     } catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
+      if (code === 'ENOENT') {
+        // A dangling settings symlink is existing data, not a new profile.
+        try { await lstat(this.settingsPath) }
+        catch (missing) { this.settingsMissing = (missing as NodeJS.ErrnoException).code === 'ENOENT' }
+      }
       if (code !== 'ENOENT') {
         const backup = `${this.settingsPath}.corrupt-${Date.now()}`
         await rename(this.settingsPath, backup).catch(() => undefined)
@@ -276,6 +295,8 @@ export class PetStore {
     const temporary = `${this.settingsPath}.${randomUUID()}.tmp`
     await writeFile(temporary, `${JSON.stringify(this.settings, null, 2)}\n`, 'utf8')
     await rename(temporary, this.settingsPath)
+    // Any explicit settings write wins over pending first-run defaults.
+    this.settingsMissing = false
   }
 
   private async writeManifest(manifest: PetManifest): Promise<void> {
