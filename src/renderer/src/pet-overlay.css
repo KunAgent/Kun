@@ -3,6 +3,7 @@ html, body, #root { margin: 0; width: 100%; height: 100%; background: transparen
 .pet-overlay { position: relative; width: 100%; height: 100%; background: transparent; pointer-events: none; }
 .pet-hit { position: absolute; right: 0; bottom: 0; pointer-events: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 7px; padding: 14px 8px 8px 10px; background: transparent; }
 .pet-hit-with-bubble { width: 330px; }
+.pet-hit-menu-open { min-width: max-content; }
 .pet-sprite {
   appearance: none;
   -webkit-appearance: none;
@@ -16,10 +17,16 @@ html, body, #root { margin: 0; width: 100%; height: 100%; background: transparen
   cursor: grab;
 }
 .pet-sprite:active { cursor: grabbing; }
-.pet-menu { display: flex; flex-direction: column; gap: 2px; min-width: 112px; padding: 4px; border: 1px solid rgba(0, 0, 0, 0.06); border-radius: 14px; background: rgba(252, 252, 252, 0.98); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.16); }
-.pet-menu-item { appearance: none; margin: 0; border: 0; border-radius: 10px; padding: 7px 12px; background: transparent; color: #18181b; font: 600 13px/18px system-ui, sans-serif; text-align: left; cursor: pointer; }
-.pet-menu-item:hover, .pet-menu-item:focus-visible { background: #ececee; outline: none; }
-.pet-note { max-width: 220px; color: #d7dbe2; font: 11px/1.3 sans-serif; }
+.pet-character-stage { display: grid; grid-template-columns: var(--pet-width); grid-template-rows: var(--pet-height); align-items: center; }
+.pet-character-stage > .pet-sprite { grid-area: 1 / 1 / 2 / -1; justify-self: start; }
+.pet-character-stage-menu-open { grid-template-columns: calc(var(--pet-width) * .42) max-content; }
+.pet-menu { z-index: 2; grid-area: 1 / 2; align-self: center; display: flex; flex-direction: column; gap: 2px; min-width: 136px; max-width: 208px; padding: 5px; border: 1px solid rgba(0, 0, 0, .14); border-radius: 14px; background: rgba(252, 252, 254, .82); -webkit-backdrop-filter: blur(18px) saturate(1.35); backdrop-filter: blur(18px) saturate(1.35); box-shadow: 0 8px 24px rgba(0, 0, 0, .18), inset 0 1px 0 rgba(255, 255, 255, .9); }
+.pet-menu-item { appearance: none; display: flex; align-items: center; gap: 9px; margin: 0; width: 100%; border: 0; border-radius: 9px; padding: 5px 8px; background: transparent; color: #252529; font: 400 14px/20px system-ui, sans-serif; text-align: left; cursor: pointer; }
+.pet-menu-item svg { width: 18px; height: 18px; flex: none; }
+.pet-menu-item span { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.pet-menu-item:hover { background: rgba(0, 0, 0, .055); }
+.pet-menu-item:focus-visible { background: rgba(114, 112, 156, .12); outline: none; box-shadow: inset 0 0 0 1px rgba(114, 112, 156, .18); }
+.pet-note { max-width: 220px; max-height: 48px; margin: 0; overflow-y: auto; color: #d7dbe2; font: 11px/1.3 sans-serif; }
 .pet-bubble-list { position: relative; width: 100%; max-width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; overflow-y: auto; scrollbar-width: thin; padding: 4px 4px 8px; }
 .pet-bubble-stack { padding-bottom: 21px; }
 .pet-bubble-stack::before { content: ""; position: absolute; inset: 15px 15px 8px; border-radius: 30px; background: #e6e6e8; border: 1px solid rgba(255, 255, 255, 0.85); box-shadow: 0 5px 9px rgba(0, 0, 0, 0.13); pointer-events: none; }

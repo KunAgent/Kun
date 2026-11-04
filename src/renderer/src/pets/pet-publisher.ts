@@ -11,6 +11,8 @@ import { applyPetResultText, latestAssistantPreview, petWorkProcessText, present
 import { loadPetConversationThreads, petConversationSupplements } from './pet-conversation-threads'
 import { PET_OPEN_SETTINGS_EVENT, queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import type { PetActionRequest } from '@shared/pets'
+import { currentPetThread, petSnapshotForDelivery } from './pet-publisher-snapshot'
+import { deliverPetChat } from './pet-new-chat'
 
 export function petBubbleAllowed(input: {
   preferenceEnabled: boolean
@@ -19,7 +21,6 @@ export function petBubbleAllowed(input: {
 }
 
 let stopPublisher: (() => void) | null = null
-let lastKey = ''
 let navigationMessage: string | null = null
 let preferences = { waiting: true, failed: true, done: true, stalled: true }
 let conversationSupplements: PetThreadSupplement[] = []
@@ -37,20 +38,27 @@ export function startPetActivityPublisher(): void {
   let overlayOpen = false
   let active = true
   let pending: PetActionRequest | null = null
+  let lastKey = ''
   const publish = (): void => {
     if (!active) return
     setPetOverlayActivityLive(overlayOpen)
     if (!overlayOpen) return
     refreshConversationThreads(publish)
     void Promise.resolve().then(() => {
+      if (!active || !overlayOpen) return
       const state = useChatStore.getState()
-      const rows = Object.values(useActivityStore.getState().rows)
+      const current = currentPetThread(state)
+      // A previous turn's row must not mask this turn while metadata catches up.
+      const rows = Object.values(useActivityStore.getState().rows).filter((row) =>
+        !current || row.threadId !== current.threadId || row.turnId === current.latestTurnId
+      )
       const projected = projectPetActivity({
         generation: activityFeedGeneration(),
         profileKey: window.kunGui.appEnvironment?.profilePath || 'desktop',
         rows,
         supplements: [
-          ...state.threads.map((thread) => ({
+          ...(current ? [current] : []),
+          ...state.threads.filter((thread) => thread.id !== current?.threadId).map((thread) => ({
             threadId: thread.id,
             title: thread.title,
             status: thread.status,
@@ -60,7 +68,7 @@ export function startPetActivityPublisher(): void {
             archived: thread.archived,
             roomId: thread.roomContext?.roomId
           })),
-          ...conversationSupplements
+          ...conversationSupplements.filter((thread) => thread.threadId !== current?.threadId)
         ],
         nowMs: Date.now(),
         bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) })
@@ -71,7 +79,7 @@ export function startPetActivityPublisher(): void {
         if (threadId === state.activeThreadId && livePreview && !state.busy) return livePreview
         return state.threads.find((thread) => thread.id === threadId)?.preview
       })
-      const snapshot = items === projected.items ? projected : { ...projected, items }
+      const snapshot = petSnapshotForDelivery({ ...projected, items }, state.activeThreadId)
       const key = semanticSnapshotKey(snapshot)
       if (key === lastKey) return
       lastKey = key
@@ -80,6 +88,8 @@ export function startPetActivityPublisher(): void {
   }
   const refreshSettings = (): void => {
     void pets.getPetSettings().then((settings) => {
+      if (!active) return
+      if (settings.overlayOpen && !overlayOpen) lastKey = ''
       overlayOpen = settings.overlayOpen
       publish()
     }).catch(() => undefined)
@@ -127,6 +137,17 @@ export function startPetActivityPublisher(): void {
       sendMessage: (prompt) => useChatStore.getState().sendMessage(prompt)
     }).then((result) => pets.completeFollowUp(request.requestId, result))
   })
+  let creatingChat = false
+  const unsubscribeChatRequest = pets.onChatRequested((request) => {
+    if (creatingChat) {
+      pets.completeChat(request.requestId, { ok: false, code: 'conflict', message: '正在发送上一条消息' })
+      return
+    }
+    creatingChat = true
+    void deliverPetChat(request.prompt, request.requestId, useChatStore.getState)
+      .then((result) => pets.completeChat(request.requestId, result))
+      .finally(() => { creatingChat = false })
+  })
   const onFocus = (): void => { ready = true; if (pending) { const next = pending; pending = null; void deliver(next) } }
   window.addEventListener('focus', onFocus)
   refreshSettings()
@@ -140,6 +161,7 @@ export function startPetActivityPublisher(): void {
     unsubscribeNavigation()
     unsubscribeSettings()
     unsubscribeFollowUp()
+    unsubscribeChatRequest()
     window.removeEventListener('kun-pet-settings-changed', refreshSettings)
     window.removeEventListener('focus', onFocus)
     setPetOverlayActivityLive(false)

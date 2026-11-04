@@ -171,4 +171,17 @@ describe('remembered Kun iOS relay', () => {
     await expect(preference.remember('../outside')).rejects.toThrow('INVALID_OWNER')
     expect(await preference.remembered('../outside')).toBe(false)
   })
+
+  it('waits for explicit device recovery after the server rejects a remembered device', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const f = fixture(signedIn('owner'))
+    await f.preference.remember('owner')
+    f.relay.enable.mockRejectedValue(new Error('DEVICE_AUTHORIZATION_REQUIRED'))
+    const resume = await f.launch()
+    await vi.waitFor(() => expect(f.relay.enable).toHaveBeenCalledTimes(1))
+    await vi.advanceTimersByTimeAsync(RESUME_RETRY_MS.reduce((sum, delay) => sum + delay, 0) * 2)
+    resume.recover()
+    expect(f.relay.enable).toHaveBeenCalledTimes(1)
+    resume.dispose()
+  })
 })

@@ -29,6 +29,15 @@ async function importPet(store: PetStore, sourceId = 'xiao-kun') {
 }
 
 describe('first-run desktop pet defaults', () => {
+  it('keeps collapsed notifications across restart without dismissing their tasks', async () => {
+    const { root, store } = await fixture()
+    await store.setBubblesCollapsed(true)
+    const restarted = new PetStore(root)
+    await restarted.initialize()
+    expect(restarted.getSettings()).toMatchObject({ bubblesCollapsed: true, dismissedNotificationKeys: [] })
+    await restarted.setBubblesCollapsed(false)
+    expect(restarted.getSettings().bubblesCollapsed).toBe(false)
+  })
   it('persists one available default and leaves its first greeting unconsumed', async () => {
     const { root, store } = await fixture()
     await importPet(store)

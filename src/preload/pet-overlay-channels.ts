@@ -19,5 +19,8 @@ export const PET_OVERLAY_IPC = {
   overlayWelcomed: 'kun:pets:overlay:welcomed',
   overlayOpenMain: 'kun:pets:overlay:open-main',
   overlayOpenSettings: 'kun:pets:overlay:open-settings',
-  overlayClose: 'kun:pets:overlay:close'
+  overlayClose: 'kun:pets:overlay:close',
+  overlayChat: 'kun:pets:overlay:chat',
+  overlayVoiceAvailable: 'kun:pets:overlay:voice-available',
+  overlayBubblesCollapsed: 'kun:pets:overlay:bubbles-collapsed'
 } as const

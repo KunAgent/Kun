@@ -175,6 +175,7 @@ describe('pet packages', () => {
       'dordor:v1',
       'gojo:v1',
       'goku:v1',
+      'ikun:v1',
       'kawaii-bear-puppy:v1',
       'lulu-capybara:v1',
       'nezuko:v1',
@@ -190,10 +191,11 @@ describe('pet packages', () => {
   it('loads the offline built-in pet from a packaged resource root', async () => {
     const root = await temp()
     const packaged = path.join(root, 'Resources', 'pets')
-    const source = path.resolve('resources/pets/xiao-kun')
     await mkdir(packaged, { recursive: true })
     const { cp } = await import('node:fs/promises')
-    await cp(source, path.join(packaged, 'xiao-kun'), { recursive: true })
+    for (const id of ['xiao-kun', 'ikun']) {
+      await cp(path.resolve('resources/pets', id), path.join(packaged, id), { recursive: true })
+    }
     const validated = await validatePetPackage(path.join(packaged, 'xiao-kun'), 'xiao-kun')
     expect(validated).toMatchObject({ sourceId: 'xiao-kun', spriteVersionNumber: 1 })
     const store = new PetStore(path.join(root, 'user', 'pets'))
@@ -206,9 +208,18 @@ describe('pet packages', () => {
       importCodexPets: false
     })
     expect(report.imported.map((pet) => pet.sourceId)).toContain('xiao-kun')
+    expect(store.listPets()).toContainEqual(expect.objectContaining({
+      id: 'kun:ikun', displayName: 'iKun', source: 'kun-builtin', available: true
+    }))
     await store.applyFirstRunDefault(true)
     expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: true })
     expect(store.assetPath(petIdForSource('kun-builtin', 'xiao-kun'))).toBeTruthy()
+    expect(store.assetPath(petIdForSource('kun-builtin', 'ikun'))).toBeTruthy()
+    await store.selectPet('kun:ikun')
+    const restarted = new PetStore(path.join(root, 'user', 'pets'))
+    await restarted.initialize()
+    await restarted.applyFirstRunDefault(true)
+    expect(restarted.getSettings()).toMatchObject({ selectedPetId: 'kun:ikun', overlayOpen: true })
   })
 
   it('finds Codex pets through CODEX_HOME and packaged resource roots', () => {

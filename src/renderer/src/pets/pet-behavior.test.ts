@@ -177,6 +177,16 @@ describe('pet activity projection', () => {
     expect(resolvePetThreadTarget({ request: { type: 'open', threadId: 'room-thread', roomId: 'room' }, knownThreadIds: new Set(['room-thread']) })).toEqual({ ok: true, threadId: 'room-thread' })
     expect(queuePetNavigation({ ready: false, request: { type: 'reply', threadId: 'room-thread' }, pending: null }).deliver).toBeNull()
   })
+
+  it('does not replace a newer event with an older bootstrap activity replay', () => {
+    const current = projectPetActivity({
+      generation: 1, profileKey: 'profile', nowMs: 2_000,
+      rows: [row({ state: 'done', lastMessagePreview: 'Image ready' })], supplements: []
+    })
+    const stale = { ...current, emittedAtMs: 1_000, items: [{ ...current.items[0], status: 'running' as const }] }
+    expect(acceptPetSnapshot(current, stale)).toBe(current)
+    expect(acceptPetSnapshot(stale, current)).toBe(current)
+  })
 })
 
 function row(overrides: Partial<ActivityRow>): ActivityRow {

@@ -20,3 +20,13 @@ it('free and unverified accounts cannot enable remote access', () => {
 it('membership loss never prevents stopping existing remote access', () => {
   expect(switchState(false, true).disabled).toBe(false)
 })
+
+it('offers device recovery only for a rejected, stopped device', () => {
+  const link = { api: {}, zh: false, account: { state: { status: 'authenticated' } }, signedIn: true,
+    state: { enabled: false, error: 'DEVICE_AUTHORIZATION_REQUIRED', pairings: [], grants: [] },
+    busy: null, starting: false, canStop: false, enabled: false, connectionError: '', mobileAllowed: true,
+    toggle() {}, retryVip() {}, refreshMembership() {}, resetIdentity() {} } as unknown as MobileLink
+  expect(renderToStaticMarkup(createElement(MobileChannelRow, { link }))).toContain('Reset remote device')
+  link.enabled = true
+  expect(renderToStaticMarkup(createElement(MobileChannelRow, { link }))).not.toContain('Reset remote device')
+})

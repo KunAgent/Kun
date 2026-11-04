@@ -81,6 +81,12 @@ export function MobileChannelRow({ link }: { link: MobileLink }): ReactElement |
       />
       {signedIn && !link.mobileAllowed ? <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={link.refreshMembership}>{zh ? '刷新会员状态' : 'Refresh membership'}</button>
         : ['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(state?.error ?? '') ? <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={link.retryVip}>{zh ? '会员已更新，重新连接' : 'Membership updated · reconnect'}</button> : null}
+      {signedIn && state?.error === 'DEVICE_AUTHORIZATION_REQUIRED' && !on ? (
+        <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)}
+          onClick={(event) => runTrustedUserActivation(event, link.resetIdentity)}>
+          {zh ? '重置远控设备' : 'Reset remote device'}
+        </button>
+      ) : null}
       {signedIn ? (
         <RemoteSwitch
           checked={on}

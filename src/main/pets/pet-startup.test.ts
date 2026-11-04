@@ -14,7 +14,8 @@ vi.mock('electron', () => ({
   app: { isPackaged: false, getPath: () => path.join(host.root, 'profile'), getAppPath: () => host.root },
   BrowserWindow: vi.fn(), screen: {}, shell: {},
   ipcMain: {
-    on: vi.fn(), handle: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),
+    on: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),
+    handle: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),
     removeHandler: (channel: string) => host.handlers.delete(channel), removeAllListeners: vi.fn()
   }
 }))
@@ -96,5 +97,26 @@ describe('desktop pet startup', () => {
     await copyDefault()
     await startDesktopPets()
     expect(host.open).not.toHaveBeenCalled()
+  })
+
+  it('includes current activity when a freshly loaded overlay requests its bootstrap', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({
+      isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const snapshot = {
+      generation: 1, profileKey: '/profile', emittedAtMs: 1_000,
+      items: [{ key: 'drawing:turn:running', generation: 1, status: 'running', threadId: 'drawing',
+        unitId: 'drawing', turnId: 'turn', stateSince: '2026-11-04T09:00:00.000Z', title: 'Drawing',
+        subtitle: 'Generating image', stalled: false, navigable: true, bubbleAllowed: true, updatedAtMs: 1_000 }]
+    }
+    const frame = {}
+    await host.handlers.get(PET_IPC.updateActivity)!({ sender: { id: 3, mainFrame: frame }, senderFrame: frame }, snapshot)
+    const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!({
+      sender: { id: 77, mainFrame: frame }, senderFrame: frame
+    }) as PetOverlayBootstrap
+    expect(bootstrap.activitySnapshot).toEqual(snapshot)
   })
 })

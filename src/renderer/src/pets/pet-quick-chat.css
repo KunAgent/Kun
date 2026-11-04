@@ -1,0 +1,25 @@
+.pet-companion { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 100%; }
+.pet-quick-chat { display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 100%; }
+.pet-quick-chat-open { width: 330px; }
+.pet-toolbar { display: inline-flex; align-items: center; padding: 6px; border: 1px solid rgba(255,255,255,.95); border-radius: 999px; background: rgba(252,252,252,.98); box-shadow: 0 4px 14px rgba(0,0,0,.1); }
+.pet-toolbar button { position: relative; display: grid; place-items: center; width: 42px; height: 30px; padding: 0; color: #26272b; background: none; border: 0; border-radius: 8px; cursor: pointer; }
+.pet-toolbar button + button { border-left: 1px solid #e7e7eb; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.pet-toolbar button:hover { background: #ededf1; }
+.pet-toolbar button:disabled { color: #a3a3ad; cursor: default; }
+.pet-toolbar button:focus-visible, .pet-quick-composer button:focus-visible { outline: 2px solid #a58be5; outline-offset: 2px; }
+.pet-toolbar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pet-toolbar button[data-recording='true'] { color: #db3a52; background: #fff0f2; }
+.pet-toolbar button[data-recording='true'] svg { animation: pet-voice-pulse .8s ease-in-out infinite alternate; }
+.pet-toolbar-count { position: absolute; top: -9px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; border: 2px solid #fff; background: #a47ce8; color: #fff; font: 600 10px/14px system-ui, sans-serif; }
+.pet-quick-composer { position: relative; display: flex; flex-wrap: wrap; align-items: center; width: 100%; min-width: 0; gap: 5px; padding: 7px 8px 7px 11px; border: 1px solid rgba(255,255,255,.95); border-radius: 24px; background: rgba(252,252,252,.99); box-shadow: 0 5px 18px rgba(0,0,0,.12); }
+.pet-quick-composer input { flex: 1; width: 0; min-width: 0; padding: 5px 0; border: 0; outline: 0; color: #24242a; background: none; font: 13px/20px system-ui, sans-serif; user-select: text; }
+.pet-quick-composer input::placeholder { color: #a4a4ad; }
+.pet-quick-send { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border: 0; border-radius: 999px; background: #a47ce8; color: #fff; cursor: pointer; }
+.pet-quick-send:disabled { background: #daccf5; cursor: default; }
+.pet-quick-send svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pet-quick-close { display: grid; place-items: center; flex: none; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: #ececf0; color: #777780; font: 16px/20px system-ui, sans-serif; cursor: pointer; }
+.pet-quick-error, .pet-quick-status { width: 100%; padding: 0 4px 3px; font: 11px/16px system-ui, sans-serif; }
+.pet-quick-error { max-height: 38px; overflow-y: auto; color: #b52d46; }
+.pet-quick-status { color: #6e6e79; }
+@keyframes pet-voice-pulse { to { opacity: .45; transform: scaleY(.65); } }
+@media (prefers-reduced-motion: reduce) { .pet-toolbar button[data-recording='true'] svg { animation: none; } }

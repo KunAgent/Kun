@@ -30,6 +30,15 @@ export function useMobileLink() {
   const unavailable = zh
     ? '连接不可用，请检查 Kun 账号登录和服务状态。'
     : 'Connection unavailable. Check your Kun account and service status.'
+  const deviceRejected = zh
+    ? '这台电脑的远控设备授权已失效或被撤销。请重置远控设备，再开启连接并重新配对手机。'
+    : 'This computer\'s remote device authorization is invalid or revoked. Reset the remote device, then enable access and pair your phone again.'
+  function failureMessage(code: string): string {
+    if (code.includes('DEVICE_AUTHORIZATION_REQUIRED')) return deviceRejected
+    if (code.includes('vip_mobile_remote_required') || code === 'VIP_REQUIRED') return vipRequired
+    if (code.includes('ENTITLEMENTS_UNAVAILABLE')) return membershipUnknown
+    return unavailable
+  }
   useEffect(() => {
     publishMobilePairings(signedIn && state?.enabled ? state.pairings : [])
   }, [signedIn, state])
@@ -67,14 +76,14 @@ export function useMobileLink() {
       const next = await run()
       if (current()) setState(next)
     } catch (failure) {
-      if (current()) setError(String(failure).includes('vip_mobile_remote_required') ? vipRequired : String(failure).includes('ENTITLEMENTS_UNAVAILABLE') ? membershipUnknown : unavailable)
+      if (current()) setError(failureMessage(String(failure)))
     } finally {
       if (current()) setBusy(null)
     }
   }
   const starting = Boolean(state?.starting || busy === 'start'),
     canStop = signedIn && Boolean(state?.enabled || starting),
-    connectionError = error || (signedIn && !mobileAllowed ? membership.value ? vipRequired : membershipUnknown : state?.error === 'VIP_REQUIRED' ? vipRequired : state?.error === 'ENTITLEMENTS_UNAVAILABLE' ? membershipUnknown : state?.error ? unavailable : ''),
+    connectionError = error || (signedIn && !mobileAllowed ? membership.value ? vipRequired : membershipUnknown : state?.error ? failureMessage(state.error) : ''),
     enabled = signedIn && state?.enabled === true
   return {
     api,
@@ -90,6 +99,7 @@ export function useMobileLink() {
     mobileAllowed,
     refreshMembership: membership.refresh,
     retryVip: () => api && void action(() => api.reconnect(), 'start'),
+    resetIdentity: () => api && void action(() => api.resetIdentity()),
     toggle: () => api && (canStop || mobileAllowed) && void action(() => api.enable(!canStop), canStop ? 'stop' : 'start'),
     confirm: (id: string, scopes?: MobileLinkScope[]) => api && void action(() => api.confirm(id, scopes)),
     setScopes: (id: string, scopes: MobileLinkScope[]) => api && void action(() => api.setScopes(id, scopes)),

@@ -1,12 +1,12 @@
 import {
   PET_DISMISSED_KEY_LIMIT,
+  PET_ACTIVITY_MAX_ITEMS,
   clampMascotWidth,
   type PetActionRequest,
   type PetActivitySnapshot,
   type PetSettings
 } from './pets'
 
-const MAX_ACTIVITY_ITEMS = 64
 const MAX_TEXT = 512
 
 export type PetPayloadResult<T> = { ok: true; value: T } | { ok: false; error: string }
@@ -98,7 +98,7 @@ export function parsePetActivitySnapshot(value: unknown): PetPayloadResult<PetAc
   }
   const profileKey = text(candidate.profileKey, 'profileKey')
   if (!profileKey) return { ok: false, error: 'invalid profile key' }
-  if (!Array.isArray(candidate.items) || candidate.items.length > MAX_ACTIVITY_ITEMS) {
+  if (!Array.isArray(candidate.items) || candidate.items.length > PET_ACTIVITY_MAX_ITEMS) {
     return { ok: false, error: 'invalid activity items' }
   }
   const items: PetActivitySnapshot['items'] = []

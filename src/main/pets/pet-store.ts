@@ -99,6 +99,10 @@ export class PetStore {
     })
   }
 
+  async setBubblesCollapsed(collapsed: boolean): Promise<void> {
+    await this.mutate(async () => { this.settings.bubblesCollapsed = collapsed })
+  }
+
   async setImportPreferences(input: { importCodexPets?: boolean }): Promise<PetSettings> {
     return this.mutate(async () => {
       if (typeof input.importCodexPets === 'boolean') this.settings.importCodexPets = input.importCodexPets
@@ -371,6 +375,7 @@ function normalizeSettings(value: unknown): PetSettings {
     schemaVersion: 1,
     selectedPetId: typeof candidate.selectedPetId === 'string' ? candidate.selectedPetId : null,
     overlayOpen: candidate.overlayOpen === true,
+    bubblesCollapsed: candidate.bubblesCollapsed === true,
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
     welcomedPetIds: stringList(candidate.welcomedPetIds),

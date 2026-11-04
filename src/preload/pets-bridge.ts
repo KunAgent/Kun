@@ -32,5 +32,11 @@ export const petsPreloadApi: PetDesktopBridge = {
     ipcRenderer.on(PET_IPC.followUpRequested, wrapped)
     return () => ipcRenderer.removeListener(PET_IPC.followUpRequested, wrapped)
   },
-  completeFollowUp: (requestId, result) => ipcRenderer.send(PET_IPC.followUpResult, { requestId, result })
+  completeFollowUp: (requestId, result) => ipcRenderer.send(PET_IPC.followUpResult, { requestId, result }),
+  onChatRequested: (handler) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, value: Parameters<typeof handler>[0]): void => handler(value)
+    ipcRenderer.on(PET_IPC.chatRequested, wrapped)
+    return () => ipcRenderer.removeListener(PET_IPC.chatRequested, wrapped)
+  },
+  completeChat: (requestId, result) => ipcRenderer.send(PET_IPC.chatResult, { requestId, result })
 }

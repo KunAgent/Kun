@@ -8,7 +8,8 @@ import type { ArtAccountAccess } from '../art-assets/account-access'
 import type { RegisterAppIpcHandlersOptions } from '../ipc/app-ipc-handler-options'
 import { assertTrustedWorkbenchSender } from '../ipc/app-ipc-handler-utils'
 import { MOBILE_LINK_CHANNELS as channels } from '../../shared/mobile-link'
-import { loadIdentity } from './identity'
+import { hasKunAccountSession } from '../../shared/kun-account'
+import { loadIdentity, resetIdentity } from './identity'
 import { MobileLinkService, type LinkDependencies } from './service'
 import { transferFiles } from './files'
 import { MobileLinkRecovery } from './recovery'
@@ -29,7 +30,7 @@ const DIAGNOSTIC_CODES = new Set([
   'NOTIFICATIONS_UNAVAILABLE', 'NOTIFICATION_POST_FAILED', 'NOTIFICATION_STREAM_RETRY',
   'SHARE_CAPABILITIES_UNAVAILABLE', 'SHARE_METADATA_UNAVAILABLE', 'SHARE_AUTHORIZATION_UNAVAILABLE', 'SHARE_CONNECTED', 'SHARE_RENEWED', 'SHARE_PONG_TIMEOUT', 'SHARE_RENEW_RETRY',
   'WSS_PROXY', 'WSS_DIRECT', 'WSS_PROXY_RESOLUTION_FAILED',
-  'RELAY_RESUMED', 'RELAY_RESUME_RETRY', 'RELAY_PREFERENCE_FAILED'
+  'RELAY_RESUMED', 'RELAY_RESUME_RETRY', 'RELAY_PREFERENCE_FAILED', 'DEVICE_AUTHORIZATION_REQUIRED'
 ])
 export function registerMobileLink(
   options: RegisterAppIpcHandlersOptions,
@@ -78,6 +79,7 @@ export function registerMobileLink(
     files: transferFiles
   })
   const resume = new MobileRelayResume({ account, relay: service, preference: new RelayPreference(links), diagnostic })
+  let resettingIdentity = false
   const recovery = new MobileLinkRecovery({
     online: () => net.isOnline(), network: networkKey,
     suspend: () => service.suspend(), reconnect: (reason) => {
@@ -109,7 +111,29 @@ export function registerMobileLink(
   ipcMain.handle(channels.enable, (event, value) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     if (typeof value !== 'boolean') throw new Error('INVALID_VALUE')
+    if (resettingIdentity) throw new Error('OPERATION_IN_PROGRESS')
     return resume.manual(value)
+  })
+  ipcMain.handle(channels.resetIdentity, async (event) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    if (resettingIdentity) throw new Error('OPERATION_IN_PROGRESS')
+    resettingIdentity = true
+    try {
+      const state = await account.getState()
+      if (!hasKunAccountSession(state) || !state.user) throw new Error('LOGIN_REQUIRED')
+      const status = await service.status()
+      if (status.enabled || status.starting || status.error !== 'DEVICE_AUTHORIZATION_REQUIRED')
+        throw new Error('INVALID_IDENTITY_RESET')
+      await resume.manual(false)
+      const current = await account.getState()
+      if (!hasKunAccountSession(current) || current.user?.id !== state.user.id) throw new Error('ACCOUNT_CHANGED')
+      await resetIdentity(join(links, state.user.id, 'identity.enc'))
+      const latest = await account.getState()
+      if (!hasKunAccountSession(latest) || latest.user?.id !== state.user.id) throw new Error('ACCOUNT_CHANGED')
+      return service.status()
+    } finally {
+      resettingIdentity = false
+    }
   })
   ipcMain.handle(channels.confirm, (event, id, scopes) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

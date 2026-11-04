@@ -5,6 +5,7 @@ import { petBubbleBody, petBubbleClock } from './pet-follow-up'
 export function PetWorkBubbles(props: {
   notifications: PetActivityItem[]
   mascotWidth: number
+  reservedHeight?: number
   expanded: boolean
   editing: string | null
   drafts: Record<string, string>
@@ -25,7 +26,7 @@ export function PetWorkBubbles(props: {
   return (
     <div
       className={`pet-bubble-list${!props.expanded && props.notifications.length > 1 ? ' pet-bubble-stack' : ''}`}
-      style={{ maxHeight: Math.min(248, 363 - Math.ceil(props.mascotWidth * 208 / 192)) }}
+      style={{ maxHeight: Math.max(64, Math.min(248, 363 - Math.ceil(props.mascotWidth * 208 / 192) - (props.reservedHeight ?? 0))) }}
     >
       {visible.map((item) => {
         const id = item.threadId

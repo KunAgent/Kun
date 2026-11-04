@@ -12,6 +12,8 @@ import {
 import { frameAtElapsedMs, staticFrame } from './pets/pet-animation'
 import { acceptPetSnapshot, earliestPetNotificationExpiry, visiblePetNotifications } from './pets/pet-activity'
 import { PetWorkBubbles } from './pets/pet-bubble'
+import { PetQuickChat } from './pets/pet-quick-chat'
+import { PetContextMenu } from './pets/pet-context-menu'
 import { effectivePetBusinessState, nextDragDirection, resolveOverlayAnimationState, type PetDragDirection } from './pets/pet-overlay-state'
 import { petContextMenuLabels } from './pets/pet-menu-labels'
 import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, pointInsidePetHit, welcomeUntil } from './pets/pet-pointer'
@@ -29,6 +31,8 @@ function PetOverlayApp(): React.JSX.Element {
   const [dragging, setDragging] = useState(false)
   const [dragDirection, setDragDirection] = useState<PetDragDirection>('right')
   const [expanded, setExpanded] = useState(false)
+  const [bubblesCollapsed, setBubblesCollapsed] = useState(false)
+  const [quickChatInteractive, setQuickChatInteractive] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [queued, setQueued] = useState<Record<string, string>>({})
@@ -51,21 +55,26 @@ function PetOverlayApp(): React.JSX.Element {
     const onChange = (event: MediaQueryListEvent): void => setReduced(event.matches)
     media?.addEventListener('change', onChange)
     let cancelled = false
+    const applyActivity = (value: PetActivitySnapshot): void => {
+      setSnapshot((current) => acceptPetSnapshot(current, value))
+      setNow(Date.now())
+    }
     void bridge.getBootstrap().then((value) => {
       if (cancelled) return
       setBootstrap(value)
       setWidth(value.mascotWidthPx)
+      setBubblesCollapsed(value.bubblesCollapsed === true)
+      if (value.activitySnapshot) applyActivity(value.activitySnapshot)
       setWelcome(welcomeUntil(value.petId, value.welcomedPetIds, Date.now()))
       if (value.petId && !value.welcomedPetIds.includes(value.petId)) void bridge.recordPetWelcomed(value.petId)
     })
     const stopBootstrap = bridge.onBootstrapChanged((value) => {
       setBootstrap(value)
       setWidth(value.mascotWidthPx)
+      setBubblesCollapsed(value.bubblesCollapsed === true)
+      if (value.activitySnapshot) applyActivity(value.activitySnapshot)
     })
-    const stopActivity = bridge.onActivityChanged((value) => {
-      setSnapshot((current) => acceptPetSnapshot(current, value))
-      setNow(Date.now())
-    })
+    const stopActivity = bridge.onActivityChanged(applyActivity)
     const stopFocus = bridge.onMainWindowFocused(() => {
       setExpanded(false)
       setEditing(null)
@@ -75,11 +84,11 @@ function PetOverlayApp(): React.JSX.Element {
   }, [bridge])
 
   useEffect(() => {
-    const wants = hover || dragging || expanded || editing !== null || menuOpen
+    const wants = hover || dragging || expanded || editing !== null || menuOpen || quickChatInteractive
     if (interactiveRef.current === wants) return
     interactiveRef.current = wants
     bridge.setPointerInteractive(wants)
-  }, [bridge, hover, dragging, expanded, editing, menuOpen])
+  }, [bridge, hover, dragging, expanded, editing, menuOpen, quickChatInteractive])
 
   useEffect(() => {
     let leaveTimer = 0
@@ -124,6 +133,7 @@ function PetOverlayApp(): React.JSX.Element {
   const retained = new Set([...(editing ? [editing] : []), ...Object.keys(queued)])
   const notifications = snapshot ? visiblePetNotifications(snapshot, dismissed, now, retained) : []
   const active = notifications[0] ?? null
+  const bubblesHidden = bubblesCollapsed || quickChatInteractive || !active
   const business = effectivePetBusinessState({ activeStatus: active?.status ?? null, welcomeUntilMs: welcome, nowMs: now })
   const animation: PetAnimationState = resolveOverlayAnimationState({ resizeMode: false, dragging, dragDirection, hover, effectiveBusinessState: business })
   const nextExpiry = earliestPetNotificationExpiry(notifications, now)
@@ -169,18 +179,16 @@ function PetOverlayApp(): React.JSX.Element {
       if (target instanceof Element && target.closest('.pet-menu, .pet-sprite')) return
       setMenuOpen(false)
     }
+    const onBlur = (): void => setMenuOpen(false)
     window.addEventListener('keydown', onKey)
     window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('blur', onBlur)
     return () => {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('blur', onBlur)
     }
   }, [menuOpen])
-  useEffect(() => {
-    if (!menuOpen || hover) return undefined
-    const timer = window.setTimeout(() => setMenuOpen(false), 280)
-    return () => window.clearTimeout(timer)
-  }, [menuOpen, hover])
 
   const menuLabels = petContextMenuLabels(window.navigator?.language ?? 'en')
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>): void => {
@@ -263,12 +271,13 @@ function PetOverlayApp(): React.JSX.Element {
 
   return (
     <div className="pet-overlay">
-      <div className={`pet-hit${active ? ' pet-hit-with-bubble' : ''}`} ref={hitRef}>
+      <div className={`pet-hit${!bubblesHidden || quickChatInteractive ? ' pet-hit-with-bubble' : ''}${menuOpen ? ' pet-hit-menu-open' : ''}`} ref={hitRef}>
         {bootstrap?.interactionNote ? <p className="pet-note">{bootstrap.interactionNote}</p> : null}
-        {active ? (
+        {!bubblesHidden ? (
           <PetWorkBubbles
             notifications={notifications}
             mascotWidth={width}
+            reservedHeight={bootstrap?.interactionNote ? 56 : 0}
             expanded={expanded}
             editing={editing}
             drafts={drafts}
@@ -310,39 +319,47 @@ function PetOverlayApp(): React.JSX.Element {
             }}
           />
         ) : null}
-        {menuOpen ? (
-          <div className="pet-menu" role="menu" data-pet-menu onContextMenu={(event) => event.preventDefault()}>
-            <button type="button" role="menuitem" className="pet-menu-item" data-pet-menu-settings onClick={() => { setMenuOpen(false); bridge.openPetSettings() }}>
-              {menuLabels.settings}
-            </button>
-            <button type="button" role="menuitem" className="pet-menu-item" data-pet-menu-hide onClick={() => { setMenuOpen(false); void bridge.closeOverlay() }}>
-              {menuLabels.hide}
-            </button>
+        <div className="pet-companion">
+          <div className={`pet-character-stage${menuOpen ? ' pet-character-stage-menu-open' : ''}`}
+            style={{ '--pet-width': `${width}px`, '--pet-height': `${height}px` } as React.CSSProperties}>
+            <button
+              type="button"
+              className="pet-sprite"
+              aria-label={bootstrap?.displayName ?? 'Desktop pet'}
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-controls={menuOpen ? 'pet-context-menu' : undefined}
+              style={{
+                width,
+                height,
+                backgroundImage: bootstrap?.spritesheetUrl ? `url("${bootstrap.spritesheetUrl}")` : undefined,
+                backgroundSize: `${PET_SHEET_COLUMNS * 100}% ${rows * 100}%`,
+                backgroundPosition: frame.backgroundPosition
+              }}
+              onPointerDown={onPointerDown}
+              onPointerMove={onPointerMove}
+              onPointerUp={(event) => finishPointer(event, false)}
+              onPointerCancel={(event) => finishPointer(event, true)}
+              onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setMenuOpen((open) => !open) }}
+              onKeyDown={(event) => {
+                if (menuOpen && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return }
+                if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) }
+              }}
+            />
+            {menuOpen ? <PetContextMenu labels={menuLabels}
+              onClose={() => { setMenuOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite')?.focus() }}
+              onSettings={() => { setMenuOpen(false); bridge.openPetSettings() }}
+              onHide={() => { setMenuOpen(false); void bridge.closeOverlay() }} /> : null}
           </div>
-        ) : null}
-        <button
-          type="button"
-          className="pet-sprite"
-          aria-label={bootstrap?.displayName ?? 'Desktop pet'}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          style={{
-            width,
-            height,
-            backgroundImage: bootstrap?.spritesheetUrl ? `url("${bootstrap.spritesheetUrl}")` : undefined,
-            backgroundSize: `${PET_SHEET_COLUMNS * 100}% ${rows * 100}%`,
-            backgroundPosition: frame.backgroundPosition
-          }}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={(event) => finishPointer(event, false)}
-          onPointerCancel={(event) => finishPointer(event, true)}
-          onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); setMenuOpen((open) => !open) }}
-          onKeyDown={(event) => {
-            if (menuOpen && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return }
-            if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) }
-          }}
-        />
+          <PetQuickChat bridge={bridge} notificationCount={notifications.length} bubblesHidden={bubblesHidden}
+            onInteractiveChange={setQuickChatInteractive} onToggleBubbles={() => {
+              const collapsed = !bubblesHidden
+              setBubblesCollapsed(collapsed)
+              setExpanded(false)
+              setEditing(null)
+              void bridge.setBubblesCollapsed(collapsed)
+            }} />
+        </div>
       </div>
     </div>
   )

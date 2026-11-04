@@ -1,0 +1,174 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { NormalizedThread } from '../agent/types'
+import type { PetActivitySnapshot } from '@shared/pets'
+import type { ActivityRow } from '@shared/activity-row'
+import { parsePetActivitySnapshot } from '@shared/pets-payload'
+import { useChatStore } from '../store/chat-store'
+import { useActivityStore } from '../store/activity-store'
+import { startPetActivityPublisher, stopPetActivityPublisher } from './pet-publisher'
+import { visiblePetNotifications } from './pet-activity'
+
+vi.mock('../store/chat-store', async () => {
+  const { create } = await import('zustand')
+  return { useChatStore: create(() => ({})) }
+})
+vi.mock('../components/rooms/workbench-flash', () => ({ showWorkbenchFlash: vi.fn() }))
+vi.mock('./pet-conversation-threads', () => ({
+  loadPetConversationThreads: async () => [], petConversationSupplements: () => []
+}))
+vi.mock('../i18n', () => ({ default: { t: (key: string) => key } }))
+
+const started = '2026-11-04T09:00:00.000Z'
+let overlayOpen = true
+let delivered: PetActivitySnapshot[]
+let publish: ReturnType<typeof vi.fn>
+
+function thread(id = 'drawing', overrides: Partial<NormalizedThread> = {}): NormalizedThread {
+  return { id, title: 'Drawing', updatedAt: started, model: 'model', mode: 'agent', status: 'idle', ...overrides }
+}
+
+function latest() {
+  const snapshot = delivered.at(-1)
+  expect(snapshot).toBeDefined()
+  return snapshot!
+}
+
+async function flush() {
+  for (let index = 0; index < 15; index++) await Promise.resolve()
+}
+
+beforeEach(() => {
+  overlayOpen = true
+  delivered = []
+  publish = vi.fn((snapshot: PetActivitySnapshot) => {
+    // Exercise the real Main IPC validator: an invalid snapshot never reaches the overlay.
+    const parsed = parsePetActivitySnapshot(snapshot)
+    if (parsed.ok) delivered.push(parsed.value)
+  })
+  const pets = {
+    getPetSettings: async () => ({ overlayOpen }),
+    updatePetActivity: publish,
+    onPetCatalogChanged: () => () => undefined,
+    onPetNavigationRequested: () => () => undefined,
+    takePendingNavigation: async () => null,
+    onFollowUpRequested: () => () => undefined,
+    onChatRequested: () => () => undefined
+  }
+  vi.stubGlobal('window', Object.assign(new EventTarget(), {
+    kunGui: { pets, appEnvironment: { profilePath: '/profile' } }
+  }))
+  useActivityStore.setState({ rows: {}, cursor: null, status: 'idle' })
+  useChatStore.setState({
+    threads: [thread()], activeThreadId: 'drawing', busy: true, busyUnconfirmed: false,
+    currentTurnId: 'drawing-turn', currentTurnStartedAtMs: Date.parse(started), currentTurnUserId: 'user',
+    turnStartedAtByUserId: { user: Date.parse(started) }, awaitingUserInputThreadIds: {},
+    blocks: [], liveAssistant: '', liveAssistantTurnId: undefined, liveReasoning: '', liveReasoningTurnId: undefined
+  })
+})
+
+afterEach(() => {
+  stopPetActivityPublisher()
+  vi.unstubAllGlobals()
+})
+
+describe('pet activity delivery for ordinary conversations', () => {
+  it.each(['code', 'design'] as const)('shows confirmed %s work before the thread list catches up', async (agentSurface) => {
+    useChatStore.setState({ threads: [thread('drawing', {
+      agentSurface, latestTurnId: 'previous-turn', latestTurnStatus: 'completed'
+    })], blocks: [{ kind: 'tool', id: 'image', turnId: 'drawing-turn', summary: 'Generate image',
+      status: 'running', meta: { toolName: 'generate_image' } }] })
+    startPetActivityPublisher()
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toMatchObject([
+      { threadId: 'drawing', turnId: 'drawing-turn', status: 'running', bubbleAllowed: true }
+    ])
+    const key = latest().items[0].key
+    useChatStore.setState({ liveAssistant: 'Drawing the requested mascot.', liveAssistantTurnId: 'drawing-turn' })
+    await flush()
+    expect(latest().items).toMatchObject([{ key, subtitle: 'Drawing the requested mascot.' }])
+    useChatStore.setState({ busy: false, threads: [thread('drawing', {
+      latestTurnId: 'drawing-turn', latestTurnStatus: 'completed', preview: 'The image is ready.'
+    })] })
+    await flush()
+    expect(latest().items).toMatchObject([{ status: 'review', subtitle: 'The image is ready.' }])
+  })
+
+  it('publishes a live task even before its thread appears in the sidebar', async () => {
+    useChatStore.setState({ threads: [] })
+    startPetActivityPublisher()
+    await flush()
+    expect(latest().items).toMatchObject([{ threadId: 'drawing', status: 'running' }])
+  })
+
+  it('does not invent live work from an unconfirmed restored conversation', async () => {
+    useChatStore.setState({ busyUnconfirmed: true })
+    startPetActivityPublisher()
+    await flush()
+    expect(latest().items).toEqual([])
+  })
+
+  it('keeps an archived conversation silent even while its local state is busy', async () => {
+    useChatStore.setState({ threads: [thread('drawing', { archived: true })] })
+    startPetActivityPublisher()
+    await flush()
+    expect(latest().items).toEqual([])
+  })
+
+  it('drops the previous turn row while preserving the current task and pending approvals', async () => {
+    useActivityStore.setState({ rows: { previous: {
+      unitId: 'previous', kind: 'thread', threadId: 'drawing', harnessId: 'kun', title: 'Previous drawing',
+      workspace: { path: '/workspace', kind: 'local' }, state: 'working', mainState: 'working',
+      children: { working: 0, waiting: 0, done: 0, failed: 0 }, turnId: 'previous-turn',
+      stateSince: started, updatedAt: started, provenance: 'runtime', restoredUnconfirmed: false,
+      stalled: false, visibility: 'active', residency: 'live', pinned: false
+    } satisfies ActivityRow } })
+    startPetActivityPublisher()
+    await flush()
+    expect(latest().items).toMatchObject([{ turnId: 'drawing-turn', status: 'running' }])
+    useChatStore.setState({ blocks: [{ kind: 'approval', id: 'approval', approvalId: 'approve-image',
+      turnId: 'drawing-turn', summary: 'Generate image?', status: 'pending' }] })
+    await flush()
+    expect(latest().items).toMatchObject([{ turnId: 'drawing-turn', status: 'waiting' }])
+  })
+
+  it('keeps the live task deliverable when more than 64 old completions are listed', async () => {
+    const old = Array.from({ length: 90 }, (_, index) => thread(`old-${index}`, {
+      latestTurnId: `old-turn-${index}`, latestTurnStatus: 'completed'
+    }))
+    useChatStore.setState({ threads: [...old, thread('drawing', {
+      latestTurnId: 'drawing-turn', latestTurnStatus: 'running'
+    })] })
+    startPetActivityPublisher()
+    await flush()
+    expect(latest().items.length).toBeLessThanOrEqual(64)
+    expect(latest().items).toContainEqual(expect.objectContaining({ threadId: 'drawing', status: 'running' }))
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())[0].threadId).toBe('drawing')
+    expect(publish.mock.calls.every(([snapshot]) => parsePetActivitySnapshot(snapshot).ok)).toBe(true)
+  })
+
+  it('replays unchanged activity after hiding and waking the pet', async () => {
+    useChatStore.setState({ threads: [thread('drawing', { latestTurnStatus: 'running', latestTurnId: 'drawing-turn' })] })
+    startPetActivityPublisher()
+    await flush()
+    const before = delivered.length
+    overlayOpen = false
+    window.dispatchEvent(new Event('kun-pet-settings-changed'))
+    await flush()
+    overlayOpen = true
+    window.dispatchEvent(new Event('kun-pet-settings-changed'))
+    await flush()
+    expect(delivered.length).toBeGreaterThan(before)
+    expect(latest().items).toContainEqual(expect.objectContaining({ threadId: 'drawing', status: 'running' }))
+  })
+
+  it('replays activity after the workbench publisher remounts', async () => {
+    useChatStore.setState({ threads: [thread('drawing', { latestTurnStatus: 'running', latestTurnId: 'drawing-turn' })] })
+    startPetActivityPublisher()
+    await flush()
+    const before = delivered.length
+    stopPetActivityPublisher()
+    startPetActivityPublisher()
+    await flush()
+    expect(delivered.length).toBeGreaterThan(before)
+  })
+})

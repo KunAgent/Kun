@@ -1,3 +1,5 @@
+import type { SpeechTranscriptionRequest, SpeechTranscriptionResult } from './speech-to-text'
+
 export type PetAnimationState =
   | 'idle'
   | 'running-right'
@@ -55,6 +57,7 @@ export type PetSettings = {
   schemaVersion: 1
   selectedPetId: string | null
   overlayOpen: boolean
+  bubblesCollapsed?: boolean
   mascotWidthPx: number
   importCodexPets: boolean
   welcomedPetIds: string[]
@@ -109,6 +112,7 @@ export type PetActionRequest =
   | { type: 'follow-up'; threadId: string; prompt: string; unitId?: string; roomId?: string }
 
 export type PetFollowUpRequest = { requestId: string; threadId: string; prompt: string }
+export type PetChatRequest = { requestId: string; prompt: string }
 
 export type PetActionResult =
   | { ok: true }
@@ -128,6 +132,9 @@ export type PetOverlayBootstrap = {
   dismissedNotificationKeys: string[]
   interactionMode: PetInteractionMode
   interactionNote: string | null
+  /** Replay current work when the overlay loads after the last activity event. */
+  activitySnapshot?: PetActivitySnapshot
+  bubblesCollapsed?: boolean
 }
 
 export type PetOverlayBounds = { width: number; height: number; anchorX: number; anchorY: number }
@@ -152,6 +159,8 @@ export type PetDesktopBridge = {
   getPetInteraction: () => Promise<{ mode: PetInteractionMode; note: string | null }>
   onFollowUpRequested: (handler: (request: PetFollowUpRequest) => void) => () => void
   completeFollowUp: (requestId: string, result: PetActionResult) => void
+  onChatRequested: (handler: (request: PetChatRequest) => void) => () => void
+  completeChat: (requestId: string, result: PetActionResult) => void
 }
 
 export type PetOverlayBridge = {
@@ -173,6 +182,10 @@ export type PetOverlayBridge = {
   openMainWindow: () => void
   openPetSettings: () => void
   closeOverlay: () => void
+  startChat: (prompt: string) => Promise<PetActionResult>
+  getVoiceInputAvailable: () => Promise<boolean>
+  transcribeSpeech: (request: Omit<SpeechTranscriptionRequest, 'speechToText'>) => Promise<SpeechTranscriptionResult>
+  setBubblesCollapsed: (collapsed: boolean) => Promise<void>
 }
 
 export const PET_ROWS: Record<PetAnimationState, { row: number; frames: number; frameDurationsMs: number[] }> = {
@@ -201,6 +214,7 @@ export const PET_MASCOT_MAX_WIDTH_PX = 224
 export const PET_FIRST_AWAKE_TTL_MS = 8_000
 export const PET_DRAG_THRESHOLD_PX = 4
 export const PET_DISMISSED_KEY_LIMIT = 500
+export const PET_ACTIVITY_MAX_ITEMS = 64
 export const PET_MANIFEST_MAX_BYTES = 64 * 1024
 export const PET_SPRITESHEET_MAX_BYTES = 16 * 1024 * 1024
 
@@ -252,7 +266,12 @@ export const PET_IPC = {
   overlayWelcomed: 'kun:pets:overlay:welcomed',
   overlayOpenMain: 'kun:pets:overlay:open-main',
   overlayOpenSettings: 'kun:pets:overlay:open-settings',
-  overlayClose: 'kun:pets:overlay:close'
+  overlayClose: 'kun:pets:overlay:close',
+  overlayChat: 'kun:pets:overlay:chat',
+  overlayVoiceAvailable: 'kun:pets:overlay:voice-available',
+  overlayBubblesCollapsed: 'kun:pets:overlay:bubbles-collapsed',
+  chatRequested: 'kun:pets:chat-requested',
+  chatResult: 'kun:pets:chat-result'
 } as const
 
 export const PET_ASSET_SCHEME = 'kun-pet'
@@ -280,6 +299,7 @@ export function defaultPetSettings(): PetSettings {
     schemaVersion: 1,
     selectedPetId: null,
     overlayOpen: false,
+    bubblesCollapsed: false,
     mascotWidthPx: PET_MASCOT_DEFAULT_WIDTH_PX,
     importCodexPets: true,
     welcomedPetIds: [],

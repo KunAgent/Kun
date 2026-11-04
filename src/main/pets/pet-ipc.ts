@@ -51,6 +51,9 @@ export type PetIpcApi = {
   openPetSettings(): void
   closeOverlay(): void
   completeFollowUp(requestId: string, result: PetActionResult): void
+  startChat(prompt: string): Promise<PetActionResult>
+  getVoiceInputAvailable(): Promise<boolean>
+  setBubblesCollapsed(collapsed: boolean): Promise<void>
   allows(event: PetIpcEvent, kinds: Array<'main' | 'overlay'>): boolean
 }
 
@@ -138,6 +141,24 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     [PET_IPC.overlayOpenMain]: (event) => { overlay(event); api.openMainWindow() },
     [PET_IPC.overlayOpenSettings]: (event) => { overlay(event); api.openPetSettings() },
     [PET_IPC.overlayClose]: async (event) => { overlay(event); api.closeOverlay() },
+    [PET_IPC.overlayChat]: async (event, prompt) => {
+      overlay(event)
+      if (typeof prompt !== 'string' || !prompt.trim() || prompt.trim().length > 16_000) {
+        return { ok: false, code: 'rejected', message: '请输入有效消息' }
+      }
+      return api.startChat(prompt.trim())
+    },
+    [PET_IPC.overlayVoiceAvailable]: (event) => { overlay(event); return api.getVoiceInputAvailable() },
+    [PET_IPC.overlayBubblesCollapsed]: async (event, collapsed) => {
+      overlay(event)
+      if (typeof collapsed !== 'boolean') throw new Error('invalid collapsed state')
+      await api.setBubblesCollapsed(collapsed)
+    },
+    [PET_IPC.chatResult]: (event, payload) => {
+      main(event)
+      const parsed = parseFollowUpResult(payload)
+      if (parsed) api.completeFollowUp(parsed.requestId, parsed.result)
+    },
     [PET_IPC.followUpResult]: (event, payload) => {
       main(event)
       const parsed = parseFollowUpResult(payload)

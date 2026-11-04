@@ -42,40 +42,42 @@ test('every bundled pet retains a decodable transparent Codex sprite layout', as
   }
 })
 
-test('Xiao Kun fits its allowance and has all 57 animation frames with clear cell margins', async () => {
-  const dir = join(petsRoot, 'xiao-kun')
-  assert(bytesUnder(dir) <= MIB, 'Xiao Kun must fit within 1 MiB')
-  const manifest = JSON.parse(readFileSync(join(dir, 'pet.json'), 'utf8'))
-  assert.equal(manifest.id, 'xiao-kun')
-  assert.equal(manifest.spriteVersionNumber, 1)
-  const { data, info } = await sharp(join(dir, manifest.spritesheetPath)).ensureAlpha().raw()
-    .toBuffer({ resolveWithObject: true })
-  const frameCounts = [6, 8, 8, 4, 5, 8, 6, 6, 6]
-  for (let row = 0; row < frameCounts.length; row++) {
-    const distinct = new Set()
-    for (let col = 0; col < 8; col++) {
-      const label = `Xiao Kun row ${row + 1}, frame ${col + 1}`
-      const frame = Buffer.alloc(192 * 208 * 4)
-      let visible = 0
-      for (let y = 0; y < 208; y++) {
-        const offset = ((row * 208 + y) * info.width + col * 192) * 4
-        data.copy(frame, y * 192 * 4, offset, offset + 192 * 4)
-        for (let x = 0; x < 192; x++) {
-          const alpha = data[offset + x * 4 + 3]
-          if (alpha > 16) visible++
-          if (x < 6 || x >= 186 || y < 6 || y >= 202) {
-            assert(alpha <= 16, `${label}: artwork touches cell margin`)
+for (const id of ['xiao-kun', 'ikun']) {
+  test(`${id} fits its allowance and has all 57 animation frames with clear cell margins`, async () => {
+    const dir = join(petsRoot, id)
+    assert(bytesUnder(dir) <= MIB, `${id} must fit within 1 MiB`)
+    const manifest = JSON.parse(readFileSync(join(dir, 'pet.json'), 'utf8'))
+    assert.equal(manifest.id, id)
+    assert.equal(manifest.spriteVersionNumber, 1)
+    const { data, info } = await sharp(join(dir, manifest.spritesheetPath)).ensureAlpha().raw()
+      .toBuffer({ resolveWithObject: true })
+    const frameCounts = [6, 8, 8, 4, 5, 8, 6, 6, 6]
+    for (let row = 0; row < frameCounts.length; row++) {
+      const distinct = new Set()
+      for (let col = 0; col < 8; col++) {
+        const label = `${id} row ${row + 1}, frame ${col + 1}`
+        const frame = Buffer.alloc(192 * 208 * 4)
+        let visible = 0
+        for (let y = 0; y < 208; y++) {
+          const offset = ((row * 208 + y) * info.width + col * 192) * 4
+          data.copy(frame, y * 192 * 4, offset, offset + 192 * 4)
+          for (let x = 0; x < 192; x++) {
+            const alpha = data[offset + x * 4 + 3]
+            if (alpha > 16) visible++
+            if (x < 6 || x >= 186 || y < 6 || y >= 202) {
+              assert(alpha <= 16, `${label}: artwork touches cell margin`)
+            }
           }
         }
+        if (col >= frameCounts[row]) {
+          assert.equal(visible, 0, `${label}: unused cell must be transparent`)
+        } else {
+          assert(visible > 192 * 208 * 0.15, `${label}: missing or undersized artwork`)
+          assert(visible < 192 * 208 * 0.8, `${label}: opaque background`)
+          distinct.add(createHash('sha256').update(frame).digest('hex'))
+        }
       }
-      if (col >= frameCounts[row]) {
-        assert.equal(visible, 0, `${label}: unused cell must be transparent`)
-      } else {
-        assert(visible > 192 * 208 * 0.15, `${label}: missing or undersized artwork`)
-        assert(visible < 192 * 208 * 0.8, `${label}: opaque background`)
-        distinct.add(createHash('sha256').update(frame).digest('hex'))
-      }
+      assert(distinct.size >= 3, `${id} row ${row + 1}: needs distinct animation poses`)
     }
-    assert(distinct.size >= 3, `Xiao Kun row ${row + 1}: needs distinct animation poses`)
-  }
-})
+  })
+}

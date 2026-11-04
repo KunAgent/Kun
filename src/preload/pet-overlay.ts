@@ -26,7 +26,12 @@ const api: PetOverlayBridge = {
   recordPetWelcomed: (petId) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayWelcomed, petId),
   openMainWindow: () => ipcRenderer.send(PET_OVERLAY_IPC.overlayOpenMain),
   openPetSettings: () => ipcRenderer.send(PET_OVERLAY_IPC.overlayOpenSettings),
-  closeOverlay: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayClose)
+  closeOverlay: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayClose),
+  startChat: (prompt) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayChat, prompt),
+  getVoiceInputAvailable: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayVoiceAvailable),
+  transcribeSpeech: ({ audioBase64, mimeType, durationMs }) =>
+    ipcRenderer.invoke('speech:transcribe', { audioBase64, mimeType, durationMs }),
+  setBubblesCollapsed: (collapsed) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayBubblesCollapsed, collapsed)
 }
 
 contextBridge.exposeInMainWorld('kunPetOverlay', api)

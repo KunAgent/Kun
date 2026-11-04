@@ -22,8 +22,10 @@ import { syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath } from './main-paths'
 import {
   normalizeDarkUiColors,
+  resolveKunSpeechToTextSettings,
   type AppSettingsV1
 } from '../shared/app-settings'
+import { isSpeechToTextConfigured } from '../shared/speech-to-text'
 import {
   ManagerResourceLeaseClient,
   ManagerRevisionedDocumentClient
@@ -558,7 +560,12 @@ export async function initializeMainServices(input: {
     })
     configureManagedWeixinBridgeUrlResolver(ensureWeixinBridgeRpcUrl)
     const { startDesktopPets } = await import('./pets/pet-service')
-    await startDesktopPets({ isFreshInstall: input.isFreshInstall === true })
+    await startDesktopPets({
+      isFreshInstall: input.isFreshInstall === true,
+      getVoiceInputAvailable: async () => isSpeechToTextConfigured(resolveKunSpeechToTextSettings(
+        await withStoredRegistryCredentials(await mainState.store.load())
+      ))
+    })
 
   return {
     initial,

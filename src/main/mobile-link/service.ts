@@ -26,6 +26,7 @@ import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-option
 import { MobileSubscriptions, type SubscriptionAuthority } from './subscriptions'
 import { refreshAfterWrite } from './write-refresh'
 import { disableHost, sessionOperation } from './lifecycle'
+import { registerMobileHost } from './device-registration'
 // Kun refuses these before any receipt or mutation, so the phone may treat them as not applied.
 const CERTAIN_REJECTIONS = new Set([
   'INVALID_REQUEST',
@@ -311,9 +312,14 @@ export class MobileLinkService {
     try {
       return await this.setEnabled(value, keepGrants)
     } catch (error) {
-      if (operation === this.enableOperation && !this.enabled) this.stop()
+      if (operation !== this.enableOperation) throw error
+      if (!this.enabled) this.stop()
       if ((error as { code?: string })?.code === 'vip_mobile_remote_required') this.error = 'VIP_REQUIRED'
       if ((error as { code?: string })?.code === 'ENTITLEMENTS_UNAVAILABLE') this.error = 'ENTITLEMENTS_UNAVAILABLE'
+      if ((error as { code?: string })?.code === 'DEVICE_AUTHORIZATION_REQUIRED') {
+        this.error = 'DEVICE_AUTHORIZATION_REQUIRED'
+        this.deps.diagnostic?.('DEVICE_AUTHORIZATION_REQUIRED')
+      }
       throw error
     } finally {
       if (operation === this.enableOperation) this.enabling = false
@@ -392,11 +398,7 @@ export class MobileLinkService {
     this.identity = identity
     const api = this.createApi(identity, generation, control.signal)
     this.api = api
-    await api.request('/devices', 'POST', {
-      name: this.deps.name,
-      platform: this.deps.platform,
-      role: 'host'
-    })
+    await registerMobileHost(api, this.deps.name, this.deps.platform)
     // Offline logout or a crashed app may not have completed cloud cleanup, so a fresh start revokes
     // previous grants before it can obtain a relay ticket. Resuming a start the user left on keeps them.
     if (!keepGrants) await api.request('/devices/enabled', 'PUT', { enabled: false })

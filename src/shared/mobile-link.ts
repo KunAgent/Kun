@@ -14,6 +14,7 @@ export type MobileLinkApi = {
   entitlements(): Promise<AccountEntitlements>
   status(): Promise<MobileLinkStatus>
   enable(enabled: boolean): Promise<MobileLinkStatus>
+  resetIdentity(): Promise<MobileLinkStatus>
   confirm(id: string, scopes?: MobileLinkScope[]): Promise<MobileLinkStatus>
   setScopes(id: string, scopes: MobileLinkScope[]): Promise<MobileLinkStatus>
   revoke(id: string): Promise<MobileLinkStatus>
@@ -23,6 +24,7 @@ export const MOBILE_LINK_CHANNELS = {
   entitlements: 'mobile-link:entitlements',
   reconnect: 'mobile-link:reconnect',
   enable: 'mobile-link:enable',
+  resetIdentity: 'mobile-link:reset-identity',
   confirm: 'mobile-link:confirm',
   revoke: 'mobile-link:revoke',
   setScopes: 'mobile-link:set-scopes'

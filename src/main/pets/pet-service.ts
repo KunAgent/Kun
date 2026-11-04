@@ -6,7 +6,7 @@ import { developmentRendererUrl, mainState } from '../main-app-context'
 import { resolveNamedPreloadPath } from '../main-paths'
 import { runtimeRequest } from '../main-runtime-settings'
 import { petStopConflict, validatePetStop } from './pet-actions'
-import { askPetFollowUp, settlePetFollowUp } from './pet-follow-up'
+import { askPetChat, askPetFollowUp, settlePetFollowUp } from './pet-follow-up'
 import { detectCodexHome, localPetsRoot, refreshPetLibraries, resolveBuiltinPetsRoot } from './pet-importer'
 import { petEventAllowed, petIpcHandlers, type PetIpcEvent } from './pet-ipc'
 import { bindPetAssetReader } from './pet-protocol'
@@ -21,11 +21,13 @@ export type DesktopPets = {
   noteMainWindow(window: BrowserWindow | null): void
 }
 
-export async function startDesktopPets(options: { isFreshInstall?: boolean } = {}): Promise<DesktopPets> {
+type DesktopPetOptions = { isFreshInstall?: boolean; getVoiceInputAvailable?: () => Promise<boolean> }
+
+export async function startDesktopPets(options: DesktopPetOptions = {}): Promise<DesktopPets> {
   if (active) return active
   const store = new PetStore(path.join(app.getPath('userData'), 'pets'))
   await store.initialize()
-  const pets = new DesktopPetRuntime(store)
+  const pets = new DesktopPetRuntime(store, options)
   await pets.start(options.isFreshInstall === true)
   active = pets
   pets.noteMainWindow(mainState.mainWindow)
@@ -51,7 +53,7 @@ class DesktopPetRuntime implements DesktopPets {
   private readonly allowed = new Set<number>()
   private controller: PetWindowController | null = null
 
-  constructor(private readonly store: PetStore) {}
+  constructor(private readonly store: PetStore, private readonly options: DesktopPetOptions) {}
 
   noteMainWindow(window: BrowserWindow | null): void {
     this.detachMain?.()
@@ -111,7 +113,7 @@ class DesktopPetRuntime implements DesktopPets {
     this.controller.setSpriteWidth(this.store.getSettings().mascotWidthPx)
     const api = this.api()
     for (const [channel, handler] of Object.entries(petIpcHandlers(api))) {
-      if (channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayOpenSettings || channel === PET_IPC.overlayDragCancel) {
+      if (channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel === PET_IPC.chatResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayOpenSettings || channel === PET_IPC.overlayDragCancel) {
         ipcMain.on(channel, (event, ...args) => { void handler(toEvent(event, this.classify(event.sender.id)), ...args) })
       } else {
         ipcMain.handle(channel, (event, ...args) => handler(toEvent(event, this.classify(event.sender.id)), ...args))
@@ -166,6 +168,17 @@ class DesktopPetRuntime implements DesktopPets {
       reportBounds: (bounds: { width: number; height: number; anchorX: number; anchorY: number }) => this.controller?.reportBounds(bounds),
       performAction: (request: PetActionRequest) => this.perform(request),
       completeFollowUp: (requestId: string, result: PetActionResult) => settlePetFollowUp(requestId, result),
+      startChat: (prompt: string): Promise<PetActionResult> => {
+        if (!this.mainWindow || this.mainWindow.isDestroyed()) {
+          return Promise.resolve({ ok: false, code: 'missing', message: '主窗口尚未准备好，请稍后重试' })
+        }
+        return askPetChat(this.mainWindow, prompt)
+      },
+      getVoiceInputAvailable: () => this.options.getVoiceInputAvailable?.() ?? Promise.resolve(false),
+      setBubblesCollapsed: async (collapsed: boolean) => {
+        await this.store.setBubblesCollapsed(collapsed)
+        this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
+      },
       dismiss: async (key: string) => {
         await this.store.dismissNotification(key)
         this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
@@ -276,7 +289,9 @@ class DesktopPetRuntime implements DesktopPets {
       welcomedPetIds: settings.welcomedPetIds,
       dismissedNotificationKeys: settings.dismissedNotificationKeys,
       interactionMode: this.controller?.mode() ?? 'passthrough',
-      interactionNote: this.controller?.policy.note ?? null
+      interactionNote: this.controller?.policy.note ?? null,
+      bubblesCollapsed: settings.bubblesCollapsed === true,
+      ...(this.snapshot ? { activitySnapshot: this.snapshot } : {})
     }
   }
 
