@@ -1,3 +1,4 @@
+import { scheduleTasksBulkInputSchema, type ScheduleTasksBulkResult } from '../../shared/schedule-task-bulk'
 import { captureDesktopAnalytics } from '../product-analytics/report'
 import {
   ipcMain,
@@ -365,6 +366,17 @@ export function registerAppRuntimeIpcHandlers(options: RegisterAppIpcHandlersOpt
         schedule: input.schedule
       })
       return task ? { ok: true, task } : { ok: false, message: 'Scheduled task was not found.' }
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    }
+  })
+
+  ipcMain.handle('schedule:tasks:bulk', async (_, payload: unknown): Promise<ScheduleTasksBulkResult> => {
+    try {
+      const input = parseIpcPayload('schedule:tasks:bulk', scheduleTasksBulkInputSchema, payload)
+      const runtime = getScheduleRuntime()
+      if (!runtime) return { ok: false, message: 'Schedule runtime is not initialized.' }
+      return { ok: true, tasks: await runtime.bulkMutateTasksById(input) }
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) }
     }

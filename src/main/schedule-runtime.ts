@@ -1,3 +1,4 @@
+import type { ScheduleTasksBulkInput } from '../shared/schedule-task-bulk'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { URL } from 'node:url'
@@ -362,6 +363,37 @@ export class ScheduleRuntime {
     if (shouldRecomputeNextRun) await this.queue.ensureNextRuns(await this.loadSettings())
     const latest = await this.loadSettings()
     return latest.schedule.tasks.find((item) => item.id === taskId) ?? nextTask
+  }
+
+  async bulkMutateTasksById(input: ScheduleTasksBulkInput): Promise<ScheduledTaskV1[]> {
+    const ids = new Set(input.taskIds)
+    const now = new Date()
+    // Resolve ids against the store's current snapshot, never a renderer task array.
+    const saved = await this.deps.store.update((current) => {
+      if (input.action === 'enable' && current.schedule.tasks.some((task) =>
+        ids.has(task.id) && !task.enabled && task.schedule.kind === 'at' &&
+        !(Date.parse(task.schedule.atTime) > now.getTime())
+      )) throw new Error('Edit expired one-time tasks before enabling them.')
+      const tasks = input.action === 'delete'
+        ? current.schedule.tasks.filter((task) => !ids.has(task.id))
+        : current.schedule.tasks.map((task) => {
+            const enabled = input.action === 'enable'
+            if (!ids.has(task.id) || task.enabled === enabled) return task
+            const next = { ...task, enabled, updatedAt: now.toISOString() }
+            return { ...next, nextRunAt: computeScheduleNextRunAt(next, now) }
+          })
+      return {
+        ...current,
+        schedule: {
+          ...current.schedule,
+          enabled: input.action === 'enable' ? true : current.schedule.enabled,
+          tasks
+        }
+      }
+    })
+    if (input.action === 'delete') this.queue.discardQueued(ids)
+    this.sync(saved)
+    return saved.schedule.tasks
   }
 
   async deleteTaskById(taskId: string): Promise<boolean> {

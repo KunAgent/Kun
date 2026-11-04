@@ -181,6 +181,14 @@ export class ScheduleExecutionQueue {
   }
 
 
+  discardQueued(taskIds: ReadonlySet<string>): void {
+    for (const id of taskIds) {
+      if (this.runningTaskIds.has(id) || !this.queuedTaskIds.delete(id)) continue
+      this.queuedTaskModes.delete(id)
+      this.resolveTaskCompletion(id, { ok: false, message: 'Task was deleted before it started.' })
+    }
+  }
+
   async ensureNextRuns(_settings: AppSettingsV1): Promise<void> {
     if (this.stopped) return
     const now = new Date()
@@ -320,6 +328,9 @@ export class ScheduleExecutionQueue {
           }
         }
         if (!next) break
+        // A previous candidate may have awaited a store write while deletion
+        // removed this id. Never launch a candidate from that stale snapshot.
+        if (!this.queuedTaskIds.has(next.id)) continue
         const scheduled = this.queuedTaskModes.get(next.id) ?? false
         const dequeued = next
         this.queuedTaskIds.delete(dequeued.id)

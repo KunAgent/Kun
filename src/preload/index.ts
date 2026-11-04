@@ -134,6 +134,7 @@ const api = {
   },
   createScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:create', payload),
   updateScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:update', payload),
+  bulkScheduleTasks: (payload) => ipcRenderer.invoke('schedule:tasks:bulk', payload),
   deleteScheduleTask: (taskId) => ipcRenderer.invoke('schedule:task:delete', taskId),
   runScheduleTask: (taskId) =>
     ipcRenderer.invoke('schedule:task:run', taskId),

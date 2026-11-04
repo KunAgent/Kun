@@ -1,3 +1,4 @@
+import type { ScheduleTasksBulkInput, ScheduleTasksBulkResult } from './schedule-task-bulk'
 import type { UserAttentionRequest } from './user-attention'
 import type {
   AppSettingsPatch,
@@ -398,6 +399,7 @@ export type KunGuiApi = KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & Pro
   onScheduleStatusChanged: (handler: (status: ScheduleRuntimeStatus) => void) => () => void
   createScheduleTask: (payload: ScheduleTaskCreateInput) => Promise<ScheduleTaskMutationResult>
   updateScheduleTask: (payload: ScheduleTaskUpdateInput) => Promise<ScheduleTaskMutationResult>
+  bulkScheduleTasks: (input: ScheduleTasksBulkInput) => Promise<ScheduleTasksBulkResult>
   deleteScheduleTask: (taskId: string) => Promise<ScheduleTaskDeleteResult>
   runScheduleTask: (taskId: string) => Promise<ScheduleRunResult>
   getDaemonStatus: () => Promise<DaemonRuntimeStatus>
