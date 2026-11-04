@@ -21,10 +21,8 @@ import { applyShellIntegration, detectTerminalShells } from './terminal-shell-in
 import { registerOwnedProcessGroup } from '../../../kun/src/process/owned-process.js'
 import type { BrowserWindow, IpcMain, WebContents } from 'electron'
 import type { IPty } from 'node-pty'
-import {
-  resolveWindowsShellCandidates,
-  type WindowsShellResolverOptions
-} from '../../../kun/src/adapters/tool/windows-shell-resolver.js'
+import { buildShellEnv, loadNodePty, resolveTerminalShellCandidates } from './pty-environment'
+export { resolveTerminalShellCandidates }
 import {
   applyKunCliEnv,
   type KunCliLaunch
@@ -63,102 +61,7 @@ type TerminalSession = {
   program: string
 }
 
-let nodePty: typeof import('node-pty') | null | undefined
 
-async function loadNodePty(): Promise<typeof import('node-pty') | null> {
-  if (nodePty !== undefined) return nodePty
-  try {
-    // Dynamic import keeps the main bundle compiling even if the native
-    // prebuild is missing on the current platform; failure surfaces as a
-    // friendly message in the panel instead of a hard crash.
-    nodePty = await import('node-pty')
-  } catch (error) {
-    console.warn('[terminal] node-pty failed to load; built-in terminal disabled:', error)
-    nodePty = null
-  }
-  return nodePty
-}
-
-/**
- * Pick a default shell for the current platform.
- *
- * macOS: respects $SHELL (set by the OS for the user's default terminal),
- *        falling back to zsh which has shipped as the system default since
- *        Catalina.
- * Linux: respects $SHELL, falling back to bash (the de-facto standard).
- * Windows: Git Bash if installed, then PowerShell 7, Windows PowerShell, and
- *        finally the COMSPEC command interpreter (usually cmd.exe).
- */
-export function resolveTerminalShellCandidates(
-  platform: NodeJS.Platform = process.platform,
-  options: WindowsShellResolverOptions = {}
-): Array<{ file: string; args: string[]; gitBash: boolean }> {
-  if (platform === 'win32') {
-    return resolveWindowsShellCandidates(options).map((candidate) => ({
-      file: candidate.file,
-      args: [...candidate.terminalArgs],
-      gitBash: candidate.kind === 'git-bash'
-    }))
-  }
-  const env = options.env ?? process.env
-  const fallback = platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
-  return [{ file: env.SHELL || fallback, args: [], gitBash: false }]
-}
-
-/**
- * True when a locale string requests a UTF-8 codeset. Matches the common
- * spellings case-insensitively: `UTF-8`, `UTF8`, `utf8`, `utf-8`, etc.
- */
-function isUtf8Locale(value: string | undefined): value is string {
-  if (!value) return false
-  return /utf-?8/i.test(value)
-}
-
-/**
- * Resolve a UTF-8 locale for the child shell.
- *
- * POSIX precedence for the character-encoding category is
- * `LC_ALL` > `LC_CTYPE` > `LANG`: LC_ALL overrides everything, then the
- * category-specific LC_CTYPE, then the catch-all LANG. The previous order
- * checked LANG before LC_ALL, which inverted that precedence.
- */
-function resolveLocale(): string {
-  if (isUtf8Locale(process.env.LC_ALL)) return process.env.LC_ALL
-  if (isUtf8Locale(process.env.LC_CTYPE)) return process.env.LC_CTYPE
-  if (isUtf8Locale(process.env.LANG)) return process.env.LANG
-  if (process.platform === 'darwin') return 'en_US.UTF-8'
-  if (process.platform === 'win32') return 'C.UTF-8'
-  return 'en_US.UTF-8'
-}
-
-function buildShellEnv(colorMode: TerminalColorMode): NodeJS.ProcessEnv {
-  // xterm-256color matches what xterm.js advertises and keeps color-capable
-  // programs (ls, git, etc.) emitting escape codes.
-  // LANG/LC_ALL ensure the child shell uses a UTF-8 locale so that CJK
-  // output (echo, git log, cat, etc.) is not garbled. Electron launched
-  // from Finder/Dock does not inherit the login-shell locale that
-  // ~/.zprofile/~/.zshrc would normally set.
-  const locale = resolveLocale()
-  const env: NodeJS.ProcessEnv = {
-    ...process.env,
-    TERM: 'xterm-256color',
-    LANG: locale,
-    LC_ALL: locale
-  }
-  // In monochrome mode we deliberately do NOT advertise truecolor: COLORTERM
-  // would let tools emit 24-bit (ESC[38;2;R;G;Bm) sequences that bypass the
-  // xterm palette entirely, defeating the mono theme. Without it, color-aware
-  // programs fall back to the 16-color ANSI palette, which the mono theme maps
-  // to the foreground. The xterm theme additionally neutralizes the 256-color
-  // (16-255) range so even 8-bit color sequences stay monochrome.
-  // Inherited COLORTERM from the parent env is stripped for the same reason.
-  if (colorMode === 'none') {
-    delete env.COLORTERM
-  } else {
-    env.COLORTERM = 'truecolor'
-  }
-  return env
-}
 
 /**
  * ADE terminal-agent launch plan. The command comes from the kun

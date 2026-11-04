@@ -1,4 +1,5 @@
 import { stopBuiltinDesktopEngines } from './remote-desktop/engine'
+import { stopBuiltinTerminalEngines } from './remote-terminal/engine'
 import { app } from 'electron'
 import {
   mainState,
@@ -65,6 +66,7 @@ export function startDesktopMainEntry(): void {
     stopCheckpointCleanupTimer()
     quitBarrierPromise = (async () => {
       try {
+        await stopBuiltinTerminalEngines().catch(error => console.warn('[kun-gui] terminal cleanup was not confirmed; process guard will retry:', error))
         await stopBuiltinDesktopEngines().catch(error => console.warn('[kun-gui] desktop cleanup was not confirmed:', error))
         try {
           mainState.protectedCredentialSurface?.dispose()

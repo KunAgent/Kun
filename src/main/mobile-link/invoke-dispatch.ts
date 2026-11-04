@@ -8,9 +8,9 @@ import { desktopScheduleDescriptors } from './desktop-schedules'
 import { appendHostMetadata } from './catalog-metadata'
 import { refreshAfterWrite } from './write-refresh'
 const CERTAIN_REJECTIONS = new Set(['INVALID_REQUEST', 'REQUEST_EXPIRED', 'AGENT_NOT_AVAILABLE', 'MODEL_NOT_AVAILABLE'])
-type Dispatch = { link: LinkDependencies; owner?: string; hostId?: string; api?: RemoteApi; filePeers: Set<string>; requestBudget: RequestBudget; totalRequestBudget: RequestBudget; shared: MobileShareHosts; subscriptions: MobileSubscriptions; authorizationRemaining(): number; send(frame: Frame): void }
+type Dispatch = { link: LinkDependencies; owner?: string; hostId?: string; api?: RemoteApi; filePeers: Set<string>; requestBudget: RequestBudget; totalRequestBudget: RequestBudget; shared: MobileShareHosts; subscriptions: MobileSubscriptions; authorizationRemaining(): number; terminalAuthorizationRemaining(): number; send(frame: Frame): void }
 /** A validated peer invocation has one admission/reply path; desktop OS work is dispatched only in Main. */
-export async function dispatchMobileInvoke(frame: Frame, src: string, authority: { id: string; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[] }, current: () => boolean, deps: Dispatch) {
+export async function dispatchMobileInvoke(frame: Frame, src: string, authority: { id: string; syncKey: string; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[] }, current: () => boolean, deps: Dispatch) {
     let fileReserved = false
     let release: (() => void) | undefined
     let control: false | true | 'desktop' = false,
@@ -36,7 +36,9 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
       } catch (error) { releasePeer(); throw error }
       if (call.expiresAt < Date.now() && !READ_METHODS.has(call.method))
         throw new Error('REQUEST_EXPIRED')
-      const lease = call.method.startsWith('desktop.') && !call.method.startsWith('desktop.schedule.') ? undefined : await deps.link.lease()
+      const desktopCall = call.method.startsWith('desktop.') && !call.method.startsWith('desktop.schedule.')
+      // Desktop and terminal calls are ephemeral: no runtime lease, no durable receipt.
+      const lease = desktopCall || call.method.startsWith('terminal.') ? undefined : await deps.link.lease()
       if (!current()) return
       let result: unknown
       if (
@@ -62,6 +64,12 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
         if (!deps.link.desktop || !deps.owner) throw new Error('DESKTOP_UNSUPPORTED')
         result = await deps.link.desktop.invoke(call.method, call.params, { accountId: deps.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes, current, validForMs: deps.authorizationRemaining,
           emit: value => { if (current()) deps.send({ kind: 'event', id: randomUUID(), dst: src, payload: value }) } })
+      } else if (call.method.startsWith('terminal.')) {
+        if (!deps.link.terminal || !deps.owner) throw new Error('TERMINAL_UNSUPPORTED')
+        // Stable grant identity permits attach after a socket change; current() still fences old transports.
+        result = await deps.link.terminal.invoke(call.method, call.params, { accountId: deps.owner, deviceId: src,
+          authorizationId: authority.syncKey, scopes: authority.scopes, current, validForMs: deps.terminalAuthorizationRemaining,
+          emit: value => { if (current()) deps.send({ kind: 'event', id: randomUUID(), dst: src, payload: value }) } })
       } else if (call.method.startsWith('desktop.schedule.')) {
         if (!deps.link.desktopSchedules || !deps.owner) throw new Error('UNSUPPORTED_OPERATION')
         result = await deps.link.desktopSchedules(call.method, call.params, {
@@ -85,9 +93,9 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
             typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED'
           )
         if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []),
-          ...(deps.link.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...deps.shared.descriptors(authority.scopes), ...(deps.link.desktop?.descriptors(authority.scopes) ?? [])]
+          ...(deps.link.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...deps.shared.descriptors(authority.scopes), ...(deps.link.desktop?.descriptors(authority.scopes) ?? []), ...(deps.link.terminal?.descriptors(authority.scopes) ?? [])]
         if (call.method === 'catalog.get' && Array.isArray(value.capabilities))
-          value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY, ...(deps.link.desktop?.capabilities() ?? [])]
+          value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY, ...(deps.link.desktop?.capabilities() ?? []), ...(deps.link.terminal?.capabilities(authority.scopes) ?? [])]
         result = call.method === 'catalog.get' ? appendHostMetadata(value, {
           deviceId: deps.hostId, appVersion: deps.link.appVersion, platform: deps.link.platform }) : value
       }

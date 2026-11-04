@@ -256,6 +256,8 @@ async markTurnAdmissionCompleted(this: TurnService,
         ...(locks.sandboxMode ? { sandboxMode: locks.sandboxMode } : {}),
         ...(locks.approvalReviewer ? { approvalReviewer: locks.approvalReviewer } : {}),
         turns,
+        // Stamp accepted input once; the completed-admission replay returns above.
+        activityAt: !current.activityAt || completedAt > current.activityAt ? completedAt : current.activityAt,
         updatedAt: completedAt
       }
       try {

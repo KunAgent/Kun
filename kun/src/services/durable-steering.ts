@@ -81,7 +81,7 @@ export async function admitDurableSteering(service: TurnService, input: DurableS
             ? { ...finishTurn(turn, 'aborted', createdAt), steeredToTurnId: target.id, terminalCode: 'queue_steered' }
             : turn)
         service['deps'].steering.markDurablePending(target.id)
-        const committed = await service['commitThreadRecordCAS']({ ...thread, turns, updatedAt: createdAt }, thread.revision ?? 0)
+        const committed = await service['commitThreadRecordCAS']({ ...thread, turns, activityAt: createdAt, updatedAt: createdAt }, thread.revision ?? 0)
         if (!committed.applied) continue
         return
       }

@@ -19,9 +19,11 @@ import { RemoteFacade } from './facade.js'
 import { requireCode } from './code/access.js'
 import { RemoteId } from './contracts.js'
 import { remoteAttachmentContent } from './files/access.js'
+import { registerTerminalOriginRoute } from './terminal/origin-workspace.js'
 export function registerRemoteRoutes(router: Router, runtime: ServerRuntime) {
   if (!runtime.rooms) return
   const facade = new RemoteFacade(runtime, router)
+  registerTerminalOriginRoute(router, runtime, facade)
   registerCodeSyncRoutes(router, runtime, facade)
   registerDesktopScheduleAudit(router, runtime)
   registerSharedTaskRoutes(router, runtime)

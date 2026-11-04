@@ -13,11 +13,13 @@ import { loadIdentity, resetIdentity } from './identity'
 import { MobileLinkService, type LinkDependencies } from './service'
 import { transferFiles } from './files'
 import { MobileLinkRecovery } from './recovery'
+import { createRuntimeOriginWorkspace } from './terminal-origin'
 import { RelayPreference } from './relay-preference'
 import { MobileRelayResume } from './relay-resume'
 import { logInfo, logWarn } from '../logger'
 import { MobileLinkSockets } from './socket'
 import { createDesktopEngine } from '../remote-desktop/engine'
+import { createTerminalEngine } from '../remote-terminal/engine'
 const networkKey = () => Object.entries(networkInterfaces()).flatMap(([name, addresses]) =>
   (addresses ?? []).filter((address) => !address.internal && !address.address.startsWith('fe80:'))
     .map((address) => name + ':' + address.family + ':' + address.address)).sort().join('|')
@@ -72,6 +74,18 @@ export function registerMobileLink(
       call: { method: `${resource.kind}.history`, params: resource.kind === 'code' ? { threadId: resource.id } : { agentId: resource.id }, requestId: crypto.randomUUID(), expiresAt: Date.now() + 15000 } }))
     if (!response.ok || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
   })
+  const terminal = createTerminalEngine({
+    invoke: async (call, authority) => {
+      const lease = await options.acquireRuntimeRequestLease()
+      if (!authority.current()) throw Error('TERMINAL_AUTHORITY_CHANGED')
+      const response = await lease.request('/v1/remote/invoke', 'POST', JSON.stringify({ accountId: authority.accountId,
+        deviceId: authority.deviceId, authorizationId: authority.authorizationId, scopes: authority.scopes,
+        call: { ...call, requestId: crypto.randomUUID(), expiresAt: Date.now() + 15000 } }))
+      if (!response.ok || !authority.current()) throw Error('TERMINAL_ORIGIN_UNAVAILABLE')
+      return JSON.parse(response.body)
+    },
+    readWorkspace: createRuntimeOriginWorkspace(options)
+  })
   const service = new MobileLinkService({
     account,
     requireMembership: (owner) => requireAccountFeature(account, (input, init) => net.fetch(String(input), init), 'mobileRemote', owner),
@@ -98,6 +112,7 @@ export function registerMobileLink(
     lease: options.acquireRuntimeRequestLease,
     diagnostic,
     desktop,
+    terminal,
     desktopSchedules: (method, params, scope, lease) => desktopSchedules.invoke(method, params, scope, lease),
     sharedFiles: transferSharedFiles,
     files: transferFiles

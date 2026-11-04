@@ -51,6 +51,8 @@ export class MobileLinkService {
   private totalRequestBudget = new RequestBudget()
   private authorizationId = randomUUID()
   private authorizationExpiresAt = 0
+  // Retained terminals keep the last authenticated lease, never a new socket's lease.
+  private authorizationLease = { expiresAt: 0 }
   private authorizationTimer?: ReturnType<typeof setTimeout>
   private transportEpoch = 0
   private lastRecoveryAt = -Infinity
@@ -145,6 +147,7 @@ export class MobileLinkService {
     this.peers.clear()
     this.authorities.clear()
     void this.deps.desktop?.stopAll('host_stopped').catch(() => {})
+    void this.deps.terminal?.stopAll('host_stopped').catch(() => {})
     this.notifications.stop()
     this.shared.stop()
     this.grantPeers.clear()
@@ -202,10 +205,13 @@ export class MobileLinkService {
     clearTimeout(this.authorizationTimer)
     this.authorizationTimer = undefined
     this.authorizationExpiresAt = 0
+    this.authorizationLease = { expiresAt: 0 }
     this.online = false
     this.authorizationId = randomUUID()
     this.subscriptions.clear()
     void this.deps.desktop?.stopAll('transport_closed').catch(() => {})
+    // Fence old socket closures, but allow the same grant to attach within its retained lease.
+    this.deps.terminal?.detachAll()
     this.peers.clear()
   }
   private transportCurrent(generation: number, epoch: number, signal?: AbortSignal) {
@@ -214,6 +220,7 @@ export class MobileLinkService {
   }
   private authorizeUntil(expiresAt: number) {
     this.authorizationExpiresAt = expiresAt
+    this.authorizationLease.expiresAt = expiresAt
     clearTimeout(this.authorizationTimer)
     this.authorizationTimer = setTimeout(() => {
       if (this.authorizationExpiresAt === expiresAt) this.reconnect('LOCAL_LEASE_EXPIRED')
@@ -232,7 +239,7 @@ export class MobileLinkService {
   /** Relay notices: a phone that went away no longer needs its streams; changed grants are re-read now. */
   private relayNotice(notice: RelayNotice, refresh: () => Promise<void>) {
     if (notice.relay === 'presence') {
-      for (const peer of notice.peers) if (!peer.online) { this.subscriptions.clear(peer.deviceId); this.deps.desktop?.authorityChanged(peer.deviceId) }
+      for (const peer of notice.peers) if (!peer.online) { this.subscriptions.clear(peer.deviceId); this.deps.desktop?.authorityChanged(peer.deviceId); this.deps.terminal?.peerGone(peer.deviceId) }
     } else if (notice.relay === 'authorization') {
       void refresh().catch(() => this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED'))
     }
@@ -522,6 +529,7 @@ export class MobileLinkService {
   }
   private permissionsChanged(peer: string) {
     this.deps.desktop?.authorityChanged(peer)
+    this.deps.terminal?.authorityChanged(peer)
     ++this.grantsVersion
     this.statusRequest = undefined
     this.subscriptions.clear(peer)
@@ -538,6 +546,7 @@ export class MobileLinkService {
     this.deniedGrants.set(id, peer)
     if (peer) {
       this.deps.desktop?.authorityChanged(peer)
+      this.deps.terminal?.authorityChanged(peer)
       this.peers.delete(peer)
       this.deniedPeers.add(peer)
       this.authorities.remove(peer)
@@ -566,10 +575,12 @@ export class MobileLinkService {
     }
     if (frame.kind !== 'invoke' || !frame.id) return
     const authority = this.peerAuthority(src)
-    const current = () => generation === this.generation && this.online && Date.now() < this.authorizationExpiresAt &&
+    const epoch = this.transportEpoch, terminalLease = this.authorizationLease
+    const current = () => generation === this.generation && epoch === this.transportEpoch && this.online && Date.now() < this.authorizationExpiresAt &&
       authority.id === this.peerAuthority(src).id && this.peers.has(src)
     await dispatchMobileInvoke(frame, src, authority, current, { link: this.deps, owner: this.owner, hostId: this.identity?.id, api: this.api,
       filePeers: this.filePeers, requestBudget: this.requestBudget, totalRequestBudget: this.totalRequestBudget, shared: this.shared, subscriptions: this.subscriptions,
-      authorizationRemaining: () => Math.max(0, this.authorizationExpiresAt - Date.now()), send: value => this.client?.send(value) })
+      authorizationRemaining: () => Math.max(0, this.authorizationExpiresAt - Date.now()),
+      terminalAuthorizationRemaining: () => Math.max(0, terminalLease.expiresAt - Date.now()), send: value => this.client?.send(value) })
   }
 }

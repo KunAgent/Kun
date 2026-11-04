@@ -16,6 +16,7 @@ export type LinkDependencies = {
   lease(): Promise<ProtectedRuntimeRequestLease>
   diagnostic?(code: string, details?: { attempt?: number; elapsedMs?: number }): void
   desktop?: import('../remote-desktop/session-service').RemoteDesktopService
+  terminal?: import('../remote-terminal/session-service').RemoteTerminalService
   sharedFiles?: SharedFileTransfer
   desktopSchedules?(method: string, params: unknown, scope: {
     accountId: string; deviceId: string; authorizationId: string; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[]

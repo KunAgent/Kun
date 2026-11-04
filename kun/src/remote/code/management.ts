@@ -23,6 +23,7 @@ export class RemoteCodeManagement {
     return { id: thread.id, title: thread.title, status: thread.status,
       pinned: thread.pinned === true, archived: thread.status === 'archived', revision: metadataRevision(thread),
       ...sessionRoute(thread),
+      ...(thread.activityAt ? { activityAt: thread.activityAt } : {}),
       createdAt: thread.createdAt, updatedAt: thread.updatedAt, ...(projectId ? { projectId } : {}) }
   }
   async search(p: { query?: string; status?: string; harnessId?: string; projectId?: string; cursor?: string; limit?: number } & UpdatedRange) {

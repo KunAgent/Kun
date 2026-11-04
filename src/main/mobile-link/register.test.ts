@@ -49,6 +49,10 @@ vi.mock('./service', () => ({ MobileLinkService: class {
 vi.mock('../remote-desktop/engine', () => ({ createDesktopEngine: () => ({
   status: vi.fn(), configure: vi.fn(), stopAll: vi.fn(async () => {})
 }) }))
+vi.mock('../remote-terminal/engine', () => ({ createTerminalEngine: () => ({
+  invoke: vi.fn(async () => ({})), descriptors: vi.fn(() => []), capabilities: vi.fn(() => []),
+  detachAll: vi.fn(), stopAll: vi.fn(async () => {}), authorityChanged: vi.fn(), peerGone: vi.fn()
+}) }))
 import { registerMobileLink } from './register'
 import { RESUME_RETRY_MS } from './relay-resume'
 

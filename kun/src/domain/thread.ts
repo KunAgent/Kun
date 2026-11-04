@@ -164,6 +164,7 @@ export function createThreadRecord(input: {
     ...(input.goal ? { goal: input.goal } : {}),
     ...(input.todos ? { todos: input.todos } : {}),
     createdAt: now,
+    activityAt: now,
     updatedAt: now,
     turns: []
   }
@@ -240,6 +241,7 @@ export function toThreadSummary(
     ...(thread.executionTasks ? { todos: executionTasksAsTodos(thread.id, thread.executionTasks) }
       : thread.todos ? { todos: thread.todos } : {}),
     ...(Array.isArray(thread.turns) ? { turnCount: thread.turns.length } : {}),
+    ...(thread.activityAt ? { activityAt: thread.activityAt } : {}),
     createdAt: thread.createdAt,
     updatedAt: thread.updatedAt
   }

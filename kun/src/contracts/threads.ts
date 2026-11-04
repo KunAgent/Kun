@@ -382,6 +382,8 @@ export const ThreadSchemaBase = z.object({
     pausedAt: z.string()
   }).optional(),
   createdAt: z.string(),
+  /** Stable ordering time: accepted input or turn settlement, not item/metadata writes. */
+  activityAt: z.string().optional(),
   updatedAt: z.string(),
   turns: z.array(TurnSchema).default([])
 })
@@ -456,6 +458,7 @@ export const ThreadSummarySchema = ThreadSchemaBase.pick({
   goal: true,
   todos: true,
   createdAt: true,
+  activityAt: true,
   updatedAt: true
 }).extend({
   /** First accepted Code/Design mode, derived from durable turn history. */
