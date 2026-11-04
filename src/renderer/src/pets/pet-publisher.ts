@@ -11,7 +11,7 @@ import { applyPetResultText, latestAssistantPreview, petWorkProcessText, present
 import { loadPetConversationThreads, petConversationSupplements } from './pet-conversation-threads'
 import { PET_OPEN_SETTINGS_EVENT, queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import type { PetActionRequest } from '@shared/pets'
-import { currentPetThread, petSnapshotForDelivery } from './pet-publisher-snapshot'
+import { currentPetThread, petSnapshotForDelivery, petUnreadBubbleAllowed } from './pet-publisher-snapshot'
 import { deliverPetChat } from './pet-new-chat'
 
 export function petBubbleAllowed(input: {
@@ -39,13 +39,17 @@ export function startPetActivityPublisher(): void {
   let active = true
   let pending: PetActionRequest | null = null
   let lastKey = ''
+  let lastUnreadSource: ChatState['unreadThreadIds'] | null = null
   const publish = (): void => {
     if (!active) return
     setPetOverlayActivityLive(overlayOpen)
-    if (!overlayOpen) return
-    refreshConversationThreads(publish)
+    const unreadSource = useChatStore.getState().unreadThreadIds
+    const unreadChanged = unreadSource !== lastUnreadSource
+    if (!overlayOpen && !unreadChanged) return
+    lastUnreadSource = unreadSource
+    if (overlayOpen) refreshConversationThreads(publish)
     void Promise.resolve().then(() => {
-      if (!active || !overlayOpen) return
+      if (!active || (!overlayOpen && !unreadChanged)) return
       const state = useChatStore.getState()
       const current = currentPetThread(state)
       // A previous turn's row must not mask this turn while metadata catches up.
@@ -71,7 +75,8 @@ export function startPetActivityPublisher(): void {
           ...conversationSupplements.filter((thread) => thread.threadId !== current?.threadId)
         ],
         nowMs: Date.now(),
-        bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) })
+        bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) }) &&
+          petUnreadBubbleAllowed(item, state)
       })
       const withProcess = projected.items.map((item) => presentRunningPetItem(item, state, rows))
       const livePreview = state.activeThreadId ? latestAssistantPreview(state.blocks, 180, state.busy ? state.currentTurnId : null) : ''
@@ -148,7 +153,11 @@ export function startPetActivityPublisher(): void {
       .then((result) => pets.completeChat(request.requestId, result))
       .finally(() => { creatingChat = false })
   })
-  const onFocus = (): void => { ready = true; if (pending) { const next = pending; pending = null; void deliver(next) } }
+  const onFocus = (): void => {
+    ready = true
+    publish()
+    if (pending) { const next = pending; pending = null; void deliver(next) }
+  }
   window.addEventListener('focus', onFocus)
   refreshSettings()
   pullNavigation()

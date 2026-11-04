@@ -1,5 +1,5 @@
 import { useState, type ReactElement } from 'react'
-import kunBird from '../../../asset/img/kun_bird.png'
+import kunBird from '../assets/kun_bird.png'
 
 type KunLoaderProps = {
   label: string

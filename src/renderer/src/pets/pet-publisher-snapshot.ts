@@ -1,6 +1,14 @@
-import { PET_ACTIVITY_MAX_ITEMS, type PetActivitySnapshot } from '@shared/pets'
+import { PET_ACTIVITY_MAX_ITEMS, type PetActivityItem, type PetActivitySnapshot } from '@shared/pets'
 import type { ChatState } from '../store/chat-store-types'
 import type { PetThreadSupplement } from './pet-activity'
+import { completionAttentionForThread, completionIsCurrentlyVisible } from '../store/unread-completions'
+
+/** Settled results follow the conversation's read state; live work still needs its progress/gates. */
+export function petUnreadBubbleAllowed(item: Pick<PetActivityItem, 'threadId' | 'status'>, state: ChatState): boolean {
+  if (item.status === 'running' || item.status === 'waiting') return true
+  return completionAttentionForThread(state.unreadThreadIds, item.threadId) !== null &&
+    !completionIsCurrentlyVisible(state, item.threadId)
+}
 
 /** Confirmed live state can arrive before sidebar metadata or the optional ADE feed. */
 export function currentPetThread(state: ChatState): PetThreadSupplement | null {

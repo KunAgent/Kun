@@ -16,7 +16,12 @@ describe('Kun startup styles', () => {
   it('provides an accessible first-paint shell before the renderer script runs', async () => {
     const html = await readFile(new URL('../../index.html', import.meta.url), 'utf8')
     expect(html).toMatch(/<div id="root">\s*<main class="kun-initial-startup" role="status"/)
-    expect(html).toMatch(/<img src="\.\.\/asset\/img\/kun_bird\.png"/)
+    // Resolve as a browser at the dev-server root would: ../ cannot escape its root.
+    const logoSrc = html.match(/<img src="([^"]+)"/)?.[1]
+    expect(logoSrc).toBeTruthy()
+    const logoPath = new URL(logoSrc!, 'http://localhost/index.html').pathname
+    const logo = await readFile(new URL(`../..${logoPath}`, import.meta.url))
+    expect(logo.subarray(1, 4).toString()).toBe('PNG')
     expect(html.indexOf('class="kun-initial-startup"')).toBeLessThan(html.indexOf('src="/src/main.tsx"'))
     expect(html).toContain('prefers-reduced-motion: reduce')
   })

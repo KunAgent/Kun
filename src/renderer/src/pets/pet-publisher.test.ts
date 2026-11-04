@@ -59,6 +59,8 @@ beforeEach(() => {
   }))
   useActivityStore.setState({ rows: {}, cursor: null, status: 'idle' })
   useChatStore.setState({
+    route: 'chat', unreadThreadIds: {}, sideConversations: {},
+    sidePanel: { open: false, activeSideId: null }, writeAssistantVisibleThreadId: null,
     threads: [thread()], activeThreadId: 'drawing', busy: true, busyUnconfirmed: false,
     currentTurnId: 'drawing-turn', currentTurnStartedAtMs: Date.parse(started), currentTurnUserId: 'user',
     turnStartedAtByUserId: { user: Date.parse(started) }, awaitingUserInputThreadIds: {},
@@ -86,7 +88,7 @@ describe('pet activity delivery for ordinary conversations', () => {
     useChatStore.setState({ liveAssistant: 'Drawing the requested mascot.', liveAssistantTurnId: 'drawing-turn' })
     await flush()
     expect(latest().items).toMatchObject([{ key, subtitle: 'Drawing the requested mascot.' }])
-    useChatStore.setState({ busy: false, threads: [thread('drawing', {
+    useChatStore.setState({ busy: false, unreadThreadIds: { drawing: 'completed' }, threads: [thread('drawing', {
       latestTurnId: 'drawing-turn', latestTurnStatus: 'completed', preview: 'The image is ready.'
     })] })
     await flush()
@@ -170,5 +172,84 @@ describe('pet activity delivery for ordinary conversations', () => {
     startPetActivityPublisher()
     await flush()
     expect(delivered.length).toBeGreaterThan(before)
+  })
+
+  it.each(['completed', 'failed'] as const)('shows %s results only while the conversation is unread', async (outcome) => {
+    useChatStore.setState({ busy: false, activeThreadId: null, threads: [thread('drawing', {
+      latestTurnId: 'drawing-turn', latestTurnStatus: outcome
+    })] })
+    startPetActivityPublisher()
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(0)
+    useChatStore.setState({ unreadThreadIds: { drawing: outcome } })
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(1)
+    useChatStore.setState({ unreadThreadIds: {} })
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(0)
+    // Metadata refreshes must not recreate an already-read notification under a new key.
+    useChatStore.setState({ threads: [thread('drawing', {
+      latestTurnId: 'drawing-turn', latestTurnStatus: outcome, updatedAt: '2026-11-04T09:01:00.000Z'
+    })] })
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(0)
+    expect(latest().items).toHaveLength(1)
+  })
+
+  it('hides the focused conversation result before the central unread clear is delivered', async () => {
+    let focused = false
+    vi.stubGlobal('document', { visibilityState: 'visible', hasFocus: () => focused })
+    useChatStore.setState({ busy: false, unreadThreadIds: { drawing: 'failed' }, threads: [thread('drawing', {
+      latestTurnId: 'drawing-turn', latestTurnStatus: 'failed'
+    })] })
+    startPetActivityPublisher()
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(1)
+    focused = true
+    window.dispatchEvent(new Event('focus'))
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(0)
+  })
+
+  it('updates cached activity on mark-as-read even while the pet is hidden', async () => {
+    useChatStore.setState({ busy: false, activeThreadId: null, unreadThreadIds: { drawing: 'completed' },
+      threads: [thread('drawing', { latestTurnId: 'drawing-turn', latestTurnStatus: 'completed' })] })
+    startPetActivityPublisher()
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(1)
+    overlayOpen = false
+    window.dispatchEvent(new Event('kun-pet-settings-changed'))
+    await flush()
+    const before = delivered.length
+    useChatStore.setState({ unreadThreadIds: {} })
+    await flush()
+    expect(delivered.length).toBeGreaterThan(before)
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(0)
+    overlayOpen = true
+    window.dispatchEvent(new Event('kun-pet-settings-changed'))
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(0)
+  })
+
+  it('allows a later unread turn to notify again and keeps live work and pending replies visible', async () => {
+    useChatStore.setState({ busy: false, activeThreadId: null, threads: [thread('drawing', {
+      latestTurnId: 'old', latestTurnStatus: 'completed'
+    })] })
+    startPetActivityPublisher()
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toHaveLength(0)
+    useChatStore.setState({ unreadThreadIds: { drawing: 'failed' }, threads: [thread('drawing', {
+      latestTurnId: 'next', latestTurnStatus: 'failed'
+    })] })
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toMatchObject([{ turnId: 'next', status: 'failed' }])
+    useChatStore.setState({ unreadThreadIds: {}, threads: [thread('drawing', {
+      latestTurnId: 'later', latestTurnStatus: 'running'
+    })] })
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toMatchObject([{ turnId: 'later', status: 'running' }])
+    useChatStore.setState({ threads: [thread('drawing', { latestTurnId: 'later', latestTurnStatus: 'waiting' })] })
+    await flush()
+    expect(visiblePetNotifications(latest(), new Set(), Date.now())).toMatchObject([{ turnId: 'later', status: 'waiting' }])
   })
 })
