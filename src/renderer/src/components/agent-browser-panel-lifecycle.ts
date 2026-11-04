@@ -24,7 +24,8 @@ function message(error: unknown): string {
 export function useAgentBrowserPanelLifecycle(
   threadId: string | null,
   expectedTurnId: string | undefined,
-  hostRef: RefObject<HTMLDivElement | null>
+  hostRef: RefObject<HTMLDivElement | null>,
+  { layoutVersion, cornerRadius = 0 }: { layoutVersion?: string | number; cornerRadius?: number } = {}
 ) {
   const [state, setState] = useState<BrowserUseViewState>(emptyState)
   const [operationError, setOperationError] = useState<string>()
@@ -36,6 +37,7 @@ export function useAgentBrowserPanelLifecycle(
   const stateRef = useRef(state)
   const mountSync = useRef<(() => void) | undefined>(undefined)
   const visible = useRef(false)
+  const radius = useRef(cornerRadius)
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? state.tabs[0]
   // The first origin needs a visible supervised host before Main can create a
   // tab or request consent. Main publishes ready as it releases that mount
@@ -89,8 +91,9 @@ export function useAgentBrowserPanelLifecycle(
 
   useLayoutEffect(() => {
     visible.current = shouldShowPage
+    radius.current = cornerRadius
     mountSync.current?.()
-  }, [shouldShowPage])
+  }, [shouldShowPage, layoutVersion, cornerRadius])
 
   useLayoutEffect(() => {
     const element = hostRef.current
@@ -107,6 +110,7 @@ export function useAgentBrowserPanelLifecycle(
         ...(expectedTurnId ? { expectedTurnId } : {}),
         visible: visible.current,
         supervisionActive: true,
+        cornerRadius: radius.current,
         bounds: { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
       }
       if (lastInput && JSON.stringify(lastInput) === JSON.stringify(input)) return

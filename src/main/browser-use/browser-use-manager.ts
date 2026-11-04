@@ -150,7 +150,8 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     rawBounds: BrowserUseRect,
     visible: boolean,
     supervisionActive = visible,
-    expectedTurnId?: string
+    expectedTurnId?: string,
+    cornerRadius = 0
   ): BrowserUseViewState {
     const entry = this.sessions.get(threadId)
     if (!entry) return this.defaultState()
@@ -173,6 +174,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
       lifecycleWindow.once?.('closed', onRendererLost)
     }
     entry.mount = {
+      cornerRadius,
       expectedTurnId,
       window,
       bounds,

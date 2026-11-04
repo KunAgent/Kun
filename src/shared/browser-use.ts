@@ -113,6 +113,7 @@ export const BrowserUseMountInputSchema = z.object({
   threadId: z.string().min(1).max(256),
   visible: z.boolean(),
   supervisionActive: z.boolean(),
+  cornerRadius: z.number().finite().min(0).max(32).optional(),
   bounds: BrowserUseRectSchema
 }).strict()
 export type BrowserUseMountInput = z.infer<typeof BrowserUseMountInputSchema>

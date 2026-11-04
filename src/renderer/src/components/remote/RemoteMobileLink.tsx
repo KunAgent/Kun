@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import type { MobileLinkScope } from '@shared/mobile-link-scopes'
 import type { MobileLinkStatus } from '@shared/mobile-link'
 import { MobileScopeOptions, PERSONAL_SCOPES } from './MobileScopeOptions'
+import { MobileGrantRow } from './MobileGrantRow'
 import { Smartphone } from 'lucide-react'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
@@ -11,7 +12,6 @@ import {
   RemoteIconTile,
   RemoteRow,
   RemoteRowText,
-  RemoteStatusDot,
   RemoteSwitch
 } from './remote-panel-ui'
 
@@ -122,26 +122,6 @@ export function MobileChannelRow({ link }: { link: MobileLink }): ReactElement |
       ) : null}
     </RemoteRow>
   )
-}
-
-function MobileGrantRow({ link, grant }: { link: MobileLink; grant: MobileLinkStatus['grants'][number] }): ReactElement {
-  const { zh, busy, revoke, setScopes } = link
-  const serialized = JSON.stringify(grant.scopes ?? PERSONAL_SCOPES)
-  const [draft, setDraft] = useState<MobileLinkScope[]>(grant.scopes ?? PERSONAL_SCOPES)
-  useEffect(() => { setDraft(JSON.parse(serialized)) }, [grant.id, serialized])
-  const dirty = [...draft].sort().join(',') !== [...(grant.scopes ?? PERSONAL_SCOPES)].sort().join(',')
-  return <RemoteRow className="flex-wrap">
-    <RemoteStatusDot on />
-    <RemoteRowText title={grant.name ?? grant.controllerId} subtitle={zh ? 'Kun iOS · Plus 及以上' : 'Kun iOS · Plus or higher'} />
-    <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)} onClick={() => revoke(grant.id)}>
-      {zh ? '撤销' : 'Revoke'}
-    </button>
-    <MobileScopeOptions zh={zh} value={draft} onChange={setDraft} disabled={Boolean(busy)} />
-    {dirty ? <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={Boolean(busy)}
-      onClick={(event) => runTrustedUserActivation(event, () => setScopes(grant.id, draft))}>
-      {zh ? '保存访问权限' : 'Save access permissions'}
-    </button> : null}
-  </RemoteRow>
 }
 
 /** Granted iOS devices retain advanced permissions only for this access session. */

@@ -461,6 +461,7 @@ export abstract class BrowserUseManagerFoundation {
     const children = mount.window.contentView.children
     if (!children.includes(tab.view)) mount.window.contentView.addChildView(tab.view)
     tab.view.setBounds(mount.bounds)
+    tab.view.setBorderRadius?.(mount.cornerRadius ?? 0)
     tab.view.setVisible(mount.visible && tab.id === entry.activeTabId)
     tab.view.webContents.setIgnoreMenuShortcuts(entry.controlOwner !== 'manual')
   }

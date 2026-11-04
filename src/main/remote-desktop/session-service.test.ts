@@ -41,6 +41,18 @@ function fixture(autoHealth = true) {
   return { service, deps, authority, events, captures, inputs, arbiter, setup, start, startParams, data, health, offline: () => { live = false }, changeDisplay: () => { fingerprint = 'different' } }
 }
 describe('RemoteDesktopService', () => {
+  it('reports actionable connection failures on the computer without retaining raw upstream errors', async () => {
+    const f = fixture(); await f.setup()
+    f.deps.permissions = async () => ({ screenRecording: 'denied', accessibility: 'granted' })
+    await expect(f.start()).rejects.toThrow('SCREEN_PERMISSION_REQUIRED')
+    expect((await f.service.status()).lastFailure).toBe('SCREEN_PERMISSION_REQUIRED')
+    await f.setup()
+    expect((await f.service.status()).lastFailure).toBeUndefined()
+    f.deps.permissions = async () => ({ screenRecording: 'granted', accessibility: 'granted' })
+    f.deps.ice = async () => { throw Error('private-vendor-token') }
+    await expect(f.start('next')).rejects.toThrow('private-vendor-token')
+    expect((await f.service.status()).lastFailure).toBe('DESKTOP_CONNECTION_FAILED')
+  })
   it('requires separate local enablement and desktop view authorization', async () => {
     const f = fixture()
     await expect(f.start()).rejects.toThrow('DESKTOP_DISABLED')

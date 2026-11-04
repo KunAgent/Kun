@@ -1,0 +1,8 @@
+{
+  "browserUseMovePreview": "移动浏览器浮窗",
+  "browserUseMovePreviewHint": "拖动可移动，方向键移动，Shift 加方向键调整大小。",
+  "browserUseResizePreview": "调整浏览器浮窗大小",
+  "browserUseDockPreview": "在右侧面板打开浏览器",
+  "browserUseFloatPreview": "悬浮到会话上",
+  "browserUseMoreActions": "更多浏览器操作"
+}

@@ -96,6 +96,7 @@ describe('registerBrowserUseIpc', () => {
       threadId: 'thread-1',
       visible: true,
       supervisionActive: true,
+      cornerRadius: 12,
       bounds: { x: 0, y: 0, width: 800, height: 600 }
     })).toEqual({ lifecycle: 'ready' })
     expect(h.manager.mount).toHaveBeenCalledWith(
@@ -104,7 +105,8 @@ describe('registerBrowserUseIpc', () => {
       { x: 0, y: 0, width: 800, height: 600 },
       true,
       true,
-      undefined
+      undefined,
+      12
     )
   })
 
@@ -150,7 +152,7 @@ it('forwards exact expected turn identity on every browser read and mutation', a
   invoke('state:get', identity)
   expect(h.manager.stateForThread).toHaveBeenLastCalledWith('thread-1', 'turn-current')
   invoke('mount', { ...identity, visible: true, supervisionActive: true, bounds: { x: 0, y: 0, width: 400, height: 300 } })
-  expect(h.manager.mount).toHaveBeenLastCalledWith('thread-1', h.window, { x: 0, y: 0, width: 400, height: 300 }, true, true, 'turn-current')
+  expect(h.manager.mount).toHaveBeenLastCalledWith('thread-1', h.window, { x: 0, y: 0, width: 400, height: 300 }, true, true, 'turn-current', undefined)
   invoke('control', { ...identity, controlOwner: 'manual' })
   expect(h.manager.setControlOwner).toHaveBeenLastCalledWith('thread-1', 'manual', 'turn-current')
   invoke('navigate', { ...identity, command: 'back' })

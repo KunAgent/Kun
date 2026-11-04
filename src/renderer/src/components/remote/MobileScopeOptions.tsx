@@ -30,15 +30,18 @@ export function selectMobileScope(current: MobileLinkScope[], id: MobileLinkScop
   }
   return [...next]
 }
-export function MobileScopeOptions({ zh, value, onChange, disabled = false }: {
-  zh: boolean; value: MobileLinkScope[]; onChange(scopes: MobileLinkScope[]): void; disabled?: boolean
+export function MobileScopeOptions({ zh, value, onChange, disabled = false, includeDesktop = true }: {
+  zh: boolean; value: MobileLinkScope[]; onChange(scopes: MobileLinkScope[]): void; disabled?: boolean; includeDesktop?: boolean
 }): ReactElement {
+  const options = OPTIONS.filter(option => includeDesktop || !option.id.startsWith('desktop.'))
+  const selected = options.filter(option => value.includes(option.id)).length
+  const title = includeDesktop ? zh ? '高级访问' : 'Advanced access' : zh ? '其他高级访问' : 'Other advanced access'
   return <details className="w-full rounded-lg border border-ds-border px-3 py-2 text-[12px] text-ds-muted">
-    <summary className="cursor-pointer select-none text-ds-ink">{zh ? '高级访问（默认关闭）' : 'Advanced access (off by default)'}</summary>
+    <summary className="cursor-pointer select-none text-ds-ink">{title + (selected ? zh ? ' · 已选择 ' + selected + ' 项' : ' · ' + selected + ' selected' : zh ? '（默认关闭）' : ' (off by default)')}</summary>
     <p className="mt-2 leading-5">{zh ? '基础访问包含这台电脑的个人 Agent 和 Code。以下权限仅在本次启动中有效，关闭访问或重新授权后清除。'
       : 'Basic access includes personal Agents and Code on this computer. These choices last until access is stopped or the device is authorized again.'}</p>
     <div className="mt-2 flex flex-col gap-2">
-      {OPTIONS.map((option) => <label key={option.id} className="flex items-start gap-2">
+      {options.map((option) => <label key={option.id} className="flex items-start gap-2">
         <input type="checkbox" checked={value.includes(option.id)} disabled={disabled}
           onChange={(event) => onChange(selectMobileScope(value, option.id, event.target.checked))} />
         <span>{zh ? option.zh : option.en}</span>

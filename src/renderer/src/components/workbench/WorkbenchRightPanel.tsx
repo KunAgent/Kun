@@ -56,8 +56,8 @@ const WorkersPanel = lazy(() =>
 const WorkerSessionPanel = lazy(() =>
   import('../workers/WorkerSessionPanel').then((module) => ({ default: module.WorkerSessionPanel }))
 )
-const DevBrowserPanel = lazy(() =>
-  import('../DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
+const WorkbenchBrowserPanel = lazy(() =>
+  import('../WorkbenchBrowserPanel').then((module) => ({ default: module.WorkbenchBrowserPanel }))
 )
 const WorkspaceFilePreviewPanel = lazy(() =>
   import('../WorkspaceFilePreviewPanel').then((module) => ({
@@ -100,7 +100,7 @@ const GraphModePanel = lazy(() =>
 
 type SddAssistantPanelProps = ComponentProps<typeof SddAssistantPanel>
 type ChangeInspectorProps = ComponentProps<typeof ChangeInspector>
-type DevBrowserPanelProps = ComponentProps<typeof DevBrowserPanel>
+type DevBrowserPanelProps = ComponentProps<typeof WorkbenchBrowserPanel>
 type CodeCanvasPanelProps = ComponentProps<typeof CodeCanvasPanel>
 type WorkspaceFilePreviewPanelProps = ComponentProps<typeof WorkspaceFilePreviewPanel>
 
@@ -229,7 +229,7 @@ export function WorkbenchRightPanel({
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.changes ? (
             <ChangeInspector {...changes} className="h-full max-h-full w-full flex-col" />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.browser ? (
-            <DevBrowserPanel {...browser} className="h-full max-h-full w-full flex-col" />
+            <WorkbenchBrowserPanel {...browser} className="h-full max-h-full w-full flex-col" />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.plan ? (
             planPanel
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.canvas ? (
@@ -338,9 +338,10 @@ function CodeRightPanelWorkspace({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.browser) {
       return (
-        <DevBrowserPanel
+        <WorkbenchBrowserPanel
           key={workspaceRoot || '__global__'}
           {...browser}
+          active={visible && code.state.activeId === id}
           embedded
           className="h-full max-h-full w-full flex-col"
           onTitleChange={(title) => updateTitle(id, title)}

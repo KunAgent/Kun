@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserUseViewState } from '@shared/browser-use'
+import type { BrowserUseMountInput, BrowserUseViewState } from '@shared/browser-use'
 import i18n from '../i18n'
 import { AgentBrowserPanel } from './AgentBrowserPanel'
 
@@ -41,7 +41,7 @@ function setup() {
       oldHandlers.push(handler)
       return () => handlers.delete(handler)
     }),
-    mountBrowserUse: vi.fn(async (input: { threadId: string }) => state(input.threadId)),
+    mountBrowserUse: vi.fn(async (input: BrowserUseMountInput) => state(input.threadId)),
     navigateBrowserUse: vi.fn(async () => state()),
     setBrowserUseControl: vi.fn(async () => state('thread-1', 'First task', { controlOwner: 'manual' })),
     stopBrowserUse: vi.fn(async () => state('thread-1', 'Stopped task', { lifecycle: 'stopped' })),
@@ -59,12 +59,15 @@ function setup() {
 }
 
 const renderers: ReactTestRenderer[] = []
-async function render(props: Parameters<typeof AgentBrowserPanel>[0] = { threadId: 'thread-1', active: true }) {
+async function render(
+  props: Parameters<typeof AgentBrowserPanel>[0] = { threadId: 'thread-1', active: true },
+  bounds = () => ({ x: 10, y: 20, width: 640, height: 480 })
+) {
   let renderer!: ReactTestRenderer
   await act(async () => {
     renderer = create(createElement(AgentBrowserPanel, props), {
       createNodeMock: (node) => node.type === 'div' ? {
-        getBoundingClientRect: () => ({ x: 10, y: 20, width: 640, height: 480 })
+        getBoundingClientRect: bounds
       } : null
     })
   })
@@ -79,6 +82,27 @@ afterEach(async () => {
 })
 
 describe('AgentBrowserPanel lifecycle fences', () => {
+  it('moves the native browser without releasing supervision or waiting for a size change', async () => {
+    const { api } = setup()
+    let bounds = { x: 10, y: 20, width: 640, height: 480 }
+    const renderer = await render({ threadId: 'thread-1', active: true, variant: 'pip', layoutVersion: 'first' }, () => bounds)
+    api.mountBrowserUse.mockClear()
+    bounds = { ...bounds, x: 120, y: 170 }
+    await act(async () => renderer.update(createElement(AgentBrowserPanel, {
+      threadId: 'thread-1', active: true, variant: 'pip', layoutVersion: 'moved'
+    })))
+    expect(api.mountBrowserUse).toHaveBeenLastCalledWith(expect.objectContaining({
+      bounds, visible: true, supervisionActive: true, cornerRadius: 12
+    }))
+    await act(async () => renderer.update(createElement(AgentBrowserPanel, {
+      threadId: 'thread-1', active: true, variant: 'full', layoutVersion: 'docked'
+    })))
+    expect(api.mountBrowserUse).toHaveBeenLastCalledWith(expect.objectContaining({
+      bounds, visible: true, supervisionActive: true, cornerRadius: 0
+    }))
+    expect(api.mountBrowserUse.mock.calls.some(([input]) => input.supervisionActive === false)).toBe(false)
+  })
+
   it('keeps a newer event when the initial get resolves late, even with equal timestamps', async () => {
     const { api, publish } = setup()
     const get = deferred<BrowserUseViewState>()

@@ -200,6 +200,45 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
             </RemoteGroup>
           </RemoteSection>
 
+          <div id="mobile-device-permissions">
+          {clients.length > 0 || grantCount > 0 ? (
+            <RemoteSection
+              title={t('remoteAccessDevicesSection')}
+              aside={
+                clients.length > 0 ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void revokeSessions()}
+                    className="text-[12px] text-ds-danger transition hover:opacity-80 disabled:opacity-50"
+                  >
+                    {t('remoteAccessRevokeSessions')}
+                  </button>
+                ) : null
+              }
+            >
+              <RemoteGroup>
+                {clients.map((client) => (
+                  <RemoteRow key={client.id}>
+                    <RemoteStatusDot on />
+                    <RemoteRowText
+                      title={describeUserAgent(client.userAgent) || t('remoteAccessBrowserClient')}
+                      subtitle={client.remoteAddress}
+                    />
+                  </RemoteRow>
+                ))}
+                <MobileGrantRows link={link} />
+              </RemoteGroup>
+            </RemoteSection>
+          ) : anyChannelOn ? (
+            <p className="flex items-center gap-2 px-1 text-[12px] text-ds-muted">
+              <RemoteStatusDot on={false} />
+              {t('remoteAccessNoDevices')}
+            </p>
+          ) : null}
+
+          </div>
+
           {status.running ? (
             <RemoteSection title={t('remoteAccessUrls')}>
               <RemoteGroup>
@@ -266,42 +305,6 @@ export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
                 ) : null}
               </RemoteGroup>
             </RemoteSection>
-          ) : null}
-
-          {clients.length > 0 || grantCount > 0 ? (
-            <RemoteSection
-              title={t('remoteAccessDevicesSection')}
-              aside={
-                clients.length > 0 ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void revokeSessions()}
-                    className="text-[12px] text-ds-danger transition hover:opacity-80 disabled:opacity-50"
-                  >
-                    {t('remoteAccessRevokeSessions')}
-                  </button>
-                ) : null
-              }
-            >
-              <RemoteGroup>
-                {clients.map((client) => (
-                  <RemoteRow key={client.id}>
-                    <RemoteStatusDot on />
-                    <RemoteRowText
-                      title={describeUserAgent(client.userAgent) || t('remoteAccessBrowserClient')}
-                      subtitle={client.remoteAddress}
-                    />
-                  </RemoteRow>
-                ))}
-                <MobileGrantRows link={link} />
-              </RemoteGroup>
-            </RemoteSection>
-          ) : anyChannelOn ? (
-            <p className="flex items-center gap-2 px-1 text-[12px] text-ds-muted">
-              <RemoteStatusDot on={false} />
-              {t('remoteAccessNoDevices')}
-            </p>
           ) : null}
 
           <RemoteSettingsGroup

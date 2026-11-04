@@ -1,0 +1,8 @@
+{
+  "browserUseMovePreview": "Move browser preview",
+  "browserUseMovePreviewHint": "Drag to move. Arrow keys move; Shift + arrows resize.",
+  "browserUseResizePreview": "Resize browser preview",
+  "browserUseDockPreview": "Open browser in right panel",
+  "browserUseFloatPreview": "Float browser over conversation",
+  "browserUseMoreActions": "More browser actions"
+}

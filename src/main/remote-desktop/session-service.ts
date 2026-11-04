@@ -46,6 +46,8 @@ export class RemoteDesktopService {
   private active?: Run
   private tombstones = new Map<string, { expires: number; value: Ended; hash?: string }>()
   private timer?: ReturnType<typeof setInterval>
+  private lastFailure?: string
+  private failureRevision = 0
   constructor(private readonly deps: DesktopEngineDependencies) {}
   private sourceList() {
     return this.deps.displays().slice(0, 8).map(display => {
@@ -57,7 +59,7 @@ export class RemoteDesktopService {
   async status(): Promise<DesktopAccessStatus> {
     const supported = this.deps.supported(), permissions = await this.deps.permissions()
     return { supported, enabled: this.enabled, ready: supported && this.enabled && this.allowed.size > 0 && permissions.screenRecording === 'granted',
-      inputReady: permissions.accessibility === 'granted',
+      inputReady: permissions.accessibility === 'granted', ...(this.lastFailure ? { lastFailure: this.lastFailure } : {}),
       ...(!supported ? { reason: 'DESKTOP_UNSUPPORTED' } : permissions.screenRecording !== 'granted' ? { reason: 'SCREEN_PERMISSION_REQUIRED' } : {}),
       displays: this.sourceList().map(display => ({ token: display.token, revision: display.revision, label: display.label, pixelWidth: display.pixelWidth,
         pixelHeight: display.pixelHeight, rotation: display.rotation, allowed: this.allowed.has(display.token) })),
@@ -70,6 +72,7 @@ export class RemoteDesktopService {
     if (value.displayTokens.some(token => typeof token !== 'string' || !known.has(token)) || new Set(value.displayTokens).size !== value.displayTokens.length) throw Error('INVALID_REQUEST')
     if (value.enabled && (!this.deps.supported() || !value.displayTokens.length)) throw Error('DESKTOP_UNSUPPORTED')
     await this.stopAll('configuration_changed')
+    ++this.failureRevision; this.lastFailure = undefined
     this.allowed = new Set(value.displayTokens); this.enabled = value.enabled
     return this.status()
   }
@@ -95,6 +98,21 @@ export class RemoteDesktopService {
   }
   private deadline(authority: DesktopAuthority, ms: number) { return this.deps.now() + Math.max(0, Math.min(ms, authority.validForMs?.() ?? ms)) }
   async invoke(method: string, raw: unknown, authority: DesktopAuthority): Promise<unknown> {
+    if (['desktop.session.stop', 'desktop.session.cancel'].includes(method) && authority.current()) ++this.failureRevision
+    const report = ['desktop.session.start', 'desktop.session.reconnect', 'desktop.control.acquire'].includes(method) && authority.current()
+    const revision = report ? ++this.failureRevision : this.failureRevision
+    if (report) this.lastFailure = undefined
+    try { return await this.dispatch(method, raw, authority) }
+    catch (error) {
+      if (report && revision === this.failureRevision && authority.current() && !(error instanceof Error && error.message === 'DESKTOP_AUTHORITY_CHANGED')) {
+        const code = error instanceof Error ? error.message : ''
+        this.lastFailure = ['SCREEN_PERMISSION_REQUIRED', 'INPUT_PERMISSION_REQUIRED', 'DESKTOP_VIEW_REQUIRED',
+          'DESKTOP_ICE_UNAVAILABLE', 'DESKTOP_CLEANUP_UNCONFIRMED'].includes(code) ? code : 'DESKTOP_CONNECTION_FAILED'
+      }
+      throw error
+    }
+  }
+  private async dispatch(method: string, raw: unknown, authority: DesktopAuthority): Promise<unknown> {
     if (!(DESKTOP_METHODS as readonly string[]).includes(method)) throw Error('UNSUPPORTED_OPERATION')
     if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
     const params = validateDesktopParams(method as DesktopMethod, raw) as any

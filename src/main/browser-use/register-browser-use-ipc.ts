@@ -45,7 +45,8 @@ export function registerBrowserUseIpc(options: {
       input.bounds,
       input.visible,
       input.supervisionActive,
-      input.expectedTurnId
+      input.expectedTurnId,
+      input.cornerRadius
     )
   })
   ipcMain.handle('browser-use:origin:decide', (event, raw) => {

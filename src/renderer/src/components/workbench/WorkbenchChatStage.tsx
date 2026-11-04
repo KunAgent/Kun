@@ -30,6 +30,7 @@ import { WorkbenchTopActions } from '../chat/WorkbenchTopBar'
 import { IkunCameoLayer, KunCelebrationLayer } from '../chat/AnimatedWorkLogo'
 import { ActiveUiPluginStagePresentation } from '../chat/UiPluginStagePresentation'
 import { DevPreviewLaunchCard } from '../DevPreviewLaunchCard'
+import { AgentBrowserFloatingPreview } from '../AgentBrowserFloatingPreview'
 import { SessionHeader } from '../SessionHeader'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import type { JsonValue } from '@kun/extension-api'
@@ -388,7 +389,7 @@ export function WorkbenchChatStage({
           ) : null}
           <ChatFindBar activeThreadId={activeThreadId} blocks={blocks} />
           <ConversationFileDropZone
-            className={`${trajectoryOpen ? 'hidden' : 'flex'} min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}
+            className={`${trajectoryOpen ? 'hidden' : 'flex'} relative min-h-0 min-w-0 flex-col ${emptyTaskLayout ? 'flex-none' : 'flex-1'}`}
             options={conversationFileDropOptions}
           >
             <MessageEditAssistProvider
@@ -430,6 +431,7 @@ export function WorkbenchChatStage({
             </MessageEditAssistProvider>
             {uiModeCameosEnabled && !focusModeEnabled && !emptyTaskLayout ? <IkunCameoLayer /> : null}
             {!focusModeEnabled ? <KunCelebrationLayer active={busy} suppressed={Boolean(runtimeError)} /> : null}
+            <AgentBrowserFloatingPreview activeThreadId={trajectoryOpen || terminalMaximized ? null : activeThreadId} onOpenInPanel={onOpenDevPreview} />
           </ConversationFileDropZone>
           {trajectoryOpen && activeThreadId ? (
             <TrajectoryView threadId={activeThreadId} data={trajectoryData} />

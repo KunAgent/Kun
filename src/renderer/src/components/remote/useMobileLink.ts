@@ -74,12 +74,13 @@ export function useMobileLink() {
     setError('')
     try {
       const next = await run()
-      if (current()) setState(next)
+      if (current()) { setState(next); return true }
     } catch (failure) {
       if (current()) setError(failureMessage(String(failure)))
     } finally {
       if (current()) setBusy(null)
     }
+    return false
   }
   const starting = Boolean(state?.starting || busy === 'start'),
     canStop = signedIn && Boolean(state?.enabled || starting),
@@ -102,7 +103,7 @@ export function useMobileLink() {
     resetIdentity: () => api && void action(() => api.resetIdentity()),
     toggle: () => api && (canStop || mobileAllowed) && void action(() => api.enable(!canStop), canStop ? 'stop' : 'start'),
     confirm: (id: string, scopes?: MobileLinkScope[]) => api && void action(() => api.confirm(id, scopes)),
-    setScopes: (id: string, scopes: MobileLinkScope[]) => api && void action(() => api.setScopes(id, scopes)),
+    setScopes: (id: string, scopes: MobileLinkScope[]) => api ? action(() => api.setScopes(id, scopes)) : Promise.resolve(false),
     revoke: (id: string) => api && void action(() => api.revoke(id))
   }
 }

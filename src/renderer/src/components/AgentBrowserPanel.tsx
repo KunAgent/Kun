@@ -24,6 +24,7 @@ type AgentBrowserPanelProps = {
   active: boolean
   onTitleChange?: (title: string) => void
   variant?: 'full' | 'pip'
+  layoutVersion?: string | number
 }
 
 export function AgentBrowserPanel(props: AgentBrowserPanelProps): ReactElement {
@@ -38,12 +39,13 @@ function ScopedAgentBrowserPanel({
   threadId,
   expectedTurnId,
   onTitleChange,
-  variant = 'full'
+  variant = 'full',
+  layoutVersion
 }: AgentBrowserPanelProps): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
   const { state, operationError, pendingOperation, run } = useAgentBrowserPanelLifecycle(
-    threadId, expectedTurnId, hostRef
+    threadId, expectedTurnId, hostRef, { layoutVersion, cornerRadius: variant === 'pip' ? 12 : 0 }
   )
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? state.tabs[0]
   const compact = variant === 'pip'
