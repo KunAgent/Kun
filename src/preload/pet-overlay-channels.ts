@@ -6,6 +6,7 @@ export const PET_OVERLAY_IPC = {
   overlayBootstrapChanged: 'kun:pets:overlay:bootstrap-changed',
   overlayActivity: 'kun:pets:overlay:activity',
   overlayFocused: 'kun:pets:overlay:main-focused',
+  overlayLayoutChanged: 'kun:pets:overlay:layout-changed',
   overlayDragStart: 'kun:pets:overlay:drag-start',
   overlayDragMove: 'kun:pets:overlay:drag-move',
   overlayDragEnd: 'kun:pets:overlay:drag-end',

@@ -49,6 +49,7 @@ export type PetOverlayPlacement = {
   displayId: string
   workArea: { x: number; y: number; width: number; height: number }
   windowBounds: { x: number; y: number; width: number; height: number }
+  petCenter?: ScreenPoint
   mascotWidthPx: number
   updatedAt: string
 }
@@ -135,6 +136,14 @@ export type PetOverlayBootstrap = {
   /** Replay current work when the overlay loads after the last activity event. */
   activitySnapshot?: PetActivitySnapshot
   bubblesCollapsed?: boolean
+  layout?: PetOverlayLayout
+}
+
+export type PetOverlayLayout = {
+  anchorX: number
+  anchorY: number
+  viewportWidth: number
+  viewportHeight: number
 }
 
 export type PetOverlayBounds = { width: number; height: number; anchorX: number; anchorY: number }
@@ -168,6 +177,7 @@ export type PetOverlayBridge = {
   onBootstrapChanged: (handler: (value: PetOverlayBootstrap) => void) => () => void
   onActivityChanged: (handler: (value: PetActivitySnapshot) => void) => () => void
   onMainWindowFocused: (handler: () => void) => () => void
+  onLayoutChanged: (handler: (layout: PetOverlayLayout) => void) => () => void
   beginDrag: (point: ScreenPoint) => void
   moveDrag: (point: ScreenPoint) => void
   endDrag: (point: ScreenPoint) => void
@@ -253,6 +263,7 @@ export const PET_IPC = {
   overlayBootstrapChanged: 'kun:pets:overlay:bootstrap-changed',
   overlayActivity: 'kun:pets:overlay:activity',
   overlayFocused: 'kun:pets:overlay:main-focused',
+  overlayLayoutChanged: 'kun:pets:overlay:layout-changed',
   overlayDragStart: 'kun:pets:overlay:drag-start',
   overlayDragMove: 'kun:pets:overlay:drag-move',
   overlayDragEnd: 'kun:pets:overlay:drag-end',

@@ -30,6 +30,7 @@ vi.mock('./pet-window', () => ({
     send = host.send
     senderId() { return 77 }
     isOpen() { return true }
+    layout() { return { anchorX: 210, anchorY: 320, viewportWidth: 420, viewportHeight: 640 } }
     mode() { return 'passthrough' }
     policy = { note: null }
   }
@@ -97,6 +98,21 @@ describe('desktop pet startup', () => {
     await copyDefault()
     await startDesktopPets()
     expect(host.open).not.toHaveBeenCalled()
+  })
+
+  it('passes the persisted pet center through startup rather than deriving it from the panel window', async () => {
+    const destination = await copyDefault()
+    const store = new PetStore(path.join(host.root, 'profile', 'pets'))
+    await store.initialize()
+    await store.importOrUpdate({ source: 'kun-builtin', sourceId: 'xiao-kun', displayName: 'Kun', description: 'Test pet',
+      spriteVersionNumber: 1, sourcePath: destination, spritesheetSourcePath: path.join(destination, 'spritesheet.webp') })
+    await store.selectPet('kun:xiao-kun')
+    await store.setOverlayOpen(true)
+    await store.setPlacement({ displayId: 'primary', workArea: { x: 0, y: 0, width: 1200, height: 800 },
+      windowBounds: { x: 300, y: 100, width: 420, height: 640 }, petCenter: { x: 510, y: 390 },
+      mascotWidthPx: 112, updatedAt: '2026-11-05T00:00:00.000Z' })
+    await startDesktopPets()
+    expect(host.open).toHaveBeenCalledWith(expect.objectContaining({ petCenter: { x: 510, y: 390 } }))
   })
 
   it('includes current activity when a freshly loaded overlay requests its bootstrap', async () => {

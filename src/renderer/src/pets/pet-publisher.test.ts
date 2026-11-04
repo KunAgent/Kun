@@ -85,7 +85,8 @@ describe('pet activity delivery for ordinary conversations', () => {
       { threadId: 'drawing', turnId: 'drawing-turn', status: 'running', bubbleAllowed: true }
     ])
     const key = latest().items[0].key
-    useChatStore.setState({ liveAssistant: 'Drawing the requested mascot.', liveAssistantTurnId: 'drawing-turn' })
+    useChatStore.setState({ liveAssistant: 'Drawing the requested mascot.', liveAssistantTurnId: 'drawing-turn',
+      liveAssistantCreatedAt: '2026-11-04T09:00:02.000Z', blocks: [] })
     await flush()
     expect(latest().items).toMatchObject([{ key, subtitle: 'Drawing the requested mascot.' }])
     useChatStore.setState({ busy: false, unreadThreadIds: { drawing: 'completed' }, threads: [thread('drawing', {
@@ -100,6 +101,26 @@ describe('pet activity delivery for ordinary conversations', () => {
     startPetActivityPublisher()
     await flush()
     expect(latest().items).toMatchObject([{ threadId: 'drawing', status: 'running' }])
+  })
+
+  it('switches an earlier text preview back to tool work and thinking, then accepts a shorter fresh reply', async () => {
+    useChatStore.setState({ liveAssistant: 'An earlier assistant paragraph that is still cached.',
+      liveAssistantTurnId: 'drawing-turn', liveAssistantCreatedAt: '2026-11-04T09:00:01.000Z' })
+    startPetActivityPublisher()
+    await flush()
+    expect(latest().items[0].subtitle).toContain('earlier assistant')
+    expect(latest().items[0].liveSinceMs).toBe(Date.parse(started))
+    useChatStore.setState({ blocks: [{ kind: 'tool', id: 'read', turnId: 'drawing-turn', status: 'running',
+      createdAt: '2026-11-04T09:00:02.000Z', summary: 'Read source', meta: { toolName: 'read_file' } }] })
+    await flush()
+    expect(latest().items[0].subtitle).toBe('workingToolAction')
+    useChatStore.setState({ blocks: [], liveReasoning: 'Think again', liveReasoningTurnId: 'drawing-turn',
+      liveReasoningCreatedAt: '2026-11-04T09:00:03.000Z' })
+    await flush()
+    expect(latest().items[0].subtitle).toBe('thinkingNow')
+    useChatStore.setState({ liveAssistant: 'Done.', liveAssistantCreatedAt: '2026-11-04T09:00:04.000Z' })
+    await flush()
+    expect(latest().items[0].subtitle).toBe('Done.')
   })
 
   it('does not invent live work from an unconfirmed restored conversation', async () => {

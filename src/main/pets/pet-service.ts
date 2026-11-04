@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
-import { PET_IPC, petAssetUrl, type PetActionRequest, type PetActionResult, type PetActivitySnapshot, type PetOverlayBootstrap } from '../../shared/pets'
+import { PET_IPC, petAssetUrl, type PetActionRequest, type PetActionResult, type PetActivitySnapshot, type PetOverlayBootstrap, type PetOverlayPlacement } from '../../shared/pets'
 import { developmentRendererUrl, mainState } from '../main-app-context'
 import { resolveNamedPreloadPath } from '../main-paths'
 import { runtimeRequest } from '../main-runtime-settings'
@@ -98,6 +98,7 @@ class DesktopPetRuntime implements DesktopPets {
         scaleFactor: display.scaleFactor
       })),
       cursor: () => screen.getCursorScreenPoint(),
+      layoutChanged: (layout) => this.controller?.send(PET_IPC.overlayLayoutChanged, layout),
       load: (window) => this.loadOverlay(window),
       onDisplayChange: (handler) => {
         screen.on('display-added', handler)
@@ -291,6 +292,7 @@ class DesktopPetRuntime implements DesktopPets {
       interactionMode: this.controller?.mode() ?? 'passthrough',
       interactionNote: this.controller?.policy.note ?? null,
       bubblesCollapsed: settings.bubblesCollapsed === true,
+      layout: this.controller?.layout(),
       ...(this.snapshot ? { activitySnapshot: this.snapshot } : {})
     }
   }
@@ -343,10 +345,10 @@ class DesktopPetRuntime implements DesktopPets {
   }
 }
 
-function savedPlacement(store: PetStore): { displayId: string; windowBounds: { x: number; y: number; width: number; height: number } } | null {
+function savedPlacement(store: PetStore): Pick<PetOverlayPlacement, 'displayId' | 'windowBounds' | 'petCenter'> | null {
   const settings = store.getSettings()
   const placement = Object.values(settings.placementByDisplay)[0]
-  return placement ? { displayId: placement.displayId, windowBounds: placement.windowBounds } : null
+  return placement ? { displayId: placement.displayId, windowBounds: placement.windowBounds, petCenter: placement.petCenter } : null
 }
 
 function toEvent(event: IpcMainInvokeEvent | IpcMainEvent, senderKind: 'main' | 'overlay' | 'other'): PetIpcEvent {

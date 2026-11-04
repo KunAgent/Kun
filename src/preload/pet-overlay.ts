@@ -13,6 +13,7 @@ const api: PetOverlayBridge = {
   onBootstrapChanged: (handler) => listen(PET_OVERLAY_IPC.overlayBootstrapChanged, handler),
   onActivityChanged: (handler) => listen(PET_OVERLAY_IPC.overlayActivity, handler),
   onMainWindowFocused: (handler) => listen(PET_OVERLAY_IPC.overlayFocused, () => handler()),
+  onLayoutChanged: (handler) => listen(PET_OVERLAY_IPC.overlayLayoutChanged, handler),
   beginDrag: (point) => ipcRenderer.send(PET_OVERLAY_IPC.overlayDragStart, point),
   moveDrag: (point) => ipcRenderer.send(PET_OVERLAY_IPC.overlayDragMove, point),
   endDrag: (point) => ipcRenderer.send(PET_OVERLAY_IPC.overlayDragEnd, point),

@@ -6,13 +6,13 @@ import { deliverPetFollowUp } from './pet-follow-up'
 import { activityFeedGeneration, setPetOverlayActivityLive, useActivityStore } from '../store/activity-store'
 import { useChatStore } from '../store/chat-store'
 import type { ChatState } from '../store/chat-store-types'
-import type { ToolBlock } from '../agent/types'
 import { applyPetResultText, latestAssistantPreview, petWorkProcessText, presentPetRunningItem, projectPetActivity, semanticSnapshotKey, type PetThreadSupplement } from './pet-activity'
 import { loadPetConversationThreads, petConversationSupplements } from './pet-conversation-threads'
 import { PET_OPEN_SETTINGS_EVENT, queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import type { PetActionRequest } from '@shared/pets'
 import { currentPetThread, petSnapshotForDelivery, petUnreadBubbleAllowed } from './pet-publisher-snapshot'
 import { deliverPetChat } from './pet-new-chat'
+import { currentPetProgress } from './pet-live-progress'
 
 export function petBubbleAllowed(input: {
   preferenceEnabled: boolean
@@ -233,66 +233,38 @@ function presentRunningPetItem(
   const row = rows.find((candidate) => candidate.unitId === item.unitId)
   const live = item.threadId === state.activeThreadId && state.busy && !state.busyUnconfirmed
   if (live) {
-    const assistant = currentTurnAssistantText(state)
-    if (assistant) return presentPetRunningItem(item, { assistantText: assistant })
+    const progress = currentPetProgress(state)
+    if (progress.kind === 'assistant') return presentPetRunningItem(item, {
+      assistantText: progress.text, liveSinceMs: liveSinceMs(state, item.stateSince)
+    })
+    const processText = petWorkProcessText({
+      toolAction: progress.kind === 'tool' ? summarizeToolLiveAction(progress.tool, translatePet) : undefined,
+      thinking: progress.kind === 'thinking', workingLabel: i18n.t('workingSprint', { ns: 'common' }),
+      thinkingLabel: i18n.t('thinkingNow', { ns: 'common' }),
+      toolLabel: (action) => i18n.t('workingToolAction', { ns: 'common', action })
+    })
     return presentPetRunningItem(item, {
-      processText: liveProcessText(state, row),
+      processText,
       liveSinceMs: liveSinceMs(state, item.stateSince)
     })
   }
-  if (item.subtitle?.trim()) return item
+  if (item.subtitle?.trim() && !row?.currentTool) return item
   return presentPetRunningItem(item, {
-    processText: liveProcessText(state, row, false),
+    processText: backgroundProcessText(row),
     liveSinceMs: Date.parse(item.stateSince)
   })
 }
 
-function currentTurnAssistantText(state: ChatState): string {
-  const turnId = state.currentTurnId
-  const fromBlocks = turnId ? latestAssistantPreview(state.blocks, 180, turnId) : ''
-  const live = state.liveAssistant.replace(/\s+/g, ' ').trim()
-  const liveMatches = !state.liveAssistantTurnId || !turnId || state.liveAssistantTurnId === turnId
-  const liveText = liveMatches ? live : ''
-  if (liveText.length > fromBlocks.length) {
-    return liveText.length > 180 ? `${liveText.slice(0, 180).trimEnd()}…` : liveText
-  }
-  return fromBlocks
-}
-
-function liveProcessText(state: ChatState, row: ActivityRow | undefined, live = true): string {
-  const tool = live ? runningToolBlock(state) : undefined
-  const toolAction = tool
-    ? summarizeToolLiveAction(tool, translatePet)
-    : toolActionName(row?.currentTool)
-  const thinking = live && !toolAction && hasCurrentReasoning(state)
+function backgroundProcessText(row: ActivityRow | undefined): string {
+  const toolAction = toolActionName(row?.currentTool)
   return petWorkProcessText({
     toolAction,
-    progressNote: live ? undefined : row?.progressNote,
-    thinking,
+    progressNote: row?.progressNote,
+    thinking: false,
     workingLabel: i18n.t('workingSprint', { ns: 'common' }),
     thinkingLabel: i18n.t('thinkingNow', { ns: 'common' }),
     toolLabel: (action) => i18n.t('workingToolAction', { ns: 'common', action })
   })
-}
-
-function runningToolBlock(state: ChatState): ToolBlock | undefined {
-  const turnId = state.currentTurnId
-  for (let index = state.blocks.length - 1; index >= 0; index -= 1) {
-    const block = state.blocks[index]
-    if (block?.kind !== 'tool' || block.status !== 'running') continue
-    if (turnId && block.turnId && block.turnId !== turnId) continue
-    return block
-  }
-  return undefined
-}
-
-function hasCurrentReasoning(state: ChatState): boolean {
-  const turnId = state.currentTurnId
-  const live = state.liveReasoning.trim()
-  if (live && (!state.liveReasoningTurnId || !turnId || state.liveReasoningTurnId === turnId)) return true
-  return state.blocks.some((block) =>
-    block.kind === 'reasoning' && (!turnId || block.turnId === turnId) && block.text.trim().length > 0
-  )
 }
 
 function toolActionName(name: string | undefined): string | undefined {

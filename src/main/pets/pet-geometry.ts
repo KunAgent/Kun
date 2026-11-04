@@ -1,9 +1,30 @@
+import type { ScreenPoint } from '../../shared/pets'
+
 export type Rect = { x: number; y: number; width: number; height: number }
 
 export type PetDisplay = { id: string; workArea: Rect; scaleFactor: number }
 
 export const PET_OVERLAY_MAX_WIDTH = 420
-export const PET_OVERLAY_MAX_HEIGHT = 460
+export const PET_OVERLAY_MAX_HEIGHT = 640
+
+/** The pet owns the position. Transparent room around it is reserved for transient panels. */
+export function petOverlayFrame(center: ScreenPoint, workArea: Rect): Rect {
+  const width = Math.min(PET_OVERLAY_MAX_WIDTH, workArea.width)
+  const height = Math.min(PET_OVERLAY_MAX_HEIGHT, workArea.height)
+  return {
+    x: Math.round(clamp(center.x - width / 2, workArea.x, workArea.x + workArea.width - width)),
+    y: Math.round(clamp(center.y - height / 2, workArea.y, workArea.y + workArea.height - height)),
+    width, height
+  }
+}
+
+export function clampPetCenter(center: ScreenPoint, width: number, workArea: Rect): ScreenPoint {
+  const height = Math.round(width * 208 / 192)
+  return {
+    x: clamp(center.x, workArea.x + width / 2 + 8, workArea.x + workArea.width - width / 2 - 8),
+    y: clamp(center.y, workArea.y + height / 2 + 8, workArea.y + workArea.height - height / 2 - 8)
+  }
+}
 
 export function clampPetBounds(bounds: Rect, workArea: Rect, visible: Rect = bounds): Rect {
   const width = Math.min(Math.max(1, bounds.width), workArea.width)
@@ -27,13 +48,15 @@ export function placementFromDip(input: {
   bounds: Rect
   mascotWidthPx: number
   updatedAt: string
-}): { displayId: string; workArea: Rect; windowBounds: Rect; mascotWidthPx: number; updatedAt: string } {
+  petCenter?: ScreenPoint
+}): { displayId: string; workArea: Rect; windowBounds: Rect; mascotWidthPx: number; updatedAt: string; petCenter?: ScreenPoint } {
   return {
     displayId: input.display.id,
     workArea: { ...input.display.workArea },
     windowBounds: { ...input.bounds },
     mascotWidthPx: input.mascotWidthPx,
-    updatedAt: input.updatedAt
+    updatedAt: input.updatedAt,
+    ...(input.petCenter ? { petCenter: { ...input.petCenter } } : {})
   }
 }
 
@@ -54,19 +77,6 @@ export function restorePetBounds(input: {
         ...input.fallbackSize
       }
   return { display, bounds: clampPetBounds(raw, display.workArea) }
-}
-
-export const PET_OVERLAY_CONTENT_MARGIN = 8
-
-export function fitPetOverlayWindow(current: Rect, content: { width: number; height: number }): Rect {
-  const width = clamp(Math.round(content.width) + PET_OVERLAY_CONTENT_MARGIN * 2, 1, PET_OVERLAY_MAX_WIDTH)
-  const height = clamp(Math.round(content.height) + PET_OVERLAY_CONTENT_MARGIN * 2, 1, PET_OVERLAY_MAX_HEIGHT)
-  return {
-    x: current.x + current.width - width,
-    y: current.y + current.height - height,
-    width,
-    height
-  }
 }
 
 export function dragBounds(origin: Rect, dx: number, dy: number, workArea: Rect, visible?: Rect): Rect {

@@ -23,6 +23,7 @@ export function PetQuickChat(props: {
   bridge: PetOverlayBridge
   notificationCount: number
   bubblesHidden: boolean
+  revealed: boolean
   onToggleBubbles: () => void
   onInteractiveChange: (interactive: boolean) => void
 }): ReactElement {
@@ -47,6 +48,7 @@ export function PetQuickChat(props: {
   const recording = voice.status === 'recording'
   const cancelVoice = voice.cancel
   const voiceBusy = voice.status !== 'idle'
+  const controlsVisible = props.revealed || open || voiceBusy || sending
 
   useEffect(() => {
     mounted.current = true
@@ -108,6 +110,10 @@ export function PetQuickChat(props: {
               if (event.key === 'Escape') { event.stopPropagation(); close() }
               if (event.key === 'Enter' && event.nativeEvent.isComposing) event.preventDefault()
             }} />
+          {voiceBusy ? <button type="button" className="pet-quick-record" aria-label={recording ? labels.stop : labels.transcribing}
+            disabled={!recording} onClick={() => voice.stop()}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+          </button> : null}
           <button type="submit" className="pet-quick-send" aria-label={labels.send}
             disabled={!draft.trim() || sending || voiceBusy}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" /></svg>
@@ -118,26 +124,30 @@ export function PetQuickChat(props: {
           {error || voice.error ? <span className="pet-quick-error" role="alert">{error || voice.error}</span> : null}
         </form>
       ) : null}
-      <div className="pet-toolbar" role="toolbar" aria-label={labels.chat}>
-        <button type="button" aria-label={labels.chat} title={labels.chat} aria-expanded={open}
-          onClick={() => { if (open) close(); else begin() }}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7M16 3l5 5-9 9-5 1 1-5Z" /></svg>
-        </button>
-        {voiceAvailable ? <button type="button" aria-label={recording ? labels.stop : labels.voice}
-          title={recording ? labels.stop : labels.voice} aria-pressed={recording} data-recording={recording}
-          disabled={sending || (voiceBusy && !recording)} onClick={() => { begin(); voice.toggle() }}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4m4-8v12m4-15v18m4-14v10m4-7v4" /></svg>
-        </button> : null}
-        <button type="button" aria-label={props.bubblesHidden ? `${labels.show} (${props.notificationCount})` : labels.hide}
-          title={props.bubblesHidden ? labels.show : labels.hide} disabled={props.notificationCount === 0}
-          aria-expanded={!props.bubblesHidden} onClick={() => { close(); props.onToggleBubbles() }}>
-          {props.bubblesHidden ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-2-3V9a5 5 0 0 0-10 0v4Zm5 4h4M12 2v2" /></svg>
-            : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 15 7-7 7 7" /></svg>}
-          {props.bubblesHidden && props.notificationCount > 0 ? <span className="pet-toolbar-count" aria-hidden="true">
-            {props.notificationCount > 99 ? '99+' : props.notificationCount}
-          </span> : null}
-        </button>
-      </div>
+      {!open ? <div className="pet-toolbar-slot" data-controls-visible={controlsVisible}>
+        <span className="pet-toolbar-handle" aria-hidden="true" />
+        <div className="pet-toolbar" role="toolbar" aria-label={labels.chat}
+          aria-hidden={!controlsVisible} inert={!controlsVisible}>
+          <button type="button" aria-label={labels.chat} title={labels.chat} aria-expanded={open}
+            onClick={() => { if (open) close(); else begin() }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7M16 3l5 5-9 9-5 1 1-5Z" /></svg>
+          </button>
+          {voiceAvailable ? <button type="button" aria-label={recording ? labels.stop : labels.voice}
+            title={recording ? labels.stop : labels.voice} aria-pressed={recording} data-recording={recording}
+            disabled={sending || (voiceBusy && !recording)} onClick={() => { begin(); voice.toggle() }}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4m4-8v12m4-15v18m4-14v10m4-7v4" /></svg>
+          </button> : null}
+          <button type="button" aria-label={props.bubblesHidden ? `${labels.show} (${props.notificationCount})` : labels.hide}
+            title={props.bubblesHidden ? labels.show : labels.hide} disabled={props.notificationCount === 0}
+            aria-expanded={!props.bubblesHidden} onClick={() => { close(); props.onToggleBubbles() }}>
+            {props.bubblesHidden ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 16h14l-2-3V9a5 5 0 0 0-10 0v4Zm5 4h4M12 2v2" /></svg>
+              : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 15 7-7 7 7" /></svg>}
+            {props.bubblesHidden && props.notificationCount > 0 ? <span className="pet-toolbar-count" aria-hidden="true">
+              {props.notificationCount > 99 ? '99+' : props.notificationCount}
+            </span> : null}
+          </button>
+        </div>
+      </div> : null}
     </div>
   )
 }

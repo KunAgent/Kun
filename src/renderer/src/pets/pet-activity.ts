@@ -108,7 +108,7 @@ export function presentPetRunningItem(item: PetActivityItem, input: {
 }): PetActivityItem {
   if (item.status !== 'running') return item
   const assistant = input.assistantText?.replace(/\s+/g, ' ').trim() ?? ''
-  if (assistant) return withRunningSubtitle(item, assistant)
+  if (assistant) return withRunningSubtitle(item, assistant, input.liveSinceMs)
   const process = input.processText?.replace(/\s+/g, ' ').trim() ?? ''
   if (!process) return item
   return withRunningSubtitle(item, process, input.liveSinceMs)
