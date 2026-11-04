@@ -29,8 +29,16 @@ export function useDesktopAccess(link: MobileLink) {
     setValue(undefined); setError(''); setBusy(false)
     if (!owner) return
     void refresh()
+    const onFocus = () => void refresh()
+    const onVisible = () => { if (document.visibilityState === 'visible') void refresh() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisible)
     const timer = setInterval(() => void refresh(), 5000)
-    return () => { invalidate(); clearInterval(timer) }
+    return () => {
+      invalidate(); clearInterval(timer)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [owner, refresh, invalidate])
 
   async function action(run: () => Promise<DesktopAccessStatus | void>) {

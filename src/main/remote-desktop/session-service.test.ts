@@ -41,6 +41,14 @@ function fixture(autoHealth = true) {
   return { service, deps, authority, events, captures, inputs, arbiter, setup, start, startParams, data, health, offline: () => { live = false }, changeDisplay: () => { fingerprint = 'different' } }
 }
 describe('RemoteDesktopService', () => {
+  it('reports OS permissions independently of sharing and display selection, and rechecks revocations', async () => {
+    const f = fixture()
+    expect(await f.service.status()).toMatchObject({ enabled: false, ready: false, screenRecordingReady: true, inputReady: true })
+    await f.setup()
+    expect(await f.service.status()).toMatchObject({ ready: true, screenRecordingReady: true })
+    f.deps.permissions = async () => ({ screenRecording: 'denied', accessibility: 'denied' })
+    expect(await f.service.status()).toMatchObject({ ready: false, screenRecordingReady: false, inputReady: false })
+  })
   it('reports actionable connection failures on the computer without retaining raw upstream errors', async () => {
     const f = fixture(); await f.setup()
     f.deps.permissions = async () => ({ screenRecording: 'denied', accessibility: 'granted' })

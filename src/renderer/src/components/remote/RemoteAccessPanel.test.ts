@@ -19,6 +19,7 @@ let api: {
   remoteAccessSetConfig: ReturnType<typeof vi.fn>
   remoteAccessRevokeSessions: ReturnType<typeof vi.fn>
   remoteAccessDetectTailscale: ReturnType<typeof vi.fn>
+  requestComputerUsePermission: ReturnType<typeof vi.fn>
   onRemoteAccessStatusChanged: (listener: typeof emit) => () => void
   mobileLink: { desktopStatus: ReturnType<typeof vi.fn>; desktopConfigure: ReturnType<typeof vi.fn>; desktopStop: ReturnType<typeof vi.fn> }
 }
@@ -32,13 +33,14 @@ beforeEach(async () => {
   container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container)
   status = { enabled: true, running: true, passwordSet: true, bind: 'lan', port: 42659, lastError: '', devMode: false, clients: [],
     urls: { local: 'http://127.0.0.1:42659', primary: 'http://192.168.1.2:42659', lan: ['http://192.168.1.2:42659'], listen: 'http://0.0.0.0:42659' } }
-  desktop = { supported: true, enabled: false, ready: false, inputReady: false,
+  desktop = { supported: true, enabled: false, ready: false, screenRecordingReady: false, inputReady: false,
     displays: [{ token: 'screen', revision: 'r1', label: 'Retina', pixelWidth: 3024, pixelHeight: 1964, rotation: 0, allowed: true }] }
   api = {
     remoteAccessGetStatus: vi.fn(async () => status),
     remoteAccessSetConfig: vi.fn(async patch => { status = { ...status, ...patch }; return status }),
     remoteAccessRevokeSessions: vi.fn(async () => status),
     remoteAccessDetectTailscale: vi.fn(async () => ({ installed: false, connected: false, ipv4: null })),
+    requestComputerUsePermission: vi.fn(async () => undefined),
     onRemoteAccessStatusChanged: listener => { emit = listener; return () => {} },
     mobileLink: {
       desktopStatus: vi.fn(async () => desktop),
@@ -137,4 +139,43 @@ it('never polls the desktop API when signed out', async () => {
   await render(); expect(api.mobileLink.desktopStatus).not.toHaveBeenCalled()
   expect(control('Enable phone access').disabled).toBe(true)
   expect(control('Desktop control').disabled).toBe(true)
+})
+it('shows granted screen permission with sharing off and no selected display', async () => {
+  desktop = { ...desktop, screenRecordingReady: true, inputReady: true, displays: desktop.displays.map(d => ({ ...d, allowed: false })) }
+  await render(); await click('Desktop control')
+  expect(container.textContent?.match(/Granted/g)).toHaveLength(2)
+  expect(button('Authorize')).toBeUndefined()
+  await click('Recheck')
+  expect(api.mobileLink.desktopStatus).toHaveBeenCalledTimes(2)
+  expect(container.textContent?.match(/Granted/g)).toHaveLength(2)
+})
+it('rechecks permissions immediately when returning from System Settings', async () => {
+  await render(); await click('Desktop control')
+  desktop = { ...desktop, screenRecordingReady: true, inputReady: true }
+  await act(async () => window.dispatchEvent(new Event('focus')))
+  expect(api.mobileLink.desktopStatus).toHaveBeenCalledTimes(2)
+  expect(container.textContent?.match(/Granted/g)).toHaveLength(2)
+})
+it('rechecks on visibility restoration and reflects revoked permissions', async () => {
+  desktop = { ...desktop, screenRecordingReady: true, inputReady: true }
+  await render(); await click('Desktop control')
+  desktop = { ...desktop, screenRecordingReady: false, inputReady: false }
+  await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+  expect(api.mobileLink.desktopStatus).toHaveBeenCalledTimes(2)
+  expect(container.textContent).not.toContain('Granted')
+  expect(container.textContent?.match(/Authorize/g)).toHaveLength(2)
+})
+it('refreshes after a permission request and reports failures beside the controls', async () => {
+  await render(); await click('Desktop control')
+  api.requestComputerUsePermission.mockImplementationOnce(async () => {
+    desktop = { ...desktop, screenRecordingReady: true }
+  })
+  await click('Authorize')
+  expect(api.requestComputerUsePermission).toHaveBeenCalledWith('screenRecording')
+  expect(api.mobileLink.desktopStatus).toHaveBeenCalledTimes(2)
+  expect(container.textContent?.match(/Granted/g)).toHaveLength(1)
+  api.requestComputerUsePermission.mockRejectedValueOnce(Error('settings unavailable'))
+  await click('Authorize')
+  expect(api.requestComputerUsePermission).toHaveBeenLastCalledWith('accessibility')
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain('could not be confirmed')
 })

@@ -591,7 +591,7 @@ export type ComputerUsePermissions = {
   needsPermission: boolean
   accessibility: ComputerUsePermissionState
   screenRecording: ComputerUsePermissionState
-  /** Accessibility is enabled in System Settings but needs an app relaunch to take effect. */
+  /** Best-effort relaunch hint when native and Electron Accessibility trust checks disagree. */
   accessibilityNeedsRestart: boolean
 }
 

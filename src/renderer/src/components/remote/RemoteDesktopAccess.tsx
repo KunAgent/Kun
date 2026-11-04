@@ -13,6 +13,7 @@ export function RemoteDesktopAccess({ link, desktop, onBack, onDevice }: {
 }) {
   const { t } = useTranslation('common')
   const { value, error, busy } = desktop
+  const screenGranted = value?.screenRecordingReady === true
   const requirement = mobileRequirement(link, t)
   const grants = link.enabled ? link.state?.grants ?? [] : []
   return <>
@@ -38,7 +39,7 @@ export function RemoteDesktopAccess({ link, desktop, onBack, onDevice }: {
         </div>
       </RemoteDisclosure>
       <RemoteCompactRow title={t('remoteCompact.screenRecording')}>
-        {value.ready ? <span className="text-[12px] text-ds-muted">{t('remoteCompact.granted')}</span>
+        {screenGranted ? <span className="text-[12px] text-ds-muted">{t('remoteCompact.granted')}</span>
           : <button type="button" className={REMOTE_BUTTON_CLASS} disabled={busy} onClick={() => desktop.permission('screenRecording')}>{t('remoteCompact.grant')}</button>}
       </RemoteCompactRow>
       <RemoteCompactRow title={t('remoteCompact.input')}>
@@ -49,7 +50,7 @@ export function RemoteDesktopAccess({ link, desktop, onBack, onDevice }: {
         <span className="text-[12px] text-ds-muted">{t(`remoteCompact.${desktopConsent(grant.scopes)}`)}</span>
       </RemoteCompactRow>)}
     </RemoteGroup> : <p className={REMOTE_DETAIL_TEXT}>{desktopSummary(value, t)}</p>}
-    {value?.supported && (!value.ready || value.inputReady !== true) ? <p className={REMOTE_DETAIL_TEXT}>{t('remoteCompact.permissionHint')}</p> : null}
+    {value?.supported && (!screenGranted || value.inputReady !== true) ? <p className={REMOTE_DETAIL_TEXT}>{t('remoteCompact.permissionHint')}</p> : null}
     {value?.lastFailure ? <p role="alert" className="text-[12px] text-ds-danger">{desktopFailureMessage(value.lastFailure, link.zh)}</p> : null}
     <div><button type="button" className={REMOTE_BUTTON_CLASS} disabled={busy} onClick={() => void desktop.refresh()}>
       <RefreshCw size={12} />{t('remoteCompact.recheck')}

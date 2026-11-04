@@ -59,7 +59,8 @@ export class RemoteDesktopService {
   async status(): Promise<DesktopAccessStatus> {
     const supported = this.deps.supported(), permissions = await this.deps.permissions()
     return { supported, enabled: this.enabled, ready: supported && this.enabled && this.allowed.size > 0 && permissions.screenRecording === 'granted',
-      inputReady: permissions.accessibility === 'granted', ...(this.lastFailure ? { lastFailure: this.lastFailure } : {}),
+      screenRecordingReady: permissions.screenRecording === 'granted', inputReady: permissions.accessibility === 'granted',
+      ...(this.lastFailure ? { lastFailure: this.lastFailure } : {}),
       ...(!supported ? { reason: 'DESKTOP_UNSUPPORTED' } : permissions.screenRecording !== 'granted' ? { reason: 'SCREEN_PERMISSION_REQUIRED' } : {}),
       displays: this.sourceList().map(display => ({ token: display.token, revision: display.revision, label: display.label, pixelWidth: display.pixelWidth,
         pixelHeight: display.pixelHeight, rotation: display.rotation, allowed: this.allowed.has(display.token) })),
