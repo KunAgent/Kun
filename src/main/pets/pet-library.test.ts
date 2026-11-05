@@ -182,6 +182,7 @@ describe('pet packages', () => {
       'nezukocoder:v1',
       'snowy:v1',
       'trae:v2',
+      'whale-girl:v1',
       'xiao-kun:v1',
       'yi-er:v1',
       'zodiac-pig:v1'
@@ -193,7 +194,7 @@ describe('pet packages', () => {
     const packaged = path.join(root, 'Resources', 'pets')
     await mkdir(packaged, { recursive: true })
     const { cp } = await import('node:fs/promises')
-    for (const id of ['xiao-kun', 'ikun']) {
+    for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
       await cp(path.resolve('resources/pets', id), path.join(packaged, id), { recursive: true })
     }
     const validated = await validatePetPackage(path.join(packaged, 'xiao-kun'), 'xiao-kun')
@@ -211,15 +212,26 @@ describe('pet packages', () => {
     expect(store.listPets()).toContainEqual(expect.objectContaining({
       id: 'kun:ikun', displayName: 'iKun', source: 'kun-builtin', available: true
     }))
+    expect(store.listPets()).toContainEqual(expect.objectContaining({
+      id: 'kun:whale-girl', displayName: '鲸鱼娘', source: 'kun-builtin', spriteVersionNumber: 1, available: true
+    }))
     await store.applyFirstRunDefault(true)
     expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: true })
     expect(store.assetPath(petIdForSource('kun-builtin', 'xiao-kun'))).toBeTruthy()
     expect(store.assetPath(petIdForSource('kun-builtin', 'ikun'))).toBeTruthy()
-    await store.selectPet('kun:ikun')
+    const whaleGirlAsset = await readPetAsset(
+      'kun-pet://asset/kun%3Awhale-girl/spritesheet?v=1',
+      (petId) => store.assetPath(petId),
+      store.libraryRoot()
+    )
+    expect(whaleGirlAsset.status).toBe(200)
+    expect(whaleGirlAsset.headers.get('Content-Type')).toBe('image/webp')
+    expect((await whaleGirlAsset.arrayBuffer()).byteLength).toBeGreaterThan(0)
+    await store.selectPet('kun:whale-girl')
     const restarted = new PetStore(path.join(root, 'user', 'pets'))
     await restarted.initialize()
     await restarted.applyFirstRunDefault(true)
-    expect(restarted.getSettings()).toMatchObject({ selectedPetId: 'kun:ikun', overlayOpen: true })
+    expect(restarted.getSettings()).toMatchObject({ selectedPetId: 'kun:whale-girl', overlayOpen: true })
   })
 
   it('finds Codex pets through CODEX_HOME and packaged resource roots', () => {

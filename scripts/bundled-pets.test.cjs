@@ -11,7 +11,7 @@ const petsRoot = join(__dirname, '..', 'resources', 'pets')
 const MIB = 1024 * 1024
 // These already-compressed images enter both DMG and ZIP nearly unchanged.
 // Keep enough headroom under the existing macOS arm64 artifact budgets.
-const BUNDLED_PETS_BUDGET = 7 * MIB
+const BUNDLED_PETS_BUDGET = 8 * MIB
 
 function bytesUnder(dir) {
   return readdirSync(dir, { withFileTypes: true }).reduce((total, entry) => {
@@ -23,7 +23,7 @@ function bytesUnder(dir) {
 test('bundled pet assets fit within the macOS installer allowance', () => {
   const bytes = bytesUnder(petsRoot)
   assert(bytes <= BUNDLED_PETS_BUDGET,
-    `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 7 MiB. Optimize new sheets before packaging.`)
+    `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 8 MiB. Optimize new sheets before packaging.`)
 })
 
 test('every bundled pet retains a decodable transparent Codex sprite layout', async () => {
@@ -42,7 +42,7 @@ test('every bundled pet retains a decodable transparent Codex sprite layout', as
   }
 })
 
-for (const id of ['xiao-kun', 'ikun']) {
+for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
   test(`${id} fits its allowance and has all 57 animation frames with clear cell margins`, async () => {
     const dir = join(petsRoot, id)
     assert(bytesUnder(dir) <= MIB, `${id} must fit within 1 MiB`)
