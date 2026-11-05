@@ -9,6 +9,7 @@ describe('Scoped operations through real facade/receipt persistence', () => {
       const group = (await f.rooms.service.create({ name: 'Team', clientRequestId: 'team' })).room
       const raw = f.envelope('group.message.send', { roomId: group.id, text: 'group input', executionIntent: 'discussion' }, 'group_once')
       await expect(f.facade.execute(raw)).rejects.toThrow('REMOTE_SCOPE_REQUIRED')
+      await expect(f.facade.execute({ ...raw, scopes: ['personal', 'desktop.view', 'desktop.control'] })).rejects.toThrow('REMOTE_SCOPE_REQUIRED')
       const full = { ...raw, scopes: ['personal', 'groups.read', 'groups.write'] }
       const applied = (await f.facade.execute(full) as any).receipt
       expect(applied.status).toBe('applied')

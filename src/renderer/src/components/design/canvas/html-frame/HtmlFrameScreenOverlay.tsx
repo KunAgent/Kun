@@ -36,6 +36,8 @@ import {
   shouldAutoResizeHtmlFrame,
   type HtmlFramePreviewAsyncEpoch
 } from './html-frame-helpers'
+import { useHtmlFrameThumbnailCapture } from './use-html-frame-thumbnail-capture'
+import { HTML_FRAME_OVERVIEW_ZOOM } from './html-frame-preview-budget'
 import { useHtmlFrameAutoSize } from './use-html-frame-auto-size'
 import { useHtmlFrameAiCursor } from './use-html-frame-ai-cursor'
 import { useHtmlFrameCodeBindings } from './use-html-frame-code-bindings'
@@ -54,6 +56,9 @@ type ScreenOverlayProps = {
   panning: boolean
   onToggleInteractive?: (shapeId: string) => void
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
+  captureKey?: string
+  captureOnly?: boolean
+  onCapture?: (shapeId: string, key: string, image: string | null) => void
   /** The whole canvas is read-only (browsing a historical drawing). */
   canvasReadOnly?: boolean
 }
@@ -71,7 +76,10 @@ function ScreenOverlayInner({
   panning,
   onToggleInteractive,
   onUseElementAsContext,
-  canvasReadOnly = false
+  canvasReadOnly = false,
+  captureKey,
+  captureOnly = false,
+  onCapture
 }: ScreenOverlayProps): ReactElement {
   const [localPreviewError, setLocalPreviewError] = useState('')
   const previewAsyncEpochRef = useRef<HtmlFramePreviewAsyncEpoch | null>(null)
@@ -143,6 +151,15 @@ function ScreenOverlayInner({
     onError: reportPreviewError,
     onRevision: clearPreviewError
   })
+  useHtmlFrameThumbnailCapture({
+    shapeId: shape.id,
+    captureKey,
+    webview,
+    webviewUrl: preview.webviewUrl,
+    ready: preview.ready && preview.renderState === 'renderable' && !drawingActive,
+    enabled: Boolean(captureKey),
+    onCapture
+  })
   const previewAsyncEpoch = useMemo<HtmlFramePreviewAsyncEpoch | null>(() => {
     if (!artifact?.id || artifactKind !== 'html' || !artifactRelativePath || !preview.webviewUrl) return null
     if (preview.relativePath !== artifactRelativePath) return null
@@ -169,7 +186,7 @@ function ScreenOverlayInner({
     artifact: renderedArtifact,
     artifactKind,
     foundationRole,
-    autoResizeEnabled,
+    autoResizeEnabled: autoResizeEnabled && !captureOnly,
     drawingActive,
     previewWebviewUrl: preview.webviewUrl,
     previewRevision: preview.revision,
@@ -197,7 +214,7 @@ function ScreenOverlayInner({
   const { t } = useTranslation('common')
   // Hovering and clicking elements only needs the select tool.
   const activeTool = useCanvasViewportStore((s) => s.activeTool)
-  const pickAvailable = !isHistoricalVersion && !canvasReadOnly && !panning && !drawingActive && !interactive
+  const pickAvailable = !captureOnly && zoom >= HTML_FRAME_OVERVIEW_ZOOM && !isHistoricalVersion && !canvasReadOnly && !panning && !drawingActive && !interactive
   const pickEnabled = pickAvailable && activeTool === 'select'
   const pickBodyRef = useRef<HTMLDivElement | null>(null)
   const {
@@ -381,7 +398,7 @@ function ScreenOverlayInner({
   const frameRadius = Math.min(7, Math.max(3, screenWidth * 0.012))
   const chromeOffset = htmlFrameChromeOffset(screenWidth)
   // Labels stay readable at any zoom, like board names on a design canvas.
-  const showChrome = screenWidth > 60
+  const showChrome = !captureOnly && zoom >= HTML_FRAME_OVERVIEW_ZOOM && screenWidth > 60
   const placeholderPreview = !preview.hasRenderableContent && preview.renderState !== 'renderable'
   const transparentGeneratingSurface = placeholderPreview || drawingActive
   const generationFailed =

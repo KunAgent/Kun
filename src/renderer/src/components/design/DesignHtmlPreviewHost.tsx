@@ -1,3 +1,4 @@
+import type { NativeImage } from 'electron'
 import {
   useCallback,
   useEffect,
@@ -24,7 +25,9 @@ export type DesignHtmlPreviewWebviewElement = HTMLElement & {
   loadURL?: (url: string) => Promise<void>
   reload?: () => void
   getURL?: () => string
+  isLoading?: () => boolean
   setZoomFactor?: (factor: number) => void
+  capturePage?: () => Promise<NativeImage>
 }
 
 export type DesignHtmlPreviewState = {

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { REMOTE_SCOPES } from '@kun/remote-protocol'
 import { REMOTE_METHOD_ORDER } from './method-order.js'
 import { CodeManagementParamSchemas, CodeTaskParamSchemas } from './code/contracts.js'
 import { AgentParamSchemas } from './agents/contracts.js'
@@ -54,7 +55,7 @@ export const Envelope = z
     accountId: RemoteId,
     deviceId: RemoteId,
     authorizationId: RemoteId,
-    scopes: z.array(z.enum(['personal', 'groups.read', 'groups.write', 'collaboration.read', 'collaboration.control', 'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage'])).max(9).default(['personal']),
+    scopes: z.array(z.enum(REMOTE_SCOPES)).max(REMOTE_SCOPES.length).default(['personal']),
     call: z
       .object({
         method: z.enum(Object.keys(ParamSchemas) as [Method, ...Method[]]),

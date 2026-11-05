@@ -13,6 +13,8 @@ import {
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
 import { ScreenOverlay } from './html-frame/HtmlFrameScreenOverlay'
 import { htmlFrameOverlayCanMountAtZoom } from './html-frame/html-frame-helpers'
+import { useHtmlFrameThumbnails } from './html-frame/use-html-frame-thumbnails'
+import { selectHtmlFramePreviewBudget, HTML_FRAME_OVERVIEW_ZOOM } from './html-frame/html-frame-preview-budget'
 import { RunningAppFrameOverlay } from './RunningAppFrameOverlay'
 import { useCanvasMotionStore } from '../../../design/motion/canvas-motion-store'
 
@@ -183,16 +185,22 @@ export function HtmlFrameOverlay({
   // so the DOM overlay matches the SVG canvas stacking order.
   const visibleFrames = useMemo(() => {
     const priorityIds = new Set(selectedIds)
+    if (interactiveId) priorityIds.add(interactiveId)
     const candidates = portalFrames.filter((shape) => {
       const motionRelevant = motionOpen && hasMotionTargetAncestor(document, shape.id, motionTargetIds)
       if (motionRelevant) priorityIds.add(shape.id)
       return motionRelevant || htmlFrameIntersectsViewport(shape, vbox)
     })
-    return selectHtmlFramesForOverlay(
-      candidates,
-      priorityIds
-    )
-  }, [document, motionOpen, motionTargetIds, portalFrames, selectedIds, vbox])
+    return { candidates, priorityIds }
+  }, [document, interactiveId, motionOpen, motionTargetIds, portalFrames, selectedIds, vbox])
+  const { thumbnails, onCapture } = useHtmlFrameThumbnails(visibleFrames.candidates, workspaceRoot)
+  const pendingIds = new Set([...thumbnails].filter(([, entry]) => entry.pending).map(([id]) => id))
+  const { liveIds, captureIds } = selectHtmlFramePreviewBudget(
+    visibleFrames.candidates.filter((shape) => shape.width * zoom >= 20 && shape.height * zoom >= 20),
+    visibleFrames.priorityIds,
+    pendingIds,
+    zoom
+  )
 
   const selectedIdsKey = useMemo(() => [...selectedIds].sort().join(','), [selectedIds])
   const paintIndexById = useMemo(() => new Map(
@@ -207,9 +215,32 @@ export function HtmlFrameOverlay({
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      {visibleFrames.map((shape) => {
+      {visibleFrames.candidates.map((shape) => {
         const screenRect = htmlFrameCanvasRectToScreenRect(shape, vbox, canvasScreenTransform)
         const active = selectedIds.has(shape.id)
+        const live = liveIds.has(shape.id)
+        const capturing = captureIds.has(shape.id)
+        const thumbnail = thumbnails.get(shape.id)
+        if (!live && !capturing) {
+          return (
+            <div
+              key={shape.id}
+              className="absolute overflow-hidden rounded border border-ds-border bg-ds-card"
+              style={{ left: screenRect.x, top: screenRect.y, width: screenRect.width, height: screenRect.height,
+                zIndex: paintIndexById.get(shape.id) ?? 1 }}
+              data-canvas-thumbnail={shape.id}
+              title={shape.name}
+            >
+              {thumbnail?.image ? (
+                <img src={thumbnail.image} alt={shape.name} draggable={false} className="h-full w-full" />
+              ) : (
+                <div className="flex h-full items-center justify-center overflow-hidden p-1 text-[10px] text-ds-muted">
+                  <span className="truncate">{shape.name}</span>
+                </div>
+              )}
+            </div>
+          )
+        }
 
         if (isRunningAppFrame(shape)) {
           return (
@@ -242,11 +273,14 @@ export function HtmlFrameOverlay({
             zIndex={paintIndexById.get(shape.id) ?? 1}
             zoom={zoom}
             active={active}
-            interactive={!readOnly && interactiveId === shape.id}
-            panning={panning || readOnly}
+            interactive={!readOnly && live && interactiveId === shape.id}
+            panning={panning || readOnly || !live || zoom < HTML_FRAME_OVERVIEW_ZOOM}
             onToggleInteractive={readOnly ? undefined : onToggleInteractive}
             onUseElementAsContext={readOnly ? undefined : onUseElementAsContext}
-            canvasReadOnly={readOnly}
+            canvasReadOnly={readOnly || !live}
+            captureOnly={!live}
+            captureKey={thumbnail?.pending ? thumbnail.key : undefined}
+            onCapture={onCapture}
           />
         )
       })}

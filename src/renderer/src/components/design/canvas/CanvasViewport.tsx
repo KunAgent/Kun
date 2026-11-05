@@ -29,9 +29,10 @@ import { AlignmentToolbar } from './AlignmentToolbar'
 import {
   HtmlFrameOverlay,
   htmlFrameIntersectsViewport,
-  htmlFramesInCanvasPaintOrder,
-  selectHtmlFramesForOverlay
+  canvasPortalFramesInCanvasPaintOrder,
+  htmlFrameCanvasScreenTransform
 } from './HtmlFrameOverlay'
+import { selectHtmlFramePreviewBudget } from './html-frame/html-frame-preview-budget'
 import { htmlFrameOverlayCanMountAtZoom } from './html-frame/html-frame-helpers'
 import {
   canvasViewportStorageKey,
@@ -188,10 +189,13 @@ export function CanvasViewport({
   }, [designMotionOpen, document, selectedIds, setActiveTool])
   const htmlFrameOverlayMountableIds = useMemo(() => {
     if (!htmlFrameOverlayCanMountAtZoom(zoom)) return new Set<string>()
-    const frames = htmlFramesInCanvasPaintOrder(document)
-      .filter((shape) => htmlFrameIntersectsViewport(shape, vbox))
-    return new Set(selectHtmlFramesForOverlay(frames, selectedIds).map((shape) => shape.id))
-  }, [document, selectedIds, vbox, zoom])
+    const scale = htmlFrameCanvasScreenTransform({ vbox, containerWidth, containerHeight }).scale
+    const frames = canvasPortalFramesInCanvasPaintOrder(document)
+      .filter((shape) => htmlFrameIntersectsViewport(shape, vbox) && shape.width * scale >= 20 && shape.height * scale >= 20)
+    const priorityIds = new Set(selectedIds)
+    if (interactiveHtmlFrameId) priorityIds.add(interactiveHtmlFrameId)
+    return selectHtmlFramePreviewBudget(frames, priorityIds, new Set(), scale).liveIds
+  }, [containerHeight, containerWidth, document, interactiveHtmlFrameId, selectedIds, vbox, zoom])
 
   const seedComposer = useCallback((promptSeed: string): void => {
     onUseElementAsContext?.(null, promptSeed)

@@ -186,4 +186,50 @@ describe('jsonSchemaToZodShape', () => {
   test('empty schema yields an empty shape', () => {
     expect(jsonSchemaToZodShape({})).toEqual({})
   })
+
+  test('nested array items keep their required keys so the model can see them', () => {
+    const shape = jsonSchemaToZodShape({
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array', minItems: 1, maxItems: 4,
+          items: {
+            type: 'object',
+            properties: {
+              title: { type: 'string', description: 'Short task title.' },
+              query: { type: 'string' }
+            },
+            required: ['title', 'query'], additionalProperties: false
+          }
+        }
+      },
+      required: ['tasks'], additionalProperties: false
+    })
+    const obj = z.object(shape)
+    expect(obj.safeParse({ tasks: [{ title: 't', query: 'q' }] }).success).toBe(true)
+    expect(obj.safeParse({ tasks: [{ query: 'q' }] }).success).toBe(false)
+    expect(obj.safeParse({ tasks: [] }).success).toBe(false)
+
+    const projected = z.toJSONSchema(obj) as unknown as {
+      properties: { tasks: { items: { required?: string[] } } }
+    }
+    expect(projected.properties.tasks.items.required).toEqual(['title', 'query'])
+  })
+
+  test('nested objects keep optional fields optional and accept extra keys by default', () => {
+    const shape = jsonSchemaToZodShape({
+      type: 'object',
+      properties: {
+        context: {
+          type: 'object',
+          properties: { notes: { type: 'string' } },
+          required: []
+        }
+      }
+    })
+    const obj = z.object(shape)
+    expect(obj.safeParse({ context: { notes: 'n', extra: 1 } }).success).toBe(true)
+    expect(obj.safeParse({ context: {} }).success).toBe(true)
+    expect(obj.safeParse({ context: { notes: 1 } }).success).toBe(false)
+  })
 })

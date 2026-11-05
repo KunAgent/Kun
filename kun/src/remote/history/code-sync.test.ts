@@ -113,7 +113,7 @@ describe('Code event projection and bounded resume', () => {
       current = { ...page(), historyVersion: 'rewritten' }
       f.emit({ kind: 'thread_pruned', threadId: 'thread', seq: 3 } as RuntimeEvent)
       await f.sync.flush()
-      const snapshot = frames.findLast(frame => frame.kind === 'snapshot') as Extract<HistorySyncFrame, { kind: 'snapshot' }>
+      const snapshot = frames.filter(frame => frame.kind === 'snapshot').at(-1) as Extract<HistorySyncFrame, { kind: 'snapshot' }>
       expect(snapshot.epoch).not.toBe(epoch)
       expect(snapshot.data).toMatchObject({ historyVersion: 'rewritten', turns: [{ items: [{ text: 'A' }] }] })
     } finally { f.sync.close() }
