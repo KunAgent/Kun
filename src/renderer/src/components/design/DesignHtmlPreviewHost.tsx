@@ -97,6 +97,13 @@ export function shouldRenderDesignHtmlPreviewWebview({
   return mountWhileSkeleton && renderState === 'skeleton'
 }
 
+export function designHtmlPreviewWebviewStyle(style?: CSSProperties): CSSProperties {
+  // Preview documents own their palette. A transparent/default HTML page needs
+  // browser-like white paper, not the workbench's dark surface showing through.
+  // This only paints the host; authored backgrounds and text stay untouched.
+  return { backgroundColor: '#ffffff', colorScheme: 'light', ...style }
+}
+
 export function designHtmlPreviewWebviewZoomFactor(zoom: number): number {
   if (!Number.isFinite(zoom) || zoom <= 0) return 1
   return Math.min(4, Math.max(0.05, zoom))
@@ -350,7 +357,7 @@ export function useDesignHtmlPreview({
         partition={partition}
         webpreferences={mergedWebpreferences}
         className={options.className}
-        style={options.style}
+        style={designHtmlPreviewWebviewStyle(options.style)}
         title={options.title}
         {...(options.extraProps ?? {})}
       />

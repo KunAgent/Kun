@@ -31,6 +31,7 @@ import {
   htmlFrameOverlayPointerEvents,
   htmlFrameShouldPromotePreviewToReady,
   htmlFrameShouldShowGeneratingCanvas,
+  htmlFrameSurfaceClasses,
   htmlFrameWebviewCanvasStyle,
   htmlFrameWebviewPartition,
   shouldAutoResizeHtmlFrame,
@@ -104,9 +105,6 @@ function ScreenOverlayInner({
   const pagesRun = useDesignWorkspaceStore((s) => s.pagesRun)
   const setFileError = useDesignWorkspaceStore((s) => s.setFileError)
   const setArtifactPreviewStatus = useDesignWorkspaceStore((s) => s.setArtifactPreviewStatus)
-  // A design turn is in flight: the agent is still streaming HTML into the file.
-  // Keep the frame in its transparent "generating" surface until the turn settles
-  // so a half-written page never shows the opaque white frame band beneath it.
   const chatBusy = useChatStore((s) => chatBusyForArtifact(s, artifactRelativePath))
   const threadBusy = useChatStore((s) => s.busy)
   const canvasWidth = Math.max(1, shape.width)
@@ -400,6 +398,8 @@ function ScreenOverlayInner({
   // Labels stay readable at any zoom, like board names on a design canvas.
   const showChrome = !captureOnly && zoom >= HTML_FRAME_OVERVIEW_ZOOM && screenWidth > 60
   const placeholderPreview = !preview.hasRenderableContent && preview.renderState !== 'renderable'
+  // Keep the brush placeholder transparent only until an HTML preview mounts;
+  // streamed content needs the same opaque paper as a completed design.
   const transparentGeneratingSurface = placeholderPreview || drawingActive
   const generationFailed =
     !isHistoricalVersion && !drawingActive && !previewError && !failedMessage &&
@@ -427,7 +427,7 @@ function ScreenOverlayInner({
         ...motionStyle
       }}
     >
-      {selectionError && pickEnabled ? <div role="status" className="absolute left-2 top-2 z-30 rounded bg-white px-2 py-1 text-xs text-ds-ink">{selectionError}</div> : null}
+      {selectionError && pickEnabled ? <div role="status" className="absolute left-2 top-2 z-30 rounded bg-ds-elevated px-2 py-1 text-xs text-ds-ink">{selectionError}</div> : null}
       {showChrome ? (
         <HtmlFrameChrome
           active={active}
@@ -449,17 +449,12 @@ function ScreenOverlayInner({
       ) : null}
 
       <div
-        className={`relative h-full w-full overflow-hidden border ${
-          transparentGeneratingSurface
-            ? active
-              ? 'border-dashed border-accent bg-transparent shadow-none'
-              : 'border-dashed border-black/15 bg-transparent shadow-none dark:border-white/20'
-            : `bg-white dark:bg-[#101214] ${
-                active
-                  ? 'border-accent shadow-[0_0_0_1px_var(--ds-accent),0_16px_38px_rgba(15,23,42,0.14)]'
-                  : 'border-black/[0.08] shadow-[0_1px_2px_rgba(15,23,42,0.05),0_10px_28px_rgba(15,23,42,0.07)] dark:border-white/12'
-              }`
-        }`}
+        className={`relative h-full w-full overflow-hidden border ${htmlFrameSurfaceClasses({
+          active,
+          hasPreview: Boolean(preview.webviewUrl),
+          transparentGeneratingSurface,
+          hasError: Boolean(previewError || failedMessage || generationFailed)
+        })}`}
         style={{ borderRadius: frameRadius }}
       >
         <div

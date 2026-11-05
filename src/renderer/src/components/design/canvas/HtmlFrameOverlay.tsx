@@ -232,7 +232,8 @@ export function HtmlFrameOverlay({
               title={shape.name}
             >
               {thumbnail?.image ? (
-                <img src={thumbnail.image} alt={shape.name} draggable={false} className="h-full w-full" />
+                <img src={thumbnail.image} alt={shape.name} draggable={false}
+                  className={`h-full w-full ${isHtmlFrame(shape) ? 'bg-white' : ''}`} />
               ) : (
                 <div className="flex h-full items-center justify-center overflow-hidden p-1 text-[10px] text-ds-muted">
                   <span className="truncate">{shape.name}</span>
