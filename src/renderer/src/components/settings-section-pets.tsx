@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { FolderOpen, RefreshCw } from 'lucide-react'
 import { PET_CELL_HEIGHT, PET_CELL_WIDTH, PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSummary } from '@shared/pets'
 import { staticFrame } from '../pets/pet-animation'
+import { PetBrandBadge } from '../pets/pet-brand-badge'
 import { settingsButtonClass } from './settings-button'
 import './settings-pets.css'
 
@@ -154,6 +155,7 @@ function PetPreview({ pet, pose, large = false }: { pet: PetSummary; pose: 'idle
           transform: `translate(${-frame.column * width}px, ${-frame.row * height}px)`
         }}
       />
+      <PetBrandBadge petId={pet.id} width={width} row={frame.row} column={frame.column} />
     </span>
   )
 }

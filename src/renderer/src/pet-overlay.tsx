@@ -11,6 +11,7 @@ import {
   type PetOverlayLayout
 } from '@shared/pets'
 import { frameAtElapsedMs, staticFrame } from './pets/pet-animation'
+import { PetBrandBadge } from './pets/pet-brand-badge'
 import { acceptPetSnapshot, earliestPetNotificationExpiry, visiblePetNotifications } from './pets/pet-activity'
 import { PetWorkBubbles } from './pets/pet-bubble'
 import { PetQuickChat } from './pets/pet-quick-chat'
@@ -391,7 +392,9 @@ function PetOverlayApp(): React.JSX.Element {
                 if (menuOpen && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return }
                 if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) }
               }}
-            />
+            >
+              <PetBrandBadge petId={bootstrap?.petId} width={width} row={frame.row} column={frame.column} />
+            </button>
           </div>
           {menuOpen ? <div className="pet-menu-position" ref={menuRef}
             style={{ left: placement.menu.left, top: placement.menu.top }}>

@@ -11,7 +11,12 @@ const petsRoot = join(__dirname, '..', 'resources', 'pets')
 const MIB = 1024 * 1024
 // These already-compressed images enter both DMG and ZIP nearly unchanged.
 // Keep enough headroom under the existing macOS arm64 artifact budgets.
-const BUNDLED_PETS_BUDGET = 8 * MIB
+const BUNDLED_PETS_BUDGET = 19 * MIB
+const CHIBI_AI_PETS = [
+  'claude-girl', 'doubao-girl', 'gemini-girl', 'glm-girl', 'gpt-girl', 'grok-girl',
+  'hunyuan-girl', 'kimi-girl', 'llama-girl', 'mimo-girl', 'minimax-girl',
+  'mistral-girl', 'qwen-girl', 'seed-girl'
+]
 
 function bytesUnder(dir) {
   return readdirSync(dir, { withFileTypes: true }).reduce((total, entry) => {
@@ -23,7 +28,7 @@ function bytesUnder(dir) {
 test('bundled pet assets fit within the macOS installer allowance', () => {
   const bytes = bytesUnder(petsRoot)
   assert(bytes <= BUNDLED_PETS_BUDGET,
-    `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 8 MiB. Optimize new sheets before packaging.`)
+    `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 19 MiB. Optimize new sheets before packaging.`)
 })
 
 test('every bundled pet retains a decodable transparent Codex sprite layout', async () => {
@@ -42,10 +47,11 @@ test('every bundled pet retains a decodable transparent Codex sprite layout', as
   }
 })
 
-for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
+for (const id of ['xiao-kun', 'ikun', 'whale-girl', ...CHIBI_AI_PETS]) {
   test(`${id} fits its allowance and has all 57 animation frames with clear cell margins`, async () => {
     const dir = join(petsRoot, id)
-    assert(bytesUnder(dir) <= MIB, `${id} must fit within 1 MiB`)
+    const budget = CHIBI_AI_PETS.includes(id) ? MIB * 0.75 : MIB
+    assert(bytesUnder(dir) <= budget, `${id} must fit within ${budget / 1024} KiB`)
     const manifest = JSON.parse(readFileSync(join(dir, 'pet.json'), 'utf8'))
     assert.equal(manifest.id, id)
     assert.equal(manifest.spriteVersionNumber, 1)
@@ -81,3 +87,15 @@ for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
     }
   })
 }
+
+test('the chibi AI collection has distinct artwork and ships each attribution', () => {
+  const designs = new Set()
+  for (const id of CHIBI_AI_PETS) {
+    const dir = join(petsRoot, id)
+    const sheet = readFileSync(join(dir, 'spritesheet.webp'))
+    designs.add(createHash('sha256').update(sheet).digest('hex'))
+    const attribution = readFileSync(join(dir, 'ATTRIBUTION.md'), 'utf8')
+    assert(attribution.includes(`characters/${id.replace(/-girl$/, '')}`), `${id}: missing source record`)
+  }
+  assert.equal(designs.size, CHIBI_AI_PETS.length, 'Each AI companion needs its own character artwork')
+})

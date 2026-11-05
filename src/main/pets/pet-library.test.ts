@@ -172,14 +172,28 @@ describe('pet packages', () => {
       'alo-asuna:v1',
       'anya:v1',
       'artoria:v1',
+      'claude-girl:v1',
       'dordor:v1',
+      'doubao-girl:v1',
+      'gemini-girl:v1',
+      'glm-girl:v1',
       'gojo:v1',
       'goku:v1',
+      'gpt-girl:v1',
+      'grok-girl:v1',
+      'hunyuan-girl:v1',
       'ikun:v1',
       'kawaii-bear-puppy:v1',
+      'kimi-girl:v1',
+      'llama-girl:v1',
       'lulu-capybara:v1',
+      'mimo-girl:v1',
+      'minimax-girl:v1',
+      'mistral-girl:v1',
       'nezuko:v1',
       'nezukocoder:v1',
+      'qwen-girl:v1',
+      'seed-girl:v1',
       'snowy:v1',
       'trae:v2',
       'whale-girl:v1',
@@ -232,6 +246,50 @@ describe('pet packages', () => {
     await restarted.initialize()
     await restarted.applyFirstRunDefault(true)
     expect(restarted.getSettings()).toMatchObject({ selectedPetId: 'kun:whale-girl', overlayOpen: true })
+  })
+
+  it('imports every chibi AI companion offline and preserves a selected companion', async () => {
+    const root = await temp()
+    const packaged = path.join(root, 'Resources', 'pets')
+    const ids = [
+      'claude-girl', 'doubao-girl', 'gemini-girl', 'glm-girl', 'gpt-girl', 'grok-girl',
+      'hunyuan-girl', 'kimi-girl', 'llama-girl', 'mimo-girl', 'minimax-girl',
+      'mistral-girl', 'qwen-girl', 'seed-girl'
+    ]
+    const { cp } = await import('node:fs/promises')
+    await mkdir(packaged, { recursive: true })
+    for (const id of ids) await cp(path.resolve('resources/pets', id), path.join(packaged, id), { recursive: true })
+    const storeRoot = path.join(root, 'user', 'pets')
+    const store = new PetStore(storeRoot)
+    await store.initialize()
+    const report = await refreshPetLibraries({
+      store,
+      builtinRoot: resolveBuiltinPetsRoot({ packaged: true, resourcesPath: path.join(root, 'Resources'), appPath: '/missing-source' }),
+      localRoot: path.join(storeRoot, 'local'),
+      codexHome: path.join(root, 'no-codex'),
+      importCodexPets: false
+    })
+    expect(report.failed).toEqual([])
+    expect(report.imported.map((pet) => pet.sourceId).sort()).toEqual(ids)
+    for (const id of ids) {
+      const petId = petIdForSource('kun-builtin', id)
+      expect(store.listPets()).toContainEqual(expect.objectContaining({
+        id: petId, source: 'kun-builtin', spriteVersionNumber: 1, available: true
+      }))
+      const asset = await readPetAsset(
+        `kun-pet://asset/${encodeURIComponent(petId)}/spritesheet?v=1`,
+        (key) => store.assetPath(key),
+        store.libraryRoot()
+      )
+      expect(asset.status, id).toBe(200)
+      expect(asset.headers.get('Content-Type'), id).toBe('image/webp')
+      expect((await asset.arrayBuffer()).byteLength, id).toBeGreaterThan(0)
+    }
+    await store.selectPet('kun:gpt-girl')
+    await store.setOverlayOpen(true)
+    const restarted = new PetStore(storeRoot)
+    await restarted.initialize()
+    expect(restarted.getSettings()).toMatchObject({ selectedPetId: 'kun:gpt-girl', overlayOpen: true })
   })
 
   it('finds Codex pets through CODEX_HOME and packaged resource roots', () => {
