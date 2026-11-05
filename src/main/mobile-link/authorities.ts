@@ -2,21 +2,25 @@ import { createHash, randomUUID } from 'node:crypto'
 import { mobileLinkScopes, type MobileLinkScope } from '../../shared/mobile-link-scopes'
 type Grant = { id: string; controllerId: string }
 type Advanced = { grantId: string; scopes: MobileLinkScope[]; version: string }
-/** Volatile enable-session choices. Unknown/rotated cloud grants never inherit advanced access. */
+/** Session-bound choices keyed to exact cloud grants; defaults require explicit unified access consent. */
 export class MobileLinkAuthorities {
   private entries = new Map<string, Advanced>()
   clear() { this.entries.clear() }
-  sync(grants: Grant[]) {
+  sync(grants: Grant[], defaults?: MobileLinkScope[]) {
     const changed: string[] = []
     for (const [peer, value] of this.entries) if (!grants.some((g) => g.controllerId === peer && g.id === value.grantId)) {
       this.entries.delete(peer); changed.push(peer)
+    }
+    if (defaults) for (const grant of grants) if (!this.entries.has(grant.controllerId)) {
+      this.set(grant.controllerId, grant.id, defaults)
+      if (!changed.includes(grant.controllerId)) changed.push(grant.controllerId)
     }
     return changed
   }
   set(peer: string, grantId: string, scopes: unknown) {
     const normalized = mobileLinkScopes(scopes)
     const old = this.entries.get(peer)
-    if (normalized.length === 1) return this.entries.delete(peer)
+    // Retain explicit personal-only overrides so a later sync cannot reinstate defaults.
     if (old?.grantId === grantId && JSON.stringify(old.scopes) === JSON.stringify(normalized)) return false
     this.entries.set(peer, { grantId, scopes: normalized, version: randomUUID() })
     return true

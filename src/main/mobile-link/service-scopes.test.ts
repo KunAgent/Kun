@@ -32,6 +32,26 @@ function fixture() {
     pause: (value: typeof response) => { response = value } }
 }
 describe('trusted desktop permission dispatch', () => {
+  it('one unified enable configures desktop and supplies paired phones desktop rights without setScopes', async () => {
+    const f = fixture(), configureRemoteAccess = vi.fn(async (_enabled: boolean, _current?: () => boolean) => undefined)
+    f.deps.desktop = { configureRemoteAccess, stopAll: async () => {}, authorityChanged() {} } as unknown as LinkDependencies['desktop']
+    try {
+      const status = await f.service.enable(true, true, true)
+      expect(configureRemoteAccess).toHaveBeenLastCalledWith(true, expect.any(Function))
+      expect(status.desktopAccess).toBe(true)
+      await vi.waitFor(async () => expect((await f.service.status()).grants[0]?.scopes).toEqual(['personal', 'desktop.view', 'desktop.control']))
+      const paired = await f.service.confirm(pairing)
+      expect(paired.grants[0].scopes).toEqual(['personal', 'desktop.view', 'desktop.control'])
+      await f.service.setScopes(grant, [])
+      expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
+      f.deps.requireMembership = async () => { throw Error('vip_mobile_remote_required') }
+      expect((await f.service.enable(false)).desktopAccess).toBe(false)
+      expect(configureRemoteAccess).toHaveBeenLastCalledWith(false)
+      configureRemoteAccess.mockClear()
+      await expect(f.service.enable(true, true, true)).rejects.toThrow('vip_mobile_remote_required')
+      expect(configureRemoteAccess.mock.calls.some(call => call[0])).toBe(false)
+    } finally { f.service.dispose(); await tick() }
+  })
   it('forwards only fixed history operations with the authenticated personal origin', async () => {
     const f = fixture()
     try {

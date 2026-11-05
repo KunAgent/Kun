@@ -28,7 +28,6 @@ export function useDesktopAccess(link: MobileLink) {
     invalidate(); pending.current = false
     setValue(undefined); setError(''); setBusy(false)
     if (!owner) return
-    void refresh()
     const onFocus = () => void refresh()
     const onVisible = () => { if (document.visibilityState === 'visible') void refresh() }
     window.addEventListener('focus', onFocus)
@@ -40,6 +39,7 @@ export function useDesktopAccess(link: MobileLink) {
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [owner, refresh, invalidate])
+  useEffect(() => { void refresh() }, [link.enabled, link.state?.desktopAccess, refresh])
 
   async function action(run: () => Promise<DesktopAccessStatus | void>) {
     if (pending.current) return
@@ -58,23 +58,12 @@ export function useDesktopAccess(link: MobileLink) {
       if (current === generation.current) setError(t('remoteCompact.desktopActionError'))
     } finally { if (current === generation.current) { pending.current = false; setBusy(false) } }
   }
-  function configure(enabled: boolean, tokens: string[]) {
-    // Losing membership must never disable the local stop operation.
-    if (!api?.desktopConfigure || (enabled && (!link.mobileAllowed || !link.enabled))) return
-    void action(() => api.desktopConfigure!({ enabled, displayTokens: tokens }))
-  }
-  function toggle() {
-    if (!value) return
-    configure(!value.enabled, value.displays.filter(d => d.allowed).map(d => d.token))
-  }
   function permission(kind: 'screenRecording' | 'accessibility') {
     void action(async () => { await window.kunGui.requestComputerUsePermission(kind) })
   }
   return {
-    value, error, busy, refresh, configure, toggle, permission,
-    stop: () => api?.desktopStop && void action(() => api.desktopStop!()),
-    toggleDisabled: busy || !value || (!value.enabled &&
-      (!value.supported || !link.mobileAllowed || !link.enabled || !value.displays.some(d => d.allowed)))
+    value, error, busy, refresh, permission,
+    stop: () => api?.desktopStop && void action(() => api.desktopStop!())
   }
 }
 export type DesktopAccess = ReturnType<typeof useDesktopAccess>

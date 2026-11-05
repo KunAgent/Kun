@@ -137,7 +137,7 @@ export function registerMobileLink(
   })
   ipcMain.handle(channels.reconnect, (event) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
-    return service.retryMembership()
+    return resume.manual(true)
   })
   ipcMain.handle(channels.entitlements, (event) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
@@ -182,9 +182,14 @@ export function registerMobileLink(
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return service.setScopes(id, scopes)
   })
-  ipcMain.handle(channels.revoke, (event, id) => {
+  ipcMain.handle(channels.revoke, async (event, id) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
-    return service.revoke(id)
+    try { return await service.revoke(id) }
+    catch (error) {
+      // A failed cloud deletion must not restore this phone's default desktop rights on restart.
+      await resume.manual(false).catch(() => {})
+      throw error
+    }
   })
   ipcMain.handle(channels.desktopStatus, event => { assertTrustedWorkbenchSender(event, options.getMainWindow); return desktop.status() })
   ipcMain.handle(channels.desktopConfigure, (event, value) => { assertTrustedWorkbenchSender(event, options.getMainWindow); return desktop.configure(value) })

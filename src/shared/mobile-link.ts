@@ -2,6 +2,8 @@ import type { AccountEntitlements } from '@kun/remote-protocol'
 import type { MobileLinkScope } from './mobile-link-scopes'
 export type MobileLinkStatus = {
   enabled: boolean
+  /** Explicit unified phone/desktop consent; absent/false on legacy relay-only starts. */
+  desktopAccess?: boolean
   starting?: boolean
   online: boolean
   error?: string

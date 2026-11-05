@@ -4,7 +4,7 @@ import { MobileShareHosts } from './share-host'
 import { desktopScheduleDescriptors } from './desktop-schedules'
 import { MobileNotifications } from './notifications'
 import { MobileLinkAuthorities } from './authorities'
-import { mobileLinkScopes } from '../../shared/mobile-link-scopes'
+import { mobileLinkScopes, MOBILE_REMOTE_SCOPES } from '../../shared/mobile-link-scopes'
 import { conditionalCall, conditionalResult } from './read-version'
 import { randomUUID } from 'node:crypto'
 import {
@@ -63,6 +63,7 @@ export class MobileLinkService {
   private observedOwner: string | null | undefined
   private generation = 0
   private enabled = false
+  private desktopAccess = false
   private online = false
   private error?: string
   private identity?: DeviceIdentity
@@ -146,6 +147,8 @@ export class MobileLinkService {
     void this.deps.desktop?.stopAll('transport_closed').catch(() => {})
     this.peers.clear()
     this.authorities.clear()
+    this.desktopAccess = false
+    void this.deps.desktop?.configureRemoteAccess?.(false).catch(() => {})
     void this.deps.desktop?.stopAll('host_stopped').catch(() => {})
     void this.deps.terminal?.stopAll('host_stopped').catch(() => {})
     this.notifications.stop()
@@ -292,6 +295,7 @@ export class MobileLinkService {
     }
     return {
       enabled: this.enabled,
+      desktopAccess: this.desktopAccess,
       starting: this.enabling && !this.enabled,
       online: this.online,
       error: this.error,
@@ -311,7 +315,7 @@ export class MobileLinkService {
     return this.status()
   }
 
-  async enable(value: boolean, keepGrants = false) {
+  async enable(value: boolean, keepGrants = false, desktopAccess = false) {
     if (!value) {
       ++this.enableOperation
       this.enabling = false
@@ -321,7 +325,7 @@ export class MobileLinkService {
     this.enabling = true
     const operation = ++this.enableOperation
     try {
-      return await this.setEnabled(value, keepGrants)
+      return await this.setEnabled(value, keepGrants, desktopAccess)
     } catch (error) {
       if (operation !== this.enableOperation) throw error
       if (!this.enabled) this.stop()
@@ -371,14 +375,15 @@ export class MobileLinkService {
     this.peers = new Set(grants.filter((grant) => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id)).map((grant) => grant.controllerId))
     for (const peer of previous) if (!this.peers.has(peer)) this.subscriptions.clear(peer)
     this.grantPeers = new Map(grants.map((grant) => [grant.id, grant.controllerId]))
-    for (const peer of this.authorities.sync(grants)) this.permissionsChanged(peer)
+    const eligibleGrants = grants.filter(grant => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id))
+    for (const peer of this.authorities.sync(eligibleGrants, this.desktopAccess ? MOBILE_REMOTE_SCOPES : undefined)) this.permissionsChanged(peer)
     const api = this.api, generation = this.generation
     const eligible = () => this.enabled && !this.sessionEnding && this.api === api && generation === this.generation &&
       [...this.grantPeers].some(([id, peer]) => !this.deniedGrants.has(id) && !this.deniedPeers.has(peer))
     if (api && eligible()) this.notifications.start(api, eligible)
     else this.notifications.stop()
   }
-  private async setEnabled(value: boolean, keepGrants = false) {
+  private async setEnabled(value: boolean, keepGrants = false, desktopAccess = false) {
     if (!value) {
       const identity = this.identity
       const token = this.lastToken
@@ -417,6 +422,9 @@ export class MobileLinkService {
     try {
       await api.request('/devices/enabled', 'PUT', { enabled: true })
       if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
+      if (desktopAccess) await this.deps.desktop?.configureRemoteAccess?.(true, () => generation === this.generation && !this.sessionEnding)
+      if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
+      this.desktopAccess = desktopAccess
     } catch (error) {
       // An old enable request may finish after logout's disable request.
       // Repeat cleanup after that request settles, still with the old identity.
@@ -495,7 +503,8 @@ export class MobileLinkService {
     return this.status()
   }
   async confirm(id: string, rawScopes?: unknown) {
-    const scopes = mobileLinkScopes(rawScopes)
+    const chosen = mobileLinkScopes(rawScopes)
+    const scopes = this.desktopAccess ? mobileLinkScopes([...new Set([...chosen, ...MOBILE_REMOTE_SCOPES])]) : chosen
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
       throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)

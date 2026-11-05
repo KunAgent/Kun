@@ -21,10 +21,14 @@ export class RelayPreference {
       return false
     }
   }
-  async remember(owner: string) {
+  async desktopRemembered(owner: string): Promise<boolean> {
+    try { const value = JSON.parse(await readFile(this.file(owner), 'utf8')); return value?.enabled === true && value?.desktopAccess === true }
+    catch { return false }
+  }
+  async remember(owner: string, desktopAccess = false) {
     const file = this.file(owner), temporary = file + '.' + randomUUID() + '.tmp'
     await mkdir(dirname(file), { recursive: true, mode: 0o700 })
-    await writeFile(temporary, JSON.stringify({ enabled: true }) + '\n', { mode: 0o600 })
+    await writeFile(temporary, JSON.stringify({ enabled: true, ...(desktopAccess ? { desktopAccess: true } : {}) }) + '\n', { mode: 0o600 })
     await rename(temporary, file)
   }
   async forget(owner: string) {

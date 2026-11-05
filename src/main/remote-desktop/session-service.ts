@@ -7,7 +7,7 @@ import { DesktopInputArbiter } from './input-arbiter'
 import type { DesktopIndicatorPort } from './indicator'
 
 export type DesktopAuthority = { accountId: string; deviceId: string; authorizationId: string; scopes: readonly string[]; current(): boolean; validForMs?(): number; emit(event: DesktopEvent): void }
-export type DesktopHostDisplay = { id: number; fingerprint: string; label: string; pixelWidth: number; pixelHeight: number; rotation: number }
+export type DesktopHostDisplay = { primary?: boolean; id: number; fingerprint: string; label: string; pixelWidth: number; pixelHeight: number; rotation: number }
 export type DesktopInputPort = { start(displayId: number, pid: number, birth: string): Promise<void>; ready?(): Promise<void>; setupLease?(ms: number): Promise<void>; lease(ms: number): Promise<void>; input(value: Record<string, unknown>): Promise<void>; release(): Promise<void>; stop(): Promise<void> }
 export type DesktopEngineDependencies = {
   supported(): boolean
@@ -48,6 +48,7 @@ export class RemoteDesktopService {
   private timer?: ReturnType<typeof setInterval>
   private lastFailure?: string
   private failureRevision = 0
+  private configurationRevision = 0
   constructor(private readonly deps: DesktopEngineDependencies) {}
   private sourceList() {
     return this.deps.displays().slice(0, 8).map(display => {
@@ -66,16 +67,26 @@ export class RemoteDesktopService {
         pixelHeight: display.pixelHeight, rotation: display.rotation, allowed: this.allowed.has(display.token) })),
       ...(this.active ? { active: { sessionId: this.active.info.sessionId, peer: this.active.authority.deviceId, mode: this.active.info.mode } } : {}) }
   }
-  async configure(value: DesktopConfiguration) {
+  async configure(value: DesktopConfiguration, current: () => boolean = () => true) {
     if (!value || typeof value.enabled !== 'boolean' || !Array.isArray(value.displayTokens) || value.displayTokens.length > 8 ||
       Object.keys(value).some(key => !['enabled', 'displayTokens'].includes(key))) throw Error('INVALID_REQUEST')
     const displays = this.sourceList(), known = new Set(displays.map(display => display.token))
     if (value.displayTokens.some(token => typeof token !== 'string' || !known.has(token)) || new Set(value.displayTokens).size !== value.displayTokens.length) throw Error('INVALID_REQUEST')
     if (value.enabled && (!this.deps.supported() || !value.displayTokens.length)) throw Error('DESKTOP_UNSUPPORTED')
+    const revision = ++this.configurationRevision
+    // Revoke admission before awaiting native cleanup. A delayed start may not overwrite a newer stop.
+    this.enabled = false; this.allowed.clear()
     await this.stopAll('configuration_changed')
+    if (revision !== this.configurationRevision || !current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
     ++this.failureRevision; this.lastFailure = undefined
     this.allowed = new Set(value.displayTokens); this.enabled = value.enabled
     return this.status()
+  }
+  async configureRemoteAccess(enabled: boolean, current: () => boolean = () => true) {
+    const displays = enabled && this.deps.supported() ? this.sourceList() : []
+    const primary = displays.find(display => display.primary)
+    const display = primary ? primary.rotation === 0 ? primary : undefined : displays.find(display => display.rotation === 0)
+    return this.configure({ enabled: enabled && Boolean(display), displayTokens: enabled && display ? [display.token] : [] }, current)
   }
   descriptors(scopes: readonly string[]) {
     const supported = this.deps.supported(), authorized = scopes.includes('desktop.view')

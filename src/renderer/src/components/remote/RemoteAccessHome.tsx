@@ -1,11 +1,10 @@
-import { Globe, Info, Monitor, QrCode, Smartphone } from 'lucide-react'
+import { Globe, Info, QrCode, Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import { MobileChannelRow } from './RemoteMobileLink'
 import { BrowserSwitch } from './RemoteBrowserAccess'
 import { RemoteCompactRow, REMOTE_FOCUS } from './remote-compact-ui'
-import { desktopConsent, desktopSummary, mobileRequirement } from './remote-access-state'
-import { describeUserAgent, RemoteCopyButton, RemoteGroup, RemoteSection, RemoteSwitch } from './remote-panel-ui'
+import { desktopConsent, desktopSummary } from './remote-access-state'
+import { describeUserAgent, RemoteCopyButton, RemoteGroup, RemoteSection } from './remote-panel-ui'
 import type { DesktopAccess } from './useDesktopAccess'
 import type { MobileLink } from './useMobileLink'
 import type { RemoteBrowser } from './useRemoteBrowser'
@@ -19,9 +18,8 @@ export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop,
   const clients = status?.running ? status.clients : []
   const grants = link.enabled ? link.state?.grants ?? [] : []
   const running = status?.running || link.enabled || desktop.value?.active
-  const requirement = mobileRequirement(link, t)
-  const desktopText = requirement || (!link.enabled ? t('remoteCompact.phoneFirst') : desktop.error || desktopSummary(desktop.value, t))
-  const warning = link.mobileAllowed && link.enabled && desktop.value?.enabled &&
+  const desktopText = desktop.error || desktopSummary(desktop.value, t)
+  const warning = link.mobileAllowed && link.enabled && link.state?.desktopAccess && desktop.value?.supported &&
     (!desktop.value.ready || desktop.value.inputReady !== true)
   const primary = status?.running ? status.urls.primary || status.urls.local : ''
   const browserText = !status ? t('remoteCompact.connecting') : status.running ? t('remoteAccessRunning')
@@ -44,12 +42,7 @@ export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop,
       </details>
     </header>
     <RemoteGroup>
-      <MobileChannelRow link={link} />
-      <RemoteCompactRow icon={Monitor} title={t('remoteCompact.desktop')} locked={Boolean(requirement) && !desktop.value?.enabled}
-        subtitle={warning ? <span className="text-amber-700 dark:text-amber-400">{desktopText}</span> : desktopText} onOpen={onDesktop}>
-        <RemoteSwitch checked={Boolean(desktop.value?.enabled)} disabled={desktop.toggleDisabled} label={t('remoteCompact.desktop')}
-          onToggle={event => runTrustedUserActivation(event, desktop.toggle)} />
-      </RemoteCompactRow>
+      <MobileChannelRow link={link} onOpen={onDesktop} detail={link.enabled && link.state?.desktopAccess ? desktopText : undefined} />
       <RemoteCompactRow icon={Globe} title={t('remoteCompact.browser')} subtitle={browserText} onOpen={onBrowser}>
         <BrowserSwitch browser={browser} />
       </RemoteCompactRow>

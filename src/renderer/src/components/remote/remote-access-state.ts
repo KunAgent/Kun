@@ -14,7 +14,7 @@ export function mobileRequirement(link: MobileLink, t: TFunction<'common'>): str
 export function desktopSummary(value: DesktopAccessStatus | undefined, t: TFunction<'common'>): string {
   if (!value) return t('remoteCompact.connecting')
   if (!value.supported) return t('remoteCompact.unsupported')
-  if (!value.displays.some(display => display.allowed)) return t('remoteCompact.selectDisplay')
+  if (!value.displays.some(display => display.allowed)) return t('remoteCompact.displayUnavailable')
   if (!value.enabled) return t('remoteCompact.desktopOff')
   if (!value.ready) return t('remoteCompact.screenRequired')
   if (value.inputReady === false) return t('remoteCompact.inputRequired')

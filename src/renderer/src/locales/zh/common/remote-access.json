@@ -135,6 +135,14 @@
     "browserHttp": "此入口使用明文 HTTP，请只在可信网络中开启。",
     "savePermissions": "保存权限",
     "logoutBrowsers": "登出全部浏览器",
+    "phoneRemote": "手机远程访问",
+    "remoteIncludesDesktop": "开启后，已配对手机可访问 Kun，并查看和控制主显示器。",
+    "pairDesktopIncluded": "配对后即可访问 Kun、查看和控制桌面，无需再次授权。仅允许你信任的手机。",
+    "upgradeRemote": "打开此开关，启用包含桌面控制的完整远程访问",
+    "desktopIncluded": "查看与控制 · 已包含",
+    "masterEnablesDesktop": "由远程访问主开关开启",
+    "displayUnavailable": "主显示器暂不可共享，请检查显示器设置。",
+    "defaultDisplay": "默认主显示器",
     "security": "安全说明"
   }
 }

@@ -105,7 +105,12 @@ export function useMobileLink() {
     refreshMembership: membership.refresh,
     retryVip: () => api && void action(() => api.reconnect(), 'start'),
     resetIdentity: () => api && void action(() => api.resetIdentity()),
-    toggle: () => api && (canStop || mobileAllowed) && void action(() => api.enable(!canStop), canStop ? 'stop' : 'start'),
+    toggle: () => {
+      if (!api || (!canStop && !mobileAllowed)) return
+      const stop = canStop && (state?.desktopAccess === true || !mobileAllowed || starting)
+      void action(() => api.enable(!stop), stop ? 'stop' : 'start')
+    },
+    stop: () => api && canStop && void action(() => api.enable(false), 'stop'),
     confirm: (id: string, scopes?: MobileLinkScope[]) => api && void action(() => api.confirm(id, scopes)),
     setScopes: (id: string, scopes: MobileLinkScope[]) => api ? action(() => api.setScopes(id, scopes)) : Promise.resolve(false),
     revoke: (id: string) => api && void action(() => api.revoke(id))

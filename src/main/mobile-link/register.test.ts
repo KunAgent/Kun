@@ -74,6 +74,19 @@ beforeEach(() => {
 afterEach(() => { mock.quit?.(); vi.useRealTimers() })
 
 describe('desktop mobile recovery composition', () => {
+  it('uses the unified consent for a trusted start and forgets it when revocation cannot be confirmed', async () => {
+    const signedIn = { status: 'authenticated', user: { id: 'owner' }, error: null }
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, { ...account, getState: async () => signedIn })
+    await vi.advanceTimersByTimeAsync(0)
+    mock.enable.mockResolvedValue({ enabled: true, desktopAccess: true, online: false, pairings: [], grants: [] })
+    await mock.handlers.get('mobile-link:enable')!({}, true)
+    expect(mock.enable).toHaveBeenLastCalledWith(true, false, true)
+    expect(mock.remembered).toBe(true)
+    mock.revoke.mockRejectedValueOnce(Error('cloud unavailable'))
+    await expect(mock.handlers.get('mobile-link:revoke')!({}, 'grant')).rejects.toThrow('cloud unavailable')
+    expect(mock.enable).toHaveBeenLastCalledWith(false)
+    expect(mock.remembered).toBe(false)
+  })
   it('allows only the trusted workbench to reset a rejected device and leaves access off', async () => {
     mock.remembered = true
     const signedIn = { status: 'authenticated', user: { id: 'owner' }, error: null }

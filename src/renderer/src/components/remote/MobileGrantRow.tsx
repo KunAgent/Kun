@@ -4,7 +4,7 @@ import type { MobileLinkScope } from '@shared/mobile-link-scopes'
 import type { MobileLinkStatus } from '@shared/mobile-link'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
-import { MobileScopeOptions, PERSONAL_SCOPES, selectMobileScope } from './MobileScopeOptions'
+import { MobileScopeOptions, PERSONAL_SCOPES } from './MobileScopeOptions'
 import { desktopConsent } from './remote-access-state'
 import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS, RemoteGroup } from './remote-panel-ui'
 import { REMOTE_FOCUS } from './remote-compact-ui'
@@ -35,29 +35,18 @@ export function MobileGrantRow({ link, grant, onDirtyChange }: {
     if (await setScopes(grant.id, draft)) setSaved(scopeKey(draft))
     else setSaveFailed(true)
   }
-  const level = desktopConsent(draft)
   const savedLevel = desktopConsent(approved)
   return <>
     <RemoteGroup>
       <div className="flex min-h-11 items-center justify-between gap-2 px-3 text-[13px]">
         <span className="font-medium text-ds-ink">{t('remoteCompact.basic')}</span><span className="text-[12px] text-ds-muted">{t('remoteCompact.basicValue')}</span>
       </div>
-      <fieldset className="flex flex-wrap items-center justify-between gap-2 px-3 py-3">
-        <legend className="sr-only">{t('remoteCompact.desktop')}</legend>
-        <span className="text-[13px] font-medium text-ds-ink">{t('remoteCompact.desktop')}</span>
-        <div className="inline-flex rounded-lg bg-ds-subtle p-0.5" role="group" aria-label={t('remoteCompact.desktop')}>
-          {(['off', 'view', 'control'] as const).map(value => <button key={value} type="button" disabled={Boolean(busy) || !link.mobileAllowed}
-            aria-pressed={level === value} className={`min-h-7 rounded-md px-2 text-[12px] font-medium disabled:opacity-50 ${REMOTE_FOCUS} ${level === value ? 'bg-control text-control-foreground' : 'text-ds-muted'}`}
-            onClick={() => change(value === 'off' ? selectMobileScope(draft, 'desktop.view', false)
-              : value === 'view' ? selectMobileScope(selectMobileScope(draft, 'desktop.control', false), 'desktop.view', true)
-                : selectMobileScope(draft, 'desktop.control', true))}>
-            {t(`remoteCompact.${value}`)}
-          </button>)}
-        </div>
-      </fieldset>
+      <div className="flex min-h-11 items-center justify-between gap-2 px-3 text-[13px]">
+        <span className="font-medium text-ds-ink">{t('remoteCompact.desktop')}</span>
+        <span className="text-[12px] text-ds-muted">{t(savedLevel === 'control' ? 'remoteCompact.desktopIncluded' : savedLevel === 'view' ? 'remoteCompact.savedView' : 'remoteCompact.masterEnablesDesktop')}</span>
+      </div>
       <MobileScopeOptions zh={zh} value={draft} onChange={change} disabled={Boolean(busy) || !link.mobileAllowed} includeDesktop={false} />
     </RemoteGroup>
-    <p className="text-[12px] text-ds-muted" aria-live="polite">{t(savedLevel === 'control' ? 'remoteCompact.savedControl' : savedLevel === 'view' ? 'remoteCompact.savedView' : 'remoteCompact.savedOff')}</p>
     {saveFailed ? <p role="alert" className="text-[12px] text-ds-danger">{zh ? '权限未保存，请重试；手机仍按原权限连接。' : 'Permissions were not saved. The phone still uses its previous permissions.'}</p> : null}
     {!dirty && saved === serialized ? <p role="status" className="text-[12px] text-ds-muted">{zh ? '权限已保存，手机可重新检查电脑状态。' : 'Permissions saved. Recheck the computer on your phone.'}</p> : null}
     <button type="button" className={`self-start rounded-md py-1 text-[12px] text-ds-danger disabled:opacity-50 ${REMOTE_FOCUS}`}

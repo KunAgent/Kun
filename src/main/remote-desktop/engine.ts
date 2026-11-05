@@ -15,7 +15,7 @@ export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promis
   const service = new RemoteDesktopService({
     supported: () => process.platform === 'darwin' && process.arch === 'arm64' && desktopHelperAvailable(),
     permissions: getComputerUsePermissions,
-    displays: () => screen.getAllDisplays().map(display => ({ id: display.id, fingerprint: displayFingerprint(display), label: display.label || `Display ${display.id}`,
+    displays: () => screen.getAllDisplays().map(display => ({ id: display.id, primary: display.id === screen.getPrimaryDisplay().id, fingerprint: displayFingerprint(display), label: display.label || `Display ${display.id}`,
       pixelWidth: Math.round(display.size.width * display.scaleFactor), pixelHeight: Math.round(display.size.height * display.scaleFactor), rotation: display.rotation })),
     capture: (id, receive) => new ElectronDesktopCapture(id, receive),
     input: lost => new NativeDesktopInput(lost), ice, authorizeOrigin,

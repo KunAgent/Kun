@@ -49,7 +49,7 @@ beforeEach(async () => {
     }
   }
   mocks.link = { api: api.mobileLink, zh: false, account: { state: { user: { id: 'owner' } } }, signedIn: true,
-    state: { enabled: true, online: true, pairings: [], grants: [{ id: 'phone', controllerId: 'controller', name: 'iPhone', scopes: ['personal'] }] },
+    state: { enabled: true, desktopAccess: true, online: true, pairings: [], grants: [{ id: 'phone', controllerId: 'controller', name: 'iPhone', scopes: ['personal', 'desktop.view', 'desktop.control'] }] },
     enabled: true, starting: false, busy: null, canStop: true, mobileAllowed: true, membershipState: 'active', connectionError: '',
     toggle: vi.fn(), confirm: vi.fn(), setScopes: vi.fn(async () => true), revoke: vi.fn(), refreshMembership: vi.fn() } as unknown as MobileLink
   mocks.gate = true
@@ -58,24 +58,25 @@ beforeEach(async () => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 it('shows a compact overview without settings forms, a QR image or nested buttons', async () => {
   await render()
-  expect(container.querySelectorAll('[role="switch"]')).toHaveLength(3)
+  expect(container.querySelectorAll('[role="switch"]')).toHaveLength(2)
   expect(container.querySelector('input')).toBeNull()
   expect(container.querySelector('[role="img"]')).toBeNull()
-  expect(container.textContent).not.toContain('Screen Recording')
+  expect(button('Authorize')).toBeUndefined()
   expect(container.querySelector('button button')).toBeNull()
   expect(container.querySelectorAll('.overflow-y-auto')).toHaveLength(1)
   expect(container.querySelector('section')?.className).toContain('overscroll-contain')
   expect(container.querySelectorAll('button').length).toBeLessThan(12)
 })
-it('locks both member entries but browser stays usable and locked desktop details remain accessible', async () => {
+it('locks the combined entry but leaves browser and system permission details accessible', async () => {
   mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free', enabled: false, canStop: false }
   await render()
-  expect(container.textContent?.match(/Requires Plus membership or higher/g)).toHaveLength(2)
+  expect(container.textContent?.match(/Requires Plus membership or higher/g)).toHaveLength(1)
   expect(control('Enable phone access').disabled).toBe(true)
-  expect(control('Desktop control').disabled).toBe(true)
+  expect(control('Desktop control')).toBeNull()
   expect(control(i18n.t('remoteAccessEnable')).disabled).toBe(false)
-  await click('Desktop control')
+  await click('Phone remote access')
   expect(container.textContent).toContain('Requires Plus membership or higher')
+  expect(container.querySelector('[role="switch"]')).toBeNull()
 })
 it('keeps browser and desktop stop controls usable after entitlement/password loss', async () => {
   status.passwordSet = false; desktop.enabled = true; desktop.active = { peer: 'iPhone', mode: 'control', sessionId: 'session' }
@@ -84,14 +85,15 @@ it('keeps browser and desktop stop controls usable after entitlement/password lo
   expect(control(i18n.t('remoteAccessEnable')).disabled).toBe(false)
   await act(async () => control(i18n.t('remoteAccessEnable')).click())
   expect(api.remoteAccessSetConfig).toHaveBeenCalledWith({ enabled: false })
-  expect(control('Desktop control').disabled).toBe(false)
-  await act(async () => control('Desktop control').click())
-  expect(api.mobileLink.desktopConfigure).toHaveBeenCalledWith({ enabled: false, displayTokens: ['screen'] })
+  expect(control('Stop phone access').disabled).toBe(false)
+  await act(async () => control('Stop phone access').click())
+  expect(mocks.link.toggle).toHaveBeenCalledOnce()
   await click('End remote session'); expect(api.mobileLink.desktopStop).toHaveBeenCalledOnce()
 })
-it('retains desktop trusted activation for configure operations', async () => {
+it('retains trusted activation for the unified remote switch', async () => {
   await render(); mocks.gate = false
-  await act(async () => control('Desktop control').click())
+  await act(async () => control('Stop phone access').click())
+  expect(mocks.link.toggle).not.toHaveBeenCalled()
   expect(api.mobileLink.desktopConfigure).not.toHaveBeenCalled()
 })
 it('allows configuring a browser with no password and hides addresses when not running', async () => {
@@ -110,14 +112,15 @@ it('keeps pairing visible on detail pages and requires the consent gate', async 
   mocks.gate = true; await click('Allow'); expect(mocks.link.confirm).toHaveBeenCalledWith('pair', ['personal'])
 })
 it('keeps draft permissions on cancelled navigation and discards only after confirmation', async () => {
-  await render(); await click('iPhone'); await click('Control')
+  await render(); await click('iPhone')
+  await act(async () => (container.querySelector('input[type="checkbox"]') as HTMLInputElement).click())
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
   const back = () => container.querySelector('[aria-label="Back to remote access"]') as HTMLButtonElement
   await act(async () => back().click())
   expect(container.textContent).toContain('Unsaved permission changes')
   confirm.mockReturnValue(true); await act(async () => back().click())
   expect(container.textContent).not.toContain('Unsaved permission changes')
-  expect(container.querySelectorAll('[role="switch"]')).toHaveLength(3)
+  expect(container.querySelectorAll('[role="switch"]')).toHaveLength(2)
 })
 it('shows an initial status error with retry instead of trapping the user in loading', async () => {
   api.remoteAccessGetStatus.mockRejectedValueOnce(new Error('status unavailable'))
@@ -138,11 +141,11 @@ it('never polls the desktop API when signed out', async () => {
   mocks.link = { ...mocks.link, signedIn: false, mobileAllowed: false, enabled: false, canStop: false, membershipState: 'signedOut' }
   await render(); expect(api.mobileLink.desktopStatus).not.toHaveBeenCalled()
   expect(control('Enable phone access').disabled).toBe(true)
-  expect(control('Desktop control').disabled).toBe(true)
+  expect(control('Desktop control')).toBeNull()
 })
 it('shows granted screen permission with sharing off and no selected display', async () => {
   desktop = { ...desktop, screenRecordingReady: true, inputReady: true, displays: desktop.displays.map(d => ({ ...d, allowed: false })) }
-  await render(); await click('Desktop control')
+  await render(); await click('Phone remote access')
   expect(container.textContent?.match(/Granted/g)).toHaveLength(2)
   expect(button('Authorize')).toBeUndefined()
   await click('Recheck')
@@ -150,7 +153,7 @@ it('shows granted screen permission with sharing off and no selected display', a
   expect(container.textContent?.match(/Granted/g)).toHaveLength(2)
 })
 it('rechecks permissions immediately when returning from System Settings', async () => {
-  await render(); await click('Desktop control')
+  await render(); await click('Phone remote access')
   desktop = { ...desktop, screenRecordingReady: true, inputReady: true }
   await act(async () => window.dispatchEvent(new Event('focus')))
   expect(api.mobileLink.desktopStatus).toHaveBeenCalledTimes(2)
@@ -158,7 +161,7 @@ it('rechecks permissions immediately when returning from System Settings', async
 })
 it('rechecks on visibility restoration and reflects revoked permissions', async () => {
   desktop = { ...desktop, screenRecordingReady: true, inputReady: true }
-  await render(); await click('Desktop control')
+  await render(); await click('Phone remote access')
   desktop = { ...desktop, screenRecordingReady: false, inputReady: false }
   await act(async () => document.dispatchEvent(new Event('visibilitychange')))
   expect(api.mobileLink.desktopStatus).toHaveBeenCalledTimes(2)
@@ -166,7 +169,7 @@ it('rechecks on visibility restoration and reflects revoked permissions', async 
   expect(container.textContent?.match(/Authorize/g)).toHaveLength(2)
 })
 it('refreshes after a permission request and reports failures beside the controls', async () => {
-  await render(); await click('Desktop control')
+  await render(); await click('Phone remote access')
   api.requestComputerUsePermission.mockImplementationOnce(async () => {
     desktop = { ...desktop, screenRecordingReady: true }
   })

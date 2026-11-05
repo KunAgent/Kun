@@ -61,6 +61,37 @@ describe('RemoteDesktopService', () => {
     await expect(f.start('next')).rejects.toThrow('private-vendor-token')
     expect((await f.service.status()).lastFailure).toBe('DESKTOP_CONNECTION_FAILED')
   })
+  it('enables the primary display without a separate selection or permission bypass', async () => {
+    const f = fixture()
+    f.deps.displays = () => [
+      { id: 1, fingerprint: 'external', label: 'External', pixelWidth: 1920, pixelHeight: 1080, rotation: 0 },
+      { id: 2, primary: true, fingerprint: 'primary', label: 'Primary', pixelWidth: 2560, pixelHeight: 1600, rotation: 0 }
+    ]
+    f.deps.permissions = async () => ({ screenRecording: 'denied', accessibility: 'denied' })
+    const status = await f.service.configureRemoteAccess(true)
+    expect(status).toMatchObject({ enabled: true, ready: false, screenRecordingReady: false, inputReady: false })
+    expect(status.displays.filter(d => d.allowed).map(d => d.label)).toEqual(['Primary'])
+    await expect(f.start()).rejects.toThrow()
+    expect(f.captures).toHaveLength(0)
+    await f.service.configureRemoteAccess(false)
+    expect(await f.service.status()).toMatchObject({ enabled: false, ready: false })
+  })
+  it('a delayed unified enable cannot overwrite a newer stop or owner change', async () => {
+    const f = fixture()
+    let release!: () => void
+    vi.spyOn(f.service, 'stopAll').mockImplementationOnce(() => new Promise<void>(resolve => { release = resolve }))
+    const enabling = f.service.configureRemoteAccess(true).catch(error => error)
+    await f.service.configureRemoteAccess(false)
+    release()
+    expect(await enabling).toMatchObject({ message: 'DESKTOP_AUTHORITY_CHANGED' })
+    expect((await f.service.status()).enabled).toBe(false)
+    await expect(f.service.configureRemoteAccess(true, () => false)).rejects.toThrow('DESKTOP_AUTHORITY_CHANGED')
+    expect((await f.service.status()).enabled).toBe(false)
+  })
+  it('unsupported hosts keep desktop disabled without breaking mobile access', async () => {
+    const f = fixture(); f.deps.supported = () => false
+    expect(await f.service.configureRemoteAccess(true)).toMatchObject({ enabled: false, supported: false })
+  })
   it('requires separate local enablement and desktop view authorization', async () => {
     const f = fixture()
     await expect(f.start()).rejects.toThrow('DESKTOP_DISABLED')

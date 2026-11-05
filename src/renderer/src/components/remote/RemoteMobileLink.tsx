@@ -26,30 +26,33 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
           {t('remoteCompact.allow')}
         </button>
       </div>
+      {state.desktopAccess ? <p className="mt-1 text-[12px] text-ds-muted">{t('remoteCompact.pairDesktopIncluded')}</p> : null}
       {!link.mobileAllowed ? <p className="mt-1 text-[12px] text-ds-muted">{mobileRequirement(link, t)}</p> : null}
       <details className="mt-1 text-[12px] text-ds-muted">
         <summary className={`cursor-pointer rounded-md py-1 ${REMOTE_FOCUS}`}>{t('remoteCompact.adjustPermissions')}</summary>
-        <MobileScopeOptions zh={zh} disabled={Boolean(busy) || !link.mobileAllowed} value={choices[pairing.id] ?? PERSONAL_SCOPES}
+        <MobileScopeOptions zh={zh} includeDesktop={false} disabled={Boolean(busy) || !link.mobileAllowed} value={choices[pairing.id] ?? PERSONAL_SCOPES}
           onChange={value => setChoices(current => ({ ...current, [pairing.id]: value }))} />
       </details>
     </div>)}
   </div>
 }
 
-export function MobileChannelRow({ link }: { link: MobileLink }): ReactElement {
+export function MobileChannelRow({ link, detail, onOpen }: { link: MobileLink; detail?: string; onOpen?(): void }): ReactElement {
   const { t } = useTranslation('common')
   const { api, account, signedIn, state, busy, starting, canStop, enabled, toggle } = link
-  const on = enabled || starting
+  const on = starting || (enabled && (state?.desktopAccess === true || !link.mobileAllowed))
   const requirement = mobileRequirement(link, t)
   const subtitle = busy === 'stop' ? t('remoteCompact.stopping') : requirement || (starting
-    ? t('remoteCompact.starting') : state?.online ? t('remoteCompact.mobileConnected')
-      : enabled ? t('remoteCompact.connecting') : t('remoteCompact.mobileOff'))
+    ? t('remoteCompact.starting') : enabled && !state?.desktopAccess ? t('remoteCompact.upgradeRemote')
+      : detail || (state?.online ? t('remoteCompact.mobileConnected') : enabled ? t('remoteCompact.connecting') : t('remoteCompact.remoteIncludesDesktop')))
   const error = link.mobileAllowed ? link.connectionError : ''
   return <div>
-    <RemoteCompactRow icon={Smartphone} title={t('remoteCompact.phone')} subtitle={subtitle} locked={Boolean(requirement) && !on}>
+    <RemoteCompactRow icon={Smartphone} title={t('remoteCompact.phoneRemote')} subtitle={subtitle} locked={Boolean(requirement) && !on} onOpen={onOpen}>
       <RemoteSwitch checked={on} label={starting ? t('remoteCompact.cancelStart') : on ? t('remoteCompact.stopPhone') : t('remoteCompact.startPhone')}
-        disabled={!api || !signedIn || !state || busy === 'stop' || (!canStop && (!link.mobileAllowed || Boolean(busy)))} onToggle={toggle} />
+        disabled={!api || !signedIn || !state || busy === 'stop' || (!canStop && (!link.mobileAllowed || Boolean(busy)))} onToggle={event => runTrustedUserActivation(event, toggle)} />
     </RemoteCompactRow>
+    {enabled && !state?.desktopAccess && link.mobileAllowed ? <div className="px-3 pb-2"><button type="button" className={REMOTE_BUTTON_CLASS}
+      disabled={Boolean(busy)} onClick={link.stop}>{t('remoteCompact.stopPhone')}</button></div> : null}
     {!signedIn && account.api ? <div className="px-3 pb-2">
       <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(account.busy)}
         onClick={() => void account.run(account.state.status === 'authorizing' ? 'cancelLogin' : 'login')}>
@@ -61,9 +64,9 @@ export function MobileChannelRow({ link }: { link: MobileLink }): ReactElement {
     {error ? <div className="space-y-2 px-3 pb-3 text-[12px] leading-4">
       <p role="alert" className="text-ds-danger">{error}</p>
       {['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(state?.error ?? '') ? <button type="button" className={REMOTE_BUTTON_CLASS}
-        disabled={Boolean(busy)} onClick={link.retryVip}>{t('remoteCompact.reconnect')}</button> : null}
+        disabled={Boolean(busy)} onClick={event => runTrustedUserActivation(event, link.retryVip)}>{t('remoteCompact.reconnect')}</button> : null}
     </div> : null}
-    {signedIn && state?.error === 'DEVICE_AUTHORIZATION_REQUIRED' && !on ? <div className="px-3 pb-3">
+    {signedIn && state?.error === 'DEVICE_AUTHORIZATION_REQUIRED' && !enabled && !starting ? <div className="px-3 pb-3">
       <button type="button" className={REMOTE_BUTTON_CLASS} disabled={Boolean(busy)}
         onClick={event => runTrustedUserActivation(event, link.resetIdentity)}>{t('remoteCompact.resetDevice')}</button>
     </div> : null}

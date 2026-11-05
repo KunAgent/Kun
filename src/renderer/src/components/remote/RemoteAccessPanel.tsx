@@ -51,8 +51,7 @@ export function RemoteAccessPanel({ className = '' }: { className?: string }): R
         onBrowser={() => navigate({ page: 'browser' })} onDesktop={() => navigate({ page: 'desktop' })}
         onDevice={id => navigate({ page: 'device', id })} /> : null}
       {view.page === 'browser' ? <RemoteBrowserAccess browser={browser} onBack={() => navigate({ page: 'home' })} /> : null}
-      {view.page === 'desktop' ? <RemoteDesktopAccess link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })}
-        onDevice={id => navigate({ page: 'device', id })} /> : null}
+      {view.page === 'desktop' ? <RemoteDesktopAccess link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })} /> : null}
       {view.page === 'device' && grant ? <>
         <RemoteDetailHeader title={grant.name ?? grant.controllerId} onBack={() => navigate({ page: 'home' })} />
         <MobileGrantRow key={grant.id} link={link} grant={grant} onDirtyChange={onDirtyChange} />

@@ -6,6 +6,9 @@ import { MobileChannelRow } from './RemoteMobileLink'
 import type { MobileLink } from './useMobileLink'
 import i18n from '../../i18n'
 
+// The production trust gate is tested separately; jsdom clicks are synthetic.
+vi.mock('../../extensions/protected-user-activation', () => ({ runTrustedUserActivation: (_event: unknown, action: () => void) => { action(); return true } }))
+
 let root: Root, container: HTMLDivElement
 function link(patch: Partial<MobileLink> = {}): MobileLink {
   return { api: {}, account: { state: { status: 'authenticated' } }, signedIn: true,

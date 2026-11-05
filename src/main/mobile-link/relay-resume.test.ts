@@ -19,7 +19,7 @@ function fixture(initial: KunAccountState) {
   const listeners = new Set<(state: KunAccountState) => void>()
   const ending = new Set<(session: AccountSessionEnding) => Promise<void>>()
   const relay = {
-    enable: vi.fn(async (value: boolean, _keepGrants?: boolean) => ({ enabled: value }) as MobileLinkStatus),
+    enable: vi.fn(async (value: boolean, _keepGrants?: boolean, _desktopAccess?: boolean) => ({ enabled: value }) as MobileLinkStatus),
     dispose: vi.fn()
   }
   const preference = new RelayPreference(root)
@@ -63,14 +63,14 @@ describe('remembered Kun iOS relay', () => {
     const f = fixture(signedIn('owner'))
     const first = await f.launch()
     await first.manual(true)
-    expect(f.relay.enable).toHaveBeenCalledWith(true, false)
-    expect(JSON.parse(await readFile(join(root, 'owner', 'relay.json'), 'utf8'))).toEqual({ enabled: true })
+    expect(f.relay.enable).toHaveBeenCalledWith(true, false, true)
+    expect(JSON.parse(await readFile(join(root, 'owner', 'relay.json'), 'utf8'))).toEqual({ enabled: true, desktopAccess: true })
     first.dispose()
     expect(f.relay.dispose).toHaveBeenLastCalledWith(true)
 
     f.relay.enable.mockClear()
     const second = await f.launch()
-    await vi.waitFor(() => expect(f.relay.enable).toHaveBeenCalledWith(true, true))
+    await vi.waitFor(() => expect(f.relay.enable).toHaveBeenCalledWith(true, true, true))
     second.dispose()
     expect(f.relay.dispose).toHaveBeenLastCalledWith(true)
   })
@@ -82,7 +82,7 @@ describe('remembered Kun iOS relay', () => {
     const resume = await f.launch()
     await vi.waitFor(() => expect(f.relay.enable).toHaveBeenCalledTimes(1))
     await resume.manual(true)
-    expect(f.relay.enable).toHaveBeenLastCalledWith(true, true)
+    expect(f.relay.enable).toHaveBeenLastCalledWith(true, true, true)
     resume.dispose()
   })
 
@@ -101,7 +101,7 @@ describe('remembered Kun iOS relay', () => {
     await settle()
     expect(f.relay.enable).not.toHaveBeenCalled()
     await second.manual(true)
-    expect(f.relay.enable).toHaveBeenLastCalledWith(true, false)
+    expect(f.relay.enable).toHaveBeenLastCalledWith(true, false, true)
     second.dispose()
   })
 
@@ -164,6 +164,28 @@ describe('remembered Kun iOS relay', () => {
     await vi.advanceTimersByTimeAsync(RESUME_RETRY_MS[0] * 4)
     expect(f.relay.enable).toHaveBeenCalledTimes(1)
     again.dispose()
+  })
+
+  it('does not silently upgrade a legacy relay preference to desktop consent', async () => {
+    const f = fixture(signedIn('owner'))
+    await f.preference.remember('owner')
+    expect(await f.preference.desktopRemembered('owner')).toBe(false)
+    const resume = await f.launch()
+    await vi.waitFor(() => expect(f.relay.enable).toHaveBeenCalledWith(true, true))
+    expect(f.relay.enable.mock.calls.every(call => call[2] !== true)).toBe(true)
+    await resume.manual(true)
+    expect(await f.preference.desktopRemembered('owner')).toBe(true)
+    expect(f.relay.enable).toHaveBeenLastCalledWith(true, true, true)
+    resume.dispose()
+  })
+
+  it('a rejected unified start never persists desktop consent', async () => {
+    const f = fixture(signedIn('owner')), resume = await f.launch()
+    f.relay.enable.mockRejectedValueOnce(new Error('vip_mobile_remote_required'))
+    await expect(resume.manual(true)).rejects.toThrow('vip_mobile_remote_required')
+    expect(await f.preference.desktopRemembered('owner')).toBe(false)
+    expect(await f.preference.remembered('owner')).toBe(false)
+    resume.dispose()
   })
 
   it('rejects account ids that are not a single path segment', async () => {
