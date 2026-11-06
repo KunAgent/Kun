@@ -5,7 +5,9 @@ Kun includes all 15 character entries from the
 DeepSeek uses the existing Whale Girl package; the other 14 entries are
 newly generated Kun adaptations. Seed and Doubao remain separate designs.
 All use nine v1 states and 57 frames, with rounded chibi proportions,
-new costume details and a vector badge identifying the AI provider.
+new costume details and brand marks built into the hair accessories,
+clothing and work props of every character. Each animation carries the
+AI identity as part of its sprite artwork.
 Brand mark sources are listed in [AI-BRANDS.md](AI-BRANDS.md).
 Choose a companion in Settings > Pets.
 

@@ -13,14 +13,19 @@ function clamp(value: number, min: number, max: number): number {
 export function petSurfaceLayout(input: {
   anchor: PetOverlayLayout
   petWidth: number
+  petSize?: PetSurfaceSize
   controls: PetSurfaceSize
   notification: PetSurfaceSize
   menu: PetSurfaceSize
 }) {
   const { anchor, petWidth } = input
   const { viewportWidth: width, viewportHeight: height } = anchor
-  const pet = { left: anchor.anchorX - petWidth / 2, top: anchor.anchorY - Math.round(petWidth * 208 / 192) / 2,
-    width: petWidth, height: Math.round(petWidth * 208 / 192) }
+  const petSize = input.petSize ?? { width: petWidth, height: Math.round(petWidth * 208 / 192) }
+  const pet = { left: anchor.anchorX - petSize.width / 2, top: anchor.anchorY - petSize.height / 2, ...petSize }
+  if (input.petSize) {
+    pet.left = clamp(pet.left, MARGIN, width - MARGIN - pet.width)
+    pet.top = clamp(pet.top, MARGIN, height - MARGIN - pet.height)
+  }
   const horizontal = (w: number): number => clamp(anchor.anchorX - w / 2, MARGIN, width - MARGIN - w)
   const controlsWidth = Math.min(input.controls.width, width - MARGIN * 2)
   const controlsHeight = input.controls.height

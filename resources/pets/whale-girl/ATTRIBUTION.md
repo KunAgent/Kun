@@ -36,5 +36,6 @@ an official DeepSeek character or endorsement. Kun's code retains its own
 license. Further source records are indexed in
 [ai-girls](https://github.com/shuaizenge/ai-girls/blob/dcd69f5f4f2dff1a9c0031e82deb49e0fe949c76/NOTICE.md).
 
-The DeepSeek provider badge is rendered separately; its source is recorded
-in [AI-BRANDS.md](../AI-BRANDS.md).
+The DeepSeek whale emblem is integrated into the headband, apron and work
+props throughout the sprite artwork. Reference marks are recorded in
+[AI-BRANDS.md](../AI-BRANDS.md).

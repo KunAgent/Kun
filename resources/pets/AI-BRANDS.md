@@ -1,12 +1,13 @@
 # AI companion brand marks
 
-The badges identify the AI represented by each community companion.
+Brand marks identify the AI represented by each community companion.
+They are integrated into the generated sprite artwork as hair ornaments,
+embroidered costume motifs and printed work props.
 Brand names and marks belong to their respective owners; these companions
 do not imply official endorsement.
 
-Existing provider marks are reused from Kun's provider icon assets.
-Additional Qwen, Hunyuan, Meta, ByteDance, Gemini, Doubao, Mistral and
-MiniMax color SVGs are from
+Design references include Kun's provider icon assets and the Qwen,
+Hunyuan, Meta, ByteDance, Gemini, Doubao, Mistral and MiniMax color SVGs from
 [Lobe Icons](https://github.com/lobehub/lobe-icons/tree/master/packages/static-svg/icons).
 Xiaomi's mark is from [Simple Icons](https://github.com/simple-icons/simple-icons/blob/develop/icons/xiaomi.svg)
 under [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/).

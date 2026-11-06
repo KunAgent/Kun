@@ -1,3 +1,5 @@
+import { RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
+import { defaultPetEnsemble, parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { createHash, randomUUID } from 'node:crypto'
 import { access, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -96,6 +98,29 @@ export class PetStore {
         throw new Error('select an available pet before opening the overlay')
       }
       this.settings.overlayOpen = open
+    })
+  }
+
+  async setPetEnsemble(ensemble: PetEnsembleSettings): Promise<PetSettings> {
+    return this.mutate(async () => {
+      const parsed = parsePetEnsemble(ensemble)
+      if (!parsed) throw new Error('invalid pet ensemble')
+      if (parsed.enabled && parsed.members.some((id) => !this.catalog.has(petIdForSource('kun-builtin', id)))) {
+        throw new Error('an ensemble member is unavailable; refresh the pet library')
+      }
+      this.settings.ensemble = parsed
+    })
+  }
+
+  async retireBuiltinPets(): Promise<void> {
+    await this.enqueue(async () => {
+      const retired = new Set([...RETIRED_BUILTIN_PET_IDS].map((id) => petIdForSource('kun-builtin', id)))
+      // Keep cached files intact, but stop offering retired packages as built-ins.
+      for (const id of retired) this.catalog.delete(id)
+      if (!this.settings.selectedPetId || !retired.has(this.settings.selectedPetId)) return
+      this.settings.selectedPetId = this.catalog.has(DEFAULT_BUILTIN_PET_ID) ? DEFAULT_BUILTIN_PET_ID : null
+      if (!this.settings.selectedPetId) this.settings.overlayOpen = false
+      await this.writeSettings()
     })
   }
 
@@ -378,6 +403,7 @@ function normalizeSettings(value: unknown): PetSettings {
     bubblesCollapsed: candidate.bubblesCollapsed === true,
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
+    ...(candidate.ensemble !== undefined ? { ensemble: parsePetEnsemble(candidate.ensemble) ?? defaultPetEnsemble() } : {}),
     welcomedPetIds: stringList(candidate.welcomedPetIds),
     dismissedNotificationKeys: boundDismissedKeys(stringList(candidate.dismissedNotificationKeys)),
     placementByDisplay: placement && typeof placement === 'object' && !Array.isArray(placement)

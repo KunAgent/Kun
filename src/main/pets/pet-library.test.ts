@@ -157,7 +157,7 @@ describe('pet packages', () => {
     expect((await readPetAsset('file:///etc/passwd', () => '/etc/passwd', store.libraryRoot())).status).toBe(404)
   })
 
-  it('accepts every shipped built-in pet, including the Awaken set', async () => {
+  it('ships only the two Kun mascots and all fifteen AI companions', async () => {
     const root = path.resolve('resources/pets')
     const names = (await readdir(root)).sort()
     const imported: string[] = []
@@ -169,37 +169,23 @@ describe('pet packages', () => {
       imported.push(`${validated.sourceId}:v${validated.spriteVersionNumber}`)
     }
     expect(imported).toEqual([
-      'alo-asuna:v1',
-      'anya:v1',
-      'artoria:v1',
       'claude-girl:v1',
-      'dordor:v1',
       'doubao-girl:v1',
       'gemini-girl:v1',
       'glm-girl:v1',
-      'gojo:v1',
-      'goku:v1',
       'gpt-girl:v1',
       'grok-girl:v1',
       'hunyuan-girl:v1',
       'ikun:v1',
-      'kawaii-bear-puppy:v1',
       'kimi-girl:v1',
       'llama-girl:v1',
-      'lulu-capybara:v1',
       'mimo-girl:v1',
       'minimax-girl:v1',
       'mistral-girl:v1',
-      'nezuko:v1',
-      'nezukocoder:v1',
       'qwen-girl:v1',
       'seed-girl:v1',
-      'snowy:v1',
-      'trae:v2',
       'whale-girl:v1',
       'xiao-kun:v1',
-      'yi-er:v1',
-      'zodiac-pig:v1'
     ])
   })
 

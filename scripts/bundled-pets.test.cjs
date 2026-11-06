@@ -31,6 +31,11 @@ test('bundled pet assets fit within the macOS installer allowance', () => {
     `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 19 MiB. Optimize new sheets before packaging.`)
 })
 
+test('only the two Kun mascots and fifteen AI companions ship as built-ins', () => {
+  const ids = readdirSync(petsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
+  assert.deepEqual(ids, ['xiao-kun', 'ikun', 'whale-girl', ...CHIBI_AI_PETS].sort())
+})
+
 test('every bundled pet retains a decodable transparent Codex sprite layout', async () => {
   const dirs = readdirSync(petsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory())
   assert(dirs.length > 0, 'An offline built-in pet must be available')

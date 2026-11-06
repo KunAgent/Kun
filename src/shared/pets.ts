@@ -1,3 +1,4 @@
+import type { PetEnsembleSettings } from './pets-ensemble'
 import type { SpeechTranscriptionRequest, SpeechTranscriptionResult } from './speech-to-text'
 
 export type PetAnimationState =
@@ -61,6 +62,7 @@ export type PetSettings = {
   bubblesCollapsed?: boolean
   mascotWidthPx: number
   importCodexPets: boolean
+  ensemble?: PetEnsembleSettings
   welcomedPetIds: string[]
   dismissedNotificationKeys: string[]
   placementByDisplay: Record<string, PetOverlayPlacement>
@@ -137,6 +139,8 @@ export type PetOverlayBootstrap = {
   activitySnapshot?: PetActivitySnapshot
   bubblesCollapsed?: boolean
   layout?: PetOverlayLayout
+  ensemble?: PetEnsembleSettings
+  ensemblePets?: PetSummary[]
 }
 
 export type PetOverlayLayout = {
@@ -155,6 +159,7 @@ export type PetDesktopBridge = {
   getPetSettings: () => Promise<PetSettings>
   selectPet: (petId: string | null) => Promise<PetSettings>
   setOverlayOpen: (open: boolean) => Promise<PetSettings>
+  setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
   setImportPreferences: (input: { importCodexPets?: boolean }) => Promise<PetSettings>
   refreshPets: () => Promise<PetImportReport>
   openKunPetsDirectory: () => Promise<void>
@@ -173,6 +178,7 @@ export type PetDesktopBridge = {
 }
 
 export type PetOverlayBridge = {
+  setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
   getBootstrap: () => Promise<PetOverlayBootstrap>
   onBootstrapChanged: (handler: (value: PetOverlayBootstrap) => void) => () => void
   onActivityChanged: (handler: (value: PetActivitySnapshot) => void) => () => void
@@ -242,6 +248,7 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 }
 
 export const PET_IPC = {
+  setPetEnsemble: 'kun:pets:ensemble',
   listPets: 'kun:pets:list',
   getSettings: 'kun:pets:settings:get',
   selectPet: 'kun:pets:select',

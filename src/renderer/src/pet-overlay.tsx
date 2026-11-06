@@ -11,7 +11,6 @@ import {
   type PetOverlayLayout
 } from '@shared/pets'
 import { frameAtElapsedMs, staticFrame } from './pets/pet-animation'
-import { PetBrandBadge } from './pets/pet-brand-badge'
 import { acceptPetSnapshot, earliestPetNotificationExpiry, visiblePetNotifications } from './pets/pet-activity'
 import { PetWorkBubbles } from './pets/pet-bubble'
 import { PetQuickChat } from './pets/pet-quick-chat'
@@ -21,6 +20,9 @@ import { petContextMenuLabels } from './pets/pet-menu-labels'
 import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, pointInsidePetHit, welcomeUntil } from './pets/pet-pointer'
 import { petControlsBridge, petSurfaceLayout } from './pets/pet-layout'
 import { usePetSurfaceSize } from './pets/use-pet-surface-size'
+import { defaultPetEnsemble } from '@shared/pets-ensemble'
+import { PetEnsembleStage } from './pets/pet-ensemble-stage'
+import { PetEnsembleControls } from './pets/pet-ensemble-controls'
 import './pet-overlay.css'
 
 function PetOverlayApp(): React.JSX.Element {
@@ -35,6 +37,7 @@ function PetOverlayApp(): React.JSX.Element {
   const [hover, setHover] = useState(false)
   const [controlsHover, setControlsHover] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [ensembleOpen, setEnsembleOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dragDirection, setDragDirection] = useState<PetDragDirection>('right')
   const [expanded, setExpanded] = useState(false)
@@ -60,7 +63,7 @@ function PetOverlayApp(): React.JSX.Element {
   const interactiveRef = useRef(false)
   const controlsVisibleRef = useRef(false)
   draggingRef.current = dragging
-  const controlsRevealed = controlsHover || dragging || menuOpen
+  const controlsRevealed = controlsHover || dragging || menuOpen || ensembleOpen
   controlsVisibleRef.current = controlsRevealed || quickChatInteractive
 
   useEffect(() => {
@@ -101,11 +104,11 @@ function PetOverlayApp(): React.JSX.Element {
   }, [bridge])
 
   useEffect(() => {
-    const wants = hover || dragging || menuOpen
+    const wants = hover || dragging || menuOpen || ensembleOpen
     if (interactiveRef.current === wants) return
     interactiveRef.current = wants
     bridge.setPointerInteractive(wants)
-  }, [bridge, hover, dragging, menuOpen])
+  }, [bridge, hover, dragging, menuOpen, ensembleOpen])
 
   useEffect(() => {
     let leaveTimer = 0
@@ -119,17 +122,17 @@ function PetOverlayApp(): React.JSX.Element {
     const onMove = (event: MouseEvent): void => {
       const hit = hitRef.current
       const point = { x: event.clientX, y: event.clientY }
-      const pet = hit?.querySelector<HTMLElement>('.pet-sprite')?.getBoundingClientRect()
+      const pet = hit?.querySelector<HTMLElement>('.pet-character-stage')?.getBoundingClientRect()
       const controls = hit?.querySelector<HTMLElement>(controlsVisibleRef.current
         ? '.pet-quick-composer, .pet-toolbar' : '.pet-toolbar-handle')?.getBoundingClientRect()
-      const overCompanion = pointInsidePetHit(point, pet ?? null) || pointInsidePetHit(point, controls ?? null) ||
+      const overCompanion = Array.from(hit?.querySelectorAll<HTMLElement>('.pet-sprite') ?? []).some((element) => pointInsidePetHit(point, element.getBoundingClientRect())) || pointInsidePetHit(point, controls ?? null) ||
         (controlsVisibleRef.current && pet && controls ? pointInsidePetHit(point, petControlsBridge(pet, controls)) : false)
       if (overCompanion || draggingRef.current) {
         window.clearTimeout(controlsLeaveTimer)
         controlsLeaveTimer = 0
         setControlsHover(true)
       } else leaveControls()
-      const inside = overCompanion || Array.from(hit?.querySelectorAll<HTMLElement>('.pet-bubble-list, .pet-note, .pet-menu') ?? [])
+      const inside = overCompanion || Array.from(hit?.querySelectorAll<HTMLElement>('.pet-bubble-list, .pet-note, .pet-menu, .pet-ensemble-panel') ?? [])
         .some((element) => pointInsidePetHit(point, element.getBoundingClientRect()))
       if (inside || draggingRef.current) {
         window.clearTimeout(leaveTimer)
@@ -171,10 +174,12 @@ function PetOverlayApp(): React.JSX.Element {
   const controlsSize = usePetSurfaceSize(controlsRef, true, { width: 140, height: 44 })
   const noticeSize = usePetSurfaceSize(noticeRef, !bubblesHidden, { width: 330, height: 80 })
   const menuSize = usePetSurfaceSize(menuRef, menuOpen, { width: 136, height: 74 })
+  const ensemble = bootstrap?.ensemble ?? defaultPetEnsemble()
+  const ensembleSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(260, viewport.height - 32) }
   const placement = petSurfaceLayout({
     anchor: nativeLayout ?? { anchorX: viewport.width / 2, anchorY: viewport.height / 2,
       viewportWidth: viewport.width, viewportHeight: viewport.height },
-    petWidth: width, controls: controlsSize, notification: noticeSize, menu: menuSize
+    petWidth: width, ...(ensemble.enabled ? { petSize: ensembleSize } : {}), controls: controlsSize, notification: noticeSize, menu: menuSize
   })
   const business = effectivePetBusinessState({ activeStatus: active?.status ?? null, welcomeUntilMs: welcome, nowMs: now })
   const animation: PetAnimationState = resolveOverlayAnimationState({ resizeMode: false, dragging, dragDirection, hover, effectiveBusinessState: business })
@@ -196,13 +201,13 @@ function PetOverlayApp(): React.JSX.Element {
     return () => window.clearTimeout(timer)
   }, [nextExpiry])
   useEffect(() => {
-    if (reduced) return undefined
+    if (reduced || ensemble.enabled) return undefined
     started.current = performance.now()
     let frame = 0
     const tick = (time: number): void => { setFrameClock(time - started.current); frame = requestAnimationFrame(tick) }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [reduced, animation])
+  }, [reduced, animation, ensemble.enabled])
   const version = bootstrap?.spriteVersionNumber ?? 1
   const frame = reduced ? staticFrame(animation, version) : frameAtElapsedMs(animation, frameClock, version)
   const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
@@ -369,7 +374,13 @@ function PetOverlayApp(): React.JSX.Element {
           if (!event.currentTarget.contains(event.relatedTarget)) setControlsHover(false)
         }}>
           <div className="pet-character-stage" style={placement.pet}>
-            <button
+            {ensemble.enabled ? <PetEnsembleStage settings={ensemble} pets={bootstrap?.ensemblePets ?? []}
+              language={window.navigator.language} width={ensembleSize.width} height={ensembleSize.height} mascotWidth={width}
+              actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
+                onPointerCancel: (event) => finishPointer(event, true),
+                onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
+                onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
+              }} /> : <button
               type="button"
               className="pet-sprite"
               aria-label={bootstrap?.displayName ?? 'Desktop pet'}
@@ -392,13 +403,12 @@ function PetOverlayApp(): React.JSX.Element {
                 if (menuOpen && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return }
                 if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) }
               }}
-            >
-              <PetBrandBadge petId={bootstrap?.petId} width={width} row={frame.row} column={frame.column} />
-            </button>
+            />}
           </div>
           {menuOpen ? <div className="pet-menu-position" ref={menuRef}
             style={{ left: placement.menu.left, top: placement.menu.top }}>
             <PetContextMenu labels={menuLabels}
+              onEnsemble={() => { setMenuOpen(false); setEnsembleOpen(true) }}
               onClose={() => { setMenuOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite')?.focus() }}
               onSettings={() => { setMenuOpen(false); bridge.openPetSettings() }}
               onHide={() => { setMenuOpen(false); void bridge.closeOverlay() }} />
@@ -406,7 +416,8 @@ function PetOverlayApp(): React.JSX.Element {
           <div className="pet-controls-position" ref={controlsRef}
             style={{ left: placement.controls.left, top: placement.controls.top }}>
             <PetQuickChat bridge={bridge} notificationCount={notifications.length} bubblesHidden={bubblesHidden}
-              revealed={controlsRevealed}
+              revealed={controlsRevealed} ensembleActive={ensemble.enabled}
+              onEnsemble={() => setEnsembleOpen((open) => !open)}
               onInteractiveChange={setQuickChatInteractive} onToggleBubbles={() => {
                 const collapsed = !bubblesHidden
                 setBubblesCollapsed(collapsed)
@@ -418,6 +429,13 @@ function PetOverlayApp(): React.JSX.Element {
               ? <p className="pet-note">{bootstrap.interactionNote}</p> : null}
           </div>
         </div>
+        {ensembleOpen ? <div className="pet-ensemble-editor"><PetEnsembleControls value={ensemble}
+          pets={bootstrap?.ensemblePets ?? []} language={window.navigator.language}
+          onClose={() => { setEnsembleOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite')?.focus() }}
+          onChange={async (next) => {
+            const settings = await bridge.setPetEnsemble(next)
+            setBootstrap((current) => current ? { ...current, ensemble: settings.ensemble } : current)
+          }} /></div> : null}
       </div>
     </div>
   )

@@ -6,7 +6,6 @@ html, body, #root { margin: 0; width: 100%; height: 100%; background: transparen
 .pet-controls-position { display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 16px); }
 .pet-sprite, .pet-bubble-list, .pet-menu, .pet-toolbar, .pet-toolbar-handle, .pet-quick-composer, .pet-note { pointer-events: auto; }
 .pet-sprite {
-  position: relative;
   appearance: none;
   -webkit-appearance: none;
   margin: 0;

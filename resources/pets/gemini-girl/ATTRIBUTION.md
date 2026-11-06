@@ -9,9 +9,10 @@ The archive is a source index, not a blanket license for its contents.
 
 New AI-generated artwork, 2026-11-05. All nine animation states (57 frames)
 use rounded chibi proportions, simplified cel shading, and a new costume.
-A rounded jacket, ivory pleated skirt, mint star pouch and pastel flower-star clip replace the original ornate outfit and brand emblems.
+A rounded jacket, ivory pleated skirt, mint star pouch and pastel flower-star clip replace the original ornate outfit.
 No upstream character image, screenshot, voice sample or website code is bundled.
-Provider marks are rendered separately as vector badges; their sources are
+Brand marks are integrated into the generated hair accessories, clothing
+and working props in all nine animation states. Reference marks are
 listed in [AI-BRANDS.md](../AI-BRANDS.md).
 The animation layout reference is Kun's existing Whale Girl atlas.
 

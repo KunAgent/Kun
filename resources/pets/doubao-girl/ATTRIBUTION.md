@@ -12,7 +12,8 @@ New AI-generated artwork, 2026-11-05. All nine animation states (57 frames)
 use rounded chibi proportions, simplified cel shading, and a new costume.
 A new face, freckles, curled hair tuft, bean clip, teal hoodie, coral apron and sprout pouch replace the official avatar's facial details and black-shirt silhouette.
 No upstream character image, screenshot, voice sample or website code is bundled.
-Provider marks are rendered separately as vector badges; their sources are
+Brand marks are integrated into the generated hair accessories, clothing
+and working props in all nine animation states. Reference marks are
 listed in [AI-BRANDS.md](../AI-BRANDS.md).
 The animation layout reference is Kun's existing Whale Girl atlas.
 

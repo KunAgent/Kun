@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PET_IPC, type PetOverlayBootstrap } from '../../shared/pets'
+import { defaultPetEnsemble } from '../../shared/pets-ensemble'
 import { PetStore } from './pet-store'
 import { shutdownDesktopPets, startDesktopPets } from './pet-service'
 
@@ -57,6 +58,27 @@ async function copyDefault() {
 }
 
 describe('desktop pet startup', () => {
+  it('publishes available ensemble assets and persists overlay changes without replacing the selected pet', async () => {
+    await copyDefault()
+    for (const id of ['ikun', 'gpt-girl', 'claude-girl']) {
+      await cp(path.resolve('resources/pets', id), path.join(host.root, 'resources', 'pets', id), { recursive: true })
+    }
+    await startDesktopPets({ isFreshInstall: true })
+    const frame = {}
+    const event = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const ensemble = { ...defaultPetEnsemble(), enabled: true,
+      members: ['xiao-kun', 'ikun', 'gpt-girl', 'claude-girl'] }
+    await host.handlers.get(PET_IPC.setPetEnsemble)!(event, ensemble)
+    const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!(event) as PetOverlayBootstrap
+    expect(bootstrap.ensemble).toEqual(ensemble)
+    expect(bootstrap.ensemblePets).toHaveLength(4)
+    expect(bootstrap.ensemblePets?.every((pet) => pet.spritesheetUrl?.startsWith('kun-pet://'))).toBe(true)
+    expect(bootstrap.petId).toBe('kun:xiao-kun')
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayBootstrapChanged, expect.objectContaining({ ensemble }))
+    const settings = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
+    expect(settings.ensemble).toEqual(ensemble)
+  })
+
   it('imports the default before opening one populated overlay', async () => {
     await copyDefault()
     await startDesktopPets({ isFreshInstall: true })

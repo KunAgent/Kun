@@ -1,3 +1,5 @@
+import { isBuiltinPetId } from '../../shared/pets-builtin'
+import { defaultPetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { app, BrowserWindow, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
@@ -149,6 +151,12 @@ class DesktopPetRuntime implements DesktopPets {
         await this.syncOverlay()
         return settings
       },
+      setPetEnsemble: async (input: PetEnsembleSettings) => {
+        const settings = await this.store.setPetEnsemble(input)
+        this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
+        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
+        return settings
+      },
       setImportPreferences: (input: { importCodexPets?: boolean }) => this.store.setImportPreferences(input),
       refresh: () => this.refresh(),
       openKunDirectory: async () => { await this.openDirectory(localPetsRoot(this.store.libraryRoot())) },
@@ -292,6 +300,8 @@ class DesktopPetRuntime implements DesktopPets {
       interactionMode: this.controller?.mode() ?? 'passthrough',
       interactionNote: this.controller?.policy.note ?? null,
       bubblesCollapsed: settings.bubblesCollapsed === true,
+      ensemble: settings.ensemble ?? defaultPetEnsemble(),
+      ensemblePets: this.store.listPets().filter((pet) => pet.source === 'kun-builtin' && isBuiltinPetId(pet.sourceId)),
       layout: this.controller?.layout(),
       ...(this.snapshot ? { activitySnapshot: this.snapshot } : {})
     }

@@ -1,3 +1,4 @@
+import { parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import {
   PET_IPC,
   type PetActionRequest,
@@ -23,6 +24,7 @@ import { petSenderAllowed } from './pet-protocol'
 export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 'main' | 'overlay' | 'other' }
 
 export type PetIpcApi = {
+  setPetEnsemble(settings: PetEnsembleSettings): Promise<PetSettings>
   listPets(): Promise<PetSummary[]>
   getSettings(): Promise<PetSettings>
   selectPet(petId: string | null): Promise<PetSettings>
@@ -67,6 +69,12 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     if (!api.allows(event, ['overlay'])) throw new Error('pet overlay ipc is limited to the pet window')
   }
   return {
+    [PET_IPC.setPetEnsemble]: async (event, input) => {
+      if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet ensemble ipc is limited to pet controls')
+      const parsed = parsePetEnsemble(input)
+      if (!parsed) throw new Error('invalid pet ensemble')
+      return api.setPetEnsemble(parsed)
+    },
     [PET_IPC.listPets]: async (event) => { main(event); return api.listPets() },
     [PET_IPC.getSettings]: async (event) => { main(event); return api.getSettings() },
     [PET_IPC.selectPet]: async (event, petId) => {

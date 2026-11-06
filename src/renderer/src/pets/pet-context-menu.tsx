@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactElement } from 'react'
-import { EyeOff, Settings } from 'lucide-react'
+import { EyeOff, Settings, UsersRound } from 'lucide-react'
 
 export function PetContextMenu(props: {
-  labels: { settings: string; hide: string }
+  labels: { settings: string; hide: string; ensemble?: string }
+  onEnsemble?: () => void
   onSettings: () => void
   onHide: () => void
   onClose: () => void
@@ -32,6 +33,9 @@ export function PetContextMenu(props: {
         event.preventDefault()
         items[next]?.focus({ preventScroll: true })
       }}>
+      {props.onEnsemble ? <button type="button" role="menuitem" className="pet-menu-item" onClick={props.onEnsemble}>
+        <UsersRound aria-hidden="true" strokeWidth={1.7} /><span>{props.labels.ensemble}</span>
+      </button> : null}
       <button type="button" role="menuitem" className="pet-menu-item" data-pet-menu-settings onClick={props.onSettings}>
         <Settings aria-hidden="true" strokeWidth={1.7} />
         <span>{props.labels.settings}</span>

@@ -9,6 +9,7 @@ function listen<T>(channel: string, handler: (value: T) => void): () => void {
 }
 
 const api: PetOverlayBridge = {
+  setPetEnsemble: (settings) => ipcRenderer.invoke(PET_OVERLAY_IPC.setPetEnsemble, settings),
   getBootstrap: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayBootstrap),
   onBootstrapChanged: (handler) => listen(PET_OVERLAY_IPC.overlayBootstrapChanged, handler),
   onActivityChanged: (handler) => listen(PET_OVERLAY_IPC.overlayActivity, handler),

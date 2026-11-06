@@ -11,7 +11,8 @@ New AI-generated artwork, 2026-11-05. All nine animation states (57 frames)
 use rounded chibi proportions, simplified cel shading, and a new costume.
 A cozy cardigan capelet, pleated pinafore, low braids and book satchel replace the original formal gown and decorative trims.
 No upstream character image, screenshot, voice sample or website code is bundled.
-Provider marks are rendered separately as vector badges; their sources are
+Brand marks are integrated into the generated hair accessories, clothing
+and working props in all nine animation states. Reference marks are
 listed in [AI-BRANDS.md](../AI-BRANDS.md).
 The animation layout reference is Kun's existing Whale Girl atlas.
 

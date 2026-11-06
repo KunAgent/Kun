@@ -24,6 +24,8 @@ export function PetQuickChat(props: {
   notificationCount: number
   bubblesHidden: boolean
   revealed: boolean
+  onEnsemble?: () => void
+  ensembleActive?: boolean
   onToggleBubbles: () => void
   onInteractiveChange: (interactive: boolean) => void
 }): ReactElement {
@@ -132,6 +134,11 @@ export function PetQuickChat(props: {
             onClick={() => { if (open) close(); else begin() }}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7M16 3l5 5-9 9-5 1 1-5Z" /></svg>
           </button>
+          {props.onEnsemble ? <button type="button" aria-label={navigator.language.toLowerCase().startsWith('zh') ? '伙伴小剧场' : 'Companion theater'}
+            title={navigator.language.toLowerCase().startsWith('zh') ? '伙伴小剧场' : 'Companion theater'}
+            aria-pressed={props.ensembleActive} onClick={props.onEnsemble}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /><circle cx="9" cy="7" r="4" /></svg>
+          </button> : null}
           {voiceAvailable ? <button type="button" aria-label={recording ? labels.stop : labels.voice}
             title={recording ? labels.stop : labels.voice} aria-pressed={recording} data-recording={recording}
             disabled={sending || (voiceBusy && !recording)} onClick={() => { begin(); voice.toggle() }}>
