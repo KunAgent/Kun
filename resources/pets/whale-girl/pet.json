@@ -3,5 +3,44 @@
   "displayName": "鲸鱼娘",
   "description": "长蓝发、鲸鳍耳和鲸尾的 Q 版大肥鱼，穿着蓝白女仆装陪你工作。社区二创形象。 AI 标识融入发饰与服装。",
   "spriteVersionNumber": 1,
-  "spritesheetPath": "spritesheet.webp"
+  "spritesheetPath": "spritesheet.webp",
+  "interactions": {
+    "version": 1,
+    "modelAliases": [
+      "deepseek"
+    ],
+    "providerAliases": [
+      "deepseek"
+    ],
+    "greeting": {
+      "states": [
+        "waving",
+        "jumping",
+        "waving"
+      ],
+      "durationMs": 4600
+    },
+    "clips": {
+      "typing": {
+        "state": "running",
+        "tempo": 1.41,
+        "strength": 0.7
+      },
+      "listening": {
+        "state": "waiting",
+        "tempo": 0.85,
+        "strength": 0.5
+      },
+      "speaking": {
+        "state": "waving",
+        "tempo": 1.15,
+        "strength": 0.8
+      },
+      "transcribing": {
+        "state": "review",
+        "tempo": 0.7,
+        "strength": 0.3
+      }
+    }
+  }
 }

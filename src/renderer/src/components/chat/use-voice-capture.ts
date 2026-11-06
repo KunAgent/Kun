@@ -1,3 +1,4 @@
+import { usePetVoicePresence } from '../../pets/use-pet-voice-presence'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { SPEECH_TRANSCRIPTION_MAX_DURATION_MS, type SpeechTranscriptionRequest, type SpeechTranscriptionResult } from '@shared/speech-to-text'
 
@@ -105,6 +106,8 @@ export function useVoiceCapture({
     }
     return Math.min(1, Math.sqrt(sumSquares / data.length) * 3)
   }, [])
+
+  usePetVoicePresence(status, getLevel)
 
   const cancel = useCallback((): void => {
     sessionRef.current += 1

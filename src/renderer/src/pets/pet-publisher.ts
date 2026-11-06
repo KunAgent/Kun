@@ -1,3 +1,4 @@
+import { startPetPresencePublisher } from './pet-presence-publisher'
 import type { ActivityRow } from '@shared/activity-row'
 import { showWorkbenchFlash } from '../components/rooms/workbench-flash'
 import { summarizeToolLiveAction } from '../components/chat/message-timeline-tool-action'
@@ -34,6 +35,7 @@ export function petNavigationNotice(): string | null {
 export function startPetActivityPublisher(): void {
   if (stopPublisher || typeof window === 'undefined' || !window.kunGui?.pets) return
   const pets = window.kunGui.pets
+  const stopPresence = startPetPresencePublisher(pets)
   let ready = true
   let overlayOpen = false
   let active = true
@@ -163,6 +165,7 @@ export function startPetActivityPublisher(): void {
   pullNavigation()
   openPetSettings()
   stopPublisher = () => {
+    stopPresence()
     active = false
     unsubscribeActivity()
     unsubscribeChat()

@@ -1,3 +1,4 @@
+import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
 import { RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
 import { defaultPetEnsemble, parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { createHash, randomUUID } from 'node:crypto'
@@ -101,6 +102,10 @@ export class PetStore {
     })
   }
 
+  async setPetReactionsEnabled(enabled: boolean): Promise<PetSettings> {
+    return this.mutate(async () => { this.settings.reactionsEnabled = enabled })
+  }
+
   async setPetEnsemble(ensemble: PetEnsembleSettings): Promise<PetSettings> {
     return this.mutate(async () => {
       const parsed = parsePetEnsemble(ensemble)
@@ -179,6 +184,7 @@ export class PetStore {
     spriteVersionNumber: PetSpriteVersion
     spritesheetSourcePath: string
     sourcePath: string
+    interactions?: PetInteractionPack
   }): Promise<{ manifest: PetManifest; status: 'imported' | 'updated' | 'unchanged' }> {
     return this.enqueueResult(() => this.importOrUpdateNow(input))
   }
@@ -191,6 +197,7 @@ export class PetStore {
     spriteVersionNumber: PetSpriteVersion
     spritesheetSourcePath: string
     sourcePath: string
+    interactions?: PetInteractionPack
   }): Promise<{ manifest: PetManifest; status: 'imported' | 'updated' | 'unchanged' }> {
     const petId = petIdForSource(input.source, input.sourceId)
     const fingerprint = await fingerprintPackage(input)
@@ -205,6 +212,7 @@ export class PetStore {
         description: input.description,
         sourcePath: input.sourcePath,
         sourceMissing: false,
+        ...(input.interactions ? { interactions: input.interactions } : {}),
         importedAt: new Date().toISOString()
       }
       await this.writeManifest(restored)
@@ -219,6 +227,7 @@ export class PetStore {
       description: input.description,
       spriteVersionNumber: input.spriteVersionNumber,
       spritesheetFile: spritesheetFileName(input.spritesheetSourcePath),
+      ...(input.interactions ? { interactions: input.interactions } : {}),
       source: input.source,
       sourcePath: input.sourcePath,
       sourceFingerprint: fingerprint,
@@ -295,6 +304,7 @@ export class PetStore {
       spritesheetUrl: petAssetUrl(manifest.id, manifest.sourceFingerprint),
       available: true,
       sourceMissing: manifest.sourceMissing === true,
+      ...(manifest.interactions ? { interactions: manifest.interactions } : {}),
       ...(manifest.sourceMissing ? { warning: 'The original package is missing. Kun is using its saved copy.' } : {})
     }
   }
@@ -379,6 +389,7 @@ export async function fingerprintPackage(input: {
   description: string
   spriteVersionNumber: PetSpriteVersion
   spritesheetSourcePath: string
+  interactions?: PetInteractionPack
 }): Promise<string> {
   const image = createHash('sha256').update(await readFile(input.spritesheetSourcePath)).digest('hex')
   return createHash('sha256').update(JSON.stringify({
@@ -387,7 +398,8 @@ export async function fingerprintPackage(input: {
     sourceId: input.sourceId,
     displayName: input.displayName,
     description: input.description,
-    spriteVersionNumber: input.spriteVersionNumber
+    spriteVersionNumber: input.spriteVersionNumber,
+    ...(input.interactions ? { interactions: input.interactions } : {})
   })).digest('hex')
 }
 
@@ -403,6 +415,7 @@ function normalizeSettings(value: unknown): PetSettings {
     bubblesCollapsed: candidate.bubblesCollapsed === true,
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
+    ...(typeof candidate.reactionsEnabled === 'boolean' ? { reactionsEnabled: candidate.reactionsEnabled } : {}),
     ...(candidate.ensemble !== undefined ? { ensemble: parsePetEnsemble(candidate.ensemble) ?? defaultPetEnsemble() } : {}),
     welcomedPetIds: stringList(candidate.welcomedPetIds),
     dismissedNotificationKeys: boundDismissedKeys(stringList(candidate.dismissedNotificationKeys)),
@@ -423,6 +436,7 @@ function normalizeManifest(value: unknown): PetManifest | null {
   const id = petIdForSource(source, candidate.sourceId)
   if (candidate.id !== id) return null
   if (candidate.spritesheetFile !== 'spritesheet.png' && candidate.spritesheetFile !== 'spritesheet.webp') return null
+  const interactions = parsePetInteractionPack(candidate.interactions)
   return {
     schemaVersion: 1,
     id,
@@ -435,7 +449,8 @@ function normalizeManifest(value: unknown): PetManifest | null {
     ...(typeof candidate.sourcePath === 'string' ? { sourcePath: candidate.sourcePath } : {}),
     ...(typeof candidate.sourceFingerprint === 'string' ? { sourceFingerprint: candidate.sourceFingerprint } : {}),
     ...(typeof candidate.importedAt === 'string' ? { importedAt: candidate.importedAt } : {}),
-    sourceMissing: candidate.sourceMissing === true
+    sourceMissing: candidate.sourceMissing === true,
+    ...(interactions ? { interactions } : {})
   }
 }
 

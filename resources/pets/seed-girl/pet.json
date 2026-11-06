@@ -3,5 +3,45 @@
   "displayName": "Seed 娘",
   "description": "蓝紫侧马尾、蓝白小风衣与豆芽包，充满好奇的科技伙伴。 社区形象的 Q 版改编。 AI 标识融入发饰与服装。",
   "spriteVersionNumber": 1,
-  "spritesheetPath": "spritesheet.webp"
+  "spritesheetPath": "spritesheet.webp",
+  "interactions": {
+    "version": 1,
+    "modelAliases": [
+      "seed",
+      "doubao-seed"
+    ],
+    "providerAliases": [
+      "seed"
+    ],
+    "greeting": {
+      "states": [
+        "waving",
+        "jumping",
+        "waving"
+      ],
+      "durationMs": 4600
+    },
+    "clips": {
+      "typing": {
+        "state": "running",
+        "tempo": 1.29,
+        "strength": 0.7
+      },
+      "listening": {
+        "state": "waiting",
+        "tempo": 0.85,
+        "strength": 0.5
+      },
+      "speaking": {
+        "state": "waving",
+        "tempo": 1.15,
+        "strength": 0.8
+      },
+      "transcribing": {
+        "state": "review",
+        "tempo": 0.7,
+        "strength": 0.3
+      }
+    }
+  }
 }

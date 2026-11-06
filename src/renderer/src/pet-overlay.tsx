@@ -1,3 +1,6 @@
+import { PetReactionStage } from './pets/pet-reaction-stage'
+import { usePetPresence } from './pets/use-pet-presence'
+import { startPetTypingPresence } from './pets/pet-presence-client'
 import React, { useEffect, useRef, useState } from 'react'
 import ReactDOM from 'react-dom/client'
 import {
@@ -28,6 +31,8 @@ import './pet-overlay.css'
 function PetOverlayApp(): React.JSX.Element {
   const bridge = window.kunPetOverlay
   const [bootstrap, setBootstrap] = useState<PetOverlayBootstrap | null>(null)
+  const reactions = usePetPresence(bridge, bootstrap)
+  const heldReaction = useRef<typeof reactions | null>(null)
   const [snapshot, setSnapshot] = useState<PetActivitySnapshot | null>(null)
   const [width, setWidth] = useState(112)
   const [nativeLayout, setNativeLayout] = useState<PetOverlayLayout | null>(null)
@@ -65,6 +70,8 @@ function PetOverlayApp(): React.JSX.Element {
   draggingRef.current = dragging
   const controlsRevealed = controlsHover || dragging || menuOpen || ensembleOpen
   controlsVisibleRef.current = controlsRevealed || quickChatInteractive
+
+  useEffect(() => startPetTypingPresence(document), [])
 
   useEffect(() => {
     const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
@@ -175,11 +182,18 @@ function PetOverlayApp(): React.JSX.Element {
   const noticeSize = usePetSurfaceSize(noticeRef, !bubblesHidden, { width: 330, height: 80 })
   const menuSize = usePetSurfaceSize(menuRef, menuOpen, { width: 136, height: 74 })
   const ensemble = bootstrap?.ensemble ?? defaultPetEnsemble()
+  const reactionAllowed = bootstrap?.spritesheetUrl && !(ensemble.enabled && ensemble.paused)
+  if (!dragging) heldReaction.current = reactionAllowed && reactions.active ? reactions : null
+  const reaction = heldReaction.current
+  const reacting = Boolean(reaction)
+  const partner = reaction?.partner?.id !== bootstrap?.petId ? reaction?.partner ?? null : null
+  const reactionSize = { width: Math.min(viewport.width - 16, Math.max(180, width * (partner ? 2 : 1) + 32)),
+    height: Math.min(viewport.height - 32, width * 208 / 192 + 72) }
   const ensembleSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(260, viewport.height - 32) }
   const placement = petSurfaceLayout({
     anchor: nativeLayout ?? { anchorX: viewport.width / 2, anchorY: viewport.height / 2,
       viewportWidth: viewport.width, viewportHeight: viewport.height },
-    petWidth: width, ...(ensemble.enabled ? { petSize: ensembleSize } : {}), controls: controlsSize, notification: noticeSize, menu: menuSize
+    petWidth: width, ...(reaction && !ensemble.enabled ? { petSize: reactionSize } : ensemble.enabled ? { petSize: ensembleSize } : {}), controls: controlsSize, notification: noticeSize, menu: menuSize
   })
   const business = effectivePetBusinessState({ activeStatus: active?.status ?? null, welcomeUntilMs: welcome, nowMs: now })
   const animation: PetAnimationState = resolveOverlayAnimationState({ resizeMode: false, dragging, dragDirection, hover, effectiveBusinessState: business })
@@ -201,13 +215,13 @@ function PetOverlayApp(): React.JSX.Element {
     return () => window.clearTimeout(timer)
   }, [nextExpiry])
   useEffect(() => {
-    if (reduced || ensemble.enabled) return undefined
+    if (reduced || ensemble.enabled || reacting) return undefined
     started.current = performance.now()
     let frame = 0
     const tick = (time: number): void => { setFrameClock(time - started.current); frame = requestAnimationFrame(tick) }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [reduced, animation, ensemble.enabled])
+  }, [reduced, animation, ensemble.enabled, reacting])
   const version = bootstrap?.spriteVersionNumber ?? 1
   const frame = reduced ? staticFrame(animation, version) : frameAtElapsedMs(animation, frameClock, version)
   const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
@@ -374,7 +388,16 @@ function PetOverlayApp(): React.JSX.Element {
           if (!event.currentTarget.contains(event.relatedTarget)) setControlsHover(false)
         }}>
           <div className="pet-character-stage" style={placement.pet}>
-            {ensemble.enabled ? <PetEnsembleStage settings={ensemble} pets={bootstrap?.ensemblePets ?? []}
+            {reaction && bootstrap && !ensemble.enabled ? <PetReactionStage pet={bootstrap} partner={reaction.partner}
+              eventId={reaction.presence.modelChangedAt} kind={reaction.input?.kind ?? 'greeting'} level={reaction.input?.level ?? 0}
+              language={window.navigator.language} width={reactionSize.width} height={reactionSize.height} mascotWidth={width} paused={dragging}
+              actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
+                onPointerCancel: (event) => finishPointer(event, true),
+                onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
+                onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
+              }} /> : ensemble.enabled ? <PetEnsembleStage settings={ensemble} pets={bootstrap?.ensemblePets ?? []}
+              reaction={reaction ? { kind: reaction.input?.kind ?? 'greeting', level: reaction.input?.level ?? 0,
+                eventId: reaction.presence.modelChangedAt, partnerId: reaction.partner?.sourceId } : undefined}
               language={window.navigator.language} width={ensembleSize.width} height={ensembleSize.height} mascotWidth={width}
               actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
                 onPointerCancel: (event) => finishPointer(event, true),

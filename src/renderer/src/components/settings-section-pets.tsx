@@ -78,6 +78,11 @@ export function PetsSettingsSection(): ReactElement {
           <span>{selectedPet?.description ?? t('petsSelectFirst')}</span>
         </div>
       </div>
+      <label className="pets-settings-toggle">
+        <input type="checkbox" checked={view.settings?.reactionsEnabled !== false}
+          onChange={(event) => void update(petsApi.setPetReactionsEnabled(event.target.checked))} />
+        {i18n?.language?.startsWith('zh') ? '跟随模型、打字和语音互动' : 'React to model changes, typing and voice'}
+      </label>
       <SettingsPetEnsemble pets={view.pets} settings={view.settings} api={petsApi}
         language={i18n?.language ?? 'en'} onSettings={(settings) => {
           setView((current) => ({ ...current, settings }))

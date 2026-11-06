@@ -3,5 +3,44 @@
   "displayName": "Llama 娘",
   "description": "奶白头发、毛绒羊驼耳和宽松小卫衣，软乎乎的陪伴。 社区形象的 Q 版改编。 AI 标识融入发饰与服装。",
   "spriteVersionNumber": 1,
-  "spritesheetPath": "spritesheet.webp"
+  "spritesheetPath": "spritesheet.webp",
+  "interactions": {
+    "version": 1,
+    "modelAliases": [
+      "llama"
+    ],
+    "providerAliases": [
+      "meta"
+    ],
+    "greeting": {
+      "states": [
+        "idle",
+        "waving",
+        "waiting"
+      ],
+      "durationMs": 5400
+    },
+    "clips": {
+      "typing": {
+        "state": "running",
+        "tempo": 1.17,
+        "strength": 0.45
+      },
+      "listening": {
+        "state": "waiting",
+        "tempo": 0.65,
+        "strength": 0.35
+      },
+      "speaking": {
+        "state": "waving",
+        "tempo": 0.85,
+        "strength": 0.5
+      },
+      "transcribing": {
+        "state": "review",
+        "tempo": 0.7,
+        "strength": 0.3
+      }
+    }
+  }
 }

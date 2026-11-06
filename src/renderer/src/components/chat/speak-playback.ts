@@ -1,3 +1,4 @@
+import { createPetPresenceSource } from '../../pets/pet-presence-client'
 /**
  * Gapless Web Audio playback for sanoTTS chunks.
  *
@@ -25,6 +26,10 @@ export class SpeakPlayer {
   private stopped = false
   private gapSeconds = 0
   private hasScheduledAudio = false
+  private analyser: AnalyserNode | null = null
+  private meterData: Uint8Array<ArrayBuffer> | null = null
+  private meterTimer: ReturnType<typeof setInterval> | undefined
+  private readonly petPresence = createPetPresenceSource('playback')
 
   constructor(private readonly sampleRate: number) {}
 
@@ -69,8 +74,9 @@ export class SpeakPlayer {
     source.onended = () => {
       this.sources.delete(source)
       source.disconnect()
-      if (this.sources.size === 0) this.resolveDrain()
+      if (this.sources.size === 0) { this.stopMeter(); this.resolveDrain() }
     }
+    this.startMeter()
     return this.nextStartTime
   }
 
@@ -86,6 +92,8 @@ export class SpeakPlayer {
   stop(): void {
     if (this.stopped) return
     this.stopped = true
+    this.stopMeter()
+    this.petPresence.dispose()
     for (const source of this.sources) {
       source.onended = null
       try {
@@ -101,7 +109,34 @@ export class SpeakPlayer {
     const context = this.context
     this.context = null
     this.gain = null
+    this.analyser = null
+    this.meterData = null
     void context?.close().catch(() => undefined)
+  }
+
+  private startMeter(): void {
+    if (this.meterTimer) return
+    const report = (): void => {
+      if (!this.active || this.context?.state !== 'running') { this.petPresence.report('idle'); return }
+      let level = 0
+      try {
+        if (this.analyser && this.meterData) {
+          this.analyser.getByteTimeDomainData(this.meterData)
+          let squares = 0
+          for (const value of this.meterData) squares += ((value - 128) / 128) ** 2
+          level = Math.min(1, Math.sqrt(squares / this.meterData.length) * 3)
+        }
+      } catch { /* The optional visual meter never changes playback. */ }
+      this.petPresence.report('speaking', level)
+    }
+    report()
+    this.meterTimer = setInterval(report, 125)
+  }
+
+  private stopMeter(): void {
+    clearInterval(this.meterTimer)
+    this.meterTimer = undefined
+    this.petPresence.report('idle')
   }
 
   private resolveDrain(): void {
@@ -119,6 +154,13 @@ export class SpeakPlayer {
     const gain = context.createGain()
     gain.gain.value = 1
     gain.connect(context.destination)
+    try {
+      const analyser = context.createAnalyser()
+      analyser.fftSize = 256
+      gain.connect(analyser)
+      this.analyser = analyser
+      this.meterData = new Uint8Array(new ArrayBuffer(analyser.fftSize))
+    } catch { /* Older audio backends can play without the optional meter. */ }
     this.context = context
     this.gain = gain
     this.nextStartTime = context.currentTime + SCHEDULE_LEAD_SECONDS

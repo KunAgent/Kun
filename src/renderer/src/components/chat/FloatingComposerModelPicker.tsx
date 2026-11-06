@@ -1,3 +1,4 @@
+import { publishPetModel } from '../../pets/pet-presence-client'
 import { AgentModelCatalogFooter } from '../ade/AgentModelCatalogFooter'
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { ComposerPickerPortalContext } from './composer-picker-portal-context'
@@ -128,6 +129,14 @@ export function FloatingComposerModelPicker({
     ungroupedLabel: t('composerOtherModels')
   }), [composerModelGroups, modelOptions, t])
   const currentModel = composerModel.trim()
+  const previousPetModel = useRef({ model: currentModel, provider: composerProviderId })
+  useEffect(() => {
+    const previous = previousPetModel.current
+    previousPetModel.current = { model: currentModel, provider: composerProviderId }
+    if (taskScoped || (previous.model === currentModel && previous.provider === composerProviderId)) return
+    const group = composerModelGroups.find((entry) => entry.providerId === composerProviderId)
+    publishPetModel(currentModel, group?.presetSource || group?.nativeHarnessId || composerProviderId, Boolean(previous.model))
+  }, [currentModel, composerProviderId, composerModelGroups, taskScoped])
   const selectedProviderId = providerMenuGroups.find((group) =>
     group.providerId === composerProviderId.trim() &&
     group.modelIds.some((id) => modelIdsMatch(id, currentModel))
@@ -321,6 +330,8 @@ export function FloatingComposerModelPicker({
   return (
     <div
       ref={pickerRef}
+      data-pet-model={taskScoped ? undefined : currentModel}
+      data-pet-provider={selectedProviderGroup?.presetSource || composerModelGroups.find((group) => group.providerId === selectedProviderId)?.nativeHarnessId || composerProviderId}
       className={`ds-composer-model-picker ds-no-drag relative flex h-9 items-center ${widthClass} ${
         mode === 'combobox' && stretch ? 'justify-end' : ''
       }`}

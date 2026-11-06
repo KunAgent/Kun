@@ -1,3 +1,4 @@
+import { parsePetPresenceSignal, type PetPresenceSignal } from '../../shared/pets-interactions'
 import { parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import {
   PET_IPC,
@@ -24,6 +25,8 @@ import { petSenderAllowed } from './pet-protocol'
 export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 'main' | 'overlay' | 'other' }
 
 export type PetIpcApi = {
+  updatePresence(senderId: number, signal: PetPresenceSignal): void
+  setPetReactionsEnabled(enabled: boolean): Promise<PetSettings>
   setPetEnsemble(settings: PetEnsembleSettings): Promise<PetSettings>
   listPets(): Promise<PetSummary[]>
   getSettings(): Promise<PetSettings>
@@ -69,6 +72,17 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     if (!api.allows(event, ['overlay'])) throw new Error('pet overlay ipc is limited to the pet window')
   }
   return {
+    [PET_IPC.updatePetPresence]: (event, input) => {
+      if (!api.allows(event, ['main', 'overlay'])) return
+      const parsed = parsePetPresenceSignal(input)
+      if (!parsed || (parsed.type === 'model' && event.senderKind !== 'main')) return
+      api.updatePresence(event.senderId, parsed)
+    },
+    [PET_IPC.setPetReactionsEnabled]: async (event, enabled) => {
+      if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet settings ipc is limited to pet controls')
+      if (typeof enabled !== 'boolean') throw new Error('invalid pet reaction preference')
+      return api.setPetReactionsEnabled(enabled)
+    },
     [PET_IPC.setPetEnsemble]: async (event, input) => {
       if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet ensemble ipc is limited to pet controls')
       const parsed = parsePetEnsemble(input)

@@ -100,7 +100,8 @@ async function importTree(
         description: validated.description,
         spriteVersionNumber: validated.spriteVersionNumber,
         spritesheetSourcePath: validated.spritesheetPath,
-        sourcePath: candidate.petDir
+        sourcePath: candidate.petDir,
+        interactions: validated.interactions
       })
       report[result.status].push(result.manifest)
     } catch (error) {

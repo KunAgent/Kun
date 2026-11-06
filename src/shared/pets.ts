@@ -1,3 +1,4 @@
+import type { PetInteractionPack, PetPresenceSignal, PetPresenceSnapshot } from './pets-interactions'
 import type { PetEnsembleSettings } from './pets-ensemble'
 import type { SpeechTranscriptionRequest, SpeechTranscriptionResult } from './speech-to-text'
 
@@ -31,6 +32,7 @@ export type PetManifest = {
   sourceFingerprint?: string
   importedAt?: string
   sourceMissing?: boolean
+  interactions?: PetInteractionPack
 }
 
 export type PetSummary = {
@@ -44,6 +46,7 @@ export type PetSummary = {
   available: boolean
   sourceMissing: boolean
   warning?: string
+  interactions?: PetInteractionPack
 }
 
 export type PetOverlayPlacement = {
@@ -63,6 +66,7 @@ export type PetSettings = {
   mascotWidthPx: number
   importCodexPets: boolean
   ensemble?: PetEnsembleSettings
+  reactionsEnabled?: boolean
   welcomedPetIds: string[]
   dismissedNotificationKeys: string[]
   placementByDisplay: Record<string, PetOverlayPlacement>
@@ -141,6 +145,9 @@ export type PetOverlayBootstrap = {
   layout?: PetOverlayLayout
   ensemble?: PetEnsembleSettings
   ensemblePets?: PetSummary[]
+  interactions?: PetInteractionPack
+  presence?: PetPresenceSnapshot
+  reactionsEnabled?: boolean
 }
 
 export type PetOverlayLayout = {
@@ -155,6 +162,8 @@ export type PetOverlayBounds = { width: number; height: number; anchorX: number;
 export type ScreenPoint = { x: number; y: number }
 
 export type PetDesktopBridge = {
+  updatePetPresence: (signal: PetPresenceSignal) => void
+  setPetReactionsEnabled: (enabled: boolean) => Promise<PetSettings>
   listPets: () => Promise<PetSummary[]>
   getPetSettings: () => Promise<PetSettings>
   selectPet: (petId: string | null) => Promise<PetSettings>
@@ -178,6 +187,9 @@ export type PetDesktopBridge = {
 }
 
 export type PetOverlayBridge = {
+  updatePetPresence: (signal: PetPresenceSignal) => void
+  onPresenceChanged: (handler: (snapshot: PetPresenceSnapshot) => void) => () => void
+  setPetReactionsEnabled: (enabled: boolean) => Promise<PetSettings>
   setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
   getBootstrap: () => Promise<PetOverlayBootstrap>
   onBootstrapChanged: (handler: (value: PetOverlayBootstrap) => void) => () => void
@@ -248,6 +260,9 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 }
 
 export const PET_IPC = {
+  updatePetPresence: 'kun:pets:presence',
+  overlayPresence: 'kun:pets:overlay:presence',
+  setPetReactionsEnabled: 'kun:pets:reactions-enabled',
   setPetEnsemble: 'kun:pets:ensemble',
   listPets: 'kun:pets:list',
   getSettings: 'kun:pets:settings:get',

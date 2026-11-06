@@ -58,6 +58,32 @@ async function copyDefault() {
 }
 
 describe('desktop pet startup', () => {
+  it('forwards transient model/input feedback without changing pet selection, and persists the off switch', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const frame = {}, event = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }
+    await host.handlers.get(PET_IPC.updatePetPresence)!(event, { type: 'model', model: 'gpt-5', provider: 'openai', announce: true })
+    await host.handlers.get(PET_IPC.updatePetPresence)!(event, { type: 'input', source: 'typing:1', kind: 'typing', level: 0 })
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayPresence, expect.objectContaining({ input: expect.objectContaining({ kind: 'typing' }) }))
+    const persisted = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
+    expect(persisted.selectedPetId).toBe('kun:xiao-kun')
+    expect(persisted.presence).toBeUndefined()
+    await host.handlers.get(PET_IPC.setPetReactionsEnabled)!(event, false)
+    const bootEvent = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!(bootEvent) as PetOverlayBootstrap
+    expect(bootstrap.reactionsEnabled).toBe(false)
+    expect(bootstrap.interactions?.clips.typing.state).toBe('running')
+    expect(bootstrap.presence).toMatchObject({ model: null, input: null })
+    host.send.mockClear()
+    await host.handlers.get(PET_IPC.updatePetPresence)!(event, { type: 'input', source: 'typing:1', kind: 'typing', level: 0 })
+    expect(host.send).not.toHaveBeenCalledWith(PET_IPC.overlayPresence, expect.anything())
+    const restarted = new PetStore(path.join(host.root, 'profile', 'pets')); await restarted.initialize()
+    expect(restarted.getSettings().reactionsEnabled).toBe(false)
+  })
+
   it('publishes available ensemble assets and persists overlay changes without replacing the selected pet', async () => {
     await copyDefault()
     for (const id of ['ikun', 'gpt-girl', 'claude-girl']) {

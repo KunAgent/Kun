@@ -2,6 +2,9 @@
 // share a Rollup chunk with the workbench preload, so this file must stay
 // independent of src/shared/pets.ts. The matching test keeps the strings aligned.
 export const PET_OVERLAY_IPC = {
+  updatePetPresence: 'kun:pets:presence',
+  overlayPresence: 'kun:pets:overlay:presence',
+  setPetReactionsEnabled: 'kun:pets:reactions-enabled',
   setPetEnsemble: 'kun:pets:ensemble',
   overlayBootstrap: 'kun:pets:overlay:bootstrap',
   overlayBootstrapChanged: 'kun:pets:overlay:bootstrap-changed',
