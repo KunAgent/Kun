@@ -1,3 +1,5 @@
+import type { PetVisitPreferences, PetVisitRequest } from './pets-visits'
+import type { PetSceneId } from './pets-ensemble'
 import type { PetInteractionPack, PetPresenceSignal, PetPresenceSnapshot } from './pets-interactions'
 import type { PetEnsembleSettings } from './pets-ensemble'
 import type { SpeechTranscriptionRequest, SpeechTranscriptionResult } from './speech-to-text'
@@ -67,6 +69,7 @@ export type PetSettings = {
   importCodexPets: boolean
   ensemble?: PetEnsembleSettings
   reactionsEnabled?: boolean
+  visits?: PetVisitPreferences
   welcomedPetIds: string[]
   dismissedNotificationKeys: string[]
   placementByDisplay: Record<string, PetOverlayPlacement>
@@ -148,6 +151,8 @@ export type PetOverlayBootstrap = {
   interactions?: PetInteractionPack
   presence?: PetPresenceSnapshot
   reactionsEnabled?: boolean
+  visits?: PetVisitPreferences
+  visitRequest?: PetVisitRequest | null
 }
 
 export type PetOverlayLayout = {
@@ -162,6 +167,9 @@ export type PetOverlayBounds = { width: number; height: number; anchorX: number;
 export type ScreenPoint = { x: number; y: number }
 
 export type PetDesktopBridge = {
+  setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
+  requestPetVisit: (scene?: PetSceneId) => Promise<void>
+  dismissPetVisit: () => Promise<void>
   updatePetPresence: (signal: PetPresenceSignal) => void
   setPetReactionsEnabled: (enabled: boolean) => Promise<PetSettings>
   listPets: () => Promise<PetSummary[]>
@@ -187,6 +195,11 @@ export type PetDesktopBridge = {
 }
 
 export type PetOverlayBridge = {
+  onVisitRequested: (handler: (request: PetVisitRequest) => void) => () => void
+  acknowledgeVisitRequest: (id: string) => void
+  setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
+  requestPetVisit: (scene?: PetSceneId) => Promise<void>
+  dismissPetVisit: () => Promise<void>
   updatePetPresence: (signal: PetPresenceSignal) => void
   onPresenceChanged: (handler: (snapshot: PetPresenceSnapshot) => void) => () => void
   setPetReactionsEnabled: (enabled: boolean) => Promise<PetSettings>
@@ -260,6 +273,11 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 }
 
 export const PET_IPC = {
+  setPetVisitPreferences: 'kun:pets:visits:preferences',
+  requestPetVisit: 'kun:pets:visits:request',
+  dismissPetVisit: 'kun:pets:visits:dismiss',
+  overlayVisitRequested: 'kun:pets:overlay:visit-requested',
+  acknowledgeVisitRequest: 'kun:pets:overlay:visit-ack',
   updatePetPresence: 'kun:pets:presence',
   overlayPresence: 'kun:pets:overlay:presence',
   setPetReactionsEnabled: 'kun:pets:reactions-enabled',

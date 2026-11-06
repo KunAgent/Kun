@@ -43,6 +43,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "study",
+        "review",
+        "brainstorm",
+        "tea"
+      ],
+      "arrival": "walk"
     }
   }
 }

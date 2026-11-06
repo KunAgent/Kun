@@ -58,6 +58,30 @@ async function copyDefault() {
 }
 
 describe('desktop pet startup', () => {
+  it('delivers one-off invitations without persisting a team and clears acknowledged or closed-window requests', async () => {
+    await copyDefault()
+    await cp(path.resolve('resources/pets/gpt-girl'), path.join(host.root, 'resources', 'pets', 'gpt-girl'), { recursive: true })
+    await startDesktopPets({ isFreshInstall: true })
+    const frame = {}, event = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const bootstrap = () => host.handlers.get(PET_IPC.overlayBootstrap)!(event) as Promise<PetOverlayBootstrap>
+    expect((await bootstrap()).visits).toEqual({ enabled: true, frequency: 'balanced' })
+    await host.handlers.get(PET_IPC.requestPetVisit)!(event, 'tea')
+    const requested = (await bootstrap()).visitRequest!
+    expect(requested).toMatchObject({ kind: 'invite', scene: 'tea', primaryId: 'kun:xiao-kun' })
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayVisitRequested, requested)
+    await host.handlers.get(PET_IPC.acknowledgeVisitRequest)!(event, requested.id)
+    expect((await bootstrap()).visitRequest).toBeNull()
+    const saved = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
+    expect(saved.visitRequest).toBeUndefined(); expect(saved.selectedPetId).toBe('kun:xiao-kun')
+    await host.handlers.get(PET_IPC.setPetVisitPreferences)!(event, { enabled: false, frequency: 'quiet' })
+    await host.handlers.get(PET_IPC.requestPetVisit)!(event)
+    expect((await bootstrap()).visitRequest?.kind).toBe('invite')
+    await host.handlers.get(PET_IPC.overlayClose)!(event)
+    expect((await bootstrap()).visitRequest).toBeNull()
+    const restarted = new PetStore(path.join(host.root, 'profile', 'pets')); await restarted.initialize()
+    expect(restarted.getSettings().visits).toEqual({ enabled: false, frequency: 'quiet' })
+  })
+
   it('forwards transient model/input feedback without changing pet selection, and persists the off switch', async () => {
     await copyDefault()
     const runtime = await startDesktopPets({ isFreshInstall: true })
@@ -79,7 +103,7 @@ describe('desktop pet startup', () => {
     expect(bootstrap.presence).toMatchObject({ model: null, input: null })
     host.send.mockClear()
     await host.handlers.get(PET_IPC.updatePetPresence)!(event, { type: 'input', source: 'typing:1', kind: 'typing', level: 0 })
-    expect(host.send).not.toHaveBeenCalledWith(PET_IPC.overlayPresence, expect.anything())
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayPresence, expect.objectContaining({ input: expect.objectContaining({ kind: 'typing' }) }))
     const restarted = new PetStore(path.join(host.root, 'profile', 'pets')); await restarted.initialize()
     expect(restarted.getSettings().reactionsEnabled).toBe(false)
   })
@@ -96,13 +120,13 @@ describe('desktop pet startup', () => {
       members: ['xiao-kun', 'ikun', 'gpt-girl', 'claude-girl'] }
     await host.handlers.get(PET_IPC.setPetEnsemble)!(event, ensemble)
     const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!(event) as PetOverlayBootstrap
-    expect(bootstrap.ensemble).toEqual(ensemble)
+    expect(bootstrap.ensemble).toEqual({ ...ensemble, enabled: false })
     expect(bootstrap.ensemblePets).toHaveLength(4)
     expect(bootstrap.ensemblePets?.every((pet) => pet.spritesheetUrl?.startsWith('kun-pet://'))).toBe(true)
     expect(bootstrap.petId).toBe('kun:xiao-kun')
-    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayBootstrapChanged, expect.objectContaining({ ensemble }))
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayBootstrapChanged, expect.objectContaining({ ensemble: { ...ensemble, enabled: false } }))
     const settings = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
-    expect(settings.ensemble).toEqual(ensemble)
+    expect(settings.ensemble).toEqual({ ...ensemble, enabled: false })
   })
 
   it('imports the default before opening one populated overlay', async () => {

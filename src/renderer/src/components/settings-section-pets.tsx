@@ -4,7 +4,7 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { PET_CELL_HEIGHT, PET_CELL_WIDTH, PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSummary } from '@shared/pets'
 import { staticFrame } from '../pets/pet-animation'
 import { settingsButtonClass } from './settings-button'
-import { SettingsPetEnsemble } from './settings-pet-ensemble'
+import { SettingsPetVisits } from './settings-pet-visits'
 import './settings-pets.css'
 
 type PetsView = {
@@ -81,9 +81,9 @@ export function PetsSettingsSection(): ReactElement {
       <label className="pets-settings-toggle">
         <input type="checkbox" checked={view.settings?.reactionsEnabled !== false}
           onChange={(event) => void update(petsApi.setPetReactionsEnabled(event.target.checked))} />
-        {i18n?.language?.startsWith('zh') ? '跟随模型、打字和语音互动' : 'React to model changes, typing and voice'}
+        {i18n?.language?.startsWith('zh') ? '打字与语音动作反馈' : 'React to typing and voice'}
       </label>
-      <SettingsPetEnsemble pets={view.pets} settings={view.settings} api={petsApi}
+      <SettingsPetVisits pets={view.pets} settings={view.settings} api={petsApi}
         language={i18n?.language ?? 'en'} onSettings={(settings) => {
           setView((current) => ({ ...current, settings }))
           window.dispatchEvent(new Event('kun-pet-settings-changed'))

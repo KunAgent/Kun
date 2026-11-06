@@ -1,84 +1,102 @@
 # Built-in companions
 
-Kun ships 17 offline companions: Xiao Kun, iKun, and the 15 AI characters
-listed in [AI-GIRLS.md](AI-GIRLS.md). Each package contains nine animation
-states and 57 transparent sprite frames. Brand marks are part of the AI
-character artwork; see [AI-BRANDS.md](AI-BRANDS.md) for their sources.
+Kun ships Xiao Kun, iKun, and the AI characters listed in
+[AI-GIRLS.md](AI-GIRLS.md). Every package has nine animation states and 57
+transparent frames. Brand marks are part of the artwork; their sources are
+recorded in [AI-BRANDS.md](AI-BRANDS.md).
 
-## Companion theater
+## One resident, occasional visitors
 
-In Settings > Pets, expand **Companion theater** to preview the ensemble,
-choose its members and start it on the desktop. The pet toolbar and context
-menu also open the theater controls. Choose either or both Kun hosts and
-one or more AI companions, up to the entire 17-character cast.
-Six themed cast presets cover the whole collection: Xiao Kun's workshop,
-iKun's rhythm party, Kimi's moonlight crew, Doubao's cozy tea, MiMo's tiny
-inventors, and Whale Girl's bubble garden. Relevant AI characters lead their
-scene when present, such as Doubao serving tea and MiniMax conducting music.
+Choosing a desktop pet is the only setup required. The selected pet normally
+stays alone. It can occasionally invite other available built-in characters
+for a short scene, then return to its usual position after they leave.
+There is no team checklist, fixed cast, or permanently repeating group.
+The visitor pool follows the built-in catalog automatically, including when
+that catalog is reduced in a later release.
 
-The 24 scenes combine the existing sprite poses with coordinated movement,
-turn-taking, shared props and character-specific motifs. They do not add new
-sprite sheets or invoke a model. Claude brings books, Kimi brings moonlight,
-DeepSeek brings bubbles, Gemini brings stars, and each other AI has its own
-performance role. These fictional roles are unrelated to model capabilities.
+A visit has three beats:
 
-| Group | Scenes |
-| --- | --- |
-| Greetings | Meet the crew, high-five team, wave relay, victory cheer, curtain call |
-| Play | Follow Kun, orbit waltz, companion train, chase the star, shuttle relay, peekaboo, jumping wave, stretch break, rhythm challenge |
-| Work | Idea circle, build together, catch the bug, show and tell, reading circle |
-| Life | Companion orchestra, pass the present, afternoon tea, stargazing, bubble garden |
+1. The resident calls a friend over; guests walk, hop or peek in from different
+   directions.
+2. They play one short scene, using circles, a loose triangle, a chase route,
+   turn-taking, and shared props instead of a stationary row.
+3. They wave goodbye and leave. The resident returns to its original position.
 
-Membership, chosen scene, automatic cycling and pause state survive restart.
-Use **Solo pet** to return to the selected individual companion. Normal chat
-and task notifications remain available during a performance. Reduced-motion
-mode shows a still ensemble; hidden windows suspend the animation clock.
+Most visits have one guest; occasional scenes invite two or three. Automatic
+model-related greetings last about 7-8 seconds in total. Other visits last
+about 10-13 seconds. Each invitation has a hard end time; continued typing or
+recording never keeps guests on screen indefinitely.
 
-## Model and input reactions
+## Timing and interruption rules
 
-Automatic feedback is enabled by default and can be toggled in Settings >
-Pets. Selecting a recognized model invites its AI companion for a short
-greeting. Typing or using voice brings that companion alongside the selected
-pet until the activity ends. Main and side composers supply their own model
-identity. Unknown model names on compatibility gateways do not imply GPT;
-provider aliases are used only for an automatic/default model selection.
+Random visits are enabled by default. Settings > Pets > Visiting friends offers
+optional frequency and pause controls:
 
-Typing uses the package's working frames. Recording silence uses listening
-poses; measured microphone activity drives responsive gestures and a waveform.
-Transcription uses thinking poses. Answer playback uses its actual audio
-amplitude and clears feedback on stop or buffer drain. An active manual theater
-keeps its chosen cast, temporarily invites the matching model companion, and
-pauses its choreography while everyone reacts. Its original scene resumes
-afterward. A paused theater suppresses automatic feedback. The selected solo
-pet and saved ensemble membership are never changed.
+| Frequency | Random interval during suitable idle time | Automatic limit per ten minutes |
+| --- | --- | --- |
+| Quiet | 8-14 minutes | 2 |
+| Natural (default) | 4-7 minutes | 3 |
+| Lively | 2-4 minutes | 5 |
 
-Each `pet.json` can supply an optional `interactions` object with:
+Actual timing varies. A recent model switch can invite the matching AI after
+selection settles; a fresh completed task can prompt a short celebration;
+a pause after at least 90 seconds of input can suggest a stretch. These are
+probabilistic opportunities, not mandatory reactions to every event. All share
+a 90-second cooldown after a visit and the automatic invitation budget.
+Recent guests and scenes are avoided when alternatives exist.
 
-- `version: 1`, `modelAliases` and `providerAliases` for model identity.
-- `greeting.states` (one to six existing pose names) and `durationMs`
-  (1000 to 10000) for the character's entrance.
-- `clips.typing`, `clips.listening`, `clips.speaking` and `clips.transcribing`,
-  each with a pose `state`, `tempo` (0.25 to 3) and `strength` (0 to 1).
+Automatic invitations wait while the user types, records, listens to answer
+playback, drags the pet, uses pet controls, or has live/urgent work. Starting
+input during an automatic visit sends guests home within a short farewell.
+Interrupted opportunities are discarded. Hiding the overlay, changing the
+resident, sleep/resume, and clock changes never replay a backlog of visits.
+Reduced-motion mode suppresses automatic visits; explicit visits use still
+poses. A manual invitation is always a single finite scene.
 
-These recipes reuse the package's existing nine sprite rows. They are validated
-declarative data, and changing just a recipe invalidates the cached manifest.
-Old v1/v2 packages without recipes use the generic feedback poses. Invalid
-updates retain the last valid cached package.
+The toolbar and context menu can invite friends immediately. The close button
+on a visit sends them home. Settings also offers an optional activity choice
+for that one invitation. Neither action saves a team or starts an endless
+playlist. Old saved troupe/autoplay flags are normalized off on upgrade.
 
-Only Kun's composer/editor input events and already active recording/playback
-are used. Pet messages carry state and a quantized amplitude, never the typed
-text, transcript or audio. Input signals expire after 1.8 seconds without a
-heartbeat and are never persisted. Reduced-motion mode keeps the poses still.
+## Input and model awareness
 
-## Upgrades and imports
+Typing, listening, measured microphone activity, transcription, and actual
+answer playback animate the resident itself. A selected model does not create
+a permanent side-by-side companion. The model context only influences an
+eligible temporary visit. Explicit model-name matches take precedence over a
+provider label; an unknown model on a compatibility gateway does not imply GPT.
 
-The older bundled anime/animal collection is no longer shipped or offered as
-built-in pets. If one of those built-ins was selected, the next library refresh
-selects Xiao Kun while retaining whether the overlay was open. Saved copies
-are left intact on disk. Local and Codex imports retain their separate
-namespaces and are unaffected, even if their package IDs match a retired pet.
+Main and side composers supply their own model context. The input messages carry
+only state and a quantized amplitude, never typed text, transcripts or audio.
+They expire after 1.8 seconds without a heartbeat and are never persisted.
+Disabling input animations still lets the visit scheduler avoid interrupting
+active input. No extra microphone capture or model request is started for pets.
 
-Run `node --test scripts/bundled-pets.test.cjs` for the exact built-in roster,
-image decoding, transparent margins, 57-frame coverage, unique designs and
-asset size checks. Runtime migration, ensemble preferences, IPC, scene timing
-and layout are covered by the pet Vitest suites.
+## Package recipes
+
+An optional `interactions` object in `pet.json` supplies validated data:
+
+- `version: 1`, lowercase literal `modelAliases` and `providerAliases` identify
+  built-in AI companions. Local packages can customize their resident's poses.
+- `greeting.states` and `durationMs` preserve the package's greeting recipe.
+- `clips.typing`, `clips.listening`, `clips.speaking`, and `clips.transcribing`
+  each select a `state`, `tempo` (0.25-3), and `strength` (0-1).
+- `visits.scenes` lists one to eight preferred scene IDs; `visits.arrival` is
+  `walk`, `hop`, or `peek`. Claude favors reading and tea, Kimi favors stargazing,
+  iKun favors rhythm games, and MiMo favors inventions and debugging.
+
+The 24 scene definitions reuse the existing sprite rows with coordinated
+movement and props. They do not add executable package scripts. Recipe-only
+changes invalidate the cached manifest. Old v1/v2 packages without recipes
+retain generic feedback; invalid updates preserve the last valid cached copy.
+
+## Library upgrades and validation
+
+The previously retired anime/animal collection is no longer offered as built-in
+pets. An old selected built-in migrates to Xiao Kun while preserving whether the
+overlay was open. Local/Codex imports retain their own namespaces and saved files.
+
+Run `node --test scripts/bundled-pets.test.cjs` for roster, decoding, margins,
+57-frame coverage, unique designs and asset size checks. Pet Vitest suites cover
+migration, ephemeral presence, invitation delivery/acknowledgment, randomized
+scheduling, cooldowns, interruption, choreography, and the setup-free controls.

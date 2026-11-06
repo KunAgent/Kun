@@ -1,3 +1,5 @@
+import { defaultPetVisits, type PetVisitPreferences, type PetVisitRequest } from '../../shared/pets-visits'
+import type { PetSceneId } from '../../shared/pets-ensemble'
 import type { PetPresenceSignal } from '../../shared/pets-interactions'
 import { PetPresence } from './pet-presence'
 import { isBuiltinPetId } from '../../shared/pets-builtin'
@@ -56,6 +58,8 @@ class DesktopPetRuntime implements DesktopPets {
   private snapshot: PetActivitySnapshot | null = null
   private readonly allowed = new Set<number>()
   private controller: PetWindowController | null = null
+  private visitRequest: PetVisitRequest | null = null
+  private visitSequence = 0
   private readonly presence = new PetPresence((snapshot) => this.controller?.send(PET_IPC.overlayPresence, snapshot))
 
   constructor(private readonly store: PetStore, private readonly options: DesktopPetOptions) {}
@@ -119,7 +123,7 @@ class DesktopPetRuntime implements DesktopPets {
     this.controller.setSpriteWidth(this.store.getSettings().mascotWidthPx)
     const api = this.api()
     for (const [channel, handler] of Object.entries(petIpcHandlers(api))) {
-      if (channel === PET_IPC.updatePetPresence || channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel === PET_IPC.chatResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayOpenSettings || channel === PET_IPC.overlayDragCancel) {
+      if (channel === PET_IPC.acknowledgeVisitRequest || channel === PET_IPC.updatePetPresence || channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel === PET_IPC.chatResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayOpenSettings || channel === PET_IPC.overlayDragCancel) {
         ipcMain.on(channel, (event, ...args) => { void handler(toEvent(event, this.classify(event.sender.id)), ...args) })
       } else {
         ipcMain.handle(channel, (event, ...args) => handler(toEvent(event, this.classify(event.sender.id)), ...args))
@@ -144,8 +148,33 @@ class DesktopPetRuntime implements DesktopPets {
   private api() {
     return {
       updatePresence: (senderId: number, signal: PetPresenceSignal) => {
-        if (this.store.getSettings().reactionsEnabled !== false) this.presence.update(senderId, signal)
+        this.presence.update(senderId, signal)
       },
+      setPetVisitPreferences: async (input: PetVisitPreferences) => {
+        const settings = await this.store.setPetVisitPreferences(input)
+        this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
+        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
+        return settings
+      },
+      requestPetVisit: async (scene?: PetSceneId) => {
+        const primary = this.store.getSettings().selectedPetId
+        if (!this.store.listPets().some((pet) => pet.source === 'kun-builtin' && pet.id !== primary && pet.available)) {
+          throw new Error('no visiting companion is available')
+        }
+        await this.store.setOverlayOpen(true)
+        await this.syncOverlay()
+        if (!this.store.getSettings().overlayOpen) return
+        this.visitRequest = { id: `${Date.now()}-${++this.visitSequence}`, kind: 'invite', createdAt: Date.now(),
+          primaryId: this.store.getSettings().selectedPetId ?? undefined, ...(scene ? { scene } : {}) }
+        this.controller?.send(PET_IPC.overlayVisitRequested, this.visitRequest)
+        this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
+        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
+      },
+      dismissPetVisit: async () => {
+        this.visitRequest = { id: `${Date.now()}-${++this.visitSequence}`, kind: 'dismiss', createdAt: Date.now() }
+        this.controller?.send(PET_IPC.overlayVisitRequested, this.visitRequest)
+      },
+      acknowledgeVisitRequest: (id: string) => { if (this.visitRequest?.id === id) this.visitRequest = null },
       setPetReactionsEnabled: async (enabled: boolean) => {
         const settings = await this.store.setPetReactionsEnabled(enabled)
         this.presence.clear()
@@ -161,6 +190,7 @@ class DesktopPetRuntime implements DesktopPets {
         return settings
       },
       setOverlayOpen: async (open: boolean) => {
+        if (!open) this.visitRequest = null
         const settings = await this.store.setOverlayOpen(open)
         await this.syncOverlay()
         return settings
@@ -223,7 +253,7 @@ class DesktopPetRuntime implements DesktopPets {
         this.reveal()
         if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send(PET_IPC.settingsRequested, {})
       },
-      closeOverlay: async () => { await this.store.setOverlayOpen(false); this.controller?.close() },
+      closeOverlay: async () => { this.visitRequest = null; await this.store.setOverlayOpen(false); this.controller?.close() },
       allows: (event: PetIpcEvent, kinds: Array<'main' | 'overlay'>) =>
         (event.senderKind === 'main' || event.senderKind === 'overlay') &&
         kinds.includes(event.senderKind) &&
@@ -318,6 +348,8 @@ class DesktopPetRuntime implements DesktopPets {
       interactions: manifest?.interactions,
       presence: this.presence.snapshot(),
       reactionsEnabled: settings.reactionsEnabled !== false,
+      visits: settings.visits ?? defaultPetVisits(),
+      visitRequest: this.visitRequest,
       ensemblePets: this.store.listPets().filter((pet) => pet.source === 'kun-builtin' && isBuiltinPetId(pet.sourceId)),
       layout: this.controller?.layout(),
       ...(this.snapshot ? { activitySnapshot: this.snapshot } : {})

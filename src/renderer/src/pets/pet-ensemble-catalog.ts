@@ -1,5 +1,5 @@
 import type { BuiltinPetId } from '@shared/pets-builtin'
-import { PET_SCENE_IDS, type PetSceneId } from '@shared/pets-ensemble'
+import type { PetSceneId } from '@shared/pets-ensemble'
 import type { PetAnimationState } from '@shared/pets'
 
 export type PetMotif = 'spark' | 'heart' | 'book' | 'moon' | 'star' | 'code' | 'music' |
@@ -62,23 +62,6 @@ export const PET_SCENES: Record<PetSceneId, SceneDefinition> = {
   finale: { title: ['全员谢幕', 'Curtain call'], story: ['逐个亮相、鞠躬，最后全员挥手谢幕', 'Individual entrances, bows, and a final wave'], group: 'greet', motif: 'spark', duration: 16000 }
 }
 
-export const PET_ENSEMBLE_PRESETS: Array<{
-  id: string; title: [string, string]; scene: PetSceneId; members: BuiltinPetId[]
-}> = [
-  { id: 'workshop', title: ['小 Kun 的研发小队', 'Xiao Kun\'s workshop'], scene: 'coding',
-    members: ['xiao-kun', 'whale-girl', 'gpt-girl', 'claude-girl', 'glm-girl'] },
-  { id: 'rhythm', title: ['iKun 的节奏派对', 'iKun\'s rhythm party'], scene: 'beatbox',
-    members: ['ikun', 'minimax-girl', 'grok-girl', 'gemini-girl'] },
-  { id: 'moonlight', title: ['Kimi 的月下观星', 'Kimi\'s moonlight crew'], scene: 'stargazing',
-    members: ['xiao-kun', 'kimi-girl', 'gemini-girl', 'hunyuan-girl'] },
-  { id: 'teatime', title: ['豆包的暖心茶会', 'Doubao\'s cozy tea'], scene: 'tea',
-    members: ['xiao-kun', 'ikun', 'doubao-girl', 'llama-girl', 'mistral-girl'] },
-  { id: 'inventors', title: ['MiMo 的小小发明家', 'MiMo\'s tiny inventors'], scene: 'brainstorm',
-    members: ['ikun', 'mimo-girl', 'seed-girl', 'qwen-girl', 'gpt-girl'] },
-  { id: 'ocean', title: ['鲸鱼娘的泡泡花园', 'Whale Girl\'s bubble garden'], scene: 'bubbles',
-    members: ['xiao-kun', 'ikun', 'whale-girl', 'seed-girl', 'llama-girl', 'hunyuan-girl'] }
-]
-
 export const PET_SCENE_DIRECTORS: Partial<Record<PetSceneId, BuiltinPetId>> = {
   orchestra: 'minimax-girl', stargazing: 'kimi-girl', bubbles: 'whale-girl',
   brainstorm: 'gpt-girl', coding: 'mimo-girl', study: 'claude-girl',
@@ -87,8 +70,4 @@ export const PET_SCENE_DIRECTORS: Partial<Record<PetSceneId, BuiltinPetId>> = {
 
 export function petEnsembleText(text: [string, string], language: string): string {
   return text[language.toLowerCase().startsWith('zh') ? 0 : 1]
-}
-
-export function nextPetScene(scene: PetSceneId): PetSceneId {
-  return PET_SCENE_IDS[(PET_SCENE_IDS.indexOf(scene) + 1) % PET_SCENE_IDS.length]
 }

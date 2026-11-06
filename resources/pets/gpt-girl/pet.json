@@ -46,6 +46,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "brainstorm",
+        "gift",
+        "high-five",
+        "circle-dance"
+      ],
+      "arrival": "walk"
     }
   }
 }

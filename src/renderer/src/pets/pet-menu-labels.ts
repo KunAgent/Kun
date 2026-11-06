@@ -13,5 +13,5 @@ const PACKS: Record<string, { petsContextSettings: string; petsContextHide: stri
 export function petContextMenuLabels(language: string): { settings: string; hide: string; ensemble: string } {
   const code = language.toLowerCase().split('-')[0] ?? ''
   const pack = PACKS[code] ?? en
-  return { settings: pack.petsContextSettings, hide: pack.petsContextHide, ensemble: code === 'zh' ? '伙伴小剧场' : 'Companion theater' }
+  return { settings: pack.petsContextSettings, hide: pack.petsContextHide, ensemble: code === 'zh' ? '叫朋友来玩' : 'Invite friends' }
 }

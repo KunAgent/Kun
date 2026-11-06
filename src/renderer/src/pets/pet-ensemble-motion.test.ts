@@ -1,17 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { BUILTIN_PET_IDS } from '@shared/pets-builtin'
-import { defaultPetEnsemble, parsePetEnsemble, PET_SCENE_IDS } from '@shared/pets-ensemble'
+import { defaultPetEnsemble, PET_SCENE_IDS } from '@shared/pets-ensemble'
 import { PET_ROWS } from '@shared/pets'
-import { PET_ENSEMBLE_PRESETS, PET_PERSONAS, PET_SCENES } from './pet-ensemble-catalog'
+import { PET_PERSONAS, PET_SCENES } from './pet-ensemble-catalog'
 import { ensembleActorRect, ensembleActorSize, ensembleSceneAt, samplePetEnsemble } from './pet-ensemble-motion'
 import { petSurfaceLayout } from './pet-layout'
 
 describe('coordinated companion scenes', () => {
-  it('offers themed casts covering every built-in, and gives a present AI director a specific role', () => {
-    expect(new Set(PET_ENSEMBLE_PRESETS.flatMap((preset) => preset.members)).size).toBe(17)
-    for (const preset of PET_ENSEMBLE_PRESETS) {
-      expect(parsePetEnsemble({ ...defaultPetEnsemble(), members: preset.members, scene: preset.scene })).not.toBeNull()
-    }
+  it('gives an AI director its own role when present', () => {
     const frame = samplePetEnsemble({ ...defaultPetEnsemble(), members: ['xiao-kun', 'doubao-girl', 'gpt-girl'], scene: 'tea' }, 0)
     expect(frame.actors.find((actor) => actor.id === 'doubao-girl')?.pose).toBe('waving')
     expect(frame.actors.find((actor) => actor.id === 'gpt-girl')?.pose).toBe('waiting')

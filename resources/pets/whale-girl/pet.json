@@ -41,6 +41,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "bubbles",
+        "chase",
+        "stargazing",
+        "high-five"
+      ],
+      "arrival": "hop"
     }
   }
 }

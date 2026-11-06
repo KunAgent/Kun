@@ -11,6 +11,8 @@ describe('declarative pet interaction packages', () => {
       { clips: { ...pack.clips, typing: { state: 'running', tempo: 99, strength: .5 } } }]) {
       expect(parsePetInteractionPack({ ...pack, ...patch })).toBeNull()
     }
+    expect(parsePetInteractionPack({ ...pack, visits: { scenes: ['execute'], arrival: 'walk' } })).toBeNull()
+    expect(parsePetInteractionPack({ ...pack, visits: { scenes: ['tea'], arrival: { toString: 'walk' } } })).toBeNull()
   })
 
   it('validates input telemetry and strips text, audio and arbitrary fields', () => {

@@ -8,7 +8,7 @@ import { usePetPresence } from './use-pet-presence'
 afterEach(() => vi.useRealTimers())
 
 describe('overlay presence lifecycle', () => {
-  it('replaces the model companion, ignores old bootstrap data, expires feedback and honors the off switch', async () => {
+  it('keeps model context without making a permanent companion and expires input feedback', async () => {
     vi.useFakeTimers(); vi.setSystemTime(10000)
     let deliver!: (snapshot: PetPresenceSnapshot) => void
     const unsubscribe = vi.fn()
@@ -23,11 +23,12 @@ describe('overlay presence lifecycle', () => {
     let view!: ReturnType<typeof create>
     await act(async () => { view = create(createElement(View, { boot })) })
     await act(async () => deliver({ revision: 2, input: null, model: { model: 'gpt-5', provider: '' }, modelChangedAt: 10000 }))
-    expect(result.partner?.sourceId).toBe('gpt-girl')
+    expect(result.presence.model?.model).toBe('gpt-5')
+    expect(result.active).toBe(false)
     await act(async () => deliver({ revision: 3, input: null, model: { model: 'claude-sonnet', provider: '' }, modelChangedAt: 10000 }))
-    expect(result.partner?.sourceId).toBe('claude-girl')
+    expect(result.presence.model?.model).toBe('claude-sonnet')
     await act(async () => view.update(createElement(View, { boot: { ...boot, presence: { ...emptyPetPresence(), revision: 1 } } })))
-    expect(result.partner?.sourceId).toBe('claude-girl')
+    expect(result.presence.model?.model).toBe('claude-sonnet')
     await act(async () => { vi.advanceTimersByTime(5000) })
     expect(result.active).toBe(false)
     await act(async () => deliver({ revision: 4, model: null, modelChangedAt: 0,

@@ -1,3 +1,4 @@
+import type { PetVisit } from '@shared/pets-visits'
 import { PetReactionStage } from './pets/pet-reaction-stage'
 import { usePetPresence } from './pets/use-pet-presence'
 import { startPetTypingPresence } from './pets/pet-presence-client'
@@ -23,9 +24,8 @@ import { petContextMenuLabels } from './pets/pet-menu-labels'
 import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, pointInsidePetHit, welcomeUntil } from './pets/pet-pointer'
 import { petControlsBridge, petSurfaceLayout } from './pets/pet-layout'
 import { usePetSurfaceSize } from './pets/use-pet-surface-size'
-import { defaultPetEnsemble } from '@shared/pets-ensemble'
-import { PetEnsembleStage } from './pets/pet-ensemble-stage'
-import { PetEnsembleControls } from './pets/pet-ensemble-controls'
+import { PetVisitStage } from './pets/pet-visit-stage'
+import { usePetVisits } from './pets/use-pet-visits'
 import './pet-overlay.css'
 
 function PetOverlayApp(): React.JSX.Element {
@@ -33,6 +33,7 @@ function PetOverlayApp(): React.JSX.Element {
   const [bootstrap, setBootstrap] = useState<PetOverlayBootstrap | null>(null)
   const reactions = usePetPresence(bridge, bootstrap)
   const heldReaction = useRef<typeof reactions | null>(null)
+  const heldVisit = useRef<PetVisit | null>(null)
   const [snapshot, setSnapshot] = useState<PetActivitySnapshot | null>(null)
   const [width, setWidth] = useState(112)
   const [nativeLayout, setNativeLayout] = useState<PetOverlayLayout | null>(null)
@@ -42,7 +43,6 @@ function PetOverlayApp(): React.JSX.Element {
   const [hover, setHover] = useState(false)
   const [controlsHover, setControlsHover] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [ensembleOpen, setEnsembleOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dragDirection, setDragDirection] = useState<PetDragDirection>('right')
   const [expanded, setExpanded] = useState(false)
@@ -68,8 +68,15 @@ function PetOverlayApp(): React.JSX.Element {
   const interactiveRef = useRef(false)
   const controlsVisibleRef = useRef(false)
   draggingRef.current = dragging
-  const controlsRevealed = controlsHover || dragging || menuOpen || ensembleOpen
+  const controlsRevealed = controlsHover || dragging || menuOpen
   controlsVisibleRef.current = controlsRevealed || quickChatInteractive
+
+  useEffect(() => {
+    if (!draggingRef.current) return
+    dragOrigin.current = null
+    setDragging(false)
+    bridge.cancelDrag()
+  }, [bridge, bootstrap?.petId])
 
   useEffect(() => startPetTypingPresence(document), [])
 
@@ -111,11 +118,11 @@ function PetOverlayApp(): React.JSX.Element {
   }, [bridge])
 
   useEffect(() => {
-    const wants = hover || dragging || menuOpen || ensembleOpen
+    const wants = hover || dragging || menuOpen
     if (interactiveRef.current === wants) return
     interactiveRef.current = wants
     bridge.setPointerInteractive(wants)
-  }, [bridge, hover, dragging, menuOpen, ensembleOpen])
+  }, [bridge, hover, dragging, menuOpen])
 
   useEffect(() => {
     let leaveTimer = 0
@@ -139,7 +146,7 @@ function PetOverlayApp(): React.JSX.Element {
         controlsLeaveTimer = 0
         setControlsHover(true)
       } else leaveControls()
-      const inside = overCompanion || Array.from(hit?.querySelectorAll<HTMLElement>('.pet-bubble-list, .pet-note, .pet-menu, .pet-ensemble-panel') ?? [])
+      const inside = overCompanion || Array.from(hit?.querySelectorAll<HTMLElement>('.pet-bubble-list, .pet-note, .pet-menu, .pet-visit-caption') ?? [])
         .some((element) => pointInsidePetHit(point, element.getBoundingClientRect()))
       if (inside || draggingRef.current) {
         window.clearTimeout(leaveTimer)
@@ -181,19 +188,22 @@ function PetOverlayApp(): React.JSX.Element {
   const controlsSize = usePetSurfaceSize(controlsRef, true, { width: 140, height: 44 })
   const noticeSize = usePetSurfaceSize(noticeRef, !bubblesHidden, { width: 330, height: 80 })
   const menuSize = usePetSurfaceSize(menuRef, menuOpen, { width: 136, height: 74 })
-  const ensemble = bootstrap?.ensemble ?? defaultPetEnsemble()
-  const reactionAllowed = bootstrap?.spritesheetUrl && !(ensemble.enabled && ensemble.paused)
-  if (!dragging) heldReaction.current = reactionAllowed && reactions.active ? reactions : null
+  const liveVisit = usePetVisits({ bridge, bootstrap, presence: reactions.presence, work: snapshot,
+    blocked: dragging || menuOpen || quickChatInteractive || Boolean(editing) })
+  const currentVisit = liveVisit?.primaryId === bootstrap?.petId ? liveVisit : null
+  if (!dragging || heldVisit.current?.primaryId !== bootstrap?.petId) heldVisit.current = currentVisit
+  const visit = dragging ? heldVisit.current : currentVisit
+  const visiting = Boolean(visit)
+  if (!dragging) heldReaction.current = bootstrap?.spritesheetUrl && reactions.input ? reactions : null
   const reaction = heldReaction.current
   const reacting = Boolean(reaction)
-  const partner = reaction?.partner?.id !== bootstrap?.petId ? reaction?.partner ?? null : null
-  const reactionSize = { width: Math.min(viewport.width - 16, Math.max(180, width * (partner ? 2 : 1) + 32)),
+  const reactionSize = { width: Math.min(viewport.width - 16, Math.max(160, width + 32)),
     height: Math.min(viewport.height - 32, width * 208 / 192 + 72) }
-  const ensembleSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(260, viewport.height - 32) }
+  const visitSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(300, viewport.height - 32) }
   const placement = petSurfaceLayout({
     anchor: nativeLayout ?? { anchorX: viewport.width / 2, anchorY: viewport.height / 2,
       viewportWidth: viewport.width, viewportHeight: viewport.height },
-    petWidth: width, ...(reaction && !ensemble.enabled ? { petSize: reactionSize } : ensemble.enabled ? { petSize: ensembleSize } : {}), controls: controlsSize, notification: noticeSize, menu: menuSize
+    petWidth: width, ...(visit ? { petSize: visitSize } : reaction ? { petSize: reactionSize } : {}), controls: controlsSize, notification: noticeSize, menu: menuSize
   })
   const business = effectivePetBusinessState({ activeStatus: active?.status ?? null, welcomeUntilMs: welcome, nowMs: now })
   const animation: PetAnimationState = resolveOverlayAnimationState({ resizeMode: false, dragging, dragDirection, hover, effectiveBusinessState: business })
@@ -215,13 +225,13 @@ function PetOverlayApp(): React.JSX.Element {
     return () => window.clearTimeout(timer)
   }, [nextExpiry])
   useEffect(() => {
-    if (reduced || ensemble.enabled || reacting) return undefined
+    if (reduced || visiting || reacting) return undefined
     started.current = performance.now()
     let frame = 0
     const tick = (time: number): void => { setFrameClock(time - started.current); frame = requestAnimationFrame(tick) }
     frame = requestAnimationFrame(tick)
     return () => cancelAnimationFrame(frame)
-  }, [reduced, animation, ensemble.enabled, reacting])
+  }, [reduced, animation, visiting, reacting])
   const version = bootstrap?.spriteVersionNumber ?? 1
   const frame = reduced ? staticFrame(animation, version) : frameAtElapsedMs(animation, frameClock, version)
   const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
@@ -388,17 +398,18 @@ function PetOverlayApp(): React.JSX.Element {
           if (!event.currentTarget.contains(event.relatedTarget)) setControlsHover(false)
         }}>
           <div className="pet-character-stage" style={placement.pet}>
-            {reaction && bootstrap && !ensemble.enabled ? <PetReactionStage pet={bootstrap} partner={reaction.partner}
-              eventId={reaction.presence.modelChangedAt} kind={reaction.input?.kind ?? 'greeting'} level={reaction.input?.level ?? 0}
-              language={window.navigator.language} width={reactionSize.width} height={reactionSize.height} mascotWidth={width} paused={dragging}
+            {visit && bootstrap ? <PetVisitStage visit={visit} pet={bootstrap} pets={bootstrap.ensemblePets ?? []}
+              language={window.navigator.language} width={visitSize.width} height={visitSize.height} mascotWidth={width}
+              primaryOrigin={{ x: (nativeLayout?.anchorX ?? viewport.width / 2) - placement.pet.left,
+                y: (nativeLayout?.anchorY ?? viewport.height / 2) - placement.pet.top }}
+              onDismiss={() => void bridge.dismissPetVisit()}
               actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
                 onPointerCancel: (event) => finishPointer(event, true),
                 onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
                 onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
-              }} /> : ensemble.enabled ? <PetEnsembleStage settings={ensemble} pets={bootstrap?.ensemblePets ?? []}
-              reaction={reaction ? { kind: reaction.input?.kind ?? 'greeting', level: reaction.input?.level ?? 0,
-                eventId: reaction.presence.modelChangedAt, partnerId: reaction.partner?.sourceId } : undefined}
-              language={window.navigator.language} width={ensembleSize.width} height={ensembleSize.height} mascotWidth={width}
+              }} /> : reaction && bootstrap ? <PetReactionStage pet={bootstrap}
+              eventId={reaction.presence.modelChangedAt} kind={reaction.input?.kind ?? 'typing'} level={reaction.input?.level ?? 0}
+              language={window.navigator.language} width={reactionSize.width} height={reactionSize.height} mascotWidth={width} paused={dragging}
               actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
                 onPointerCancel: (event) => finishPointer(event, true),
                 onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
@@ -431,7 +442,7 @@ function PetOverlayApp(): React.JSX.Element {
           {menuOpen ? <div className="pet-menu-position" ref={menuRef}
             style={{ left: placement.menu.left, top: placement.menu.top }}>
             <PetContextMenu labels={menuLabels}
-              onEnsemble={() => { setMenuOpen(false); setEnsembleOpen(true) }}
+              onEnsemble={() => { setMenuOpen(false); void bridge.requestPetVisit() }}
               onClose={() => { setMenuOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite')?.focus() }}
               onSettings={() => { setMenuOpen(false); bridge.openPetSettings() }}
               onHide={() => { setMenuOpen(false); void bridge.closeOverlay() }} />
@@ -439,8 +450,8 @@ function PetOverlayApp(): React.JSX.Element {
           <div className="pet-controls-position" ref={controlsRef}
             style={{ left: placement.controls.left, top: placement.controls.top }}>
             <PetQuickChat bridge={bridge} notificationCount={notifications.length} bubblesHidden={bubblesHidden}
-              revealed={controlsRevealed} ensembleActive={ensemble.enabled}
-              onEnsemble={() => setEnsembleOpen((open) => !open)}
+              revealed={controlsRevealed} ensembleActive={Boolean(visit)}
+              onEnsemble={() => { if (visit) void bridge.dismissPetVisit(); else void bridge.requestPetVisit() }}
               onInteractiveChange={setQuickChatInteractive} onToggleBubbles={() => {
                 const collapsed = !bubblesHidden
                 setBubblesCollapsed(collapsed)
@@ -452,13 +463,7 @@ function PetOverlayApp(): React.JSX.Element {
               ? <p className="pet-note">{bootstrap.interactionNote}</p> : null}
           </div>
         </div>
-        {ensembleOpen ? <div className="pet-ensemble-editor"><PetEnsembleControls value={ensemble}
-          pets={bootstrap?.ensemblePets ?? []} language={window.navigator.language}
-          onClose={() => { setEnsembleOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite')?.focus() }}
-          onChange={async (next) => {
-            const settings = await bridge.setPetEnsemble(next)
-            setBootstrap((current) => current ? { ...current, ensemble: settings.ensemble } : current)
-          }} /></div> : null}
+
       </div>
     </div>
   )

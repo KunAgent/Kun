@@ -41,6 +41,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "hide-and-seek",
+        "chase",
+        "beatbox",
+        "gift"
+      ],
+      "arrival": "peek"
     }
   }
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { PetOverlayBootstrap, PetOverlayBridge } from '@shared/pets'
 import { emptyPetPresence, type PetPresenceSnapshot } from '@shared/pets-interactions'
-import { currentPetReaction, petForModel } from './pet-reactions'
+import { currentPetReaction } from './pet-reactions'
 
 export function usePetPresence(bridge: Pick<PetOverlayBridge, 'onPresenceChanged'>, bootstrap: PetOverlayBootstrap | null) {
   const [presence, setPresence] = useState<PetPresenceSnapshot>(emptyPetPresence)
@@ -17,17 +17,13 @@ export function usePetPresence(bridge: Pick<PetOverlayBridge, 'onPresenceChanged
       setNow(Date.now())
     }
   }, [bootstrap?.presence])
-  const partner = petForModel(presence.model, bootstrap?.ensemblePets ?? [])
-  const greetingUntil = partner && presence.modelChangedAt > 0
-    ? presence.modelChangedAt + (partner.interactions?.greeting.durationMs ?? 4800) : 0
   useEffect(() => {
-    const expiry = [presence.input?.expiresAt ?? 0, greetingUntil].filter((time) => time > Date.now())
+    const expiry = [presence.input?.expiresAt ?? 0].filter((time) => time > Date.now())
     if (!expiry.length) return
     const timer = setTimeout(() => setNow(Date.now()), Math.max(1, Math.min(...expiry) - Date.now() + 1))
     return () => clearTimeout(timer)
-  }, [presence, greetingUntil, now])
+  }, [presence, now])
   const enabled = bootstrap?.reactionsEnabled !== false
   const input = enabled ? currentPetReaction(presence, now) : null
-  const greeting = enabled && now < greetingUntil
-  return { presence, partner, input, greeting, active: Boolean(input || greeting) }
+  return { presence, input, active: Boolean(input) }
 }

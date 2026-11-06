@@ -60,7 +60,7 @@ describe('built-in pet collection upgrades', () => {
 })
 
 describe('ensemble persistence and IPC', () => {
-  it('persists cast, scene, pause and autoplay across restart and rejects missing members', async () => {
+  it('retains legacy scene preferences but never restores permanent parties', async () => {
     const { store, root } = await fixture()
     const ensemble = { ...defaultPetEnsemble(), enabled: true, scene: 'orchestra' as const, paused: true, autoplay: true }
     await expect(store.setPetEnsemble(ensemble)).rejects.toThrow('unavailable')
@@ -68,7 +68,7 @@ describe('ensemble persistence and IPC', () => {
     await store.setPetEnsemble(ensemble)
     const restarted = new PetStore(root)
     await restarted.initialize()
-    expect(restarted.getSettings().ensemble).toEqual(ensemble)
+    expect(restarted.getSettings().ensemble).toEqual({ ...ensemble, enabled: false, paused: false, autoplay: false })
     const copy = restarted.getSettings()
     copy.ensemble?.members.pop()
     expect(restarted.getSettings().ensemble?.members).toHaveLength(4)

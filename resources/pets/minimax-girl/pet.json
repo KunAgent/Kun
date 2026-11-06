@@ -41,6 +41,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "orchestra",
+        "dance",
+        "beatbox",
+        "finale"
+      ],
+      "arrival": "hop"
     }
   }
 }

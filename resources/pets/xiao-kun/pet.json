@@ -37,6 +37,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "high-five",
+        "gift",
+        "exercise",
+        "chase"
+      ],
+      "arrival": "hop"
     }
   }
 }

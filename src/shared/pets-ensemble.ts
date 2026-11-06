@@ -36,3 +36,8 @@ export function parsePetEnsemble(value: unknown): PetEnsembleSettings | null {
     autoplay: input.autoplay, paused: input.paused
   }
 }
+
+/** Retain friend/scene preferences without restoring an old permanent troupe. */
+export function normalizeSavedPetEnsemble(value: unknown): PetEnsembleSettings {
+  return { ...(parsePetEnsemble(value) ?? defaultPetEnsemble()), enabled: false, autoplay: false, paused: false }
+}

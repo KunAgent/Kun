@@ -9,6 +9,11 @@ function listen<T>(channel: string, handler: (value: T) => void): () => void {
 }
 
 const api: PetOverlayBridge = {
+  onVisitRequested: (handler) => listen(PET_OVERLAY_IPC.overlayVisitRequested, handler),
+  acknowledgeVisitRequest: (id) => ipcRenderer.send(PET_OVERLAY_IPC.acknowledgeVisitRequest, id),
+  setPetVisitPreferences: (input) => ipcRenderer.invoke(PET_OVERLAY_IPC.setPetVisitPreferences, input),
+  requestPetVisit: (scene) => ipcRenderer.invoke(PET_OVERLAY_IPC.requestPetVisit, scene),
+  dismissPetVisit: () => ipcRenderer.invoke(PET_OVERLAY_IPC.dismissPetVisit),
   updatePetPresence: (signal) => ipcRenderer.send(PET_OVERLAY_IPC.updatePetPresence, signal),
   onPresenceChanged: (handler) => listen(PET_OVERLAY_IPC.overlayPresence, handler),
   setPetReactionsEnabled: (enabled) => ipcRenderer.invoke(PET_OVERLAY_IPC.setPetReactionsEnabled, enabled),

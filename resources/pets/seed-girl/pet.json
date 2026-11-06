@@ -42,6 +42,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "bubbles",
+        "leapfrog",
+        "exercise",
+        "gift"
+      ],
+      "arrival": "hop"
     }
   }
 }

@@ -33,6 +33,7 @@ describe('model and input reactions', () => {
   it('ships safe recipes for every built-in and animates typing, listening and speaking differently', () => {
     for (const pet of pets) {
       expect(parsePetInteractionPack(pet.interactions), pet.id).not.toBeNull()
+      expect(pet.interactions?.visits?.scenes.length, pet.id).toBeGreaterThan(0)
       const base = { pack: pet.interactions, elapsed: 750, level: 0, version: pet.spriteVersionNumber, reduced: false }
       expect(reactionFrame({ ...base, kind: 'typing' }).frame.row).toBe(7)
       expect(reactionFrame({ ...base, kind: 'listening' }).frame.row).toBe(6)

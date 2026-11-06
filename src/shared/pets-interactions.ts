@@ -1,4 +1,5 @@
 import { PET_ROWS, type PetAnimationState } from './pets'
+import { PET_SCENE_IDS, type PetSceneId } from './pets-ensemble'
 
 export const PET_REACTION_KINDS = ['typing', 'listening', 'speaking', 'transcribing'] as const
 export type PetReactionKind = typeof PET_REACTION_KINDS[number]
@@ -9,6 +10,7 @@ export type PetInteractionPack = {
   providerAliases: string[]
   greeting: { states: PetAnimationState[]; durationMs: number }
   clips: Record<PetReactionKind, PetReactionClip>
+  visits?: { scenes: PetSceneId[]; arrival: 'walk' | 'hop' | 'peek' }
 }
 
 export function defaultPetInteractions(): PetInteractionPack {
@@ -40,8 +42,16 @@ export function parsePetInteractionPack(value: unknown): PetInteractionPack | nu
     if (!record(clip) || !pose(clip.state) || !finite(clip.tempo, .25, 3) || !finite(clip.strength, 0, 1)) return null
     clips[kind] = { state: clip.state, tempo: clip.tempo, strength: clip.strength }
   }
+  let visits: PetInteractionPack['visits']
+  if (value.visits !== undefined) {
+    const input = value.visits
+    if (!record(input) || !Array.isArray(input.scenes) || input.scenes.length < 1 || input.scenes.length > 8 ||
+      !input.scenes.every((id) => (PET_SCENE_IDS as readonly unknown[]).includes(id)) ||
+      new Set(input.scenes).size !== input.scenes.length || !(['walk', 'hop', 'peek'] as readonly unknown[]).includes(input.arrival)) return null
+    visits = { scenes: [...input.scenes] as PetSceneId[], arrival: input.arrival as NonNullable<PetInteractionPack['visits']>['arrival'] }
+  }
   return { version: 1, modelAliases: [...value.modelAliases], providerAliases: [...value.providerAliases],
-    greeting: { states: [...value.greeting.states], durationMs: value.greeting.durationMs }, clips }
+    greeting: { states: [...value.greeting.states], durationMs: value.greeting.durationMs }, clips, ...(visits ? { visits } : {}) }
 }
 
 export const PET_PRESENCE_TTL_MS = 1800

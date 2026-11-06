@@ -1,3 +1,5 @@
+import { parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
+import { PET_SCENE_IDS, type PetSceneId } from '../../shared/pets-ensemble'
 import { parsePetPresenceSignal, type PetPresenceSignal } from '../../shared/pets-interactions'
 import { parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import {
@@ -25,6 +27,10 @@ import { petSenderAllowed } from './pet-protocol'
 export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 'main' | 'overlay' | 'other' }
 
 export type PetIpcApi = {
+  setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings>
+  requestPetVisit(scene?: PetSceneId): Promise<void>
+  dismissPetVisit(): Promise<void>
+  acknowledgeVisitRequest(id: string): void
   updatePresence(senderId: number, signal: PetPresenceSignal): void
   setPetReactionsEnabled(enabled: boolean): Promise<PetSettings>
   setPetEnsemble(settings: PetEnsembleSettings): Promise<PetSettings>
@@ -54,7 +60,7 @@ export type PetIpcApi = {
   takePendingSettings(): Promise<boolean>
   openMainWindow(): void
   openPetSettings(): void
-  closeOverlay(): void
+  closeOverlay(): Promise<void> | void
   completeFollowUp(requestId: string, result: PetActionResult): void
   startChat(prompt: string): Promise<PetActionResult>
   getVoiceInputAvailable(): Promise<boolean>
@@ -71,7 +77,26 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
   const overlay = (event: PetIpcEvent) => {
     if (!api.allows(event, ['overlay'])) throw new Error('pet overlay ipc is limited to the pet window')
   }
+  const controls = (event: PetIpcEvent): void => {
+    if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet controls ipc is limited to pet windows')
+  }
   return {
+    [PET_IPC.setPetVisitPreferences]: async (event, input) => {
+      controls(event)
+      const value = parsePetVisitPreferences(input)
+      if (!value) throw new Error('invalid pet visit preferences')
+      return api.setPetVisitPreferences(value)
+    },
+    [PET_IPC.requestPetVisit]: async (event, scene) => {
+      controls(event)
+      if (scene !== undefined && !(PET_SCENE_IDS as readonly unknown[]).includes(scene)) throw new Error('invalid visit scene')
+      await api.requestPetVisit(scene as PetSceneId | undefined)
+    },
+    [PET_IPC.dismissPetVisit]: async (event) => { controls(event); await api.dismissPetVisit() },
+    [PET_IPC.acknowledgeVisitRequest]: (event, id) => {
+      overlay(event)
+      if (typeof id === 'string' && id.length <= 80) api.acknowledgeVisitRequest(id)
+    },
     [PET_IPC.updatePetPresence]: (event, input) => {
       if (!api.allows(event, ['main', 'overlay'])) return
       const parsed = parsePetPresenceSignal(input)
@@ -162,7 +187,7 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     [PET_IPC.settingsPending]: async (event) => { main(event); return api.takePendingSettings() },
     [PET_IPC.overlayOpenMain]: (event) => { overlay(event); api.openMainWindow() },
     [PET_IPC.overlayOpenSettings]: (event) => { overlay(event); api.openPetSettings() },
-    [PET_IPC.overlayClose]: async (event) => { overlay(event); api.closeOverlay() },
+    [PET_IPC.overlayClose]: async (event) => { overlay(event); await api.closeOverlay() },
     [PET_IPC.overlayChat]: async (event, prompt) => {
       overlay(event)
       if (typeof prompt !== 'string' || !prompt.trim() || prompt.trim().length > 16_000) {

@@ -1,6 +1,7 @@
+import { defaultPetVisits, parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
 import { RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
-import { defaultPetEnsemble, parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
+import { normalizeSavedPetEnsemble, parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { createHash, randomUUID } from 'node:crypto'
 import { access, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -106,6 +107,14 @@ export class PetStore {
     return this.mutate(async () => { this.settings.reactionsEnabled = enabled })
   }
 
+  async setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings> {
+    return this.mutate(async () => {
+      const preferences = parsePetVisitPreferences(input)
+      if (!preferences) throw new Error('invalid pet visit preferences')
+      this.settings.visits = preferences
+    })
+  }
+
   async setPetEnsemble(ensemble: PetEnsembleSettings): Promise<PetSettings> {
     return this.mutate(async () => {
       const parsed = parsePetEnsemble(ensemble)
@@ -113,7 +122,7 @@ export class PetStore {
       if (parsed.enabled && parsed.members.some((id) => !this.catalog.has(petIdForSource('kun-builtin', id)))) {
         throw new Error('an ensemble member is unavailable; refresh the pet library')
       }
-      this.settings.ensemble = parsed
+      this.settings.ensemble = normalizeSavedPetEnsemble(parsed)
     })
   }
 
@@ -416,7 +425,8 @@ function normalizeSettings(value: unknown): PetSettings {
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
     ...(typeof candidate.reactionsEnabled === 'boolean' ? { reactionsEnabled: candidate.reactionsEnabled } : {}),
-    ...(candidate.ensemble !== undefined ? { ensemble: parsePetEnsemble(candidate.ensemble) ?? defaultPetEnsemble() } : {}),
+    ...(candidate.ensemble !== undefined ? { ensemble: normalizeSavedPetEnsemble(candidate.ensemble) } : {}),
+    ...(candidate.visits !== undefined ? { visits: parsePetVisitPreferences(candidate.visits) ?? defaultPetVisits() } : {}),
     welcomedPetIds: stringList(candidate.welcomedPetIds),
     dismissedNotificationKeys: boundDismissedKeys(stringList(candidate.dismissedNotificationKeys)),
     placementByDisplay: placement && typeof placement === 'object' && !Array.isArray(placement)

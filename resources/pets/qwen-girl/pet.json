@@ -44,6 +44,15 @@
         "tempo": 0.7,
         "strength": 0.3
       }
+    },
+    "visits": {
+      "scenes": [
+        "wave-relay",
+        "gift",
+        "brainstorm",
+        "high-five"
+      ],
+      "arrival": "walk"
     }
   }
 }
