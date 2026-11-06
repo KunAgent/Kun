@@ -76,6 +76,10 @@ export function refreshWardrobe(): Promise<void> {
   return inflight
 }
 const subscribe = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener) } }
+/** Read-only observers share the existing mirror; they never roll, open or stash drops. */
+export const wardrobeSnapshot = (): Readonly<WardrobeSnapshot> => snapshot
+export const subscribeWardrobe = subscribe
+
 export function useWardrobe(active = true): WardrobeSnapshot {
   const state = useSyncExternalStore(subscribe, () => snapshot, () => snapshot)
   useEffect(() => {

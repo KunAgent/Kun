@@ -1,4 +1,5 @@
 import type { PetSummary } from '@shared/pets'
+import { defaultPetBottleRecipe, PET_BOTTLE_BATCH_LIMIT, PET_BOTTLE_TTL_MS, type PetBottleRecipe } from '@shared/pets-bottle'
 import { PET_SCENE_IDS, type PetSceneId } from '@shared/pets-ensemble'
 import { PET_VISIT_ARRIVAL_MS, PET_VISIT_COOLDOWN_MS, PET_VISIT_DEPARTURE_MS, PET_VISIT_REQUEST_TTL_MS,
   type PetVisit, type PetVisitPreferences, type PetVisitReason, type PetVisitRequest } from '@shared/pets-visits'
@@ -15,6 +16,8 @@ export type PetVisitContext = {
   modelPetId: string | null
   modelChangedAt: number
   completedKeys: string[]
+  eventsEnabled?: boolean
+  bottleRecipe?: PetBottleRecipe
 }
 
 const INTERVALS = { quiet: [8 * 60_000, 14 * 60_000], balanced: [4 * 60_000, 7 * 60_000], lively: [2 * 60_000, 4 * 60_000] } as const
@@ -41,6 +44,8 @@ export class PetVisitDirector {
   private recentScenes: PetSceneId[] = []
   private automaticStarts: number[] = []
   private sequence = 0
+  private pendingBottle: { count: number; expiresAt: number } | null = null
+  private bottleCooldownUntil = 0
 
   constructor(private readonly random = Math.random) {}
 
@@ -52,6 +57,7 @@ export class PetVisitDirector {
       this.primaryId = context.primaryId
       this.current = null
       this.pending = null
+      this.pendingBottle = null
       this.lastModelAt = context.modelChangedAt
       this.completed = new Set(context.completedKeys)
       this.inputSince = null
@@ -79,9 +85,13 @@ export class PetVisitDirector {
     const guests = this.guests(context)
     if (this.current) {
       const unavailable = this.current.guestIds.some((id) => !guests.some((pet) => pet.id === id))
-      if (unavailable || (this.current.reason !== 'manual' &&
+      if (this.current.reason === 'bottle') {
+        if (context.eventsEnabled === false || context.blocked || context.working || context.inputActive) this.leave(now)
+      } else if (unavailable || (this.current.reason !== 'manual' &&
         (!context.preferences.enabled || context.reduced || context.blocked || context.working || context.inputActive))) this.leave(now)
     }
+    if (this.pendingBottle && (now >= this.pendingBottle.expiresAt || context.eventsEnabled === false)) this.pendingBottle = null
+    if (this.pendingBottle && !blocked && !this.current && now >= this.bottleCooldownUntil) this.beginBottle(context, now)
     if (context.modelChangedAt !== this.lastModelAt) {
       this.lastModelAt = context.modelChangedAt
       if (this.current?.reason === 'model') this.leave(now)
@@ -116,14 +126,37 @@ export class PetVisitDirector {
     if (this.requests.has(request.id)) return this.current
     this.requests.add(request.id)
     while (this.requests.size > 64) this.requests.delete(this.requests.values().next().value!)
+    if (request.kind === 'clear-bottle') {
+      this.pendingBottle = null
+      if (this.current?.reason === 'bottle') this.current = null
+      return this.current
+    }
     if (request.kind === 'dismiss') {
       this.pending = null
+      this.pendingBottle = null
       this.leave(now)
       this.cooldownUntil = now + PET_VISIT_COOLDOWN_MS
       this.nextRandomAt = now + this.interval(context)
       return this.current
     }
     if (now - request.createdAt > PET_VISIT_REQUEST_TTL_MS || request.createdAt > now + 1000 || !context.visible || !context.primaryId) return this.current
+    if (request.kind === 'bottle') {
+      const count = request.bottleCount
+      if (context.eventsEnabled === false || !Number.isInteger(count) || !count || count < 1 || count > PET_BOTTLE_BATCH_LIMIT) return this.current
+      this.pending = null
+      if (this.current?.reason === 'bottle') {
+        this.current = { ...this.current, bottleCount: Math.min(PET_BOTTLE_BATCH_LIMIT, (this.current.bottleCount ?? 1) + count) }
+        return this.current
+      }
+      this.pendingBottle = { count: Math.min(PET_BOTTLE_BATCH_LIMIT, count + (this.pendingBottle?.count ?? 0)),
+        expiresAt: Math.min(this.pendingBottle?.expiresAt ?? Infinity, request.createdAt + PET_BOTTLE_TTL_MS) }
+      if (this.current && this.current.reason !== 'manual') this.leave(now)
+      if (!this.current && !context.blocked && !context.inputActive && !context.working && now >= this.quietUntil && now >= this.bottleCooldownUntil) {
+        this.beginBottle(context, now)
+      }
+      return this.current
+    }
+    this.pendingBottle = null
     this.begin(context, 'manual', now, request.scene)
     return this.current
   }
@@ -165,6 +198,19 @@ export class PetVisitDirector {
     this.cooldownUntil = this.current.endsAt + PET_VISIT_COOLDOWN_MS
     this.nextRandomAt = this.current.endsAt + this.interval(context)
     if (reason !== 'manual') this.automaticStarts.push(now)
+  }
+
+  private beginBottle(context: PetVisitContext, now: number): void {
+    if (!this.pendingBottle || !context.primaryId) return
+    const duration = context.reduced ? 3000 : (context.bottleRecipe ?? defaultPetBottleRecipe()).durationMs
+    this.current = { id: ++this.sequence, primaryId: context.primaryId, guestIds: [], reason: 'bottle', scene: 'gift',
+      bottleCount: this.pendingBottle.count, startedAt: now, playUntil: now + duration - 900,
+      plannedPlayUntil: now + duration - 900, endsAt: now + duration, seed: this.random() }
+    this.pendingBottle = null
+    this.pending = null
+    this.bottleCooldownUntil = this.current.endsAt + 20_000
+    this.cooldownUntil = Math.max(this.cooldownUntil, this.current.endsAt + PET_VISIT_COOLDOWN_MS)
+    this.nextRandomAt = this.current.endsAt + this.interval(context)
   }
 
   private leave(now: number): void {

@@ -31,7 +31,8 @@ export function usePetVisits(input: {
       inputActive: Boolean(value.presence.input && value.presence.input.expiresAt > now),
       modelPetId: petForModel(value.presence.model, pets)?.id ?? null,
       modelChangedAt: value.presence.modelChangedAt,
-      completedKeys: work.filter((item) => item.status === 'review' && now - item.updatedAtMs < 20_000).map((item) => item.key)
+      completedKeys: work.filter((item) => item.status === 'review' && now - item.updatedAtMs < 20_000).map((item) => item.key),
+      eventsEnabled: value.bootstrap?.reactionsEnabled !== false, bottleRecipe: value.bootstrap?.interactions?.bottle
     }
   }
   const contextRef = useRef(context)
@@ -40,7 +41,7 @@ export function usePetVisits(input: {
     if (seenRequests.current.has(value.id)) return
     pendingRequest.current = value
     const current = contextRef.current(), now = Date.now()
-    if (value.kind === 'invite' && (!current.visible || (value.primaryId && value.primaryId !== current.primaryId)) &&
+    if ((value.kind === 'invite' || value.kind === 'bottle') && (!current.visible || (value.primaryId && value.primaryId !== current.primaryId)) &&
       now - value.createdAt < PET_VISIT_REQUEST_TTL_MS) return
     pendingRequest.current = null
     seenRequests.current.add(value.id)

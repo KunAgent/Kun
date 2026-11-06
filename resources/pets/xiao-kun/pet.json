@@ -46,6 +46,12 @@
         "chase"
       ],
       "arrival": "hop"
+    },
+    "bottle": {
+      "catchStyle": "careful",
+      "inspectState": "waiting",
+      "celebrateState": "jumping",
+      "durationMs": 8400
     }
   }
 }

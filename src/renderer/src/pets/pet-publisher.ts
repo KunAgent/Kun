@@ -1,3 +1,4 @@
+import { startPetBottlePublisher } from './pet-bottle-publisher'
 import { startPetPresencePublisher } from './pet-presence-publisher'
 import type { ActivityRow } from '@shared/activity-row'
 import { showWorkbenchFlash } from '../components/rooms/workbench-flash'
@@ -36,6 +37,7 @@ export function startPetActivityPublisher(): void {
   if (stopPublisher || typeof window === 'undefined' || !window.kunGui?.pets) return
   const pets = window.kunGui.pets
   const stopPresence = startPetPresencePublisher(pets)
+  const stopBottles = startPetBottlePublisher(pets)
   let ready = true
   let overlayOpen = false
   let active = true
@@ -166,6 +168,7 @@ export function startPetActivityPublisher(): void {
   openPetSettings()
   stopPublisher = () => {
     stopPresence()
+    stopBottles()
     active = false
     unsubscribeActivity()
     unsubscribeChat()

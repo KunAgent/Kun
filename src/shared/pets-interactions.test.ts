@@ -13,6 +13,9 @@ describe('declarative pet interaction packages', () => {
     }
     expect(parsePetInteractionPack({ ...pack, visits: { scenes: ['execute'], arrival: 'walk' } })).toBeNull()
     expect(parsePetInteractionPack({ ...pack, visits: { scenes: ['tea'], arrival: { toString: 'walk' } } })).toBeNull()
+    expect(parsePetInteractionPack({ ...pack, bottle: { catchStyle: 'careful', inspectState: 'waiting', celebrateState: 'jumping', durationMs: 8400 } })?.bottle?.catchStyle).toBe('careful')
+    expect(parsePetInteractionPack({ ...pack, bottle: { catchStyle: 'careful', inspectState: 'execute', celebrateState: 'jumping', durationMs: 8400 } })).toBeNull()
+    expect(parsePetInteractionPack({ ...pack, bottle: { catchStyle: 'careful', inspectState: 'waiting', celebrateState: 'jumping', durationMs: Infinity } })).toBeNull()
   })
 
   it('validates input telemetry and strips text, audio and arbitrary fields', () => {

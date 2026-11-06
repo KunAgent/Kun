@@ -1,3 +1,4 @@
+import { PetBottleStage } from './pet-bottle-stage'
 import type { ButtonHTMLAttributes, ReactElement } from 'react'
 import { X } from 'lucide-react'
 import { PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetOverlayBootstrap, type PetSummary } from '@shared/pets'
@@ -9,11 +10,17 @@ import { samplePetVisit } from './pet-visit-motion'
 import { PetMotifIcon } from './pet-motif-icon'
 import './pet-visits.css'
 
-export function PetVisitStage(props: {
+export type PetVisitStageProps = {
   visit: PetVisit; pet: PetOverlayBootstrap; pets: PetSummary[]; width: number; height: number
   primaryOrigin: { x: number; y: number }; mascotWidth: number; language: string
   actorEvents: ButtonHTMLAttributes<HTMLButtonElement>; onDismiss: () => void
-}): ReactElement {
+}
+
+export function PetVisitStage(props: PetVisitStageProps): ReactElement {
+  return props.visit.reason === 'bottle' ? <PetBottleStage {...props} /> : <PetFriendVisitStage {...props} />
+}
+
+function PetFriendVisitStage(props: PetVisitStageProps): ReactElement {
   const { visit, pet, pets, language } = props
   const { elapsed, reduced } = usePetAnimationClock(String(visit.id), false)
   const currentTime = Math.max(Date.now(), visit.startedAt + elapsed)

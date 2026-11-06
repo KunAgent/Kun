@@ -1,8 +1,11 @@
 import type { PetSceneId } from './pets-ensemble'
 
 export type PetVisitPreferences = { enabled: boolean; frequency: 'quiet' | 'balanced' | 'lively' }
-export type PetVisitReason = 'random' | 'model' | 'celebration' | 'break' | 'manual'
-export type PetVisitRequest = { id: string; kind: 'invite' | 'dismiss'; createdAt: number; primaryId?: string; scene?: PetSceneId }
+export type PetVisitReason = 'random' | 'model' | 'celebration' | 'break' | 'manual' | 'bottle'
+export type PetVisitRequest = {
+  id: string; kind: 'invite' | 'dismiss' | 'bottle' | 'clear-bottle'; createdAt: number
+  primaryId?: string; scene?: PetSceneId; bottleCount?: number
+}
 export type PetVisit = {
   id: number
   primaryId: string
@@ -14,6 +17,7 @@ export type PetVisit = {
   plannedPlayUntil: number
   endsAt: number
   seed: number
+  bottleCount?: number
 }
 
 export const PET_VISIT_ARRIVAL_MS = 1600

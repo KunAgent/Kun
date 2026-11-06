@@ -1,5 +1,6 @@
 import { PET_ROWS, type PetAnimationState } from './pets'
 import { PET_SCENE_IDS, type PetSceneId } from './pets-ensemble'
+import type { PetBottleRecipe } from './pets-bottle'
 
 export const PET_REACTION_KINDS = ['typing', 'listening', 'speaking', 'transcribing'] as const
 export type PetReactionKind = typeof PET_REACTION_KINDS[number]
@@ -11,6 +12,7 @@ export type PetInteractionPack = {
   greeting: { states: PetAnimationState[]; durationMs: number }
   clips: Record<PetReactionKind, PetReactionClip>
   visits?: { scenes: PetSceneId[]; arrival: 'walk' | 'hop' | 'peek' }
+  bottle?: PetBottleRecipe
 }
 
 export function defaultPetInteractions(): PetInteractionPack {
@@ -50,8 +52,17 @@ export function parsePetInteractionPack(value: unknown): PetInteractionPack | nu
       new Set(input.scenes).size !== input.scenes.length || !(['walk', 'hop', 'peek'] as readonly unknown[]).includes(input.arrival)) return null
     visits = { scenes: [...input.scenes] as PetSceneId[], arrival: input.arrival as NonNullable<PetInteractionPack['visits']>['arrival'] }
   }
+  let bottle: PetBottleRecipe | undefined
+  if (value.bottle !== undefined) {
+    const input = value.bottle
+    if (!record(input) || !(['careful', 'bounce'] as readonly unknown[]).includes(input.catchStyle) ||
+      !pose(input.inspectState) || !pose(input.celebrateState) || !finite(input.durationMs, 6000, 12000)) return null
+    bottle = { catchStyle: input.catchStyle as PetBottleRecipe['catchStyle'], inspectState: input.inspectState,
+      celebrateState: input.celebrateState, durationMs: input.durationMs }
+  }
   return { version: 1, modelAliases: [...value.modelAliases], providerAliases: [...value.providerAliases],
-    greeting: { states: [...value.greeting.states], durationMs: value.greeting.durationMs }, clips, ...(visits ? { visits } : {}) }
+    greeting: { states: [...value.greeting.states], durationMs: value.greeting.durationMs }, clips,
+    ...(visits ? { visits } : {}), ...(bottle ? { bottle } : {}) }
 }
 
 export const PET_PRESENCE_TTL_MS = 1800

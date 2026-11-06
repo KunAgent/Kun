@@ -58,6 +58,31 @@ async function copyDefault() {
 }
 
 describe('desktop pet startup', () => {
+  it('delivers a fresh bottle once without changing the resident, opening the overlay or saving a reward', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const frame = {}, main = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }, overlay = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const initial = await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8')
+    const notify = host.handlers.get(PET_IPC.notifyPetBottleDrop)!
+    const signal = { dropIds: ['new-drop'], occurredAt: Date.now() }
+    const opens = host.open.mock.calls.length
+    host.send.mockClear()
+    await notify(main, signal)
+    expect(host.open).toHaveBeenCalledTimes(opens)
+    const boot = await host.handlers.get(PET_IPC.overlayBootstrap)!(overlay) as PetOverlayBootstrap
+    expect(boot.visitRequest).toMatchObject({ kind: 'bottle', bottleCount: 1, primaryId: 'kun:xiao-kun' })
+    expect(boot.petId).toBe('kun:xiao-kun')
+    expect(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8')).toBe(initial)
+    await host.handlers.get(PET_IPC.acknowledgeVisitRequest)!(overlay, boot.visitRequest!.id)
+    host.send.mockClear(); await notify(main, signal)
+    expect(host.send).not.toHaveBeenCalled()
+    await notify(main, null)
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayVisitRequested, expect.objectContaining({ kind: 'clear-bottle' }))
+  })
+
   it('delivers one-off invitations without persisting a team and clears acknowledged or closed-window requests', async () => {
     await copyDefault()
     await cp(path.resolve('resources/pets/gpt-girl'), path.join(host.root, 'resources', 'pets', 'gpt-girl'), { recursive: true })

@@ -72,6 +72,29 @@ They expire after 1.8 seconds without a heartbeat and are never persisted.
 Disabling input animations still lets the visit scheduler avoid interrupting
 active input. No extra microphone capture or model request is started for pets.
 
+## Bottle discoveries
+
+A fresh `wardrobe.dropped` receipt can trigger a short solo discovery scene:
+notice the falling sealed bottle, walk over, catch it, inspect it, celebrate,
+and return to the saved position. Xiao Kun keeps the original logo-based white
+eyes and black pupils; its careful pickup, head tilt and hop provide the extra
+expression. iKun uses a playful toss-and-catch variation. The sprite artwork is
+unchanged.
+
+The workbench verifies the drop against its read-only wardrobe mirror before
+sending only opaque drop IDs and time to Main. The overlay receives only a
+count and a presentation request. No rarity, contents, rewards, open/stash
+operation or extra drop roll is involved. The existing sealed-bottle artwork
+is used throughout; rewards are still opened from the wardrobe by the user.
+
+Shelf hydration, history replay, guest login hints, already opened/stashed
+bottles, quiet notices and focus mode do not trigger the scene. Multiple live
+drops are coalesced without extending the animation. A single cue can wait up
+to 15 seconds for a quiet moment, then expires; hidden windows never reopen for
+it. Input interrupts the scene, and account/presentation changes clear it.
+Disabling event feedback suppresses it; reduced-motion mode shows a brief still
+notice. Pausing random friend visits leaves these real-event reactions enabled.
+
 ## Package recipes
 
 An optional `interactions` object in `pet.json` supplies validated data:
@@ -81,6 +104,8 @@ An optional `interactions` object in `pet.json` supplies validated data:
 - `greeting.states` and `durationMs` preserve the package's greeting recipe.
 - `clips.typing`, `clips.listening`, `clips.speaking`, and `clips.transcribing`
   each select a `state`, `tempo` (0.25-3), and `strength` (0-1).
+- An optional `bottle` recipe sets `catchStyle` (`careful` or `bounce`),
+  `inspectState`, `celebrateState`, and a bounded `durationMs` (6000-12000).
 - `visits.scenes` lists one to eight preferred scene IDs; `visits.arrival` is
   `walk`, `hop`, or `peek`. Claude favors reading and tea, Kimi favors stargazing,
   iKun favors rhythm games, and MiMo favors inventions and debugging.

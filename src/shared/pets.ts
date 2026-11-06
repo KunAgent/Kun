@@ -1,3 +1,4 @@
+import type { PetBottleDrop } from './pets-bottle'
 import type { PetVisitPreferences, PetVisitRequest } from './pets-visits'
 import type { PetSceneId } from './pets-ensemble'
 import type { PetInteractionPack, PetPresenceSignal, PetPresenceSnapshot } from './pets-interactions'
@@ -167,6 +168,7 @@ export type PetOverlayBounds = { width: number; height: number; anchorX: number;
 export type ScreenPoint = { x: number; y: number }
 
 export type PetDesktopBridge = {
+  notifyPetBottleDrop: (drop: PetBottleDrop | null) => void
   setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
   requestPetVisit: (scene?: PetSceneId) => Promise<void>
   dismissPetVisit: () => Promise<void>
@@ -273,6 +275,7 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 }
 
 export const PET_IPC = {
+  notifyPetBottleDrop: 'kun:pets:bottle-drop',
   setPetVisitPreferences: 'kun:pets:visits:preferences',
   requestPetVisit: 'kun:pets:visits:request',
   dismissPetVisit: 'kun:pets:visits:dismiss',

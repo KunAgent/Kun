@@ -1,3 +1,4 @@
+import { parsePetBottleDrop, type PetBottleDrop } from '../../shared/pets-bottle'
 import { parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { PET_SCENE_IDS, type PetSceneId } from '../../shared/pets-ensemble'
 import { parsePetPresenceSignal, type PetPresenceSignal } from '../../shared/pets-interactions'
@@ -27,6 +28,7 @@ import { petSenderAllowed } from './pet-protocol'
 export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 'main' | 'overlay' | 'other' }
 
 export type PetIpcApi = {
+  notifyBottleDrop(drop: PetBottleDrop | null): void
   setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings>
   requestPetVisit(scene?: PetSceneId): Promise<void>
   dismissPetVisit(): Promise<void>
@@ -81,6 +83,12 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet controls ipc is limited to pet windows')
   }
   return {
+    [PET_IPC.notifyPetBottleDrop]: (event, input) => {
+      if (!api.allows(event, ['main'])) return
+      if (input === null) { api.notifyBottleDrop(null); return }
+      const value = parsePetBottleDrop(input)
+      if (value) api.notifyBottleDrop(value)
+    },
     [PET_IPC.setPetVisitPreferences]: async (event, input) => {
       controls(event)
       const value = parsePetVisitPreferences(input)

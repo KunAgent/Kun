@@ -46,6 +46,12 @@
         "conga"
       ],
       "arrival": "hop"
+    },
+    "bottle": {
+      "catchStyle": "bounce",
+      "inspectState": "waiting",
+      "celebrateState": "jumping",
+      "durationMs": 7800
     }
   }
 }

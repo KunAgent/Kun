@@ -8,6 +8,7 @@ function listen(channel: string, handler: () => void): () => void {
 }
 
 export const petsPreloadApi: PetDesktopBridge = {
+  notifyPetBottleDrop: (drop) => ipcRenderer.send(PET_IPC.notifyPetBottleDrop, drop),
   setPetVisitPreferences: (input) => ipcRenderer.invoke(PET_IPC.setPetVisitPreferences, input),
   requestPetVisit: (scene) => ipcRenderer.invoke(PET_IPC.requestPetVisit, scene),
   dismissPetVisit: () => ipcRenderer.invoke(PET_IPC.dismissPetVisit),

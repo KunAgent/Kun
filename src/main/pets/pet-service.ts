@@ -1,3 +1,5 @@
+import { PetBottleGate } from './pet-bottle-gate'
+import type { PetBottleDrop } from '../../shared/pets-bottle'
 import { defaultPetVisits, type PetVisitPreferences, type PetVisitRequest } from '../../shared/pets-visits'
 import type { PetSceneId } from '../../shared/pets-ensemble'
 import type { PetPresenceSignal } from '../../shared/pets-interactions'
@@ -60,6 +62,7 @@ class DesktopPetRuntime implements DesktopPets {
   private controller: PetWindowController | null = null
   private visitRequest: PetVisitRequest | null = null
   private visitSequence = 0
+  private readonly bottleGate = new PetBottleGate()
   private readonly presence = new PetPresence((snapshot) => this.controller?.send(PET_IPC.overlayPresence, snapshot))
 
   constructor(private readonly store: PetStore, private readonly options: DesktopPetOptions) {}
@@ -123,7 +126,7 @@ class DesktopPetRuntime implements DesktopPets {
     this.controller.setSpriteWidth(this.store.getSettings().mascotWidthPx)
     const api = this.api()
     for (const [channel, handler] of Object.entries(petIpcHandlers(api))) {
-      if (channel === PET_IPC.acknowledgeVisitRequest || channel === PET_IPC.updatePetPresence || channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel === PET_IPC.chatResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayOpenSettings || channel === PET_IPC.overlayDragCancel) {
+      if (channel === PET_IPC.notifyPetBottleDrop || channel === PET_IPC.acknowledgeVisitRequest || channel === PET_IPC.updatePetPresence || channel === PET_IPC.updateActivity || channel === PET_IPC.followUpResult || channel === PET_IPC.chatResult || channel.startsWith('kun:pets:overlay:drag') || channel === PET_IPC.overlayPointer || channel === PET_IPC.overlayResize || channel === PET_IPC.overlayBounds || channel === PET_IPC.overlayOpenMain || channel === PET_IPC.overlayOpenSettings || channel === PET_IPC.overlayDragCancel) {
         ipcMain.on(channel, (event, ...args) => { void handler(toEvent(event, this.classify(event.sender.id)), ...args) })
       } else {
         ipcMain.handle(channel, (event, ...args) => handler(toEvent(event, this.classify(event.sender.id)), ...args))
@@ -147,6 +150,17 @@ class DesktopPetRuntime implements DesktopPets {
 
   private api() {
     return {
+      notifyBottleDrop: (drop: PetBottleDrop | null) => {
+        const accepted = drop === null ? null : this.bottleGate.accept(drop)
+        const settings = this.store.getSettings()
+        if (!settings.overlayOpen || !settings.selectedPetId || !this.controller?.isOpen()) return
+        if (drop !== null && (!accepted || settings.reactionsEnabled === false)) return
+        this.visitRequest = { id: `bottle-${Date.now()}-${++this.visitSequence}`,
+          kind: accepted ? 'bottle' : 'clear-bottle', createdAt: accepted?.occurredAt ?? Date.now(),
+          primaryId: settings.selectedPetId, ...(accepted ? { bottleCount: accepted.count } : {}) }
+        this.controller.send(PET_IPC.overlayVisitRequested, this.visitRequest)
+        this.controller.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
+      },
       updatePresence: (senderId: number, signal: PetPresenceSignal) => {
         this.presence.update(senderId, signal)
       },
