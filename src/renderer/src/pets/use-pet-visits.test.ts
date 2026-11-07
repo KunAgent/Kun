@@ -35,7 +35,7 @@ describe('visit delivery lifecycle', () => {
     expect(ack).toHaveBeenCalledExactlyOnceWith('one')
     await act(async () => { deliver(request) })
     expect(ack).toHaveBeenCalledOnce()
-    await act(async () => { vi.advanceTimersByTime(15000) })
+    await act(async () => { vi.advanceTimersByTime(result!.endsAt - Date.now() + 250) })
     expect(result).toBeNull()
     await act(async () => { view.update(createElement(View, { bootstrap: { ...boot, isOpen: true, mascotWidthPx: 128 } })) })
     expect(result).toBeNull(); expect(ack).toHaveBeenCalledOnce()

@@ -1,3 +1,4 @@
+import { PET_SCENES, PET_SCENE_DIRECTORS } from './pet-ensemble-catalog'
 import type { PetSummary } from '@shared/pets'
 import { defaultPetBottleRecipe, PET_BOTTLE_BATCH_LIMIT, PET_BOTTLE_TTL_MS, type PetBottleRecipe } from '@shared/pets-bottle'
 import { PET_SCENE_IDS, type PetSceneId } from '@shared/pets-ensemble'
@@ -174,7 +175,8 @@ export class PetVisitDirector {
     if (preferred && !matching) return
     const recent = new Set(this.recentGuests.slice(-3))
     const fresh = candidates.filter((pet) => !recent.has(pet.id))
-    const first = matching ?? this.pick(fresh.length ? fresh : candidates)
+    const director = requestedScene ? candidates.find((pet) => pet.sourceId === PET_SCENE_DIRECTORS[requestedScene]) : undefined
+    const first = matching ?? director ?? this.pick(fresh.length ? fresh : candidates)
     const guests = [first]
     const sizeRoll = this.random()
     const count = reason === 'model' ? 1 : Math.min(candidates.length, sizeRoll < .65 ? 1 : sizeRoll < .9 ? 2 : 3)
@@ -183,11 +185,14 @@ export class PetVisitDirector {
       const unused = remaining.filter((pet) => !recent.has(pet.id))
       guests.push(this.pick(unused.length ? unused : remaining))
     }
-    const themes = first.interactions?.visits?.scenes ?? CASUAL
+    const residentThemes = context.pets.find((pet) => pet.id === context.primaryId)?.interactions?.visits?.scenes
+    const themes = reason !== 'model' && residentThemes && this.random() < .35
+      ? residentThemes : first.interactions?.visits?.scenes ?? CASUAL
     const availableScenes = themes.filter((scene) => !this.recentScenes.slice(-2).includes(scene))
-    const scene = requestedScene ?? this.pick(availableScenes.length ? availableScenes : themes)
+    const scene = requestedScene ?? (reason === 'model' ? themes[0] : this.pick(availableScenes.length ? availableScenes : themes))
     if (!(PET_SCENE_IDS as readonly string[]).includes(scene)) return
-    const playMs = reason === 'model' ? this.between(3500, 5000) : this.between(6500, 10_000)
+    // Let the complete action and response play; compressed stories looked rushed.
+    const playMs = PET_SCENES[scene].duration
     this.current = { id: ++this.sequence, primaryId: context.primaryId, guestIds: guests.map((pet) => pet.id), reason, scene,
       startedAt: now, playUntil: now + PET_VISIT_ARRIVAL_MS + playMs,
       plannedPlayUntil: now + PET_VISIT_ARRIVAL_MS + playMs,

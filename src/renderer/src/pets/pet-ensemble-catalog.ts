@@ -41,12 +41,12 @@ export const PET_SCENES: Record<PetSceneId, SceneDefinition> = {
   'wave-relay': { title: ['挥手接力', 'Wave relay'], story: ['挥手信号从 Kun 传到每一个伙伴', 'Pass a wave from Kun through the whole crew'], group: 'greet', motif: 'heart', duration: 12000 },
   cheer: { title: ['通关庆祝', 'Victory cheer'], story: ['蓄力、接力欢呼，最后一起跳起来', 'Gather, cheer in sequence, then jump together'], group: 'greet', motif: 'star', duration: 10000 },
   dance: { title: ['Kun 领舞', 'Follow Kun'], story: ['Kun 打拍子，伙伴按各自节奏加入', 'Kun sets the beat; every companion joins in'], group: 'play', motif: 'music', duration: 12000 },
-  'circle-dance': { title: ['星环圆舞', 'Orbit waltz'], story: ['围成星环，交错旋转再回到队形', 'Orbit together, then return to formation'], group: 'play', motif: 'orbit', duration: 14000 },
+  'circle-dance': { title: ['双人小舞步', 'A little duet'], story: ['先邀请，再面对面交换舞步，最后一起鞠躬', 'Invite, mirror each other’s steps, then take a bow'], group: 'play', motif: 'orbit', duration: 14000 },
   conga: { title: ['快乐小火车', 'Companion train'], story: ['跟随 Kun 绕出一条弯弯的队伍', 'Follow Kun along a winding parade route'], group: 'play', motif: 'music', duration: 14000 },
   chase: { title: ['追逐星星', 'Chase the star'], story: ['Kun 放出星星，伙伴轮流追上它', 'Kun releases a star for the crew to chase'], group: 'play', motif: 'star', duration: 12000 },
   race: { title: ['折返接力赛', 'Shuttle relay'], story: ['一人出发、全队助威，传棒再折返', 'One runner at a time, with the crew cheering'], group: 'play', motif: 'ball', duration: 15000 },
   'hide-and-seek': { title: ['躲猫猫', 'Peekaboo'], story: ['Kun 转身数数，伙伴依次探头出现', 'Kun counts while companions peek out in turn'], group: 'play', motif: 'idea', duration: 12000 },
-  leapfrog: { title: ['跳跳波浪', 'Jumping wave'], story: ['从 Kun 开始，一道跳跃波穿过队伍', 'Send a jumping wave across the crew'], group: 'play', motif: 'leaf', duration: 10000 },
+  leapfrog: { title: ['跳过小水洼', 'Hop the puddle'], story: ['一位先跳，另一位让开再跟上，一起庆祝没湿鞋', 'One hops across while the other makes room, then follows'], group: 'play', motif: 'leaf', duration: 10000 },
   exercise: { title: ['课间伸伸腰', 'Stretch break'], story: ['一起伸腰、左右摇摆，再轻轻跳两下', 'Stretch, sway, and finish with gentle jumps'], group: 'play', motif: 'heart', duration: 14000 },
   brainstorm: { title: ['灵感圆桌', 'Idea circle'], story: ['伙伴贡献主题灵感，Kun 收集成一颗星', 'Share signature ideas; Kun gathers them into a star'], group: 'work', motif: 'idea', duration: 16000 },
   coding: { title: ['一起写代码', 'Build together'], story: ['Kun 分工，伙伴轮流构建，最后一起交付', 'Kun assigns roles; the crew builds and delivers'], group: 'work', motif: 'code', duration: 16000 },
@@ -54,7 +54,7 @@ export const PET_SCENES: Record<PetSceneId, SceneDefinition> = {
   review: { title: ['成果评审会', 'Show and tell'], story: ['每个伙伴展示成果，Kun 和大家鼓掌', 'Each companion presents while the others applaud'], group: 'work', motif: 'book', duration: 15000 },
   study: { title: ['围坐读书', 'Reading circle'], story: ['轮流翻书讲故事，大家安静倾听', 'Take turns reading while the crew listens'], group: 'work', motif: 'book', duration: 18000 },
   orchestra: { title: ['AI 小乐团', 'Companion orchestra'], story: ['Kun 指挥，音符依次入场，最后全员合奏', 'Kun conducts individual entries and a full ensemble'], group: 'life', motif: 'music', duration: 16000 },
-  beatbox: { title: ['节拍挑战', 'Rhythm challenge'], story: ['Kun 给节拍，伙伴轮流接招再齐舞', 'Trade rhythmic solos, then dance in sync'], group: 'play', motif: 'ball', duration: 14000 },
+  beatbox: { title: ['默契传球', 'Catch and pass'], story: ['ikun 运球示范，伙伴接住后传回来，接球时轻轻缓冲', 'Dribble, pass, cushion the catch and return the ball'], group: 'play', motif: 'ball', duration: 14000 },
   gift: { title: ['惊喜传礼物', 'Pass the present'], story: ['礼物在伙伴间传递，打开各自主题的惊喜', 'Pass a gift that reveals each companion\'s signature'], group: 'life', motif: 'gift', duration: 16000 },
   tea: { title: ['午后茶话会', 'Afternoon tea'], story: ['Kun 邀大家围坐，伙伴轮流分享茶点', 'Gather around Kun and share a cozy tea break'], group: 'life', motif: 'coffee', duration: 18000 },
   stargazing: { title: ['一起看星空', 'Stargazing'], story: ['伙伴点亮专属星光，最后连成星座', 'Light up signature stars to form a constellation'], group: 'life', motif: 'moon', duration: 16000 },
@@ -63,7 +63,7 @@ export const PET_SCENES: Record<PetSceneId, SceneDefinition> = {
 }
 
 export const PET_SCENE_DIRECTORS: Partial<Record<PetSceneId, BuiltinPetId>> = {
-  orchestra: 'minimax-girl', stargazing: 'kimi-girl', bubbles: 'whale-girl',
+  beatbox: 'ikun', orchestra: 'minimax-girl', stargazing: 'kimi-girl', bubbles: 'whale-girl',
   brainstorm: 'gpt-girl', coding: 'mimo-girl', study: 'claude-girl',
   review: 'glm-girl', tea: 'doubao-girl', gift: 'mistral-girl', 'circle-dance': 'hunyuan-girl'
 }

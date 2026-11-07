@@ -1,3 +1,4 @@
+import { PET_SCENES } from './pet-ensemble-catalog'
 import { describe, expect, it } from 'vitest'
 import type { PetSummary } from '@shared/pets'
 import { defaultPetInteractions } from '@shared/pets-interactions'
@@ -19,6 +20,25 @@ function advance(director: PetVisitDirector, ctx: PetVisitContext, from: number,
 }
 
 describe('occasional pet visits', () => {
+  it('invites the scene’s specialist and gives a model visit its package’s signature story', () => {
+    const scripted = pets.map((pet) => ({ ...pet, interactions: { ...defaultPetInteractions(), visits: {
+      arrival: 'walk' as const, scenes: pet.sourceId === 'claude-girl' ? ['study', 'tea'] as const : ['brainstorm', 'gift'] as const
+    } } })) as unknown as PetSummary[]
+    const ctx = context({ pets: scripted })
+    const manual = new PetVisitDirector(() => 0)
+    const book = manual.request({ id: 'book', kind: 'invite', createdAt: 1000, scene: 'study' }, ctx, 1000)!
+    expect(book.guestIds[0]).toBe('kun:claude-girl')
+    for (const [id, scene] of [['gpt-girl', 'brainstorm'], ['claude-girl', 'study']] as const) {
+      const director = new PetVisitDirector(() => 0)
+      director.update(ctx, 1000)
+      const switched = { ...ctx, modelPetId: `kun:${id}`, modelChangedAt: 2000 }
+      director.update(switched, 2000)
+      const visit = director.update(switched, 3000)!
+      expect(visit.scene).toBe(scene)
+      expect(visit.playUntil - visit.startedAt).toBe(PET_SCENES[scene].duration + 1600)
+    }
+  })
+
   it('starts solo, invites from installed pets without any selection, and returns to solo after one scene', () => {
     const director = new PetVisitDirector(() => 0), ctx = context()
     expect(director.update(ctx, 1000)).toBeNull()
@@ -27,7 +47,8 @@ describe('occasional pet visits', () => {
     expect(visit.reason).toBe('random')
     expect(visit.guestIds).toHaveLength(1)
     expect(visit.guestIds).not.toContain(ctx.primaryId)
-    expect(visit.endsAt - visit.startedAt).toBeLessThanOrEqual(13200)
+    expect(visit.playUntil - visit.startedAt).toBe(PET_SCENES[visit.scene].duration + 1600)
+    expect(visit.endsAt - visit.startedAt).toBeLessThanOrEqual(21200)
     expect(director.update(ctx, visit.endsAt)).toBeNull()
     expect(advance(director, ctx, visit.endsAt + 1000, visit.endsAt + 89000)).toBeNull()
   })

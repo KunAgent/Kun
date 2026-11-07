@@ -32,8 +32,8 @@ export function usePetAnimationPainter(key: string, paused: boolean, paint: PetP
 }
 
 // Avoid reassigning unchanged sprite positions (browsers normalize percentage strings).
-const painted = new WeakMap<HTMLElement, Record<string, string>>()
-export function paintPetStyle(element: HTMLElement | null | undefined, styles: Partial<Record<'transform' | 'opacity' | 'backgroundPosition' | 'zIndex' | 'width' | 'height', string>>): void {
+const painted = new WeakMap<HTMLElement | SVGElement, Record<string, string>>()
+export function paintPetStyle(element: HTMLElement | SVGElement | null | undefined, styles: Partial<Record<'transform' | 'opacity' | 'backgroundPosition' | 'zIndex' | 'width' | 'height', string>>): void {
   if (!element) return
   const previous = painted.get(element) ?? {}
   for (const [key, value] of Object.entries(styles)) {
