@@ -468,6 +468,8 @@ const api = {
     ipcRenderer.invoke('browser-use:control', input),
   navigateBrowserUse: (input) =>
     ipcRenderer.invoke('browser-use:navigate', input),
+  setBrowserUseZoom: (input) =>
+    ipcRenderer.invoke('browser-use:zoom', input),
   stopBrowserUse: (threadId, expectedTurnId) =>
     ipcRenderer.invoke('browser-use:stop', { threadId, expectedTurnId }),
   clearBrowserUse: (threadId, expectedTurnId) =>

@@ -2,6 +2,21 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs'
 import { resolve } from 'path'
 import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
+import type { Plugin } from 'vite'
+
+function downloadedControlBoundary(): Plugin {
+  return {
+    name: 'downloaded-control-boundary',
+    generateBundle(_options, bundle) {
+      for (const chunk of Object.values(bundle)) {
+        if (chunk.type !== 'chunk') continue
+        const embedded = chunk.moduleIds.some(id => /[/\\]node_modules[/\\]@kun[/\\]control-runtime[/\\]/.test(id))
+        const imported = [...chunk.imports, ...chunk.dynamicImports].some(id => id === '@kun/control-runtime' || id.startsWith('@kun/control-runtime/'))
+        if (embedded || imported) this.error(`Downloaded control runtime must not ship in ${chunk.fileName}`)
+      }
+    }
+  }
+}
 
 function copyExcalidrawAssets(): void {
   const from = resolve('node_modules/@excalidraw/excalidraw/dist/prod/fonts')
@@ -25,7 +40,7 @@ function excalidrawAssetsPlugin() {
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), downloadedControlBoundary()],
     build: {
       // electron-vite disables minification by default; enable esbuild so the
       // shipped main-process bundle is smaller without touching externals.
@@ -46,7 +61,7 @@ export default defineConfig({
     }
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), downloadedControlBoundary()],
     build: {
       minify: 'esbuild',
       reportCompressedSize: false,
@@ -62,6 +77,8 @@ export default defineConfig({
           'tray-quota': resolve('src/preload/tray-quota.ts'),
           'pet-overlay': resolve('src/preload/pet-overlay.ts'),
           'remote-desktop-capture': resolve('src/preload/remote-desktop-capture.ts'),
+          'remote-desktop-viewer': resolve('src/preload/remote-desktop-viewer.ts'),
+          'control-viewer-probe': resolve('src/preload/control-viewer-probe.ts'),
           'remote-desktop-indicator': resolve('src/preload/remote-desktop-indicator.ts')
         },
         output: {
@@ -114,10 +131,9 @@ export default defineConfig({
           index: resolve('src/renderer/index.html'),
           'tray-quota': resolve('src/renderer/tray-quota.html'),
           'pet-overlay': resolve('src/renderer/pet-overlay.html'),
-          'remote-desktop-capture': resolve('src/renderer/remote-desktop-capture.html')
         }
       }
     },
-    plugins: [react(), excalidrawAssetsPlugin()]
+    plugins: [react(), excalidrawAssetsPlugin(), downloadedControlBoundary()]
   }
 })

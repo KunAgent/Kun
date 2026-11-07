@@ -6,7 +6,7 @@ const state = (turnId = 'turn-1'): BrowserUseViewState => ({
   contractVersion: 1, capabilityStatus: 'available', sessionId: 'session-1234567890', threadId: 'thread', turnId,
   lifecycle: 'ready', controlOwner: 'agent', visible: false, mounted: false, mode: 'public',
   tabs: [{ id: 'tab', title: '', origin: 'https://example.com', sanitizedUrl: 'https://example.com',
-    active: true, loading: false, canGoBack: false, canGoForward: false }], updatedAt: '2026-11-04T00:00:00Z'
+    active: true, zoomPercent: 100, loading: false, canGoBack: false, canGoForward: false }], updatedAt: '2026-11-04T00:00:00Z'
 })
 beforeEach(() => useAgentBrowserPreviewStore.setState({ byThreadId: {} }))
 

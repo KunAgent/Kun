@@ -6,6 +6,8 @@ export interface AgentBrowserSurface extends BrowserPreviewOwner {
   owner: symbol
   rect: BrowserUseRect
   variant: 'full' | 'pip'
+  visible?: boolean
+  layoutScale?: number
 }
 
 export const useAgentBrowserSurfaceStore = create<{
@@ -22,6 +24,7 @@ export const useAgentBrowserSurfaceStore = create<{
     const before = state.byThreadId[surface.threadId]
     if (before?.owner !== surface.owner) return state
     if (before?.owner === surface.owner && before.variant === surface.variant &&
+      before.visible === surface.visible && before.layoutScale === surface.layoutScale &&
       before.rect.x === surface.rect.x && before.rect.y === surface.rect.y &&
       before.rect.width === surface.rect.width && before.rect.height === surface.rect.height) return state
     return { byThreadId: { ...state.byThreadId, [surface.threadId]: surface } }

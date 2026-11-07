@@ -27,6 +27,14 @@ beforeEach(async () => {
 })
 afterEach(async () => { await rm(directory, { recursive: true, force: true }) })
 
+it('shares first initialization across simultaneous host and controller callers', async () => {
+  const file = join(directory, 'identity.enc')
+  const [host, controller] = await Promise.all([loadIdentity(file), loadIdentity(file)])
+  expect(controller).toEqual(host)
+  expect(storage.encrypt).toHaveBeenCalledTimes(1)
+  expect(await loadIdentity(file)).toEqual(host)
+})
+
 it('keeps a stored identity until an explicit reset, then backs it up encrypted and creates a new private identity', async () => {
   const file = join(directory, 'identity.enc')
   const first = await loadIdentity(file)

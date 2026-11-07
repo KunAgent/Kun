@@ -216,6 +216,7 @@ jobs:
     env:
       # PR validation intentionally uses the afterPack ad-hoc signature only.
       # It never consumes Developer ID or notarization secrets.
+      KUN_MAC_ALLOW_ADHOC: '1'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       # Renderer chunk generation now exceeds the former 5 GiB heap ceiling.
       # Match the 6 GiB budget already exercised by native macOS workspace

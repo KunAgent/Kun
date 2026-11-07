@@ -73,6 +73,7 @@ it('does not let an expected turn bind a legacy session without an active turn',
 it('retires the previous turn-bound mount on turnover and protects a later remount from old cleanup', async () => {
   const f = fixture(), setVisible = vi.fn()
   const view = { setVisible, setBounds: vi.fn(), webContents: { setIgnoreMenuShortcuts: vi.fn(), isDestroyed: () => false,
+    getZoomFactor: () => 1,
     stop: vi.fn(), close: vi.fn(), getURL: () => 'https://example.com/', getTitle: () => 'Example',
     navigationHistory: { canGoBack: () => false, canGoForward: () => false },
     session: { closeAllConnections: async () => {}, clearCache: async () => {}, clearStorageData: async () => {} } } } as unknown as WebContentsView

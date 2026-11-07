@@ -27,6 +27,7 @@ vi.mock('node:os', () => ({ hostname: () => 'desktop',
 vi.mock('../ipc/app-ipc-handler-utils', () => ({ assertTrustedWorkbenchSender: mock.trusted }))
 vi.mock('../logger', () => ({ logInfo: mock.info, logWarn: mock.warn }))
 vi.mock('./files', () => ({ transferFiles: vi.fn() }))
+vi.mock('../computer-access/register', () => ({ registerComputerAccess: vi.fn() }))
 vi.mock('./share-file-services', () => ({ transferSharedFiles: vi.fn() }))
 vi.mock('./identity', () => ({ loadIdentity: vi.fn(), resetIdentity: mock.resetIdentity }))
 vi.mock('./socket', () => ({ MobileLinkSockets: class { open = vi.fn(); dispose = vi.fn() } }))

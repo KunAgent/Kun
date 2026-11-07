@@ -18,7 +18,17 @@ async function requireSecureStorage(): Promise<void> {
   )
     throw new Error('SECURE_STORAGE_REQUIRED')
 }
-export async function loadIdentity(path: string): Promise<DeviceIdentity> {
+const identityWrites = new Map<string, Promise<DeviceIdentity>>()
+/** The host and controller can initialize concurrently without creating two host identities. */
+export function loadIdentity(path: string): Promise<DeviceIdentity> {
+  const pending = identityWrites.get(path)
+  if (pending) return pending
+  const task = readIdentity(path)
+  identityWrites.set(path, task)
+  void task.finally(() => { if (identityWrites.get(path) === task) identityWrites.delete(path) }).catch(() => {})
+  return task
+}
+async function readIdentity(path: string): Promise<DeviceIdentity> {
   await requireSecureStorage()
   try {
     const bytes = await readFile(path)

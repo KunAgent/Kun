@@ -54,6 +54,7 @@ import type {
   BrowserUseDecisionInput,
   BrowserUseMountInput,
   BrowserUseNavigationInput,
+  BrowserUseZoomInput,
   BrowserUseViewState
 } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
@@ -660,6 +661,7 @@ export type KunGuiApi = KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & Pro
   decideBrowserUseAction: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
   setBrowserUseControl: (input: BrowserUseControlInput) => Promise<BrowserUseViewState>
   navigateBrowserUse: (input: BrowserUseNavigationInput) => Promise<BrowserUseViewState>
+  setBrowserUseZoom: (input: BrowserUseZoomInput) => Promise<BrowserUseViewState>
   stopBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   clearBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   onBrowserUseState: (handler: (state: BrowserUseViewState) => void) => () => void

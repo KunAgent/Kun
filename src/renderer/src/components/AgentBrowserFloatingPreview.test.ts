@@ -24,6 +24,7 @@ function state(overrides: Partial<BrowserUseViewState> = {}): BrowserUseViewStat
       origin: 'https://example.com',
       sanitizedUrl: 'https://example.com',
       active: true,
+      zoomPercent: 100,
       loading: false,
       canGoBack: false,
       canGoForward: false
@@ -47,6 +48,7 @@ function setup(initial = state()) {
     }),
     mountBrowserUse: vi.fn(async () => state()),
     decideBrowserUseAction: vi.fn(), decideBrowserUseOrigin: vi.fn(), navigateBrowserUse: vi.fn(),
+    setBrowserUseZoom: vi.fn(async () => state()),
     setBrowserUseControl: vi.fn(async () => state({ controlOwner: 'manual' })),
     stopBrowserUse: vi.fn(), clearBrowserUse: vi.fn()
   }
@@ -70,17 +72,17 @@ async function renderPreview(activeThreadId: string | null = 'thread-1') {
 }
 
 function createNodeMock() {
-  return { getBoundingClientRect: () => ({ x: 0, y: 0, width: 900, height: 600 }) }
+  return { focus: vi.fn(), getBoundingClientRect: () => ({ x: 0, y: 0, width: 1000, height: 800 }) }
 }
 
 function showTools(renderer: ReactTestRenderer) {
-  return act(async () => renderer.root.findByProps({ 'aria-label': 'Move browser preview' }).props.onFocus())
+  expect(renderer.root.findByProps({ 'data-browser-preview-tools': true })).toBeTruthy()
 }
 
 async function collapse(renderer: ReactTestRenderer) {
   await showTools(renderer)
   return act(async () => renderer.root.findByProps({
-    'aria-label': 'Close preview and keep safe work running in the background'
+    'aria-label': 'Collapse browser'
   }).props.onClick())
 }
 
@@ -136,7 +138,7 @@ describe('AgentBrowserFloatingPreview', () => {
       controlOwner: 'manual'
     })
     const close = renderer.root.findByProps({
-      'aria-label': 'Close preview and keep safe work running in the background'
+      'aria-label': 'Collapse browser'
     })
     await act(async () => close.props.onClick())
     expect(renderer.root.findByProps({ 'aria-label': 'Show Agent Browser' })).toBeTruthy()
@@ -205,7 +207,7 @@ describe('AgentBrowserFloatingPreview', () => {
     setup(state(overrides))
     const renderer = await renderPreview()
     expect(renderer.root.findByProps({ 'aria-label': 'Show Agent Browser' })).toBeTruthy()
-    expect(renderer.root.findAllByType(AgentBrowserPanel)).toHaveLength(0)
+    expect(renderer.root.findByType(AgentBrowserPanel).props.displayVisible).toBe(false)
   })
 
   it('keeps collapse choices through conversation switches and remounts, ignoring retired callbacks', async () => {
@@ -241,6 +243,53 @@ describe('AgentBrowserFloatingPreview', () => {
     fixture.api.setBrowserUseControl.mockClear()
     await act(async () => takeControl())
     expect(fixture.api.setBrowserUseControl).not.toHaveBeenCalled()
+  })
+
+  it('hides a collapsed manual page without disposing its supervision lease', async () => {
+    const fixture = setup()
+    const renderer = await renderPreview()
+    await act(async () => fixture.publish(state({ controlOwner: 'manual', lifecycle: 'manual-control' })))
+    fixture.api.mountBrowserUse.mockClear()
+    await collapse(renderer)
+    expect(renderer.root.findByType(AgentBrowserPanel).props.displayVisible).toBe(false)
+    expect(JSON.stringify(renderer.toJSON())).toContain("You're in control")
+    expect(fixture.api.setBrowserUseControl).not.toHaveBeenCalled()
+    expect(fixture.api.mountBrowserUse).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false, supervisionActive: true }))
+    expect(fixture.api.mountBrowserUse.mock.calls).not.toContainEqual([expect.objectContaining({ supervisionActive: false })])
+  })
+
+  it('keeps pending approval visible and prevents collapse', async () => {
+    const fixture = setup()
+    const renderer = await renderPreview()
+    await act(async () => fixture.publish(state({
+      capabilityStatus: 'interaction-required', lifecycle: 'waiting-origin-consent',
+      pendingOriginConsent: {
+        id: 'consent-1234567890', sessionId: 'session-1234567890', threadId: 'thread-1',
+        origin: 'https://example.com', sanitizedUrl: 'https://example.com', mode: 'public',
+        createdAt: '2026-07-26T00:00:00.000Z'
+      }
+    })))
+    expect(renderer.root.findByProps({ 'aria-label': 'Collapse browser' }).props.disabled).toBe(true)
+    await collapse(renderer)
+    expect(renderer.root.findAllByProps({ 'aria-label': 'Show Agent Browser' })).toHaveLength(0)
+    expect(JSON.stringify(renderer.toJSON())).toContain('Browser needs your approval')
+    expect(fixture.api.mountBrowserUse).toHaveBeenLastCalledWith(expect.objectContaining({ visible: false, supervisionActive: true }))
+  })
+
+  it('confirms clearing, lets cancel preserve data, and scopes page zoom to the current turn', async () => {
+    const fixture = setup(state({ turnId: 'turn-1' }))
+    fixture.api.setBrowserUseZoom.mockResolvedValue(state({ turnId: 'turn-1' }))
+    const renderer = await renderPreview()
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'Page zoom' }).props.onChange({ target: { value: '125' } }))
+    expect(fixture.api.setBrowserUseZoom).toHaveBeenCalledWith({ threadId: 'thread-1', expectedTurnId: 'turn-1', zoomPercent: 125 })
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'More browser actions' }).props.onClick())
+    await act(async () => renderer.root.findByProps({ 'aria-label': 'Clear session' }).props.onClick())
+    expect(renderer.root.findByProps({ role: 'alertdialog' })).toBeTruthy()
+    expect(renderer.root.findByType(AgentBrowserPanel).props.displayVisible).toBe(false)
+    expect(fixture.api.clearBrowserUse).not.toHaveBeenCalled()
+    await act(async () => renderer.root.findAllByType('button').find((node) => node.children.includes('Keep session'))!.props.onClick())
+    expect(fixture.api.clearBrowserUse).not.toHaveBeenCalled()
+    expect(renderer.root.findByType(AgentBrowserPanel).props.displayVisible).toBe(true)
   })
 
   it('keeps a live browser event when the initial snapshot arrives late', async () => {

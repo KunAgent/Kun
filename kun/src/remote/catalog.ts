@@ -14,6 +14,7 @@ import type { RemoteSourceContent } from './messages/source/content.js'
 import { AttentionParamSchemas } from './attention/contracts.js'
 import { ArtifactDirectoryParamSchemas } from './files/artifact-contracts.js'
 import { ProjectFilesParamSchemas } from './files/project-contracts.js'
+import { WorkParamSchemas } from './work/contracts.js'
 import { ExecutionQueueParamSchemas } from './execution/contracts.js'
 import { GoalParamSchemas } from './goals/contracts.js'
 import { GroupParamSchemas } from './groups/contracts.js'
@@ -61,6 +62,7 @@ export async function remoteCapabilityDescriptors(
   for (const [operation, schema] of Object.entries(ProjectFilesParamSchemas)) {
     add({ [operation]: schema }, 'file', { pageSize: operation.startsWith('project.') ? 50 : 20 })
   }
+  add(WorkParamSchemas, 'code', { pageSize: 50 })
   add(GroupParamSchemas, 'group', { pageSize: 20 }, Boolean(runtime.rooms))
   const send = descriptors.find((descriptor) => descriptor.operation === 'group.message.send')
   if (send) send.limits.attachments = 0

@@ -17,7 +17,7 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
   const [choices, setChoices] = useState<Record<string, MobileLinkScope[]>>({})
   if (!enabled || !state?.pairings.length) return null
   return <div className="flex flex-col gap-2">
-    {state.pairings.map(pairing => <div key={pairing.id} className="rounded-2xl bg-accent-soft p-3">
+    {state.pairings.filter(pairing => pairing.purpose !== 'desktop').map(pairing => <div key={pairing.id} className="rounded-2xl bg-accent-soft p-3">
       <div className="flex items-center gap-3">
         <Smartphone size={17} className="shrink-0 text-ds-muted" aria-hidden />
         <span className="min-w-0 flex-1 text-[13px] font-medium text-ds-ink">{t('remoteCompact.pairRequest', { name: pairing.name })}</span>
@@ -75,5 +75,5 @@ export function MobileChannelRow({ link, detail, onOpen }: { link: MobileLink; d
 
 export function MobileGrantRows({ link }: { link: MobileLink }): ReactElement[] {
   if (!link.enabled || !link.state) return []
-  return link.state.grants.map(grant => <MobileGrantRow key={grant.id} link={link} grant={grant} />)
+  return link.state.grants.filter(grant => grant.purpose !== 'desktop').map(grant => <MobileGrantRow key={grant.id} link={link} grant={grant} />)
 }

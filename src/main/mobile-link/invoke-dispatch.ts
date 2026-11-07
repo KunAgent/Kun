@@ -1,5 +1,6 @@
+import { admitControlOperation } from '../control-host/admission'
 import { randomUUID } from 'node:crypto'
-import { validateCall, hasRemoteOperationScope, READ_METHODS, HISTORY_LIVE_CAPABILITY, READ_CONDITIONAL_CAPABILITY, requestControlLane, type Frame, type RemoteApi, type RequestBudget } from '@kun/remote-protocol'
+import { validateCall, hasRemoteOperationScope, DESKTOP_METHODS, READ_METHODS, HISTORY_LIVE_CAPABILITY, READ_CONDITIONAL_CAPABILITY, requestControlLane, type Frame, type RemoteApi, type RequestBudget } from '@kun/remote-protocol'
 import type { LinkDependencies } from './service-dependencies'
 import type { MobileShareHosts } from './share-host'
 import type { MobileSubscriptions } from './subscriptions'
@@ -8,18 +9,21 @@ import { desktopScheduleDescriptors } from './desktop-schedules'
 import { appendHostMetadata } from './catalog-metadata'
 import { refreshAfterWrite } from './write-refresh'
 const CERTAIN_REJECTIONS = new Set(['INVALID_REQUEST', 'REQUEST_EXPIRED', 'AGENT_NOT_AVAILABLE', 'MODEL_NOT_AVAILABLE'])
-type Dispatch = { link: LinkDependencies; owner?: string; hostId?: string; api?: RemoteApi; filePeers: Set<string>; requestBudget: RequestBudget; totalRequestBudget: RequestBudget; shared: MobileShareHosts; subscriptions: MobileSubscriptions; authorizationRemaining(): number; terminalAuthorizationRemaining(): number; send(frame: Frame): void }
+type Dispatch = { link: LinkDependencies; owner?: string; hostId?: string; api?: RemoteApi; filePeers: Set<string>; requestBudget: RequestBudget; totalRequestBudget: RequestBudget; shared?: MobileShareHosts; subscriptions: MobileSubscriptions; authorizationRemaining(): number; terminalAuthorizationRemaining(): number; send(frame: Frame): void }
 /** A validated peer invocation has one admission/reply path; desktop OS work is dispatched only in Main. */
-export async function dispatchMobileInvoke(frame: Frame, src: string, authority: { id: string; syncKey: string; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[] }, current: () => boolean, deps: Dispatch) {
+export async function dispatchMobileInvoke(frame: Frame, src: string, authority: { id: string; syncKey: string; purpose?: 'desktop'; scopes: import('../../shared/mobile-link-scopes').MobileLinkScope[] }, current: () => boolean, deps: Dispatch) {
+    let releaseAdmission: (() => void) | undefined
     let fileReserved = false
     let release: (() => void) | undefined
     let control: false | true | 'desktop' = false,
       size = 0
 
     try {
+      releaseAdmission = admitControlOperation()
       // An optional read version is answered here; the runtime envelope never sees it.
       const { call, ifVersion } = conditionalCall(validateCall(frame.payload))
       if (call.requestId !== frame.id) throw new Error('INVALID_REQUEST')
+      if (authority.purpose === 'desktop' && !(DESKTOP_METHODS as readonly string[]).includes(call.method)) throw Error('REMOTE_SCOPE_REQUIRED')
       if (!hasRemoteOperationScope(call.method, authority.scopes)) throw new Error('REMOTE_SCOPE_REQUIRED')
       if (call.method.startsWith('attachment.')) {
         if (deps.filePeers.size >= 2 || deps.filePeers.has(src))
@@ -59,10 +63,11 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
           call
         )
       } else if (call.method === 'shares.list' || call.method === 'shares.manage') {
+        if (!deps.shared) throw new Error('UNSUPPORTED_OPERATION')
         result = await deps.shared.ownerInvoke(call.method, call, src, current)
       } else if (call.method.startsWith('desktop.') && !call.method.startsWith('desktop.schedule.')) {
         if (!deps.link.desktop || !deps.owner) throw new Error('DESKTOP_UNSUPPORTED')
-        result = await deps.link.desktop.invoke(call.method, call.params, { accountId: deps.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes, current, validForMs: deps.authorizationRemaining,
+        result = await deps.link.desktop.invoke(call.method, call.params, { accountId: deps.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes, purpose: authority.purpose, hostId: deps.hostId, current, validForMs: deps.authorizationRemaining,
           emit: value => { if (current()) deps.send({ kind: 'event', id: randomUUID(), dst: src, payload: value }) } })
       } else if (call.method.startsWith('terminal.')) {
         if (!deps.link.terminal || !deps.owner) throw new Error('TERMINAL_UNSUPPORTED')
@@ -75,7 +80,7 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
         result = await deps.link.desktopSchedules(call.method, call.params, {
           accountId: deps.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes }, lease!)
       } else {
-        const shareReceipt = call.method === 'request.get' ? await deps.shared.ownerInvoke(call.method, call, src, current) : null
+        const shareReceipt = call.method === 'request.get' ? await deps.shared?.ownerInvoke(call.method, call, src, current) : null
         const response = shareReceipt ? { ok: true, status: 200, body: JSON.stringify(shareReceipt) } : await lease!.request(
           '/v1/remote/invoke',
           'POST',
@@ -93,7 +98,7 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
             typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED'
           )
         if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []),
-          ...(deps.link.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...deps.shared.descriptors(authority.scopes), ...(deps.link.desktop?.descriptors(authority.scopes) ?? []), ...(deps.link.terminal?.descriptors(authority.scopes) ?? [])]
+          ...(deps.link.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...(deps.shared?.descriptors(authority.scopes) ?? []), ...(deps.link.desktop?.descriptors(authority.scopes) ?? []), ...(deps.link.terminal?.descriptors(authority.scopes) ?? [])]
         if (call.method === 'catalog.get' && Array.isArray(value.capabilities))
           value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY, ...(deps.link.desktop?.capabilities() ?? []), ...(deps.link.terminal?.capabilities(authority.scopes) ?? [])]
         result = call.method === 'catalog.get' ? appendHostMetadata(value, {
@@ -132,6 +137,7 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
         } catch { /* best-effort error reply; the peer may be gone */ }
       }
     } finally {
+      releaseAdmission?.()
       if (fileReserved) deps.filePeers.delete(src)
       release?.()
     }

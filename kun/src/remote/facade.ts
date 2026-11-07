@@ -18,6 +18,8 @@ import { RemoteArtifacts } from './files/artifacts.js'
 import { RemoteProjectFiles } from './files/projects.js'
 import { RemoteArtifactDirectory } from './files/artifact-directory.js'
 import { ProjectFilesParamSchemas } from './files/project-contracts.js'
+import { WorkParamSchemas } from './work/contracts.js'
+import { RemoteWork } from './work/sessions.js'
 import { RemoteApprovals } from './approvals/service.js'
 import { RemoteApprovalQueries } from './approvals/queries.js'
 import { RemoteAgents } from './agents/service.js'
@@ -181,7 +183,10 @@ export class RemoteFacade {
     add(ExecutionQueueParamSchemas, (scope, p) => this.queue.dispatch(scope.call.method, p, scope))
     add(GoalParamSchemas, (scope, p) => this.goals.dispatch(scope.call.method, p))
     add(ProjectFilesParamSchemas, (scope, p) => scope.call.method === 'file.preview'
-      ? this.projectFiles.preview(scope, p) : this.projectFiles.page(scope, p))
+      ? this.projectFiles.preview(scope, p) : scope.call.method === 'project.files.resolve'
+        ? this.projectFiles.resolve(scope, p) : this.projectFiles.page(scope, p))
+    const work = new RemoteWork(this.runtime, this.code)
+    add(WorkParamSchemas, (scope, p) => scope.call.method === 'work.spaces.list' ? work.spaces() : work.sessions(p))
     add(GroupWriteParamSchemas, (scope, p) => this.groups.mutate(scope, scope.call.method, p, scope.call.requestId))
     add(MessageParamSchemas, (scope, p) => scope.call.method === 'message.source.get' ? this.source.get(p)
       : scope.call.method === 'message.search' ? this.messages.search(p) : this.messages.get(p))

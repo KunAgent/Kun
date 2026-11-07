@@ -8,6 +8,7 @@ import {
   BrowserUseDecisionInputSchema,
   BrowserUseMountInputSchema,
   BrowserUseNavigationInputSchema,
+  BrowserUseZoomInputSchema,
   BrowserUseThreadInputSchema
 } from '../../shared/browser-use'
 import type { BrowserUseManager } from './browser-use-manager'
@@ -21,6 +22,7 @@ const CHANNELS = [
   'browser-use:action:decide',
   'browser-use:control',
   'browser-use:navigate',
+  'browser-use:zoom',
   'browser-use:stop',
   'browser-use:clear'
 ] as const
@@ -72,6 +74,12 @@ export function registerBrowserUseIpc(options: {
     const input = BrowserUseNavigationInputSchema.parse(raw)
     assertBoundSession(manager, input.threadId, window)
     return manager.navigate(input.threadId, input.command, input.expectedTurnId)
+  })
+  ipcMain.handle('browser-use:zoom', (event, raw) => {
+    const window = assertTrustedWorkbenchSender(event, getMainWindow)
+    const input = BrowserUseZoomInputSchema.parse(raw)
+    assertBoundSession(manager, input.threadId, window)
+    return manager.setZoom(input.threadId, input.zoomPercent, input.expectedTurnId)
   })
   ipcMain.handle('browser-use:stop', (event, raw) => {
     const window = assertTrustedWorkbenchSender(event, getMainWindow)

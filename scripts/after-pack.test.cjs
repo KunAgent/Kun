@@ -21,6 +21,7 @@ const { tmpdir } = require('node:os')
 const { dirname, join } = require('node:path')
 const test = require('node:test')
 require('./after-pack-jimp.test.cjs')
+require('./after-pack-control-payload.test.cjs')
 const {
   KUN_RUNTIME_REQUIRED_PATHS,
   LINUX_SANDBOX_LAUNCHER_FLAG,

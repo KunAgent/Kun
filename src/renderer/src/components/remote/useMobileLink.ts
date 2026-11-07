@@ -43,7 +43,7 @@ export function useMobileLink() {
     return unavailable
   }
   useEffect(() => {
-    publishMobilePairings(signedIn && state?.enabled ? state.pairings : [])
+    publishMobilePairings(signedIn && state?.enabled ? state.pairings.filter(pairing => pairing.purpose !== 'desktop') : [])
   }, [signedIn, state])
   useEffect(() => {
     let active = true

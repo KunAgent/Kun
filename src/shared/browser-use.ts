@@ -77,7 +77,8 @@ export const BrowserUseTabStateSchema = z.object({
   active: z.boolean(),
   loading: z.boolean(),
   canGoBack: z.boolean(),
-  canGoForward: z.boolean()
+  canGoForward: z.boolean(),
+  zoomPercent: z.number().finite().positive()
 }).strict()
 export type BrowserUseTabState = z.infer<typeof BrowserUseTabStateSchema>
 
@@ -145,6 +146,13 @@ export const BrowserUseNavigationInputSchema = z.object({
   command: z.enum(['back', 'forward', 'reload'])
 }).strict()
 export type BrowserUseNavigationInput = z.infer<typeof BrowserUseNavigationInputSchema>
+
+export const BrowserUseZoomInputSchema = z.object({
+  expectedTurnId: z.string().min(1).max(256).optional(),
+  threadId: z.string().min(1).max(256),
+  zoomPercent: z.number().int().min(50).max(200)
+}).strict()
+export type BrowserUseZoomInput = z.infer<typeof BrowserUseZoomInputSchema>
 
 export const BrowserUseAuditEntrySchema = z.object({
   id: z.string().min(16).max(256),

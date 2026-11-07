@@ -621,7 +621,8 @@ export abstract class BrowserUseManagerFoundation {
         active: tab.id === entry.activeTabId,
         loading: tab.loading,
         canGoBack: history.canGoBack(),
-        canGoForward: history.canGoForward()
+        canGoForward: history.canGoForward(),
+        zoomPercent: Math.round(tab.view.webContents.getZoomFactor() * 100)
       }
     })
     return {

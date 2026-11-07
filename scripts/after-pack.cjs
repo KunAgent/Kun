@@ -1,5 +1,6 @@
 const { execFileSync } = require('node:child_process')
 const { createHash } = require('node:crypto')
+const { macSigningEnabled } = require('./mac-signing-policy.cjs')
 const {
   chmodSync,
   closeSync,
@@ -17,6 +18,7 @@ const {
 const { dirname, join } = require('node:path')
 const { checkPackedSanottsRuntime } = require('./after-pack-sanotts.cjs')
 const { validatePackagedKunDependencies } = require('./packaged-kun-dependencies.cjs')
+const { withPackedKunPruneArchives, validateNoBundledControlPayload } = require('./after-pack-control-payload.cjs')
 const { writeRuntimeIntegrityManifest } = require('./after-pack-runtime-integrity.cjs')
 const { trimPackedNodePtyPayload, ensureNodePtyHelpersExecutable } = require('./after-pack-node-pty.cjs')
 const { deduplicatePackedJimpZod } = require('./after-pack-jimp.cjs')
@@ -221,14 +223,16 @@ function prunePackedKunDependencies(context) {
   rewriteWorkspaceSpecifiers(join(kunDir, 'node_modules'))
 
   const prune = npmCommand(packedKunPruneArgs(context))
-  execFileSync(prune.command, prune.args, {
-    cwd: kunDir,
-    env: {
-      ...process.env,
-      npm_config_audit: 'false',
-      npm_config_fund: 'false'
-    },
-    stdio: 'inherit'
+  withPackedKunPruneArchives(context.packager?.projectDir ?? join(__dirname, '..'), root, () => {
+    execFileSync(prune.command, prune.args, {
+      cwd: kunDir,
+      env: {
+        ...process.env,
+        npm_config_audit: 'false',
+        npm_config_fund: 'false'
+      },
+      stdio: 'inherit'
+    })
   })
 
   // Keep native SQLite on the app root dependency so electron-builder's
@@ -580,12 +584,7 @@ function maybeAdhocSignMacApp(context) {
     return
   }
 
-  if (
-    process.env.CSC_LINK ||
-    process.env.CSC_NAME ||
-    process.env.CSC_KEY_PASSWORD ||
-    process.env.MAC_SIGN === '1'
-  ) {
+  if (macSigningEnabled(process.env, context.packager?.config?.extraMetadata?.kunAppFlavor)) {
     console.log('[after-pack] Developer ID signing is enabled, skipping ad-hoc signing.')
     return
   }
@@ -635,6 +634,7 @@ async function afterPack(context) {
   await maybeSignBundledOfficeCli(context)
   prunePackedWhisperResources(context)
   ensureNodePtyHelpersExecutable(unpackedAppRoot(context))
+  validateNoBundledControlPayload(packedResourcesDir(context))
   writeRuntimeIntegrityManifest(context, packedResourcesDir(context))
   installCliLaunchers(context)
   installLinuxElectronLauncher(context)

@@ -574,7 +574,7 @@
   "browserUseAllowOnce": "仅允许一次",
   "browserUseFloatingTitle": "智能体浏览器",
   "browserUseShowPreview": "显示智能体浏览器",
-  "browserUseClosePreview": "关闭预览，安全操作继续在后台运行",
+  "browserUseClosePreview": "收起浏览器",
   "browserUseBackgroundRunning": "浏览器正在后台操作",
   "browserUseNeedsAttention": "浏览器需要你的审批",
   "browserNewTab": "新预览",

@@ -1,6 +1,7 @@
 import {
   useEffect,
   useRef,
+  useState,
   type ReactElement
 } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,6 +18,8 @@ import {
   Trash2
 } from 'lucide-react'
 import { useAgentBrowserPanelLifecycle } from './agent-browser-panel-lifecycle'
+import { AgentBrowserClearConfirmation } from './AgentBrowserClearConfirmation'
+import { browserPreviewStatusKey } from './agent-browser-preview-status'
 
 type AgentBrowserPanelProps = {
   threadId: string | null
@@ -25,6 +28,7 @@ type AgentBrowserPanelProps = {
   onTitleChange?: (title: string) => void
   variant?: 'full' | 'pip'
   layoutVersion?: string | number
+  displayVisible?: boolean
 }
 
 export function AgentBrowserPanel(props: AgentBrowserPanelProps): ReactElement {
@@ -40,16 +44,22 @@ function ScopedAgentBrowserPanel({
   expectedTurnId,
   onTitleChange,
   variant = 'full',
-  layoutVersion
+  layoutVersion,
+  displayVisible = true
 }: AgentBrowserPanelProps): ReactElement {
   const { t } = useTranslation('common')
   const hostRef = useRef<HTMLDivElement | null>(null)
+  const [confirmClear, setConfirmClear] = useState(false)
   const { state, operationError, pendingOperation, run } = useAgentBrowserPanelLifecycle(
-    threadId, expectedTurnId, hostRef, { layoutVersion, cornerRadius: variant === 'pip' ? 12 : 0 }
+    threadId, expectedTurnId, hostRef, { layoutVersion, displayVisible: displayVisible && !confirmClear }
   )
   const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId) ?? state.tabs[0]
   const compact = variant === 'pip'
   const busy = Boolean(pendingOperation)
+  const consent = Boolean(state.pendingOriginConsent || state.pendingActionConsent)
+  const pageActionsDisabled = busy || consent || state.lifecycle === 'stopped'
+  const zoom = activeTab?.zoomPercent ?? 100
+  const zoomOptions = [...new Set([50, 67, 80, 90, 100, 110, 125, 150, 175, 200, zoom])].sort((a, b) => a - b)
   const turnScope = expectedTurnId ? { expectedTurnId } : {}
 
   useEffect(() => {
@@ -57,7 +67,10 @@ function ScopedAgentBrowserPanel({
     onTitleChange?.(title)
   }, [activeTab?.title, onTitleChange, t])
 
+  useEffect(() => { setConfirmClear(false) }, [state.sessionId, state.turnId, consent])
+
   const stop = (): void => {
+    setConfirmClear(false)
     if (!threadId) return
     void run(() => expectedTurnId
       ? window.kunGui.stopBrowserUse(threadId, expectedTurnId)
@@ -65,6 +78,7 @@ function ScopedAgentBrowserPanel({
   }
 
   const clear = (): void => {
+    setConfirmClear(false)
     if (!threadId) return
     void run(() => expectedTurnId
       ? window.kunGui.clearBrowserUse(threadId, expectedTurnId)
@@ -107,11 +121,11 @@ function ScopedAgentBrowserPanel({
     }))
   }
 
-  const statusTone = state.lifecycle === 'error' || state.capabilityStatus === 'unavailable'
+  const statusTone = operationError || state.lifecycle === 'error' || state.capabilityStatus === 'unavailable'
     ? 'text-red-600 dark:text-red-300'
     : state.controlOwner === 'manual'
-      ? 'text-amber-600 dark:text-amber-300'
-      : 'text-emerald-600 dark:text-emerald-300'
+      ? 'text-ds-ink'
+      : 'text-ds-muted'
 
   return (
     <aside
@@ -125,7 +139,7 @@ function ScopedAgentBrowserPanel({
               <button
                 type="button"
                 onClick={() => navigate('back')}
-                disabled={busy || !activeTab?.canGoBack}
+                disabled={pageActionsDisabled || !activeTab?.canGoBack}
                 aria-label={t('browserBack')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ds-faint hover:bg-ds-hover disabled:opacity-30"
               >
@@ -134,7 +148,7 @@ function ScopedAgentBrowserPanel({
               <button
                 type="button"
                 onClick={() => navigate('forward')}
-                disabled={busy || !activeTab?.canGoForward}
+                disabled={pageActionsDisabled || !activeTab?.canGoForward}
                 aria-label={t('browserForward')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ds-faint hover:bg-ds-hover disabled:opacity-30"
               >
@@ -143,7 +157,7 @@ function ScopedAgentBrowserPanel({
               <button
                 type="button"
                 onClick={() => navigate('reload')}
-                disabled={busy || !activeTab}
+                disabled={pageActionsDisabled || !activeTab}
                 aria-label={t('browserReload')}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-full text-ds-faint hover:bg-ds-hover disabled:opacity-30"
               >
@@ -162,13 +176,20 @@ function ScopedAgentBrowserPanel({
               </div>
             </div>
 
+            <select aria-label={t('browserUsePageZoom')} title={t('browserUsePageZoomHint')}
+              value={zoom} disabled={pageActionsDisabled || !activeTab}
+              onChange={(event) => {
+                const zoomPercent = Number(event.target.value)
+                if (threadId) void run(() => window.kunGui.setBrowserUseZoom({ threadId, ...turnScope, zoomPercent }))
+              }}
+              className="h-8 rounded-md border border-ds-border-muted bg-ds-card px-1 text-[11px] text-ds-ink disabled:opacity-35">
+              {zoomOptions.map((value) => <option key={value} value={value}>{value}%</option>)}
+            </select>
             <div className={`flex shrink-0 items-center gap-1 text-[10.5px] font-semibold ${statusTone}`}>
               {state.controlOwner === 'manual'
                 ? <Hand className="h-3.5 w-3.5" />
                 : <ShieldCheck className="h-3.5 w-3.5" />}
-              {state.controlOwner === 'manual'
-                ? t('browserUseManualControl')
-                : t('browserUseAgentControl')}
+              {t(browserPreviewStatusKey(state, operationError))}
             </div>
           </div>
 
@@ -188,7 +209,7 @@ function ScopedAgentBrowserPanel({
               <button
                 type="button"
                 onClick={toggleControl}
-                disabled={busy || !state.sessionId}
+                disabled={pageActionsDisabled || !state.sessionId}
                 className="inline-flex h-7 items-center gap-1 rounded-md border border-ds-border-muted bg-ds-card px-2 text-[10.5px] font-semibold text-ds-muted hover:text-ds-ink disabled:opacity-35"
               >
                 {state.controlOwner === 'agent'
@@ -201,7 +222,7 @@ function ScopedAgentBrowserPanel({
               <button
                 type="button"
                 onClick={stop}
-                disabled={pendingOperation === 'stop' || !state.sessionId}
+                disabled={pendingOperation === 'stop' || !state.sessionId || state.lifecycle === 'stopped'}
                 className="inline-flex h-7 items-center gap-1 rounded-md px-2 text-[10.5px] font-semibold text-red-600 hover:bg-red-500/10 disabled:opacity-35"
               >
                 <Square className="h-3 w-3" />
@@ -209,8 +230,8 @@ function ScopedAgentBrowserPanel({
               </button>
               <button
                 type="button"
-                onClick={clear}
-                disabled={busy || !state.sessionId}
+                onClick={() => setConfirmClear(true)}
+                disabled={busy || !state.sessionId || Boolean(state.pendingOriginConsent || state.pendingActionConsent)}
                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-ds-faint hover:bg-red-500/10 hover:text-red-600 disabled:opacity-35"
                 aria-label={t('browserUseClear')}
                 title={t('browserUseClear')}
@@ -247,22 +268,28 @@ function ScopedAgentBrowserPanel({
             title={t('browserUseStartingTitle')}
             body={t('browserUseStartingBody')}
           />
-        ) : !activeTab && state.lifecycle === 'error' ? (
+        ) : state.lifecycle === 'stopped' ? (
+          <BrowserEmptyState icon="ready" title={t('browserUseStopped')} body={t('browserUseStoppedBody')} />
+        ) : state.lifecycle === 'error' || operationError ? (
           <BrowserEmptyState
             icon="alert"
             title={t('browserUseInitializationFailed')}
-            body={state.reason || t('browserUseUnavailable')}
-            action={threadId ? (
+            body={operationError || state.reason || t('browserUseUnavailable')}
+            action={threadId ? <div className="mt-4 flex flex-wrap justify-center gap-2">
+              {activeTab ? <button type="button" onClick={() => navigate('reload')} disabled={busy}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-md border border-ds-border px-3 text-xs text-ds-ink disabled:opacity-35">
+                <RefreshCw size={14} />{t('browserReload')}
+              </button> : null}
               <button
                 type="button"
-                onClick={clear}
+                onClick={stop}
                 disabled={busy}
                 className="mt-4 inline-flex h-8 items-center gap-1.5 rounded-md border border-red-500/30 px-3 text-[11px] font-semibold text-red-600 hover:bg-red-500/10 dark:text-red-300"
               >
                 <Square className="h-3 w-3" />
                 {t('browserUseStop')}
               </button>
-            ) : undefined}
+            </div> : undefined}
           />
         ) : !activeTab ? (
           <BrowserEmptyState
@@ -273,8 +300,8 @@ function ScopedAgentBrowserPanel({
         ) : null}
 
         {state.pendingOriginConsent ? (
-          <div className="ds-sidebar-surface-body absolute inset-0 z-10 flex items-center justify-center overflow-auto p-5">
-            <div className="w-full max-w-md rounded-2xl border border-ds-border-strong bg-ds-card p-4 shadow-xl">
+          <div className="ds-sidebar-surface-body absolute inset-0 z-10 flex flex-col items-center justify-center overflow-hidden p-3">
+            <div className="w-full max-w-md overflow-y-auto rounded-xl border border-ds-border-strong bg-ds-card p-4 shadow-xl">
               <div className="flex items-center gap-2 text-[13px] font-semibold text-ds-ink">
                 <ShieldAlert className="h-4 w-4 text-amber-500" />
                 {t('browserUseOriginConsentTitle')}
@@ -285,7 +312,7 @@ function ScopedAgentBrowserPanel({
               <div className="mt-3 break-all rounded-lg bg-ds-surface-subtle px-3 py-2 font-mono text-[11px] text-ds-ink">
                 {state.pendingOriginConsent.origin}
               </div>
-              <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <div className="sticky -bottom-4 -mx-4 mt-4 flex flex-wrap justify-end gap-2 border-t border-ds-border-muted bg-ds-card px-4 py-3">
                 <ConsentButton disabled={busy} onClick={() => decideOrigin('deny')}>
                   {t('browserUseDeny')}
                 </ConsentButton>
@@ -298,8 +325,8 @@ function ScopedAgentBrowserPanel({
         ) : null}
 
         {state.pendingActionConsent ? (
-          <div className="ds-sidebar-surface-body absolute inset-0 z-10 flex items-center justify-center overflow-auto p-5">
-            <div className="w-full max-w-lg rounded-2xl border border-ds-border-strong bg-ds-card p-4 shadow-xl">
+          <div className="ds-sidebar-surface-body absolute inset-0 z-10 flex flex-col items-center justify-center overflow-hidden p-3">
+            <div className="w-full max-w-lg overflow-y-auto rounded-xl border border-ds-border-strong bg-ds-card p-4 shadow-xl">
               <div className="flex items-center gap-2 text-[13px] font-semibold text-ds-ink">
                 <ShieldAlert className="h-4 w-4 text-amber-500" />
                 {t('browserUseActionConsentTitle')}
@@ -308,7 +335,7 @@ function ScopedAgentBrowserPanel({
                 <img
                   src={state.pendingActionConsent.previewDataUrl}
                   alt={t('browserUseTargetPreview')}
-                  className="mt-3 max-h-56 w-full rounded-lg border border-ds-border-muted object-contain"
+                  className={`mt-3 w-full rounded-lg border border-ds-border-muted object-contain ${compact ? 'max-h-28' : 'max-h-56'}`}
                 />
               ) : null}
               <dl className="mt-3 grid grid-cols-[6rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-[11px]">
@@ -332,7 +359,7 @@ function ScopedAgentBrowserPanel({
               <p className="mt-3 text-[10.5px] leading-5 text-ds-muted">
                 {t('browserUseActionConsentBody')}
               </p>
-              <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <div className="sticky -bottom-4 -mx-4 mt-4 flex flex-wrap justify-end gap-2 border-t border-ds-border-muted bg-ds-card px-4 py-3">
                 <ConsentButton disabled={busy} onClick={() => decideAction('deny')}>
                   {t('browserUseDeny')}
                 </ConsentButton>
@@ -342,6 +369,9 @@ function ScopedAgentBrowserPanel({
               </div>
             </div>
           </div>
+        ) : null}
+        {confirmClear && !state.pendingOriginConsent && !state.pendingActionConsent ? (
+          <AgentBrowserClearConfirmation onCancel={() => setConfirmClear(false)} onConfirm={clear} />
         ) : null}
       </div>
     </aside>

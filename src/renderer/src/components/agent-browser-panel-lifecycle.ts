@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import type { BrowserUseMountInput, BrowserUseViewState } from '@shared/browser-use'
+import { observeBrowserLayout } from './agent-browser-layout-observer'
 
 function emptyState(): BrowserUseViewState {
   return {
@@ -25,7 +26,9 @@ export function useAgentBrowserPanelLifecycle(
   threadId: string | null,
   expectedTurnId: string | undefined,
   hostRef: RefObject<HTMLDivElement | null>,
-  { layoutVersion, cornerRadius = 0 }: { layoutVersion?: string | number; cornerRadius?: number } = {}
+  { layoutVersion, cornerRadius = 0, displayVisible = true }: {
+    layoutVersion?: string | number; cornerRadius?: number; displayVisible?: boolean
+  } = {}
 ) {
   const [state, setState] = useState<BrowserUseViewState>(emptyState)
   const [operationError, setOperationError] = useState<string>()
@@ -44,6 +47,7 @@ export function useAgentBrowserPanelLifecycle(
   // waiter, so keep the empty host visible through ready/loading as well.
   const awaitingFirstTab = state.lifecycle === 'mount-required' || state.lifecycle === 'ready' || state.lifecycle === 'loading'
   const shouldShowPage = Boolean(
+    displayVisible && !operationError && state.lifecycle !== 'error' && state.lifecycle !== 'stopped' &&
     (activeTab || awaitingFirstTab) && !state.pendingOriginConsent && !state.pendingActionConsent
   )
 
@@ -127,16 +131,14 @@ export function useAgentBrowserPanelLifecycle(
     }
     mountSync.current = sync
     sync()
-    const observer = new ResizeObserver(sync)
-    observer.observe(element)
-    window.addEventListener('resize', sync)
+    const unobserve = observeBrowserLayout(element, sync)
     return () => {
       disposed = true
       if (mountSync.current === sync) mountSync.current = undefined
-      observer.disconnect()
-      window.removeEventListener('resize', sync)
+      unobserve()
       // Capture this lease's thread/turn/bounds, not the next render's host ref.
-      // Hiding for consent is not lease disposal and keeps supervision active.
+      // Consent, collapse and app dialogs hide the page without disposing its lease.
+      // Only removing the actual surface releases supervision (and manual control).
       if (lastInput) {
         void api.mountBrowserUse({ ...lastInput, visible: false, supervisionActive: false })
           .catch(() => undefined)

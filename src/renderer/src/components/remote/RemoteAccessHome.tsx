@@ -9,15 +9,16 @@ import type { DesktopAccess } from './useDesktopAccess'
 import type { MobileLink } from './useMobileLink'
 import type { RemoteBrowser } from './useRemoteBrowser'
 
-export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop, onDevice }: {
+export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop, onDevice, directRunning = false }: {
   link: MobileLink; browser: RemoteBrowser; desktop: DesktopAccess
   onBrowser(): void; onDesktop(): void; onDevice(id: string): void
+  directRunning?: boolean
 }) {
   const { t } = useTranslation('common')
   const { status } = browser
   const clients = status?.running ? status.clients : []
-  const grants = link.enabled ? link.state?.grants ?? [] : []
-  const running = status?.running || link.enabled || desktop.value?.active
+  const grants = link.enabled ? link.state?.grants.filter(grant => grant.purpose !== 'desktop') ?? [] : []
+  const running = status?.running || link.enabled || desktop.value?.active || directRunning
   const desktopText = desktop.error || desktopSummary(desktop.value, t)
   const warning = link.mobileAllowed && link.enabled && link.state?.desktopAccess && desktop.value?.supported &&
     (!desktop.value.ready || desktop.value.inputReady !== true)
@@ -29,7 +30,7 @@ export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop,
       <div className="min-w-0 flex-1" role="status">
         <h2 className="text-[18px] font-semibold leading-6 text-ds-ink">{t(warning ? 'remoteCompact.setupNeeded' : running ? 'remoteCompact.enabled' : 'remoteCompact.disabled')}</h2>
         <p className="mt-0.5 text-[12px] leading-[18px] text-ds-muted">{warning ? desktopText
-          : link.state?.online ? t('remoteCompact.mobileConnected') : clients.length ? t('remoteCompact.browserCount', { n: clients.length })
+          : link.state?.online ? t('remoteCompact.mobileConnected') : directRunning ? link.zh ? '局域网与自建连接已开启' : 'Local network and private connections are on' : clients.length ? t('remoteCompact.browserCount', { n: clients.length })
             : t(running ? 'remoteCompact.onHint' : 'remoteCompact.offHint')}</p>
       </div>
       <details className="group">

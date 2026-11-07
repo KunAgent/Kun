@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
-import { join } from 'node:path'
+import { resolveNamedPreloadPath } from '../main-paths'
 import { DESKTOP_INDICATOR_CHANNEL } from '../../shared/remote-desktop'
 import { DESKTOP_INDICATOR_STATUS } from '../../shared/desktop-indicator-channels'
 import { markProtectedWindowContents } from '../protected-window-contents'
@@ -19,7 +19,7 @@ export class DesktopShareIndicator implements DesktopIndicatorPort {
     this.status = value
     const area = screen.getPrimaryDisplay().workArea
     const window = new BrowserWindow({ width: 540, height: 56, x: area.x + Math.round((area.width - 540) / 2), y: area.y + 12,
-      frame: false, resizable: false, alwaysOnTop: true, skipTaskbar: true, webPreferences: { preload: join(__dirname, '../preload/remote-desktop-indicator.cjs'), sandbox: true, nodeIntegration: false, contextIsolation: true } })
+      frame: false, resizable: false, alwaysOnTop: true, skipTaskbar: true, webPreferences: { preload: resolveNamedPreloadPath(app.getAppPath(), 'remote-desktop-indicator'), sandbox: true, nodeIntegration: false, contextIsolation: true } })
     this.window = window
     markProtectedWindowContents(window.webContents)
     const html = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'none\'"><title>Kun remote desktop sharing</title><style>body{margin:0;font:13px system-ui;background:#202124;color:#fff;display:flex;align-items:center;gap:12px;padding:12px;-webkit-app-region:drag}span{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}button{margin-left:auto;flex-shrink:0;min-height:32px;color:white;background:#c73337;border:0;border-radius:6px;padding:0 12px;-webkit-app-region:no-drag}</style><span id="status">Kun · Desktop sharing</span><button id="end">End session</button>'

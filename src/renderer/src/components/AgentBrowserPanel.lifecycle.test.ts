@@ -18,7 +18,7 @@ function state(threadId = 'thread-1', title = 'First task', overrides: Partial<B
     threadId, lifecycle: 'ready', controlOwner: 'agent', visible: false, mounted: false, mode: 'public',
     tabs: [{
       id: `tab-${threadId}`, title, origin: 'https://example.com', sanitizedUrl: 'https://example.com',
-      active: true, loading: false, canGoBack: true, canGoForward: true
+      active: true, zoomPercent: 100, loading: false, canGoBack: true, canGoForward: true
     }], activeTabId: `tab-${threadId}`, updatedAt: '2026-07-26T00:00:00.000Z', ...overrides
   }
 }
@@ -43,6 +43,7 @@ function setup() {
     }),
     mountBrowserUse: vi.fn(async (input: BrowserUseMountInput) => state(input.threadId)),
     navigateBrowserUse: vi.fn(async () => state()),
+    setBrowserUseZoom: vi.fn(async () => state()),
     setBrowserUseControl: vi.fn(async () => state('thread-1', 'First task', { controlOwner: 'manual' })),
     stopBrowserUse: vi.fn(async () => state('thread-1', 'Stopped task', { lifecycle: 'stopped' })),
     clearBrowserUse: vi.fn(async () => state('thread-1', '', { sessionId: undefined, tabs: [], lifecycle: 'closed' })),
@@ -92,7 +93,7 @@ describe('AgentBrowserPanel lifecycle fences', () => {
       threadId: 'thread-1', active: true, variant: 'pip', layoutVersion: 'moved'
     })))
     expect(api.mountBrowserUse).toHaveBeenLastCalledWith(expect.objectContaining({
-      bounds, visible: true, supervisionActive: true, cornerRadius: 12
+      bounds, visible: true, supervisionActive: true, cornerRadius: 0
     }))
     await act(async () => renderer.update(createElement(AgentBrowserPanel, {
       threadId: 'thread-1', active: true, variant: 'full', layoutVersion: 'docked'
@@ -308,6 +309,8 @@ describe('AgentBrowserPanel expected-turn binding', () => {
     await act(async () => button(renderer, 'Take control').props.onClick())
     await act(async () => button(renderer, 'Stop').props.onClick())
     await act(async () => button(renderer, 'Clear session').props.onClick())
+    expect(api.clearBrowserUse).not.toHaveBeenCalled()
+    await act(async () => button(renderer, 'Clear session and data').props.onClick())
     expect(api.navigateBrowserUse).toHaveBeenCalledWith({ threadId: 'thread-1', expectedTurnId: 'selected-turn', command: 'reload' })
     expect(api.setBrowserUseControl).toHaveBeenCalledWith({ threadId: 'thread-1', expectedTurnId: 'selected-turn', controlOwner: 'manual' })
     expect(api.stopBrowserUse).toHaveBeenCalledWith('thread-1', 'selected-turn')

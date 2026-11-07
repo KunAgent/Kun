@@ -26,6 +26,7 @@ function state(overrides: Partial<BrowserUseViewState> = {}): BrowserUseViewStat
       origin: 'https://example.com',
       sanitizedUrl: 'https://example.com/page',
       active: true,
+      zoomPercent: 100,
       loading: false,
       canGoBack: false,
       canGoForward: false
@@ -152,6 +153,8 @@ describe('AgentBrowserPanel supervision', () => {
     expect(stopBrowserUse).toHaveBeenCalledWith('thread-1')
     const clear = renderer.root.findByProps({ 'aria-label': 'Clear session' })
     await act(async () => clear.props.onClick())
+    expect(clearBrowserUse).not.toHaveBeenCalled()
+    await act(async () => buttonByText(renderer, 'Clear session and data').props.onClick())
     expect(clearBrowserUse).toHaveBeenCalledWith('thread-1')
   })
 

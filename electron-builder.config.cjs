@@ -6,6 +6,7 @@ const {
 const {
   KUN_ROOT_UNPACKED_SHARED_JS_PACKAGES
 } = require('./scripts/after-pack-hoisted-dependencies.cjs')
+const { macSigningEnabled } = require('./scripts/mac-signing-policy.cjs')
 
 // 品牌升级后构建环境变量改用 KUN_* 前缀;旧的 DEEPSEEK_GUI_* 仍然
 // 兼容读取,避免 CI / 本地发布脚本一刀切失效。
@@ -45,12 +46,8 @@ function loadLocalReleaseEnv() {
 loadLocalReleaseEnv()
 configureElectronNativeBuildEnvironment(process.platform, process.env)
 
-const hasExplicitMacSigningIdentity = Boolean(
-  process.env.CSC_LINK ||
-    process.env.CSC_NAME ||
-    process.env.CSC_KEY_PASSWORD ||
-    process.env.MAC_SIGN === '1'
-)
+// Production packages must retain a stable identity across local rebuilds too.
+const macSigningRequired = macSigningEnabled()
 
 const hasNotaryToolCredentials = Boolean(
   process.env.APPLE_API_KEY_ID &&
@@ -141,7 +138,6 @@ module.exports = {
     '**/kun/dist/**/*',
     '**/kun/package*.json',
     '**/kun/node_modules/**/*',
-    '**/vendor/kun-remote/*.tgz',
     '**/packages/extension-api/**/*',
     '**/packages/provider-catalog/**/*',
     '**/packages/create-kun-extension/**/*',
@@ -199,9 +195,11 @@ module.exports = {
     'kun/package.json',
     'kun/package-lock.json',
     'kun/node_modules/**/*',
-    // kun/package.json depends on file:../vendor/kun-remote/*.tgz; the packed
-    // dependency prune resolves it from the unpacked app root.
-    'vendor/kun-remote/*.tgz',
+    // npm's local archives are temporary afterPack prune inputs, not runtime files.
+    '!**/vendor/**/*.tgz',
+    // The signed host downloads the execution package into userData on demand.
+    '!**/node_modules/@kun/control-runtime{,/**/*}',
+    '!**/control-baselines{,/**/*}',
     'packages/extension-api/package.json',
     'packages/extension-api/dist/**/*',
     'packages/extension-api/schema/**/*',
@@ -348,12 +346,12 @@ module.exports = {
     // macOS stores Chromium locales in language-named .lproj directories.
     electronLanguages: chromiumMacLanguages,
     category: 'public.app-category.developer-tools',
-    identity: hasExplicitMacSigningIdentity ? undefined : null,
+    identity: macSigningRequired ? undefined : null,
     // We notarize in scripts/mac-notarize.cjs so APPLE_API_KEY_BASE64 can be supported.
     notarize: false,
-    hardenedRuntime: hasExplicitMacSigningIdentity,
-    forceCodeSigning: hasExplicitMacSigningIdentity,
-    timestamp: hasExplicitMacSigningIdentity ? 'http://timestamp.apple.com/ts01' : null,
+    hardenedRuntime: macSigningRequired,
+    forceCodeSigning: macSigningRequired,
+    timestamp: macSigningRequired ? 'http://timestamp.apple.com/ts01' : null,
     gatekeeperAssess: false,
     entitlements: 'build/entitlements.mac.plist',
     entitlementsInherit: 'build/entitlements.mac.inherit.plist',
@@ -373,7 +371,7 @@ module.exports = {
     // LZFSE keeps the native speech dependency within the installer budget.
     // Supported since macOS 10.11, below Electron's minimum supported macOS.
     format: 'ULFO',
-    sign: hasExplicitMacSigningIdentity,
+    sign: macSigningRequired,
     // Volume name carries the same artifact version as artifactName so users
     // can tell installers apart in Finder; without release env overrides,
     // electron-builder expands the ${version} macro from package.json.
@@ -460,7 +458,7 @@ module.exports = {
     kunAppFlavor: appFlavor,
     updateChannel,
     buildHints: {
-      macSigningEnabled: hasExplicitMacSigningIdentity,
+      macSigningEnabled: macSigningRequired,
       notarizationEnabled: hasNotaryToolCredentials
     }
   }

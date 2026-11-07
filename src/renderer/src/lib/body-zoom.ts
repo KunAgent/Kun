@@ -9,7 +9,7 @@
  * `scrollTop`/`scrollLeft` are already CSS pixels and must not be divided.
  */
 export function bodyZoom(): number {
-  if (typeof window === 'undefined') return 1
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 1
   const parsed = Number.parseFloat(window.getComputedStyle(document.body).zoom)
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1
 }

@@ -1,4 +1,4 @@
-import { BrowserWindow, desktopCapturer, ipcMain, screen, webContents, type IpcMainEvent } from 'electron'
+import { app, BrowserWindow, desktopCapturer, ipcMain, screen, webContents, type IpcMainEvent } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -6,6 +6,9 @@ import { DESKTOP_CAPTURE_CHANNELS as channels, type CaptureEvent, type CaptureRe
 import { desktopProcessBirth, terminateDesktopProcess } from './native-input'
 import { validateDesktopSdp } from '@kun/remote-protocol'
 import { markProtectedWindowContents } from '../protected-window-contents'
+import { logWarn } from '../logger'
+import { captureFailureName, permitsDesktopCapture } from './capture-permissions'
+import { resolveNamedPreloadPath } from '../main-paths'
 function bounded(value: unknown, max: number) { try { return Buffer.byteLength(JSON.stringify(value)) <= max } catch { return false } }
 export interface DesktopCapturePort {
   start(iceServers: unknown[], quality: string): Promise<{ type: 'offer'; sdp: string }>
@@ -26,7 +29,7 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
   private readonly readyPromise = new Promise<void>(resolve => { this.ready = resolve })
   private url = ''
   private processIdentity?: { pid: number; birth: string }
-  constructor(private readonly displayId: number, private readonly receive: (event: CaptureEvent) => void) {}
+  constructor(private readonly displayId: number, private readonly receive: (event: CaptureEvent) => void, private readonly controlDirectory?: () => string) {}
   private trusted(event: IpcMainEvent) {
     const window = this.window
     return !!window && !window.isDestroyed() && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === this.url
@@ -36,7 +39,10 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
     const call = this.calls.get(result.id)
     if (!call) return
     this.calls.delete(result.id); clearTimeout(call.timer)
-    if (result.error) call.reject(new Error('DESKTOP_CAPTURE_FAILED')); else call.resolve(result.value)
+    if (result.error) {
+      logWarn('remote-desktop', 'Desktop capture command failed.', { errorName: captureFailureName(result.error) })
+      call.reject(new Error('DESKTOP_CAPTURE_FAILED'))
+    } else call.resolve(result.value)
   }
   private onEvent = (event: IpcMainEvent, value: CaptureEvent) => {
     if (!this.trusted(event)) return
@@ -45,18 +51,25 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
     this.receive(value)
   }
   async open() {
+    const directory = this.controlDirectory?.()
+    if (!directory) throw Error('CONTROL_PACKAGE_NOT_INSTALLED')
     const partition = `kun-desktop-${randomUUID()}`
-    const window = new BrowserWindow({ show: false, width: 1, height: 1, webPreferences: { preload: join(__dirname, '../preload/remote-desktop-capture.cjs'), partition,
+    const appPath = app.getAppPath()
+    const window = new BrowserWindow({ show: false, width: 1, height: 1, webPreferences: { preload: resolveNamedPreloadPath(appPath, 'remote-desktop-capture'), partition,
       sandbox: true, nodeIntegration: false, contextIsolation: true, backgroundThrottling: false } })
     this.window = window
     markProtectedWindowContents(window.webContents)
-    const dev = process.env.ELECTRON_RENDERER_URL
-    this.url = dev ? new URL('remote-desktop-capture.html', dev.endsWith('/') ? dev : dev + '/').href : pathToFileURL(join(__dirname, '../renderer/remote-desktop-capture.html')).href
+    this.url = pathToFileURL(join(directory, 'capture/index.html')).href
     const ses = window.webContents.session
-    ses.setPermissionRequestHandler((contents, permission, callback) => callback(contents === window.webContents && String(permission) === 'display-capture' && contents.getURL() === this.url))
-    ses.setPermissionCheckHandler((contents, permission) => contents === window.webContents && String(permission) === 'display-capture' && contents.getURL() === this.url)
+    const trustedCapture = (contents: Electron.WebContents | null) => !this.closing && contents === window.webContents && contents.getURL() === this.url
+    ses.setPermissionRequestHandler((contents, permission, callback, details) => {
+      callback(trustedCapture(contents) && permitsDesktopCapture(String(permission), details, 'request'))
+    })
+    ses.setPermissionCheckHandler((contents, permission, _origin, details) => {
+      return trustedCapture(contents) && permitsDesktopCapture(String(permission), details, 'check')
+    })
     ses.setDisplayMediaRequestHandler(async (request, callback) => {
-      if (this.closing || request.frame !== window.webContents.mainFrame || request.frame.url !== this.url) { callback({}); return }
+      if (this.closing || !request.videoRequested || request.audioRequested || request.frame !== window.webContents.mainFrame || request.frame.url !== this.url) { callback({}); return }
       try {
         const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
         const source = sources.find(item => item.display_id === String(this.displayId))
@@ -67,7 +80,11 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
     window.webContents.on('will-navigate', event => event.preventDefault())
     window.webContents.once('render-process-gone', () => { if (!this.closing) this.receive({ event: 'closed' }) })
     ipcMain.on(channels.response, this.onReply); ipcMain.on(channels.event, this.onEvent)
-    await window.loadURL(this.url)
+    try { await window.loadURL(this.url) }
+    catch {
+      logWarn('remote-desktop', 'The packaged capture page could not be loaded.')
+      throw new Error('DESKTOP_CAPTURE_LOAD_FAILED')
+    }
     await Promise.race([this.readyPromise, new Promise((_, reject) => setTimeout(() => reject(new Error('DESKTOP_CAPTURE_TIMEOUT')), 5000))])
   }
   async identity() {

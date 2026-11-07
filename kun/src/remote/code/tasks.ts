@@ -5,6 +5,7 @@ import { receiptKey, type Receipt } from '../requests/receipts.js'
 import { createHash } from 'node:crypto'
 import { CreateThreadRequest, type ThreadRecord } from '../../contracts/threads.js'
 import { isRemoteCodeAllowed, requireCode } from './access.js'
+import { workSpaces } from '../work/spaces.js'
 import { projects } from '../files/project-directory.js'
 import { resolveCodeRoute } from './model-catalog.js'
 import { RemoteCodeManagement, metadataRevision } from './management.js'
@@ -79,7 +80,8 @@ case 'code.history': {
         }
       }
 case 'code.create': {
-        const project = (await projects(runtime)).find(
+        const work = p.surface === 'work'
+        const project = (await (work ? workSpaces(runtime) : projects(runtime))).find(
           (v) => v.id === p.projectId
         )
         if (!project) throw new Error('PROJECT_NOT_ALLOWED')
@@ -105,8 +107,7 @@ case 'code.create': {
             // Stored on the task route, where each new turn's admission reads and freezes it.
             ...(gatewayBinding ? { gatewayBinding } : {}),
             ...(reasoningEffort ? { reasoningEffort } : {}),
-            agentSurface: 'code',
-            workspaceMode: 'code'
+            ...(work ? { agentSurface: 'write' as const } : { agentSurface: 'code' as const, workspaceMode: 'code' as const })
           }),
           { id }
         )

@@ -11,6 +11,7 @@ import { ArtifactDirectoryParamSchemas } from './files/artifact-contracts.js'
 import { ExecutionQueueParamSchemas, ExecutionStopParamSchemas } from './execution/contracts.js'
 import { GoalParamSchemas } from './goals/contracts.js'
 import { ProjectFilesParamSchemas } from './files/project-contracts.js'
+import { WorkParamSchemas } from './work/contracts.js'
 import { CodeHistoryParamSchemas } from './code/history/contracts.js'
 import { GroupParamSchemas } from './groups/contracts.js'
 import { CollaborationParamSchemas } from './collaboration/contracts.js'
@@ -33,6 +34,7 @@ const schemas = {
   ...ExecutionStopParamSchemas,
   ...GoalParamSchemas,
   ...ProjectFilesParamSchemas,
+  ...WorkParamSchemas,
   ...CodeHistoryParamSchemas,
   ...GroupParamSchemas,
   ...CollaborationParamSchemas,

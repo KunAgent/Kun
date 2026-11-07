@@ -285,7 +285,7 @@ function main() {
     printBaselineComparison(compareWithBaseline(report, baseline))
   }
   if (!options.enforce) return
-  const signed = process.env.MAC_SIGN === '1'
+  const signed = require('./mac-signing-policy.cjs').macSigningEnabled()
   const failures = budgetFailures(report, { signed })
   if (failures.length > 0) {
     throw new Error(`Package size budget failed:\n${failures.map((entry) => `- ${entry}`).join('\n')}`)

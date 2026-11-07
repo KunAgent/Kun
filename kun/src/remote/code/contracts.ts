@@ -40,6 +40,8 @@ export const CodeTaskParamSchemas = {
     .object({
       projectId: Id,
       title: z.string().max(160).default('Mobile task'),
+      // `work`: `projectId` names a Work space and the session runs on Work's surface.
+      surface: z.enum(['code', 'work']).optional(),
       model: z.string().max(256).optional(),
       // An Agent pick from `catalog.get` agents; re-validated server side.
       harnessId: z.string().regex(/^[a-z][a-z0-9-]{1,47}$/).optional(),

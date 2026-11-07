@@ -8,10 +8,13 @@ export type MobileLinkStatus = {
   online: boolean
   error?: string
   deviceId?: string
-  pairings: Array<{ id: string; name: string; controllerId: string }>
-  grants: Array<{ id: string; controllerId: string; name?: string; scopes?: MobileLinkScope[] }>
+  pairings: Array<{ id: string; name: string; controllerId: string; purpose?: 'desktop' }>
+  grants: Array<{ id: string; controllerId: string; name?: string; scopes?: MobileLinkScope[]; purpose?: 'desktop' }>
 }
 export type MobileLinkApi = {
+  computers?: import('./computer-access').ComputerAccessApi
+  controlPackage?: import('./control-package').ControlPackageApi
+  direct?: import('./direct-link').DirectLinkApi
   reconnect(): Promise<MobileLinkStatus>
   entitlements(): Promise<AccountEntitlements>
   status(): Promise<MobileLinkStatus>

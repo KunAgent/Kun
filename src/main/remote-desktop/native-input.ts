@@ -10,9 +10,12 @@ export function desktopHelperPath() {
 }
 export const desktopHelperAvailable = () => process.platform === 'darwin' && process.arch === 'arm64' && Number.parseInt(osRelease(), 10) >= 22 && existsSync(desktopHelperPath())
 const exec = promisify(execFile)
+// A freshly signed/notarized helper can spend several seconds in macOS trust
+// evaluation on its first launch. This is a startup-only probe, before input.
+const IDENTITY_START_TIMEOUT_MS = 5000
 export async function desktopProcessBirth(pid: number) {
   if (!Number.isSafeInteger(pid) || pid <= 1) throw new Error('DESKTOP_CAPTURE_NOT_ISOLATED')
-  const { stdout } = await exec(desktopHelperPath(), ['--identity', String(pid)], { timeout: 1500, maxBuffer: 4096 })
+  const { stdout } = await exec(desktopHelperPath(), ['--identity', String(pid)], { timeout: IDENTITY_START_TIMEOUT_MS, maxBuffer: 4096 })
     .catch(() => { throw new Error('DESKTOP_CAPTURE_NOT_ISOLATED') })
   const value = stdout.trim()
   if (!/^\d+:\d+$/.test(value)) throw new Error('DESKTOP_CAPTURE_NOT_ISOLATED')

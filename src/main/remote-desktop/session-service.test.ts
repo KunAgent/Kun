@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RemoteDesktopService, type DesktopAuthority, type DesktopEngineDependencies } from './session-service'
+import { RemoteDesktopService, type DesktopAuthority, type DesktopEngineDependencies } from '@kun/control-runtime/desktop'
 import { DesktopInputArbiter } from './input-arbiter'
 import type { CaptureEvent } from '../../shared/remote-desktop'
 import { validateDesktopEvent, validateDesktopDataMessage } from '@kun/remote-protocol'

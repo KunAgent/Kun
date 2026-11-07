@@ -1,3 +1,6 @@
+import { controlRuntimeHost } from '../control-host/runtime-host'
+import { registerControlPackage } from '../control-package/register'
+import { registerComputerAccess } from '../computer-access/register'
 import { readAccountEntitlements, requireAccountFeature } from '../account-entitlements'
 import { transferSharedFiles } from './share-file-services'
 import { MobileDesktopSchedules } from './desktop-schedules'
@@ -18,7 +21,9 @@ import { RelayPreference } from './relay-preference'
 import { MobileRelayResume } from './relay-resume'
 import { logInfo, logWarn } from '../logger'
 import { MobileLinkSockets } from './socket'
+import { registerDirectLink } from './direct-register'
 import { createDesktopEngine } from '../remote-desktop/engine'
+import { DesktopIceClient } from './desktop-ice'
 import { createTerminalEngine } from '../remote-terminal/engine'
 const networkKey = () => Object.entries(networkInterfaces()).flatMap(([name, addresses]) =>
   (addresses ?? []).filter((address) => !address.internal && !address.address.startsWith('fe80:'))
@@ -52,21 +57,16 @@ export function registerMobileLink(
   const sockets = new MobileLinkSockets(undefined, diagnostic)
   const links = join(app.getPath('userData'), 'mobile-link')
   const desktopSchedules = new MobileDesktopSchedules(options)
-  const desktop = createDesktopEngine(async authority => {
-    const state = await account.getState()
-    if (!hasKunAccountSession(state) || state.user?.id !== authority.accountId || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
-    const [identity, token] = await Promise.all([loadIdentity(join(links, authority.accountId, 'identity.enc')), account.accessToken()])
-    if (!token || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
-    const abort = new AbortController(), timer = setTimeout(() => abort.abort(), 5000)
-    try {
-      const response = await net.fetch('https://api-kun-server.com/api/remote/v1/desktop/ice', { method: 'POST', signal: abort.signal,
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Kun-Device': identity.id, 'X-Kun-Device-Credential': identity.credential }, body: JSON.stringify({ peerDeviceId: authority.deviceId }) })
-      if (!response.ok || !authority.current()) throw Error('DESKTOP_ICE_UNAVAILABLE')
-      const value = await response.json() as { schemaVersion?: number; iceServers?: unknown[]; expiresAt?: number }
-      if (value.schemaVersion !== 1 || !Array.isArray(value.iceServers) || !value.iceServers.length || value.iceServers.length > 8 || !value.expiresAt || value.expiresAt <= Date.now()) throw Error('DESKTOP_ICE_UNAVAILABLE')
-      return value.iceServers
-    } finally { clearTimeout(timer) }
-  }, async (authority, resource) => {
+  const desktopIce = new DesktopIceClient({ account, origin: 'https://api-kun-server.com',
+    identity: owner => loadIdentity(join(links, owner, 'identity.enc')),
+    fetch: (input, init) => net.fetch(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init),
+    diagnostic: value => (value.event === 'ice_ready' ? logInfo : logWarn)('remote-desktop', 'Desktop ICE request.', value)
+  })
+  const desktop = createDesktopEngine(authority => desktopIce.request(authority), async (authority, resource) => {
+    if (resource.kind === 'device') {
+      if (authority.purpose !== 'desktop' || resource.id !== authority.hostId || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+      return
+    }
     const lease = await options.acquireRuntimeRequestLease()
     if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
     const response = await lease.request('/v1/remote/invoke', 'POST', JSON.stringify({ accountId: authority.accountId,
@@ -86,12 +86,15 @@ export function registerMobileLink(
     },
     readWorkspace: createRuntimeOriginWorkspace(options)
   })
-  const service = new MobileLinkService({
+  registerControlPackage(options)
+  const serviceDependencies: LinkDependencies = {
+    createClient: deps => controlRuntimeHost().relay(deps),
     account,
     requireMembership: (owner) => requireAccountFeature(account, (input, init) => net.fetch(String(input), init), 'mobileRemote', owner),
     origin: 'https://api-kun-server.com',
     name: hostname(),
     appVersion: app.getVersion(),
+    computerAccess: process.platform === 'darwin' && process.arch === 'arm64',
     platform:
       process.platform === 'darwin'
         ? 'macos'
@@ -116,7 +119,10 @@ export function registerMobileLink(
     desktopSchedules: (method, params, scope, lease) => desktopSchedules.invoke(method, params, scope, lease),
     sharedFiles: transferSharedFiles,
     files: transferFiles
-  })
+  }
+  const service = new MobileLinkService(serviceDependencies)
+  const computers = registerComputerAccess(options, account, service)
+  registerDirectLink(options, serviceDependencies, links)
   const resume = new MobileRelayResume({ account, relay: service, preference: new RelayPreference(links), diagnostic })
   let resettingIdentity = false
   const recovery = new MobileLinkRecovery({
@@ -166,6 +172,7 @@ export function registerMobileLink(
       await resume.manual(false)
       const current = await account.getState()
       if (!hasKunAccountSession(current) || current.user?.id !== state.user.id) throw new Error('ACCOUNT_CHANGED')
+      await computers?.resetIdentity(state.user.id)
       await resetIdentity(join(links, state.user.id, 'identity.enc'))
       const latest = await account.getState()
       if (!hasKunAccountSession(latest) || latest.user?.id !== state.user.id) throw new Error('ACCOUNT_CHANGED')

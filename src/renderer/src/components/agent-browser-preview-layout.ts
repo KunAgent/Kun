@@ -1,9 +1,13 @@
 export const BROWSER_PREVIEW_GAP = 12
 export const BROWSER_PREVIEW_RADIUS = 12
-export const BROWSER_PREVIEW_CHROME = 16
+export const BROWSER_PREVIEW_TITLEBAR = 44
+export const BROWSER_PREVIEW_NAVBAR = 44
+export const BROWSER_PREVIEW_FOOTER = 32
+export const BROWSER_PREVIEW_CHROME = BROWSER_PREVIEW_TITLEBAR + BROWSER_PREVIEW_NAVBAR + BROWSER_PREVIEW_FOOTER + 2
+export const BROWSER_PREVIEW_MIN_WIDTH = 482
 const ASPECT_RATIO = 16 / 10
-const DEFAULT_WIDTH = 320
-const MIN_WIDTH = 240
+const DEFAULT_WIDTH = 642
+const EXPANDED_WIDTH = 922
 
 export interface BrowserPreviewSize { width: number; height: number }
 export interface BrowserPreviewPosition { x: number; y: number }
@@ -16,9 +20,9 @@ const clamp = (value: number, min: number, max: number) => Math.min(Math.max(val
 function sizeFor(width: number, container: BrowserPreviewSize): BrowserPreviewSize {
   const availableWidth = Math.max(1, container.width - BROWSER_PREVIEW_GAP * 2)
   const availableHeight = Math.max(1, container.height - BROWSER_PREVIEW_GAP * 2)
-  const maxWidth = Math.min(availableWidth, Math.max(1, availableHeight - BROWSER_PREVIEW_CHROME) * ASPECT_RATIO)
-  const fitted = clamp(width, Math.min(MIN_WIDTH, maxWidth), maxWidth)
-  return { width: Math.round(fitted), height: Math.min(availableHeight, Math.round(fitted / ASPECT_RATIO) + BROWSER_PREVIEW_CHROME) }
+  const maxWidth = Math.min(availableWidth, Math.max(0, availableHeight - BROWSER_PREVIEW_CHROME) * ASPECT_RATIO + 2)
+  const fitted = Math.floor(clamp(width, Math.min(BROWSER_PREVIEW_MIN_WIDTH, maxWidth), maxWidth))
+  return { width: fitted, height: Math.min(availableHeight, Math.round((fitted - 2) / ASPECT_RATIO) + BROWSER_PREVIEW_CHROME) }
 }
 
 export function moveBrowserPreview(
@@ -33,10 +37,16 @@ export function moveBrowserPreview(
 }
 
 export function resolveBrowserPreviewFrame(
-  container: BrowserPreviewSize, geometry?: BrowserPreviewGeometry, needsAttention = false
+  container: BrowserPreviewSize, geometry?: BrowserPreviewGeometry, needsAttention = false, expanded = false
 ): BrowserPreviewFrame {
-  const size = sizeFor(Math.max(geometry?.width ?? DEFAULT_WIDTH, needsAttention ? 480 : 0), container)
-  const position = geometry?.position ?? {
+  const size = sizeFor(expanded ? EXPANDED_WIDTH : Math.max(geometry?.width ?? DEFAULT_WIDTH, needsAttention ? DEFAULT_WIDTH : 0), container)
+  // Below the readable viewport minimum, reserve room for the expand/dock
+  // fallback instead of presenting an unusably small live webpage.
+  if (size.width < BROWSER_PREVIEW_MIN_WIDTH) {
+    size.width = Math.max(1, Math.min(DEFAULT_WIDTH, container.width - BROWSER_PREVIEW_GAP * 2))
+    size.height = Math.max(1, Math.min(422, container.height - BROWSER_PREVIEW_GAP * 2))
+  }
+  const position = expanded ? { x: (container.width - size.width) / 2, y: (container.height - size.height) / 2 } : geometry?.position ?? {
     x: container.width - size.width - BROWSER_PREVIEW_GAP,
     y: container.height - size.height - BROWSER_PREVIEW_GAP
   }
