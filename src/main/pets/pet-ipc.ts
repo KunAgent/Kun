@@ -1,3 +1,4 @@
+import { parsePetGlobalActivity, type PetGlobalActivityPreferences, type PetGlobalActivityStatus } from '../../shared/pets-global-activity'
 import { parsePetBottleDrop, type PetBottleDrop } from '../../shared/pets-bottle'
 import { parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { PET_SCENE_IDS, type PetSceneId } from '../../shared/pets-ensemble'
@@ -28,6 +29,9 @@ import { petSenderAllowed } from './pet-protocol'
 export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 'main' | 'overlay' | 'other' }
 
 export type PetIpcApi = {
+  getPetGlobalActivityStatus(): PetGlobalActivityStatus
+  setPetGlobalActivity(preferences: PetGlobalActivityPreferences): Promise<PetSettings>
+  requestPetKeyboardAccess(): Promise<void>
   notifyBottleDrop(drop: PetBottleDrop | null): void
   setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings>
   requestPetVisit(scene?: PetSceneId): Promise<void>
@@ -83,6 +87,14 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet controls ipc is limited to pet windows')
   }
   return {
+    [PET_IPC.getPetGlobalActivityStatus]: (event) => { main(event); return api.getPetGlobalActivityStatus() },
+    [PET_IPC.requestPetKeyboardAccess]: async (event) => { main(event); await api.requestPetKeyboardAccess() },
+    [PET_IPC.setPetGlobalActivity]: async (event, input) => {
+      main(event)
+      const value = parsePetGlobalActivity(input)
+      if (!value) throw new Error('invalid global pet activity preferences')
+      return api.setPetGlobalActivity(value)
+    },
     [PET_IPC.notifyPetBottleDrop]: (event, input) => {
       if (!api.allows(event, ['main'])) return
       if (input === null) { api.notifyBottleDrop(null); return }

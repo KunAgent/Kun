@@ -4,6 +4,7 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { PET_CELL_HEIGHT, PET_CELL_WIDTH, PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSummary } from '@shared/pets'
 import { staticFrame } from '../pets/pet-animation'
 import { settingsButtonClass } from './settings-button'
+import { SettingsPetGlobalActivity } from './settings-pet-global-activity'
 import { SettingsPetVisits } from './settings-pet-visits'
 import './settings-pets.css'
 
@@ -83,6 +84,11 @@ export function PetsSettingsSection(): ReactElement {
           onChange={(event) => void update(petsApi.setPetReactionsEnabled(event.target.checked))} />
         {i18n?.language?.startsWith('zh') ? '打字、语音与掉落动作反馈' : 'React to typing, voice and bottle drops'}
       </label>
+      <SettingsPetGlobalActivity api={petsApi} settings={view.settings} language={i18n?.language ?? 'en'}
+        onSettings={(settings) => {
+          setView((current) => ({ ...current, settings }))
+          window.dispatchEvent(new Event('kun-pet-settings-changed'))
+        }} />
       <SettingsPetVisits pets={view.pets} settings={view.settings} api={petsApi}
         language={i18n?.language ?? 'en'} onSettings={(settings) => {
           setView((current) => ({ ...current, settings }))

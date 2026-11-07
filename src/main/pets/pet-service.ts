@@ -1,3 +1,5 @@
+import { defaultPetGlobalActivity, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
+import { PetGlobalActivity, PET_GLOBAL_SENDER_ID } from './pet-global-activity'
 import { PetBottleGate } from './pet-bottle-gate'
 import type { PetBottleDrop } from '../../shared/pets-bottle'
 import { defaultPetVisits, type PetVisitPreferences, type PetVisitRequest } from '../../shared/pets-visits'
@@ -6,7 +8,7 @@ import type { PetPresenceSignal } from '../../shared/pets-interactions'
 import { PetPresence } from './pet-presence'
 import { isBuiltinPetId } from '../../shared/pets-builtin'
 import { defaultPetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
-import { app, BrowserWindow, ipcMain, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, powerMonitor, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import path from 'node:path'
 import { PET_IPC, petAssetUrl, type PetActionRequest, type PetActionResult, type PetActivitySnapshot, type PetOverlayBootstrap, type PetOverlayPlacement } from '../../shared/pets'
@@ -65,7 +67,23 @@ class DesktopPetRuntime implements DesktopPets {
   private readonly bottleGate = new PetBottleGate()
   private readonly presence = new PetPresence((snapshot) => this.controller?.send(PET_IPC.overlayPresence, snapshot))
 
+  private suspended = false
+  private readonly globalActivity = new PetGlobalActivity({
+    platform: process.platform,
+    executable: path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'native', 'pet-activity'),
+    signal: (signal) => this.presence.update(PET_GLOBAL_SENDER_ID, signal),
+    changed: () => { if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send(PET_IPC.catalogChanged, {}) }
+  })
+  private readonly onSuspend = (): void => { this.suspended = true; this.syncGlobalActivity() }
+  private readonly onResume = (): void => { this.suspended = false; this.syncGlobalActivity() }
+
   constructor(private readonly store: PetStore, private readonly options: DesktopPetOptions) {}
+
+  private syncGlobalActivity(): void {
+    const settings = this.store.getSettings()
+    this.globalActivity.configure(settings.globalActivity ?? defaultPetGlobalActivity(),
+      !this.suspended && settings.reactionsEnabled !== false && settings.overlayOpen && Boolean(this.controller?.isOpen()))
+  }
 
   noteMainWindow(window: BrowserWindow | null): void {
     this.detachMain?.()
@@ -86,6 +104,7 @@ class DesktopPetRuntime implements DesktopPets {
       this.mainWindow = null
       this.detachMain = null
       this.controller?.close()
+      this.syncGlobalActivity()
     }
     window.webContents.on('did-finish-load', onLoad)
     window.on('focus', onFocus)
@@ -99,6 +118,8 @@ class DesktopPetRuntime implements DesktopPets {
   }
 
   async start(isFreshInstall: boolean): Promise<void> {
+    powerMonitor.on('suspend', this.onSuspend)
+    powerMonitor.on('resume', this.onResume)
     bindPetAssetReader({ lookup: (id) => this.store.assetPath(id), libraryRoot: this.store.libraryRoot() })
     this.controller = new PetWindowController({
       platform: process.platform,
@@ -136,6 +157,9 @@ class DesktopPetRuntime implements DesktopPets {
   }
 
   async shutdown(): Promise<void> {
+    powerMonitor.off('suspend', this.onSuspend)
+    powerMonitor.off('resume', this.onResume)
+    this.globalActivity.dispose()
     this.presence.dispose()
     this.detachMain?.()
     this.detachMain = null
@@ -150,6 +174,20 @@ class DesktopPetRuntime implements DesktopPets {
 
   private api() {
     return {
+      getPetGlobalActivityStatus: () => this.globalActivity.status(),
+      setPetGlobalActivity: async (preferences: PetGlobalActivityPreferences) => {
+        const settings = await this.store.setPetGlobalActivity(preferences)
+        this.syncGlobalActivity()
+        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
+        return settings
+      },
+      requestPetKeyboardAccess: async () => {
+        if (!this.store.getSettings().globalActivity?.keyboard) return
+        await this.globalActivity.requestKeyboardAccess()
+        if (process.platform === 'darwin' && this.globalActivity.status().keyboard !== 'active') {
+          await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent')
+        }
+      },
       notifyBottleDrop: (drop: PetBottleDrop | null) => {
         const accepted = drop === null ? null : this.bottleGate.accept(drop)
         const settings = this.store.getSettings()
@@ -192,6 +230,7 @@ class DesktopPetRuntime implements DesktopPets {
       setPetReactionsEnabled: async (enabled: boolean) => {
         const settings = await this.store.setPetReactionsEnabled(enabled)
         this.presence.clear()
+        this.syncGlobalActivity()
         this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
         this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
         return settings
@@ -267,7 +306,7 @@ class DesktopPetRuntime implements DesktopPets {
         this.reveal()
         if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send(PET_IPC.settingsRequested, {})
       },
-      closeOverlay: async () => { this.visitRequest = null; await this.store.setOverlayOpen(false); this.controller?.close() },
+      closeOverlay: async () => { this.visitRequest = null; await this.store.setOverlayOpen(false); this.controller?.close(); this.syncGlobalActivity() },
       allows: (event: PetIpcEvent, kinds: Array<'main' | 'overlay'>) =>
         (event.senderKind === 'main' || event.senderKind === 'overlay') &&
         kinds.includes(event.senderKind) &&
@@ -332,10 +371,12 @@ class DesktopPetRuntime implements DesktopPets {
     const settings = this.store.getSettings()
     if (!settings.overlayOpen || !settings.selectedPetId || !this.store.getManifest(settings.selectedPetId)) {
       this.controller?.close()
+      this.syncGlobalActivity()
       return
     }
     const saved = savedPlacement(this.store)
     await this.controller?.openAtSaved(saved)
+    this.syncGlobalActivity()
     const overlayId = this.controller?.senderId()
     if (overlayId !== null && overlayId !== undefined) this.allowed.add(overlayId)
     this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
@@ -397,7 +438,7 @@ class DesktopPetRuntime implements DesktopPets {
     })
     const contentsId = window.webContents.id
     this.allowed.add(contentsId)
-    window.on('closed', () => { this.allowed.delete(contentsId) })
+    window.on('closed', () => { this.allowed.delete(contentsId); this.syncGlobalActivity() })
     return window as unknown as PetWindowLike
   }
 

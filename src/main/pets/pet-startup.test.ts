@@ -8,16 +8,25 @@ import { PetStore } from './pet-store'
 import { shutdownDesktopPets, startDesktopPets } from './pet-service'
 
 const host = vi.hoisted(() => ({
-  root: '', open: vi.fn(), close: vi.fn(), send: vi.fn(),
+  root: '', open: vi.fn(), close: vi.fn(), send: vi.fn(), globalConfigure: vi.fn(), globalDispose: vi.fn(),
+  power: new Map<string, () => void>(),
   handlers: new Map<string, (...args: unknown[]) => unknown>()
 }))
 vi.mock('electron', () => ({
   app: { isPackaged: false, getPath: () => path.join(host.root, 'profile'), getAppPath: () => host.root },
-  BrowserWindow: vi.fn(), screen: {}, shell: {},
+  BrowserWindow: vi.fn(), screen: {}, shell: {}, powerMonitor: { on: (name: string, fn: () => void) => host.power.set(name, fn), off: (name: string) => host.power.delete(name) },
   ipcMain: {
     on: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),
     handle: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),
     removeHandler: (channel: string) => host.handlers.delete(channel), removeAllListeners: vi.fn()
+  }
+}))
+vi.mock('./pet-global-activity', () => ({
+  PET_GLOBAL_SENDER_ID: -1,
+  PetGlobalActivity: class {
+    configure = host.globalConfigure
+    dispose = host.globalDispose
+    status() { return { keyboard: 'off', microphone: 'off', recording: false } }
   }
 }))
 vi.mock('../main-app-context', () => ({ mainState: { mainWindow: null }, developmentRendererUrl: () => undefined }))
@@ -42,6 +51,9 @@ beforeEach(async () => {
   host.open.mockReset()
   host.close.mockReset()
   host.send.mockReset()
+  host.globalConfigure.mockReset()
+  host.globalDispose.mockReset()
+  host.power.clear()
   vi.stubEnv('CODEX_HOME', path.join(host.root, 'codex'))
 })
 afterEach(async () => {
@@ -58,6 +70,31 @@ async function copyDefault() {
 }
 
 describe('desktop pet startup', () => {
+  it('follows pet visibility, reaction preferences, suspend/resume and shutdown for global observers', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const frame = {}, main = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }
+    const preferences = { keyboard: true, microphone: true }
+    await host.handlers.get(PET_IPC.setPetGlobalActivity)!(main, preferences)
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
+    host.power.get('suspend')!()
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
+    host.power.get('resume')!()
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
+    await host.handlers.get(PET_IPC.setPetReactionsEnabled)!(main, false)
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
+    await host.handlers.get(PET_IPC.setPetReactionsEnabled)!(main, true)
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
+    await host.handlers.get(PET_IPC.setOverlayOpen)!(main, false)
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
+    await runtime.shutdown()
+    expect(host.globalDispose).toHaveBeenCalled()
+    expect(host.power.size).toBe(0)
+  })
+
   it('delivers a fresh bottle once without changing the resident, opening the overlay or saving a reward', async () => {
     await copyDefault()
     const runtime = await startDesktopPets({ isFreshInstall: true })

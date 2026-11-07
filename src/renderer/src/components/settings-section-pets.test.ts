@@ -44,6 +44,7 @@ function install(pets: PetSummary[], settings: PetSettings, fail = false): { ref
       if (fail) throw new Error('unavailable')
       return pets
     }),
+    getPetGlobalActivityStatus: vi.fn(async () => ({ keyboard: 'off', microphone: 'off', recording: false })),
     getPetSettings: vi.fn(async () => settings),
     getPetInteraction: vi.fn(async () => ({ mode: 'passthrough' as const, note: null })),
     selectPet: vi.fn(async (id: string | null) => ({ ...settings, selectedPetId: id })),
@@ -60,7 +61,8 @@ function install(pets: PetSummary[], settings: PetSettings, fail = false): { ref
     onPetNavigationRequested: vi.fn(() => () => undefined),
     takePendingNavigation: vi.fn(async () => null)
   }
-  vi.stubGlobal('window', { kunGui: { pets: api }, dispatchEvent: () => true })
+  vi.stubGlobal('window', { kunGui: { pets: api }, dispatchEvent: () => true,
+    setInterval: vi.fn(() => 0), clearInterval: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() })
   return { refresh, catalog: () => catalog() }
 }
 

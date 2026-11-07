@@ -1,3 +1,4 @@
+import { defaultPetGlobalActivity, parsePetGlobalActivity, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
 import { defaultPetVisits, parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
 import { RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
@@ -101,6 +102,10 @@ export class PetStore {
       }
       this.settings.overlayOpen = open
     })
+  }
+
+  async setPetGlobalActivity(input: PetGlobalActivityPreferences): Promise<PetSettings> {
+    return this.mutate(async () => { this.settings.globalActivity = { ...input } })
   }
 
   async setPetReactionsEnabled(enabled: boolean): Promise<PetSettings> {
@@ -424,6 +429,7 @@ function normalizeSettings(value: unknown): PetSettings {
     bubblesCollapsed: candidate.bubblesCollapsed === true,
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
+    globalActivity: parsePetGlobalActivity(candidate.globalActivity) ?? defaultPetGlobalActivity(),
     ...(typeof candidate.reactionsEnabled === 'boolean' ? { reactionsEnabled: candidate.reactionsEnabled } : {}),
     ...(candidate.ensemble !== undefined ? { ensemble: normalizeSavedPetEnsemble(candidate.ensemble) } : {}),
     ...(candidate.visits !== undefined ? { visits: parsePetVisitPreferences(candidate.visits) ?? defaultPetVisits() } : {}),

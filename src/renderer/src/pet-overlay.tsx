@@ -7,14 +7,12 @@ import ReactDOM from 'react-dom/client'
 import {
   PET_CELL_HEIGHT,
   PET_CELL_WIDTH,
-  PET_SHEET_COLUMNS,
-  petSheetRowsForVersion,
   type PetActivitySnapshot,
   type PetAnimationState,
   type PetOverlayBootstrap,
   type PetOverlayLayout
 } from '@shared/pets'
-import { frameAtElapsedMs, staticFrame } from './pets/pet-animation'
+import { PetResidentSprite } from './pets/pet-resident-sprite'
 import { acceptPetSnapshot, earliestPetNotificationExpiry, visiblePetNotifications } from './pets/pet-activity'
 import { PetWorkBubbles } from './pets/pet-bubble'
 import { PetQuickChat } from './pets/pet-quick-chat'
@@ -55,15 +53,12 @@ function PetOverlayApp(): React.JSX.Element {
   const [sending, setSending] = useState<Set<string>>(new Set())
   const [closedKeys, setClosedKeys] = useState<string[]>([])
   const inFlight = useRef(new Set<string>())
-  const [reduced, setReduced] = useState(false)
-  const [frameClock, setFrameClock] = useState(0)
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
   const hitRef = useRef<HTMLDivElement | null>(null)
   const companionRef = useRef<HTMLDivElement | null>(null)
   const controlsRef = useRef<HTMLDivElement | null>(null)
   const noticeRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const started = useRef(0)
   const draggingRef = useRef(false)
   const interactiveRef = useRef(false)
   const controlsVisibleRef = useRef(false)
@@ -81,10 +76,6 @@ function PetOverlayApp(): React.JSX.Element {
   useEffect(() => startPetTypingPresence(document), [])
 
   useEffect(() => {
-    const media = window.matchMedia?.('(prefers-reduced-motion: reduce)')
-    setReduced(Boolean(media?.matches))
-    const onChange = (event: MediaQueryListEvent): void => setReduced(event.matches)
-    media?.addEventListener('change', onChange)
     let cancelled = false
     const applyActivity = (value: PetActivitySnapshot): void => {
       setSnapshot((current) => acceptPetSnapshot(current, value))
@@ -114,7 +105,7 @@ function PetOverlayApp(): React.JSX.Element {
       setEditing(null)
       setMenuOpen(false)
     })
-    return () => { cancelled = true; stopBootstrap(); stopActivity(); stopFocus(); stopLayout(); media?.removeEventListener('change', onChange) }
+    return () => { cancelled = true; stopBootstrap(); stopActivity(); stopFocus(); stopLayout() }
   }, [bridge])
 
   useEffect(() => {
@@ -193,10 +184,8 @@ function PetOverlayApp(): React.JSX.Element {
   const currentVisit = liveVisit?.primaryId === bootstrap?.petId ? liveVisit : null
   if (!dragging || heldVisit.current?.primaryId !== bootstrap?.petId) heldVisit.current = currentVisit
   const visit = dragging ? heldVisit.current : currentVisit
-  const visiting = Boolean(visit)
   if (!dragging) heldReaction.current = bootstrap?.spritesheetUrl && reactions.input ? reactions : null
   const reaction = heldReaction.current
-  const reacting = Boolean(reaction)
   const reactionSize = { width: Math.min(viewport.width - 16, Math.max(160, width + 32)),
     height: Math.min(viewport.height - 32, width * 208 / 192 + 72) }
   const visitSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(300, viewport.height - 32) }
@@ -224,18 +213,8 @@ function PetOverlayApp(): React.JSX.Element {
     const timer = window.setTimeout(() => setNow(Date.now()), Math.max(0, nextExpiry - Date.now() + 1))
     return () => window.clearTimeout(timer)
   }, [nextExpiry])
-  useEffect(() => {
-    if (reduced || visiting || reacting) return undefined
-    started.current = performance.now()
-    let frame = 0
-    const tick = (time: number): void => { setFrameClock(time - started.current); frame = requestAnimationFrame(tick) }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [reduced, animation, visiting, reacting])
   const version = bootstrap?.spriteVersionNumber ?? 1
-  const frame = reduced ? staticFrame(animation, version) : frameAtElapsedMs(animation, frameClock, version)
   const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
-  const rows = petSheetRowsForVersion(version)
 
   useEffect(() => {
     if (!menuOpen) return undefined
@@ -414,20 +393,15 @@ function PetOverlayApp(): React.JSX.Element {
                 onPointerCancel: (event) => finishPointer(event, true),
                 onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
                 onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
-              }} /> : <button
+              }} /> : <PetResidentSprite
+              animation={animation} version={version} sheet={bootstrap?.spritesheetUrl}
               type="button"
               className="pet-sprite"
               aria-label={bootstrap?.displayName ?? 'Desktop pet'}
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               aria-controls={menuOpen ? 'pet-context-menu' : undefined}
-              style={{
-                width,
-                height,
-                backgroundImage: bootstrap?.spritesheetUrl ? `url("${bootstrap.spritesheetUrl}")` : undefined,
-                backgroundSize: `${PET_SHEET_COLUMNS * 100}% ${rows * 100}%`,
-                backgroundPosition: frame.backgroundPosition
-              }}
+              style={{ width, height }}
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}
               onPointerUp={(event) => finishPointer(event, false)}

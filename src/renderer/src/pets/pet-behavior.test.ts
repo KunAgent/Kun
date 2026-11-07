@@ -11,11 +11,11 @@ import { deliverPetFollowUp, petBubbleBody, petBubbleClock } from './pet-follow-
 import { petBubbleAllowed } from './pet-publisher'
 
 describe('pet animation and interaction', () => {
-  it('maps nine rows, slows idle, and returns to idle after three transient cycles', () => {
+  it('maps nine rows, holds open eyes, and returns to idle after three transient cycles', () => {
     for (const state of Object.keys(PET_ROWS) as Array<keyof typeof PET_ROWS>) {
       expect(frameAtElapsedMs(state, 0, 2).row).toBe(PET_ROWS[state].row)
     }
-    expect(frameDurationMs('idle', 0)).toBe(PET_ROWS.idle.frameDurationsMs[0] * 6)
+    expect(frameDurationMs('idle', 0)).toBe(PET_ROWS.idle.frameDurationsMs[0])
     const elapsed = totalCycleDurationMs('waiting') * 3
     expect(frameAtElapsedMs('waiting', elapsed, 2).row).toBe(PET_ROWS.idle.row)
     expect(staticFrame('running', 2).column).toBe(0)

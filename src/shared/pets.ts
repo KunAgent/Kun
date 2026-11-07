@@ -1,3 +1,4 @@
+import type { PetGlobalActivityPreferences, PetGlobalActivityStatus } from './pets-global-activity'
 import type { PetBottleDrop } from './pets-bottle'
 import type { PetVisitPreferences, PetVisitRequest } from './pets-visits'
 import type { PetSceneId } from './pets-ensemble'
@@ -70,6 +71,7 @@ export type PetSettings = {
   importCodexPets: boolean
   ensemble?: PetEnsembleSettings
   reactionsEnabled?: boolean
+  globalActivity?: PetGlobalActivityPreferences
   visits?: PetVisitPreferences
   welcomedPetIds: string[]
   dismissedNotificationKeys: string[]
@@ -168,6 +170,9 @@ export type PetOverlayBounds = { width: number; height: number; anchorX: number;
 export type ScreenPoint = { x: number; y: number }
 
 export type PetDesktopBridge = {
+  getPetGlobalActivityStatus: () => Promise<PetGlobalActivityStatus>
+  setPetGlobalActivity: (preferences: PetGlobalActivityPreferences) => Promise<PetSettings>
+  requestPetKeyboardAccess: () => Promise<void>
   notifyPetBottleDrop: (drop: PetBottleDrop | null) => void
   setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
   requestPetVisit: (scene?: PetSceneId) => Promise<void>
@@ -232,7 +237,8 @@ export type PetOverlayBridge = {
 }
 
 export const PET_ROWS: Record<PetAnimationState, { row: number; frames: number; frameDurationsMs: number[] }> = {
-  idle: { row: 0, frames: 6, frameDurationsMs: [280, 110, 110, 140, 140, 320] },
+  // Rest on the open eyes; the eyelids themselves must move quickly.
+  idle: { row: 0, frames: 6, frameDurationsMs: [3200, 55, 55, 70, 55, 3165] },
   'running-right': { row: 1, frames: 8, frameDurationsMs: [120, 120, 120, 120, 120, 120, 120, 220] },
   'running-left': { row: 2, frames: 8, frameDurationsMs: [120, 120, 120, 120, 120, 120, 120, 220] },
   waving: { row: 3, frames: 4, frameDurationsMs: [140, 140, 140, 280] },
@@ -275,6 +281,9 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 }
 
 export const PET_IPC = {
+  getPetGlobalActivityStatus: 'kun:pets:global-activity:status',
+  setPetGlobalActivity: 'kun:pets:global-activity:preferences',
+  requestPetKeyboardAccess: 'kun:pets:global-activity:keyboard-access',
   notifyPetBottleDrop: 'kun:pets:bottle-drop',
   setPetVisitPreferences: 'kun:pets:visits:preferences',
   requestPetVisit: 'kun:pets:visits:request',

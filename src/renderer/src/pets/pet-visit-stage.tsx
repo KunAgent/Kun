@@ -1,11 +1,11 @@
 import { PetBottleStage } from './pet-bottle-stage'
-import type { ButtonHTMLAttributes, ReactElement } from 'react'
+import { useRef, useState, type ButtonHTMLAttributes, type ReactElement } from 'react'
 import { X } from 'lucide-react'
 import { PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetOverlayBootstrap, type PetSummary } from '@shared/pets'
 import type { PetVisit } from '@shared/pets-visits'
 import { frameAtElapsedMs, staticFrame, totalCycleDurationMs } from './pet-animation'
 import { petEnsembleText, PET_SCENES } from './pet-ensemble-catalog'
-import { usePetAnimationClock } from './use-pet-animation-clock'
+import { paintPetStyle, usePetAnimationPainter } from './use-pet-animation-painter'
 import { samplePetVisit } from './pet-visit-motion'
 import { PetMotifIcon } from './pet-motif-icon'
 import './pet-visits.css'
@@ -22,35 +22,48 @@ export function PetVisitStage(props: PetVisitStageProps): ReactElement {
 
 function PetFriendVisitStage(props: PetVisitStageProps): ReactElement {
   const { visit, pet, pets, language } = props
-  const { elapsed, reduced } = usePetAnimationClock(String(visit.id), false)
-  const currentTime = Math.max(Date.now(), visit.startedAt + elapsed)
   const primary: PetSummary = { id: pet.petId!, sourceId: pet.petId!.split(':').slice(1).join(':'),
     displayName: pet.displayName ?? '', description: pet.description ?? '', source: 'kun-local',
     available: true, sourceMissing: false, spriteVersionNumber: pet.spriteVersionNumber,
     spritesheetUrl: pet.spritesheetUrl ?? undefined, interactions: pet.interactions }
   const cast = [primary, ...visit.guestIds.map((id) => pets.find((candidate) => candidate.id === id)).filter((value): value is PetSummary => Boolean(value))]
-  const view = samplePetVisit({ ...props, cast, now: currentTime, reduced })
+  const actors = useRef<Array<HTMLButtonElement | null>>([])
+  const token = useRef<HTMLSpanElement>(null)
+  const [phase, setPhase] = useState(() => samplePetVisit({ ...props, cast, now: Date.now(), reduced: true }).phase)
+  const paintedPhase = useRef(phase)
+  usePetAnimationPainter(String(visit.id), false, ({ elapsed, reduced }) => {
+    const motion = samplePetVisit({ ...props, cast, now: Date.now(), reduced })
+    if (paintedPhase.current !== motion.phase) { paintedPhase.current = motion.phase; setPhase(motion.phase) }
+    const depth = motion.actors.map((state, index) => ({ y: state.y, index })).sort((a, b) => a.y - b.y)
+    motion.actors.forEach((state, index) => {
+      const actor = cast[index]
+      const pose = index === 0 && motion.phase === 'arriving' ? actor.interactions?.greeting.states[0] ?? state.pose : state.pose
+      const frame = reduced ? staticFrame('idle', actor.spriteVersionNumber)
+        : frameAtElapsedMs(pose, elapsed % totalCycleDurationMs(pose), actor.spriteVersionNumber)
+      paintPetStyle(actors.current[index], {
+        width: `${state.size}px`, height: `${state.size * 208 / 192}px`,
+        transform: `translate3d(${state.x - state.size / 2}px, ${state.y - state.size * 208 / 384 - state.lift}px, 0) rotate(${state.tilt}deg) scale(${state.scale})`,
+        opacity: String(state.opacity), zIndex: String(1 + depth.findIndex((item) => item.index === index)),
+        backgroundPosition: frame.backgroundPosition
+      })
+    })
+    paintPetStyle(token.current, { opacity: motion.token ? '1' : '0',
+      transform: motion.token ? `translate3d(${motion.token.x}px, ${motion.token.y}px, 0) translate(-50%, -50%)` : '' })
+  })
   const text = (pair: [string, string]): string => petEnsembleText(pair, language)
-  const title = view.phase === 'departing' ? text(['下次再来玩', 'See you next time'])
-    : view.phase === 'arriving' ? text(['叫朋友来玩一会儿', 'A little visit from friends']) : text(PET_SCENES[visit.scene].title)
-  return <div className="pet-visit-stage" data-pet-visit={visit.reason} data-visit-phase={view.phase} style={{ width: props.width, height: props.height }}>
+  const title = phase === 'departing' ? text(['下次再来玩', 'See you next time'])
+    : phase === 'arriving' ? text(['叫朋友来玩一会儿', 'A little visit from friends']) : text(PET_SCENES[visit.scene].title)
+  return <div className="pet-visit-stage" data-pet-visit={visit.reason} data-visit-phase={phase} style={{ width: props.width, height: props.height }}>
     <div className="pet-visit-caption"><span>{title}</span><button type="button" onClick={props.onDismiss}
       aria-label={text(['结束这次来访', 'End this visit'])}><X aria-hidden="true" /></button></div>
     {cast.map((actor, index) => {
-      const state = view.actors[index]
-      const pose = index === 0 && view.phase === 'arriving' ? actor.interactions?.greeting.states[0] ?? state.pose : state.pose
-      const frame = reduced ? staticFrame('idle', actor.spriteVersionNumber)
-        : frameAtElapsedMs(pose, elapsed % totalCycleDurationMs(pose), actor.spriteVersionNumber)
-      return <button {...props.actorEvents} key={actor.id} type="button" className="pet-sprite pet-visit-actor"
+      return <button {...props.actorEvents} key={actor.id} ref={(node) => { actors.current[index] = node }} type="button" className="pet-sprite pet-visit-actor"
         data-visit-host={index === 0} aria-label={actor.displayName} title={actor.displayName}
-        style={{ left: state.x - state.size / 2, top: state.y - state.size * 208 / 384 - state.lift,
-          width: state.size, height: state.size * 208 / 192, opacity: state.opacity, zIndex: Math.round(state.y),
-          transform: `rotate(${state.tilt}deg) scale(${state.scale})`,
-          backgroundImage: `url("${actor.spritesheetUrl}")`, backgroundSize: `${PET_SHEET_COLUMNS * 100}% ${petSheetRowsForVersion(actor.spriteVersionNumber) * 100}%`,
-          backgroundPosition: frame.backgroundPosition }} />
+        style={{ left: 0, top: 0, willChange: 'transform, opacity',
+          backgroundImage: `url("${actor.spritesheetUrl}")`, backgroundSize: `${PET_SHEET_COLUMNS * 100}% ${petSheetRowsForVersion(actor.spriteVersionNumber) * 100}%` }} />
     })}
-    {view.token ? <span className="pet-visit-token" aria-hidden="true" style={{ left: view.token.x, top: view.token.y }}>
-      <PetMotifIcon motif={view.token.motif} />
-    </span> : null}
+    <span ref={token} className="pet-visit-token" aria-hidden="true" style={{ left: 0, top: 0, willChange: 'transform' }}>
+      <PetMotifIcon motif={PET_SCENES[visit.scene].motif} />
+    </span>
   </div>
 }

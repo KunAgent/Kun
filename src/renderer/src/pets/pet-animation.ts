@@ -17,7 +17,20 @@ export function framePosition(row: number, column: number, sheetRows: number): s
 export function frameDurationMs(state: PetAnimationState, frameIndex: number): number {
   const row = PET_ROWS[state]
   const duration = row.frameDurationsMs[frameIndex] ?? row.frameDurationsMs[0] ?? 0
-  return state === 'idle' ? duration * 6 : duration
+  return duration
+}
+
+/** Wake at a sprite boundary instead of rendering unchanged frames every refresh. */
+export function nextFrameDelayMs(state: PetAnimationState, elapsedMs: number): number {
+  const cycle = totalCycleDurationMs(state)
+  if (state !== 'idle' && elapsedMs >= cycle * 3) return nextFrameDelayMs('idle', elapsedMs - cycle * 3)
+  const wrapped = Math.max(0, elapsedMs) % cycle
+  let boundary = 0
+  for (let index = 0; index < PET_ROWS[state].frames; index++) {
+    boundary += frameDurationMs(state, index)
+    if (boundary > wrapped) return boundary - wrapped
+  }
+  return 1
 }
 
 export function totalCycleDurationMs(state: PetAnimationState): number {

@@ -6,7 +6,7 @@ const { existsSync, lstatSync, statSync, readdirSync, readFileSync, readlinkSync
 const { dirname, join, resolve } = require('node:path')
 
 const outputs = ['out', 'kun/dist', 'resources/bundled-extensions',
-  ...(process.platform === 'darwin' ? ['resources/native/remote-desktop-input'] : []),
+  ...(process.platform === 'darwin' ? ['resources/native/remote-desktop-input', 'resources/native/pet-activity'] : []),
   ...['provider-catalog', 'extension-api', 'extension-react', 'extension-test']
     .map(name => `packages/${name}/dist`)]
 
