@@ -5,7 +5,7 @@ import { defaultPetInteractions } from '@shared/pets-interactions'
 import { defaultPetVisits, type PetVisit } from '@shared/pets-visits'
 import { PetVisitDirector, type PetVisitContext } from './pet-visit-director'
 
-const pets: PetSummary[] = ['xiao-kun', 'ikun', 'gpt-girl', 'claude-girl', 'kimi-girl', 'whale-girl'].map((id) => ({
+const pets: PetSummary[] = ['xiao-kun', 'ikun', 'whale-girl'].map((id) => ({
   id: `kun:${id}`, sourceId: id, displayName: id, description: '', source: 'kun-builtin', available: true,
   sourceMissing: false, spriteVersionNumber: 1, spritesheetUrl: `kun-pet://asset/${id}`, interactions: defaultPetInteractions()
 }))
@@ -20,23 +20,18 @@ function advance(director: PetVisitDirector, ctx: PetVisitContext, from: number,
 }
 
 describe('occasional pet visits', () => {
-  it('invites the scene’s specialist and gives a model visit its package’s signature story', () => {
-    const scripted = pets.map((pet) => ({ ...pet, interactions: { ...defaultPetInteractions(), visits: {
-      arrival: 'walk' as const, scenes: pet.sourceId === 'claude-girl' ? ['study', 'tea'] as const : ['brainstorm', 'gift'] as const
-    } } })) as unknown as PetSummary[]
-    const ctx = context({ pets: scripted })
-    const manual = new PetVisitDirector(() => 0)
-    const book = manual.request({ id: 'book', kind: 'invite', createdAt: 1000, scene: 'study' }, ctx, 1000)!
-    expect(book.guestIds[0]).toBe('kun:claude-girl')
-    for (const [id, scene] of [['gpt-girl', 'brainstorm'], ['claude-girl', 'study']] as const) {
-      const director = new PetVisitDirector(() => 0)
-      director.update(ctx, 1000)
-      const switched = { ...ctx, modelPetId: `kun:${id}`, modelChangedAt: 2000 }
-      director.update(switched, 2000)
-      const visit = director.update(switched, 3000)!
-      expect(visit.scene).toBe(scene)
-      expect(visit.playUntil - visit.startedAt).toBe(PET_SCENES[scene].duration + 1600)
-    }
+  it('invites DS for shared bubbles and uses the model pet’s joint scene', () => {
+    const scripted: PetSummary[] = pets.map((pet) => ({ ...pet, interactions: { ...defaultPetInteractions(),
+      visits: { arrival: 'walk', scenes: ['bubbles', 'dance'] } } }))
+    const ctx = context({ pets: scripted }), manual = new PetVisitDirector(() => 0)
+    expect(manual.request({ id: 'shared', kind: 'invite', createdAt: 1000, scene: 'study' }, ctx, 1000))
+      .toMatchObject({ scene: 'bubbles', guestIds: ['kun:whale-girl'] })
+    const director = new PetVisitDirector(() => 0); director.update(ctx, 1000)
+    const switched = { ...ctx, modelPetId: 'kun:whale-girl', modelChangedAt: 2000 }
+    director.update(switched, 2000)
+    const visit = director.update(switched, 3000)!
+    expect(visit.scene).toBe('bubbles')
+    expect(visit.playUntil - visit.startedAt).toBe(PET_SCENES.bubbles.duration + 1600)
   })
 
   it('starts solo, invites from installed pets without any selection, and returns to solo after one scene', () => {
@@ -56,13 +51,13 @@ describe('occasional pet visits', () => {
   it('settles rapid model changes on the latest model and cancels stale guests politely', () => {
     const director = new PetVisitDirector(() => 0)
     director.update(context(), 1000)
-    director.update(context({ modelPetId: 'kun:gpt-girl', modelChangedAt: 2000 }), 2000)
-    const ctx = context({ modelPetId: 'kun:claude-girl', modelChangedAt: 2200 })
+    director.update(context({ modelPetId: 'kun:ikun', modelChangedAt: 2000 }), 2000)
+    const ctx = context({ modelPetId: 'kun:whale-girl', modelChangedAt: 2200 })
     director.update(ctx, 2200)
     expect(director.update(ctx, 2900)).toBeNull()
     const visit = director.update(ctx, 3100)!
-    expect(visit).toMatchObject({ reason: 'model', guestIds: ['kun:claude-girl'] })
-    const next = context({ modelPetId: 'kun:gpt-girl', modelChangedAt: 3300 })
+    expect(visit).toMatchObject({ reason: 'model', guestIds: ['kun:whale-girl'] })
+    const next = context({ modelPetId: 'kun:ikun', modelChangedAt: 3300 })
     const leaving = director.update(next, 3300)!
     expect(leaving.endsAt).toBe(4100)
     expect(director.update(next, 4100)).toBeNull()
@@ -72,7 +67,7 @@ describe('occasional pet visits', () => {
   it('does not replay an invitation that was interrupted by typing or an urgent task', () => {
     const director = new PetVisitDirector(() => 0)
     director.update(context(), 1000)
-    const model = context({ modelPetId: 'kun:gpt-girl', modelChangedAt: 2000 })
+    const model = context({ modelPetId: 'kun:ikun', modelChangedAt: 2000 })
     director.update(model, 2000)
     director.update({ ...model, inputActive: true }, 2400)
     expect(advance(director, model, 3400, 16400)).toBeNull()
@@ -83,7 +78,7 @@ describe('occasional pet visits', () => {
   it('backs out of an automatic visit on new input, while explicit invitations still work when automatic visits are paused', () => {
     const director = new PetVisitDirector(() => 0)
     director.update(context(), 1000)
-    const ctx = context({ modelPetId: 'kun:gpt-girl', modelChangedAt: 2000 })
+    const ctx = context({ modelPetId: 'kun:ikun', modelChangedAt: 2000 })
     director.update(ctx, 2000)
     director.update(ctx, 3000)
     expect(director.update({ ...ctx, inputActive: true }, 3500)?.endsAt).toBe(4300)
@@ -91,7 +86,7 @@ describe('occasional pet visits', () => {
     const quiet = context({ preferences: { enabled: false, frequency: 'balanced' } })
     const request = { id: 'manual', kind: 'invite' as const, createdAt: 5000, scene: 'tea' as const }
     const visit = director.request(request, quiet, 5000)!
-    expect(visit).toMatchObject({ reason: 'manual', scene: 'tea' })
+    expect(visit).toMatchObject({ reason: 'manual', scene: 'bubbles' })
     expect(director.request(request, quiet, 5100)?.startedAt).toBe(5000)
   })
 
@@ -114,17 +109,17 @@ describe('occasional pet visits', () => {
     const second = director.request({ id: 'two', kind: 'invite', createdAt: 3000 }, ctx, 3000)!
     expect(second.guestIds[0]).not.toBe(first.guestIds[0])
     expect(second.scene).not.toBe(first.scene)
-    const smaller = { ...ctx, pets: pets.filter((pet) => pet.id === ctx.primaryId || pet.sourceId === 'claude-girl') }
+    const smaller = { ...ctx, pets: pets.filter((pet) => pet.id === ctx.primaryId || pet.sourceId === 'whale-girl') }
     const third = director.request({ id: 'three', kind: 'invite', createdAt: 4000 }, smaller, 4000)!
-    expect(third.guestIds).toEqual(['kun:claude-girl'])
+    expect(third.guestIds).toEqual(['kun:whale-girl'])
   })
 
-  it('occasionally permits two or three guests without turning them into a persistent team', () => {
+  it('occasionally invites both remaining companions without turning them into a persistent team', () => {
     const director = new PetVisitDirector(() => .99), ctx = context()
     director.update(ctx, 1000)
     const visit = director.request({ id: 'group', kind: 'invite', createdAt: 2000 }, ctx, 2000)!
-    expect(visit.guestIds).toHaveLength(3)
-    expect(new Set(visit.guestIds).size).toBe(3)
+    expect(visit.guestIds).toHaveLength(2)
+    expect(new Set(visit.guestIds).size).toBe(2)
     expect(director.update(ctx, visit.endsAt)).toBeNull()
   })
 
@@ -137,7 +132,7 @@ describe('occasional pet visits', () => {
       const next = now + 110000
       advance(director, ctx, now + 1000, next - 1000)
       now = next
-      ctx = context({ modelPetId: index % 2 ? 'kun:gpt-girl' : 'kun:claude-girl', modelChangedAt: now })
+      ctx = context({ modelPetId: index % 2 ? 'kun:ikun' : 'kun:whale-girl', modelChangedAt: now })
       director.update(ctx, now)
       const visit = director.update(ctx, now + 1000)
       if (visit) started.push(visit.id)

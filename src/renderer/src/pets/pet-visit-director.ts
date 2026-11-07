@@ -1,3 +1,5 @@
+import { isBuiltinPetId } from '@shared/pets-builtin'
+import { jointSceneFor } from '@shared/pets-joint'
 import { PET_SCENES, PET_SCENE_DIRECTORS } from './pet-ensemble-catalog'
 import type { PetSummary } from '@shared/pets'
 import { defaultPetBottleRecipe, PET_BOTTLE_BATCH_LIMIT, PET_BOTTLE_TTL_MS, type PetBottleRecipe } from '@shared/pets-bottle'
@@ -23,7 +25,7 @@ export type PetVisitContext = {
 
 const INTERVALS = { quiet: [8 * 60_000, 14 * 60_000], balanced: [4 * 60_000, 7 * 60_000], lively: [2 * 60_000, 4 * 60_000] } as const
 const BUDGETS = { quiet: 2, balanced: 3, lively: 5 }
-const CASUAL: PetSceneId[] = ['high-five', 'gift', 'chase', 'bubbles', 'circle-dance', 'tea', 'wave-relay', 'exercise', 'conga']
+const CASUAL: PetSceneId[] = ['bubbles', 'dance', 'cheer', 'beatbox']
 type Pending = { reason: PetVisitReason; at: number; expiresAt: number; preferred?: string; scene?: PetSceneId }
 
 /** One finite visit at a time. No persisted parties or catch-up queue. */
@@ -79,7 +81,7 @@ export class PetVisitDirector {
       this.quietUntil = now + 2500
     } else if (this.inputSince !== null) {
       if (now - this.inputSince >= 90_000 && this.random() < .25) {
-        this.pending = { reason: 'break', scene: 'exercise', at: now + 4000, expiresAt: now + 10_000 }
+        this.pending = { reason: 'break', scene: 'dance', at: now + 4000, expiresAt: now + 10_000 }
       }
       this.inputSince = null
     }
@@ -105,7 +107,7 @@ export class PetVisitDirector {
     for (const key of context.completedKeys) this.completed.add(key)
     while (this.completed.size > 128) this.completed.delete(this.completed.values().next().value!)
     if (newCompletion && !blocked && !this.pending && this.eligible(context, now) && this.random() < .55) {
-      this.pending = { reason: 'celebration', scene: this.pick<PetSceneId>(['cheer', 'high-five', 'dance']), at: now + 2500, expiresAt: now + 8000 }
+      this.pending = { reason: 'celebration', scene: this.pick<PetSceneId>(['cheer', 'dance']), at: now + 2500, expiresAt: now + 8000 }
     }
     // Discard situational invitations when the user returns to work.
     if (this.pending && (now >= this.pending.expiresAt || context.inputActive || context.blocked || context.working)) this.pending = null
@@ -170,6 +172,7 @@ export class PetVisitDirector {
 
   private begin(context: PetVisitContext, reason: PetVisitReason, now: number, requestedScene?: PetSceneId, preferred?: string): void {
     const candidates = this.guests(context)
+    if (requestedScene) requestedScene = jointSceneFor(requestedScene)
     if (!candidates.length || !context.primaryId) return
     const matching = preferred ? candidates.find((pet) => pet.id === preferred) : undefined
     if (preferred && !matching) return
@@ -179,7 +182,7 @@ export class PetVisitDirector {
     const first = matching ?? director ?? this.pick(fresh.length ? fresh : candidates)
     const guests = [first]
     const sizeRoll = this.random()
-    const count = reason === 'model' ? 1 : Math.min(candidates.length, sizeRoll < .65 ? 1 : sizeRoll < .9 ? 2 : 3)
+    const count = Math.min(candidates.length, reason === 'model' || sizeRoll < .65 ? 1 : 2)
     for (let i = 1; i < count; i++) {
       const remaining = candidates.filter((pet) => !guests.includes(pet))
       const unused = remaining.filter((pet) => !recent.has(pet.id))
@@ -188,8 +191,9 @@ export class PetVisitDirector {
     const residentThemes = context.pets.find((pet) => pet.id === context.primaryId)?.interactions?.visits?.scenes
     const themes = reason !== 'model' && residentThemes && this.random() < .35
       ? residentThemes : first.interactions?.visits?.scenes ?? CASUAL
-    const availableScenes = themes.filter((scene) => !this.recentScenes.slice(-2).includes(scene))
-    const scene = requestedScene ?? (reason === 'model' ? themes[0] : this.pick(availableScenes.length ? availableScenes : themes))
+    const jointThemes = [...new Set(themes.map(jointSceneFor))]
+    const availableScenes = jointThemes.filter((scene) => !this.recentScenes.slice(-2).includes(scene))
+    const scene = requestedScene ?? (reason === 'model' ? jointThemes[0] : this.pick(availableScenes.length ? availableScenes : jointThemes))
     if (!(PET_SCENE_IDS as readonly string[]).includes(scene)) return
     // Let the complete action and response play; compressed stories looked rushed.
     const playMs = PET_SCENES[scene].duration
@@ -224,7 +228,7 @@ export class PetVisitDirector {
   }
 
   private guests(context: PetVisitContext): PetSummary[] {
-    return context.pets.filter((pet) => pet.source === 'kun-builtin' && pet.available && pet.spritesheetUrl &&
+    return context.pets.filter((pet) => pet.source === 'kun-builtin' && isBuiltinPetId(pet.sourceId) && pet.available && pet.spritesheetUrl &&
       pet.id !== context.primaryId)
   }
 

@@ -1,5 +1,6 @@
+import { PET_JOINT_SCENE_IDS } from '@shared/pets-joint'
 import { useRef, useState, type ReactElement } from 'react'
-import { PET_SCENE_IDS, type PetSceneId } from '@shared/pets-ensemble'
+import { type PetSceneId } from '@shared/pets-ensemble'
 import type { PetVisitPreferences } from '@shared/pets-visits'
 import { PET_SCENES, petEnsembleText } from './pet-ensemble-catalog'
 import './pet-visits.css'
@@ -43,7 +44,7 @@ export function PetVisitControls(props: {
     <details><summary>{text(['这次想玩什么', 'Choose this visit’s activity'])}</summary>
       <label>{text(['玩法', 'Activity'])}<select value={scene} disabled={pending} onChange={(event) => setScene(event.target.value as PetSceneId | '')}>
         <option value="">{text(['让宠物自己决定', 'Let the pet decide'])}</option>
-        {PET_SCENE_IDS.map((id) => <option key={id} value={id}>{text(PET_SCENES[id].title)}</option>)}
+        {PET_JOINT_SCENE_IDS.map((id) => <option key={id} value={id}>{text(PET_SCENES[id].title)}</option>)}
       </select></label>
     </details>
     {error ? <p role="alert">{error}</p> : null}

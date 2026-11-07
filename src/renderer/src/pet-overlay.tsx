@@ -130,7 +130,8 @@ function PetOverlayApp(): React.JSX.Element {
       const pet = hit?.querySelector<HTMLElement>('.pet-character-stage')?.getBoundingClientRect()
       const controls = hit?.querySelector<HTMLElement>(controlsVisibleRef.current
         ? '.pet-quick-composer, .pet-toolbar' : '.pet-toolbar-handle')?.getBoundingClientRect()
-      const overCompanion = Array.from(hit?.querySelectorAll<HTMLElement>('.pet-sprite') ?? []).some((element) => pointInsidePetHit(point, element.getBoundingClientRect())) || pointInsidePetHit(point, controls ?? null) ||
+      const overJoint = Boolean(document.elementFromPoint(point.x, point.y)?.closest('.pet-joint-hit'))
+      const overCompanion = overJoint || Array.from(hit?.querySelectorAll<HTMLElement>('.pet-sprite') ?? []).some((element) => pointInsidePetHit(point, element.getBoundingClientRect())) || pointInsidePetHit(point, controls ?? null) ||
         (controlsVisibleRef.current && pet && controls ? pointInsidePetHit(point, petControlsBridge(pet, controls)) : false)
       if (overCompanion || draggingRef.current) {
         window.clearTimeout(controlsLeaveTimer)
@@ -226,7 +227,7 @@ function PetOverlayApp(): React.JSX.Element {
     }
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target
-      if (target instanceof Element && target.closest('.pet-menu, .pet-sprite')) return
+      if (target instanceof Element && target.closest('.pet-menu, .pet-sprite, .pet-joint-hit')) return
       setMenuOpen(false)
     }
     const onBlur = (): void => setMenuOpen(false)
@@ -372,7 +373,7 @@ function PetOverlayApp(): React.JSX.Element {
           </div>
         ) : null}
         <div className="pet-companion" ref={companionRef} onFocusCapture={(event) => {
-          if ((event.target as HTMLElement).matches('.pet-sprite:focus-visible')) setControlsHover(true)
+          if ((event.target as HTMLElement).matches('.pet-sprite:focus-visible, .pet-joint-hit:focus-visible')) setControlsHover(true)
         }} onBlurCapture={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) setControlsHover(false)
         }}>
@@ -417,7 +418,7 @@ function PetOverlayApp(): React.JSX.Element {
             style={{ left: placement.menu.left, top: placement.menu.top }}>
             <PetContextMenu labels={menuLabels}
               onEnsemble={() => { setMenuOpen(false); void bridge.requestPetVisit() }}
-              onClose={() => { setMenuOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite')?.focus() }}
+              onClose={() => { setMenuOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite, .pet-joint-hit')?.focus() }}
               onSettings={() => { setMenuOpen(false); bridge.openPetSettings() }}
               onHide={() => { setMenuOpen(false); void bridge.closeOverlay() }} />
           </div> : null}

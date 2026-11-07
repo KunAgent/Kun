@@ -40,10 +40,9 @@
     },
     "visits": {
       "scenes": [
-        "high-five",
-        "gift",
-        "exercise",
-        "chase"
+        "dance",
+        "bubbles",
+        "cheer"
       ],
       "arrival": "hop"
     },
@@ -52,6 +51,57 @@
       "inspectState": "waiting",
       "celebrateState": "jumping",
       "durationMs": 8400
+    },
+    "joint": {
+      "version": 1,
+      "row": 0,
+      "blink": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "ground": 0.91,
+      "head": [
+        0.5,
+        0.64
+      ],
+      "arms": [
+        {
+          "shoulder": [
+            0.29,
+            0.55
+          ],
+          "hand": [
+            0.15,
+            0.69
+          ],
+          "radius": 0.105
+        },
+        {
+          "shoulder": [
+            0.72,
+            0.56
+          ],
+          "hand": [
+            0.84,
+            0.69
+          ],
+          "radius": 0.11
+        }
+      ],
+      "feet": [
+        [
+          0.35,
+          0.88
+        ],
+        [
+          0.66,
+          0.89
+        ]
+      ]
     }
   }
 }

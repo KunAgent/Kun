@@ -1,4 +1,4 @@
-import { BUILTIN_PET_IDS, isBuiltinPetId, isKunPetId, type BuiltinPetId } from './pets-builtin'
+import { BUILTIN_PET_IDS, isBuiltinPetId, type BuiltinPetId } from './pets-builtin'
 
 export const PET_SCENE_IDS = [
   'welcome', 'high-five', 'wave-relay', 'cheer', 'dance', 'circle-dance',
@@ -18,8 +18,8 @@ export type PetEnsembleSettings = {
 
 export function defaultPetEnsemble(): PetEnsembleSettings {
   return {
-    enabled: false, members: ['xiao-kun', 'whale-girl', 'gpt-girl', 'claude-girl'],
-    scene: 'welcome', autoplay: false, paused: false
+    enabled: false, members: ['xiao-kun', 'ikun', 'whale-girl'],
+    scene: 'bubbles', autoplay: false, paused: false
   }
 }
 
@@ -30,7 +30,6 @@ export function parsePetEnsemble(value: unknown): PetEnsembleSettings | null {
   if (typeof input.scene !== 'string' || !(PET_SCENE_IDS as readonly string[]).includes(input.scene)) return null
   if (!Array.isArray(input.members) || input.members.length < 2 || input.members.length > BUILTIN_PET_IDS.length) return null
   if (!input.members.every(isBuiltinPetId) || new Set(input.members).size !== input.members.length) return null
-  if (!input.members.some(isKunPetId) || !input.members.some((id) => !isKunPetId(id))) return null
   return {
     enabled: input.enabled, members: [...input.members], scene: input.scene as PetSceneId,
     autoplay: input.autoplay, paused: input.paused

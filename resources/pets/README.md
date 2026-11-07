@@ -1,9 +1,9 @@
 # Built-in companions
 
-Kun ships Xiao Kun, iKun, and the AI characters listed in
-[AI-GIRLS.md](AI-GIRLS.md). Every package has nine animation states and 57
-transparent frames. Brand marks are part of the artwork; their sources are
-recorded in [AI-BRANDS.md](AI-BRANDS.md).
+Kun ships exactly three built-in pets: Xiao Kun, iKun and DS (`whale-girl`).
+Every package retains its original nine solo animation states and 57 transparent
+frames. DS's artwork attribution is in [whale-girl/ATTRIBUTION.md](whale-girl/ATTRIBUTION.md).
+Each package also includes a declarative rig for joint canvas interactions.
 
 ## One resident, occasional visitors
 
@@ -18,14 +18,13 @@ A visit has three beats:
 
 1. The resident calls a friend over; guests walk, hop or peek in from different
    directions.
-2. They play one short scene, using circles, a loose triangle, a chase route,
-   turn-taking, and shared props instead of a stationary row.
+2. They act together on one canvas. Hands, bodies, feet and objects share the
+   same contact and motion solution.
 3. They wave goodbye and leave. The resident returns to its original position.
 
-Most visits have one guest; occasional scenes invite two or three. Automatic
-model-related greetings last about 7-8 seconds in total. Other visits last
-about 10-13 seconds. Each invitation has a hard end time; continued typing or
-recording never keeps guests on screen indefinitely.
+Most visits have one guest; some invite both other pets. The joint activity lasts
+12-14 seconds, plus a short entrance and departure. Each invitation has a hard
+end time; continued typing or recording never keeps guests on screen indefinitely.
 
 ## Timing and interruption rules
 
@@ -64,7 +63,8 @@ Typing, listening, measured microphone activity, transcription, and actual
 answer playback animate the resident itself. A selected model does not create
 a permanent side-by-side companion. The model context only influences an
 eligible temporary visit. Explicit model-name matches take precedence over a
-provider label; an unknown model on a compatibility gateway does not imply GPT.
+provider label. DeepSeek can invite DS; removed AI characters are never recreated
+for other model names.
 
 Main and side composers supply their own model context. The input messages carry
 only state and a quantized amplitude, never typed text, transcripts or audio.
@@ -107,21 +107,23 @@ An optional `interactions` object in `pet.json` supplies validated data:
 - An optional `bottle` recipe sets `catchStyle` (`careful` or `bounce`),
   `inspectState`, `celebrateState`, and a bounded `durationMs` (6000-12000).
 - `visits.scenes` lists one to eight preferred scene IDs; `visits.arrival` is
-  `walk`, `hop`, or `peek`. Claude favors reading and tea, Kimi favors stargazing,
-  iKun favors rhythm games, and MiMo favors inventions and debugging.
+  `walk`, `hop`, or `peek`. DS favors shared bubbles, iKun favors passing a ball,
+  and Xiao Kun favors hand-in-hand steps.
+- `joint` stores the neutral sprite row, blink cells, head pivot, shoulder/hand
+  anchors, feet and ground. All values are bounded numeric data.
 
-The 24 scene definitions reuse the existing sprite rows with coordinated
-movement and props. They do not add executable package scripts. Recipe-only
+The four joint scenes use one texture mesh renderer and shared contact constraints.
+Legacy activity names map to these scenes. No executable package script is added. Recipe-only
 changes invalidate the cached manifest. Old v1/v2 packages without recipes
 retain generic feedback; invalid updates preserve the last valid cached copy.
 
 ## Library upgrades and validation
 
-The previously retired anime/animal collection is no longer offered as built-in
-pets. An old selected built-in migrates to Xiao Kun while preserving whether the
-overlay was open. Local/Codex imports retain their own namespaces and saved files.
+The retired anime/animal collection and the fourteen other AI characters are no
+longer offered or bundled. Retired AI selections migrate to DS; older anime/animal
+selections migrate to Xiao Kun. Both preserve whether the overlay was open. Local/Codex imports retain their own namespaces and saved files.
 
 Run `node --test scripts/bundled-pets.test.cjs` for roster, decoding, margins,
-57-frame coverage, unique designs and asset size checks. Pet Vitest suites cover
+57-frame coverage, rig metadata and asset size checks. Pet Vitest suites cover
 migration, ephemeral presence, invitation delivery/acknowledgment, randomized
 scheduling, cooldowns, interruption, choreography, and the setup-free controls.

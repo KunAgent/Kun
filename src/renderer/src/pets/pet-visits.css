@@ -1,5 +1,4 @@
 .pet-visit-stage { position: relative; overflow: hidden; pointer-events: none; isolation: isolate; }
-.pet-visit-actor { position: absolute; transform-origin: center; }
 .pet-visit-caption { position: absolute; z-index: 400; top: 2px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 12px); display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px; border-radius: 18px; background: #fffcf3ed; color: #71604b; border: 1px solid #ffffffb0; box-shadow: 0 2px 10px #33220010; font: 12px/1.4 system-ui,sans-serif; white-space: nowrap; }
 .pet-visit-caption span { overflow: hidden; text-overflow: ellipsis; }
 .pet-visit-caption button { pointer-events: auto; appearance: none; padding: 3px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
@@ -17,5 +16,3 @@
 .pet-visits-controls [role='alert'] { color: #a13a31; }
 .pet-visits-settings { margin: 16px 0; }
 .pet-visits-settings > summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 0; }
-.pet-story-prop { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; will-change: transform, opacity; }
-.pet-visit-shadow { position: absolute; left: 0; top: 0; height: 5px; border-radius: 50%; background: #5c685d; pointer-events: none; will-change: transform, opacity; }

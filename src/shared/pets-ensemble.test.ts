@@ -6,16 +6,17 @@ describe('pet ensemble preferences', () => {
   it('accepts multiple hosts and every AI companion without sharing the caller array', () => {
     const input = { ...defaultPetEnsemble(), enabled: true, members: [...BUILTIN_PET_IDS] }
     const parsed = parsePetEnsemble(input)
+    expect(parsePetEnsemble({ ...input, members: ['xiao-kun', 'ikun'] })).not.toBeNull()
     expect(parsed).toEqual(input)
     expect(parsed?.members).not.toBe(input.members)
-    expect(parsed?.members).toHaveLength(17)
+    expect(parsed?.members).toHaveLength(3)
     expect(new Set(PET_SCENE_IDS).size).toBe(24)
   })
 
-  it('rejects unknown members, malformed controls and casts without both a host and an AI', () => {
+  it('rejects unknown members, malformed controls and invalid casts', () => {
     for (const patch of [
       { enabled: 'true' }, { paused: 0 }, { autoplay: null }, { scene: 'unknown' },
-      { members: [] }, { members: ['xiao-kun', 'ikun'] }, { members: ['gpt-girl', 'claude-girl'] },
+      { members: [] }, { members: ['whale-girl'] }, { members: ['gpt-girl', 'claude-girl'] },
       { members: ['xiao-kun', 'gpt-girl', 'gpt-girl'] }, { members: ['xiao-kun', 'custom-pet'] },
       { members: ['xiao-kun', 'kun-local:gpt-girl'] }, { members: Array(100).fill('gpt-girl') }
     ]) expect(parsePetEnsemble({ ...defaultPetEnsemble(), ...patch })).toBeNull()

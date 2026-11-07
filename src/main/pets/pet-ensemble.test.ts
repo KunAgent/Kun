@@ -24,9 +24,28 @@ async function importPet(store: PetStore, sourceId: string, source: PetSource = 
 }
 
 describe('built-in pet collection upgrades', () => {
+  it.each([true, false])('moves a retired AI selection to DS without changing visibility (%s)', async (open) => {
+    const { store, root } = await fixture()
+    await importPet(store, 'gpt-girl')
+    await importPet(store, 'gpt-girl', 'kun-local')
+    await store.selectPet('kun:gpt-girl'); await store.setOverlayOpen(open)
+    const refresh = async (target: PetStore) => refreshPetLibraries({ store: target,
+      builtinRoot: path.resolve('resources/pets'), localRoot: path.join(root, 'local'),
+      codexHome: path.join(root, 'no-codex'), importCodexPets: false })
+    await refresh(store)
+    expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:whale-girl', overlayOpen: open })
+    expect(store.listPets().filter((pet) => pet.source === 'kun-builtin').map((pet) => pet.sourceId).sort()).toEqual(['ikun', 'whale-girl', 'xiao-kun'])
+    expect(store.getManifest('kun:gpt-girl')).toBeNull()
+    expect(store.getManifest('kun-local:gpt-girl')).not.toBeNull()
+    const restarted = new PetStore(root); await restarted.initialize(); await refresh(restarted)
+    expect(restarted.getSettings().selectedPetId).toBe('kun:whale-girl')
+    expect(restarted.getManifest('kun:gpt-girl')).toBeNull()
+  })
+
   it.each([true, false])('retires cached built-ins and retains overlay visibility (%s), imports and saved files', async (open) => {
     const { store, root } = await fixture()
     await importPet(store, 'anya')
+    await importPet(store, 'unknown-old-builtin')
     await importPet(store, 'anya', 'kun-local')
     await importPet(store, 'anya', 'codex-custom')
     const cached = store.assetPath('kun:anya')!
@@ -36,9 +55,10 @@ describe('built-in pet collection upgrades', () => {
       builtinRoot: path.resolve('resources/pets'), localRoot: path.join(root, 'local'),
       codexHome: path.join(root, 'no-codex'), importCodexPets: false })
     await refresh(store)
-    expect(store.listPets().filter((pet) => pet.source === 'kun-builtin')).toHaveLength(17)
+    expect(store.listPets().filter((pet) => pet.source === 'kun-builtin')).toHaveLength(3)
     expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: open })
     expect(store.getManifest('kun:anya')).toBeNull()
+    expect(store.getManifest('kun:unknown-old-builtin')).toBeNull()
     expect(store.getManifest('kun-local:anya')).not.toBeNull()
     expect(store.getManifest('codex-custom:anya')).not.toBeNull()
     expect((await readFile(cached)).byteLength).toBeGreaterThan(0)
@@ -71,7 +91,7 @@ describe('ensemble persistence and IPC', () => {
     expect(restarted.getSettings().ensemble).toEqual({ ...ensemble, enabled: false, paused: false, autoplay: false })
     const copy = restarted.getSettings()
     copy.ensemble?.members.pop()
-    expect(restarted.getSettings().ensemble?.members).toHaveLength(4)
+    expect(restarted.getSettings().ensemble?.members).toHaveLength(3)
   })
 
   it('accepts valid workbench and overlay requests, and rejects subframes and malformed casts', async () => {

@@ -1,3 +1,4 @@
+import { parsePetJointRig, type PetJointRig } from './pets-joint'
 import { PET_ROWS, type PetAnimationState } from './pets'
 import { PET_SCENE_IDS, type PetSceneId } from './pets-ensemble'
 import type { PetBottleRecipe } from './pets-bottle'
@@ -7,6 +8,7 @@ export type PetReactionKind = typeof PET_REACTION_KINDS[number]
 export type PetReactionClip = { state: PetAnimationState; tempo: number; strength: number }
 export type PetInteractionPack = {
   version: 1
+  joint?: PetJointRig
   modelAliases: string[]
   providerAliases: string[]
   greeting: { states: PetAnimationState[]; durationMs: number }
@@ -38,6 +40,8 @@ export function parsePetInteractionPack(value: unknown): PetInteractionPack | nu
   if (!aliases(value.modelAliases) || !aliases(value.providerAliases)) return null
   if (!Array.isArray(value.greeting.states) || value.greeting.states.length < 1 || value.greeting.states.length > 6 ||
     !value.greeting.states.every(pose) || !finite(value.greeting.durationMs, 1000, 10000)) return null
+  const joint = value.joint === undefined ? undefined : parsePetJointRig(value.joint)
+  if (joint === null) return null
   const clips = {} as PetInteractionPack['clips']
   for (const kind of PET_REACTION_KINDS) {
     const clip = value.clips[kind]
@@ -60,7 +64,7 @@ export function parsePetInteractionPack(value: unknown): PetInteractionPack | nu
     bottle = { catchStyle: input.catchStyle as PetBottleRecipe['catchStyle'], inspectState: input.inspectState,
       celebrateState: input.celebrateState, durationMs: input.durationMs }
   }
-  return { version: 1, modelAliases: [...value.modelAliases], providerAliases: [...value.providerAliases],
+  return { version: 1, ...(joint ? { joint } : {}), modelAliases: [...value.modelAliases], providerAliases: [...value.providerAliases],
     greeting: { states: [...value.greeting.states], durationMs: value.greeting.durationMs }, clips,
     ...(visits ? { visits } : {}), ...(bottle ? { bottle } : {}) }
 }

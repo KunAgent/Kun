@@ -12,20 +12,17 @@ const pets: PetSummary[] = BUILTIN_PET_IDS.map((id) => {
 })
 
 describe('model and input reactions', () => {
-  it.each([
-    ['openai/gpt-5.1', 'gpt-girl'], ['o3-mini', 'gpt-girl'], ['anthropic/claude-sonnet-4', 'claude-girl'],
-    ['claude-opus', 'claude-girl'], ['gemini-3-pro', 'gemini-girl'], ['doubao-seed-2', 'seed-girl'],
-    ['doubao-1.5', 'doubao-girl'], ['deepseek-v4', 'whale-girl'], ['kimi-k2.5', 'kimi-girl'], ['grok-4', 'grok-girl'],
-    ['qwen3-coder', 'qwen-girl'], ['glm-5', 'glm-girl'], ['MiniMax-M2', 'minimax-girl'], ['llama-4', 'llama-girl'],
-    ['codestral-latest', 'mistral-girl'], ['hunyuan-t1', 'hunyuan-girl'], ['mimo-v2-flash', 'mimo-girl']
-  ])('maps %s to its packaged character through a compatibility gateway', (model, id) => {
-    expect(petForModel({ model, provider: 'openai' }, pets)?.sourceId).toBe(id)
+  it.each(['deepseek-v4', 'deepseek-chat', 'gateway/deepseek-reasoner'])('maps %s to DS', (model) => {
+    expect(petForModel({ model, provider: 'openai' }, pets)?.sourceId).toBe('whale-girl')
+  })
+  it.each(['gpt-5', 'claude-sonnet-4', 'gemini-3-pro', 'kimi-k2', 'qwen3'])('does not resurrect a removed character for %s', (model) => {
+    expect(petForModel({ model, provider: 'openai' }, pets)).toBeNull()
   })
 
   it('uses provider defaults only for auto selection and ignores unknown or imported namesakes', () => {
     expect(petForModel({ model: 'custom-private-model', provider: 'openai' }, pets)).toBeNull()
     expect(petForModel({ model: 'gptish', provider: 'openai' }, pets)).toBeNull()
-    expect(petForModel({ model: 'auto', provider: 'anthropic' }, pets)?.sourceId).toBe('claude-girl')
+    expect(petForModel({ model: 'auto', provider: 'deepseek' }, pets)?.sourceId).toBe('whale-girl')
     expect(petForModel({ model: 'gpt-5', provider: '' }, pets.map((pet) => ({ ...pet, source: 'kun-local' })))).toBeNull()
     expect(petForModel({ model: 'gpt-5', provider: '' }, pets.map((pet) => ({ ...pet, available: false })))).toBeNull()
   })

@@ -1,7 +1,7 @@
 import { access, mkdir, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
+import { isBuiltinPetId } from '../../shared/pets-builtin'
 import type { PetImportReport, PetSource, PetSourceState } from '../../shared/pets'
 import { directoryStateFromError } from './pet-paths'
 import { PetStore, pathExists } from './pet-store'
@@ -85,7 +85,7 @@ async function importTree(
       })
       continue
     }
-    if (source === 'kun-builtin' && RETIRED_BUILTIN_PET_IDS.has(validated.sourceId)) continue
+    if (source === 'kun-builtin' && !isBuiltinPetId(validated.sourceId)) continue
     const previous = kept.get(validated.sourceId)
     if (previous) {
       report.conflicts.push({ sourcePath: candidate.petDir, sourceId: validated.sourceId, keptSourcePath: previous })

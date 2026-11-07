@@ -17,7 +17,7 @@ describe('visit delivery lifecycle', () => {
     let deliver!: (request: PetVisitRequest) => void
     const stop = vi.fn(), ack = vi.fn()
     const bridge = { onVisitRequested: (handler: typeof deliver) => { deliver = handler; return stop }, acknowledgeVisitRequest: ack }
-    const guest = { id: 'kun:gpt-girl', sourceId: 'gpt-girl', source: 'kun-builtin', available: true, spritesheetUrl: 'kun-pet://gpt' } as PetSummary
+    const guest = { id: 'kun:whale-girl', sourceId: 'whale-girl', source: 'kun-builtin', available: true, spritesheetUrl: 'kun-pet://ds' } as PetSummary
     const request: PetVisitRequest = { id: 'one', kind: 'invite', createdAt: 100000, primaryId: 'kun:xiao-kun' }
     const boot = { petId: 'kun:xiao-kun', spritesheetUrl: 'kun-pet://kun', isOpen: false, ensemblePets: [guest], visitRequest: request,
       ensemble: { ...defaultPetEnsemble(), enabled: true, autoplay: true } } as PetOverlayBootstrap
@@ -31,7 +31,7 @@ describe('visit delivery lifecycle', () => {
     await act(async () => { view.update(createElement(View, { bootstrap: { ...boot, isOpen: true, petId: 'kun:ikun' } })) })
     expect(result).toBeNull(); expect(ack).not.toHaveBeenCalled()
     await act(async () => { view.update(createElement(View, { bootstrap: { ...boot, isOpen: true } })) })
-    expect(result?.guestIds).toEqual(['kun:gpt-girl'])
+    expect(result?.guestIds).toEqual(['kun:whale-girl'])
     expect(ack).toHaveBeenCalledExactlyOnceWith('one')
     await act(async () => { deliver(request) })
     expect(ack).toHaveBeenCalledOnce()

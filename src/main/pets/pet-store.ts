@@ -1,7 +1,7 @@
 import { defaultPetGlobalActivity, parsePetGlobalActivity, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
 import { defaultPetVisits, parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
-import { RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
+import { isBuiltinPetId, RETIRED_AI_PET_IDS, RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
 import { normalizeSavedPetEnsemble, parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { createHash, randomUUID } from 'node:crypto'
 import { access, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
@@ -134,10 +134,15 @@ export class PetStore {
   async retireBuiltinPets(): Promise<void> {
     await this.enqueue(async () => {
       const retired = new Set([...RETIRED_BUILTIN_PET_IDS].map((id) => petIdForSource('kun-builtin', id)))
+      for (const manifest of this.catalog.values()) {
+        if (manifest.source === 'kun-builtin' && !isBuiltinPetId(manifest.sourceId)) retired.add(manifest.id)
+      }
       // Keep cached files intact, but stop offering retired packages as built-ins.
       for (const id of retired) this.catalog.delete(id)
       if (!this.settings.selectedPetId || !retired.has(this.settings.selectedPetId)) return
-      this.settings.selectedPetId = this.catalog.has(DEFAULT_BUILTIN_PET_ID) ? DEFAULT_BUILTIN_PET_ID : null
+      const fallback = RETIRED_AI_PET_IDS.has(this.settings.selectedPetId.slice(4)) && this.catalog.has('kun:whale-girl')
+        ? 'kun:whale-girl' : DEFAULT_BUILTIN_PET_ID
+      this.settings.selectedPetId = this.catalog.has(fallback) ? fallback : null
       if (!this.settings.selectedPetId) this.settings.overlayOpen = false
       await this.writeSettings()
     })

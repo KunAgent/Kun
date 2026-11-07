@@ -1,7 +1,7 @@
 {
   "id": "whale-girl",
-  "displayName": "鲸鱼娘",
-  "description": "长蓝发、鲸鳍耳和鲸尾的 Q 版大肥鱼，穿着蓝白女仆装陪你工作。社区二创形象。 AI 标识融入发饰与服装。",
+  "displayName": "DS",
+  "description": "DeepSeek 鲸鱼娘。与小 kun、ikun 一起合作玩耍的 AI 伙伴。",
   "spriteVersionNumber": 1,
   "spritesheetPath": "spritesheet.webp",
   "interactions": {
@@ -45,11 +45,62 @@
     "visits": {
       "scenes": [
         "bubbles",
-        "chase",
-        "stargazing",
-        "high-five"
+        "dance",
+        "cheer",
+        "beatbox"
       ],
       "arrival": "hop"
+    },
+    "joint": {
+      "version": 1,
+      "row": 0,
+      "blink": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "ground": 0.93,
+      "head": [
+        0.5,
+        0.53
+      ],
+      "arms": [
+        {
+          "shoulder": [
+            0.4,
+            0.56
+          ],
+          "hand": [
+            0.385,
+            0.67
+          ],
+          "radius": 0.025
+        },
+        {
+          "shoulder": [
+            0.6,
+            0.56
+          ],
+          "hand": [
+            0.615,
+            0.67
+          ],
+          "radius": 0.025
+        }
+      ],
+      "feet": [
+        [
+          0.46,
+          0.9
+        ],
+        [
+          0.55,
+          0.9
+        ]
+      ]
     }
   }
 }

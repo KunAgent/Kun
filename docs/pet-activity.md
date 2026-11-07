@@ -1,6 +1,6 @@
 # Desktop pet activity
 
-All 17 built-in pets use the same animation scheduler. Idle sprites sleep between
+All three built-in pets use the same animation scheduler. Idle sprites sleep between
 frame boundaries; only the open-eye frames hold for seconds. Moving scenes paint
 transforms at the display refresh rate without rerendering the overlay. Hidden,
 paused and reduced-motion surfaces stop their animation callbacks.

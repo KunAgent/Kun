@@ -122,7 +122,7 @@ describe('desktop pet startup', () => {
 
   it('delivers one-off invitations without persisting a team and clears acknowledged or closed-window requests', async () => {
     await copyDefault()
-    await cp(path.resolve('resources/pets/gpt-girl'), path.join(host.root, 'resources', 'pets', 'gpt-girl'), { recursive: true })
+    await cp(path.resolve('resources/pets/whale-girl'), path.join(host.root, 'resources', 'pets', 'whale-girl'), { recursive: true })
     await startDesktopPets({ isFreshInstall: true })
     const frame = {}, event = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
     const bootstrap = () => host.handlers.get(PET_IPC.overlayBootstrap)!(event) as Promise<PetOverlayBootstrap>
@@ -172,18 +172,18 @@ describe('desktop pet startup', () => {
 
   it('publishes available ensemble assets and persists overlay changes without replacing the selected pet', async () => {
     await copyDefault()
-    for (const id of ['ikun', 'gpt-girl', 'claude-girl']) {
+    for (const id of ['ikun', 'whale-girl']) {
       await cp(path.resolve('resources/pets', id), path.join(host.root, 'resources', 'pets', id), { recursive: true })
     }
     await startDesktopPets({ isFreshInstall: true })
     const frame = {}
     const event = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
     const ensemble = { ...defaultPetEnsemble(), enabled: true,
-      members: ['xiao-kun', 'ikun', 'gpt-girl', 'claude-girl'] }
+      members: ['xiao-kun', 'ikun', 'whale-girl'] }
     await host.handlers.get(PET_IPC.setPetEnsemble)!(event, ensemble)
     const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!(event) as PetOverlayBootstrap
     expect(bootstrap.ensemble).toEqual({ ...ensemble, enabled: false })
-    expect(bootstrap.ensemblePets).toHaveLength(4)
+    expect(bootstrap.ensemblePets).toHaveLength(3)
     expect(bootstrap.ensemblePets?.every((pet) => pet.spritesheetUrl?.startsWith('kun-pet://'))).toBe(true)
     expect(bootstrap.petId).toBe('kun:xiao-kun')
     expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayBootstrapChanged, expect.objectContaining({ ensemble: { ...ensemble, enabled: false } }))
