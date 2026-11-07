@@ -7,14 +7,7 @@ export type PetGlobalActivityStatus = {
 }
 
 export function defaultPetGlobalActivity(): PetGlobalActivityPreferences {
-  return { keyboard: false, microphone: false }
-}
-
-export function parsePetGlobalActivity(value: unknown): PetGlobalActivityPreferences | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
-  const input = value as Record<string, unknown>
-  if (typeof input.keyboard !== 'boolean' || typeof input.microphone !== 'boolean') return null
-  return { keyboard: input.keyboard, microphone: input.microphone }
+  return { keyboard: true, microphone: true }
 }
 
 export type PetNativeActivityEvent =

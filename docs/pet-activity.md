@@ -5,9 +5,10 @@ frame boundaries; only the open-eye frames hold for seconds. Moving scenes paint
 transforms at the display refresh rate without rerendering the overlay. Hidden,
 paused and reduced-motion surfaces stop their animation callbacks.
 
-Settings > Pets > Companion across apps exposes two independent opt-ins. These
-preferences default to off, including after migration. Existing in-app input and
-voice reactions continue to work on all platforms.
+Typing, voice and bottle-drop reactions are enabled automatically while a pet is
+visible. Settings > Pets > Automatic companionship shows activity status without
+separate opt-in switches. Existing saved off switches migrate to the automatic
+behavior. In-app input and voice reactions continue to work on all platforms.
 
 - On macOS, typing uses a read-only CoreGraphics event tap. It emits at most five
   activity pulses per second, without reading key codes, characters, text fields
@@ -22,11 +23,11 @@ voice reactions continue to work on all platforms.
   clearly show this; in-app reactions remain available.
 
 The native observer is packaged as `Contents/Resources/native/pet-activity` and
-built for both macOS architectures. It runs only while a pet and its reactions
-are enabled. Closing the pet, disabling reactions, suspending or quitting stops
+built for both macOS architectures. It runs only while a pet is visible.
+Closing the pet, suspending or quitting stops
 it. The owner supplies a heartbeat; EOF, owner death or a 15-second heartbeat
 expiry also terminates the helper. A failed observer reports unavailable and can
-be restarted by toggling the source. No startup or automatic retry prompts for
+be restarted by hiding and waking the pet. No startup or automatic retry prompts for
 permission.
 
 Only whitelisted states cross main-process IPC, with activity expiring after

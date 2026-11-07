@@ -18,7 +18,7 @@ export class PetGlobalActivity {
   private child: ChildProcessWithoutNullStreams | null = null
   private heartbeat: ReturnType<typeof setInterval> | undefined
   private preferences = defaultPetGlobalActivity()
-  private enabled = false
+  private enabled: boolean | null = null
   private state: PetGlobalActivityStatus = { keyboard: 'off', microphone: 'off', recording: false }
   private permission: Promise<void> | null = null
   private permissionChild: ChildProcessWithoutNullStreams | null = null

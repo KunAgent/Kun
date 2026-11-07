@@ -1,6 +1,6 @@
 # Joint pet interactions
 
-The built-in cast is Xiao Kun, iKun and DS (`whale-girl`). Each retains its original
+The built-in cast is Xiao Kun, iKun and Whale Girl (`whale-girl`). Each retains its original
 solo sprite sheet. Visits are authored as one scene on one transparent canvas,
 with a shared clock, coordinate system, object ownership and contact solution.
 There are no separately playing character clips during a joint scene.

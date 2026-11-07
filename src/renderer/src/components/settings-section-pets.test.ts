@@ -4,6 +4,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestInstance } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defaultPetSettings, type PetImportReport, type PetSettings, type PetSummary } from '@shared/pets'
+import type { PetGlobalActivityStatus } from '@shared/pets-global-activity'
 import { PetsSettingsSection } from './settings-section-pets'
 
 vi.mock('react-i18next', () => ({
@@ -36,15 +37,19 @@ function report(failed = 0): PetImportReport {
   }
 }
 
-function install(pets: PetSummary[], settings: PetSettings, fail = false): { refresh: ReturnType<typeof vi.fn>; catalog: () => void } {
+function install(pets: PetSummary[], settings: PetSettings, fail = false,
+  activity: PetGlobalActivityStatus = { keyboard: 'active', microphone: 'active', recording: false }
+): { refresh: ReturnType<typeof vi.fn>; catalog: () => void; requestAccess: ReturnType<typeof vi.fn> } {
   let catalog = (): void => undefined
   const refresh = vi.fn(async () => report(1))
+  const requestAccess = vi.fn(async () => { activity = { ...activity, keyboard: 'active' } })
   const api = {
     listPets: vi.fn(async () => {
       if (fail) throw new Error('unavailable')
       return pets
     }),
-    getPetGlobalActivityStatus: vi.fn(async () => ({ keyboard: 'off', microphone: 'off', recording: false })),
+    getPetGlobalActivityStatus: vi.fn(async () => activity),
+    requestPetKeyboardAccess: requestAccess,
     getPetSettings: vi.fn(async () => settings),
     getPetInteraction: vi.fn(async () => ({ mode: 'passthrough' as const, note: null })),
     selectPet: vi.fn(async (id: string | null) => ({ ...settings, selectedPetId: id })),
@@ -63,7 +68,7 @@ function install(pets: PetSummary[], settings: PetSettings, fail = false): { ref
   }
   vi.stubGlobal('window', { kunGui: { pets: api }, dispatchEvent: () => true,
     setInterval: vi.fn(() => 0), clearInterval: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() })
-  return { refresh, catalog: () => catalog() }
+  return { refresh, catalog: () => catalog(), requestAccess }
 }
 
 function collectText(node: ReactTestInstance): string {
@@ -126,6 +131,44 @@ describe('pets settings section', () => {
     })
     expect(installed.refresh).toHaveBeenCalled()
     expect(JSON.stringify(renderer.toJSON())).toContain('petsReport:1/0')
+  })
+
+  it('shows automatic typing and recording status without reaction opt-in checkboxes', async () => {
+    const installed = install([pet], { ...defaultPetSettings(), selectedPetId: pet.id, overlayOpen: true }, false,
+      { keyboard: 'active', microphone: 'active', recording: true })
+    const renderer = await renderSection()
+    const checkboxes = renderer.root.findAllByType('input').filter((node) => node.props.type === 'checkbox')
+    expect(checkboxes).toHaveLength(1)
+    expect(collectText(checkboxes[0].parent!)).toBe('petsImportCodex')
+    expect(renderer.root.findAllByProps({ role: 'status' }).map(collectText)).toEqual([
+      'Typing across appsReady', 'Recording in other appsRecording detected; your pet is listening'
+    ])
+    expect(installed.requestAccess).not.toHaveBeenCalled()
+    await act(async () => renderer.unmount())
+  })
+
+  it('keeps OS authorization explicit and updates the status after permission is granted', async () => {
+    const installed = install([pet], defaultPetSettings(), false,
+      { keyboard: 'permission-required', microphone: 'active', recording: false })
+    const renderer = await renderSection()
+    expect(installed.requestAccess).not.toHaveBeenCalled()
+    const allow = renderer.root.findAllByType('button').find((node) => collectText(node) === 'Allow Input Monitoring')
+    expect(allow).toBeDefined()
+    await act(async () => { allow!.props.onClick() })
+    expect(installed.requestAccess).toHaveBeenCalledOnce()
+    expect(collectText(renderer.root)).not.toContain('Input Monitoring')
+    expect(renderer.root.findAllByProps({ role: 'status' }).map(collectText)).toContain('Typing across appsReady')
+    await act(async () => renderer.unmount())
+  })
+
+  it.each(['paused', 'unsupported'] as const)('shows %s status without an unnecessary authorization button', async (state) => {
+    const installed = install([pet], defaultPetSettings(), false,
+      { keyboard: state, microphone: state, recording: false })
+    const renderer = await renderSection()
+    expect(renderer.root.findAllByProps({ role: 'status' })).toHaveLength(2)
+    expect(collectText(renderer.root)).not.toContain('Allow Input Monitoring')
+    expect(installed.requestAccess).not.toHaveBeenCalled()
+    await act(async () => renderer.unmount())
   })
 
   it('shows the load error and hides the panel without the desktop bridge', async () => {

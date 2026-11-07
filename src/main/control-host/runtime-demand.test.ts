@@ -4,8 +4,8 @@ vi.mock('electron', () => ({ app: {getPath: () => '/fixture', getAppPath: () => 
 vi.mock('../logger', () => ({logWarn: vi.fn()}))
 vi.mock('../computer-access/lifecycle', () => ({stopComputerSessions: h.stopViewers}))
 vi.mock('./viewer-resources', () => ({controlViewerEntry: () => '/download/viewer/index.html', probeControlViewer: vi.fn(async () => {})}))
-vi.mock('./process', () => ({startControlProcess: vi.fn(async (_directory, release) => {
-  const process = {exited: false, rpc: {closed: false, call: vi.fn(async (method: string, value?: any): Promise<any> => {
+vi.mock('./process', () => ({startControlProcess: vi.fn(async (_directory, release, handlers, event) => {
+  const process = {exited: false, handlers, event, rpc: {closed: false, call: vi.fn(async (method: string, value?: any): Promise<any> => {
     if (method === 'desktop.command') {
       if (value.method === 'capabilities') return []
       return {supported: true, enabled: value.method === 'configureRemoteAccess' && value.value === true, ready: false, displays: []}
@@ -78,5 +78,26 @@ it('preserves pending desktop enable and relay start across first-install drains
   expect(calls.filter(([method]: any[]) => method === 'relay.create')).toHaveLength(1)
   expect(calls.filter(([method, value]: any[]) => method === 'relay.command' && value.method === 'start')).toHaveLength(1)
   expect(calls.some(([method, value]: any[]) => method === 'desktop.command' && value.method === 'configureRemoteAccess' && value.value === true)).toBe(true)
+  relay.stop()
+})
+it('routes host tickets and events again when a suspended relay starts again', async () => {
+  vi.useFakeTimers(); host = new ControlRuntimeHost()
+  const diagnostic = vi.fn()
+  const relay = host.relay({ticket: vi.fn(async () => ({url: 'wss://authorized.test/ws', ticket: 'private-ticket'})),
+    renew: vi.fn(), socket: vi.fn(), diagnostic} as any)
+  relay.start()
+  await vi.advanceTimersByTimeAsync(31000)
+  const process = h.processes.at(-1)
+  for (let round = 0; round < 3; round++) {
+    const result = await process.handlers['relay.ticket']({id: relay.id})
+    expect(result.url).toMatch(/^control:\/\/ticket\//)
+    expect(result.ticket).not.toBe('private-ticket')
+    process.event('relay.event', {id: relay.id, event: 'diagnostic', value: {code: 'CONNECTED'}})
+    expect(diagnostic).toHaveBeenCalledTimes(round + 1)
+    relay.stop()
+    expect(() => process.handlers['relay.ticket']({id: relay.id})).toThrow('CONTROL_RPC_REJECTED')
+    relay.start()
+    await vi.advanceTimersByTimeAsync(0)
+  }
   relay.stop()
 })

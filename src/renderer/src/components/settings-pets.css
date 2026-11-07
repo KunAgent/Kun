@@ -119,6 +119,17 @@
   cursor: pointer;
 }
 
+.pets-settings-activity-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--ds-text-secondary, var(--ds-text-muted));
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .pets-settings-list {
   display: grid;
   gap: 7px;

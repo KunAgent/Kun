@@ -70,7 +70,7 @@ async function copyDefault() {
 }
 
 describe('desktop pet startup', () => {
-  it('follows pet visibility, reaction preferences, suspend/resume and shutdown for global observers', async () => {
+  it('automatically follows pet visibility, suspend/resume and shutdown for global observers', async () => {
     await copyDefault()
     const runtime = await startDesktopPets({ isFreshInstall: true })
     runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
@@ -78,18 +78,15 @@ describe('desktop pet startup', () => {
     } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
     const frame = {}, main = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }
     const preferences = { keyboard: true, microphone: true }
-    await host.handlers.get(PET_IPC.setPetGlobalActivity)!(main, preferences)
     expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
     host.power.get('suspend')!()
     expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
     host.power.get('resume')!()
     expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
-    await host.handlers.get(PET_IPC.setPetReactionsEnabled)!(main, false)
-    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
-    await host.handlers.get(PET_IPC.setPetReactionsEnabled)!(main, true)
-    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
     await host.handlers.get(PET_IPC.setOverlayOpen)!(main, false)
     expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
+    await host.handlers.get(PET_IPC.setOverlayOpen)!(main, true)
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
     await runtime.shutdown()
     expect(host.globalDispose).toHaveBeenCalled()
     expect(host.power.size).toBe(0)
@@ -144,7 +141,7 @@ describe('desktop pet startup', () => {
     expect(restarted.getSettings().visits).toEqual({ enabled: false, frequency: 'quiet' })
   })
 
-  it('forwards transient model/input feedback without changing pet selection, and persists the off switch', async () => {
+  it('forwards automatic model/input feedback without changing pet selection or persisting activity', async () => {
     await copyDefault()
     const runtime = await startDesktopPets({ isFreshInstall: true })
     runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
@@ -157,17 +154,13 @@ describe('desktop pet startup', () => {
     const persisted = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
     expect(persisted.selectedPetId).toBe('kun:xiao-kun')
     expect(persisted.presence).toBeUndefined()
-    await host.handlers.get(PET_IPC.setPetReactionsEnabled)!(event, false)
     const bootEvent = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
     const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!(bootEvent) as PetOverlayBootstrap
-    expect(bootstrap.reactionsEnabled).toBe(false)
+    expect(bootstrap.reactionsEnabled).toBe(true)
     expect(bootstrap.interactions?.clips.typing.state).toBe('running')
-    expect(bootstrap.presence).toMatchObject({ model: null, input: null })
-    host.send.mockClear()
-    await host.handlers.get(PET_IPC.updatePetPresence)!(event, { type: 'input', source: 'typing:1', kind: 'typing', level: 0 })
-    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayPresence, expect.objectContaining({ input: expect.objectContaining({ kind: 'typing' }) }))
+    expect(bootstrap.presence).toMatchObject({ model: { model: 'gpt-5' }, input: { kind: 'typing' } })
     const restarted = new PetStore(path.join(host.root, 'profile', 'pets')); await restarted.initialize()
-    expect(restarted.getSettings().reactionsEnabled).toBe(false)
+    expect(restarted.getSettings().reactionsEnabled).toBe(true)
   })
 
   it('publishes available ensemble assets and persists overlay changes without replacing the selected pet', async () => {

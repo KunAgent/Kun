@@ -195,7 +195,7 @@ describe('pet packages', () => {
       id: 'kun:ikun', displayName: 'iKun', source: 'kun-builtin', available: true
     }))
     expect(store.listPets()).toContainEqual(expect.objectContaining({
-      id: 'kun:whale-girl', displayName: 'DS', source: 'kun-builtin', spriteVersionNumber: 1, available: true
+      id: 'kun:whale-girl', displayName: '鲸鱼娘', source: 'kun-builtin', spriteVersionNumber: 1, available: true
     }))
     await store.applyFirstRunDefault(true)
     expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: true })

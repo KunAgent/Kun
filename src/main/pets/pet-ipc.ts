@@ -1,4 +1,4 @@
-import { parsePetGlobalActivity, type PetGlobalActivityPreferences, type PetGlobalActivityStatus } from '../../shared/pets-global-activity'
+import type { PetGlobalActivityStatus } from '../../shared/pets-global-activity'
 import { parsePetBottleDrop, type PetBottleDrop } from '../../shared/pets-bottle'
 import { parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { PET_SCENE_IDS, type PetSceneId } from '../../shared/pets-ensemble'
@@ -30,7 +30,6 @@ export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 
 
 export type PetIpcApi = {
   getPetGlobalActivityStatus(): PetGlobalActivityStatus
-  setPetGlobalActivity(preferences: PetGlobalActivityPreferences): Promise<PetSettings>
   requestPetKeyboardAccess(): Promise<void>
   notifyBottleDrop(drop: PetBottleDrop | null): void
   setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings>
@@ -38,7 +37,6 @@ export type PetIpcApi = {
   dismissPetVisit(): Promise<void>
   acknowledgeVisitRequest(id: string): void
   updatePresence(senderId: number, signal: PetPresenceSignal): void
-  setPetReactionsEnabled(enabled: boolean): Promise<PetSettings>
   setPetEnsemble(settings: PetEnsembleSettings): Promise<PetSettings>
   listPets(): Promise<PetSummary[]>
   getSettings(): Promise<PetSettings>
@@ -89,12 +87,6 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
   return {
     [PET_IPC.getPetGlobalActivityStatus]: (event) => { main(event); return api.getPetGlobalActivityStatus() },
     [PET_IPC.requestPetKeyboardAccess]: async (event) => { main(event); await api.requestPetKeyboardAccess() },
-    [PET_IPC.setPetGlobalActivity]: async (event, input) => {
-      main(event)
-      const value = parsePetGlobalActivity(input)
-      if (!value) throw new Error('invalid global pet activity preferences')
-      return api.setPetGlobalActivity(value)
-    },
     [PET_IPC.notifyPetBottleDrop]: (event, input) => {
       if (!api.allows(event, ['main'])) return
       if (input === null) { api.notifyBottleDrop(null); return }
@@ -122,11 +114,6 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
       const parsed = parsePetPresenceSignal(input)
       if (!parsed || (parsed.type === 'model' && event.senderKind !== 'main')) return
       api.updatePresence(event.senderId, parsed)
-    },
-    [PET_IPC.setPetReactionsEnabled]: async (event, enabled) => {
-      if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet settings ipc is limited to pet controls')
-      if (typeof enabled !== 'boolean') throw new Error('invalid pet reaction preference')
-      return api.setPetReactionsEnabled(enabled)
     },
     [PET_IPC.setPetEnsemble]: async (event, input) => {
       if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet ensemble ipc is limited to pet controls')

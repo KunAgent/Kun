@@ -16,14 +16,15 @@ export class ControlRelay implements RelayClient {
   private authority = new RelayAuthority()
   private currentSocket?: string
   private outgoing = new Reassembler()
-  constructor(readonly deps: ClientDependencies, private ready: () => Promise<RpcPeer>, private retire: () => void) {}
+  constructor(readonly deps: ClientDependencies, private ready: () => Promise<RpcPeer>, private track: (active: boolean) => void) {}
   async attach(rpc: RpcPeer) {
-    this.rpc = rpc
     if (!this.desired) return
+    this.rpc = rpc
     await rpc.call('relay.create', { id: this.id })
     if (this.desired) await rpc.call('relay.command', { id: this.id, method: 'start' })
   }
   start() {
+    this.track(true)
     if (this.desired && this.rpc) { void this.rpc.call('relay.command', { id: this.id, method: 'start' }).catch(() => {}); return }
     this.desired = true
     const serial = ++this.serial
@@ -33,7 +34,7 @@ export class ControlRelay implements RelayClient {
   stop() {
     this.desired = false; ++this.serial
     if (this.rpc) void this.rpc.call('relay.command', { id: this.id, method: 'stop' }).catch(() => {})
-    this.detach(); this.retire()
+    this.detach(); this.track(false)
   }
   reconnect() { if (this.desired && this.rpc) void this.rpc.call('relay.command', { id: this.id, method: 'reconnect' }).catch(() => {}) }
   resume() { if (this.desired && this.rpc) void this.rpc.call('relay.command', { id: this.id, method: 'resume' }).catch(() => {}) }
@@ -87,7 +88,8 @@ export class ControlRelay implements RelayClient {
     const socket = this.sockets.get(id)
     if (!socket || typeof data !== 'string' || Buffer.byteLength(data) > 262144 || (socket.bufferedAmount ?? 0) > 8388608) throw Error('BACKPRESSURE')
     const frame = this.outgoing.accept(parseFrame(data))
-    if (frame && !['ping', 'pong', 'ack', 'event', 'result', 'error'].includes(frame.kind)) throw Error('CONTROL_RPC_REJECTED')
+    // Reconnects, permission changes and subscription overflow notify existing peers.
+    if (frame && !['ping', 'pong', 'ack', 'event', 'result', 'error', 'resync_required'].includes(frame.kind)) throw Error('CONTROL_RPC_REJECTED')
     socket.send(data); return socket.bufferedAmount ?? 0
   }
   socketClose(id: string) { const socket = this.sockets.get(id); this.sockets.delete(id); socket?.close() }

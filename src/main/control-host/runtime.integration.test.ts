@@ -25,16 +25,22 @@ async function processFixture(handlers: Record<string, (value: any) => any>, eve
   return { rpc, messages, async stop() { rpc.close(); child.kill(); await exited } }
 }
 it('runs mobile transport out of process without exposing the ticket and reconnects without replay', async () => {
-  let relay!: ControlRelay, socket: any, instance: Awaited<ReturnType<typeof processFixture>>
-  const states: boolean[] = [], sends: string[] = []
+  let relay!: ControlRelay, socket: any, socketId = '', instance: Awaited<ReturnType<typeof processFixture>>
+  const states: boolean[] = [], sends: string[] = [], diagnostics: string[] = []
   instance = await processFixture({
     'relay.ticket': () => relay.ticket(), 'relay.renew': () => relay.renew(),
-    'relay.socket.open': value => relay.open(value.key, value.id),
+    'relay.socket.open': value => { socketId = value.id; return relay.open(value.key, value.id) },
     'relay.socket.send': value => relay.socketSend(value.id, value.data),
     'relay.socket.close': value => relay.socketClose(value.id)
   }, (name, value) => { if (name === 'relay.event') relay.event(value.event, value.value) })
   relay = new ControlRelay({ ticket: async () => ({ url: 'wss://authorized.test/ws', ticket: 'private-one-use-ticket' }),
-    renew: async () => ({ expiresAt: Date.now() + 60000 }), state: value => states.push(value),
+    renew: async () => ({ expiresAt: Date.now() + 60000 }),
+    state: value => {
+      states.push(value)
+      // MobileLinkService notifies existing paired phones as soon as hello arrives.
+      if (value) relay.send({ kind: 'resync_required', id: randomUUID(), dst: 'phone', payload: { reason: 'host_reconnected' } })
+    },
+    diagnostic: code => diagnostics.push(code),
     socket: (url, headers) => {
       expect(url).toBe('wss://authorized.test/ws'); expect(headers.Authorization).toBe('Ticket private-one-use-ticket')
       socket = { bufferedAmount: 0, send: (data: string) => sends.push(data), close() {} }
@@ -42,13 +48,66 @@ it('runs mobile transport out of process without exposing the ticket and reconne
       return socket
     } }, async () => instance.rpc, () => {})
   try {
-    relay.start(); await vi.waitFor(() => expect(states).toContain(true))
+    relay.start(); await vi.waitFor(() => expect(sends.filter(value => value.includes('host_reconnected'))).toHaveLength(1))
+    expect(relay.online).toBe(true)
     relay.send({ kind: 'event', id: 'notice', dst: 'phone', payload: { example: true } })
     await vi.waitFor(() => expect(sends.some(value => value.includes('notice'))).toBe(true))
     const count = sends.filter(value => value.includes('notice')).length
-    relay.reconnect(); await vi.waitFor(() => expect(states.filter(Boolean).length).toBe(2))
+    relay.reconnect(); await vi.waitFor(() => expect(sends.filter(value => value.includes('host_reconnected'))).toHaveLength(2))
+    expect(states.filter(Boolean)).toHaveLength(2)
+    expect(relay.online).toBe(true)
+    expect(diagnostics).not.toContain('SOCKET_ERROR')
+    const rejected = JSON.stringify({ v: 1, kind: 'invoke', id: 'forbidden', dst: 'phone', payload: {} })
+    expect(() => relay.socketSend(socketId, rejected)).toThrow('CONTROL_RPC_REJECTED')
+    expect(sends).not.toContain(rejected)
     expect(sends.filter(value => value.includes('notice'))).toHaveLength(count)
     expect(JSON.stringify(instance.messages)).not.toContain('private-one-use-ticket')
+  } finally { relay.stop(); await instance.stop() }
+})
+
+it('restores host registration after stop/start and ignores attachments while suspended', async () => {
+  const registered = new Map<string, ControlRelay>(), states: boolean[] = [], sends: string[] = []
+  const find = (id: string) => {
+    const relay = registered.get(id)
+    if (!relay) throw Error('CONTROL_RPC_REJECTED')
+    return relay
+  }
+  const instance = await processFixture({
+    'relay.ticket': value => find(value.id).ticket(), 'relay.renew': value => find(value.id).renew(),
+    'relay.socket.open': value => find(value.clientId).open(value.key, value.id),
+    'relay.socket.send': value => find(value.id.split(':')[0]).socketSend(value.id, value.data),
+    'relay.socket.close': value => find(value.id.split(':')[0]).socketClose(value.id)
+  }, (name, value) => { if (name === 'relay.event') registered.get(value.id)?.event(value.event, value.value) })
+  const relay = new ControlRelay({
+    ticket: async () => ({ url: 'wss://authorized.test/ws', ticket: 'private-ticket' }),
+    renew: async () => ({ expiresAt: Date.now() + 60000 }), state: value => states.push(value),
+    socket: () => {
+      const socket: any = { bufferedAmount: 0, send: (data: string) => sends.push(data), close: vi.fn() }
+      setTimeout(() => {
+        socket.onopen?.()
+        socket.onmessage?.({ data: JSON.stringify({ v: 1, kind: 'hello', payload: { leaseExpiresAt: Date.now() + 60000 } }) })
+      }, 10)
+      return socket
+    }
+  }, async () => instance.rpc, tracked => {
+    if (tracked) registered.set(relay.id, relay)
+    else registered.delete(relay.id)
+  })
+  registered.set(relay.id, relay)
+  try {
+    for (let round = 0; round < 3; round++) {
+      relay.start()
+      await vi.waitFor(() => expect(states.filter(Boolean)).toHaveLength(round + 1))
+      expect(relay.online).toBe(true)
+      expect(registered.size).toBe(1)
+      relay.send({ kind: 'event', id: `notice-${round}`, dst: 'phone', payload: { round } })
+      await vi.waitFor(() => expect(sends).toHaveLength(round + 1))
+      relay.stop()
+      expect(relay.online).toBe(false)
+      expect(registered.size).toBe(0)
+      // A delayed host activation must not bind an idle relay without creating it.
+      if (round === 1) await relay.attach(instance.rpc)
+    }
   } finally { relay.stop(); await instance.stop() }
 })
 

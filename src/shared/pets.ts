@@ -1,4 +1,4 @@
-import type { PetGlobalActivityPreferences, PetGlobalActivityStatus } from './pets-global-activity'
+import { defaultPetGlobalActivity, type PetGlobalActivityPreferences, type PetGlobalActivityStatus } from './pets-global-activity'
 import type { PetBottleDrop } from './pets-bottle'
 import type { PetVisitPreferences, PetVisitRequest } from './pets-visits'
 import type { PetSceneId } from './pets-ensemble'
@@ -171,14 +171,12 @@ export type ScreenPoint = { x: number; y: number }
 
 export type PetDesktopBridge = {
   getPetGlobalActivityStatus: () => Promise<PetGlobalActivityStatus>
-  setPetGlobalActivity: (preferences: PetGlobalActivityPreferences) => Promise<PetSettings>
   requestPetKeyboardAccess: () => Promise<void>
   notifyPetBottleDrop: (drop: PetBottleDrop | null) => void
   setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
   requestPetVisit: (scene?: PetSceneId) => Promise<void>
   dismissPetVisit: () => Promise<void>
   updatePetPresence: (signal: PetPresenceSignal) => void
-  setPetReactionsEnabled: (enabled: boolean) => Promise<PetSettings>
   listPets: () => Promise<PetSummary[]>
   getPetSettings: () => Promise<PetSettings>
   selectPet: (petId: string | null) => Promise<PetSettings>
@@ -209,7 +207,6 @@ export type PetOverlayBridge = {
   dismissPetVisit: () => Promise<void>
   updatePetPresence: (signal: PetPresenceSignal) => void
   onPresenceChanged: (handler: (snapshot: PetPresenceSnapshot) => void) => () => void
-  setPetReactionsEnabled: (enabled: boolean) => Promise<PetSettings>
   setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
   getBootstrap: () => Promise<PetOverlayBootstrap>
   onBootstrapChanged: (handler: (value: PetOverlayBootstrap) => void) => () => void
@@ -282,7 +279,6 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 
 export const PET_IPC = {
   getPetGlobalActivityStatus: 'kun:pets:global-activity:status',
-  setPetGlobalActivity: 'kun:pets:global-activity:preferences',
   requestPetKeyboardAccess: 'kun:pets:global-activity:keyboard-access',
   notifyPetBottleDrop: 'kun:pets:bottle-drop',
   setPetVisitPreferences: 'kun:pets:visits:preferences',
@@ -292,7 +288,6 @@ export const PET_IPC = {
   acknowledgeVisitRequest: 'kun:pets:overlay:visit-ack',
   updatePetPresence: 'kun:pets:presence',
   overlayPresence: 'kun:pets:overlay:presence',
-  setPetReactionsEnabled: 'kun:pets:reactions-enabled',
   setPetEnsemble: 'kun:pets:ensemble',
   listPets: 'kun:pets:list',
   getSettings: 'kun:pets:settings:get',
@@ -365,6 +360,8 @@ export function defaultPetSettings(): PetSettings {
     bubblesCollapsed: false,
     mascotWidthPx: PET_MASCOT_DEFAULT_WIDTH_PX,
     importCodexPets: true,
+    reactionsEnabled: true,
+    globalActivity: defaultPetGlobalActivity(),
     welcomedPetIds: [],
     dismissedNotificationKeys: [],
     placementByDisplay: {}

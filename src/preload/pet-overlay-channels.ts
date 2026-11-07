@@ -9,7 +9,6 @@ export const PET_OVERLAY_IPC = {
   acknowledgeVisitRequest: 'kun:pets:overlay:visit-ack',
   updatePetPresence: 'kun:pets:presence',
   overlayPresence: 'kun:pets:overlay:presence',
-  setPetReactionsEnabled: 'kun:pets:reactions-enabled',
   setPetEnsemble: 'kun:pets:ensemble',
   overlayBootstrap: 'kun:pets:overlay:bootstrap',
   overlayBootstrapChanged: 'kun:pets:overlay:bootstrap-changed',

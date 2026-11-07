@@ -89,7 +89,10 @@ export class ControlRuntimeHost {
   desktop(deps: DesktopEngineDependencies) { const value = new ControlDesktop(deps, required => required ? this.ready() : this.available()); this.desktops.set(value.id, value); return value }
   relay(deps: ClientDependencies) {
     let relay: ControlRelay
-    relay = new ControlRelay(deps, () => this.ready(), () => this.relays.delete(relay.id))
+    relay = new ControlRelay(deps, () => this.ready(), active => {
+      if (active) this.relays.set(relay.id, relay)
+      else this.relays.delete(relay.id)
+    })
     this.relays.set(relay.id, relay); return relay
   }
   private handlers() {

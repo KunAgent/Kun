@@ -16,7 +16,6 @@ const api: PetOverlayBridge = {
   dismissPetVisit: () => ipcRenderer.invoke(PET_OVERLAY_IPC.dismissPetVisit),
   updatePetPresence: (signal) => ipcRenderer.send(PET_OVERLAY_IPC.updatePetPresence, signal),
   onPresenceChanged: (handler) => listen(PET_OVERLAY_IPC.overlayPresence, handler),
-  setPetReactionsEnabled: (enabled) => ipcRenderer.invoke(PET_OVERLAY_IPC.setPetReactionsEnabled, enabled),
   setPetEnsemble: (settings) => ipcRenderer.invoke(PET_OVERLAY_IPC.setPetEnsemble, settings),
   getBootstrap: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayBootstrap),
   onBootstrapChanged: (handler) => listen(PET_OVERLAY_IPC.overlayBootstrapChanged, handler),

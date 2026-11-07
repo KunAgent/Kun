@@ -1,4 +1,4 @@
-import { defaultPetGlobalActivity, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
+import { defaultPetGlobalActivity } from '../../shared/pets-global-activity'
 import { PetGlobalActivity, PET_GLOBAL_SENDER_ID } from './pet-global-activity'
 import { PetBottleGate } from './pet-bottle-gate'
 import type { PetBottleDrop } from '../../shared/pets-bottle'
@@ -175,12 +175,6 @@ class DesktopPetRuntime implements DesktopPets {
   private api() {
     return {
       getPetGlobalActivityStatus: () => this.globalActivity.status(),
-      setPetGlobalActivity: async (preferences: PetGlobalActivityPreferences) => {
-        const settings = await this.store.setPetGlobalActivity(preferences)
-        this.syncGlobalActivity()
-        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
-        return settings
-      },
       requestPetKeyboardAccess: async () => {
         if (!this.store.getSettings().globalActivity?.keyboard) return
         await this.globalActivity.requestKeyboardAccess()
@@ -227,14 +221,6 @@ class DesktopPetRuntime implements DesktopPets {
         this.controller?.send(PET_IPC.overlayVisitRequested, this.visitRequest)
       },
       acknowledgeVisitRequest: (id: string) => { if (this.visitRequest?.id === id) this.visitRequest = null },
-      setPetReactionsEnabled: async (enabled: boolean) => {
-        const settings = await this.store.setPetReactionsEnabled(enabled)
-        this.presence.clear()
-        this.syncGlobalActivity()
-        this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
-        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
-        return settings
-      },
       listPets: () => Promise.resolve(this.store.listPets()),
       getSettings: () => Promise.resolve(this.store.getSettings()),
       selectPet: async (petId: string | null) => {
