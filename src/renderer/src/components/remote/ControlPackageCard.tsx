@@ -47,6 +47,7 @@ export function ControlPackageCard({ zh }: { zh: boolean }) {
       const origin = updateOrigin.current
       if (origin && next.version && !next.error && origin.version !== next.version) {
         setCompleted({ version: next.version, from: origin.version })
+        setFailure('')
       }
       updateOrigin.current = undefined
     } else {
@@ -102,6 +103,7 @@ export function ControlPackageCard({ zh }: { zh: boolean }) {
       const next = await api![operation]()
       if (!current.active) return
       ++reads.current
+      if (operation !== 'check' && next.phase === 'ready') updateOrigin.current ??= { version: status?.version }
       receive(next)
       if (operation === 'check') setChecked(next.phase === 'ready' && !next.error && !next.candidateVersion)
     } catch {

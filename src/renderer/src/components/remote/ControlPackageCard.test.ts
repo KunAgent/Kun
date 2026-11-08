@@ -189,6 +189,19 @@ it('stops status polling on unmount and ignores a late install result', async ()
   expect(api.status).toHaveBeenCalledOnce()
   expect(container.textContent).toBe('')
 })
+it('keeps the update result when polling still returns the old ready version during install', async () => {
+  vi.useFakeTimers()
+  status = { phase: 'ready', version: '0.1.7', candidateVersion: '0.1.8', error: 'fetch failed' }
+  const installation = deferred<ControlPackageStatus>()
+  api.install.mockReturnValueOnce(installation.promise)
+  await render(); await click('Download and update')
+  status = { ...status, error: undefined }
+  await act(async () => vi.advanceTimersByTimeAsync(2000))
+  await act(async () => installation.resolve({ phase: 'ready', version: '0.1.8' }))
+  expect(container.textContent).toContain('v0.1.8 is active')
+  expect(findButton('Done')).toBeTruthy()
+  expect(container.querySelector('[role="alert"]')).toBeNull()
+})
 it('uses Chinese copy without exposing raw error codes or fictitious percentages', async () => {
   status = { phase: 'waiting_for_idle', version: '0.1.7', candidateVersion: '0.1.8' }
   await render(true)
