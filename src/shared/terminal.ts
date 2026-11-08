@@ -73,7 +73,7 @@ export type TerminalExitPayload = {
 }
 
 export type TerminalCreateResult =
-  | { ok: true; sessionId: string; replayed?: boolean; unitId?: string; shellIntegration?: boolean }
+  | { ok: true; sessionId: string; replayed?: boolean; unitId?: string; shellIntegration?: boolean; shell?: string }
   | { ok: false; message: string }
 
 /** A login shell the main process found on this machine. */

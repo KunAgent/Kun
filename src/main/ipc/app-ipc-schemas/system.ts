@@ -303,7 +303,7 @@ export const terminalCreatePayloadSchema = z
     shell: optionalTrimmedString(1_024),
     shellIntegration: z.boolean().optional(),
     env: z
-      .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/), z.string().max(4_096))
+      .record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,63}$/), z.string().max(4_096).refine((value) => !value.includes('\0'), 'Invalid environment value'))
       .refine((value) => Object.keys(value).length <= 16, 'Too many environment entries')
       .optional()
   })

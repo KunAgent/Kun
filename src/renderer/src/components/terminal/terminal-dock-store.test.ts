@@ -66,7 +66,8 @@ describe('terminal dock store', () => {
   it('persists tabs without one-shot commands or Kun processes', async () => {
     const tab = workspaceTerminals(KEY).tabs[0]!
     renameTerminalPane(KEY, tab.id, 'main', 'renamed')
-    addTerminalTab(KEY, freshPane({ kind: 'local' }, { initialCommand: 'npm test', prefill: 'x' }))
+    addTerminalTab(KEY, freshPane({ kind: 'local' }, { initialCommand: 'npm test', prefill: 'x',
+      profileLaunch: { argv: ['agent'], env: { SECRET: 'do-not-persist' } } }))
     addTerminalTab(KEY, freshPane({ kind: 'kun-process', processId: 'p', command: 'dev', threadId: 't' }))
     vi.advanceTimersByTime(400)
     const saved = JSON.parse(localStorage.getItem('kun.terminal.dock.v1') ?? '{}')
@@ -75,6 +76,8 @@ describe('terminal dock store', () => {
     expect(panes[0].userTitle).toBe('renamed')
     expect(panes[1]).not.toHaveProperty('initialCommand')
     expect(panes[1]).not.toHaveProperty('prefill')
+    expect(panes[1]).not.toHaveProperty('profileLaunch')
+    expect(localStorage.getItem('kun.terminal.dock.v1')).not.toContain('do-not-persist')
     expect(panes[1]).not.toHaveProperty('fresh')
   })
 })

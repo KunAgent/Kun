@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import { ArrowDown, ArrowUp, Plus } from 'lucide-react'
 import type { TerminalAgentProfileV1, TerminalSettingsV1 } from '@shared/app-settings'
+import { resolveProfileLaunch } from '@shared/app-settings-terminal-dock'
 import { loadHarnesses, useHarnessStore } from '../store/harness-store'
 import { settingsButtonClass } from './settings-button'
 import { SettingsCard, Toggle } from './settings-controls'
@@ -118,8 +119,8 @@ export function TerminalAgentsCard({ terminal, update, openSettingsCategory, t }
           onCancel={() => setEditing(null)}
           onSave={saveProfile}
           onDelete={editing === 'new' ? undefined : () => removeProfile(editing.id)}
-          onTryRun={(command, name) => {
-            openTerminal({ command, title: name })
+          onTryRun={(profile) => {
+            openTerminal({ profileLaunch: resolveProfileLaunch(profile, ''), title: profile.name, cwd: profile.cwd || undefined })
             setNotice(t('termSetOpenedInTerminal'))
           }}
           t={t}

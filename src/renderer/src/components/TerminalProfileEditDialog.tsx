@@ -31,7 +31,7 @@ export function TerminalProfileEditDialog({
   onCancel: () => void
   onSave: (profile: TerminalAgentProfileV1) => void
   onDelete?: () => void
-  onTryRun: (command: string, name: string) => void
+  onTryRun: (profile: TerminalAgentProfileV1) => void
   t: T
 }): ReactElement {
   const harnessRows = useHarnessStore((state) => state.rows)
@@ -153,7 +153,7 @@ export function TerminalProfileEditDialog({
         <div className="mt-2 flex items-center gap-2 border-t border-[var(--ds-border-muted)] px-[22px] pb-5 pt-4">
           {onDelete ? <button type="button" className={settingsButtonClass({ variant: 'danger-ghost' })} onClick={onDelete}>{t('termSetDelete')}</button> : null}
           <span className="flex-1" />
-          <button type="button" className={settingsButtonClass()} disabled={!draft} onClick={() => draft && onTryRun(profileCommandLine(draft, ''), draft.name)}>
+          <button type="button" className={settingsButtonClass()} disabled={!draft} onClick={() => draft && onTryRun(draft)}>
             <Play className="mr-1 inline h-3 w-3" strokeWidth={2} />{t('termSetTryRun')}
           </button>
           <button type="button" className={settingsButtonClass()} onClick={onCancel}>{t('termSetCancel')}</button>

@@ -228,6 +228,11 @@ export function resolveProfileArgv(profile: Pick<TerminalAgentProfileV1, 'comman
   return [replacePlaceholders(profile.command, trimmed), ...args]
 }
 
+/** Freeze one profile submission before shell creation or settings changes. */
+export function resolveProfileLaunch(profile: Pick<TerminalAgentProfileV1, 'command' | 'args' | 'env'>, task: string) {
+  return { argv: resolveProfileArgv(profile, task), env: Object.fromEntries(profile.env.map(({ key, value }) => [key, value])) }
+}
+
 /** Quote one word for POSIX shells; plain words stay readable. */
 export function quoteShellWord(value: string): string {
   if (value === '') return "''"
@@ -235,11 +240,30 @@ export function quoteShellWord(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`
 }
 
-/** The command line written into the shell for a profile launch. */
+/** Format argv only; profile environment belongs in terminal:create, never in shell text. */
+export function profileArgvCommandLine(argv: readonly string[], shell: string): string {
+  const name = shell.split(/[\\/]/).pop()?.toLowerCase().replace(/\.exe$/, '')
+  if (name === 'powershell' || name === 'pwsh') {
+    return `& ${argv.map((value) => `'${value.replace(/'/g, "''")}'`).join(' ')}`
+  }
+  if (name === 'cmd') {
+    // cmd expands these even inside quotes; fail closed rather than execute altered argv.
+    if (argv.some((value) => /[%!"\r\n]/.test(value))) {
+      throw new Error('This profile contains arguments cmd.exe cannot quote safely. Select PowerShell or Bash.')
+    }
+    return argv.map((value) => `"${value.replace(/\\+$/, '$&$&')}"`).join(' ')
+  }
+  if (!name || !['sh', 'bash', 'zsh', 'fish', 'dash', 'ksh'].includes(name)) {
+    throw new Error('This terminal shell does not support profile command quoting.')
+  }
+  return argv.map(quoteShellWord).join(' ')
+}
+
+/** The command line written after main reports which shell actually started. */
 export function profileCommandLine(
   profile: Pick<TerminalAgentProfileV1, 'command' | 'args' | 'env'>,
-  task: string
+  task: string,
+  shell = '/bin/sh'
 ): string {
-  const env = profile.env.map((entry) => `${entry.key}=${quoteShellWord(entry.value)}`)
-  return [...env, ...resolveProfileArgv(profile, task).map(quoteShellWord)].join(' ')
+  return profileArgvCommandLine(resolveProfileArgv(profile, task), shell)
 }

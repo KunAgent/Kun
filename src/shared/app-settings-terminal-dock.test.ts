@@ -4,6 +4,8 @@ import {
   normalizeTerminalBehavior,
   normalizeTerminalProfiles,
   profileCommandLine,
+  profileArgvCommandLine,
+  resolveProfileLaunch,
   profileTakesTask,
   quoteShellWord,
   resolveProfileArgv,
@@ -55,7 +57,26 @@ describe('terminal dock settings', () => {
   it('quotes the command line for the shell', () => {
     expect(quoteShellWord("it's")).toBe(`'it'\\''s'`)
     expect(quoteShellWord('plain-word_1.2')).toBe('plain-word_1.2')
-    expect(profileCommandLine({ command: 'claude', args: '{task}', env: [{ key: 'A', value: 'b c' }] }, 'fix the bug')).toBe(`A='b c' claude 'fix the bug'`)
+    expect(profileCommandLine({ command: 'claude', args: '{task}', env: [{ key: 'A', value: 'b c' }] }, 'fix the bug')).toBe(`claude 'fix the bug'`)
+    expect(resolveProfileLaunch({ command: 'node', args: '--version', env: [{ key: 'HTTPS_PROXY', value: 'http://proxy/?x=1&y=2' }] }, '')).toEqual({
+      argv: ['node', '--version'], env: { HTTPS_PROXY: 'http://proxy/?x=1&y=2' }
+    })
+  })
+
+  it('formats literal argv for the actual PowerShell executable, not the host platform', () => {
+    expect(profileArgvCommandLine(['C:\\Program Files\\Agent\\agent.exe', "it's $HOME & x; `echo`", 'two words', ''], 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'))
+      .toBe("& 'C:\\Program Files\\Agent\\agent.exe' 'it''s $HOME & x; `echo`' 'two words' ''")
+    expect(profileArgvCommandLine(['node', '--version'], 'pwsh.exe')).toBe("& 'node' '--version'")
+    expect(profileArgvCommandLine(['node', "it's $HOME"], 'C:\\Git\\bin\\bash.exe')).toBe(`node 'it'\\''s $HOME'`)
+  })
+
+  it('quotes basic cmd arguments and rejects expansion-sensitive argv instead of changing its meaning', () => {
+    expect(profileArgvCommandLine(['C:\\Program Files\\agent.exe', 'two words', 'a&b', ''], 'cmd.exe'))
+      .toBe('"C:\\Program Files\\agent.exe" "two words" "a&b" ""')
+    for (const value of ['%PATH%', '!PATH!', 'a"b', 'a\nb']) {
+      expect(() => profileArgvCommandLine(['agent', value], 'cmd.exe')).toThrow('cannot quote safely')
+    }
+    expect(() => profileArgvCommandLine(['agent'], 'unknown.exe')).toThrow('does not support')
   })
 
   it('merges partial patches and keeps arrays unless replaced', () => {

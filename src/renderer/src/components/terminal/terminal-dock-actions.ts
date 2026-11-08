@@ -1,5 +1,5 @@
 import type { RemoteSshHost } from '@shared/remote-ssh'
-import { profileCommandLine } from '@shared/app-settings-terminal-dock'
+import { resolveProfileLaunch } from '@shared/app-settings-terminal-dock'
 import { attachTerminalOutput, selectRelevantLines } from '../../lib/terminal-output-attachment'
 import { terminalSessionIdForWorkspace } from './terminal-session'
 import { freshPane, displayDirectory, basename, TERMINAL_SNAPSHOT_LINES, type TerminalPane, type ClosedTerminal } from './terminal-dock-model'
@@ -82,7 +82,7 @@ export function openAgent(
   const cwd = profile.cwd || options.cwd
   return place(scope, freshPane({ kind: 'local', ...(cwd ? { cwd } : {}) }, {
     title: profile.name,
-    initialCommand: profileCommandLine(profile, task)
+    profileLaunch: resolveProfileLaunch(profile, task)
   }), placement)
 }
 
@@ -119,7 +119,7 @@ export function closePane(scope: DockScope, tabId: string, pane: TerminalPane, t
     const snapshot = snapshotTerminal(id, TERMINAL_SNAPSHOT_LINES)
     if (snapshot?.length) saveTerminalSnapshots({ [id]: snapshot }, TERMINAL_SNAPSHOT_LINES)
     disposeTerminal(id, { killPty: true })
-    const { prefill: _prefill, initialCommand: _initialCommand, fresh: _fresh, restoredFrom: _restoredFrom, ...rest } = pane
+    const { prefill: _prefill, initialCommand: _initialCommand, profileLaunch: _profileLaunch, fresh: _fresh, restoredFrom: _restoredFrom, ...rest } = pane
     closed = { pane: rest, ptySessionId: id, title, closedAt: Date.now() }
   }
   removeTerminalPane(scope.workspaceKey, tabId, pane.id, closed)
