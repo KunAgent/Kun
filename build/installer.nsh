@@ -94,6 +94,7 @@ Var /GLOBAL KunInstallerStopDiagnosticPath
   File /oname=$PLUGINSDIR\windows-installer-migration-runtime-integrity.ps1 "${PROJECT_DIR}\build\windows-installer-migration-runtime-integrity.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-recovery-env.ps1 "${PROJECT_DIR}\build\windows-installer-migration-recovery-env.ps1"
   File /oname=$PLUGINSDIR\windows-installer-migration-transaction.ps1 "${PROJECT_DIR}\build\windows-installer-migration-transaction.ps1"
+  File /oname=$PLUGINSDIR\windows-installer-migration-privileged.ps1 "${PROJECT_DIR}\build\windows-installer-migration-privileged.ps1"
   StrCpy $KunInstallerHelperPath "$PLUGINSDIR\kun-windows-installer-migration.ps1"
   StrCpy $KunInstallerResultPath "$PLUGINSDIR\kun-windows-installer-result.txt"
   System::Call 'kernel32::GetCurrentProcessId() i .r0'
