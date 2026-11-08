@@ -34,9 +34,12 @@ function Assert-PackagedRuntimeIntegrity([string]$Root) {
   # Older installs shipped no manifest. The caller still enforces its required
   # file list, and a rollback may legitimately restore a payload built before
   # manifests existed, so an absent manifest is not an install failure.
-  if (-not (Test-Path -LiteralPath $manifestPath -PathType Leaf)) { return }
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  $manifestInfo = [KunInstallerPayloadCopy]::GetLiteralFileInfo($manifestPath)
+  if (-not $manifestInfo.Exists) { return }
+  if ($manifestInfo.IsDirectory) { throw "The packaged Kun runtime integrity manifest is not a file: $manifestPath" }
 
-  $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+  $manifest = [KunInstallerPayloadCopy]::ReadLiteralUtf8File($manifestPath) | ConvertFrom-Json
   if ($null -eq $manifest -or [int]$manifest.schemaVersion -ne 1) {
     throw "The packaged Kun runtime integrity manifest is unreadable: $manifestPath"
   }
@@ -46,13 +49,10 @@ function Assert-PackagedRuntimeIntegrity([string]$Root) {
       throw "The packaged Kun runtime integrity manifest has an unsafe path: $($file.path)"
     }
     $path = Join-Path $Root ('resources\' + ([string]$file.path).Replace('/', '\'))
-    if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
+    $item = [KunInstallerPayloadCopy]::GetLiteralFileInfo($path)
+    if (-not $item.Exists -or $item.IsDirectory) {
       Write-RuntimeFileInspection $path ([string]$file.path)
       throw "The installed Kun runtime is missing a packaged file: $($file.path)"
-    }
-    $item = Get-Item -LiteralPath $path -Force
-    if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-      throw "The installed Kun runtime file must not use a reparse point: $($file.path)"
     }
     if ($item.Length -ne [int64]$file.size) {
       Write-RuntimeFileInspection $path ([string]$file.path)
