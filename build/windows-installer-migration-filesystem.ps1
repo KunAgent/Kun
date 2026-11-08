@@ -449,7 +449,7 @@ function Assert-RecoveryPayload([string]$Root) {
     throw "The automatic update recovery payload directory is missing: $Root"
   }
   Find-RecoveryPayloadExecutable $Root | Out-Null
-  Assert-NonEmptyPayloadFile (Join-Path $Root 'resources\\app.asar') 'the recovery resources\\app.asar'
+  Assert-NonEmptyPayloadFile (Join-Path $Root 'resources\app.asar') 'the recovery resources\app.asar'
 }
 
 function Get-InPlacePayloadBackupPath {
