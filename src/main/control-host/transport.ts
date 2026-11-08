@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import type { ClientDependencies, Frame, RemoteClient, Socket } from '@kun/remote-protocol'
 import type { RpcPeer } from '@kun/control-host'
-import { parseFrame, Reassembler } from '@kun/remote-protocol'
+import { parseFrame, Reassembler, encodeFrames, VERSION } from '@kun/remote-protocol'
 import { RelayAuthority } from './relay-authority'
+import { logWarn } from '../logger'
 export type RelayClient = Pick<RemoteClient, 'start' | 'stop' | 'reconnect' | 'resume' | 'send' | 'online'>
 export class ControlRelay implements RelayClient {
   readonly id = randomUUID()
@@ -39,8 +40,28 @@ export class ControlRelay implements RelayClient {
   reconnect() { if (this.desired && this.rpc) void this.rpc.call('relay.command', { id: this.id, method: 'reconnect' }).catch(() => {}) }
   resume() { if (this.desired && this.rpc) void this.rpc.call('relay.command', { id: this.id, method: 'resume' }).catch(() => {}) }
   send(frame: Frame) {
-    if (!this.online || !this.rpc) throw Error('DEVICE_OFFLINE')
-    void this.rpc.call('relay.command', { id: this.id, method: 'send', frame }).catch(() => this.detach())
+    const rpc = this.rpc, socketId = this.currentSocket
+    if (!this.online || !rpc || !socketId) throw Error('DEVICE_OFFLINE')
+    // Preserve RemoteClient.send's synchronous validation across the IPC boundary.
+    encodeFrames({ v: VERSION, ...frame })
+    void rpc.call('relay.command', { id: this.id, method: 'send', frame })
+      .catch(error => this.deliveryFailed(rpc, socketId, error))
+  }
+  private deliveryFailed(rpc: RpcPeer, socketId: string, error: unknown) {
+    if (this.rpc !== rpc || this.currentSocket !== socketId || !this.desired) return
+    const value = error instanceof Error ? error.message : ''
+    const code = ['BACKPRESSURE', 'MESSAGE_LIMIT', 'DEVICE_OFFLINE', 'CONTROL_RPC_TOO_LARGE',
+      'CONTROL_RPC_TIMEOUT', 'CONTROL_PROCESS_CLOSED', 'CONTROL_PROCESS_UNAVAILABLE'].includes(value) ? value : 'CONTROL_SEND_REJECTED'
+    logWarn('control-transport', 'CONTROL_RELAY_SEND_FAILED', { code })
+    const socket = this.sockets.get(socketId)
+    this.sockets.delete(socketId); this.currentSocket = undefined
+    if (socket) { socket.onmessage = socket.onopen = socket.onerror = socket.onclose = null; socket.close() }
+    this.authority.clear(); this.outgoing.clear(); this.online = false
+    this.deps.state?.(false, 'SEND_FAILED')
+    // A refused frame is not a lost process. Keep RPC attached and let the
+    // transport fence the old connection and retry without replaying business work.
+    try { rpc.notify('relay.socket.event', { id: socketId, event: 'error' }) }
+    catch { this.detach() }
   }
   event(event: string, value: any) {
     if (!this.desired) return

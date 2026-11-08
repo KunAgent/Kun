@@ -21,3 +21,5 @@ export * from './registry.js'
 export * from './rooms.js'
 export * from './services.js'
 export * from './tools.js'
+
+export * from './mobile-view.js'

@@ -15,6 +15,7 @@ import type { RemoteArtifacts } from '../files/artifacts.js'
 import { versionedHistory } from '../messages/history-version.js'
 import { continuationRoute, movedTurn } from './session-route.js'
 import { fastServiceTier } from './model-info.js'
+import { mobileUsage } from './mobile-usage.js'
 
 /**
  * The task depth a new turn inherits. A fresh admission promotes pending settings first, so they win; the
@@ -73,6 +74,7 @@ case 'code.history': {
         const { relayed, retained } = relayHistoryPage(history, p.cursor)
         return {
           ...relayed,
+          mobileUsage: mobileUsage(runtime.usageService?.forThread(p.threadId), (history as { contextSnapshot?: unknown }).contextSnapshot),
           revision: metadataRevision(metadata),
           historyState: metadata.remoteRewind?.phase === 'pending' ? 'reconciliation_required' : 'ready',
           historyVersion,

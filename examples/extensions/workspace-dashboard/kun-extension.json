@@ -30,7 +30,48 @@
         "id": "dashboard",
         "title": "Workspace Dashboard",
         "entry": "dist/webview/index.html",
-        "localResourceRoots": ["dist/webview"]
+        "localResourceRoots": [
+          "dist/webview"
+        ],
+        "mobile": {
+          "version": 1,
+          "description": "Mobile companion for Workspace Dashboard. Options below affect only this preview on your phone.",
+          "blocks": [
+            {
+              "id": "overview",
+              "type": "text",
+              "text": "Open the desktop dashboard to refresh workspace data. This mobile panel provides a native preview without loading plugin scripts."
+            },
+            {
+              "id": "scope",
+              "type": "stat",
+              "label": "Data scope",
+              "value": "Current workspace on the desktop"
+            },
+            {
+              "id": "details",
+              "type": "toggle",
+              "label": "Show detail preference",
+              "initial": false
+            },
+            {
+              "id": "density",
+              "type": "choice",
+              "label": "Preview density",
+              "initial": "comfortable",
+              "options": [
+                {
+                  "value": "comfortable",
+                  "label": "Comfortable"
+                },
+                {
+                  "value": "compact",
+                  "label": "Compact"
+                }
+              ]
+            }
+          ]
+        }
       }
     ]
   },

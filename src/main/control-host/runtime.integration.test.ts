@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { RpcPeer } from '@kun/control-host'
+import { LIMITS } from '@kun/remote-protocol'
 import { ControlDesktop } from './desktop'
 import { ControlRelay } from './transport'
 import { DesktopInputArbiter } from '../remote-desktop/input-arbiter'
@@ -12,7 +13,7 @@ import type { DesktopAuthority, DesktopEngineDependencies } from '@kun/control-r
 
 async function processFixture(handlers: Record<string, (value: any) => any>, event: (name: string, value: any) => void) {
   const root = dirname(createRequire(import.meta.url).resolve('@kun/control-runtime/package.json'))
-  const path = join(root, 'baselines', `${process.platform}-${process.arch}`, 'runtime/index.mjs')
+  const path = process.env.KUN_CONTROL_RUNTIME_FIXTURE ?? join(root, 'baselines', `${process.platform}-${process.arch}`, 'runtime/index.mjs')
   const child = fork(path, [], { stdio: ['ignore', 'ignore', 'ignore', 'ipc'], execArgv: [], env: {} })
   const generation = randomUUID(), messages: unknown[] = []
   const rpc = new RpcPeer(value => { messages.push(value); child.send(value as Serializable) }, generation, handlers, event)
@@ -50,6 +51,8 @@ it('runs mobile transport out of process without exposing the ticket and reconne
   try {
     relay.start(); await vi.waitFor(() => expect(sends.filter(value => value.includes('host_reconnected'))).toHaveLength(1))
     expect(relay.online).toBe(true)
+    expect(() => relay.send({ kind: 'result', id: 'too-large', dst: 'phone', payload: { text: 'x'.repeat(LIMITS.message) } })).toThrow('MESSAGE_LIMIT')
+    expect(relay.online).toBe(true)
     relay.send({ kind: 'event', id: 'notice', dst: 'phone', payload: { example: true } })
     await vi.waitFor(() => expect(sends.some(value => value.includes('notice'))).toBe(true))
     const count = sends.filter(value => value.includes('notice')).length
@@ -63,6 +66,45 @@ it('runs mobile transport out of process without exposing the ticket and reconne
     expect(sends.filter(value => value.includes('notice'))).toHaveLength(count)
     expect(JSON.stringify(instance.messages)).not.toContain('private-one-use-ticket')
   } finally { relay.stop(); await instance.stop() }
+})
+
+it('keeps the broker usable after sender backpressure and reconnects without replaying the rejected result', async () => {
+  let relay!: ControlRelay, socketId = ''
+  const sockets: any[] = [], states: boolean[] = [], sends: string[] = []
+  const instance = await processFixture({
+    'relay.ticket': () => relay.ticket(), 'relay.renew': () => relay.renew(),
+    'relay.socket.open': value => { socketId = value.id; return relay.open(value.key, value.id) },
+    'relay.socket.send': value => relay.socketSend(value.id, value.data),
+    'relay.socket.close': value => relay.socketClose(value.id)
+  }, (name, value) => { if (name === 'relay.event') relay.event(value.event, value.value) })
+  relay = new ControlRelay({ticket: async () => ({url: 'wss://authorized.test/ws', ticket: 'private-ticket'}),
+    renew: async () => ({expiresAt: Date.now() + 60000}), state: online => states.push(online),
+    socket: () => {
+      const socket: any = {bufferedAmount: 0, send: (raw: string) => sends.push(raw), close: vi.fn()}
+      sockets.push(socket)
+      setTimeout(() => {socket.onopen?.(); socket.onmessage?.({data: JSON.stringify({v: 1, kind: 'hello', payload: {leaseExpiresAt: Date.now() + 60000}})})}, 10)
+      return socket
+    }
+  }, async () => instance.rpc, () => {})
+  try {
+    relay.start(); await vi.waitFor(() => expect(relay.online).toBe(true))
+    const oldSocket = socketId
+    sockets[0].bufferedAmount = LIMITS.bytes
+    relay.send({kind: 'event', id: 'warm', dst: 'phone', payload: {}})
+    await vi.waitFor(() => expect(sends.some(raw => raw.includes('warm'))).toBe(true))
+    sockets[0].bufferedAmount = 0
+    // The round trip follows the buffer acknowledgement on the same IPC channel.
+    await instance.rpc.call('health')
+    relay.send({kind: 'result', id: 'rejected-result', dst: 'phone', payload: {}})
+    await vi.waitFor(() => expect(states).toContain(false))
+    // Also cover a later heartbeat observing the failed old connection.
+    instance.rpc.notify('relay.socket.event', {id: oldSocket, event: 'error'})
+    await vi.waitFor(() => expect(states.filter(Boolean)).toHaveLength(2), {timeout: 4000})
+    expect(sockets).toHaveLength(2)
+    relay.send({kind: 'event', id: 'after-reconnect', dst: 'phone', payload: {}})
+    await vi.waitFor(() => expect(sends.some(raw => raw.includes('after-reconnect'))).toBe(true))
+    expect(sends.some(raw => raw.includes('rejected-result'))).toBe(false)
+  } finally {relay.stop(); await instance.stop()}
 })
 
 it('restores host registration after stop/start and ignores attachments while suspended', async () => {
