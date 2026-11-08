@@ -29,7 +29,8 @@ export function RemoteAccessPanel({ className = '' }: { className?: string }): R
   const dirty = useRef(false)
   const scrollPosition = useRef(0)
   const onDirtyChange = useCallback((value: boolean) => { dirty.current = value }, [])
-  const grant = view.page === 'device' && link.enabled ? link.state?.grants.find(item => item.id === view.id) : undefined
+  const mobileVisible = link.signedIn && link.mobileAllowed
+  const grant = view.page === 'device' && mobileVisible && link.enabled ? link.state?.grants.find(item => item.id === view.id) : undefined
   function navigate(next: View) {
     if (dirty.current && !window.confirm(t('remoteCompact.discardQuestion'))) return
     dirty.current = false
@@ -38,15 +39,18 @@ export function RemoteAccessPanel({ className = '' }: { className?: string }): R
     if (root.current) { root.current.scrollTop = next.page === 'home' ? scrollPosition.current : 0; root.current.focus({ preventScroll: true }) }
   }
   useEffect(() => {
-    if (view.page === 'device' && !grant) { dirty.current = false; setView({ page: 'home' }) }
-  }, [view.page, grant])
+    if ((view.page === 'device' && !grant) || (view.page === 'desktop' && !mobileVisible)) {
+      dirty.current = false
+      setView({ page: 'home' })
+    }
+  }, [view.page, grant, mobileVisible])
   const error = browser.error || browser.status?.lastError
   return <section ref={root}
     className={`ds-no-drag flex min-h-0 min-w-0 flex-col touch-pan-y overscroll-contain overflow-y-auto overflow-x-hidden bg-ds-sidebar ${className}`}
     aria-label={t('rightPanelRemote')} tabIndex={0}>
     <div className="flex shrink-0 flex-col gap-3.5 px-4 pb-5 pt-5">
-      <MobilePairingRequests link={link} />
-      {view.page === 'home' ? <ControlPackageCard zh={link.zh} /> : null}
+      {mobileVisible ? <MobilePairingRequests link={link} /> : null}
+      {view.page === 'home' && mobileVisible ? <ControlPackageCard key={`control-package:${directOwner}`} zh={link.zh} /> : null}
       {desktop.value?.active ? <div role="status" className="flex items-center gap-3 rounded-2xl bg-ds-danger-soft p-3">
         <span className="min-w-0 flex-1 text-[12px] font-medium text-ds-ink">{t('remoteCompact.activeDesktop', { name: desktop.value.active.peer })}</span>
         <button type="button" className={REMOTE_BUTTON_CLASS} disabled={desktop.busy} onClick={desktop.stop}>{t('remoteCompact.endDesktop')}</button>
@@ -64,7 +68,7 @@ export function RemoteAccessPanel({ className = '' }: { className?: string }): R
       {view.page === 'computers' ? <ComputerAccessPanel key={directOwner} link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })} /> : null}
       {view.page === 'home' ? <DirectMobileLink key={directOwner} onRunningChange={setDirectRunning} /> : null}
       {view.page === 'browser' ? <RemoteBrowserAccess browser={browser} onBack={() => navigate({ page: 'home' })} /> : null}
-      {view.page === 'desktop' ? <RemoteDesktopAccess link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })} /> : null}
+      {view.page === 'desktop' && mobileVisible ? <RemoteDesktopAccess link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })} /> : null}
       {view.page === 'device' && grant ? <>
         <RemoteDetailHeader title={grant.name ?? grant.controllerId} onBack={() => navigate({ page: 'home' })} />
         <MobileGrantRow key={grant.id} link={link} grant={grant} onDirtyChange={onDirtyChange} />

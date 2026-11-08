@@ -17,10 +17,11 @@ export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop,
   const { t } = useTranslation('common')
   const { status } = browser
   const clients = status?.running ? status.clients : []
-  const grants = link.enabled ? link.state?.grants.filter(grant => grant.purpose !== 'desktop') ?? [] : []
-  const running = status?.running || link.enabled || desktop.value?.active || directRunning
+  const mobileVisible = link.signedIn && link.mobileAllowed
+  const grants = mobileVisible && link.enabled ? link.state?.grants.filter(grant => grant.purpose !== 'desktop') ?? [] : []
+  const running = status?.running || (mobileVisible && link.enabled) || desktop.value?.active || directRunning
   const desktopText = desktop.error || desktopSummary(desktop.value, t)
-  const warning = link.mobileAllowed && link.enabled && link.state?.desktopAccess && desktop.value?.supported &&
+  const warning = mobileVisible && link.enabled && link.state?.desktopAccess && desktop.value?.supported &&
     (!desktop.value.ready || desktop.value.inputReady !== true)
   const primary = status?.running ? status.urls.primary || status.urls.local : ''
   const browserText = !status ? t('remoteCompact.connecting') : status.running ? t('remoteAccessRunning')
@@ -30,7 +31,7 @@ export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop,
       <div className="min-w-0 flex-1" role="status">
         <h2 className="text-[18px] font-semibold leading-6 text-ds-ink">{t(warning ? 'remoteCompact.setupNeeded' : running ? 'remoteCompact.enabled' : 'remoteCompact.disabled')}</h2>
         <p className="mt-0.5 text-[12px] leading-[18px] text-ds-muted">{warning ? desktopText
-          : link.state?.online ? t('remoteCompact.mobileConnected') : directRunning ? link.zh ? '局域网与自建连接已开启' : 'Local network and private connections are on' : clients.length ? t('remoteCompact.browserCount', { n: clients.length })
+          : mobileVisible && link.state?.online ? t('remoteCompact.mobileConnected') : directRunning ? link.zh ? '局域网与自建连接已开启' : 'Local network and private connections are on' : clients.length ? t('remoteCompact.browserCount', { n: clients.length })
             : t(running ? 'remoteCompact.onHint' : 'remoteCompact.offHint')}</p>
       </div>
       <details className="group">
@@ -38,12 +39,12 @@ export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop,
           className={`flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg text-ds-muted [&::-webkit-details-marker]:hidden ${REMOTE_FOCUS}`}><Info size={15} /></summary>
         <div className="absolute left-0 right-0 top-10 z-10 space-y-3 rounded-xl border border-ds-border-muted bg-ds-elevated p-3 text-[12px] leading-[18px] text-ds-muted shadow-lg">
           <p>{t('remoteAccessSecurityHint')} {t('remoteAccessExternalHint')}</p>
-          <p>{t('remoteAccessMobileSecurityHint')}</p>
+          {mobileVisible ? <p>{t('remoteAccessMobileSecurityHint')}</p> : null}
         </div>
       </details>
     </header>
     <RemoteGroup>
-      <MobileChannelRow link={link} onOpen={onDesktop} detail={link.enabled && link.state?.desktopAccess ? desktopText : undefined} />
+      {mobileVisible ? <MobileChannelRow link={link} onOpen={onDesktop} detail={link.enabled && link.state?.desktopAccess ? desktopText : undefined} /> : null}
       <RemoteCompactRow icon={Globe} title={t('remoteCompact.browser')} subtitle={browserText} onOpen={onBrowser}>
         <BrowserSwitch browser={browser} />
       </RemoteCompactRow>

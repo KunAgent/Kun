@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ControlPackageApi } from '@shared/control-package'
 import type { RemoteAccessStatus } from '@shared/remote-access'
 import type { DesktopAccessStatus } from '@shared/remote-desktop'
 import type { MobileLink } from './useMobileLink'
@@ -21,7 +22,7 @@ let api: {
   remoteAccessDetectTailscale: ReturnType<typeof vi.fn>
   requestComputerUsePermission: ReturnType<typeof vi.fn>
   onRemoteAccessStatusChanged: (listener: typeof emit) => () => void
-  mobileLink: { desktopStatus: ReturnType<typeof vi.fn>; desktopConfigure: ReturnType<typeof vi.fn>; desktopStop: ReturnType<typeof vi.fn> }
+  mobileLink: { desktopStatus: ReturnType<typeof vi.fn>; desktopConfigure: ReturnType<typeof vi.fn>; desktopStop: ReturnType<typeof vi.fn>; controlPackage: ControlPackageApi }
 }
 const control = (label: string) => container.querySelector(`[role="switch"][aria-label="${label}"]`) as HTMLButtonElement
 const button = (text: string) => [...container.querySelectorAll('button')].find(b => b.textContent?.includes(text))!
@@ -43,6 +44,10 @@ beforeEach(async () => {
     requestComputerUsePermission: vi.fn(async () => undefined),
     onRemoteAccessStatusChanged: listener => { emit = listener; return () => {} },
     mobileLink: {
+      controlPackage: {
+        status: vi.fn(async () => ({ phase: 'ready', version: '0.1.7' })),
+        check: vi.fn(), install: vi.fn(), apply: vi.fn()
+      },
       desktopStatus: vi.fn(async () => desktop),
       desktopConfigure: vi.fn(async patch => { desktop = { ...desktop, ...patch }; return desktop }),
       desktopStop: vi.fn(async () => { desktop = { ...desktop, active: undefined }; return desktop })
@@ -55,7 +60,7 @@ beforeEach(async () => {
   mocks.gate = true
   vi.stubGlobal('kunGui', api)
 })
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 it('shows a compact overview without settings forms, a QR image or nested buttons', async () => {
   await render()
   expect(container.querySelectorAll('[role="switch"]')).toHaveLength(2)
@@ -67,16 +72,22 @@ it('shows a compact overview without settings forms, a QR image or nested button
   expect(container.querySelector('section')?.className).toContain('overscroll-contain')
   expect(container.querySelectorAll('button').length).toBeLessThan(12)
 })
-it('locks the combined entry but leaves browser and system permission details accessible', async () => {
-  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free', enabled: false, canStop: false }
+it.each(['free', 'loading', 'unavailable', 'signedOut'] as const)('hides mobile and package UI when membership is %s without gating the browser', async membershipState => {
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState, signedIn: membershipState !== 'signedOut' }
+  mocks.link.state!.pairings = [{ id: 'pair', name: 'New phone' }] as NonNullable<MobileLink['state']>['pairings']
   await render()
-  expect(container.textContent?.match(/Requires Plus membership or higher/g)).toHaveLength(1)
-  expect(control('Enable phone access').disabled).toBe(true)
-  expect(control('Desktop control')).toBeNull()
+  expect(container.textContent).not.toContain('Phone remote access')
+  expect(container.textContent).not.toContain('Remote control package')
+  expect(container.textContent).not.toContain('Requires Plus')
+  expect(container.textContent).not.toContain(i18n.t('remoteCompact.mobileConnected'))
+  expect(container.textContent).not.toContain('New phone wants access')
+  expect(container.textContent).not.toContain('iPhone')
+  expect(control('Enable phone access')).toBeNull()
+  expect(control('Stop phone access')).toBeNull()
+  expect(api.mobileLink.controlPackage.status).not.toHaveBeenCalled()
   expect(control(i18n.t('remoteAccessEnable')).disabled).toBe(false)
-  await click('Phone remote access')
-  expect(container.textContent).toContain('Requires Plus membership or higher')
-  expect(container.querySelector('[role="switch"]')).toBeNull()
+  await click('Browser')
+  expect(container.querySelector('input[type="password"]')).toBeTruthy()
 })
 it('keeps browser and desktop stop controls usable after entitlement/password loss', async () => {
   status.passwordSet = false; desktop.enabled = true; desktop.active = { peer: 'iPhone', mode: 'control', sessionId: 'session' }
@@ -85,9 +96,8 @@ it('keeps browser and desktop stop controls usable after entitlement/password lo
   expect(control(i18n.t('remoteAccessEnable')).disabled).toBe(false)
   await act(async () => control(i18n.t('remoteAccessEnable')).click())
   expect(api.remoteAccessSetConfig).toHaveBeenCalledWith({ enabled: false })
-  expect(control('Stop phone access').disabled).toBe(false)
-  await act(async () => control('Stop phone access').click())
-  expect(mocks.link.toggle).toHaveBeenCalledOnce()
+  expect(control('Stop phone access')).toBeNull()
+  expect(mocks.link.toggle).not.toHaveBeenCalled()
   await click('End remote session'); expect(api.mobileLink.desktopStop).toHaveBeenCalledOnce()
 })
 it('retains trusted activation for the unified remote switch', async () => {
@@ -140,7 +150,8 @@ it('receives browser updates and reports logout failures beside the view', async
 it('never polls the desktop API when signed out', async () => {
   mocks.link = { ...mocks.link, signedIn: false, mobileAllowed: false, enabled: false, canStop: false, membershipState: 'signedOut' }
   await render(); expect(api.mobileLink.desktopStatus).not.toHaveBeenCalled()
-  expect(control('Enable phone access').disabled).toBe(true)
+  expect(control('Enable phone access')).toBeNull()
+  expect(api.mobileLink.controlPackage.status).not.toHaveBeenCalled()
   expect(control('Desktop control')).toBeNull()
 })
 it('shows granted screen permission with sharing off and no selected display', async () => {
@@ -181,4 +192,70 @@ it('refreshes after a permission request and reports failures beside the control
   await click('Authorize')
   expect(api.requestComputerUsePermission).toHaveBeenLastCalledWith('accessibility')
   expect(container.querySelector('[role="alert"]')?.textContent).toContain('could not be confirmed')
+})
+it('reads the package only for an entitled account and never checks or installs on mount', async () => {
+  await render()
+  expect(container.textContent).toContain('Remote control package')
+  expect(api.mobileLink.controlPackage.status).toHaveBeenCalledOnce()
+  expect(api.mobileLink.controlPackage.check).not.toHaveBeenCalled()
+  expect(api.mobileLink.controlPackage.install).not.toHaveBeenCalled()
+  expect(api.mobileLink.controlPackage.apply).not.toHaveBeenCalled()
+})
+it('unmounts package polling and removes mobile content immediately when entitlement is lost', async () => {
+  vi.useFakeTimers()
+  await render()
+  expect(api.mobileLink.controlPackage.status).toHaveBeenCalledOnce()
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
+  await render()
+  expect(container.textContent).not.toContain('Remote control package')
+  expect(container.textContent).not.toContain('Phone remote access')
+  expect(container.textContent).not.toContain(i18n.t('remoteCompact.mobileConnected'))
+  expect(container.textContent).not.toContain('iPhone')
+  await act(async () => vi.advanceTimersByTimeAsync(6000))
+  expect(api.mobileLink.controlPackage.status).toHaveBeenCalledOnce()
+  mocks.link = { ...mocks.link, mobileAllowed: true, membershipState: 'active' }
+  await render()
+  expect(container.textContent).toContain('Remote control package')
+  expect(container.textContent).toContain('Phone remote access')
+  expect(api.mobileLink.controlPackage.status).toHaveBeenCalledTimes(2)
+})
+it.each(['Phone remote access', 'iPhone'])('returns from %s details when mobile permission is lost', async detail => {
+  await render(); await click(detail)
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
+  await render()
+  expect(container.textContent).not.toContain('Remote control package')
+  expect(container.textContent).not.toContain('Phone remote access')
+  expect(container.querySelector('[aria-label="Back to remote access"]')).toBeNull()
+  expect(control(i18n.t('remoteAccessEnable'))).toBeTruthy()
+})
+it('does not derive the overview status from a hidden stale mobile connection', async () => {
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
+  status = { ...status, enabled: false, running: false }
+  await render()
+  expect(container.querySelector('h2')?.textContent).toBe(i18n.t('remoteCompact.disabled'))
+  expect(container.textContent).not.toContain(i18n.t('remoteCompact.mobileConnected'))
+})
+it('requires a signed-in owner even if the previous entitlement flag remains true', async () => {
+  mocks.link = { ...mocks.link, signedIn: false }
+  await render()
+  expect(container.textContent).not.toContain('Phone remote access')
+  expect(container.textContent).not.toContain('Remote control package')
+  expect(api.mobileLink.controlPackage.status).not.toHaveBeenCalled()
+})
+it('preserves independently authorized local/private and computer connections without mobile relay membership', async () => {
+  const direct = {
+    status: vi.fn(async () => ({ ready: true, running: false, enabled: false, bind: 'lan', port: 0,
+      addresses: [], localAddresses: [], hasIceServers: false, grants: [] })),
+    configure: vi.fn()
+  }
+  Object.assign(api.mobileLink, { direct, computers: {} })
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
+  await render()
+  expect(container.textContent).not.toContain('Remote control package')
+  expect(container.textContent).not.toContain('Phone remote access')
+  expect(control('Local network and private connections')?.disabled).toBe(false)
+  expect(button('Computer to computer desktop')).toBeTruthy()
+  expect(control(i18n.t('remoteAccessEnable')).disabled).toBe(false)
+  expect(direct.status).toHaveBeenCalledOnce()
+  expect(direct.configure).not.toHaveBeenCalled()
 })
