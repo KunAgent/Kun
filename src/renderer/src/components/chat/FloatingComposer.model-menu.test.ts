@@ -320,6 +320,7 @@ describe('FloatingComposer model controls', () => {
     expect(html).toContain('deepseek-v4-pro')
     expect(html).toContain('Ultra')
     expect(html).toContain('data-reasoning-effort="max"')
+    expect(html).toContain('data-pet-model="deepseek-v4-pro"')
     expect(html).toContain('aria-label="Model and reasoning settings: DeepSeek / deepseek-v4-pro / Reasoning Ultra"')
   })
 
@@ -394,5 +395,7 @@ describe('FloatingComposer model controls', () => {
 
     expect(html).toContain('Set up provider')
     expect(html).not.toContain('deepseek-v4-pro')
+    expect(html).not.toContain('data-pet-model=')
+    expect(html).not.toContain('data-pet-provider=')
   })
 })

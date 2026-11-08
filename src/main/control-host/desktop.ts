@@ -125,11 +125,19 @@ export class ControlDesktop {
     if (this.stopping) return this.stopping
     const rpc = this.rpc
     this.stopping = (async () => {
+      let stopFailure: { error: unknown } | undefined
       try { if (rpc && !rpc.closed) await rpc.call('desktop.command', { id: this.id, method: 'stopAll', value: reason }, 8000) }
-      finally {
-        try { await this.ports.cleanup(); this.contexts.clear(); this.cleanupBlocked = false; this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id) }
-        catch (error) { this.cleanupBlocked = true; throw error }
+      catch (error) { stopFailure = { error } }
+      try { await this.ports.cleanup() }
+      catch (error) {
+        this.cleanupBlocked = true
+        // Cleanup failure keeps safety ownership; preserve the RPC error too when both operations fail.
+        if (stopFailure) throw new AggregateError([error, stopFailure.error], 'DESKTOP_STOP_AND_CLEANUP_FAILED')
+        throw error
       }
+      this.contexts.clear(); this.cleanupBlocked = false
+      this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id)
+      if (stopFailure) throw stopFailure.error
     })().finally(() => { this.stopping = undefined })
     return this.stopping
   }

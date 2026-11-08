@@ -49,7 +49,7 @@ export function DirectMobileLink({ onRunningChange }: { onRunningChange?(running
   }
   const label = text('局域网与自建连接', 'Local network and private connections')
   if (!api) return null
-  const field = 'w-full rounded-lg border border-ds-border-muted bg-ds-elevated px-2.5 py-2 text-[12px] text-ds-ink outline-none focus:ring-2 focus:ring-ds-accent'
+  const field = 'w-full rounded-lg border border-ds-border-muted bg-ds-elevated px-2.5 py-2 text-[12px] text-ds-ink outline-none focus:ring-2 focus:ring-[var(--ds-accent)]'
   return <RemoteGroup>
     <RemoteCompactRow icon={Network} title={label} onOpen={edit} subtitle={text(state?.running ? '已开启 · 数据直接传到电脑' : '支持局域网、Tailscale 和自己的隧道', state?.running ? 'On · data goes directly to this computer' : 'LAN, Tailscale and your own tunnel')}>
       <RemoteSwitch checked={state?.running === true} disabled={!state?.ready || busy} label={label} onToggle={() => void run(async () => {

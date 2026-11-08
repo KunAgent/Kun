@@ -92,12 +92,12 @@ describe('Manager manual native permit issuance', () => {
   })
 
   it.each<Variant>(['injected-request', 'external-event', 'wrong-binding', 'wrong-event-key', 'source-envelope',
-    'non-user-message', 'stale-evidence', 'paused', 'expired-claim', 'wrong-target', 'expired-policy', 'missing-action', 'archived-agent'])
-  ('fails closed for %s without writing a permit', async (variant) => {
-    const f = await setup(variant)
-    await expect(issueManualNativeFollowUpPermit(f.args)).rejects.toMatchObject({ code: 'native_followup_permit_required' })
-    expect((await f.h.data.roomStore.get('commitment_execution', f.execution.id))?.value).toMatchObject({ phase: 'reserved' })
-  })
+    'non-user-message', 'stale-evidence', 'paused', 'expired-claim', 'wrong-target', 'expired-policy', 'missing-action', 'archived-agent'])(
+    'fails closed for %s without writing a permit', async (variant) => {
+      const f = await setup(variant)
+      await expect(issueManualNativeFollowUpPermit(f.args)).rejects.toMatchObject({ code: 'native_followup_permit_required' })
+      expect((await f.h.data.roomStore.get('commitment_execution', f.execution.id))?.value).toMatchObject({ phase: 'reserved' })
+    })
 
   it('fails closed when disabled, with a stale claim, or with a live target lease', async () => {
     const f = await setup()

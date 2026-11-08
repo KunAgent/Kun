@@ -129,14 +129,6 @@ export function FloatingComposerModelPicker({
     ungroupedLabel: t('composerOtherModels')
   }), [composerModelGroups, modelOptions, t])
   const currentModel = composerModel.trim()
-  const previousPetModel = useRef({ model: currentModel, provider: composerProviderId })
-  useEffect(() => {
-    const previous = previousPetModel.current
-    previousPetModel.current = { model: currentModel, provider: composerProviderId }
-    if (taskScoped || (previous.model === currentModel && previous.provider === composerProviderId)) return
-    const group = composerModelGroups.find((entry) => entry.providerId === composerProviderId)
-    publishPetModel(currentModel, group?.presetSource || group?.nativeHarnessId || composerProviderId, Boolean(previous.model))
-  }, [currentModel, composerProviderId, composerModelGroups, taskScoped])
   const selectedProviderId = providerMenuGroups.find((group) =>
     group.providerId === composerProviderId.trim() &&
     group.modelIds.some((id) => modelIdsMatch(id, currentModel))
@@ -152,6 +144,15 @@ export function FloatingComposerModelPicker({
         : emptyModelState === 'agent-not-ready' ? 'agentUpdate.composerNotReadyHint'
           : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
+  const petModel = needsProviderSetup ? '' : currentModel
+  const previousPetModel = useRef({ model: petModel, provider: composerProviderId })
+  useEffect(() => {
+    const previous = previousPetModel.current
+    previousPetModel.current = { model: petModel, provider: composerProviderId }
+    if (taskScoped || !petModel || (previous.model === petModel && previous.provider === composerProviderId)) return
+    const group = composerModelGroups.find((entry) => entry.providerId === composerProviderId)
+    publishPetModel(petModel, group?.presetSource || group?.nativeHarnessId || composerProviderId, Boolean(previous.model))
+  }, [petModel, composerProviderId, composerModelGroups, taskScoped])
   const reasoningSelection = resolveComposerReasoningSelection({ groups: providerMenuGroups, model: currentModel,
     providerId: selectedProviderId, effort: composerReasoningEffort, allowedEfforts: allowedReasoningEfforts,
     requireReportedLevels: taskScoped })
@@ -330,8 +331,8 @@ export function FloatingComposerModelPicker({
   return (
     <div
       ref={pickerRef}
-      data-pet-model={taskScoped ? undefined : currentModel}
-      data-pet-provider={selectedProviderGroup?.presetSource || composerModelGroups.find((group) => group.providerId === selectedProviderId)?.nativeHarnessId || composerProviderId}
+      data-pet-model={taskScoped || needsProviderSetup ? undefined : currentModel}
+      data-pet-provider={needsProviderSetup ? undefined : selectedProviderGroup?.presetSource || composerModelGroups.find((group) => group.providerId === selectedProviderId)?.nativeHarnessId || composerProviderId}
       className={`ds-composer-model-picker ds-no-drag relative flex h-9 items-center ${widthClass} ${
         mode === 'combobox' && stretch ? 'justify-end' : ''
       }`}
