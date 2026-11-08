@@ -9,7 +9,8 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const kunRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const entries = ['dist/cli/serve-entry.js', 'dist/tui/app/main.js']
+// Check the lazy dispatcher too: the bootstrap must not hide native imports.
+const entries = ['dist/cli/serve-entry.js', 'dist/cli/serve-main.js', 'dist/tui/app/main.js']
 const NATIVE_PACKAGES = [/^better-sqlite3$/u, /^node-pty$/u, /^@computer-use\//u, /^@napi-rs\//u, /^sharp$/u, /^bindings$/u]
 const IMPORT = /(?:^|[;\n}])\s*(?:import|export)\s*(?:[^'"\n;]*?\sfrom\s*)?['"]([^'"]+)['"]/gu
 
