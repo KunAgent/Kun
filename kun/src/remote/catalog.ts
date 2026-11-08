@@ -1,5 +1,6 @@
 import { VERSION as REMOTE_PROTOCOL_VERSION, DIRECTORY_LIVE_CAPABILITY, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
 import { FILE_IDENTITY_CAPABILITY, CODE_HISTORY_SYNC_CAPABILITY } from '@kun/remote-protocol'
+import { DispatchParamSchemas } from './dispatch/contracts.js'
 import { KUN_VERSION, KUN_RELEASE_CHANNEL } from '../version.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Envelope } from './contracts.js'
@@ -42,6 +43,7 @@ export async function remoteCapabilityDescriptors(
         supported: true, enabled: true, authorized: true, online: true, limits: { ...limits } })
     }
   }
+  add(DispatchParamSchemas, 'code', { pageSize: 30, assignments: 16 }, Boolean(runtime.agentDispatchService))
   add(CodeManagementParamSchemas, 'code', { pageSize: 50 })
   const search = descriptors.find((descriptor) => descriptor.operation === 'code.search')
   if (search) search.limits.dateRange = 1

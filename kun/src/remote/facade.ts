@@ -1,3 +1,5 @@
+import { DispatchParamSchemas } from './dispatch/contracts.js'
+import { RemoteDispatch } from './dispatch/service.js'
 import { OPERATION_METHODS, OPERATION_READ_METHODS, READ_METHODS, validateOperationParams } from '@kun/remote-protocol'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Router } from '../server/router.js'
@@ -54,6 +56,7 @@ export class RemoteFacade {
   readonly artifacts: RemoteArtifacts
   readonly projectFiles: RemoteProjectFiles
   readonly groups: RemoteGroups
+  private readonly dispatches: RemoteDispatch
   private readonly receipts: RemoteReceipts
   private readonly approvals: RemoteApprovals
   private readonly approvalQueries: RemoteApprovalQueries
@@ -101,6 +104,7 @@ export class RemoteFacade {
     this.schedules = new RemoteSchedules(runtime)
     this.plugins = new RemotePlugins(runtime)
     this.attachmentAdmissions = new RemoteAttachmentAdmissions(runtime)
+    this.dispatches = new RemoteDispatch(runtime, () => this.tasks.models())
     this.registerHandlers()
   }
 
@@ -128,6 +132,7 @@ export class RemoteFacade {
 
   private async preflight(envelope: Envelope, params: any) {
     const { method } = envelope.call
+    if (method === 'dispatch.act') return this.dispatches.preflight(params)
     if (Object.hasOwn(GroupParamSchemas, method)) return this.groups.preflight(method, params, envelope)
     if (method === 'plugin.setEnabled') return this.plugins.preflight(envelope, params)
     if (Object.hasOwn(CodeManagementParamSchemas, method)) return this.code.preflight(method, params)
@@ -149,6 +154,7 @@ export class RemoteFacade {
     const method = receipt.method
     let result: unknown
     if (method === 'code.create' || method === 'code.turn.start') result = await this.tasks.recover(scope, receipt)
+    else if (method === 'dispatch.act') result = await this.dispatches.recover(scope, receipt)
     else if (method === 'agent.message.send') result = await this.conversations.recover(scope, receipt)
     else if (this.history.supports(method)) result = await this.history.recover(scope, receipt)
     else if (this.agents.supports(method)) result = await this.agents.recover(scope, receipt)
@@ -171,6 +177,9 @@ export class RemoteFacade {
         this.handlers.set(method, handler)
       }
     }
+    add(DispatchParamSchemas, (scope, p) => scope.call.method === 'dispatch.list'
+      ? this.dispatches.list(p.threadId) : scope.call.method === 'dispatch.catalog'
+        ? this.dispatches.catalog(p.threadId) : this.dispatches.act(scope, p))
     add(CodeManagementParamSchemas, async ({ call }, p) => {
       if (call.method === 'code.search') return this.code.search(p)
       if (call.method === 'code.settings.get') return this.code.settings(p.threadId)
