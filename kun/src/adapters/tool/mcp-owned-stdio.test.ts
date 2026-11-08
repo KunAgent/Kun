@@ -1,14 +1,16 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OwnedStdioClientTransport } from './mcp-owned-stdio.js'
+import { buildMcpStdioEnvironment } from './mcp-stdio-environment.js'
 import { resumeOwnedProcessAdmission, shutdownOwnedProcesses } from '../../process/owned-process.js'
 
 const directories: string[] = []
 afterEach(async () => {
   await shutdownOwnedProcesses({ graceMs: 50, timeoutMs: 4000 })
   resumeOwnedProcessAdmission()
+  vi.unstubAllEnvs()
   await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
 })
 
@@ -31,8 +33,12 @@ describe('owned MCP stdio', () => {
         process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, result }) + '\\n');
       });
     `)
+    const inheritedPath = join(directory, 'parent-without-npx')
+    await mkdir(inheritedPath)
+    vi.stubEnv('PATH', inheritedPath)
     const transport = new OwnedStdioClientTransport({ command: 'npx', cwd: directory,
-      env: { PATH: directory, Path: directory, PATHEXT: '.COM;.EXE;.BAT;.CMD', ELECTRON_RUN_AS_NODE: '1' }, stderr: 'pipe' })
+      env: buildMcpStdioEnvironment({ Path: directory, PATHEXT: '.COM;.EXE;.BAT;.CMD', ELECTRON_RUN_AS_NODE: '1' }),
+      stderr: 'pipe' })
     const messages: unknown[] = []
     transport.onmessage = message => { messages.push(message) }
     try {

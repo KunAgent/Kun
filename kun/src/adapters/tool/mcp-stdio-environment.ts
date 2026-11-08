@@ -1,5 +1,6 @@
 import { readdirSync, statSync } from 'node:fs'
 import { posix, win32 } from 'node:path'
+import { mergeProcessEnvironments } from '../../process/process-environment.js'
 import type { McpServerConfig } from '../../contracts/capabilities.js'
 
 /**
@@ -17,22 +18,23 @@ export type McpStdioEnvironmentOptions = {
 }
 
 export function buildMcpStdioEnvironment(
-  serverEnv: Record<string, string> = {},
+  serverEnv: NodeJS.ProcessEnv = {},
   options: McpStdioEnvironmentOptions = {}
-): Record<string, string> {
+): NodeJS.ProcessEnv {
   const platform = options.platform ?? process.platform
-  const baseEnv = options.baseEnv ?? process.env
-  const pathKey = findPathKey(serverEnv) ?? findPathKey(baseEnv) ?? 'PATH'
-  const configuredPath = readEnvPath(serverEnv)
-  const inheritedPath = readEnvPath(baseEnv)
+  const baseEnv = mergeProcessEnvironments(platform, options.baseEnv ?? process.env)
+  const configuredEnv = mergeProcessEnvironments(platform, serverEnv)
+  const configuredPathKey = findPathKey(configuredEnv, platform)
+  const pathKey = configuredPathKey ?? findPathKey(baseEnv, platform) ?? 'PATH'
+  // An explicit undefined is an unset operation, not permission to restore
+  // the parent's PATH (or add GUI defaults) on the next merge.
+  if (configuredPathKey && configuredEnv[configuredPathKey] === undefined) return configuredEnv
   const pathValue = mergePathEntries(
-    [configuredPath ?? inheritedPath ?? '', ...commonMcpCommandPathEntries(platform, baseEnv)],
-    pathDelimiter(platform)
+    [configuredPathKey ? configuredEnv[configuredPathKey] ?? '' : readEnvPath(baseEnv, platform) ?? '',
+      ...commonMcpCommandPathEntries(platform, baseEnv)],
+    platform
   )
-  return {
-    ...serverEnv,
-    ...(pathValue ? { [pathKey]: pathValue } : {})
-  }
+  return mergeProcessEnvironments(platform, configuredEnv, pathValue ? { [pathKey]: pathValue } : {})
 }
 
 export function formatMcpConnectionError(error: unknown, server: McpServerConfig): string {
@@ -76,33 +78,42 @@ function commonMcpCommandPathEntries(
     ].filter((entry): entry is string => Boolean(entry))
   }
   if (platform === 'win32') {
+    const appData = envValue(env, 'APPDATA', platform)
+    const programFiles = envValue(env, 'ProgramFiles', platform)
+    const programFilesX86 = envValue(env, 'ProgramFiles(x86)', platform)
     return [
-      env.APPDATA ? win32.join(env.APPDATA, 'npm') : '',
-      env.ProgramFiles ? win32.join(env.ProgramFiles, 'nodejs') : '',
-      env['ProgramFiles(x86)'] ? win32.join(env['ProgramFiles(x86)'], 'nodejs') : ''
+      appData ? win32.join(appData, 'npm') : '',
+      programFiles ? win32.join(programFiles, 'nodejs') : '',
+      programFilesX86 ? win32.join(programFilesX86, 'nodejs') : ''
     ].filter((entry): entry is string => Boolean(entry))
   }
   return []
 }
 
-function findPathKey(env: Record<string, string | undefined>): string | undefined {
-  return Object.keys(env).find((key) => key.toLowerCase() === 'path')
+function envValue(env: NodeJS.ProcessEnv, name: string, platform: NodeJS.Platform): string | undefined {
+  const key = platform === 'win32'
+    ? Object.keys(env).find((key) => key.toLowerCase() === name.toLowerCase()) : name
+  return key ? env[key] : undefined
 }
 
-function readEnvPath(env: Record<string, string | undefined>): string | undefined {
-  const key = findPathKey(env)
-  const value = key ? env[key] : undefined
+function findPathKey(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | undefined {
+  return Object.keys(env).find((key) => platform === 'win32' ? key.toLowerCase() === 'path' : key === 'PATH')
+}
+
+function readEnvPath(env: NodeJS.ProcessEnv, platform: NodeJS.Platform): string | undefined {
+  const value = envValue(env, 'PATH', platform)
   return value && value.trim() ? value : undefined
 }
 
-function mergePathEntries(values: string[], delimiter: string): string {
+function mergePathEntries(values: string[], platform: NodeJS.Platform): string {
+  const delimiter = pathDelimiter(platform)
   const seen = new Set<string>()
   const entries: string[] = []
   for (const value of values) {
     for (const entry of value.split(delimiter)) {
       const trimmed = entry.trim()
       if (!trimmed) continue
-      const key = trimmed.toLowerCase()
+      const key = platform === 'win32' ? trimmed.toLowerCase() : trimmed
       if (seen.has(key)) continue
       seen.add(key)
       entries.push(trimmed)
