@@ -465,6 +465,12 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         return { ok: false as const, message: 'Terminal service is stopping.' }
       }
       if (agentPlan) await validateAgentLaunch(agentPlan, options.runtimeFetch!)
+      // Validation can yield while shutdown closes admission. Neither platform
+      // may release its suspended shell after that cancellation.
+      if (cancelled()) {
+        await disposeSession(request.sessionId, true)
+        return { ok: false as const, message: 'Terminal service is stopping.' }
+      }
       launch?.release()
       session.ready = true
       return {

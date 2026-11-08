@@ -1,13 +1,16 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
-import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, isAbsolute, join, resolve } from 'node:path'
 import { windowsOwnedLauncherPath } from './windows-startup-native.js'
 
 type StopOptions = { graceMs?: number; timeoutMs?: number }
 type LaunchOptions = SpawnOptions & { ownerLossGraceMs?: number; beforeLaunch?: () => Promise<unknown> }
-type Launch = { directory: string; stopPath: string; launcherPid: number; stop?: Promise<void> }
+type Launch = {
+  directory: string; stopPath: string; launcherPid: number; exited: boolean
+  stop?: Promise<void>; release?: Promise<void>
+}
 const launches = new Map<ChildProcess, Launch>()
 const retired = new WeakSet<ChildProcess>()
 let stopping = false
@@ -23,12 +26,19 @@ export function quoteWindowsArgument(value: string): string {
 export async function resolveWindowsExecutablePath(command: string, options: SpawnOptions): Promise<string> {
   const environment = options.env ?? process.env
   const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === 'path')
+  const cwd = String(options.cwd ?? process.cwd())
   const paths = /[\\/]/u.test(command) || isAbsolute(command)
-    ? [resolve(String(options.cwd ?? process.cwd()), command)]
-    : String(environment[pathKey ?? 'PATH'] ?? '').split(';').map((part) => join(part, command))
-  const suffixes = /\.(?:exe|com|cmd|bat)$/iu.test(command) ? [''] : ['', '.exe', '.com', '.cmd', '.bat']
+    ? [resolve(cwd, command)]
+    : String(environment[pathKey ?? 'PATH'] ?? '').split(';').map((part) => resolve(cwd, part, command))
+  const pathExtKey = Object.keys(environment).find((key) => key.toLowerCase() === 'pathext')
+  const supported = ['.com', '.exe', '.bat', '.cmd']
+  const extensions = String(environment[pathExtKey ?? 'PATHEXT'] ?? supported.join(';')).split(';')
+    .map((suffix) => suffix.toLowerCase()).filter((suffix) => supported.includes(suffix))
+  // npm installs a POSIX shell shim alongside .cmd/.ps1. Existence alone
+  // cannot make that extensionless file a Windows executable.
+  const suffixes = /\.(?:exe|com|cmd|bat)$/iu.test(command) ? [''] : extensions
   for (const path of paths) for (const suffix of suffixes) {
-    try { await access(path + suffix); return path + suffix } catch { /* next */ }
+    try { if ((await stat(path + suffix)).isFile()) return path + suffix } catch { /* next */ }
   }
   throw Object.assign(new Error(`Could not start executable: ${basename(command)}`), { code: 'ENOENT' })
 }
@@ -57,11 +67,16 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
   const environment = { ...(options.env ?? process.env) }
   const ownerPid = Number(environment.KUN_PROCESS_STACK_OWNER_PID) || process.pid
   const ownerBirth = environment.KUN_PROCESS_STACK_OWNER_BIRTH ?? '0'
-  await writeFile(configPath, [executable, commandLine, String(options.cwd ?? process.cwd()), statusPath, stopPath]
-    .map((value) => Buffer.from(value).toString('base64')).concat([
-      String(ownerPid), ownerBirth, String(options.ownerLossGraceMs ?? 20_000), console ? 'console' : 'pipe',
-      Buffer.from(startPath).toString('base64')
-    ]).join('\n'), { mode: 0o600 })
+  try {
+    await writeFile(configPath, [executable, commandLine, String(options.cwd ?? process.cwd()), statusPath, stopPath]
+      .map((value) => Buffer.from(value).toString('base64')).concat([
+        String(ownerPid), ownerBirth, String(options.ownerLossGraceMs ?? 20_000), console ? 'console' : 'pipe',
+        Buffer.from(startPath).toString('base64')
+      ]).join('\n'), { mode: 0o600 })
+  } catch (error) {
+    await rm(directory, { recursive: true, force: true })
+    throw error
+  }
   const { ownerLossGraceMs: _ownerLossGraceMs, beforeLaunch, ...spawnOptions } = options
   const launcherOptions: SpawnOptions = {
     // The supervisor must outlive an abrupt owner exit long enough to enforce
@@ -74,11 +89,36 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
   return { launcher, launcherOptions, directory, statusPath, stopPath, startPath, beforeLaunch }
 }
 
-async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnType<typeof prepareWindowsLaunch>>): Promise<ChildProcess> {
+function launcherExited(child: ChildProcess, launch: Launch): boolean {
+  return launch.exited || child.exitCode !== null || child.signalCode !== null
+}
+
+function releaseWindowsLaunch(child: ChildProcess, launch: Launch): Promise<void> {
+  if (launch.release) return launch.release
+  launch.release = rm(launch.directory, { recursive: true, force: true }).then(() => {
+    launches.delete(child)
+    retired.add(child)
+  }).catch((error) => { launch.release = undefined; throw error })
+  return launch.release
+}
+
+async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnType<typeof prepareWindowsLaunch>>,
+  suspended = false): Promise<ChildProcess> {
   const { directory, statusPath, stopPath } = prepared
   let spawnError: Error | undefined
-  child.on('error', (error) => { spawnError = error })
-  const launch = { directory, stopPath, launcherPid: child.pid ?? 0 }
+  let binding = true
+  const launch: Launch = { directory, stopPath, launcherPid: child.pid ?? 0, exited: false }
+  const onError = (error: Error) => {
+    spawnError = error
+    if (!launch.launcherPid) launch.exited = true
+  }
+  child.on('error', onError)
+  // This is the launcher handle's exit, NOT the target PID's exit. The native
+  // launcher waits for an empty Job (including surviving descendants).
+  child.once('exit', () => {
+    launch.exited = true
+    if (!binding) void releaseWindowsLaunch(child, launch).catch(() => undefined)
+  })
   launches.set(child, launch)
   try {
     const deadline = Date.now() + 5_000
@@ -94,7 +134,8 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
         if (stopping) throw new Error('Owned process admission closed during launch')
         // Do not await after releasing the gate: the caller installs its
         // listeners in the promise microtask before target I/O can be handled.
-        writeFileSync(prepared.startPath, 'start', { mode: 0o600 })
+        if (launcherExited(child, launch)) throw new Error('Windows owned launcher exited before release')
+        if (!suspended) writeFileSync(prepared.startPath, 'start', { mode: 0o600 })
         return child
       }
       if (spawnError || child.exitCode !== null || child.signalCode !== null) {
@@ -120,6 +161,10 @@ async function bindWindowsLaunch(child: ChildProcess, prepared: Awaited<ReturnTy
   } catch (error) {
     await stopWindowsOwnedProcess(child, { graceMs: 0, timeoutMs: 3_000 }).catch(() => undefined)
     throw error
+  } finally {
+    binding = false
+    child.removeListener('error', onError)
+    if (launcherExited(child, launch)) await releaseWindowsLaunch(child, launch)
   }
 }
 
@@ -132,18 +177,44 @@ export async function spawnWindowsOwnedProcess(command: string, args: readonly s
     await rm(prepared.directory, { recursive: true, force: true })
     throw error
   }
-  return bindWindowsLaunch(spawn(prepared.launcher, [], prepared.launcherOptions), prepared)
+  try {
+    return await bindWindowsLaunch(spawn(prepared.launcher, [], prepared.launcherOptions), prepared)
+  } catch (error) {
+    // A synchronous spawn failure has no launcher/Job to stop.
+    // Bound failures retain their registration until the launcher really exits.
+    if (![...launches.values()].some((launch) => launch.directory === prepared.directory)) {
+      await rm(prepared.directory, { recursive: true, force: true })
+    }
+    throw error
+  }
 }
 
 /** ConPTY starts the gated launcher, never an already executing uncontained shell. */
 export async function prepareWindowsOwnedPty(command: string, args: readonly string[], options: LaunchOptions) {
   const prepared = await prepareWindowsLaunch(command, args, options, true)
+  let child: ChildProcess | undefined
+  let ready = false
+  let released = false
   return {
     command: prepared.launcher,
     args: [] as string[],
     env: prepared.launcherOptions.env ?? {},
-    bind: (child: ChildProcess) => bindWindowsLaunch(child, prepared),
-    abort: () => rm(prepared.directory, { recursive: true, force: true })
+    bind: async (facade: ChildProcess) => {
+      child = facade
+      await bindWindowsLaunch(facade, prepared, true)
+      ready = true
+      return facade
+    },
+    release: () => {
+      if (released) return
+      if (!ready || !child) throw new Error('Windows owned PTY is not ready')
+      const launch = launches.get(child)
+      if (stopping || !launch || launcherExited(child, launch)) throw new Error('Windows owned PTY cannot resume')
+      writeFileSync(prepared.startPath, 'start', { mode: 0o600 })
+      released = true
+    },
+    abort: () => child ? stopWindowsOwnedProcess(child, { graceMs: 0 })
+      : rm(prepared.directory, { recursive: true, force: true })
   }
 }
 
@@ -157,25 +228,27 @@ export async function stopWindowsOwnedProcess(child: ChildProcess, options: Stop
   launch.stop = (async () => {
     const deadline = Date.now() + (options.timeoutMs ?? 5_000)
     const graceUntil = Math.min(deadline, Date.now() + (options.graceMs ?? 0))
-    while (child.exitCode === null && child.signalCode === null && Date.now() < graceUntil) {
+    while (!launcherExited(child, launch) && Date.now() < graceUntil) {
       await new Promise((accept) => setTimeout(accept, 25))
     }
-    await writeFile(launch.stopPath, 'stop', { mode: 0o600 })
-    while (child.exitCode === null && child.signalCode === null && Date.now() < deadline) {
+    if (!launcherExited(child, launch)) {
+      try { await writeFile(launch.stopPath, 'stop', { mode: 0o600 }) }
+      catch (error) { if (!launcherExited(child, launch)) throw error }
+    }
+    while (!launcherExited(child, launch) && Date.now() < deadline) {
       await new Promise((accept) => setTimeout(accept, 25))
     }
-    if (child.exitCode === null && child.signalCode === null) {
+    if (!launcherExited(child, launch)) {
       // Native ChildProcess handle targets the launcher, not a recycled PID.
       // Closing its sole non-inherited Job handle kills every contained child.
       child.kill('SIGKILL')
-      await new Promise<void>((accept, reject) => {
-        const timer = setTimeout(() => reject(new Error('Windows owned Job launcher did not exit')), 1_000)
-        child.once('exit', () => { clearTimeout(timer); accept() })
-      })
+      const killDeadline = Date.now() + 1_000
+      while (!launcherExited(child, launch) && Date.now() < killDeadline) {
+        await new Promise((accept) => setTimeout(accept, 25))
+      }
+      if (!launcherExited(child, launch)) throw new Error('Windows owned Job launcher did not exit')
     }
-    launches.delete(child)
-    retired.add(child)
-    await rm(launch.directory, { recursive: true, force: true })
+    await releaseWindowsLaunch(child, launch)
   })().catch((error) => { launch.stop = undefined; throw error })
   return launch.stop
 }
