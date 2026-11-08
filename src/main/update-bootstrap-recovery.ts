@@ -24,7 +24,7 @@ export type UpdateBootstrapRecoveryDeps = {
   scheduleRollback: typeof scheduleUpdateRollbackAfterExit
   relaunch: () => void
   exit: (code: number) => void
-  readTransaction?: (match: { oldVersion: string, newVersion: string }) => Promise<InstallerUpdateTransaction | null>
+  readTransaction?: (match: { oldVersion: string, newVersion: string, installDir?: string }) => Promise<InstallerUpdateTransaction | null>
   installerIsAlive?: typeof runtimeProcessIsAlive
   log?: (message: string) => void
 }
@@ -50,7 +50,7 @@ type InstallerRecoveryContext = {
  */
 async function resolveInstallerRecoveryContext(
   deps: UpdateBootstrapRecoveryDeps,
-  pending: { oldVersion: string, newVersion: string }
+  pending: { oldVersion: string, newVersion: string, installDir?: string }
 ): Promise<InstallerRecoveryContext | null> {
   const result = await readPendingUpdateResult()
   const resultState = result?.outcome === 'success' ? result.transactionState : undefined
@@ -62,7 +62,7 @@ async function resolveInstallerRecoveryContext(
     }
   }
 
-  const transaction = await (deps.readTransaction ?? readInstallerUpdateTransaction)(pending)
+  const transaction = await (deps.readTransaction ?? ((match) => readInstallerUpdateTransaction(match, { platform: deps.platform })))(pending)
   if (transaction && resolveUpdateTransactionFacts(transaction.phase).countsAsInstalled) {
     return {
       recoveryEnvironment: transaction.recoveryEnvironment,
@@ -113,7 +113,7 @@ export async function recoverUpdateBeforeRuntimeStart(
   if (deps.platform !== 'win32') return false
   const [pending, result] = await Promise.all([readPendingUpdate(), readPendingUpdateResult()])
   if (pending) {
-    const transaction = await (deps.readTransaction ?? readInstallerUpdateTransaction)(pending)
+    const transaction = await (deps.readTransaction ?? ((match) => readInstallerUpdateTransaction(match, { platform: deps.platform })))(pending)
     if (installerOwnsUpdateCutover(transaction, deps.installerIsAlive)) {
       // Do not clear pending recovery or arm runtime/watchdog recovery while
       // the exact installer still owns cutover. Health probes use a separate entry.
