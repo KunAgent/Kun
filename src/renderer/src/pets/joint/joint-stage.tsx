@@ -1,22 +1,16 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useRef, type ReactElement } from 'react'
 import { X } from 'lucide-react'
 import { PetResidentSprite } from '../pet-resident-sprite'
 import type { PetSummary } from '@shared/pets'
 import { PET_SCENES, petEnsembleText } from '../pet-ensemble-catalog'
 import type { PetVisitStageProps } from '../pet-visit-stage'
 import { usePetAnimationPainter } from '../use-pet-animation-painter'
-import { loadJointTexture } from './assets'
-import { JointWebGLRenderer } from './webgl-renderer'
-import { JointCanvasRenderer } from './canvas-renderer'
+import { usePetCanvas } from './use-pet-canvas'
 import { jointHitPath, sampleJointVisit, type JointTimelineInput } from './timeline'
 import './joint-stage.css'
 
-type Renderer = { paint: JointWebGLRenderer['paint']; dispose(): void }
-
 export function PetJointStage(props: PetVisitStageProps): ReactElement {
-  const canvas = useRef<HTMLCanvasElement>(null), hit = useRef<HTMLButtonElement>(null)
-  const renderer = useRef<Renderer | null>(null)
-  const [revision, setRevision] = useState(0), [loadedKey, setLoadedKey] = useState(''), [error, setError] = useState(false)
+  const hit = useRef<HTMLButtonElement>(null)
   const primary: PetSummary = { id: props.pet.petId!, sourceId: props.pet.petId!.split(':').slice(1).join(':'),
     displayName: props.pet.displayName ?? '', description: '', source: 'kun-local', available: true, sourceMissing: false,
     spriteVersionNumber: props.pet.spriteVersionNumber, spritesheetUrl: props.pet.spritesheetUrl ?? undefined,
@@ -26,36 +20,8 @@ export function PetJointStage(props: PetVisitStageProps): ReactElement {
   const latest = useRef(input)
   latest.current = input
   const assetKey = cast.map((p) => `${p.id}:${p.spritesheetUrl}`).join('|')
-  const renderKey = `${assetKey}:${revision}`
-  const ready = loadedKey === renderKey
-  useEffect(() => {
-    let cancelled = false
-    const element = canvas.current!
-    const initial = sampleJointVisit({ ...latest.current, now: Date.now(), reduced: false })
-    setLoadedKey(''); setError(false)
-    const lost = (event: Event): void => {
-      event.preventDefault(); renderer.current?.dispose(); renderer.current = null; setLoadedKey('')
-    }
-    const restored = (): void => setRevision((value) => value + 1)
-    element.addEventListener('webglcontextlost', lost)
-    element.addEventListener('webglcontextrestored', restored)
-    void Promise.all(initial.actors.map((a) => loadJointTexture(a.pet, a.rig))).then((textures) => {
-      if (cancelled) return
-      const gl = element.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true })
-      if (gl?.isContextLost()) return
-      if (gl) renderer.current = new JointWebGLRenderer(gl, textures, initial)
-      else {
-        const ctx = element.getContext('2d')
-        if (!ctx) throw new Error('No canvas renderer available')
-        renderer.current = new JointCanvasRenderer(ctx, textures, initial)
-      }
-      setLoadedKey(renderKey)
-    }).catch(() => { if (!cancelled) setError(true) })
-    return () => {
-      cancelled = true; renderer.current?.dispose(); renderer.current = null
-      element.removeEventListener('webglcontextlost', lost); element.removeEventListener('webglcontextrestored', restored)
-    }
-  }, [renderKey])
+  const { canvas, renderer, ready, error, revision } = usePetCanvas(assetKey,
+    () => sampleJointVisit({ ...latest.current, now: Date.now(), reduced: false }))
   usePetAnimationPainter(`joint:${props.visit.id}:${ready}:${revision}`, false, ({ elapsed, reduced }) => {
     const frame = sampleJointVisit({ ...latest.current, now: Date.now(), reduced })
     if (hit.current) hit.current.style.clipPath = `path('${jointHitPath(frame)}')`

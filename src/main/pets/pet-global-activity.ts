@@ -76,6 +76,7 @@ export class PetGlobalActivity {
     const child = this.launch([...(keyboard ? ['--keyboard'] : []), ...(microphone ? ['--microphone'] : [])])
     this.child = child
     let buffer = ''
+    let lastKeySequence = 0
     const failure = (): void => {
       if (this.child !== child) return
       this.stop()
@@ -88,14 +89,18 @@ export class PetGlobalActivity {
     child.stdout.on('data', (chunk: Buffer) => {
       if (this.child !== child) return
       buffer += chunk.toString('utf8')
-      if (buffer.length > 4096) { failure(); return }
       let index: number
       while ((index = buffer.indexOf('\n')) >= 0) {
+        if (index > 512) { failure(); return }
         const event = parsePetNativeActivity(buffer.slice(0, index))
         buffer = buffer.slice(index + 1)
         if (!event) continue
         if (event.type === 'status') {
           this.publish({ ...this.state, keyboard: keyboard ? event.keyboard : 'off', microphone: microphone ? event.microphone : 'off' })
+        } else if (event.type === 'keys' && keyboard) {
+          if (event.sequence <= lastKeySequence) continue
+          lastKeySequence = event.sequence
+          this.options.signal({ type: 'keyboard', source: 'global-keyboard', held: event.held, tap: event.tap })
         } else if (event.type === 'typing' && keyboard) {
           this.options.signal({ type: 'input', source: 'global-keyboard', kind: 'typing', level: .5 })
         } else if (event.type === 'recording' && microphone) {
@@ -105,6 +110,7 @@ export class PetGlobalActivity {
           this.publish({ ...this.state, recording: event.active })
         }
       }
+      if (buffer.length > 512) failure()
     })
     child.stdin.write('alive\n')
     this.heartbeat = setInterval(() => { if (!child.stdin.destroyed) child.stdin.write('alive\n') }, 3000)

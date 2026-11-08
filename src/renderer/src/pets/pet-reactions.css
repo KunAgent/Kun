@@ -9,3 +9,5 @@
 
 @keyframes pet-reaction-enter { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .pet-reaction-stage { animation: none; } }
+
+.pet-typing-stage { animation: none; }

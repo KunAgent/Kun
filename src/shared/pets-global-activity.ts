@@ -1,3 +1,4 @@
+import { isPetKeyMask, type PetKeyMask } from './pets-typing'
 export type PetGlobalActivityPreferences = { keyboard: boolean; microphone: boolean }
 export type PetGlobalActivityState = 'off' | 'starting' | 'active' | 'paused' | 'permission-required' | 'unsupported' | 'unavailable'
 export type PetGlobalActivityStatus = {
@@ -21,6 +22,7 @@ export function parsePetGlobalActivityPreferences(value: unknown): PetGlobalActi
 }
 
 export type PetNativeActivityEvent =
+  | { type: 'keys'; sequence: number; held: PetKeyMask; tap: PetKeyMask }
   | { type: 'typing' }
   | { type: 'recording'; active: boolean }
   | { type: 'status'; keyboard: PetGlobalActivityState; microphone: PetGlobalActivityState }
@@ -31,6 +33,9 @@ export function parsePetNativeActivity(line: string): PetNativeActivityEvent | n
   try {
     const value = JSON.parse(line)
     if (!value || typeof value !== 'object') return null
+    if (value.type === 'keys' && Number.isSafeInteger(value.sequence) && value.sequence > 0 && isPetKeyMask(value.held) && isPetKeyMask(value.tap)) {
+      return { type: 'keys', sequence: value.sequence, held: value.held, tap: value.tap }
+    }
     if (value.type === 'typing') return { type: 'typing' }
     if (value.type === 'recording' && typeof value.active === 'boolean') return { type: 'recording', active: value.active }
     const states = ['off', 'active', 'permission-required', 'unsupported', 'unavailable']

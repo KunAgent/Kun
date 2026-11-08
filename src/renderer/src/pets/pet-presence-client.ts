@@ -1,3 +1,4 @@
+import { PetKeyboardState, petTypingMaskForCode, type PetKeyMask } from '@shared/pets-typing'
 import type { PetPresenceSignal, PetReactionKind } from '@shared/pets-interactions'
 
 let sequence = 0
@@ -21,6 +22,9 @@ export function createPetPresenceSource(label: string) {
     report(kind: PetReactionKind | 'idle', level = 0): void {
       if (!disposed) send({ type: 'input', source, kind, level: Number.isFinite(level) ? Math.min(1, Math.max(0, level)) : 0 })
     },
+    keyboard(held: PetKeyMask, tap: PetKeyMask): void {
+      if (!disposed) send({ type: 'keyboard', source, held, tap })
+    },
     dispose(): void {
       if (!disposed) send({ type: 'input', source, kind: 'idle', level: 0 })
       disposed = true
@@ -37,32 +41,57 @@ export function isPetTypingTarget(target: EventTarget | null): boolean {
 
 export function startPetTypingPresence(doc: Document): () => void {
   const source = createPetPresenceSource('typing')
-  let last = -Infinity
+  const keys = new PetKeyboardState()
+  let lastPhysical = -Infinity, lastFallback = -Infinity, alternate: PetKeyMask = 1
+  let heartbeat: ReturnType<typeof setTimeout> | undefined
   const modelFromFocus = (event: Event): void => {
     if (!(event.target instanceof Element)) return
     const picker = event.target.closest('[data-floating-composer]')?.querySelector('[data-pet-model]')
     const model = picker?.getAttribute('data-pet-model')
     if (model !== null && model !== undefined) publishPetModel(model, picker?.getAttribute('data-pet-provider') ?? '')
   }
-  const input = (event: Event): void => {
-    if (!isPetTypingTarget(event.target) || Date.now() - last < 100) return
-    last = Date.now()
-    modelFromFocus(event)
-    source.report('typing')
+  const keepHeld = (): void => {
+    clearTimeout(heartbeat)
+    if (!keys.held) return
+    heartbeat = setTimeout(() => { source.keyboard(keys.held, 0); keepHeld() }, 500)
   }
-  const stop = (): void => { source.report('idle'); last = -Infinity }
+  const down = (event: KeyboardEvent): void => {
+    if (!isPetTypingTarget(event.target) || !petTypingMaskForCode(event.code)) return
+    lastPhysical = Date.now()
+    modelFromFocus(event)
+    const state = keys.down(event.code, event.repeat)
+    if (state) { source.keyboard(state.held, state.tap); keepHeld() }
+  }
+  const up = (event: KeyboardEvent): void => {
+    const state = keys.up(event.code)
+    if (state) { source.keyboard(state.held, 0); keepHeld() }
+  }
+  // IME/virtual editors without a physical key event still get a short real-input tap.
+  const input = (event: Event): void => {
+    const now = Date.now()
+    if (!isPetTypingTarget(event.target) || now - lastPhysical < 80 || now - lastFallback < 50) return
+    lastFallback = now; modelFromFocus(event)
+    source.keyboard(keys.held, alternate); alternate = alternate === 1 ? 2 : 1
+  }
+  const stop = (): void => {
+    clearTimeout(heartbeat); keys.reset(); source.report('idle')
+    lastPhysical = lastFallback = -Infinity
+  }
   const visibility = (): void => { if (doc.hidden) stop() }
+  doc.addEventListener('keydown', down, true)
+  doc.addEventListener('keyup', up, true)
   for (const event of ['input', 'compositionupdate']) doc.addEventListener(event, input, true)
   doc.addEventListener('focusin', modelFromFocus, true)
   doc.addEventListener('focusout', stop, true)
   doc.addEventListener('visibilitychange', visibility)
   doc.defaultView?.addEventListener('blur', stop)
   return () => {
+    doc.removeEventListener('keydown', down, true); doc.removeEventListener('keyup', up, true)
     for (const event of ['input', 'compositionupdate']) doc.removeEventListener(event, input, true)
     doc.removeEventListener('focusin', modelFromFocus, true)
     doc.removeEventListener('focusout', stop, true)
     doc.removeEventListener('visibilitychange', visibility)
     doc.defaultView?.removeEventListener('blur', stop)
-    source.dispose()
+    clearTimeout(heartbeat); keys.reset(); source.dispose()
   }
 }

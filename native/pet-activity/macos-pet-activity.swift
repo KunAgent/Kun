@@ -2,14 +2,14 @@ import Foundation
 import CoreGraphics
 import CoreAudio
 
-// State only: no key codes, characters, process names, audio buffers or recording APIs.
+// Physical codes stay in this process solely to match releases to paws.
+// No characters, key names, codes, app names or audio leave this helper.
 let arguments = Set(CommandLine.arguments.dropFirst())
 let wantsKeyboard = arguments.contains("--keyboard")
 let wantsMicrophone = arguments.contains("--microphone")
 let probe = arguments.contains("--status")
 let parent = getppid()
 var lastHeartbeat = ProcessInfo.processInfo.systemUptime
-var lastTyping = -Double.infinity
 var eventTap: CFMachPort?
 var eventSource: CFRunLoopSource?
 var keyboardState = "off"
@@ -28,6 +28,51 @@ func status() {
     lastStatus = key
     emit(["type": "status", "keyboard": keyboardState, "microphone": microphoneState])
 }
+
+// ANSI physical positions. The result is only left/right/both, never a character.
+func pawMask(_ key: CGKeyCode) -> Int {
+    if key == 49 { return 3 } // Space: both paws.
+    let left: Set<CGKeyCode> = [0, 1, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 48, 50, 53]
+    if left.contains(key) { return 1 }
+    let right: Set<CGKeyCode> = [4, 16, 22, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39,
+        40, 41, 42, 43, 44, 45, 46, 47, 51, 65, 67, 69, 71, 75, 76, 78, 81, 82, 83, 84, 85, 86, 87,
+        88, 89, 91, 92, 93, 94, 95, 102, 114, 115, 116, 117, 119, 121, 123, 124, 125, 126]
+    return right.contains(key) ? 2 : 0
+}
+
+final class KeyboardActivity {
+    private var pressed: [CGKeyCode: Int] = [:]
+    private var sequence = 0
+    var held: Int { pressed.values.reduce(0) { $0 | $1 } }
+
+    func down(_ key: CGKeyCode, repeated: Bool) {
+        let mask = pawMask(key)
+        guard mask != 0, pressed[key] == nil else { return }
+        if pressed.count >= 128 { reset() }
+        pressed[key] = mask
+        publish(tap: repeated ? 0 : mask)
+    }
+    func up(_ key: CGKeyCode) {
+        guard pressed.removeValue(forKey: key) != nil else { return }
+        publish(tap: 0)
+    }
+    func reset() {
+        guard !pressed.isEmpty else { return }
+        pressed.removeAll()
+        publish(tap: 0)
+    }
+    func reconcile() {
+        // Check only keys already observed, to recover a missed release.
+        let missing = pressed.keys.filter { !CGEventSource.keyState(.combinedSessionState, key: $0) }
+        for key in missing { pressed.removeValue(forKey: key) }
+        if !missing.isEmpty || held != 0 { publish(tap: 0) }
+    }
+    func publish(tap: Int) {
+        sequence += 1
+        emit(["type": "keys", "sequence": sequence, "held": held, "tap": tap])
+    }
+}
+let keyboard = KeyboardActivity()
 
 func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
     AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioObjectPropertyScopeGlobal,
@@ -60,6 +105,7 @@ func microphoneRunning() -> Bool? {
 }
 
 func stopKeyboard() {
+    keyboard.reset()
     if let tap = eventTap { CGEvent.tapEnable(tap: tap, enable: false); CFMachPortInvalidate(tap) }
     if let source = eventSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes) }
     eventTap = nil
@@ -76,13 +122,16 @@ func syncKeyboard() {
     if probe { keyboardState = "active"; return }
     if eventTap != nil { return }
     eventTap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .listenOnly,
-        eventsOfInterest: CGEventMask(1) << CGEventType.keyDown.rawValue,
+        eventsOfInterest: (CGEventMask(1) << CGEventType.keyDown.rawValue) | (CGEventMask(1) << CGEventType.keyUp.rawValue),
         callback: { _, type, event, _ in
             if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+                keyboard.reset()
                 if let tap = eventTap, CGPreflightListenEventAccess() { CGEvent.tapEnable(tap: tap, enable: true) }
-            } else if type == .keyDown && !event.flags.contains(.maskCommand) && !event.flags.contains(.maskControl) {
-                let now = ProcessInfo.processInfo.systemUptime
-                if now - lastTyping >= 0.2 { lastTyping = now; emit(["type": "typing"]) }
+            } else if type == .keyDown || type == .keyUp {
+                let key = CGKeyCode(event.getIntegerValueField(.keyboardEventKeycode))
+                if type == .keyDown {
+                    keyboard.down(key, repeated: event.getIntegerValueField(.keyboardEventAutorepeat) != 0)
+                } else { keyboard.up(key) }
             }
             return Unmanaged.passUnretained(event)
         }, userInfo: nil)
@@ -95,6 +144,7 @@ func syncKeyboard() {
 
 func poll() {
     syncKeyboard()
+    if !probe && keyboardState == "active" { keyboard.reconcile() }
     if wantsMicrophone {
         if #available(macOS 14.2, *) {
             if let running = microphoneRunning() {
@@ -112,7 +162,15 @@ func poll() {
 if arguments.contains("--self-test") {
     // No observers or permission requests in this mode.
     emit(["type": "status", "keyboard": "off", "microphone": "off"])
-    emit(["type": "typing"])
+    keyboard.down(0, repeated: false)
+    keyboard.down(0, repeated: true)
+    keyboard.down(1, repeated: false)
+    keyboard.down(38, repeated: false)
+    keyboard.up(0)
+    keyboard.up(1)
+    keyboard.up(38)
+    keyboard.down(49, repeated: false)
+    keyboard.reset()
     emit(["type": "recording", "active": true])
     emit(["type": "recording", "active": false])
     exit(0)

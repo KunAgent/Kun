@@ -1,3 +1,6 @@
+import type { PetTypingState } from '@shared/pets-typing'
+import type { Point } from './joint/geometry'
+import { PetTypingStage } from './typing/typing-stage'
 import { useRef, type ButtonHTMLAttributes, type ReactElement } from 'react'
 import { Keyboard, Mic, AudioLines, MessageCircle } from 'lucide-react'
 import { PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetOverlayBootstrap } from '@shared/pets'
@@ -6,11 +9,19 @@ import { petReactionLabel, reactionFrame } from './pet-reactions'
 import { paintPetStyle, usePetAnimationPainter } from './use-pet-animation-painter'
 import './pet-reactions.css'
 
-export function PetReactionStage(props: {
+type ReactionStageProps = {
   pet: PetOverlayBootstrap; kind: PetReactionKind; level: number
   width: number; height: number; mascotWidth: number; paused: boolean; language: string; eventId: number
   actorEvents: ButtonHTMLAttributes<HTMLButtonElement>
-}): ReactElement {
+  typing?: PetTypingState; expiresAt: number; primaryOrigin: Point
+}
+
+export function PetReactionStage(props: ReactionStageProps): ReactElement {
+  return props.kind === 'typing' && props.pet.interactions?.joint ? <PetTypingStage key={props.pet.petId} {...props} origin={props.primaryOrigin} />
+    : <PetSpriteReactionStage {...props} />
+}
+
+function PetSpriteReactionStage(props: ReactionStageProps): ReactElement {
   const { pet, kind, level, width, height, paused } = props
   const actor = useRef<HTMLButtonElement>(null)
   const bars = useRef<Array<HTMLElement | null>>([])

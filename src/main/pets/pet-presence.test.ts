@@ -7,6 +7,28 @@ import { petIpcHandlers, type PetIpcApi } from './pet-ipc'
 afterEach(() => vi.useRealTimers())
 
 describe('ephemeral pet presence', () => {
+  it('preserves quick tap timestamps after release and gives an active global keyboard one authoritative stream', () => {
+    vi.useFakeTimers(); vi.setSystemTime(1000)
+    const publish = vi.fn(), presence = new PetPresence(publish)
+    presence.update(1, { type: 'keyboard', source: 'local', held: 1, tap: 1 })
+    expect(presence.snapshot().input?.typing?.left.sequence).toBe(1)
+    presence.setGlobalKeyboardActive(true)
+    expect(presence.snapshot().input).toBeNull()
+    presence.update(-1, { type: 'keyboard', source: 'global-keyboard', held: 1, tap: 1 })
+    const revision = presence.snapshot().revision
+    presence.update(1, { type: 'keyboard', source: 'local', held: 1, tap: 1 })
+    expect(presence.snapshot().revision).toBe(revision)
+    vi.advanceTimersByTime(5)
+    presence.update(-1, { type: 'keyboard', source: 'global-keyboard', held: 0, tap: 0 })
+    expect(presence.snapshot().input?.typing).toMatchObject({ held: 0, left: { sequence: 1, struckAt: 1000, releasedAt: 1005 } })
+    vi.advanceTimersByTime(PET_PRESENCE_TTL_MS + 1)
+    expect(presence.snapshot().input).toBeNull()
+    presence.setGlobalKeyboardActive(false)
+    presence.update(1, { type: 'keyboard', source: 'local', held: 2, tap: 2 })
+    expect(presence.snapshot().input?.typing?.held).toBe(2)
+    presence.dispose()
+  })
+
   it('expires abandoned inputs and prioritizes speech without one sender clearing another', () => {
     vi.useFakeTimers(); vi.setSystemTime(10000)
     const publish = vi.fn()

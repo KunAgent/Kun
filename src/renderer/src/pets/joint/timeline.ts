@@ -1,3 +1,4 @@
+import type { PetKeyboardSurface } from '../typing/keyboard-surface'
 import type { PetSummary } from '@shared/pets'
 import { jointSceneFor } from '@shared/pets-joint'
 import { PET_VISIT_ARRIVAL_MS, type PetVisit } from '@shared/pets-visits'
@@ -9,6 +10,7 @@ export type JointTimelineInput = {
   primaryOrigin: Point; reduced: boolean
 }
 export type JointFrame = JointScene & {
+  keyboard?: PetKeyboardSurface
   phase: 'arriving' | 'playing' | 'departing'; progress: number; opacity: number; width: number; height: number
 }
 
@@ -104,6 +106,10 @@ export function jointHitPath(frame: JointFrame): string {
       const points = [...frame.blanket.points].sort((a, b) => a.x - b.x), first = points[0], last = points.at(-1)!
       bodies.push(`M${first.x},${first.y} ${points.slice(1).map((p) => `L${p.x},${p.y}`).join(' ')} Q${(first.x + last.x) / 2},${Math.max(first.y, last.y) + frame.blanket.sag * 2 + 18} ${first.x},${first.y}Z`)
     }
+  }
+  if (frame.keyboard && frame.keyboard.opacity > .1) {
+    const k = frame.keyboard
+    bodies.push(`M${k.x - 8},${k.y}h${k.width + 16}v${k.height + 14}h${-k.width - 16}Z`)
   }
   return bodies.join(' ')
 }

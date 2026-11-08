@@ -1,3 +1,4 @@
+import { isPetKeyMask, type PetKeyMask, type PetTypingState } from './pets-typing'
 import { parsePetJointRig, type PetJointRig } from './pets-joint'
 import { PET_ROWS, type PetAnimationState } from './pets'
 import { PET_SCENE_IDS, type PetSceneId } from './pets-ensemble'
@@ -72,13 +73,14 @@ export function parsePetInteractionPack(value: unknown): PetInteractionPack | nu
 export const PET_PRESENCE_TTL_MS = 1800
 export type PetModelPresence = { model: string; provider: string }
 export type PetPresenceSignal =
+  | { type: 'keyboard'; source: string; held: PetKeyMask; tap: PetKeyMask }
   | { type: 'model'; model: string; provider: string; announce: boolean }
   | { type: 'input'; source: string; kind: PetReactionKind | 'idle'; level: number }
 export type PetPresenceSnapshot = {
   revision: number
   model: PetModelPresence | null
   modelChangedAt: number
-  input: { kind: PetReactionKind; level: number; expiresAt: number } | null
+  input: { kind: PetReactionKind; level: number; expiresAt: number; typing?: PetTypingState } | null
 }
 
 export function emptyPetPresence(): PetPresenceSnapshot {
@@ -91,6 +93,10 @@ export function parsePetPresenceSignal(value: unknown): PetPresenceSignal | null
     if (typeof value.model !== 'string' || value.model.length > 200 || typeof value.provider !== 'string' ||
       value.provider.length > 100 || typeof value.announce !== 'boolean') return null
     return { type: 'model', model: value.model.trim(), provider: value.provider.trim(), announce: value.announce }
+  }
+  if (value.type === 'keyboard') {
+    if (typeof value.source !== 'string' || !/^[a-zA-Z0-9:_-]{1,80}$/.test(value.source) || !isPetKeyMask(value.held) || !isPetKeyMask(value.tap)) return null
+    return { type: 'keyboard', source: value.source, held: value.held, tap: value.tap }
   }
   if (value.type !== 'input' || typeof value.source !== 'string' || !/^[a-zA-Z0-9:_-]{1,80}$/.test(value.source)) return null
   if (value.kind !== 'idle' && !(PET_REACTION_KINDS as readonly unknown[]).includes(value.kind)) return null

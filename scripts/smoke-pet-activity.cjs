@@ -37,7 +37,9 @@ async function main() {
   if (process.platform !== 'darwin') { console.log('SKIP: macOS pet activity helper'); return }
   const lines = (args) => execFileSync(helper, args, { encoding: 'utf8', timeout: 30000 }).trim().split('\n').map(JSON.parse)
   assert.deepEqual(lines(['--self-test']), [
-    { type: 'status', keyboard: 'off', microphone: 'off' }, { type: 'typing' },
+    { type: 'status', keyboard: 'off', microphone: 'off' },
+    ...[[1, 1], [1, 1], [3, 2], [3, 0], [2, 0], [0, 0], [3, 3], [0, 0]]
+      .map(([held, tap], index) => ({ type: 'keys', sequence: index + 1, held, tap })),
     { type: 'recording', active: true }, { type: 'recording', active: false }
   ])
   const [status] = lines(['--status', '--keyboard', '--microphone'])

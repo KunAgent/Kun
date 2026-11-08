@@ -7,6 +7,7 @@ export type JointActor = {
   lean: number; crouch: number; headTilt: number; step: number; jump: number
   hands: [Point, Point]; grips: [number, number]; feet: [Point, Point]
   soloBlend: number
+  frontArms?: boolean
 }
 export const ASPECT = 208 / 192
 export const clamp = (n: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, n))

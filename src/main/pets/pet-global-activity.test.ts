@@ -49,6 +49,20 @@ describe('system pet activity observer', () => {
     f.service.dispose()
   })
 
+  it('keeps ordered key edges and accepts a large batch of valid lines without dropping releases', () => {
+    vi.useFakeTimers()
+    const f = fixture(); f.service.configure({ keyboard: true, microphone: false }, true)
+    f.signal.mockClear()
+    f.send(Array.from({ length: 100 }, (_, i) => JSON.stringify({ type: 'keys', sequence: i + 1,
+      held: i % 2 ? 0 : 1, tap: i % 2 ? 0 : 1, code: 'must not leave the parser' }) + '\n').join(''))
+    expect(f.signal).toHaveBeenCalledTimes(100)
+    expect(f.signal).toHaveBeenLastCalledWith({ type: 'keyboard', source: 'global-keyboard', held: 0, tap: 0 })
+    f.send('{"type":"keys","sequence":100,"held":3,"tap":3}\n')
+    expect(f.signal).toHaveBeenCalledTimes(100)
+    expect(f.children[0].kill).not.toHaveBeenCalled()
+    f.service.dispose()
+  })
+
   it('parses split lines, ignores unrequested sources and clears activity on native failure', () => {
     vi.useFakeTimers()
     const f = fixture()

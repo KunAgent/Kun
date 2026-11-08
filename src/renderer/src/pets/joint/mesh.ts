@@ -1,5 +1,5 @@
 import type { PetJointRig, PetRigPoint } from '@shared/pets-joint'
-import { armWeight, skinPoint, type JointActor } from './geometry'
+import { armWeight, clamp, skinPoint, type JointActor } from './geometry'
 
 export type RigMesh = { points: PetRigPoint[]; indices: Uint16Array; vertices: Float32Array }
 const axis = (extra: number[], divisions: number): number[] => [...new Set([...Array.from({ length: divisions + 1 }, (_, i) => i / divisions), ...extra])].sort((a, b) => a - b)
@@ -23,7 +23,15 @@ export function paintRigVertices(mesh: RigMesh, actor: JointActor, column: numbe
     mesh.vertices[index] = p.x; mesh.vertices[index + 1] = p.y
     mesh.vertices[index + 2] = (column + uv[0]) / 7
     mesh.vertices[index + 3] = uv[1]
-    mesh.vertices[index + 4] = Math.max(armWeight(actor, uv, 0) * actor.grips[0], armWeight(actor, uv, 1) * actor.grips[1])
+    let left = armWeight(actor, uv, 0) * actor.grips[0], right = armWeight(actor, uv, 1) * actor.grips[1]
+    if (actor.frontArms) {
+      left = Math.pow(left, .28); right = Math.pow(right, .28)
+      if (actor.pet.id === 'kun:xiao-kun') {
+        left *= clamp((.155 - uv[0]) / .015) * clamp((uv[1] - .53) / .04)
+        right *= clamp((uv[0] - .695) / .025) * clamp((uv[1] - .59) / .04)
+      }
+    }
+    mesh.vertices[index + 4] = Math.max(left, right)
   })
   return mesh.vertices
 }

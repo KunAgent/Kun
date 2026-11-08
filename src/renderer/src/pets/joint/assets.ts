@@ -5,7 +5,7 @@ export type JointTexture = { id: string; atlas: HTMLCanvasElement }
 const cache = new Map<string, Promise<HTMLCanvasElement>>()
 
 /** Decode once and retain seven small cells, not three full-resolution GPU sheets. */
-export async function loadJointTexture(pet: PetSummary, rig: PetJointRig): Promise<JointTexture> {
+export async function loadJointTexture(pet: Pick<PetSummary, 'id' | 'spritesheetUrl'>, rig: PetJointRig): Promise<JointTexture> {
   const key = `${pet.spritesheetUrl}:${JSON.stringify(rig)}`
   let pending = cache.get(key)
   if (!pending) {

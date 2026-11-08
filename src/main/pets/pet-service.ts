@@ -72,7 +72,9 @@ class DesktopPetRuntime implements DesktopPets {
     platform: process.platform,
     executable: path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'native', 'pet-activity'),
     signal: (signal) => this.presence.update(PET_GLOBAL_SENDER_ID, signal),
-    changed: () => { if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send(PET_IPC.catalogChanged, {}) }
+    changed: () => {
+      this.presence.setGlobalKeyboardActive(this.globalActivity.status().keyboard === 'active')
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send(PET_IPC.catalogChanged, {}) }
   })
   private readonly onSuspend = (): void => { this.suspended = true; this.syncGlobalActivity() }
   private readonly onResume = (): void => { this.suspended = false; this.syncGlobalActivity() }

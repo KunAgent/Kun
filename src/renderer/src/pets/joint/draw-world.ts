@@ -1,8 +1,10 @@
+import { drawPetKeyboard } from '../typing/keyboard-surface'
 import type { JointFrame } from './timeline'
 import type { SharedObject } from './scenes'
 
 type Context = CanvasRenderingContext2D
 export function drawJointGround(ctx: Context, frame: JointFrame): void {
+  if (frame.keyboard) return
   const { width: w, height: h, opacity } = frame
   const wash = ctx.createRadialGradient(w / 2, h * .80, 5, w / 2, h * .80, w * .36)
   wash.addColorStop(0, `rgba(176,215,222,${.19 * opacity})`); wash.addColorStop(1, 'rgba(176,215,222,0)')
@@ -15,6 +17,7 @@ export function drawJointGround(ctx: Context, frame: JointFrame): void {
 
 export function drawJointObjects(ctx: Context, frame: JointFrame): void {
   ctx.save(); ctx.globalAlpha = frame.opacity
+  if (frame.keyboard) drawPetKeyboard(ctx, frame.keyboard)
   if (frame.blanket) {
     const { points, sag, opacity } = frame.blanket
     const sorted = [...points].sort((a, b) => a.x - b.x)

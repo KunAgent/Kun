@@ -1,3 +1,5 @@
+import { petTypingRig } from './pets/typing/typing-rig'
+import { loadJointTexture } from './pets/joint/assets'
 import type { PetVisit } from '@shared/pets-visits'
 import { PetReactionStage } from './pets/pet-reaction-stage'
 import { usePetPresence } from './pets/use-pet-presence'
@@ -74,6 +76,11 @@ function PetOverlayApp(): React.JSX.Element {
   }, [bridge, bootstrap?.petId])
 
   useEffect(() => startPetTypingPresence(document), [])
+  useEffect(() => {
+    if (bootstrap?.petId && bootstrap.spritesheetUrl && bootstrap.interactions?.joint) {
+      void loadJointTexture({ id: bootstrap.petId, spritesheetUrl: bootstrap.spritesheetUrl }, petTypingRig({ id: bootstrap.petId, interactions: bootstrap.interactions })!).catch(() => undefined)
+    }
+  }, [bootstrap?.petId, bootstrap?.spritesheetUrl, bootstrap?.interactions])
 
   useEffect(() => {
     let cancelled = false
@@ -187,8 +194,8 @@ function PetOverlayApp(): React.JSX.Element {
   const visit = dragging ? heldVisit.current : currentVisit
   if (!dragging) heldReaction.current = bootstrap?.spritesheetUrl && reactions.input ? reactions : null
   const reaction = heldReaction.current
-  const reactionSize = { width: Math.min(viewport.width - 16, Math.max(160, width + 32)),
-    height: Math.min(viewport.height - 32, width * 208 / 192 + 72) }
+  const reactionSize = { width: Math.min(viewport.width - 16, reaction?.input?.kind === 'typing' ? Math.max(180, width * 1.3 + 24) : Math.max(160, width + 32)),
+    height: Math.min(viewport.height - 32, width * 208 / 192 + (reaction?.input?.kind === 'typing' ? 36 : 72)) }
   const visitSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(300, viewport.height - 32) }
   const placement = petSurfaceLayout({
     anchor: nativeLayout ?? { anchorX: viewport.width / 2, anchorY: viewport.height / 2,
@@ -388,6 +395,9 @@ function PetOverlayApp(): React.JSX.Element {
                 onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
                 onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
               }} /> : reaction && bootstrap ? <PetReactionStage pet={bootstrap}
+              typing={reaction.presence.input?.typing} expiresAt={reaction.presence.input?.expiresAt ?? 0}
+              primaryOrigin={{ x: (nativeLayout?.anchorX ?? viewport.width / 2) - placement.pet.left,
+                y: (nativeLayout?.anchorY ?? viewport.height / 2) - placement.pet.top }}
               eventId={reaction.presence.modelChangedAt} kind={reaction.input?.kind ?? 'typing'} level={reaction.input?.level ?? 0}
               language={window.navigator.language} width={reactionSize.width} height={reactionSize.height} mascotWidth={width} paused={dragging}
               actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
