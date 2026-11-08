@@ -19,7 +19,7 @@ export function createRigMesh(rig: PetJointRig, divisions = 12): RigMesh {
 
 export function paintRigVertices(mesh: RigMesh, actor: JointActor, column: number): Float32Array {
   mesh.points.forEach((uv, i) => {
-    const p = skinPoint(actor, uv), index = i * 5
+    const p = skinPoint(actor, uv, !actor.armLayers), index = i * 5
     mesh.vertices[index] = p.x; mesh.vertices[index + 1] = p.y
     mesh.vertices[index + 2] = (column + uv[0]) / 7
     mesh.vertices[index + 3] = uv[1]

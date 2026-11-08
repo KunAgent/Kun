@@ -1,3 +1,4 @@
+import { armLayerBounds, armLayerMatrix } from './arm-layer'
 import { blinkCell, type JointTexture } from './assets'
 import { createRigMesh, paintRigVertices, type RigMesh } from './mesh'
 import type { JointFrame } from './timeline'
@@ -5,11 +6,11 @@ import { drawJointGround, drawJointObjects } from './draw-world'
 
 /** Same joint geometry on machines without WebGL, using a coarser textured mesh. */
 export class JointCanvasRenderer {
-  private readonly resources = new Map<string, { mesh: RigMesh; atlas: HTMLCanvasElement }>()
+  private readonly resources = new Map<string, { mesh: RigMesh; atlas: HTMLCanvasElement; arms?: HTMLCanvasElement }>()
   constructor(private readonly ctx: CanvasRenderingContext2D, textures: JointTexture[], frame: JointFrame) {
     for (const a of frame.actors) {
-      const atlas = textures.find((t) => t.id === a.pet.id)?.atlas
-      if (atlas) this.resources.set(a.pet.id, { atlas, mesh: createRigMesh(a.rig, 3) })
+      const source = textures.find((t) => t.id === a.pet.id)
+      if (source) this.resources.set(a.pet.id, { atlas: source.atlas, arms: source.arms, mesh: createRigMesh(a.rig, 3) })
     }
   }
   paint(frame: JointFrame, elapsed: number, reduced: boolean): void {
@@ -25,6 +26,18 @@ export class JointCanvasRenderer {
       for (const { a, i } of ordered) {
         const resource = this.resources.get(a.pet.id)
         if (!resource || a.opacity < .001) continue
+        if (handPass && a.armLayers && resource.arms) {
+          for (const side of [0, 1] as const) {
+            const bounds = armLayerBounds(a.armLayers.cutouts[side]), m = armLayerMatrix(a, side)
+            const x = bounds.left * 192, y = bounds.top * 208
+            const w = (bounds.right - bounds.left) * 192, h = (bounds.bottom - bounds.top) * 208
+            ctx.save(); ctx.globalAlpha = a.opacity * (1 - a.soloBlend)
+            ctx.beginPath(); ctx.rect(0, 0, frame.width, a.armLayers.contactY[side] + .5); ctx.clip()
+            ctx.transform(m.a, m.b, m.c, m.d, m.e, m.f)
+            ctx.drawImage(resource.arms, x, y, w, h, x, y, w, h); ctx.restore()
+          }
+          continue
+        }
         const column = a.soloBlend > .5 ? 6 : blinkCell(elapsed, i, reduced)
         const data = paintRigVertices(resource.mesh, a, column)
         ctx.globalAlpha = a.opacity

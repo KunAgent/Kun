@@ -1,3 +1,4 @@
+import { armLayerVertices } from './arm-layer'
 import type { JointFrame } from './timeline'
 import type { JointTexture } from './assets'
 import { blinkCell } from './assets'
@@ -11,10 +12,11 @@ attribute float a_grip;
 uniform vec2 u_resolution;
 varying vec2 v_uv;
 varying float v_grip;
+varying float v_y;
 void main() {
   vec2 p = a_position / u_resolution * 2.0 - 1.0;
   gl_Position = vec4(p.x, -p.y, 0.0, 1.0);
-  v_uv = a_uv; v_grip = a_grip;
+  v_uv = a_uv; v_grip = a_grip; v_y = a_position.y;
 }`
 const FRAGMENT = `
 precision mediump float;
@@ -23,16 +25,19 @@ uniform float u_opacity;
 uniform float u_hands;
 uniform float u_solo;
 uniform float u_column;
+uniform float u_contact;
 varying vec2 v_uv;
 varying float v_grip;
+varying float v_y;
 void main() {
   vec4 base = texture2D(u_texture, v_uv);
   vec4 solo = texture2D(u_texture, vec2(v_uv.x + (6.0 - u_column) / 7.0, v_uv.y));
-  float mask = mix(1.0, smoothstep(0.60, 0.94, v_grip), u_hands);
+  float mask = u_hands > 1.5 ? 1.0 - smoothstep(u_contact, u_contact + 0.5, v_y)
+    : mix(1.0, smoothstep(0.60, 0.94, v_grip), u_hands);
   gl_FragColor = mix(base, solo, u_solo) * u_opacity * mask;
 }`
 
-type MeshResource = { mesh: RigMesh; vertices: WebGLBuffer; indices: WebGLBuffer; texture: WebGLTexture }
+type MeshResource = { mesh: RigMesh; vertices: WebGLBuffer; indices: WebGLBuffer; texture: WebGLTexture; arms?: WebGLTexture }
 export class JointWebGLRenderer {
   private readonly program: WebGLProgram
   private readonly locations: Record<string, WebGLUniformLocation | null>
@@ -54,14 +59,15 @@ export class JointWebGLRenderer {
     gl.deleteShader(vertex); gl.deleteShader(fragment)
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) { gl.deleteProgram(program); throw new Error('Joint animation shader linking failed') }
     this.program = program
-    this.locations = Object.fromEntries(['resolution', 'opacity', 'hands', 'solo', 'column', 'texture'].map((name) => [name, gl.getUniformLocation(program, `u_${name}`)]))
+    this.locations = Object.fromEntries(['resolution', 'opacity', 'hands', 'solo', 'column', 'texture', 'contact'].map((name) => [name, gl.getUniformLocation(program, `u_${name}`)]))
     this.position = gl.getAttribLocation(program, 'a_position'); this.uv = gl.getAttribLocation(program, 'a_uv'); this.grip = gl.getAttribLocation(program, 'a_grip')
     this.layerTexture = this.texture()
     this.quad = gl.createBuffer()!; this.quadIndices = gl.createBuffer()!
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.quadIndices)
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array([0, 1, 2, 1, 3, 2]), gl.STATIC_DRAW)
     for (const a of frame.actors) {
-      const atlas = textures.find((texture) => texture.id === a.pet.id)?.atlas
+      const source = textures.find((texture) => texture.id === a.pet.id)
+      const atlas = source?.atlas
       if (!atlas) continue
       const mesh = createRigMesh(a.rig), texture = this.texture()
       gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true)
@@ -69,7 +75,12 @@ export class JointWebGLRenderer {
       const vertices = gl.createBuffer()!, indices = gl.createBuffer()!
       gl.bindBuffer(gl.ARRAY_BUFFER, vertices); gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices.byteLength, gl.DYNAMIC_DRAW)
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indices); gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW)
-      this.resources.set(a.pet.id, { mesh, texture, vertices, indices })
+      let arms: WebGLTexture | undefined
+      if (source?.arms) {
+        arms = this.texture()
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source.arms)
+      }
+      this.resources.set(a.pet.id, { mesh, texture, vertices, indices, arms })
     }
   }
 
@@ -101,11 +112,24 @@ export class JointWebGLRenderer {
       gl.drawElements(gl.TRIANGLES, resource.mesh.indices.length, gl.UNSIGNED_SHORT, 0)
     }
     this.paintLayer(frame, ratio, drawJointObjects)
-    // Tips wrap around the shared object. The same mesh/contact solution is reused.
+    // Foreground limbs cover the prop; typing uses isolated silhouettes and a key plane.
     for (const { a, i } of ordered) {
-      if (a.opacity < .001 || Math.max(...a.grips) < .65) continue
+      if (a.opacity < .001) continue
       const resource = this.resources.get(a.pet.id)
       if (!resource) continue
+      if (a.armLayers && resource.arms) {
+        gl.bindTexture(gl.TEXTURE_2D, resource.arms)
+        this.bindVertices(this.quad)
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.quadIndices)
+        for (const side of [0, 1] as const) {
+          gl.bufferData(gl.ARRAY_BUFFER, armLayerVertices(a, side), gl.STREAM_DRAW)
+          this.uniforms(a.opacity, 2, a.soloBlend, 0)
+          gl.uniform1f(this.locations.contact, a.armLayers.contactY[side])
+          gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0)
+        }
+        continue
+      }
+      if (Math.max(...a.grips) < .65) continue
       this.bindVertices(resource.vertices); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, resource.indices)
       gl.bindTexture(gl.TEXTURE_2D, resource.texture)
       this.uniforms(a.opacity, 1, a.soloBlend, blinkCell(elapsed, i, reduced))
@@ -118,7 +142,7 @@ export class JointWebGLRenderer {
     this.disposed = true
     const gl = this.gl
     for (const resource of this.resources.values()) {
-      gl.deleteBuffer(resource.vertices); gl.deleteBuffer(resource.indices); gl.deleteTexture(resource.texture)
+      gl.deleteBuffer(resource.vertices); gl.deleteBuffer(resource.indices); gl.deleteTexture(resource.texture); if (resource.arms) gl.deleteTexture(resource.arms)
     }
     this.resources.clear(); gl.deleteBuffer(this.quad); gl.deleteBuffer(this.quadIndices)
     gl.deleteTexture(this.layerTexture); gl.deleteProgram(this.program)

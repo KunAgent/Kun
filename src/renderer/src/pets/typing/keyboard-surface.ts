@@ -1,4 +1,4 @@
-export type KeyboardKey = { x: number; y: number; down: number; glow: number }
+export type KeyboardKey = { x: number; y: number; down: number; glow: number; depth?: number }
 export type PetKeyboardSurface = {
   x: number; y: number; width: number; height: number; opacity: number; accent: string
   left: KeyboardKey; right: KeyboardKey
@@ -30,7 +30,7 @@ export function drawPetKeyboard(ctx: CanvasRenderingContext2D, keyboard: PetKeyb
   ctx.restore()
   for (const key of [keyboard.left, keyboard.right]) {
     ctx.save(); ctx.globalAlpha *= keyboard.opacity
-    const capW = Math.max(9, w * .075), capH = Math.max(6, h * .20), offset = key.down * 1.8
+    const capW = Math.max(9, w * .075), capH = Math.max(6, h * .20), offset = key.down * (key.depth ?? 1.8)
     ctx.fillStyle = '#aaa596'; ctx.strokeStyle = '#aaa493'; ctx.lineWidth = .8
     ctx.beginPath(); ctx.roundRect(key.x - capW / 2, key.y - capH / 2 + 2, capW, capH, 1.8); ctx.fill()
     ctx.fillStyle = '#f6f4e9'; ctx.beginPath(); ctx.roundRect(key.x - capW / 2, key.y - capH / 2 + offset, capW, capH, 1.8); ctx.fill(); ctx.stroke()

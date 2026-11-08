@@ -22,7 +22,7 @@ export function usePetCanvas(assetKey: string, frame: () => JointFrame) {
     }
     const restored = (): void => setRevision((value) => value + 1)
     element.addEventListener('webglcontextlost', lost); element.addEventListener('webglcontextrestored', restored)
-    void Promise.all(initial.actors.map((a) => loadJointTexture(a.pet, a.rig))).then((textures) => {
+    void Promise.all(initial.actors.map((a) => loadJointTexture(a.pet, a.rig, a.armLayers?.cutouts))).then((textures) => {
       if (cancelled) return
       const gl = element.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true })
       if (gl?.isContextLost()) return

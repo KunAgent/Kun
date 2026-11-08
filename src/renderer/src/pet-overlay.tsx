@@ -1,4 +1,4 @@
-import { petTypingRig } from './pets/typing/typing-rig'
+import { petTypingCutouts, petTypingRig } from './pets/typing/typing-rig'
 import { loadJointTexture } from './pets/joint/assets'
 import type { PetVisit } from '@shared/pets-visits'
 import { PetReactionStage } from './pets/pet-reaction-stage'
@@ -78,7 +78,7 @@ function PetOverlayApp(): React.JSX.Element {
   useEffect(() => startPetTypingPresence(document), [])
   useEffect(() => {
     if (bootstrap?.petId && bootstrap.spritesheetUrl && bootstrap.interactions?.joint) {
-      void loadJointTexture({ id: bootstrap.petId, spritesheetUrl: bootstrap.spritesheetUrl }, petTypingRig({ id: bootstrap.petId, interactions: bootstrap.interactions })!).catch(() => undefined)
+      void loadJointTexture({ id: bootstrap.petId, spritesheetUrl: bootstrap.spritesheetUrl }, petTypingRig({ id: bootstrap.petId, interactions: bootstrap.interactions })!, petTypingCutouts({ id: bootstrap.petId })).catch(() => undefined)
     }
   }, [bootstrap?.petId, bootstrap?.spritesheetUrl, bootstrap?.interactions])
 

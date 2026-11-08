@@ -8,7 +8,7 @@ import { usePetAnimationPainter } from '../use-pet-animation-painter'
 import { nextFrameDelayMs } from '../pet-animation'
 import { PetResidentSprite } from '../pet-resident-sprite'
 import { PetTypingMotion } from './typing-motion'
-import { petTypingRig } from './typing-rig'
+import { petTypingCutouts, petTypingRig } from './typing-rig'
 import { typingScene } from './typing-scene'
 import '../joint/joint-stage.css'
 
@@ -27,7 +27,7 @@ export function PetTypingStage(props: {
     const state = motion.current.sample(props.typing, now, reduced, props.paused)
     return { state, frame: typingScene({ ...props, pet, now, enteredAt: enteredAt.current, motion: state }) }
   }
-  const { canvas, renderer, ready, error, revision } = usePetCanvas(`${pet.id}:${pet.spritesheetUrl}:${JSON.stringify(petTypingRig(pet))}`, () => frameAt(Date.now(), false).frame)
+  const { canvas, renderer, ready, error, revision } = usePetCanvas(`${pet.id}:${pet.spritesheetUrl}:${JSON.stringify(petTypingRig(pet))}:${JSON.stringify(petTypingCutouts(pet))}`, () => frameAt(Date.now(), false).frame)
   usePetAnimationPainter(`typing:${pet.id}:${ready}:${revision}`, props.paused, ({ elapsed, reduced }) => {
     const now = Date.now(), { state, frame } = frameAt(now, reduced)
     if (hit.current) hit.current.style.clipPath = `path('${jointHitPath(frame)}')`

@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import type { PetSummary } from '@shared/pets'
-import { skinPoint } from '../joint/geometry'
+import { bodyPoint } from '../joint/geometry'
+import { armLayerContact, armLayerMatrix, armLayerPoint } from '../joint/arm-layer'
+import { createRigMesh, paintRigVertices } from '../joint/mesh'
 import { typingScene } from './typing-scene'
 
 const pets = ['xiao-kun', 'ikun', 'whale-girl'].map((id): PetSummary => ({
@@ -18,11 +20,42 @@ describe('keyboard and paw contact', () => {
     expect(frame.objects).toHaveLength(0)
     const actor = frame.actors[0]
     for (const side of [0, 1] as const) {
-      const contact = skinPoint(actor, actor.rig.arms[side].hand), key = side ? frame.keyboard!.right : frame.keyboard!.left
+      const contact = armLayerContact(actor, side, actor.armLayers!.cutouts[side]), key = side ? frame.keyboard!.right : frame.keyboard!.left
       expect(contact.x).toBeCloseTo(key.x)
-      expect(contact.y).toBeCloseTo(key.y + 1.8)
+      expect(contact.y).toBeCloseTo(key.y + key.depth!)
+      expect(actor.armLayers!.contactY[side]).toBeCloseTo(contact.y)
     }
     expect(actor.rig.row).toBe(pet.sourceId === 'ikun' ? 5 : 0)
+  })
+
+  it.each(pets)('rotates $sourceId arms without stretching or pulling face/body pixels', (pet) => {
+    for (const size of [80, 112, 224]) {
+      let body: number[] | undefined
+      let scales: number[] | undefined
+      for (const down of [0, .2, .5, .8, 1]) {
+        const frame = typingScene({ pet, width: 404, height: 350, mascotWidth: size, origin: { x: 202, y: 160 },
+          motion: { left: { down, glow: 0 }, right: { down: 1 - down, glow: 0 }, moving: true },
+          now: 1200, enteredAt: 1000, expiresAt: 2800, paused: false })
+        const actor = frame.actors[0], currentScales: number[] = []
+        for (const side of [0, 1] as const) {
+          const matrix = armLayerMatrix(actor, side), rig = actor.rig.arms[side]
+          const pivot = armLayerPoint(actor, side, rig.shoulder), shoulder = bodyPoint(actor, rig.shoulder)
+          expect(pivot.x).toBeCloseTo(shoulder.x)
+          expect(pivot.y).toBeCloseTo(shoulder.y)
+          expect(matrix.a * matrix.c + matrix.b * matrix.d).toBeCloseTo(0)
+          const scale = Math.hypot(matrix.a, matrix.b)
+          expect(Math.hypot(matrix.c, matrix.d)).toBeCloseTo(scale)
+          currentScales.push(scale)
+          expect(armLayerContact(actor, side, actor.armLayers!.cutouts[side]).y).toBeLessThanOrEqual(actor.armLayers!.contactY[side] + .001)
+        }
+        if (scales) currentScales.forEach((scale, side) => expect(scale).toBeCloseTo(scales![side]))
+        scales = currentScales
+        const mesh = createRigMesh(actor.rig), data = paintRigVertices(mesh, actor, 0)
+        const positions = Array.from(data).filter((_, index) => index % 5 < 2)
+        if (body) expect(positions).toEqual(body)
+        body = positions
+      }
+    }
   })
 
   it('fits the desktop at both edges and restores the original anchor as it fades', () => {

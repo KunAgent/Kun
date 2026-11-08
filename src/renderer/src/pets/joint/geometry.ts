@@ -1,3 +1,4 @@
+import type { ArmLayers } from './arm-layer'
 import type { PetJointRig, PetRigPoint } from '@shared/pets-joint'
 import type { PetSummary } from '@shared/pets'
 
@@ -8,6 +9,7 @@ export type JointActor = {
   hands: [Point, Point]; grips: [number, number]; feet: [Point, Point]
   soloBlend: number
   frontArms?: boolean
+  armLayers?: ArmLayers
 }
 export const ASPECT = 208 / 192
 export const clamp = (n: number, lo = 0, hi = 1): number => Math.max(lo, Math.min(hi, n))
@@ -76,7 +78,7 @@ export function armWeight(a: JointActor, uv: PetRigPoint, side: number): number 
 }
 
 /** Skinning uses the original pixels. The face rotates rigidly and is never redrawn. */
-export function skinPoint(a: JointActor, uv: PetRigPoint): Point {
+export function skinPoint(a: JointActor, uv: PetRigPoint, animateArms = true): Point {
   let result = bodyPoint(a, uv)
   const head = bodyPoint(a, a.rig.head)
   const headWeight = ease((a.rig.head[1] - uv[1]) / .07)
@@ -84,7 +86,7 @@ export function skinPoint(a: JointActor, uv: PetRigPoint): Point {
   result = { x: head.x + dx * Math.cos(angle) - dy * Math.sin(angle), y: head.y + dx * Math.sin(angle) + dy * Math.cos(angle) }
   for (const side of [0, 1] as const) {
     const arm = a.rig.arms[side], shoulder = bodyPoint(a, arm.shoulder), base = bodyPoint(a, arm.hand)
-    const weight = armWeight(a, uv, side)
+    const weight = animateArms ? armWeight(a, uv, side) : 0
     const vx = base.x - shoulder.x, vy = base.y - shoulder.y, length = Math.hypot(vx, vy)
     const tx = a.hands[side].x - shoulder.x, ty = a.hands[side].y - shoulder.y, targetLength = Math.max(.001, Math.hypot(tx, ty))
     const dx = result.x - shoulder.x, dy = result.y - shoulder.y
