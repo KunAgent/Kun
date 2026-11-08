@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path'
-import { TERMINAL_LIMITS } from '@kun/remote-protocol'
+import { isAbsoluteTerminalCwd } from '@kun/remote-protocol'
 import type { TerminalAuthority, TerminalOrigin } from './session-service'
 
 /**
@@ -25,8 +25,7 @@ export type WorkspaceReader = (
 ) => Promise<string | null | undefined>
 
 export function parseWorkspace(value: unknown): string {
-  if (typeof value !== 'string' || !value || Buffer.byteLength(value, 'utf8') > TERMINAL_LIMITS.cwdBytes || value.includes('\0')) throw new Error('TERMINAL_ORIGIN_UNAVAILABLE')
-  if (!isAbsolute(value)) throw new Error('TERMINAL_ORIGIN_UNAVAILABLE')
+  if (!isAbsoluteTerminalCwd(value) || !isAbsolute(value)) throw new Error('TERMINAL_ORIGIN_UNAVAILABLE')
   return value
 }
 

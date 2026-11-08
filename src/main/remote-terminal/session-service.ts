@@ -1,6 +1,6 @@
 import {
   TERMINAL_CAPABILITY, TERMINAL_LIMITS, TERMINAL_METHODS,
-  validateOperationParams, validateTerminalResult
+  validateOperationParams, validateTerminalResult, isAbsoluteTerminalCwd
 } from '@kun/remote-protocol'
 import type { TerminalEvent, TerminalMethod, TerminalSession, TerminalSnapshot } from '@kun/remote-protocol'
 import type { MobileLinkScope } from '../../shared/mobile-link-scopes'
@@ -121,8 +121,7 @@ export function splitOutput(value: string, limit = TERMINAL_LIMITS.outputChunkBy
 }
 
 function validCwd(value: unknown): string {
-  if (typeof value !== 'string' || !value || utf8Length(value) > TERMINAL_LIMITS.cwdBytes || value.includes('\0')) throw new Error('TERMINAL_ORIGIN_UNAVAILABLE')
-  if (!value.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(value)) throw new Error('TERMINAL_ORIGIN_UNAVAILABLE')
+  if (!isAbsoluteTerminalCwd(value)) throw new Error('TERMINAL_ORIGIN_UNAVAILABLE')
   return value
 }
 
