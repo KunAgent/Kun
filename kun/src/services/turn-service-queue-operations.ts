@@ -1,3 +1,4 @@
+import { initializeGraphPlanning } from './turn-service-graph-initialization.js'
 import type { NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
 import { prepareNativeFollowUpRequest, commitQueuedTurnPromotion } from './native-followup-admission.js'
 import { PRIVATE_QUEUE_LOCKED, withPrivateQueueAdmission, privateQueuedTurnAllowed } from '../rooms/private-turn-lifecycle.js'
@@ -455,6 +456,14 @@ export const turnServiceQueueOperations = {
               this['leasedTurns'].set(candidate.id, lease)
             }
             const now = this['deps'].nowIso()
+            const graphPlanningLifecycle = candidate.orchestration === 'graph'
+              ? await initializeGraphPlanning(this['deps'], {
+                  threadId: input.threadId,
+                  sourceTurnId: candidate.id,
+                  goal: candidate.prompt,
+                  workspace: thread.workspace
+                }, candidate.graphPlanningLifecycle)
+              : undefined
             const promotedTurn = candidate.admissionPending
               ? (() => {
                   const { admissionPending: _pending, ...committed } = startTurnRecord(candidate, now)
@@ -462,7 +471,11 @@ export const turnServiceQueueOperations = {
                 })()
               : startTurnRecord(candidate, now)
             const history = executableHistory(await this['deps'].sessionStore.loadItems(input.threadId), thread)
-            const startedTurn = { ...promotedTurn, queueExecutionAnchorItemId: history.at(-1)?.id }
+            const startedTurn = {
+              ...promotedTurn,
+              ...(graphPlanningLifecycle ? { graphPlanningLifecycle } : {}),
+              queueExecutionAnchorItemId: history.at(-1)?.id
+            }
             const next: ThreadRecord = {
               ...touchThread(thread, now),
               ...(designAdmission.locksSurface && designAdmission.effectiveSurface

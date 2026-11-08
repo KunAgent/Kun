@@ -478,6 +478,29 @@ describe('chat-store-thread-actions queued messages', () => {
     }))
   })
 
+  it.each([false, true])('freezes busy execution settings before async preparation (local=%s)', async (local) => {
+    const provider = {
+      sendUserMessage: vi.fn(async () => ({ threadId: 'thr_existing', turnId: 'queued', userMessageItemId: 'user' }))
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+    const { actions, state } = buildHarness()
+    if (local) state.activeThreadId = null
+    const policy = { approvalPolicy: 'on-request', sandboxMode: 'workspace-write', approvalReviewer: 'user' } as const
+    state.composerExecutionSettings = policy
+    vi.stubGlobal('window', { kunGui: {
+      getSettings: vi.fn(async () => {
+        state.composerExecutionSettings = { approvalPolicy: 'never', sandboxMode: 'danger-full-access', approvalReviewer: 'user' }
+        return { agents: { kun: { providerId: 'deepseek', model: 'deepseek-v4-pro' } },
+          codePromptPrefix: '', chatWelcomeMessage: '' }
+      }),
+      logError: vi.fn(async () => undefined)
+    } })
+    await expect(actions.sendMessage('Queued policy', 'agent')).resolves.toBe(true)
+    expect(state.queuedMessages[0]).toMatchObject(policy)
+    if (local) expect(provider.sendUserMessage).not.toHaveBeenCalled()
+    else expect(provider.sendUserMessage).toHaveBeenCalledWith('thr_existing', 'Queued policy', expect.objectContaining(policy))
+  })
+
   it('sends an override provider from the write route without switching the global runtime provider', async () => {
     const provider = {
       connect: vi.fn(async () => undefined),

@@ -24,8 +24,8 @@ export const MAX_LIVE_EVENTS_DURING_REPLAY = 1_024
  * The handler subscribes before it replays persisted events, buffering live
  * updates until replay is complete. That closes the otherwise permanent gap
  * between a store snapshot and EventBus subscription. The stream closes when
- * the request's `AbortSignal`
- * fires (the client disconnects) or the server stops publishing.
+ * the client disconnects, its response body is cancelled, or the server closes
+ * the stream. Each response owns the signal cancelling its durable watcher.
  *
  * Delivery is deduplicated per connection: an event whose seq is at or
  * below the connection's high-water mark is dropped, so an event that
@@ -56,6 +56,8 @@ export function buildEventStreamResponse(input: {
 }): Response {
   const sinceSeq = input.sinceSeq ?? parseEventCursor(input.request) ?? 0
   const encoder = new TextEncoder()
+  // Server EOF does not abort the HTTP request's signal.
+  const streamAbort = new AbortController()
   let unsubscribe: (() => void) | undefined
   let unregisterStream: (() => void) | undefined
   let closeStream: (() => void) | undefined
@@ -79,11 +81,17 @@ export function buildEventStreamResponse(input: {
       const close = () => {
         if (closed) return
         closed = true
+        streamAbort.abort()
         input.request.signal.removeEventListener('abort', close)
         closeStream = undefined
-        unsubscribe?.()
+        for (const cleanup of [unsubscribe, unregisterStream]) {
+          try {
+            cleanup?.()
+          } catch {
+            // A failing cleanup must not retain the other stream resources.
+          }
+        }
         unsubscribe = undefined
-        unregisterStream?.()
         unregisterStream = undefined
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer)
@@ -101,8 +109,8 @@ export function buildEventStreamResponse(input: {
         close()
         return
       }
-      unregisterStream = input.streamRegistry?.register(input.threadId, close)
       try {
+        unregisterStream = input.streamRegistry?.register(input.threadId, close)
         let lastDeliveredSeq = sinceSeq
         let replaying = true
         let synchronizationMarkerMayFillQueue = false
@@ -170,11 +178,13 @@ export function buildEventStreamResponse(input: {
           sinceSeq,
           await input.sessionStore.highestSeq(input.threadId)
         )
+        if (closed) return
         // Prune/restore can drop the event prefix a client's cursor points
         // into. Replaying silently from that cursor would hide the gap; emit
         // an explicit reset marker so the client re-hydrates from /state and
         // resubscribes from the new floor.
         const replayFloor = await input.sessionStore.eventReplayFloorSeq?.(input.threadId) ?? 0
+        if (closed) return
         if (replayFloor > 0 && sinceSeq > 0 && sinceSeq < replayFloor - 1) {
           controller.enqueue(encoder.encode(
             `event: replay_reset_required\ndata: {"threadId":${JSON.stringify(input.threadId)},"floorSeq":${replayFloor}}\n\n`
@@ -261,7 +271,7 @@ export function buildEventStreamResponse(input: {
             for await (const event of input.sessionStore.watchEventsSince!(
               input.threadId,
               lastDeliveredSeq,
-              input.request.signal
+              streamAbort.signal
             )) {
               if (closed) return
               deliver(event)
@@ -318,14 +328,7 @@ export function buildEventStreamResponse(input: {
       }
     },
     cancel() {
-      closed = true
-      if (closeStream) input.request.signal.removeEventListener('abort', closeStream)
-      closeStream = undefined
-      unsubscribe?.()
-      unsubscribe = undefined
-      unregisterStream?.()
-      unregisterStream = undefined
-      if (heartbeatTimer) clearInterval(heartbeatTimer)
+      closeStream?.()
     }
   })
   return new Response(stream, {

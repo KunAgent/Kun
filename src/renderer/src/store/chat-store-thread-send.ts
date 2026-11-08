@@ -202,6 +202,7 @@ export async function sendThreadMessage(
   }
   const adeDraft = captureAdeDraftSendSnapshot(get())
   const codeDraftComposer = captureCodeDraftComposer(get())
+  const composerExecutionSettings = { ...(adeDraft?.composer.composerExecutionSettings ?? get().composerExecutionSettings) }
   const codeProjectRoute = captureCodeProjectRouteSnapshot(get())
   const composerCollaborationEnabled = !get().activeThreadId && get().route === 'chat' &&
     get().composerCollaborationEnabled === true
@@ -220,6 +221,13 @@ export async function sendThreadMessage(
     // commits a turn so the fallback plain-text frame is as short as possible.
     void prepareAssistantMarkdownRenderer().catch(() => undefined)
     let queued = overrides?.queued
+    // Keep the execution policy selected at submission for busy and idle sends.
+    const snapshotApprovalPolicy = queued?.approvalPolicy ?? overrides?.approvalPolicy ?? composerExecutionSettings.approvalPolicy
+    const snapshotSandboxMode = queued?.sandboxMode ?? overrides?.sandboxMode ?? composerExecutionSettings.sandboxMode
+    const snapshotApprovalReviewer = queued?.approvalReviewer ?? overrides?.approvalReviewer ?? composerExecutionSettings.approvalReviewer
+    const executionSnapshot = {
+      approvalPolicy: snapshotApprovalPolicy, sandboxMode: snapshotSandboxMode, approvalReviewer: snapshotApprovalReviewer
+    }
     let paperContext = queued?.paperContext ?? overrides?.paperContext
     if (paperContext) {
       try {
@@ -429,7 +437,8 @@ export async function sendThreadMessage(
           composerContexts,
           ackNoticeIds,
           queued,
-          overrides,
+          overrides: { ...overrides, ...executionSnapshot },
+          submissionGuard: () => expectedThreadStillActive() && activeWriteContextIsValid(),
           set,
           get,
           persistActiveQueuedMessages: runtime.persistActiveQueuedMessages
@@ -446,6 +455,7 @@ export async function sendThreadMessage(
       set((s) => ({
         queuedMessages: upsertQueuedSubmission(s.queuedMessages, {
           ...queued,
+          ...executionSnapshot,
           ...(taskWorkspace && activeThreadId ? { taskWorkspace, expectedThreadId: activeThreadId } : {}),
           id: queued?.id ?? `q-${clientRequestId}`,
           text: trimmedText,
@@ -556,16 +566,6 @@ export async function sendThreadMessage(
     const guiDesignMode = (queued?.guiDesignMode ?? overrides?.guiDesignMode) === true
     const userModelChip =
       queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
-    // Freeze the composer execution settings at enqueue time so a queued
-    // message keeps the approval/sandbox policy selected when it was submitted,
-    // not whatever is global by the time the queue drains.
-    const composerExecutionSettings = adeDraft ? adeDraft.composer.composerExecutionSettings : get().composerExecutionSettings
-    const snapshotApprovalPolicy =
-      queued?.approvalPolicy ?? overrides?.approvalPolicy ?? composerExecutionSettings?.approvalPolicy
-    const snapshotSandboxMode =
-      queued?.sandboxMode ?? overrides?.sandboxMode ?? composerExecutionSettings?.sandboxMode
-    const snapshotApprovalReviewer =
-      queued?.approvalReviewer ?? overrides?.approvalReviewer ?? composerExecutionSettings?.approvalReviewer
     const submittedMessageForQueue = pendingQueuedMessage({
       ...queued,
       id: queued?.id ?? `q-${clientRequestId}`,

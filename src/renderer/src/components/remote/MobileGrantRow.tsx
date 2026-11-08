@@ -5,7 +5,7 @@ import type { MobileLinkStatus } from '@shared/mobile-link'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
 import { MobileScopeOptions, PERSONAL_SCOPES } from './MobileScopeOptions'
-import { desktopConsent } from './remote-access-state'
+import { desktopConsent, mobileRequirement } from './remote-access-state'
 import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS, RemoteGroup } from './remote-panel-ui'
 import { REMOTE_FOCUS } from './remote-compact-ui'
 
@@ -37,6 +37,7 @@ export function MobileGrantRow({ link, grant, onDirtyChange }: {
   }
   const savedLevel = desktopConsent(approved)
   return <>
+    {!link.mobileAllowed ? <p role="status" className="text-[12px] text-ds-muted">{mobileRequirement(link, t)}</p> : null}
     <RemoteGroup>
       <div className="flex min-h-11 items-center justify-between gap-2 px-3 text-[13px]">
         <span className="font-medium text-ds-ink">{t('remoteCompact.basic')}</span><span className="text-[12px] text-ds-muted">{t('remoteCompact.basicValue')}</span>

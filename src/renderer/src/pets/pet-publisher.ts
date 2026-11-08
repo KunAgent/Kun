@@ -140,10 +140,12 @@ export function startPetActivityPublisher(): void {
   const unsubscribeFollowUp = pets.onFollowUpRequested((request) => {
     void deliverPetFollowUp({
       threadId: request.threadId,
+      requestId: request.requestId,
       prompt: request.prompt,
       knownThreadIds: new Set(useChatStore.getState().threads.map((thread) => thread.id)),
       selectThread: (threadId) => useChatStore.getState().selectThread(threadId),
-      sendMessage: (prompt) => useChatStore.getState().sendMessage(prompt)
+      getActiveThreadId: () => useChatStore.getState().activeThreadId,
+      sendMessage: (prompt, mode, overrides) => useChatStore.getState().sendMessage(prompt, mode, overrides)
     }).then((result) => pets.completeFollowUp(request.requestId, result))
   })
   let creatingChat = false

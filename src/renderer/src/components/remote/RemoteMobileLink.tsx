@@ -74,6 +74,6 @@ export function MobileChannelRow({ link, detail, onOpen }: { link: MobileLink; d
 }
 
 export function MobileGrantRows({ link }: { link: MobileLink }): ReactElement[] {
-  if (!link.enabled || !link.state) return []
+  if (!link.signedIn || !link.state) return []
   return link.state.grants.filter(grant => grant.purpose !== 'desktop').map(grant => <MobileGrantRow key={grant.id} link={link} grant={grant} />)
 }

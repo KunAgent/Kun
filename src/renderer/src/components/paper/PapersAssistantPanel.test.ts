@@ -29,6 +29,7 @@ const composer = () => tree.root.findByProps({ 'data-probe': 'composer' }).props
 const timelines = () => tree.root.findAllByProps({ 'data-probe': 'timeline' })
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
   usePaperAssistantStore.setState({ sessions: {} })
   useChatStore.setState(useChatStore.getInitialState(), true)
   useChatStore.setState({ route: 'papers', activeThreadId: 'work', runtimeConnection: 'ready',

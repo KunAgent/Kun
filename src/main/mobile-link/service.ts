@@ -537,6 +537,17 @@ export class MobileLinkService {
     const peer = this.grantPeers.get(id)
     const scopes = this.authorities.purpose(peer ?? '', id) === 'desktop' ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes)
     if (!this.enabled || !peer || this.deniedGrants.has(id)) throw new Error('INVALID_GRANT')
+    const currentScopes = this.authorities.scopes(peer, id)
+    if (scopes.some(scope => !currentScopes.includes(scope))) {
+      const generation = this.generation, owner = this.owner
+      const authority = this.authorities.identity('', peer, id)
+      await this.deps.requireMembership(owner!)
+      if (generation !== this.generation || owner !== this.owner || this.sessionEnding || !this.enabled)
+        throw new Error('ACCOUNT_CHANGED')
+      // A revoke or permission reduction during verification must not be overwritten by a stale expansion.
+      if (this.grantPeers.get(id) !== peer || this.deniedGrants.has(id) || this.authorities.identity('', peer, id) !== authority)
+        throw new Error('INVALID_GRANT')
+    }
     if (this.authorities.set(peer, id, scopes)) this.permissionsChanged(peer)
     return this.status()
   }

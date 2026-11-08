@@ -1,4 +1,5 @@
 import type { PetActionResult, PetActivityItem, PetAnimationState } from '@shared/pets'
+import type { ChatState } from '../store/chat-store-types'
 
 const FALLBACK_BODY: Partial<Record<PetAnimationState, string>> = {
   running: '正在思考并生成回答',
@@ -34,17 +35,28 @@ function formatPetElapsed(ms: number): string {
 
 export async function deliverPetFollowUp(input: {
   threadId: string
+  requestId: string
   prompt: string
   knownThreadIds: ReadonlySet<string>
   selectThread: (threadId: string) => Promise<unknown>
-  sendMessage: (prompt: string) => Promise<boolean>
+  getActiveThreadId: () => string | null
+  sendMessage: ChatState['sendMessage']
 }): Promise<PetActionResult> {
   const prompt = input.prompt.trim()
   if (!prompt || prompt.length > 16_000 || !input.knownThreadIds.has(input.threadId)) {
     return { ok: false, code: 'rejected', message: '无法发送跟进消息' }
   }
-  await input.selectThread(input.threadId)
-  const sent = await input.sendMessage(prompt)
+  const threadId = input.threadId
+  const requestId = input.requestId
+  const selected = (): boolean => input.getActiveThreadId() === threadId
+  await input.selectThread(threadId)
+  if (!selected()) return { ok: false, code: 'conflict', message: '会话已切换，请重新发送' }
+  const sent = await input.sendMessage(prompt, 'agent', {
+    expectedThreadId: threadId,
+    clientRequestId: requestId,
+    submissionGuard: selected
+  })
+  if (!sent && !selected()) return { ok: false, code: 'conflict', message: '会话已切换，请重新发送' }
   if (!sent) return { ok: false, code: 'rejected', message: '发送失败，请按回车重试' }
   return { ok: true }
 }

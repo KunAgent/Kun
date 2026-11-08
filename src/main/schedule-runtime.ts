@@ -233,12 +233,14 @@ export class ScheduleRuntime {
         id: randomUUID()
       })
       task.clawChannelId = clawChannel?.id ?? ''
-      const saved = await this.deps.store.patch({
+      const saved = await this.deps.store.update((current) => ({
+        ...current,
         schedule: {
+          ...current.schedule,
           enabled: true,
-          tasks: [...settings.schedule.tasks, task]
+          tasks: [...current.schedule.tasks, task]
         }
-      })
+      }))
       this.sync(saved)
       return {
         kind: 'created',

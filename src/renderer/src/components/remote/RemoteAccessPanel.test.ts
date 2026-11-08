@@ -73,7 +73,8 @@ it('shows a compact overview without settings forms, a QR image or nested button
   expect(container.querySelectorAll('button').length).toBeLessThan(12)
 })
 it.each(['free', 'loading', 'unavailable', 'signedOut'] as const)('hides mobile and package UI when membership is %s without gating the browser', async membershipState => {
-  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState, signedIn: membershipState !== 'signedOut' }
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState, signedIn: membershipState !== 'signedOut', enabled: false, canStop: false,
+    state: { ...mocks.link.state!, enabled: false, online: false, grants: [] } }
   mocks.link.state!.pairings = [{ id: 'pair', name: 'New phone' }] as NonNullable<MobileLink['state']>['pairings']
   await render()
   expect(container.textContent).not.toContain('Phone remote access')
@@ -96,7 +97,7 @@ it('keeps browser and desktop stop controls usable after entitlement/password lo
   expect(control(i18n.t('remoteAccessEnable')).disabled).toBe(false)
   await act(async () => control(i18n.t('remoteAccessEnable')).click())
   expect(api.remoteAccessSetConfig).toHaveBeenCalledWith({ enabled: false })
-  expect(control('Stop phone access')).toBeNull()
+  expect(control('Stop phone access').disabled).toBe(false)
   expect(mocks.link.toggle).not.toHaveBeenCalled()
   await click('End remote session'); expect(api.mobileLink.desktopStop).toHaveBeenCalledOnce()
 })
@@ -201,16 +202,16 @@ it('reads the package only for an entitled account and never checks or installs 
   expect(api.mobileLink.controlPackage.install).not.toHaveBeenCalled()
   expect(api.mobileLink.controlPackage.apply).not.toHaveBeenCalled()
 })
-it('unmounts package polling and removes mobile content immediately when entitlement is lost', async () => {
+it('unmounts package polling but retains existing mobile management when entitlement is lost', async () => {
   vi.useFakeTimers()
   await render()
   expect(api.mobileLink.controlPackage.status).toHaveBeenCalledOnce()
   mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
   await render()
   expect(container.textContent).not.toContain('Remote control package')
-  expect(container.textContent).not.toContain('Phone remote access')
-  expect(container.textContent).not.toContain(i18n.t('remoteCompact.mobileConnected'))
-  expect(container.textContent).not.toContain('iPhone')
+  expect(container.textContent).toContain('Phone remote access')
+  expect(container.textContent).toContain('iPhone')
+  expect(control('Stop phone access').disabled).toBe(false)
   await act(async () => vi.advanceTimersByTimeAsync(6000))
   expect(api.mobileLink.controlPackage.status).toHaveBeenCalledOnce()
   mocks.link = { ...mocks.link, mobileAllowed: true, membershipState: 'active' }
@@ -219,21 +220,52 @@ it('unmounts package polling and removes mobile content immediately when entitle
   expect(container.textContent).toContain('Phone remote access')
   expect(api.mobileLink.controlPackage.status).toHaveBeenCalledTimes(2)
 })
-it.each(['Phone remote access', 'iPhone'])('returns from %s details when mobile permission is lost', async detail => {
+it.each(['Phone remote access', 'iPhone'])('retains %s management details when mobile permission is lost', async detail => {
   await render(); await click(detail)
-  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'unavailable' }
   await render()
   expect(container.textContent).not.toContain('Remote control package')
-  expect(container.textContent).not.toContain('Phone remote access')
-  expect(container.querySelector('[aria-label="Back to remote access"]')).toBeNull()
-  expect(control(i18n.t('remoteAccessEnable'))).toBeTruthy()
+  expect(container.querySelector('[aria-label="Back to remote access"]')).toBeTruthy()
+  if (detail === 'iPhone') {
+    expect(button(i18n.t('remoteCompact.revoke')).disabled).toBe(false)
+    expect([...container.querySelectorAll('input[type="checkbox"]')].every(input => (input as HTMLInputElement).disabled)).toBe(true)
+  } else expect(container.textContent).toContain('Membership could not be verified')
 })
-it('does not derive the overview status from a hidden stale mobile connection', async () => {
-  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
+it('does not report a stopped, unentitled mobile connection as running', async () => {
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free', enabled: false, canStop: false,
+    state: { ...mocks.link.state!, enabled: false, online: false, grants: [] } }
   status = { ...status, enabled: false, running: false }
   await render()
   expect(container.querySelector('h2')?.textContent).toBe(i18n.t('remoteCompact.disabled'))
   expect(container.textContent).not.toContain(i18n.t('remoteCompact.mobileConnected'))
+})
+it('shows actual online status and retains stop and revoke management when membership verification fails', async () => {
+  status = { ...status, enabled: false, running: false }
+  desktop = { ...desktop, enabled: true, ready: true, screenRecordingReady: true, inputReady: true }
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'unavailable' }
+  await render()
+  expect(container.querySelector('h2')?.textContent).toBe(i18n.t('remoteCompact.enabled'))
+  expect(container.textContent).toContain(i18n.t('remoteCompact.mobileConnected'))
+  expect(container.textContent).toContain('Membership could not be verified')
+  expect(control('Stop phone access').getAttribute('aria-checked')).toBe('true')
+  expect(control('Stop phone access').disabled).toBe(false)
+  await act(async () => control('Stop phone access').click())
+  expect(mocks.link.toggle).toHaveBeenCalledOnce()
+  await click('iPhone')
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  await click(i18n.t('remoteCompact.revoke'))
+  expect(mocks.link.revoke).toHaveBeenCalledWith('phone')
+  expect(api.mobileLink.controlPackage.status).not.toHaveBeenCalled()
+})
+it('keeps existing grants revocable after stopping without reporting the connection as on', async () => {
+  status = { ...status, enabled: false, running: false }
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free', enabled: false, canStop: false,
+    state: { ...mocks.link.state!, enabled: false, online: false } }
+  await render()
+  expect(container.querySelector('h2')?.textContent).toBe(i18n.t('remoteCompact.disabled'))
+  expect(control('Enable phone access').disabled).toBe(true)
+  await click('iPhone')
+  expect(button(i18n.t('remoteCompact.revoke')).disabled).toBe(false)
 })
 it('requires a signed-in owner even if the previous entitlement flag remains true', async () => {
   mocks.link = { ...mocks.link, signedIn: false }
@@ -249,7 +281,8 @@ it('preserves independently authorized local/private and computer connections wi
     configure: vi.fn()
   }
   Object.assign(api.mobileLink, { direct, computers: {} })
-  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free' }
+  mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free', enabled: false, canStop: false,
+    state: { ...mocks.link.state!, enabled: false, online: false, grants: [] } }
   await render()
   expect(container.textContent).not.toContain('Remote control package')
   expect(container.textContent).not.toContain('Phone remote access')

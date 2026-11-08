@@ -2,6 +2,12 @@ import type { TFunction } from 'i18next'
 import type { DesktopAccessStatus } from '@shared/remote-desktop'
 import type { MobileLink } from './useMobileLink'
 
+export function mobileManagementVisible(link: MobileLink): boolean {
+  // Entitlements gate new access, not visibility of existing access and its stop/revoke controls.
+  return link.signedIn && Boolean(link.mobileAllowed || link.enabled || link.starting || link.state?.online ||
+    link.state?.grants.some(grant => grant.purpose !== 'desktop'))
+}
+
 export function mobileRequirement(link: MobileLink, t: TFunction<'common'>): string {
   if (!link.api) return t('remoteCompact.unavailable')
   if (!link.signedIn) return t('remoteCompact.signInRequired')

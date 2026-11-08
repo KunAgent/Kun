@@ -2,6 +2,7 @@ import { ControlPackageCard } from './ControlPackageCard'
 import { ComputerAccessPanel } from './ComputerAccessPanel'
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { mobileManagementVisible } from './remote-access-state'
 import { RemoteAccessHome } from './RemoteAccessHome'
 import { RemoteBrowserAccess } from './RemoteBrowserAccess'
 import { RemoteDesktopAccess } from './RemoteDesktopAccess'
@@ -29,8 +30,8 @@ export function RemoteAccessPanel({ className = '' }: { className?: string }): R
   const dirty = useRef(false)
   const scrollPosition = useRef(0)
   const onDirtyChange = useCallback((value: boolean) => { dirty.current = value }, [])
-  const mobileVisible = link.signedIn && link.mobileAllowed
-  const grant = view.page === 'device' && mobileVisible && link.enabled ? link.state?.grants.find(item => item.id === view.id) : undefined
+  const mobileVisible = mobileManagementVisible(link)
+  const grant = view.page === 'device' && mobileVisible ? link.state?.grants.find(item => item.id === view.id && item.purpose !== 'desktop') : undefined
   function navigate(next: View) {
     if (dirty.current && !window.confirm(t('remoteCompact.discardQuestion'))) return
     dirty.current = false
@@ -50,7 +51,7 @@ export function RemoteAccessPanel({ className = '' }: { className?: string }): R
     aria-label={t('rightPanelRemote')} tabIndex={0}>
     <div className="flex shrink-0 flex-col gap-3.5 px-4 pb-5 pt-5">
       {mobileVisible ? <MobilePairingRequests link={link} /> : null}
-      {view.page === 'home' && mobileVisible ? <ControlPackageCard key={`control-package:${directOwner}`} zh={link.zh} /> : null}
+      {view.page === 'home' && link.signedIn && link.mobileAllowed ? <ControlPackageCard key={`control-package:${directOwner}`} zh={link.zh} /> : null}
       {desktop.value?.active ? <div role="status" className="flex items-center gap-3 rounded-2xl bg-ds-danger-soft p-3">
         <span className="min-w-0 flex-1 text-[12px] font-medium text-ds-ink">{t('remoteCompact.activeDesktop', { name: desktop.value.active.peer })}</span>
         <button type="button" className={REMOTE_BUTTON_CLASS} disabled={desktop.busy} onClick={desktop.stop}>{t('remoteCompact.endDesktop')}</button>

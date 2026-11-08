@@ -4,10 +4,11 @@ import { openPaperSpaceAssistant, selectPaperSpaceAssistant } from './paper-spac
 import { paperAssistantSession, patchPaperAssistant, usePaperAssistantStore } from './paper-space-assistant-state'
 
 const mocked = vi.hoisted(() => ({
-  create: vi.fn(), select: vi.fn(), send: vi.fn(), upload: vi.fn(),
+  create: vi.fn(), select: vi.fn(), send: vi.fn(), upload: vi.fn(), summary: vi.fn(),
   chat: { route: 'papers', activeThreadId: 'work-thread', composerInput: 'Work draft',
     attachmentIds: ['work-image'], threads: [] as { id: string }[], error: null as string | null,
-    composerModel: 'model', composerProviderId: 'provider', runtimeConnection: 'ready' },
+    composerModel: 'model', composerProviderId: 'provider', runtimeConnection: 'ready',
+    composerReasoningEffort: 'high', composerFastMode: false, composerModelGroups: [] },
   paper: { readerKey: '/legacy\0papers/a' }
 }))
 vi.mock('../store/chat-store', () => ({ useChatStore: {
@@ -15,7 +16,8 @@ vi.mock('../store/chat-store', () => ({ useChatStore: {
   setState: (patch: Partial<typeof mocked.chat> | ((state: typeof mocked.chat) => Partial<typeof mocked.chat>)) =>
     Object.assign(mocked.chat, typeof patch === 'function' ? patch(mocked.chat) : patch)
 } }))
-vi.mock('../agent/registry', () => ({ getProvider: () => ({ createThread: mocked.create, uploadAttachment: mocked.upload }) }))
+vi.mock('../agent/registry', () => ({ getProvider: () => ({ createThread: mocked.create, uploadAttachment: mocked.upload,
+  getThreadSummary: mocked.summary }) }))
 vi.mock('./paper-space-store', () => ({
   paperSpaceItemKey: (root: string, unit: string) => `${root}\0${unit}`,
   usePaperSpaceStore: { getState: () => mocked.paper }
@@ -32,9 +34,12 @@ function deferred<T>() {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  localStorage.clear()
+  mocked.summary.mockImplementation(async (id: string) => ({ id, workspace: id === 'second-thread' ? '/second' : '/legacy', agentSurface: 'write' }))
   usePaperAssistantStore.setState({ sessions: {} })
   Object.assign(mocked.chat, { route: 'papers', activeThreadId: 'work-thread', composerInput: 'Work draft',
-    attachmentIds: ['work-image'], threads: [], error: null })
+    attachmentIds: ['work-image'], threads: [], error: null, composerModel: 'model', composerProviderId: 'provider',
+    composerReasoningEffort: 'high', composerFastMode: false, composerModelGroups: [] })
   mocked.paper.readerKey = key
   mocked.create.mockResolvedValue({ id: 'paper-thread', workspace: '/legacy', agentSurface: 'write' })
   mocked.select.mockImplementation(async (id: string, options: { selectionGuard: () => boolean }) => {
@@ -53,7 +58,8 @@ describe('paper assistant source and thread isolation', () => {
     })
     expect(mocked.send).toHaveBeenCalledWith('Explain this paper', 'agent', {
       expectedThreadId: 'paper-thread', submissionGuard: expect.any(Function), agentSurface: 'write', attachmentIds: [], attachments: [], composerContexts: [],
-      fileReferences: [{ path: '/legacy/papers/a', relativePath: 'papers/a', name: 'Paper A', kind: 'directory' }]
+      fileReferences: [{ path: '/legacy/papers/a', relativePath: 'papers/a', name: 'Paper A', kind: 'directory' }],
+      model: '', providerId: '', reasoningEffort: 'high', serviceTier: undefined
     })
     expect(mocked.chat.composerInput).toBe('Work draft')
     expect(mocked.chat.attachmentIds).toEqual(['work-image'])
@@ -155,6 +161,7 @@ describe('paper assistant source and thread isolation', () => {
     pending.resolve({ id: 'paper-thread' })
     await first
     usePaperAssistantStore.setState({ sessions: {} })
+    localStorage.clear()
     mocked.create.mockRejectedValueOnce(new Error('Thread unavailable'))
     await expect(openPaperSpaceAssistant({ ...source, prompt: 'Try' })).resolves.toBeNull()
     expect(paperAssistantSession(key)).toMatchObject({ error: 'Thread unavailable', sending: false })
@@ -182,4 +189,66 @@ it('uses the paper-selected Kun model rather than inheriting a Code native model
   expect(guard()).toBe(true)
   mocked.paper.readerKey = '/other\0papers/b'
   expect(guard()).toBe(false)
+})
+
+it('restores the persisted PDF thread after renderer sessions and thread list are rebuilt', async () => {
+  await openPaperSpaceAssistant({ ...source, prompt: 'First' })
+  usePaperAssistantStore.setState({ sessions: {} })
+  mocked.chat.threads = []
+  mocked.chat.activeThreadId = 'work-thread'
+  mocked.create.mockClear()
+  await expect(openPaperSpaceAssistant({ ...source, prompt: 'Continue' })).resolves.toBe('paper-thread')
+  expect(mocked.summary).toHaveBeenLastCalledWith('paper-thread')
+  expect(mocked.create).not.toHaveBeenCalled()
+  expect(mocked.send.mock.lastCall?.[2].expectedThreadId).toBe('paper-thread')
+  expect(usePaperAssistantStore.getState().sessions[key].threadId).toBe('paper-thread')
+})
+
+it.each(['archived', 'deleted'])('refuses a persisted %s thread even if it is active', async (status) => {
+  patchPaperAssistant(key, { threadId: 'paper-thread', input: 'Keep draft', images: [image] })
+  usePaperAssistantStore.setState({ sessions: {} })
+  mocked.chat.activeThreadId = 'paper-thread'
+  mocked.summary.mockResolvedValue({ id: 'paper-thread', workspace: '/legacy', agentSurface: 'write', status })
+  await expect(openPaperSpaceAssistant({ ...source, prompt: 'Continue' })).resolves.toBeNull()
+  expect(paperAssistantSession(key).error).toContain('deleted or archived')
+  expect(mocked.create).not.toHaveBeenCalled()
+  expect(mocked.select).not.toHaveBeenCalled()
+  expect(mocked.send).not.toHaveBeenCalled()
+})
+
+it.each(['Thread not found (404)', 'Runtime validation timed out'])(
+  'does not replace a persisted thread when validation fails: %s', async (message) => {
+    patchPaperAssistant(key, { threadId: 'paper-thread', input: 'Keep draft', images: [image] })
+    mocked.summary.mockRejectedValueOnce(new Error(message))
+    await expect(openPaperSpaceAssistant({ ...source, prompt: 'Continue', consumeDraft: true })).resolves.toBeNull()
+    expect(paperAssistantSession(key)).toMatchObject({ threadId: 'paper-thread', input: 'Keep draft', images: [image], error: message })
+    expect(mocked.create).not.toHaveBeenCalled()
+    expect(mocked.send).not.toHaveBeenCalled()
+  }
+)
+
+it.each([{ workspace: '/other', agentSurface: 'write' }, { workspace: '/legacy', agentSurface: 'code' }])(
+  'rejects a binding with mismatched runtime ownership: %j', async (metadata) => {
+    patchPaperAssistant(key, { threadId: 'paper-thread' })
+    mocked.summary.mockResolvedValueOnce({ id: 'paper-thread', ...metadata })
+    await expect(openPaperSpaceAssistant({ ...source, prompt: 'Continue' })).resolves.toBeNull()
+    expect(paperAssistantSession(key).error).toContain('does not belong')
+    expect(mocked.send).not.toHaveBeenCalled()
+    expect(mocked.create).not.toHaveBeenCalled()
+  }
+)
+
+it('restores different papers in the same library without cross-binding their threads', async () => {
+  await openPaperSpaceAssistant({ ...source, prompt: 'A' })
+  mocked.paper.readerKey = '/legacy\0papers/b'
+  mocked.create.mockResolvedValueOnce({ id: 'b-thread', workspace: '/legacy', agentSurface: 'write' })
+  await openPaperSpaceAssistant({ ...source, unitDir: 'papers/b', prompt: 'B' })
+  usePaperAssistantStore.setState({ sessions: {} })
+  mocked.paper.readerKey = key
+  await openPaperSpaceAssistant({ ...source, prompt: 'A again' })
+  expect(mocked.send.mock.lastCall?.[2].expectedThreadId).toBe('paper-thread')
+  mocked.paper.readerKey = '/legacy\0papers/b'
+  await openPaperSpaceAssistant({ ...source, unitDir: 'papers/b', prompt: 'B again' })
+  expect(mocked.send.mock.lastCall?.[2].expectedThreadId).toBe('b-thread')
+  expect(mocked.create).toHaveBeenCalledTimes(2)
 })

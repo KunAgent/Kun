@@ -3,6 +3,9 @@ import { useChatStore } from '../store/chat-store'
 import { getProvider } from '../agent/registry'
 import type { AttachmentReference } from '../agent/types'
 import { writeJoinPath } from '../write/write-workspace-store-helpers'
+import { workspaceRootScopeKey } from '../lib/workspace-path'
+import { composerReasoningEffortRequestValue } from '../components/chat/floating-composer-model-picker-logic'
+import { serviceTierForComposerSelection } from '../components/chat/composer-fast-mode'
 import { paperSpaceItemKey, usePaperSpaceStore } from './paper-space-store'
 import { paperAssistantSession, patchPaperAssistant, type PaperSpaceImage } from './paper-space-assistant-state'
 
@@ -23,11 +26,34 @@ function readerIsCurrent(key: string): boolean {
   return useChatStore.getState().route === 'papers' && usePaperSpaceStore.getState().readerKey === key
 }
 
+async function validatePaperThread(key: string, threadId: string): Promise<void> {
+  const provider = getProvider()
+  if (!provider.getThreadSummary) throw new Error('PDF assistant thread validation is unavailable.')
+  const thread = await provider.getThreadSummary(threadId)
+  const root = key.split('\0')[0]
+  if (thread.id !== threadId || thread.archived || thread.status === 'archived' || thread.status === 'deleted') {
+    throw new Error('This PDF assistant thread is deleted or archived. Restore it before continuing.')
+  }
+  if (workspaceRootScopeKey(thread.workspace) !== root || thread.agentSurface !== 'write') {
+    throw new Error('This PDF assistant thread does not belong to this paper source.')
+  }
+}
+
 /** Restore only this paper's projection; selection never changes the current route. */
-export async function selectPaperSpaceAssistant(key: string): Promise<void> {
+export async function selectPaperSpaceAssistant(key: string): Promise<boolean> {
   const threadId = paperAssistantSession(key).threadId
-  if (!threadId || !readerIsCurrent(key) || useChatStore.getState().activeThreadId === threadId) return
-  await useChatStore.getState().selectThread(threadId, { selectionGuard: () => readerIsCurrent(key) })
+  if (!threadId || !readerIsCurrent(key)) return false
+  try {
+    await validatePaperThread(key, threadId)
+    patchPaperAssistant(key, { threadId })
+    if (!readerIsCurrent(key)) return false
+    if (useChatStore.getState().activeThreadId === threadId) return true
+    await useChatStore.getState().selectThread(threadId, { selectionGuard: () => readerIsCurrent(key) })
+    return readerIsCurrent(key) && useChatStore.getState().activeThreadId === threadId
+  } catch (error) {
+    patchPaperAssistant(key, { error: error instanceof Error ? error.message : String(error) })
+    return false
+  }
 }
 
 async function ensurePaperAssistantThread(input: PaperSpaceAssistantInput, key: string): Promise<string> {
@@ -58,26 +84,32 @@ async function ensurePaperAssistantThread(input: PaperSpaceAssistantInput, key: 
 
 /** Paper requests stay in the PDF rail and use the paper's own trusted source root. */
 export async function openPaperSpaceAssistant(input: PaperSpaceAssistantInput): Promise<string | null> {
-  const root = input.workspaceRoot.trim()
+  const root = workspaceRootScopeKey(input.workspaceRoot)
   const key = input.unitDir ? paperSpaceItemKey(root, input.unitDir) : null
   if (!root || !key || !readerIsCurrent(key)) return null
   const before = paperAssistantSession(key)
+  const chat = useChatStore.getState()
   patchPaperAssistant(key, { layout: 'assistant', error: null })
   if (!input.prompt?.trim()) {
-    await selectPaperSpaceAssistant(key)
-    return paperAssistantSession(key).threadId
+    return await selectPaperSpaceAssistant(key) ? paperAssistantSession(key).threadId : null
   }
   if (before.sending) return null
   if (useChatStore.getState().runtimeConnection !== 'ready') {
     patchPaperAssistant(key, { error: i18n.t('common:runtimeActionNeedsConnection') })
     return null
   }
+  const ownsProjection = before.threadId !== null && chat.activeThreadId === before.threadId
+  const model = ownsProjection ? chat.composerModel : before.model ?? ''
+  const providerId = ownsProjection ? chat.composerProviderId : before.providerId ?? ''
+  const reasoningEffort = composerReasoningEffortRequestValue(chat.composerReasoningEffort)
+  const serviceTier = serviceTierForComposerSelection(chat.composerFastMode, chat.composerModelGroups, model, providerId)
+  const selection = { model, providerId, reasoningEffort, serviceTier }
   const current = (): boolean => readerIsCurrent(key)
   patchPaperAssistant(key, { sending: true })
   try {
     const threadId = await ensurePaperAssistantThread({ ...input, workspaceRoot: root }, key)
     if (!current()) return null
-    await selectPaperSpaceAssistant(key)
+    if (!await selectPaperSpaceAssistant(key)) return null
     const selected = (): boolean => current() && useChatStore.getState().activeThreadId === threadId
     if (!selected()) return null
     const attachments: AttachmentReference[] = []
@@ -95,7 +127,7 @@ export async function openPaperSpaceAssistant(input: PaperSpaceAssistantInput): 
     const sent = await useChatStore.getState().sendMessage(input.prompt.trim(), 'agent', {
       expectedThreadId: threadId, submissionGuard: selected, agentSurface: 'write', attachmentIds: attachments.map((item) => item.id),
       attachments, fileReferences, composerContexts: [],
-      ...(before.model !== undefined ? { model: before.model, providerId: before.providerId ?? '' } : {})
+      ...selection
     })
     if (!sent) {
       patchPaperAssistant(key, { error: useChatStore.getState().error || 'The message was not sent.' })

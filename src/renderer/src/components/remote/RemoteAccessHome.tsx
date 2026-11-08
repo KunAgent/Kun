@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { MobileChannelRow } from './RemoteMobileLink'
 import { BrowserSwitch } from './RemoteBrowserAccess'
 import { RemoteCompactRow, REMOTE_FOCUS } from './remote-compact-ui'
-import { desktopConsent, desktopSummary } from './remote-access-state'
+import { desktopConsent, desktopSummary, mobileManagementVisible } from './remote-access-state'
 import { describeUserAgent, RemoteCopyButton, RemoteGroup, RemoteSection } from './remote-panel-ui'
 import type { DesktopAccess } from './useDesktopAccess'
 import type { MobileLink } from './useMobileLink'
@@ -17,9 +17,9 @@ export function RemoteAccessHome({ link, browser, desktop, onBrowser, onDesktop,
   const { t } = useTranslation('common')
   const { status } = browser
   const clients = status?.running ? status.clients : []
-  const mobileVisible = link.signedIn && link.mobileAllowed
-  const grants = mobileVisible && link.enabled ? link.state?.grants.filter(grant => grant.purpose !== 'desktop') ?? [] : []
-  const running = status?.running || (mobileVisible && link.enabled) || desktop.value?.active || directRunning
+  const mobileVisible = mobileManagementVisible(link)
+  const grants = mobileVisible ? link.state?.grants.filter(grant => grant.purpose !== 'desktop') ?? [] : []
+  const running = status?.running || (mobileVisible && (link.enabled || link.starting || link.state?.online)) || desktop.value?.active || directRunning
   const desktopText = desktop.error || desktopSummary(desktop.value, t)
   const warning = mobileVisible && link.enabled && link.state?.desktopAccess && desktop.value?.supported &&
     (!desktop.value.ready || desktop.value.inputReady !== true)

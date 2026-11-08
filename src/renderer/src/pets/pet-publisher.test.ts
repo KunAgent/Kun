@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread } from '../agent/types'
-import type { PetActivitySnapshot } from '@shared/pets'
+import type { PetActivitySnapshot, PetFollowUpRequest } from '@shared/pets'
 import type { ActivityRow } from '@shared/activity-row'
 import { parsePetActivitySnapshot } from '@shared/pets-payload'
 import { useChatStore } from '../store/chat-store'
@@ -22,6 +22,8 @@ const started = '2026-11-04T09:00:00.000Z'
 let overlayOpen = true
 let delivered: PetActivitySnapshot[]
 let publish: ReturnType<typeof vi.fn>
+let followUp: (request: PetFollowUpRequest) => void
+let completeFollowUp: ReturnType<typeof vi.fn>
 
 function thread(id = 'drawing', overrides: Partial<NormalizedThread> = {}): NormalizedThread {
   return { id, title: 'Drawing', updatedAt: started, model: 'model', mode: 'agent', status: 'idle', ...overrides }
@@ -45,13 +47,15 @@ beforeEach(() => {
     const parsed = parsePetActivitySnapshot(snapshot)
     if (parsed.ok) delivered.push(parsed.value)
   })
+  completeFollowUp = vi.fn()
   const pets = {
     getPetSettings: async () => ({ overlayOpen }),
     updatePetActivity: publish,
     onPetCatalogChanged: () => () => undefined,
     onPetNavigationRequested: () => () => undefined,
     takePendingNavigation: async () => null,
-    onFollowUpRequested: () => () => undefined,
+    onFollowUpRequested: (handler: typeof followUp) => { followUp = handler; return () => undefined },
+    completeFollowUp,
     onChatRequested: () => () => undefined
   }
   vi.stubGlobal('window', Object.assign(new EventTarget(), {
@@ -74,6 +78,21 @@ afterEach(() => {
 })
 
 describe('pet activity delivery for ordinary conversations', () => {
+  it('preserves follow-up request and target identity through the publisher bridge', async () => {
+    const sendMessage = vi.fn(async () => true)
+    const selectThread = vi.fn(async (threadId: string) => {
+      useChatStore.setState({ activeThreadId: threadId })
+    })
+    useChatStore.setState({ busy: false, selectThread, sendMessage })
+    startPetActivityPublisher()
+    followUp({ requestId: 'pet-request', threadId: 'drawing', prompt: ' Continue ' })
+    await flush()
+    expect(sendMessage).toHaveBeenCalledExactlyOnceWith('Continue', 'agent', {
+      expectedThreadId: 'drawing', clientRequestId: 'pet-request', submissionGuard: expect.any(Function)
+    })
+    expect(completeFollowUp).toHaveBeenCalledExactlyOnceWith('pet-request', { ok: true })
+  })
+
   it.each(['code', 'design'] as const)('shows confirmed %s work before the thread list catches up', async (agentSurface) => {
     useChatStore.setState({ threads: [thread('drawing', {
       agentSurface, latestTurnId: 'previous-turn', latestTurnStatus: 'completed'

@@ -148,12 +148,12 @@ describe('pet activity projection', () => {
     expect(petBubbleAllowed({ preferenceEnabled: false })).toBe(false)
     expect(petBubbleAllowed({ preferenceEnabled: true })).toBe(true)
     await expect(deliverPetFollowUp({
-      threadId: 'thr', prompt: '继续', knownThreadIds: new Set(['thr']),
-      selectThread: async () => undefined, sendMessage: async () => true
+      threadId: 'thr', requestId: 'follow-up', prompt: '继续', knownThreadIds: new Set(['thr']),
+      getActiveThreadId: () => 'thr', selectThread: async () => undefined, sendMessage: async () => true
     })).resolves.toEqual({ ok: true })
     await expect(deliverPetFollowUp({
-      threadId: 'missing', prompt: '继续', knownThreadIds: new Set(['thr']),
-      selectThread: async () => undefined, sendMessage: async () => true
+      threadId: 'missing', requestId: 'follow-up', prompt: '继续', knownThreadIds: new Set(['thr']),
+      getActiveThreadId: () => 'thr', selectThread: async () => undefined, sendMessage: async () => true
     })).resolves.toMatchObject({ ok: false })
   })
 

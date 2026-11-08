@@ -1,3 +1,4 @@
+import { enqueueWriteDocumentOperation } from './write-document-operations'
 import type { WorkspaceFileWritePayload, WorkspaceFileWriteResult } from '@shared/workspace-file'
 
 type WriteWorkspaceFile = (payload: WorkspaceFileWritePayload) => Promise<WorkspaceFileWriteResult>
@@ -23,6 +24,21 @@ export function enqueueWriteWorkspaceFileTask<T>(
   path: string,
   operation: () => Promise<T>
 ): Promise<T> {
+  return enqueueWriteDocumentOperation(workspaceRoot, path, async (currentPath) => {
+    // Generic read/modify/write closures capture their source path. After a
+    // rename they must be retried with a fresh context, never recreate the source.
+    if (writeSaveQueueKey(workspaceRoot, currentPath) !== writeSaveQueueKey(workspaceRoot, path)) {
+      throw new Error('Document moved before the queued file operation started')
+    }
+    return enqueueDiskWriteTask(workspaceRoot, path, operation)
+  })
+}
+
+function enqueueDiskWriteTask<T>(
+  workspaceRoot: string,
+  path: string,
+  operation: () => Promise<T>
+): Promise<T> {
   const key = writeSaveQueueKey(workspaceRoot, path)
   const previous = saveQueues.get(key) ?? Promise.resolve()
   const task = previous
@@ -44,7 +60,8 @@ export function enqueueWriteWorkspaceSave(
   contents.set(payload.content, (contents.get(payload.content) ?? 0) + 1)
   pendingSaveContents.set(key, contents)
 
-  const task = enqueueWriteWorkspaceFileTask(
+  // Store saves already hold the document reservation through state settlement.
+  const task = enqueueDiskWriteTask(
     payload.workspaceRoot ?? '',
     payload.path,
     () => writeWorkspaceFile(payload)
@@ -75,10 +92,15 @@ export function isWriteWorkspaceSaveContentPending(
 
 export async function flushWriteWorkspaceSaveQueue(
   workspaceRoot?: string,
-  path?: string
+  path?: string,
+  includeDescendants = false
 ): Promise<void> {
   if (workspaceRoot !== undefined && path !== undefined) {
-    await saveQueues.get(writeSaveQueueKey(workspaceRoot, path))?.catch(() => undefined)
+    const key = writeSaveQueueKey(workspaceRoot, path)
+    const pending = [...saveQueues].filter(([candidate]) => candidate === key || (
+      includeDescendants && candidate.startsWith(`${key}/`)
+    ))
+    await Promise.all(pending.map(([, task]) => task.catch(() => undefined)))
     return
   }
   await Promise.all([...saveQueues.values()].map((task) => task.catch(() => undefined)))

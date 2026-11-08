@@ -1,3 +1,4 @@
+import { initializeGraphPlanning } from './turn-service-graph-initialization.js'
 import { replayNativeFollowUpRequest } from './native-followup-admission.js'
 import { validateAttachmentAliases, type AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { restartSourceIsCurrent, insertRecoveryTurn } from '../domain/queue-execution-state.js'
@@ -243,8 +244,8 @@ async startTurn(this: TurnService, input: {
           const sandboxMode = input.request.sandboxMode ?? thread.sandboxMode
           const approvalReviewer = input.request.approvalReviewer ?? thread.approvalReviewer
           const graphPlanningLifecycle =
-            input.request.orchestration === 'graph' && this['deps'].createGraphPlanningDraft
-              ? await this['deps'].createGraphPlanningDraft({
+            input.request.orchestration === 'graph'
+              ? await initializeGraphPlanning(this['deps'], {
                   threadId: input.threadId,
                   sourceTurnId: turnId,
                   goal: input.request.prompt,

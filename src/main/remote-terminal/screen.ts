@@ -50,6 +50,13 @@ type HeadlessTerminal = new (options: { cols: number; rows: number; scrollback?:
 type Serializer = { serialize(options?: { scrollback?: number }): string }
 type AddonConstructor = new () => Serializer
 
+function moduleConstructor<T>(module: unknown, name: string): T | undefined {
+  // Node ESM exposes some CommonJS builds only through the default namespace.
+  const namespace = module as Record<string, unknown> & { default?: Record<string, unknown> }
+  const candidate = namespace[name] ?? namespace.default?.[name]
+  return typeof candidate === 'function' ? candidate as T : undefined
+}
+
 export class XtermScreen implements TerminalScreen {
   private applied: Promise<void> = Promise.resolve()
   private pending = 0
@@ -100,8 +107,8 @@ export function createReplayScreens(): TerminalScreenFactory {
 export async function loadTerminalScreens(): Promise<TerminalScreenFactory> {
   try {
     const [headless, serialize] = await Promise.all([import('@xterm/headless'), import('@xterm/addon-serialize')])
-    const Terminal = (headless as unknown as { Terminal?: HeadlessTerminal }).Terminal
-    const SerializeAddon = (serialize as unknown as { SerializeAddon?: AddonConstructor }).SerializeAddon
+    const Terminal = moduleConstructor<HeadlessTerminal>(headless, 'Terminal')
+    const SerializeAddon = moduleConstructor<AddonConstructor>(serialize, 'SerializeAddon')
     if (!Terminal || !SerializeAddon) return createReplayScreens()
     return { fullScreen: true, create(cols, rows) {
       const term = new Terminal({ cols, rows, scrollback: SCREEN_SCROLLBACK, allowProposedApi: true })
