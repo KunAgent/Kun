@@ -1,4 +1,4 @@
-import { defaultPetGlobalActivity } from '../../shared/pets-global-activity'
+import { defaultPetGlobalActivity, parsePetGlobalActivityPreferences, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
 import { defaultPetVisits, parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
 import { isBuiltinPetId, RETIRED_AI_PET_IDS, RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
@@ -109,6 +109,14 @@ export class PetStore {
       const preferences = parsePetVisitPreferences(input)
       if (!preferences) throw new Error('invalid pet visit preferences')
       this.settings.visits = preferences
+    })
+  }
+
+  async setPetGlobalActivity(input: PetGlobalActivityPreferences): Promise<PetSettings> {
+    return this.mutate(async () => {
+      const preferences = parsePetGlobalActivityPreferences(input)
+      if (!preferences) throw new Error('invalid pet global activity preferences')
+      this.settings.globalActivity = preferences
     })
   }
 
@@ -426,8 +434,9 @@ function normalizeSettings(value: unknown): PetSettings {
     bubblesCollapsed: candidate.bubblesCollapsed === true,
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
-    // Activity follows pet visibility; migrate the former opt-in switches.
-    globalActivity: defaultPetGlobalActivity(),
+    // Typing follows pet visibility; recording detection is an explicit
+    // opt-in that must survive restarts.
+    globalActivity: parsePetGlobalActivityPreferences(candidate.globalActivity) ?? defaultPetGlobalActivity(),
     reactionsEnabled: true,
     ...(candidate.ensemble !== undefined ? { ensemble: normalizeSavedPetEnsemble(candidate.ensemble) } : {}),
     ...(candidate.visits !== undefined ? { visits: parsePetVisitPreferences(candidate.visits) ?? defaultPetVisits() } : {}),

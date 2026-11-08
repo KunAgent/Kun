@@ -28,21 +28,21 @@ function fixture(platform = 'darwin') {
 }
 
 describe('system pet activity observer', () => {
-  it('starts default activity only when visible and never requests permission automatically', () => {
+  it('starts typing activity by default and keeps recording opt-in', () => {
     vi.useFakeTimers()
     const f = fixture()
     f.service.configure(defaultPetGlobalActivity(), false)
     expect(f.launch).not.toHaveBeenCalled()
-    expect(f.service.status()).toEqual({ keyboard: 'paused', microphone: 'paused', recording: false })
+    expect(f.service.status()).toEqual({ keyboard: 'paused', microphone: 'off', recording: false })
     f.service.configure(defaultPetGlobalActivity(), true)
-    expect(f.launch).toHaveBeenCalledExactlyOnceWith(['--keyboard', '--microphone'])
+    expect(f.launch).toHaveBeenCalledExactlyOnceWith(['--keyboard'])
     f.service.configure({ keyboard: true, microphone: true }, true)
-    expect(f.launch).toHaveBeenCalledOnce()
+    expect(f.launch).toHaveBeenLastCalledWith(['--keyboard', '--microphone'])
     f.send('{"type":"typing"}\n{"type":"recording","active":true}\n')
     expect(f.signal).toHaveBeenCalledWith({ type: 'input', source: 'global-keyboard', kind: 'typing', level: .5 })
     expect(f.signal).toHaveBeenCalledWith({ type: 'input', source: 'global-microphone', kind: 'listening', level: 0 })
     f.service.configure({ keyboard: true, microphone: true }, false)
-    expect(f.children[0].kill).toHaveBeenCalled()
+    expect(f.children.at(-1)!.kill).toHaveBeenCalled()
     expect(f.service.status()).toEqual({ keyboard: 'paused', microphone: 'paused', recording: false })
     expect(f.signal).toHaveBeenLastCalledWith({ type: 'input', source: 'global-microphone', kind: 'idle', level: 0 })
     expect(vi.getTimerCount()).toBe(0)
@@ -77,7 +77,7 @@ describe('system pet activity observer', () => {
     expect(unsupported.launch).not.toHaveBeenCalled(); unsupported.service.dispose()
     const hidden = fixture('linux')
     hidden.service.configure(defaultPetGlobalActivity(), false)
-    expect(hidden.service.status()).toEqual({ keyboard: 'unsupported', microphone: 'unsupported', recording: false })
+    expect(hidden.service.status()).toEqual({ keyboard: 'unsupported', microphone: 'off', recording: false })
     expect(hidden.launch).not.toHaveBeenCalled(); hidden.service.dispose()
   })
 
@@ -111,17 +111,18 @@ describe('system pet activity observer', () => {
   })
 
   it.each([
-    {},
-    { reactionsEnabled: false, globalActivity: { keyboard: false, microphone: false } },
-    { reactionsEnabled: true, globalActivity: { keyboard: true, microphone: false } },
-    { globalActivity: { keyboard: 'yes', microphone: true } }
-  ])('migrates saved switches to automatic activity without opening a hidden pet: %j', async (legacy) => {
+    [{}, { keyboard: true, microphone: false }],
+    [{ reactionsEnabled: false, globalActivity: { keyboard: false, microphone: false } }, { keyboard: false, microphone: false }],
+    [{ reactionsEnabled: true, globalActivity: { keyboard: true, microphone: false } }, { keyboard: true, microphone: false }],
+    [{ globalActivity: { keyboard: 'yes', microphone: true } }, { keyboard: true, microphone: false }]
+  ] as Array<[Record<string, unknown>, { keyboard: boolean; microphone: boolean }]>)(
+    'keeps the saved recording preference without opening a hidden pet: %j', async (legacy, activity) => {
     const root = await mkdtemp(path.join(tmpdir(), 'kun-pet-activity-')); roots.push(root)
     const settingsPath = path.join(root, 'settings.json')
     await writeFile(settingsPath, JSON.stringify({ ...legacy, overlayOpen: false, mascotWidthPx: 128,
       importCodexPets: false, visits: { enabled: false, frequency: 'quiet' }, presence: { text: 'discard' } }))
     const store = new PetStore(root); await store.initialize()
-    const expected = { globalActivity: { keyboard: true, microphone: true }, reactionsEnabled: true,
+    const expected = { globalActivity: activity, reactionsEnabled: true,
       overlayOpen: false, mascotWidthPx: 128, importCodexPets: false, visits: { enabled: false, frequency: 'quiet' } }
     expect(store.getSettings()).toMatchObject(expected)
     await store.setMascotWidth(128)
@@ -133,16 +134,31 @@ describe('system pet activity observer', () => {
   })
 
   it('limits OS permission and status IPC to the desktop main frame', async () => {
-    const api = { getPetGlobalActivityStatus: vi.fn(), requestPetKeyboardAccess: vi.fn(),
+    const api = { getPetGlobalActivityStatus: vi.fn(), setPetGlobalActivity: vi.fn(), requestPetKeyboardAccess: vi.fn(),
       allows: (e: { isMainFrame: boolean; senderKind: string }, kinds: string[]) => e.isMainFrame && kinds.includes(e.senderKind) }
     const handlers = petIpcHandlers(api as unknown as PetIpcApi)
     const main = { senderId: 1, isMainFrame: true, senderKind: 'main' as const }
     for (const event of [{ ...main, senderKind: 'overlay' as const }, { ...main, isMainFrame: false }]) {
       await expect(handlers[PET_IPC.requestPetKeyboardAccess](event)).rejects.toThrow('desktop')
       expect(() => handlers[PET_IPC.getPetGlobalActivityStatus](event)).toThrow('desktop')
+      await expect(handlers[PET_IPC.setPetGlobalActivity](event, { keyboard: true, microphone: true })).rejects.toThrow('desktop')
     }
     expect(api.requestPetKeyboardAccess).not.toHaveBeenCalled()
+    expect(api.setPetGlobalActivity).not.toHaveBeenCalled()
+    await expect(handlers[PET_IPC.setPetGlobalActivity](main, { keyboard: 'yes', microphone: true }))
+      .rejects.toThrow('invalid pet global activity preferences')
+    await handlers[PET_IPC.setPetGlobalActivity](main, { keyboard: true, microphone: true })
+    expect(api.setPetGlobalActivity).toHaveBeenCalledWith({ keyboard: true, microphone: true })
     await handlers[PET_IPC.requestPetKeyboardAccess](main)
     expect(api.requestPetKeyboardAccess).toHaveBeenCalledOnce()
+  })
+
+  it('persists the opt-in recording preference across restarts', async () => {
+    const root = await mkdtemp(path.join(tmpdir(), 'kun-pet-activity-')); roots.push(root)
+    const store = new PetStore(root); await store.initialize()
+    expect(store.getSettings().globalActivity).toEqual({ keyboard: true, microphone: false })
+    await store.setPetGlobalActivity({ keyboard: true, microphone: true })
+    const restored = new PetStore(root); await restored.initialize()
+    expect(restored.getSettings().globalActivity).toEqual({ keyboard: true, microphone: true })
   })
 })

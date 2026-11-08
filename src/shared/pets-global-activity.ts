@@ -7,7 +7,17 @@ export type PetGlobalActivityStatus = {
 }
 
 export function defaultPetGlobalActivity(): PetGlobalActivityPreferences {
-  return { keyboard: true, microphone: true }
+  // Recording detection watches every app on the machine, not just Kun, so it
+  // stays opt-in: a default-on system-wide "listening" reaction reads as Kun
+  // capturing the microphone.
+  return { keyboard: true, microphone: false }
+}
+
+export function parsePetGlobalActivityPreferences(value: unknown): PetGlobalActivityPreferences | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const candidate = value as Record<string, unknown>
+  if (typeof candidate.keyboard !== 'boolean' || typeof candidate.microphone !== 'boolean') return null
+  return { keyboard: candidate.keyboard, microphone: candidate.microphone }
 }
 
 export type PetNativeActivityEvent =

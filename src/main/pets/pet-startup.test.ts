@@ -77,7 +77,7 @@ describe('desktop pet startup', () => {
       webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
     } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
     const frame = {}, main = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }
-    const preferences = { keyboard: true, microphone: true }
+    const preferences = { keyboard: true, microphone: false }
     expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
     host.power.get('suspend')!()
     expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)

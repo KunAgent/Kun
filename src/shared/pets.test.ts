@@ -32,7 +32,7 @@ describe('pet contracts', () => {
       mascotWidthPx: PET_MASCOT_DEFAULT_WIDTH_PX,
       importCodexPets: true,
       reactionsEnabled: true,
-      globalActivity: { keyboard: true, microphone: true }
+      globalActivity: { keyboard: true, microphone: false }
     })
   })
 

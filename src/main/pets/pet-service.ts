@@ -1,4 +1,4 @@
-import { defaultPetGlobalActivity } from '../../shared/pets-global-activity'
+import { defaultPetGlobalActivity, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
 import { PetGlobalActivity, PET_GLOBAL_SENDER_ID } from './pet-global-activity'
 import { PetBottleGate } from './pet-bottle-gate'
 import type { PetBottleDrop } from '../../shared/pets-bottle'
@@ -175,6 +175,12 @@ class DesktopPetRuntime implements DesktopPets {
   private api() {
     return {
       getPetGlobalActivityStatus: () => this.globalActivity.status(),
+      setPetGlobalActivity: async (preferences: PetGlobalActivityPreferences) => {
+        const settings = await this.store.setPetGlobalActivity(preferences)
+        this.syncGlobalActivity()
+        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
+        return settings
+      },
       requestPetKeyboardAccess: async () => {
         if (!this.store.getSettings().globalActivity?.keyboard) return
         await this.globalActivity.requestKeyboardAccess()

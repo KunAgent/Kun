@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import type { PetDesktopBridge, PetSettings } from '@shared/pets'
-import type { PetGlobalActivityState, PetGlobalActivityStatus } from '@shared/pets-global-activity'
+import { defaultPetGlobalActivity, type PetGlobalActivityState, type PetGlobalActivityStatus } from '@shared/pets-global-activity'
 import { settingsButtonClass } from './settings-button'
 
 export function SettingsPetGlobalActivity({ api, settings, language }: {
@@ -11,6 +11,7 @@ export function SettingsPetGlobalActivity({ api, settings, language }: {
   const [status, setStatus] = useState<PetGlobalActivityStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [pendingMicrophone, setPendingMicrophone] = useState<boolean | null>(null)
   useEffect(() => {
     let cancelled = false
     const refresh = (): void => {
@@ -35,10 +36,20 @@ export function SettingsPetGlobalActivity({ api, settings, language }: {
     catch { setError(text('设置失败，请重试', 'Unable to update settings. Please retry.')) }
     finally { setBusy(false) }
   }
+  // The saved preference is the source of truth; keep the checkbox responsive
+  // until the settings round-trip lands.
+  const microphoneEnabled = pendingMicrophone ??
+    settings?.globalActivity?.microphone ?? defaultPetGlobalActivity().microphone
+  const setMicrophone = (enabled: boolean): void => {
+    setPendingMicrophone(enabled)
+    void run(async () => {
+      await api.setPetGlobalActivity({ ...(settings?.globalActivity ?? defaultPetGlobalActivity()), microphone: enabled })
+    }).finally(() => { setPendingMicrophone(null) })
+  }
   return <div className="pets-settings-section">
     <h3>{text('自动陪伴', 'Automatic companionship')}</h3>
-    <p className="pets-settings-note">{text('宠物会自动回应打字、语音与掉落动作，在其他软件里打字、录音时也会跟随，无需单独开启。只感知活动状态，不读取输入文字，不录音。',
-      'Your pet automatically reacts to typing, voice and bottle drops, including typing and recording in other apps. No separate switches are needed. Only activity states are observed; no text or audio is collected.')}</p>
+    <p className="pets-settings-note">{text('宠物会自动回应打字、语音与掉落动作。只感知活动状态，不读取输入文字，也不录音。',
+      'Your pet automatically reacts to typing, voice and bottle drops. Only activity states are observed; no text or audio is collected.')}</p>
     {status ? <div className="pets-settings-activity-row" role="status">
       <span>{text('跟随系统打字', 'Typing across apps')}</span>
       <span>{labels[status.keyboard]}</span>
@@ -48,12 +59,17 @@ export function SettingsPetGlobalActivity({ api, settings, language }: {
         onClick={() => void run(() => api.requestPetKeyboardAccess())}>
         {text('授权系统输入监控', 'Allow Input Monitoring')}
       </button> : null}
+    <label className="pets-settings-toggle">
+      <input type="checkbox" checked={microphoneEnabled} disabled={busy}
+        onChange={(event) => setMicrophone(event.target.checked)} />
+      {text('跟随其他软件的录音状态', 'Follow recording in other apps')}
+    </label>
     {status ? <div className="pets-settings-activity-row" role="status">
-      <span>{text('跟随其他软件的录音状态', 'Recording in other apps')}</span>
+      <span>{text('录音状态', 'Recording state')}</span>
       <span>{status.recording ? text('有软件正在录音，宠物正在倾听', 'Recording detected; your pet is listening') : labels[status.microphone]}</span>
     </div> : null}
-    <p className="pets-settings-note">{text('系统打字联动支持 macOS；录音状态联动需要 macOS 14.2 或更新版本，不会额外启用麦克风。',
-      'Typing activity is supported on macOS. Recording status requires macOS 14.2 or later and does not turn on your microphone.')}</p>
+    <p className="pets-settings-note">{text('系统打字联动支持 macOS；录音状态联动需要 macOS 14.2 或更新版本，默认关闭。它只读取系统当前的录音状态，不会打开或录制麦克风。',
+      'Typing activity is supported on macOS. Recording status requires macOS 14.2 or later and is off by default; it only reads the system recording state and never opens or records your microphone.')}</p>
     {error ? <p role="alert">{error}</p> : null}
   </div>
 }

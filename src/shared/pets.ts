@@ -171,6 +171,7 @@ export type ScreenPoint = { x: number; y: number }
 
 export type PetDesktopBridge = {
   getPetGlobalActivityStatus: () => Promise<PetGlobalActivityStatus>
+  setPetGlobalActivity: (preferences: PetGlobalActivityPreferences) => Promise<PetSettings>
   requestPetKeyboardAccess: () => Promise<void>
   notifyPetBottleDrop: (drop: PetBottleDrop | null) => void
   setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
@@ -279,6 +280,7 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 
 export const PET_IPC = {
   getPetGlobalActivityStatus: 'kun:pets:global-activity:status',
+  setPetGlobalActivity: 'kun:pets:global-activity:preferences',
   requestPetKeyboardAccess: 'kun:pets:global-activity:keyboard-access',
   notifyPetBottleDrop: 'kun:pets:bottle-drop',
   setPetVisitPreferences: 'kun:pets:visits:preferences',

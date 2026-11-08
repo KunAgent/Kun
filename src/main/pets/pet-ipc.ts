@@ -1,4 +1,4 @@
-import type { PetGlobalActivityStatus } from '../../shared/pets-global-activity'
+import { parsePetGlobalActivityPreferences, type PetGlobalActivityPreferences, type PetGlobalActivityStatus } from '../../shared/pets-global-activity'
 import { parsePetBottleDrop, type PetBottleDrop } from '../../shared/pets-bottle'
 import { parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { PET_SCENE_IDS, type PetSceneId } from '../../shared/pets-ensemble'
@@ -30,6 +30,7 @@ export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 
 
 export type PetIpcApi = {
   getPetGlobalActivityStatus(): PetGlobalActivityStatus
+  setPetGlobalActivity(preferences: PetGlobalActivityPreferences): Promise<PetSettings>
   requestPetKeyboardAccess(): Promise<void>
   notifyBottleDrop(drop: PetBottleDrop | null): void
   setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings>
@@ -86,6 +87,12 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
   }
   return {
     [PET_IPC.getPetGlobalActivityStatus]: (event) => { main(event); return api.getPetGlobalActivityStatus() },
+    [PET_IPC.setPetGlobalActivity]: async (event, input) => {
+      main(event)
+      const parsed = parsePetGlobalActivityPreferences(input)
+      if (!parsed) throw new Error('invalid pet global activity preferences')
+      return api.setPetGlobalActivity(parsed)
+    },
     [PET_IPC.requestPetKeyboardAccess]: async (event) => { main(event); await api.requestPetKeyboardAccess() },
     [PET_IPC.notifyPetBottleDrop]: (event, input) => {
       if (!api.allows(event, ['main'])) return
