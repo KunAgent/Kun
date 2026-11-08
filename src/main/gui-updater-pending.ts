@@ -3,6 +3,7 @@ import { readFile, readdir, realpath, rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import { basename, join, resolve } from 'node:path'
 import { commonInstallerRecoveryRoot, installerRecoveryIdentity, recoveryPathApi, registeredInstallerLocations, trustedCommonRecoveryFile } from './installer-recovery-identity'
+import { privilegedUpdateOperation } from './update-elevated-transaction'
 import { atomicWriteFile } from './atomic-json-file'
 import type { GuiUpdateChannel } from '../shared/gui-update'
 
@@ -367,7 +368,19 @@ export async function readInstallerUpdateTransaction(
   const explicitRoot = options.recoveryRoot
   const identity = explicitRoot === undefined ? installerRecoveryIdentity() : null
   const registrations = identity ? await registeredInstallerLocations(identity.appGuid) : []
-  const commonRoot = explicitRoot === undefined ? await commonInstallerRecoveryRoot() : null
+  const paths = identity ? recoveryPathApi(identity.executable) : path
+  const normalize = (value: string) => paths === path.win32 ? paths.resolve(value).toLowerCase() : paths.resolve(value)
+  const runningDir = identity ? paths.dirname(identity.executable) : ''
+  const sourceDir = match.installDir ?? runningDir
+  const relevantDirectories = [sourceDir, runningDir, paths.join(paths.dirname(sourceDir), identity?.productName ?? '')]
+  const hasMachineInstallation = registrations.some((registration) => registration.scope === 'all' &&
+    relevantDirectories.some((directory) => {
+      const registered = normalize(registration.installDir), expected = normalize(directory)
+      const stagePrefix = expected + '.kun-stage-'
+      return registered === expected || (registered.startsWith(stagePrefix) && /^\d+$/u.test(registered.slice(stagePrefix.length)))
+    }))
+  // A separate machine install must not introduce UAC into current-user recovery.
+  const commonRoot = hasMachineInstallation ? await commonInstallerRecoveryRoot() : null
   const roots = explicitRoot !== undefined
     ? [{ root: explicitRoot, scope: '' }]
     : [{ root: installerRecoveryRoot(), scope: 'current' }, ...(commonRoot ? [{ root: commonRoot, scope: 'all' }] : [])]
@@ -376,17 +389,31 @@ export async function readInstallerUpdateTransaction(
   const readFileBound = options.readApi ?? ((filePath: string) => readFile(filePath, 'utf8'))
   const entriesByRoot = await Promise.all(roots.map(async ({ root, scope }) => {
     try { return (await listDir(root)).map((entry) => ({ root, scope, entry })) }
-    catch { return [] }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (scope === 'all' && identity && (code === 'EACCES' || code === 'EPERM')) {
+        return [{ root, scope, entry: `${identity.appGuid}-update.json` }]
+      }
+      return []
+    }
   }))
   for (const { root, scope, entry } of entriesByRoot.flat()) {
     const paths = explicitRoot !== undefined ? path : recoveryPathApi(root)
     if (!entry.endsWith('-update.json') || paths.basename(entry) !== entry) continue
     const transactionPath = paths.join(root, entry)
     let value: unknown
+    let privileged = false
     try {
       value = JSON.parse((await readFileBound(transactionPath)).replace(/^\uFEFF/u, '')) as unknown
-    } catch {
-      continue
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (scope !== 'all' || !identity || (code !== 'EACCES' && code !== 'EPERM')) continue
+      // Permission denial is not absence. Only the constrained elevated reader
+      // can inspect a protected transaction; refusal remains retryable.
+      const reply = await privilegedUpdateOperation('inspect', { ...match,
+        installDir: match.installDir ?? recoveryPathApi(identity.executable).dirname(identity.executable) })
+      value = reply.transaction
+      privileged = true
     }
     if (!value || typeof value !== 'object') continue
     const record = value as Record<string, unknown>
@@ -420,10 +447,11 @@ export async function readInstallerUpdateTransaction(
           !/^\d+$/u.test(paths.basename(record.StageRoot).slice(`${paths.basename(String(record.Target))}.kun-stage-`.length)) ||
           (record.TransactionPath !== undefined && !samePath(record.TransactionPath, transactionPath))) continue
       const scopes = new Set(registrations.filter((registration) =>
-        samePath(record.Source, registration.installDir) || samePath(record.Target, registration.installDir)
+        samePath(record.Source, registration.installDir) || samePath(record.Target, registration.installDir) ||
+        samePath(record.StageRoot, registration.installDir)
       ).map((registration) => registration.scope))
       if (scopes.size !== 1 || !scopes.has(scope)) continue
-      if (scope === 'all' && !await trustedCommonRecoveryFile(root, transactionPath)) continue
+      if (scope === 'all' && !privileged && !await trustedCommonRecoveryFile(root, transactionPath)) continue
     }
 
     const recoveryEnvironment: InstallerRecoveryEnvironment = {}

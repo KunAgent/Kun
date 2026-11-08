@@ -61,6 +61,7 @@ export class GuiUpdateInstaller {
   private recoveryTriggered = false
   private healthRetryTimer: ReturnType<typeof setTimeout> | null = null
   private healthCheck?: () => Promise<boolean>
+  private healthCheckedThisBoot = false
   private installerPath = ''
   private installerSha512 = ''
   private blockedForMissingRollbackRecord = false
@@ -176,7 +177,7 @@ export class GuiUpdateInstaller {
       return
     }
 
-    if (pending && !result) {
+    if (pending && !result && !recovery) {
       if (app.getVersion() === pending.oldVersion) {
         await clearPendingUpdate()
         this.emitInstallFailure('The update installer did not finish. The downloaded update can be retried.')
@@ -186,7 +187,12 @@ export class GuiUpdateInstaller {
         // The installer died between the payload cutover and its result write.
         // The transaction file is the authoritative rollback record; use it to
         // build a recovery that can still roll back or finalize (#1).
-        const transaction = await readInstallerUpdateTransaction(pending)
+        let transaction: Awaited<ReturnType<typeof readInstallerUpdateTransaction>>
+        try { transaction = await readInstallerUpdateTransaction(pending) }
+        catch (error) {
+          this.emitInstallFailure(`Update recovery inspection needs permission and can be retried: ${String(error)}`)
+          return
+        }
         if (!transaction || !resolveUpdateTransactionFacts(transaction.phase).countsAsInstalled) {
           console.error(
             '[kun-gui updater] no authoritative rollback record for a switched payload; blocking updates'
@@ -216,23 +222,15 @@ export class GuiUpdateInstaller {
       await this.rollbackAfterHealthFailure(recovery)
       return
     }
-    if (retryAt > Date.now()) {
+    if (this.healthCheckedThisBoot && retryAt > Date.now()) {
       this.armHealthRetry(retryAt)
       this.emitDegraded(recovery.healthAttempts, recovery.lastError)
       return
     }
+    this.healthCheckedThisBoot = true
     const healthy = await (this.healthCheck?.() ?? Promise.resolve(true)).catch(() => false)
     if (healthy) {
-      this.clearHealthRetry()
-      const outcome = await this.finalizeTransaction({
-        recoveryEnvironment: recovery.recoveryEnvironment,
-        backupDir: recovery.backupDir
-      })
-      if (outcome === 'unconfirmed') {
-        // Keep every recovery artifact so a later run can finalize or roll
-        // back; never delete the backup while the transaction is unresolved.
-        this.emitDegraded(recovery.healthAttempts, undefined)
-      }
+      await this.finalizeHealthyRecovery(recovery)
       return
     }
     const attempts = recovery.healthAttempts + 1
@@ -246,6 +244,21 @@ export class GuiUpdateInstaller {
     }
     this.armHealthRetry(Date.parse(nextRecovery.nextHealthCheckAt ?? ''))
     this.emitDegraded(attempts, message)
+  }
+
+  private async finalizeHealthyRecovery(recovery: GuiUpdateRecovery): Promise<void> {
+    this.clearHealthRetry()
+    // Health proof and cleanup permission are independent. Persist this before
+    // UAC so a refused/slow helper cannot turn a successful boot into a failure.
+    const healthy = await writeGuiUpdateRecovery({ ...recovery, bootAttempts: 0, healthAttempts: 0,
+      nextHealthCheckAt: undefined, lastError: undefined })
+    const outcome = await this.finalizeTransaction({ recoveryEnvironment: healthy.recoveryEnvironment, backupDir: healthy.backupDir })
+    if (outcome !== 'unconfirmed') return
+    const message = 'Kun Runtime is healthy; update cleanup is unconfirmed and recovery is retained for retry.'
+    const retryAt = Date.now() + GUI_UPDATE_HEALTH_RETRY_MS
+    await writeGuiUpdateRecovery({ ...healthy, nextHealthCheckAt: new Date(retryAt).toISOString(), lastError: message })
+    this.armHealthRetry(retryAt)
+    this.emitDegraded(0, message)
   }
 
   private async rollbackAfterHealthFailure(recovery: GuiUpdateRecovery): Promise<void> {
@@ -315,16 +328,20 @@ export class GuiUpdateInstaller {
       )
       return
     }
+    const retryAt = recovery.nextHealthCheckAt ? Date.parse(recovery.nextHealthCheckAt) : 0
+    if (this.healthCheckedThisBoot && retryAt > Date.now()) {
+      this.armHealthRetry(retryAt)
+      this.emitDegraded(recovery.healthAttempts, recovery.lastError)
+      return
+    }
+    this.healthCheckedThisBoot = true
     const healthy = await (this.healthCheck?.() ?? Promise.resolve(false)).catch(() => false)
     if (healthy) {
-      const outcome = await this.finalizeTransaction({
-        recoveryEnvironment: recovery.recoveryEnvironment,
-        backupDir: recovery.backupDir
-      })
-      if (outcome !== 'unconfirmed') return
+      await this.finalizeHealthyRecovery(recovery)
+      return
     }
-    // No persisted health proof (or finalize could not be confirmed): roll
-    // back to the previous version instead of silently deleting the backup.
+    // Only a failed health probe, never an administrative cleanup refusal,
+    // authorizes rollback after grace expiry.
     console.warn(
       '[kun-gui updater] backup grace window expired without health proof; rolling back'
     )

@@ -4,9 +4,13 @@ import { openUpdateRollbackReadiness, powershellCaptureGuiProcess, powershellRol
 import { access, readFile } from 'node:fs/promises'
 import { join, win32 } from 'node:path'
 import { encodePowershellCommand, ONE_SHOT_HELPER_TIMEOUT_SECONDS, powershellHelperDeadline } from './one-shot-helper-script'
+import { privilegedUpdateOperation } from './update-elevated-transaction'
+import { installerRecoveryIdentity } from './installer-recovery-identity'
 import { isUpdateTransactionState, type UpdateTransactionState } from './update-transaction-states'
 import type { InstallerRecoveryEnvironment } from './gui-updater-pending'
 import {
+  readPendingUpdate,
+  readGuiUpdateRecovery,
   clearGuiUpdateRecovery,
   clearPendingUpdate,
   clearPendingUpdateResult,
@@ -216,6 +220,28 @@ export async function finalizeUpdateTransactionAndCleanup(
   if (platform !== 'win32') {
     await clearRecords()
     return { kind: 'finalized', phase: 'skipped-non-windows' }
+  }
+
+  if (input.environment.KUN_INSTALLER_INSTALL_MODE?.toLowerCase() === 'all') {
+    try {
+      const identity = installerRecoveryIdentity()
+      if (input.environment.KUN_INSTALLER_APP_GUID?.toLowerCase() !== identity.appGuid.toLowerCase()) {
+        return { kind: 'unconfirmed', reason: 'Recovery application identity does not match.' }
+      }
+      const [pending, recovery] = await Promise.all([readPendingUpdate(), readGuiUpdateRecovery()])
+      const reply = await privilegedUpdateOperation('finalize', {
+        oldVersion: pending?.oldVersion ?? recovery?.oldVersion ?? '',
+        newVersion: pending?.newVersion ?? recovery?.installedVersion ?? '',
+        installDir: pending?.installDir ?? input.environment.KUN_INSTALLER_SOURCE
+      })
+      // The elevated helper validates and removes the authority it read.
+      // Ordinary EACCES reads and unauthenticated result files are not evidence.
+      if (reply.outcome !== 'finalized') return { kind: 'unconfirmed', reason: 'Finalization was not confirmed.' }
+      await clearRecords()
+      return { kind: 'finalized', phase: 'finalized' }
+    } catch (error) {
+      return { kind: 'unconfirmed', reason: error instanceof Error ? error.message : String(error) }
+    }
   }
 
   const before = await readTransactionPhase(input.environment)
