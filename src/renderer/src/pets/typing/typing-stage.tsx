@@ -25,7 +25,7 @@ export function PetTypingStage(props: {
     interactions: props.pet.interactions }
   const frameAt = (now: number, reduced: boolean) => {
     const state = motion.current.sample(props.typing, now, reduced, props.paused)
-    return { state, frame: typingScene({ ...props, pet, now, enteredAt: enteredAt.current, motion: state }) }
+    return { state, frame: typingScene({ ...props, pet, now, reduced, enteredAt: enteredAt.current, motion: state }) }
   }
   const { canvas, renderer, ready, error, revision } = usePetCanvas(`${pet.id}:${pet.spritesheetUrl}:${JSON.stringify(petTypingRig(pet))}:${JSON.stringify(petTypingCutouts(pet))}`, () => frameAt(Date.now(), false).frame)
   usePetAnimationPainter(`typing:${pet.id}:${ready}:${revision}`, props.paused, ({ elapsed, reduced }) => {

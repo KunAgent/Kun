@@ -40,20 +40,26 @@ async function decode(url: string, rig: PetJointRig, cutouts?: ArmCutouts): Prom
     context.drawImage(image, column * 192, rig.row * 208, 192, 208, x, 0, 192, 208)
     context.restore()
     if (cutouts && armContext) for (const side of [0, 1] as const) {
-      const points = cutouts[side].contour
-      const trace = (ctx: CanvasRenderingContext2D): void => {
+      const cutout = cutouts[side]
+      const trace = (ctx: CanvasRenderingContext2D, points = cutout.contour): void => {
         ctx.beginPath(); points.forEach(([u, v], i) => {
           if (i) ctx.lineTo(x + u * 192, v * 208); else ctx.moveTo(x + u * 192, v * 208)
         }); ctx.closePath()
       }
       // The foreground is the exact opaque limb silhouette, independent of skin weights.
       armContext.save(); trace(armContext); armContext.clip()
-      armContext.drawImage(image, rig.blink[0] * 192, rig.row * 208, 192, 208, x, 0, 192, 208)
+      if (cutout.source) {
+        const { row, column, offset, mirrorX } = cutout.source
+        armContext.translate(x + (mirrorX ? 192 : 0), 0)
+        armContext.scale(mirrorX ? -1 : 1, 1)
+        armContext.drawImage(image, column * 192, row * 208, 192, 208, offset[0] * 192, offset[1] * 208, 192, 208)
+      } else armContext.drawImage(image, rig.blink[0] * 192, rig.row * 208, 192, 208, x, 0, 192, 208)
       armContext.restore()
       // Keep a short shoulder overlap; the desk hides the rest of the original limb.
+      if (cutout.eraseContour === null) continue
       context.save(); context.beginPath()
-      context.rect(x, rig.arms[side].shoulder[1] * 208 + 2, 192, 208); context.clip()
-      context.globalCompositeOperation = 'destination-out'; trace(context); context.fill()
+      context.rect(x, cutout.eraseFrom ?? rig.arms[side].shoulder[1] * 208 + 2, 192, 208); context.clip()
+      context.globalCompositeOperation = 'destination-out'; trace(context, cutout.eraseContour); context.fill()
       context.restore()
     }
   })

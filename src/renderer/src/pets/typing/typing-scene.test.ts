@@ -72,4 +72,38 @@ describe('keyboard and paw contact', () => {
       expect(end.actors[0].soloBlend).toBe(1)
     }
   })
+
+  it('gives Xiao Kun two inward blue wings and a compact keyboard, preserving the other pets', () => {
+    for (const pet of pets) {
+      const frame = typingScene({ pet, width: 204, height: 190, mascotWidth: 112, origin: { x: 102, y: 80 },
+        motion: { left: { down: 1, glow: 1 }, right: { down: 1, glow: 1 }, moving: false },
+        now: 1200, enteredAt: 1000, expiresAt: 2800, paused: false })
+      const actor = frame.actors[0], keyboard = frame.keyboard!
+      if (pet.sourceId === 'xiao-kun') {
+        expect(keyboard.theme).toBe('xiao-kun')
+        expect(keyboard.width).toBeCloseTo(112 * .98)
+        expect(actor.hands[0].x).toBeGreaterThan(bodyPoint(actor, actor.rig.arms[0].shoulder).x)
+        expect(actor.hands[1].x).toBeLessThan(bodyPoint(actor, actor.rig.arms[1].shoulder).x)
+        expect(keyboard.left.y).toBeCloseTo(keyboard.right.y)
+        expect(actor.armLayers!.cutouts.every((cutout) => cutout.source?.row === 7)).toBe(true)
+      } else {
+        expect(keyboard.theme).toBeUndefined()
+        expect(keyboard.width).toBeCloseTo(112 * 1.12)
+        expect(actor.armLayers!.cutouts.every((cutout) => !cutout.source)).toBe(true)
+      }
+    }
+  })
+
+  it('shows a brief contact accent without repeating it during holds or reduced motion', () => {
+    const input = { pet: pets[0], width: 204, height: 190, mascotWidth: 112, origin: { x: 102, y: 80 },
+      motion: { left: { down: 1, glow: .8 }, right: { down: 0, glow: 0 }, moving: true },
+      now: 1200, enteredAt: 1000, expiresAt: 2800, paused: false }
+    expect(typingScene(input).keyboard!.left.impact).toBeGreaterThan(0)
+    expect(typingScene({ ...input, reduced: true }).keyboard!.left.impact).toBe(0)
+    expect(typingScene({ ...input, paused: true }).keyboard!.left.impact).toBe(0)
+    for (const [down, glow] of [[1, .2], [0, .8], [0, 0]]) {
+      const frame = typingScene({ ...input, motion: { ...input.motion, left: { down, glow } } })
+      expect(frame.keyboard!.left.impact).toBe(0)
+    }
+  })
 })

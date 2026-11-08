@@ -1,7 +1,12 @@
 import type { PetRigPoint } from '@shared/pets-joint'
 import { bodyPoint, type JointActor, type Point } from './geometry'
 
-export type ArmCutout = { contour: PetRigPoint[]; scale: number }
+export type ArmCutout = {
+  contour: PetRigPoint[]; scale: number
+  source?: { row: number; column: number; offset: PetRigPoint; mirrorX?: boolean }
+  eraseContour?: PetRigPoint[] | null
+  eraseFrom?: number
+}
 export type ArmCutouts = [ArmCutout, ArmCutout]
 export type ArmLayers = { cutouts: ArmCutouts; contactY: [number, number] }
 export type ArmMatrix = { a: number; b: number; c: number; d: number; e: number; f: number }

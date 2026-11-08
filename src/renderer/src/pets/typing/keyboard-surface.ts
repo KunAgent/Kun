@@ -1,10 +1,15 @@
-export type KeyboardKey = { x: number; y: number; down: number; glow: number; depth?: number }
+import { drawXiaoKunKeyboard } from './xiao-kun-keyboard'
+
+export type KeyboardKey = { x: number; y: number; down: number; glow: number; depth?: number; impact?: number }
 export type PetKeyboardSurface = {
   x: number; y: number; width: number; height: number; opacity: number; accent: string
   left: KeyboardKey; right: KeyboardKey
+  theme?: 'xiao-kun'
+  caseDepth?: number
 }
 
 export function drawPetKeyboard(ctx: CanvasRenderingContext2D, keyboard: PetKeyboardSurface): void {
+  if (keyboard.theme === 'xiao-kun') { drawXiaoKunKeyboard(ctx, keyboard); return }
   const { x, y, width: w, height: h, accent } = keyboard
   ctx.save(); ctx.globalAlpha *= keyboard.opacity
   // A low desk edge hides the feet and gives the paws a surface to actually press.
