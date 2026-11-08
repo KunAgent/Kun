@@ -1,4 +1,5 @@
 import { enqueueWriteDocumentOperation } from './write-document-operations'
+import { normalizeWritePath } from './write-path-normalization'
 import type { WorkspaceFileWritePayload, WorkspaceFileWriteResult } from '@shared/workspace-file'
 
 type WriteWorkspaceFile = (payload: WorkspaceFileWritePayload) => Promise<WorkspaceFileWriteResult>
@@ -7,7 +8,7 @@ const saveQueues = new Map<string, Promise<unknown>>()
 const pendingSaveContents = new Map<string, Map<string, number>>()
 
 function normalizedKeyPart(value: string): string {
-  return value.trim().replaceAll('\\', '/').replace(/\/+$/, '')
+  return normalizeWritePath(value.trim())
 }
 
 export function writeSaveQueueKey(workspaceRoot: string, path: string): string {
@@ -98,7 +99,7 @@ export async function flushWriteWorkspaceSaveQueue(
   if (workspaceRoot !== undefined && path !== undefined) {
     const key = writeSaveQueueKey(workspaceRoot, path)
     const pending = [...saveQueues].filter(([candidate]) => candidate === key || (
-      includeDescendants && candidate.startsWith(`${key}/`)
+      includeDescendants && candidate.startsWith(key.endsWith('/') ? key : `${key}/`)
     ))
     await Promise.all(pending.map(([, task]) => task.catch(() => undefined)))
     return

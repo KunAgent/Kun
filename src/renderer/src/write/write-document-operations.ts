@@ -1,3 +1,5 @@
+import { normalizeWritePath } from './write-path-normalization'
+
 // Unlike the disk-write queue, these tasks include save completion/state updates.
 // A directory rename conflicts with every descendant, but unrelated files remain concurrent.
 type DocumentOperation = {
@@ -6,8 +8,9 @@ type DocumentOperation = {
   done: Promise<unknown>
 }
 const operations = new Set<DocumentOperation>()
-const normalize = (path: string): string => path.trim().replaceAll('\\', '/').replace(/\/+$/, '')
-const contains = (parent: string, path: string): boolean => path === parent || path.startsWith(`${parent}/`)
+const normalize = (path: string): string => normalizeWritePath(path.trim())
+const contains = (parent: string, path: string): boolean =>
+  path === parent || path.startsWith(parent.endsWith('/') ? parent : `${parent}/`)
 
 export function enqueueWriteDocumentOperation<T>(
   workspaceRoot: string,
@@ -38,7 +41,9 @@ export function relocateQueuedWriteDocumentOperations(
   const previous = normalize(previousPath)
   for (const task of operations) {
     if (task.root === root && contains(previous, task.path)) {
-      task.path = `${normalize(nextPath)}${task.path.slice(previous.length)}`
+      const next = normalize(nextPath)
+      const suffix = task.path.slice(previous.length).replace(/^\/+/, '')
+      task.path = suffix ? `${next}${next.endsWith('/') ? '' : '/'}${suffix}` : next
     }
   }
 }
