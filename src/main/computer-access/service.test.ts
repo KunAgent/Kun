@@ -7,7 +7,7 @@ const host = '11111111-1111-4111-8111-111111111111', controller = '22222222-2222
 const target = '33333333-3333-4333-8333-333333333333', owner = '44444444-4444-4444-8444-444444444444', grant = '55555555-5555-4555-8555-555555555555'
 const alive: ComputerAccessService[] = []
 afterEach(async () => { for (const service of alive.splice(0)) await service.dispose() })
-function fixture() {
+function fixture(tier = 'max') {
   const calls: Array<{path:string; device:string; body:any}> = [], invokes: any[] = []
   const gate = new DesktopActivityGate()
   let online: Socket | undefined, denyStop = false, currentSession: any
@@ -18,7 +18,8 @@ function fixture() {
     fetch:async(input,init)=>{
       const path=new URL(String(input)).pathname, body=init?.body?JSON.parse(String(init.body)):null
       calls.push({path,body,device:new Headers(init?.headers).get('X-Kun-Device')!})
-      const payload = path.endsWith('/capabilities') ? {desktop:{computerAccess:true}}
+      const payload = path.endsWith('/entitlements') ? {version:1,userId:owner,tier,effectiveTier:tier,status:tier==='free'?'free':'active',expiresAt:null,checkedAt:new Date().toISOString(),revision:1,features:{mobileRemote:tier!=='free',personalAssistant:['pro','max'].includes(tier)}}
+        : path.endsWith('/capabilities') ? {desktop:{computerAccess:true}}
         : path.endsWith('/desktop/devices') ? {devices:[{id:target,installationId:target,name:'Remote Mac',platform:'macos',enabled:true,supported:true,online:true,grantId:grant}]}
         : path.endsWith('/relay-tickets') ? {ticket:'ticket',url:'wss://api.example.test/api/remote/v1/ws'}
         : {ok:true}
@@ -47,9 +48,15 @@ function fixture() {
     }
   })
   alive.push(service)
-  return {service,gate,calls,invokes,frame,denyStop:(value:boolean)=>{denyStop=value}}
+  return {service,gate,calls,invokes,frame,denyStop:(value:boolean)=>{denyStop=value},setTier:(value:string)=>{tier=value}}
 }
 describe('trusted computer controller',()=>{
+  for (const tier of ['free','plus','pro']) it(`blocks ${tier} before creating or registering controller credentials`,async()=>{
+    const f=fixture(tier)
+    await expect(f.service.refresh()).rejects.toMatchObject({code:'vip_computer_remote_required',status:403})
+    expect(f.calls.every(call=>call.path.endsWith('/entitlements'))).toBe(true)
+    expect(f.gate.busy()).toBe(false)
+  })
   it('rejects an old login snapshot before registering any identity under a new account',async()=>{
     let resolve!: (value: any) => void, observe!: (value: any) => void
     const identity=vi.fn(), fetcher=vi.fn()
@@ -83,5 +90,14 @@ describe('trusted computer controller',()=>{
     await expect(f.service.open(target)).rejects.toThrow('DESKTOP_CLEANUP_UNCONFIRMED')
     f.denyStop(false);await f.service.confirmClosed()
     expect(f.service.status().active).toBeUndefined();expect(f.gate.busy()).toBe(false)
+  })
+  it('checks a fresh Max entitlement before acquisition and closes the existing session on downgrade',async()=>{
+    const f=fixture();await f.service.refresh();await new Promise(resolve=>setTimeout(resolve,10));await f.service.open(target)
+    await f.service.invoke('desktop.session.start',{startId:'start',origin:{kind:'device',id:target},displayToken:'display',displayRevision:'revision',quality:'balanced'})
+    f.setTier('pro')
+    await expect(f.service.invoke('desktop.control.acquire',{sessionId:'session',epoch:1})).rejects.toThrow('vip_computer_remote_required')
+    await vi.waitFor(()=>expect(f.service.status().active).toBeUndefined())
+    expect(f.invokes.some(call=>call.method==='desktop.control.acquire')).toBe(false)
+    expect(f.gate.busy()).toBe(false)
   })
 })

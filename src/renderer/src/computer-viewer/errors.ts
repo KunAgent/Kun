@@ -1,4 +1,6 @@
 const messages: Record<string, string> = {
+  vip_computer_remote_required: '电脑与电脑远程桌面仅限有效 Max 会员，请升级或续费 Max 后重新连接。',
+  ENTITLEMENTS_UNAVAILABLE: '暂时无法确认 Max 会员权益，请刷新会员状态后重试。',
   DESKTOP_BUSY: '这台电脑正在进行另一条桌面连接，请先在被控端结束旧会话。',
   DESKTOP_VIEW_REQUIRED: '对端尚未允许查看，请在对端的「允许访问本机」中授权。',
   DESKTOP_CONTROL_REQUIRED: '暂时不能接管，请确认控制许可和画面状态。',

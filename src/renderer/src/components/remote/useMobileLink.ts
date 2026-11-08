@@ -6,6 +6,7 @@ import { hasKunAccountSession } from '@shared/kun-account'
 import { useKunAccount } from '../account/useKunAccount'
 import { useAccountEntitlements } from '../account/useAccountEntitlements'
 import { publishMobilePairings } from './mobile-pairing-store'
+import { computerRemoteAllowed } from '@shared/computer-membership'
 
 export type MobileLinkBusy = 'start' | 'stop' | 'other' | null
 
@@ -25,6 +26,10 @@ export function useMobileLink() {
   owner.current = accountId
   const membership = useAccountEntitlements(accountId)
   const mobileAllowed = membership.value?.features.mobileRemote === true
+  const computerAllowed = computerRemoteAllowed(membership.value)
+  const computerMembershipState = !signedIn ? 'signedOut' : !membership.value
+    ? membership.failed ? 'unavailable' : 'loading' : computerAllowed ? 'active'
+      : membership.value.status === 'expired' ? 'expired' : 'maxRequired'
   const membershipState = !signedIn ? 'signedOut' : membership.value
     ? mobileAllowed ? 'active' : 'free'
     : membership.failed ? 'unavailable' : 'loading'
@@ -102,6 +107,8 @@ export function useMobileLink() {
     connectionError,
     membershipState,
     mobileAllowed,
+    computerAllowed,
+    computerMembershipState,
     refreshMembership: membership.refresh,
     retryVip: () => api && signedIn && mobileAllowed && void action(() => api.reconnect(), 'start'),
     resetIdentity: () => api && void action(() => api.resetIdentity()),

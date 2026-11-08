@@ -9,6 +9,8 @@ import { hasKunAccountSession } from '../../shared/kun-account'
 import type { ComputerAccessStatus, ComputerDevice, ComputerViewerEvent, DesktopIceConfiguration } from '../../shared/computer-access'
 import { DesktopActivityGate, desktopActivityGate } from '../remote-desktop/activity-gate'
 import { registerMobileHost } from '../mobile-link/device-registration'
+import { ComputerMembershipLease } from './membership'
+import { readAccountEntitlements } from '../account-entitlements'
 
 type Dependencies = {
   account: ArtAccountAccess; origin: string; name: string; supported: boolean; fetch: typeof fetch
@@ -35,6 +37,8 @@ export class ComputerAccessService {
   private error?: string
   private ending = false
   private resetting?: Promise<void>
+  private membership?: ComputerMembershipLease
+  private membershipTimer?: ReturnType<typeof setInterval>
   private readonly gate: DesktopActivityGate
   private readonly gateKey = 'computer-viewer:' + randomUUID()
   private readonly unsubscribe: () => void
@@ -76,6 +80,8 @@ export class ComputerAccessService {
       const owner = account.user.id
       if (this.observedOwner !== undefined && this.observedOwner !== owner) throw Error('ACCOUNT_CHANGED')
       this.owner = owner; this.observedOwner = owner
+      this.membership = new ComputerMembershipLease(owner, () => readAccountEntitlements(this.deps.account, this.deps.fetch, this.deps.origin))
+      await this.requireMax(true); this.current(generation)
       const host = await this.deps.identity(owner, 'host'); this.current(generation)
       const controller = await this.deps.identity(owner, 'controller'); this.current(generation)
       const token = async () => { const value = await this.deps.account.accessToken(); this.current(generation); return value }
@@ -114,6 +120,7 @@ export class ComputerAccessService {
   }
   async refresh() {
     await this.initialize()
+    await this.requireMax()
     const generation = this.generation, value = await this.api!.request('/desktop/devices'); this.current(generation)
     if (!Array.isArray(value.devices) || value.devices.length > 16) throw Error('INVALID_COMPUTER_DIRECTORY')
     this.devices = value.devices.map((device: ComputerDevice) => {
@@ -124,6 +131,9 @@ export class ComputerAccessService {
       return { id: device.id, installationId: device.installationId, name: device.name, platform: device.platform,
         enabled: device.enabled, supported: device.supported, online: device.online, grantId: device.grantId }
     })
+    // A successful authenticated directory read proves repaired membership/device access.
+    // Socket replacement remains terminal until an explicit application restart.
+    if (!this.client?.online && ['AUTHORIZATION_REJECTED', 'VIP_REQUIRED'].includes(this.error ?? '')) this.client?.start()
     return this.status()
   }
   private device(id: string) {
@@ -135,11 +145,13 @@ export class ComputerAccessService {
   }
   async pair(hostId: string) {
     await this.refresh(); this.device(hostId)
+    await this.requireMax(true)
     await this.api!.request('/desktop/pairings', 'POST', { hostId })
     return this.refresh()
   }
   async open(hostId: string) {
     await this.refresh()
+    await this.requireMax(true)
     if (this.active) throw Error(this.active.phase === 'unconfirmed' ? 'DESKTOP_CLEANUP_UNCONFIRMED' : 'DESKTOP_BUSY')
     const device = this.device(hostId)
     if (!device.grantId) throw Error('AUTHORIZATION_REQUIRED')
@@ -147,6 +159,12 @@ export class ComputerAccessService {
     this.gate.claim(this.gateKey, 'outgoing')
     const active: Active = { hostId, name: device.name, phase: 'opening', generation: this.generation }
     this.active = active; this.closing = undefined
+    this.membershipTimer = setInterval(() => {
+      if (!this.active || ['closing', 'unconfirmed'].includes(this.active.phase)) return
+      if (!this.membership?.current()) { this.error = 'ENTITLEMENTS_UNAVAILABLE'; void this.close('membership_changed'); return }
+      if (this.membership.remaining() < 10000) void this.requireMax(true).catch(() => {})
+    }, 1000)
+    this.membershipTimer.unref?.()
     try {
       const access = await this.invoke('desktop.access.get', {})
       if (!access.capabilities.includes(DESKTOP_DEVICE_CAPABILITY) || !access.capabilities.includes(DESKTOP_SCOPED_CAPABILITY)) throw Error('COMPUTER_HOST_UPDATE_REQUIRED')
@@ -162,6 +180,8 @@ export class ComputerAccessService {
     const active = this.active, client = this.client
     const cleanup = DESKTOP_STOP_METHODS.has(method) || method === 'desktop.session.get' || method === 'desktop.control.release'
     if (!active || !client?.online || this.ending && !cleanup) throw Error('DESKTOP_SESSION_EXPIRED')
+    if (!cleanup) await this.requireMax(method === 'desktop.session.start' || method === 'desktop.control.acquire')
+    if (this.active !== active) throw Error('DESKTOP_SESSION_EXPIRED')
     if (!cleanup && ['closing', 'unconfirmed'].includes(active.phase)) throw Error('DESKTOP_CLEANUP_UNCONFIRMED')
     if (!cleanup && this.pending >= 4) throw Error('BACKPRESSURE')
     const value = params as Record<string, any>
@@ -188,6 +208,7 @@ export class ComputerAccessService {
     } finally { this.pending-- }
   }
   async ice(): Promise<DesktopIceConfiguration> {
+    await this.requireMax(true)
     const active = this.active
     if (!active || !this.api || ['closing', 'unconfirmed'].includes(active.phase)) throw Error('DESKTOP_SESSION_EXPIRED')
     const value = await this.api.request<DesktopIceConfiguration>('/desktop/ice', 'POST', { peerDeviceId: active.hostId })
@@ -205,6 +226,7 @@ export class ComputerAccessService {
     if (session) void this.invoke('desktop.control.release', { sessionId: session.sessionId, epoch: session.epoch }).catch(() => {})
   }
   close(reason = 'user_ended'): Promise<void> {
+    clearInterval(this.membershipTimer); this.membershipTimer = undefined
     if (this.closing) return this.closing
     const active = this.active
     if (!active) return Promise.resolve()
@@ -232,11 +254,27 @@ export class ComputerAccessService {
     }
     return this.status()
   }
-  private finished(active: Active) { if (this.active === active) { this.active = undefined; this.gate.release(this.gateKey) } }
+  private async requireMax(force = false) {
+    const generation = this.generation, membership = this.membership
+    this.current(generation)
+    if (!membership) throw Error('LOGIN_REQUIRED')
+    try { await membership.require(force); this.current(generation) }
+    catch (error) {
+      if (this.membership === membership && generation === this.generation) {
+        this.error = error instanceof Error ? error.message : 'ENTITLEMENTS_UNAVAILABLE'
+        if (this.active) void this.close('membership_changed')
+      }
+      throw error
+    }
+  }
+  private finished(active: Active) {
+    if (this.active === active) { clearInterval(this.membershipTimer); this.membershipTimer = undefined; this.active = undefined; this.gate.release(this.gateKey) }
+  }
   reset(): Promise<void> {
     if (this.resetting) return this.resetting
     // Fence new work and hide old account metadata before awaiting the existing cleanup channel.
     this.ending = true; this.devices = []
+    this.membership?.invalidate(); this.membership = undefined
     const task = (async () => {
       await this.close('account_changed')
       ++this.generation

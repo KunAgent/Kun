@@ -1,13 +1,23 @@
 import type { RemoteApi } from '@kun/remote-protocol'
 import type { MobileLinkStatus } from '../../shared/mobile-link'
+import { ComputerMembershipLease, computerMembershipError } from '../computer-access/membership'
 
 /** Optional server extension. Legacy deployments and phone grants keep their original routes. */
 export class ComputerHostAccess {
   active = false
-  reset() { this.active = false }
-  async advertise(api: RemoteApi, enabled: boolean, required = false) {
+  private membership?: ComputerMembershipLease
+  reset() { this.active = false; this.membership?.invalidate(); this.membership = undefined }
+  current() { return this.active && this.membership?.current() === true }
+  async requireMax() { if (!this.membership) throw computerMembershipError(); await this.membership.require(true) }
+  async renew() { try { await this.requireMax(); return this.current() } catch { return false } }
+  async advertise(api: RemoteApi, enabled: boolean, required = false, owner?: string) {
+    if (!enabled) this.reset()
     try {
       if (enabled) {
+        if (!owner) throw Error('ACCOUNT_CHANGED')
+        this.membership?.invalidate()
+        this.membership = new ComputerMembershipLease(owner, () => api.entitlements())
+        await this.requireMax()
         const caps = await api.request('/capabilities')
         if (caps.desktop?.computerAccess !== true) throw Error('COMPUTER_SERVER_UPDATE_REQUIRED')
       }

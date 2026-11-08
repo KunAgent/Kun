@@ -1,5 +1,6 @@
 import { dispatchMobileInvoke } from './invoke-dispatch'
 import { ComputerHostAccess } from './computer-host-access'
+import { requireComputerRemote } from '../computer-access/membership'
 import { appendHostMetadata } from './catalog-metadata'
 import { MobileShareHosts } from './share-host'
 import { desktopScheduleDescriptors } from './desktop-schedules'
@@ -301,6 +302,7 @@ export class MobileLinkService {
     return {
       enabled: this.enabled,
       desktopAccess: this.desktopAccess,
+      computerAccess: this.computers.active,
       starting: this.enabling && !this.enabled,
       online: this.online,
       error: this.error,
@@ -438,7 +440,7 @@ export class MobileLinkService {
       throw error
     }
     this.enabled = true
-    if (this.deps.computerAccess) await this.computers.advertise(api, true)
+    if (this.deps.computerAccess) await this.computers.advertise(api, true, false, owner)
     if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
     this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
       current: () => this.enabled && generation === this.generation && !this.sessionEnding })
@@ -480,6 +482,12 @@ export class MobileLinkService {
       budget: this.requestBudget,
       leaseChanged: (expiresAt: number) => {
         if (generation === this.generation && this.online) this.authorizeUntil(expiresAt)
+        if (generation === this.generation && this.computers.active) void this.computers.renew().then(allowed => {
+          if (allowed || generation !== this.generation) return
+          for (const [id, peer] of this.grantPeers) if (this.authorities.purpose(peer, id) === 'desktop') {
+            if (this.authorities.set(peer, id, [])) this.permissionsChanged(peer)
+          }
+        })
       },
       relay: (notice: RelayNotice) => {
         if (generation === this.generation) this.relayNotice(notice, () => refreshPeers(this.transportEpoch))
@@ -516,6 +524,7 @@ export class MobileLinkService {
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
       throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)
+    if (computer) await this.computers.requireMax()
     await this.deps.requireMembership(this.owner!)
     if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     await this.api.request((computer ? '/desktop' : '') + '/pairings/' + id + '/confirm', 'POST')
@@ -534,9 +543,14 @@ export class MobileLinkService {
     return { ...status, grants: status.grants.map((g) => ({ ...g, scopes: this.authorities.scopes(g.controllerId, g.id) })) }
   }
   async setScopes(id: string, rawScopes: unknown) {
+    const generation = this.generation
     const peer = this.grantPeers.get(id)
     const scopes = this.authorities.purpose(peer ?? '', id) === 'desktop' ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes)
     if (!this.enabled || !peer || this.deniedGrants.has(id)) throw new Error('INVALID_GRANT')
+    if (scopes.length && this.authorities.purpose(peer, id) === 'desktop') {
+      await this.computers.requireMax()
+      if (generation !== this.generation || this.grantPeers.get(id) !== peer) throw Error('ACCOUNT_CHANGED')
+    }
     const currentScopes = this.authorities.scopes(peer, id)
     if (scopes.some(scope => !currentScopes.includes(scope))) {
       const generation = this.generation, owner = this.owner
@@ -608,7 +622,7 @@ export class MobileLinkService {
     const authority = this.peerAuthority(src)
     const epoch = this.transportEpoch, terminalLease = this.authorizationLease
     const current = () => generation === this.generation && epoch === this.transportEpoch && this.online && Date.now() < this.authorizationExpiresAt &&
-      authority.id === this.peerAuthority(src).id && this.peers.has(src)
+      authority.id === this.peerAuthority(src).id && this.peers.has(src) && (authority.purpose !== 'desktop' || this.computers.current())
     await dispatchMobileInvoke(frame, src, authority, current, { link: this.deps, owner: this.owner, hostId: this.identity?.id, api: this.api,
       filePeers: this.filePeers, requestBudget: this.requestBudget, totalRequestBudget: this.totalRequestBudget, shared: this.shared, subscriptions: this.subscriptions,
       authorizationRemaining: () => Math.max(0, this.authorizationExpiresAt - Date.now()),
@@ -616,11 +630,16 @@ export class MobileLinkService {
   }
   async enableComputerAccess(enabled: boolean) {
     if (!this.deps.computerAccess || !this.deps.desktop) throw Error('DESKTOP_UNSUPPORTED')
+    const initialGeneration = this.generation
+    if (enabled) {
+      await requireComputerRemote(this.deps.account, this.deps.fetch, this.deps.origin)
+      if (initialGeneration !== this.generation) throw Error('ACCOUNT_CHANGED')
+    }
     if (!enabled) await this.deps.desktop.configureRemoteAccess(false)
     if (enabled && !this.enabled) await this.enable(true, true, false)
     if (!this.api) return this.status()
     const api = this.api, generation = this.generation
-    await this.computers.advertise(api, enabled, true)
+    await this.computers.advertise(api, enabled, true, this.owner)
     if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
     if (enabled) await this.deps.desktop.configureRemoteAccess(true, () => generation === this.generation)
     if (!enabled) for (const [id, peer] of this.grantPeers) if (this.authorities.purpose(peer, id) === 'desktop') {

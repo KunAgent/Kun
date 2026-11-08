@@ -4,6 +4,8 @@ export type MobileLinkStatus = {
   enabled: boolean
   /** Explicit unified phone/desktop consent; absent/false on legacy relay-only starts. */
   desktopAccess?: boolean
+  /** Hosting switch; a separate live Max entitlement still gates every computer session. */
+  computerAccess?: boolean
   starting?: boolean
   online: boolean
   error?: string
