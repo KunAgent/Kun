@@ -18,10 +18,13 @@ import { readXlsxStyleOverrides } from '../lib/workspace-xlsx-style-reader'
 import { emptyWorkspaceOfficeSelection } from './workspace-office-selection'
 import {
   registerWriteSpreadsheetEditor,
+  type SpreadsheetEditorDisposer,
   type SpreadsheetMutationProjection
 } from '../write/write-spreadsheet-editor-coordinator'
 
 type Props = {
+  documentPath?: string
+  documentEpoch?: number
   result: WorkspaceOfficePreviewSuccess
   mutations: WorkspaceSpreadsheetMutation[]
   sourceSha256: string
@@ -42,6 +45,8 @@ type UniverSession = {
 }
 
 export function WorkspaceUniverSpreadsheetEditor({
+  documentPath,
+  documentEpoch,
   result,
   mutations,
   sourceSha256,
@@ -52,12 +57,17 @@ export function WorkspaceUniverSpreadsheetEditor({
 }: Props): ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null)
   const sessionRef = useRef<UniverSession | null>(null)
+  const identityRef = useRef({ path: documentPath ?? result.path, epoch: documentEpoch })
+  const registrationRef = useRef<SpreadsheetEditorDisposer | null>(null)
+  identityRef.current = { path: documentPath ?? result.path, epoch: documentEpoch }
   const callbackRef = useRef(onMutationsChange)
   const selectionRef = useRef(onSelectionChange)
   const sourceShaRef = useRef(sourceSha256)
   const focusedRef = useRef(focused)
   const mutationsRef = useRef(mutations)
   const lastCommitRef = useRef(commitRevision)
+  const previewShaRef = useRef(result.sourceSha256)
+  const previewRef = useRef(result)
   const seenMutationsRef = useRef(JSON.stringify(mutations))
   const mutationTimerRef = useRef<number | null>(null)
   const preparedSnapshotsRef = useRef(new Map<string, NormalizedSpreadsheetWorkbook>())
@@ -70,6 +80,23 @@ export function WorkspaceUniverSpreadsheetEditor({
   sourceShaRef.current = sourceSha256
   focusedRef.current = focused
   mutationsRef.current = mutations
+  previewRef.current = result
+
+  useEffect(() => {
+    const identity = identityRef.current
+    // Rename migrates the registration synchronously; a different instance at
+    // the same content hash must instead discard the old workbook session.
+    if (registrationRef.current && !registrationRef.current.matches(identity.path, identity.epoch)) {
+      setExternalEpoch((value) => value + 1)
+    }
+  }, [documentPath, documentEpoch, result.path])
+
+  useEffect(() => {
+    if (previewShaRef.current === result.sourceSha256) return
+    previewShaRef.current = result.sourceSha256
+    // A preview catching up with our committed baseline is not an external edit.
+    if (sessionRef.current?.baseline.sourceSha256 !== result.sourceSha256) setExternalEpoch((value) => value + 1)
+  }, [result.sourceSha256])
 
   useEffect(() => {
     const next = JSON.stringify(mutations)
@@ -88,12 +115,14 @@ export function WorkspaceUniverSpreadsheetEditor({
   }, [commitRevision])
 
   useEffect(() => {
+    // Rebuild from the current preview only for an epoch/format change; rename metadata must not discard active cells.
+    const preview = previewRef.current
     const host = hostRef.current
     if (!host) return
     let disposed = false
     const disposables: Array<{ dispose: () => void }> = []
     const preparedSnapshots = preparedSnapshotsRef.current
-    let unregisterEditor: (() => void) | undefined
+    let unregisterEditor: SpreadsheetEditorDisposer | undefined
     setLoading(true)
     setError(null)
     host.replaceChildren()
@@ -105,10 +134,10 @@ export function WorkspaceUniverSpreadsheetEditor({
       import('xlsx')
     ]).then(async ([presets, sheetPreset, localeModule, xlsx]) => {
       if (disposed) return
-      if (result.sourceFormat !== 'xlsx' || result.renderFormat !== 'xlsx') {
+      if (preview.sourceFormat !== 'xlsx' || preview.renderFormat !== 'xlsx') {
         throw new Error('Univer editing requires an XLSX source.')
       }
-      const parsed = xlsx.read(result.data, {
+      const parsed = xlsx.read(preview.data, {
         type: 'array',
         dense: false,
         cellDates: false,
@@ -116,12 +145,12 @@ export function WorkspaceUniverSpreadsheetEditor({
         cellNF: true,
         cellStyles: true
       })
-      const styleOverrides = await readXlsxStyleOverrides(result.data, parsed)
+      const styleOverrides = await readXlsxStyleOverrides(preview.data, parsed)
       if (disposed) return
       const converted = sheetJsWorkbookToUniver(
         parsed,
-        result.sourceSha256,
-        result.name,
+        preview.sourceSha256,
+        preview.name,
         styleOverrides
       )
       const initialMutations = mutationsRef.current
@@ -150,7 +179,7 @@ export function WorkspaceUniverSpreadsheetEditor({
       sessionRef.current = { univer, univerAPI, baseline: converted.baseline }
       seenMutationsRef.current = JSON.stringify(initialMutations)
 
-      unregisterEditor = registerWriteSpreadsheetEditor(result.path, {
+      unregisterEditor = registerWriteSpreadsheetEditor(identityRef.current.path, {
         isFocused: () => focusedRef.current,
         setSaving,
         prepareSave: async () => {
@@ -160,6 +189,10 @@ export function WorkspaceUniverSpreadsheetEditor({
           if (mutationTimerRef.current !== null) window.clearTimeout(mutationTimerRef.current)
           mutationTimerRef.current = null
           const committed = await workbook.endEditingAsync(true)
+          if (disposed || sessionRef.current !== session ||
+            !unregisterEditor?.matches(identityRef.current.path, identityRef.current.epoch)) {
+            throw new Error('Spreadsheet document changed while committing the active cell.')
+          }
           if (!committed) throw new Error('The active spreadsheet cell could not be committed. Finish or cancel the edit and retry.')
           const snapshot = workbook.getSnapshot()
           const projection = diffUniverWorkbook(session.baseline, snapshot)
@@ -190,7 +223,8 @@ export function WorkspaceUniverSpreadsheetEditor({
           seenMutationsRef.current = JSON.stringify(projection.mutations)
           return projection
         }
-      })
+      }, identityRef.current.epoch)
+      registrationRef.current = unregisterEditor
 
       const scheduleDiff = (): void => {
         if (disposed || !focusedRef.current) return
@@ -199,7 +233,8 @@ export function WorkspaceUniverSpreadsheetEditor({
           mutationTimerRef.current = null
           const session = sessionRef.current
           const workbook = session?.univerAPI.getActiveWorkbook()
-          if (!session || !workbook) return
+          if (!session || !workbook || disposed ||
+            !unregisterEditor?.matches(identityRef.current.path, identityRef.current.epoch)) return
           const diff = diffUniverWorkbook(session.baseline, workbook.getSnapshot())
           const serialized = JSON.stringify(diff.mutations)
           seenMutationsRef.current = serialized
@@ -250,12 +285,13 @@ export function WorkspaceUniverSpreadsheetEditor({
       mutationTimerRef.current = null
       for (const disposable of disposables) disposable.dispose()
       unregisterEditor?.()
+      if (registrationRef.current === unregisterEditor) registrationRef.current = null
       preparedSnapshots.clear()
       sessionRef.current?.univer.dispose()
       sessionRef.current = null
       host.replaceChildren()
     }
-  }, [externalEpoch, result.data, result.name, result.path, result.renderFormat, result.sourceFormat, result.sourceSha256])
+  }, [externalEpoch, result.renderFormat, result.sourceFormat])
 
   return (
     <div

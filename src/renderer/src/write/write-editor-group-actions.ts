@@ -30,6 +30,7 @@ import { enqueueWriteWorkspaceSave, flushWriteWorkspaceSaveQueue } from './write
 import {
   commitWriteSpreadsheetEditorSave,
   finishWriteSpreadsheetEditorSave,
+  hasWriteSpreadsheetEditor,
   prepareWriteSpreadsheetEditorSave,
   type CoordinatedSpreadsheetSave
 } from './write-spreadsheet-editor-coordinator'
@@ -157,7 +158,7 @@ export function createWriteEditorGroupActions(
         }
         let coordinated: CoordinatedSpreadsheetSave | null = null
         try {
-          coordinated = await prepareWriteSpreadsheetEditorSave(path)
+          coordinated = await prepareWriteSpreadsheetEditorSave(path, document.documentEpoch)
         } catch (error) {
           if (!isCurrentSpreadsheetSave()) return false
           set((state) => {
@@ -426,15 +427,18 @@ export function createWriteEditorGroupActions(
       const filePath = isWriteVirtualTabKey(path) ? null : path
       const document = filePath ? snapshot.documentsByPath[writeDocumentKey(filePath)] : undefined
       const lastReference = documentReferenceCount(snapshot, path) <= 1
+      // A live active-cell edit may not have reached the debounced mutation store.
+      const captureActiveCell = document?.officePreview?.sourceFormat === 'xlsx' && document.saveStatus === 'saved' &&
+        hasWriteSpreadsheetEditor(filePath ?? path, document.documentEpoch)
       const needsDecision = lastReference && document && (
-        document.saveStatus === 'dirty' || document.saveStatus === 'error' ||
+        captureActiveCell || document.saveStatus === 'dirty' || document.saveStatus === 'error' ||
         document.saveStatus === 'saving' || document.reviewActive
       )
       if (needsDecision && !force) {
         const savable = document.kind === 'text' || (
           document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx'
         )
-        if ((snapshot.autoSaveEnabled || document.saveStatus === 'saving') && savable) {
+        if ((snapshot.autoSaveEnabled || captureActiveCell || document.saveStatus === 'saving') && savable) {
           const saved = await saveDocument(snapshot.workspaceRoot, filePath ?? path, { resolveExternalConflict: 'keep-local' }, document.documentEpoch)
           if (!saved) return false
         } else {

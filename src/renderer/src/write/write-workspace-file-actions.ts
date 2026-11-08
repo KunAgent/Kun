@@ -1,4 +1,5 @@
 import { enqueueWriteDocumentOperation, relocateQueuedWriteDocumentOperations } from './write-document-operations'
+import { moveWriteSpreadsheetEditors } from './write-spreadsheet-editor-coordinator'
 import { flushWriteWorkspaceSaveQueue } from './write-save-coordinator'
 import i18n from '../i18n'
 import {
@@ -563,6 +564,9 @@ export function createWriteFileActions({
           const epoch = nextPath === document.path
             ? document.documentEpoch
             : nextWriteDocumentEpoch(document.documentEpoch)
+          if (nextPath !== document.path && document.officePreview?.sourceFormat === 'xlsx') {
+            moveWriteSpreadsheetEditors(document.path, document.documentEpoch, nextPath, epoch)
+          }
           const kind = renamedWritingDocumentKind(document.kind, nextPath)
           const becameCode = kind === 'code' && (
             document.kind === 'text' || (renameLocked && pathsEqual(document.path, result.previousPath))
