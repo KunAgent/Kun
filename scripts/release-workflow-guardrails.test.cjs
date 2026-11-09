@@ -242,6 +242,19 @@ test('an existing candidate can be revalidated without rebuilding or moving its 
   assert.ok(binding >= 0 && binding < verify)
 })
 
+test('0.4.5 preserves R2 rollback downloads and only previews cleanup', () => {
+  const release = readWorkflow('release.yml')
+  const cleanup = release.jobs['prune-r2']
+  assert.deepEqual(cleanup.needs, ['prepare', 'accept-and-publish'])
+  const preview = stepByName(cleanup, 'Preview superseded R2 cleanup for 0.4.5')
+  const prune = stepByName(cleanup, 'Delete superseded R2 release archives and installers')
+  assert.equal(preview.if, "env.TAG_NAME == 'v0.4.5'")
+  assert.equal(prune.if, "env.TAG_NAME != 'v0.4.5'")
+  assert.equal(preview.run, 'node ./scripts/publish-r2.mjs prune --tag "${TAG_NAME}" --channel stable --dry-run')
+  assert.equal(prune.run, 'node ./scripts/publish-r2.mjs prune --tag "${TAG_NAME}" --channel stable')
+  assert.equal(cleanup.steps.filter(step => step.run?.includes('publish-r2.mjs prune')).length, 2)
+})
+
 test('release verification retains artifact evidence without launching GUI upgrade tests', () => {
   const workflow = readWorkflow('release-gui-acceptance.yml')
   assert.deepEqual(Object.keys(workflow.jobs), ['promote'])

@@ -631,5 +631,11 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
+      # Preserve rollback downloads during the 0.4.5 release stabilization.
+      - name: Preview superseded R2 cleanup for 0.4.5
+        if: env.TAG_NAME == 'v0.4.5'
+        run: node ./scripts/publish-r2.mjs prune --tag "${TAG_NAME}" --channel stable --dry-run
+
       - name: Delete superseded R2 release archives and installers
+        if: env.TAG_NAME != 'v0.4.5'
         run: node ./scripts/publish-r2.mjs prune --tag "${TAG_NAME}" --channel stable
