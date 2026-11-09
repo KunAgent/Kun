@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { build } from 'esbuild'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { cp, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { cp, mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -32,6 +32,36 @@ describe('Windows executable argument encoding', () => {
       expect(await resolveWindowsExecutablePath(join(directory, 'npm.cmd'), {})).toBe(join(directory, 'npm.cmd'))
     } finally { await rm(directory, { recursive: true, force: true }) }
   })
+  it('skips the POSIX and PowerShell shims in npm cmd-shim three-file layouts', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kun-npm-shims-'))
+    try {
+      for (const command of ['npm', 'npx']) {
+        await writeFile(join(directory, command), '#!/bin/sh\nexec node "$basedir/node_modules/npm/bin/npx-cli.js" "$@"\n')
+        await writeFile(join(directory, `${command}.ps1`), '#!/usr/bin/env pwsh\n& "node$exe" "$basedir/node_modules/npm/bin/npx-cli.js" $args\n')
+        await writeFile(join(directory, `${command}.cmd`), '@ECHO off\nnode "%~dp0\\node_modules\\npm\\bin\\npx-cli.js" %*\n')
+        expect(await resolveWindowsExecutablePath(command, { env: { Path: directory, PathExt: '.COM;.EXE;.BAT;.CMD' } }))
+          .toBe(join(directory, `${command}.cmd`))
+      }
+    } finally { await rm(directory, { recursive: true, force: true }) }
+  })
+
+  it('honors supported PATHEXT order, explicit extensions, and rejects directories or extensionless scripts', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'kun-windows-pathext-'))
+    try {
+      await writeFile(join(directory, 'helper'), '#!/bin/sh\nexit 0')
+      await mkdir(join(directory, 'helper.exe'))
+      await writeFile(join(directory, 'helper.cmd'), '@exit /b 0')
+      await writeFile(join(directory, 'helper.com'), 'fixture')
+      const env = { PATH: directory, PATHEXT: '.PS1;.CMD;.COM;.EXE' }
+      expect(await resolveWindowsExecutablePath('helper', { env })).toBe(join(directory, 'helper.cmd'))
+      expect(await resolveWindowsExecutablePath(join(directory, 'helper.com'), { env: { PATHEXT: '.CMD' } }))
+        .toBe(join(directory, 'helper.com'))
+      await expect(resolveWindowsExecutablePath(join(directory, 'helper.exe'), { env })).rejects.toMatchObject({ code: 'ENOENT' })
+      await writeFile(join(directory, 'only-script'), '#!/bin/sh\nexit 0')
+      await expect(resolveWindowsExecutablePath('only-script', { env })).rejects.toMatchObject({ code: 'ENOENT' })
+    } finally { await rm(directory, { recursive: true, force: true }) }
+  })
+
   it('preserves whitespace, trailing backslashes and embedded quotes without a shell', () => {
     expect(quoteWindowsArgument('plain')).toBe('plain')
     expect(quoteWindowsArgument('')).toBe('""')

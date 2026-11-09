@@ -11,6 +11,7 @@ export interface QueuedEditInput {
 async function finishEdit(service: TurnService, thread: ThreadRecord, turnId: string): Promise<void> {
   const turn = thread.turns.find((row) => row.id === turnId), pending = turn?.queueEdit?.pending
   if (!turn || turn.status !== 'queued' || !pending) return
+  if (thread.nativeFollowUpRequests?.some((row) => row.turnId === turnId)) throw new PolicyMutationRejected('TASK_BUSY')
   if (pending.attachmentIds.length) {
     const store = service['deps'].attachmentStore?.()
     if (!store) throw new Error('attachment_store_unavailable')
@@ -39,6 +40,9 @@ export const turnServiceQueuedEditOperations = {
       if (!thread) throw new PolicyMutationRejected('NOT_FOUND')
       const turn = thread.turns.find((row) => row.id === input.turnId)
       if (!turn) throw new PolicyMutationRejected('NOT_FOUND')
+      // The effect fingerprint owns this exact payload. Takeover must cancel
+      // the receipt and submit fresh input, not mutate an admitted request.
+      if (thread.nativeFollowUpRequests?.some((row) => row.turnId === turn.id)) throw new PolicyMutationRejected('TASK_BUSY')
       const fingerprint = createHash('sha256').update(JSON.stringify([input.text, input.attachmentIds])).digest('hex')
       if (turn.queueEdit?.lastOperationId === input.operationId) {
         if (turn.queueEdit.lastFingerprint !== fingerprint) throw new PolicyMutationRejected('INVALID_REQUEST')

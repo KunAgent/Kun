@@ -3,11 +3,13 @@ import { StringDecoder } from 'node:string_decoder'
 import { randomUUID } from 'node:crypto'
 import { opendir, realpath, stat } from 'node:fs/promises'
 import type { Dir } from 'node:fs'
-import { basename, extname, join, relative, resolve } from 'node:path'
+import { basename, dirname, extname, join, relative, resolve } from 'node:path'
 import type { ServerRuntime } from '../../server/routes/server-runtime.js'
 import type { RemoteScope } from '../contracts.js'
 import { projects } from './project-directory.js'
+import { workSpaces } from '../work/spaces.js'
 import { FILE_MAX_BYTES, inside, fileRevision, rootRevision, checkedProjectRead } from './project-content.js'
+import { projectFileIdentity } from './identity.js'
 const TTL = 10 * 60 * 1000
 const MIME: Record<string, string> = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json', '.md': 'text/markdown',
@@ -15,8 +17,8 @@ const MIME: Record<string, string> = { '.pdf': 'application/pdf', '.png': 'image
 // These are credential/configuration authorities, not source-code exclusions.
 const PRIVATE = new Set(['.git', '.codex', '.claude', '.gemini', '.ssh', '.aws', '.azure', '.gnupg', '.npmrc', '.netrc', '.pypirc',
   '.git-credentials', '.docker', '.kube', 'credentials.json', 'service-account.json'])
-type Entry = { fileRef: string; name: string; kind: 'file' | 'directory'; revision: string;
-  available: boolean; size?: number; mimeType?: string; displayPath?: string; parentRef?: string }
+type Entry = { fileRef: string; fileId: string; name: string; kind: 'file' | 'directory'; revision: string;
+  available: boolean; size?: number; mimeType?: string; displayPath?: string; parentRef?: string; modifiedAt?: number; snippet?: string }
 type Handle = { scope: string; projectId: string; root: string; rootVersion: string; path: string; entry: Entry; expires: number }
 type Scan = { scope: string; projectId: string; root: string; rootVersion: string; rootRef: string; parentRef?: string;
   query?: string; mode?: 'name' | 'content'; pending: string[]; directory?: Dir; currentPath?: string;
@@ -63,7 +65,8 @@ export class RemoteProjectFiles {
     }
   }
   private async root(projectId: string) {
-    const project = (await projects(this.runtime)).find((p) => p.id === projectId)
+    // A Work space is read through the same protected-path checks as a Code project.
+    const project = (await projects(this.runtime)).find((p) => p.id === projectId) ?? (await workSpaces(this.runtime)).find((p) => p.id === projectId)
     if (!project) throw new Error('NOT_FOUND')
     return { root: project.path, rootVersion: rootRevision(await stat(project.path)) }
   }
@@ -88,8 +91,9 @@ export class RemoteProjectFiles {
     const info = await stat(await realpath(path))
     if (!info.isDirectory() && !info.isFile()) return null
     const entry: Entry = { fileRef: 'file_' + randomUUID().replaceAll('-', ''), name: basename(path),
+      fileId: projectFileIdentity(this.runtime.rooms!.deps.dataDir, scan.projectId, scan.rootVersion, await realpath(path)),
       kind: info.isDirectory() ? 'directory' : 'file', revision: fileRevision(info), parentRef,
-      displayPath: relative(scan.root, path), available: info.isDirectory() || info.size > 0 && info.size <= FILE_MAX_BYTES,
+      displayPath: relative(scan.root, path), modifiedAt: Math.trunc(info.mtimeMs), available: info.isDirectory() || info.size > 0 && info.size <= FILE_MAX_BYTES,
       ...(info.isFile() ? { size: info.size, mimeType: MIME[extname(path).toLowerCase()] ?? 'application/octet-stream' } : {}) }
     this.prune()
     const handle = { ...scan, path, entry, expires: Date.now() + TTL }
@@ -109,6 +113,23 @@ export class RemoteProjectFiles {
     const handle = await this.validate(scope, p.projectId, p.fileRef, p.expectedRevision)
     if (handle.entry.kind !== 'file') throw new Error('FILE_NOT_ALLOWED')
     return { file: handle.entry, export: { projectId: p.projectId, fileRef: p.fileRef, revision: p.expectedRevision } }
+  }
+  /** A relative path from a document or the root becomes a fileRef only if the real path stays inside and is permitted. */
+  async resolve(scope: RemoteScope, p: { projectId: string; relativePath: string; baseRef?: string }) {
+    const root = await this.root(p.projectId)
+    let base = root.root
+    if (p.baseRef) {
+      const handle = await this.validate(scope, p.projectId, p.baseRef)
+      base = handle.entry.kind === 'directory' ? handle.path : dirname(handle.path)
+    }
+    const target = resolve(base, p.relativePath)
+    if (!inside(root.root, target)) throw new Error('FILE_NOT_ALLOWED')
+    const handle = await this.issue({ scope: scopeKey(scope), projectId: p.projectId, ...root }, target).catch((error: NodeJS.ErrnoException) => {
+      if (error?.code === 'ENOENT') throw new Error('NOT_FOUND')
+      throw error
+    })
+    if (!handle) throw new Error('FILE_NOT_ALLOWED')
+    return { file: handle.entry }
   }
   async read(scope: RemoteScope, projectId: string, fileRef: string, revision: string) {
     const handle = await this.validate(scope, projectId, fileRef, revision)
@@ -158,10 +179,14 @@ export class RemoteProjectFiles {
           if (!chunk || chunk.data.includes(0)) { scan.content = undefined; continue }
           bytes += chunk.data.length
           const decoded = current.offset + chunk.data.length >= chunk.size ? current.decoder.end(chunk.data) : current.decoder.write(chunk.data)
-          const text = (current.tail + decoded).toLowerCase(), query = p.query!.toLowerCase()
+          const raw = current.tail + decoded, text = raw.toLowerCase(), query = p.query!.toLowerCase()
           current.offset += chunk.data.length
-          current.tail = text.slice(-Math.max(query.length + 4, 256))
-          if (text.includes(query)) { entries.push(current.handle.entry); scan.content = undefined }
+          current.tail = raw.slice(-Math.max(query.length + 4, 256))
+          const hit = text.indexOf(query)
+          if (hit >= 0) {
+            entries.push({ ...current.handle.entry, snippet: raw.slice(Math.max(0, hit - 60), hit + query.length + 90).replace(/\s+/g, ' ').trim() })
+            scan.content = undefined
+          }
           else if (current.offset >= chunk.size) scan.content = undefined
           continue
         }

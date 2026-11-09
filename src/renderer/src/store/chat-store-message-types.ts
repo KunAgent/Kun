@@ -158,6 +158,8 @@ export type SendMessageOverrides = {
   messageSource?: 'design_continuation'
   /** Renderer-only guard that prevents Design/Write-style sends from changing thread identity. */
   expectedThreadId?: string
+  /** Renderer-only source/navigation fence, rechecked immediately before runtime admission. */
+  submissionGuard?: () => boolean
   displayText?: string
   orchestration?: 'direct' | 'graph'
   guiPlan?: GuiPlanMessageContext

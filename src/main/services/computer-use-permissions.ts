@@ -13,33 +13,28 @@ export type ComputerUsePermissions = {
   /** Screen Recording permission (controls screenshots on macOS). */
   screenRecording: ComputerUsePermissionState
   /**
-   * macOS only: Accessibility is enabled in System Settings, but the running
-   * process still reports untrusted because AXIsProcessTrusted is cached until
-   * relaunch. The UI shows a "restart to take effect" hint instead of "not
-   * granted" so the granted-but-stale state is not mistaken for a failure.
+   * macOS only: a secondary native trust check reports a grant while Electron
+   * still reports untrusted. This is a best-effort relaunch hint, not a direct
+   * reading of the permission toggle in System Settings.
    */
   accessibilityNeedsRestart: boolean
 }
 
 /**
  * The native macOS permission helper bundled with @computer-use/nut-js.
- * Its `askFor*` calls use the canonical TCC registration APIs
- * (AXIsProcessTrustedWithOptions / CGRequestScreenCaptureAccess) which
- * proactively add the app to the Accessibility / Screen Recording lists —
- * so the user only has to flip the toggle rather than add Kun by hand.
+ * Use its screen capture request to register the app with TCC. Its
+ * Accessibility helper checks trust without prompting, so use Electron's
+ * explicit prompt instead for that permission.
  */
 type MacPermissions = {
   getAuthStatus(type: 'accessibility' | 'screen'): string
-  askForAccessibilityAccess(): unknown
-  askForScreenCaptureAccess(openPreferences?: boolean): unknown
+  askForScreenCaptureAccess(): unknown
 }
 
-let macPermissionsLoaded = false
-let macPermissions: MacPermissions | null = null
+let macPermissions: Promise<MacPermissions | null> | undefined
 
 async function loadMacPermissions(): Promise<MacPermissions | null> {
-  if (!macPermissionsLoaded) {
-    macPermissionsLoaded = true
+  macPermissions ??= (async () => {
     try {
       // node-mac-permissions is a transitive native dep (a .node addon), so it
       // is NOT externalized by electron-vite's direct-deps plugin. Load it via
@@ -47,17 +42,17 @@ async function loadMacPermissions(): Promise<MacPermissions | null> {
       // import instead of trying (and failing) to bundle the native binary.
       const specifier = '@computer-use/node-mac-permissions'
       const ns = (await import(/* @vite-ignore */ specifier)) as Record<string, unknown>
-      macPermissions = ((ns as { default?: unknown }).default ?? ns) as MacPermissions
+      return ((ns as { default?: unknown }).default ?? ns) as MacPermissions
     } catch {
-      macPermissions = null
+      return null
     }
-  }
+  })()
   return macPermissions
 }
 
 function normalizeState(status: string | undefined): ComputerUsePermissionState {
   if (status === 'authorized' || status === 'granted') return 'granted'
-  if (status === 'not determined' || status === 'not-determined' || status === undefined) return 'unknown'
+  if (status === 'unknown' || status === 'not determined' || status === 'not-determined' || status === undefined) return 'unknown'
   return 'denied'
 }
 
@@ -79,23 +74,21 @@ export async function getComputerUsePermissions(): Promise<ComputerUsePermission
       accessibilityNeedsRestart: false
     }
   }
-  // Live trust: whether THIS process can inject right now. Cached by macOS
-  // until the app relaunches, so it lags a freshly-toggled grant.
+  // Live trust: whether THIS process can inject right now.
   let liveTrust = false
   try {
     liveTrust = systemPreferences.isTrustedAccessibilityClient(false)
   } catch {
     liveTrust = false
   }
-  // TCC db state: what System Settings shows (updates the instant the user
-  // flips the toggle). Used to distinguish "not granted" from
-  // "granted but the process needs a restart to pick it up".
-  let accessibilityGrantedInSettings = false
+  // This helper also uses AXIsProcessTrusted, not the TCC database. Neither
+  // check proves what System Settings shows if macOS requires a relaunch.
+  let nativeAccessibilityGranted = false
   try {
     const native = await loadMacPermissions()
-    accessibilityGrantedInSettings = native?.getAuthStatus('accessibility') === 'authorized'
+    nativeAccessibilityGranted = native?.getAuthStatus('accessibility') === 'authorized'
   } catch {
-    accessibilityGrantedInSettings = false
+    nativeAccessibilityGranted = false
   }
   let screenRecording: ComputerUsePermissionState = 'unknown'
   try {
@@ -109,52 +102,46 @@ export async function getComputerUsePermissions(): Promise<ComputerUsePermission
     needsPermission: true,
     accessibility: liveTrust ? 'granted' : 'denied',
     screenRecording,
-    accessibilityNeedsRestart: !liveTrust && accessibilityGrantedInSettings
+    accessibilityNeedsRestart: !liveTrust && nativeAccessibilityGranted
   }
 }
 
 /**
  * Proactively enroll Kun in the relevant macOS permission list and open
- * the settings pane. Prefers the native node-mac-permissions APIs (which
- * register the app in the list so the user just toggles it on); falls
- * back to Electron primitives if the native module is unavailable.
- * Returns the refreshed status. The registration runs in the app bundle
- * (main process); the nut.js capture/inject child shares the same signed
- * bundle and inherits the grant.
+ * the settings pane. Registration failures still open the appropriate pane;
+ * failures to open settings propagate to the UI. Returns the current process
+ * status, which can remain ungranted until the user allows access or relaunches.
  */
 export async function requestComputerUsePermission(
   kind: 'accessibility' | 'screenRecording'
 ): Promise<ComputerUsePermissions> {
   if (process.platform !== 'darwin') return getComputerUsePermissions()
-  const native = await loadMacPermissions()
-  try {
-    if (kind === 'accessibility') {
-      if (native?.askForAccessibilityAccess) {
-        // Registers Kun in the Accessibility list + opens the pane.
-        native.askForAccessibilityAccess()
-      } else {
-        // Fallback: prompt adds the app to the Accessibility list.
-        systemPreferences.isTrustedAccessibilityClient(true)
-      }
-    } else {
-      if (native?.askForScreenCaptureAccess) {
-        // CGRequestScreenCaptureAccess: registers Kun in the Screen
-        // Recording list, then open the pane so the user can enable it.
-        native.askForScreenCaptureAccess(true)
-      } else {
-        // Fallback: a one-shot capture enrolls the bundle, then open prefs.
-        try {
-          await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } })
-        } catch {
-          // ignore — best effort
-        }
-      }
-      await shell.openExternal(
-        'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'
-      )
+  if (kind === 'accessibility') {
+    try {
+      systemPreferences.isTrustedAccessibilityClient(true)
+    } catch {
+      // Still open settings so the user can enable permission there.
     }
-  } catch {
-    // Best effort — fall through to returning the current status.
+  } else {
+    let requested = false
+    try {
+      const native = await loadMacPermissions()
+      if (native?.askForScreenCaptureAccess) {
+        await native.askForScreenCaptureAccess()
+        requested = true
+      }
+    } catch {
+      // A broken native module must still fall back to Electron capture.
+    }
+    if (!requested) {
+      try {
+        await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1, height: 1 } })
+      } catch {
+        // Capture can fail before permission is allowed. Still open settings.
+      }
+    }
   }
+  const pane = kind === 'accessibility' ? 'Privacy_Accessibility' : 'Privacy_ScreenCapture'
+  await shell.openExternal(`x-apple.systempreferences:com.apple.preference.security?${pane}`)
   return getComputerUsePermissions()
 }

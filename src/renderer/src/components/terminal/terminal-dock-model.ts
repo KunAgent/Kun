@@ -19,6 +19,8 @@ export type TerminalPane = {
   probeHarnessId?: string
   /** Run once, with Enter, when a fresh shell is ready (profiles, scripts). */
   initialCommand?: string
+  /** Frozen one-shot profile launch; environment is applied at PTY creation, not typed. */
+  profileLaunch?: { argv: string[]; env: Record<string, string> }
   /** PTY session id whose saved output is shown above the new shell. */
   restoredFrom?: string
   /** Created in this app session; never restored from a snapshot. Not persisted. */

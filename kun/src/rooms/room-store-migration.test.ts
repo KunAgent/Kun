@@ -67,7 +67,7 @@ describe('room SQLite schema migration', () => {
     expect(await store.list('message', { roomId: 'room', search: '中文搜索', limit: 1000 })).toHaveLength(70)
     expect(await store.list('message', { roomId: 'room', search: '搜索', limit: 1000 })).toHaveLength(70)
     const db = new DatabaseSync(path, { readOnly: true })
-    try { expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(4) } finally { db.close() }
+    try { expect(db.prepare('PRAGMA user_version').get()?.user_version).toBe(5) } finally { db.close() }
   })
 
   it('migrates only known rule versions and never fabricates v1 from later content on repeated startup', async () => {
@@ -103,10 +103,10 @@ describe('room SQLite schema migration', () => {
   it('refuses future schema versions instead of rewriting them', async () => {
     const path = await legacy()
     const db = new DatabaseSync(path)
-    db.exec('PRAGMA user_version=5;')
+    db.exec('PRAGMA user_version=6;')
     db.close()
     await expect(open(path).get('room', 'room')).rejects.toThrow('newer Kun version')
     const after = new DatabaseSync(path, { readOnly: true })
-    try { expect(after.prepare('PRAGMA user_version').get()?.user_version).toBe(5) } finally { after.close() }
+    try { expect(after.prepare('PRAGMA user_version').get()?.user_version).toBe(6) } finally { after.close() }
   })
 })

@@ -8,7 +8,9 @@ const OPTIONS: Array<{ id: MobileLinkScope; zh: string; en: string }> = [
   { id: 'schedules.read', zh: '阅读 Agent 和桌面自动运行及其历史', en: 'Read Agent and desktop schedules and their run history' },
   { id: 'extensions.read', zh: '阅读已装插件及桌面面板信息', en: 'Read installed plugins and desktop panel information' },
   { id: 'extensions.control', zh: '启用或停用已装插件（全局开关，项目覆盖保持有效）', en: 'Enable or disable installed plugins globally (project overrides remain active)' },
-  { id: 'shares.manage', zh: '管理单任务跨账号共享及访客权限', en: 'Manage single-task sharing and guest permissions' }
+  { id: 'shares.manage', zh: '管理单任务跨账号共享及访客权限', en: 'Manage single-task sharing and guest permissions' },
+  { id: 'desktop.view', zh: '查看已批准显示器的桌面', en: 'View the approved desktop display' },
+  { id: 'desktop.control', zh: '接管桌面的鼠标和键盘', en: 'Control desktop mouse and keyboard' }
 ]
 export function selectMobileScope(current: MobileLinkScope[], id: MobileLinkScope, checked: boolean): MobileLinkScope[] {
   const next = new Set(current)
@@ -18,23 +20,30 @@ export function selectMobileScope(current: MobileLinkScope[], id: MobileLinkScop
     if (['groups.write', 'collaboration.read', 'collaboration.control'].includes(id)) next.add('groups.read')
     if (id === 'collaboration.control') next.add('collaboration.read')
     if (id === 'extensions.control') next.add('extensions.read')
+    if (id === 'desktop.control') next.add('desktop.view')
   } else {
     next.delete(id)
     if (id === 'groups.read') for (const scope of ['groups.write', 'collaboration.read', 'collaboration.control'] as const) next.delete(scope)
     if (id === 'collaboration.read') next.delete('collaboration.control')
     if (id === 'extensions.read') next.delete('extensions.control')
+    if (id === 'desktop.view') next.delete('desktop.control')
   }
   return [...next]
 }
-export function MobileScopeOptions({ zh, value, onChange, disabled = false }: {
-  zh: boolean; value: MobileLinkScope[]; onChange(scopes: MobileLinkScope[]): void; disabled?: boolean
+export function MobileScopeOptions({ zh, value, onChange, disabled = false, includeDesktop = true, persistent = false, excludeScopes = [] }: {
+  zh: boolean; value: MobileLinkScope[]; onChange(scopes: MobileLinkScope[]): void; disabled?: boolean; includeDesktop?: boolean; persistent?: boolean; excludeScopes?: readonly MobileLinkScope[]
 }): ReactElement {
+  const options = OPTIONS.filter(option => (includeDesktop || !option.id.startsWith('desktop.')) && !excludeScopes.includes(option.id))
+  const selected = options.filter(option => value.includes(option.id)).length
+  const title = includeDesktop ? zh ? '高级访问' : 'Advanced access' : zh ? '其他高级访问' : 'Other advanced access'
   return <details className="w-full rounded-lg border border-ds-border px-3 py-2 text-[12px] text-ds-muted">
-    <summary className="cursor-pointer select-none text-ds-ink">{zh ? '高级访问（默认关闭）' : 'Advanced access (off by default)'}</summary>
-    <p className="mt-2 leading-5">{zh ? '基础访问包含这台电脑的个人 Agent 和 Code。以下权限仅在本次启动中有效，关闭访问或重新授权后清除。'
+    <summary className="cursor-pointer select-none text-ds-ink">{title + (selected ? zh ? ' · 已选择 ' + selected + ' 项' : ' · ' + selected + ' selected' : zh ? '（默认关闭）' : ' (off by default)')}</summary>
+    <p className="mt-2 leading-5">{persistent ? zh ? '基础访问包含个人 Agent 和 Code。直连授权保留至配对过期或被撤销；终端与键鼠操作需要桌面控制权限。'
+      : 'Basic access includes personal Agents and Code. Direct permissions last until the pairing expires or is revoked. Terminals and input require desktop control.'
+      : zh ? '基础访问包含这台电脑的个人 Agent 和 Code。以下权限仅在本次启动中有效，关闭访问或重新授权后清除。'
       : 'Basic access includes personal Agents and Code on this computer. These choices last until access is stopped or the device is authorized again.'}</p>
     <div className="mt-2 flex flex-col gap-2">
-      {OPTIONS.map((option) => <label key={option.id} className="flex items-start gap-2">
+      {options.map((option) => <label key={option.id} className="flex items-start gap-2">
         <input type="checkbox" checked={value.includes(option.id)} disabled={disabled}
           onChange={(event) => onChange(selectMobileScope(value, option.id, event.target.checked))} />
         <span>{zh ? option.zh : option.en}</span>

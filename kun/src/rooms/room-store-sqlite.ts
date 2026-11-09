@@ -1,3 +1,7 @@
+import type { CollaborationQuery } from '../contracts/collaboration-store.js'
+import { initializeCollaborationIndexes, queryCollaboration } from './room-collaboration-sqlite.js'
+import { isCollaborationKind, validateCollaborationMigration, validateCollaborationWrite, validateCollaborationTargets } from './room-collaboration-validation.js'
+import { validateFollowUpLegacyWrites, validateFollowUpNativeStarts } from './room-collaboration-legacy.js'
 import { eraseRoomMemoryProjections, type RoomMemoryErasure } from './room-memory-erasure.js'
 import { notifyRoomStoreCommit } from './room-commit-signal.js'
 import { roomAttentionPredicateSql, roomCurrentAttentionRequestSql, roomIntegrationHasTaskSql } from './room-activity-predicates.js'
@@ -62,6 +66,10 @@ export class SqliteRoomStore implements RoomStore {
     const row = db.prepare('SELECT * FROM room_documents WHERE kind = ? AND id = ?')
       .get(kind, id) as DocumentRow | undefined
     return row ? document<T>(row) : null
+  }
+
+  async collaborationQuery<T = unknown>(input: CollaborationQuery): Promise<RoomStoredDocument<T>[]> {
+    return queryCollaboration<T>(await this.database(), input)
   }
 
   async list<T = unknown>(kind: RoomDocumentKind, options: RoomStoreListOptions = {}): Promise<RoomStoredDocument<T>[]> {
@@ -340,6 +348,7 @@ export class SqliteRoomStore implements RoomStore {
           throw new RoomStoreConflictError(`room ${check.kind} ${check.id} changed concurrently`, revision)
         }
       }
+      const nativeStarts = validateFollowUpLegacyWrites(db, parsed)
       const written = new Set<string>()
       for (const put of parsed.puts) {
         const key = `${put.kind}:${put.id}`
@@ -365,8 +374,10 @@ export class SqliteRoomStore implements RoomStore {
             }
           }
         }
+        put.value = validateCollaborationWrite(db, put, current)
         const metadata = record(put.value)
-        const roomId = put.roomId ?? stringValue(metadata.roomId) ?? (put.kind === 'room' ? put.id : undefined)
+        const roomId = put.roomId ?? (isCollaborationKind(put.kind) ? stringValue(metadata.sourceRoomId) : undefined)
+          ?? stringValue(metadata.roomId) ?? (put.kind === 'room' ? put.id : undefined)
         const taskId = put.taskId ?? stringValue(metadata.taskId)
         if (current && (current.room_id !== (roomId ?? null) || current.task_id !== (taskId ?? null))) {
           throw new RoomStoreConflictError('room document ownership cannot change', current.revision)
@@ -386,6 +397,8 @@ export class SqliteRoomStore implements RoomStore {
         if (put.kind === 'message') refreshRoomMessageIndex(db, put.id)
         if (put.kind === 'task' && roomId) projectRoomTask(db, put.id, roomId, put.value)
       }
+      validateCollaborationTargets(db, parsed.puts)
+      validateFollowUpNativeStarts(db, nativeStarts)
       const now = new Date().toISOString()
       const events: RoomStoreEvent[] = parsed.events.map((event) => {
         const inserted = db.prepare('INSERT INTO room_events (room_id, kind, payload, created_at) VALUES (?, ?, ?, ?)')
@@ -435,7 +448,7 @@ export class SqliteRoomStore implements RoomStore {
     try {
       await chmod(this.input.path, 0o600)
       const previousVersion = Number(db.prepare('PRAGMA user_version').get()?.user_version)
-      if (previousVersion > 4) {
+      if (previousVersion > 5) {
         throw new Error('room database was created by a newer Kun version')
       }
       db.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = FULL; PRAGMA busy_timeout = 5000')
@@ -467,7 +480,10 @@ export class SqliteRoomStore implements RoomStore {
         initializeRoomProjections(db)
         db.exec("CREATE INDEX IF NOT EXISTS room_peer_root_member ON room_documents(kind, json_extract(document, '$.rootRequestId'), json_extract(document, '$.memberId'), seq);")
         db.exec("CREATE TABLE IF NOT EXISTS room_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL); INSERT OR IGNORE INTO room_metadata VALUES('event_scope',lower(hex(randomblob(16))));")
-        db.exec('PRAGMA user_version = 4')
+        if (previousVersion < 5) validateCollaborationMigration(db)
+        initializeCollaborationIndexes(db)
+        // Disabling follow-up is a behavioral rollback, not permission to open v5 with a v4 binary.
+        db.exec('PRAGMA user_version = 5')
       })
       const backfill = () => {
         if (this.closed) return

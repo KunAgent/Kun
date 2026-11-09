@@ -212,7 +212,7 @@ export function WriteFileTree({
             onDragStart={(event) => startReferenceDrag(event, entry)}
             onClick={(event) => {
               if (isDirectory) onToggleDir(entry.path)
-              // Alt-click opens the file in the side slot; a hover button would cover the name.
+              // Alt-click opens the side slot without adding another row action.
               else if (event?.altKey && onOpenBeside) onOpenBeside(entry.path)
               else onSelectFile(entry.path)
             }}
@@ -221,7 +221,7 @@ export function WriteFileTree({
             buttonClassName="items-center gap-1.5 py-1.5 pr-2"
             buttonStyle={{ paddingLeft: 8 + depth * 14 }}
             actionsVisibility="hidden"
-            actionsLayout="overlay"
+            actionsLayout="swap"
             title={isDirectory || !onOpenBeside
               ? relativeDisplayPath(rootDirectory, entry.path)
               : `${relativeDisplayPath(rootDirectory, entry.path)} · ${t('workOpenBeside')}: ⌥`}

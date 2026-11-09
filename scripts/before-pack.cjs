@@ -4,6 +4,7 @@ const { existsSync } = require('node:fs')
 const { join } = require('node:path')
 const { prepareGmailNativeResource } = require('./prepare-gmail-native-resource.cjs')
 const { validateInstalledKunDependencies } = require('./packaged-kun-dependencies.cjs')
+const { assertMacSigningConfiguration } = require('./mac-signing-policy.cjs')
 
 const WHISPER_RESOURCES_DIR = join(__dirname, '..', 'resources', 'whisper')
 
@@ -20,6 +21,7 @@ function normalizeArch(arch) {
 }
 
 async function beforePack(context) {
+  assertMacSigningConfiguration(context)
   validateInstalledKunDependencies(context.packager?.projectDir ?? join(__dirname, '..'))
   const platform = normalizePlatform(context.electronPlatformName)
   const arch = normalizeArch(context.arch)

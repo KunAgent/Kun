@@ -65,4 +65,11 @@ describe('main paths', () => {
       join(appPath, 'out', 'preload', 'runtime-data-recovery.mjs')
     )
   })
+  it.each(['remote-desktop-capture', 'remote-desktop-indicator', 'remote-desktop-viewer', 'control-viewer-probe'] as const)('resolves %s from the application root when Main is chunked', name => {
+    const appPath = '/Applications/Kun.app/Contents/Resources/app.asar'
+    const expected = join(appPath, 'out/preload', `${name}.cjs`)
+    const checked: string[] = []
+    expect(resolveNamedPreloadPath(appPath, name, candidate => { checked.push(candidate); return candidate === expected })).toBe(expected)
+    expect(checked).toEqual([expected])
+  })
 })

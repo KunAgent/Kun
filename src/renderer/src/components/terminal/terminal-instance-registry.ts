@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import { TERMINAL_DEFAULT_COLS, TERMINAL_DEFAULT_ROWS } from '@shared/terminal'
 import type { TerminalSettingsV1 } from '@shared/app-settings'
 import { defaultTerminalSettings } from '@shared/app-settings-terminal'
+import { profileArgvCommandLine } from '@shared/app-settings-terminal-dock'
 import { getProvider } from '../../agent/registry'
 import { loadHarnesses } from '../../store/harness-store'
 import { useActivityStore } from '../../store/activity-store'
@@ -61,6 +62,7 @@ type TerminalInstance = {
   lastOutputAt: number
   prefilled: boolean
   initialCommandSent: boolean
+  actualShell: string | null
   runOnceTimer: ReturnType<typeof setTimeout> | null
   kunOutput: string
   markListeners: Set<MarkListener>
@@ -135,7 +137,16 @@ function runOnce(instance: TerminalInstance): void {
   const { pane, ptySessionId } = instance.spec
   if (!isPtyTarget(pane.target)) return
   const backend = terminalBackend(pane.target)
-  if (pane.initialCommand && !instance.initialCommandSent) {
+  if (pane.profileLaunch && !instance.initialCommandSent) {
+    if (!instance.actualShell) return
+    try {
+      const command = profileArgvCommandLine(pane.profileLaunch.argv, instance.actualShell)
+      instance.initialCommandSent = true
+      void backend.write({ sessionId: ptySessionId, data: `${command}\r` })
+    } catch (error) {
+      updateSessionStatus(ptySessionId, { phase: 'error', error: error instanceof Error ? error.message : String(error) })
+    }
+  } else if (pane.initialCommand && !instance.initialCommandSent) {
     instance.initialCommandSent = true
     void backend.write({ sessionId: ptySessionId, data: `${pane.initialCommand}\r` })
   } else if (pane.prefill && !instance.prefilled) {
@@ -168,7 +179,7 @@ function createInstance(spec: TerminalInstanceSpec): TerminalInstance {
     spec, term, fit, host, commands: null,
     search: new TerminalSearchController(term, () => config.searchColors),
     disposers: [], container: null, resizeObserver: null, startToken: 0,
-    visible: false, lastOutputAt: 0, prefilled: false, initialCommandSent: false, runOnceTimer: null, kunOutput: '',
+    visible: false, lastOutputAt: 0, prefilled: false, initialCommandSent: false, actualShell: null, runOnceTimer: null, kunOutput: '',
     markListeners: new Set(), selectionListeners: new Set()
   }
   const { ptySessionId } = spec
@@ -232,7 +243,8 @@ function wirePty(instance: TerminalInstance, target: TerminalPtyTarget): void {
     instance.term.write(payload.data)
     instance.lastOutputAt = Date.now()
     if (target.kind === 'agent' && !readSessionStatus(ptySessionId)?.unitId) setActivity(instance, 'running')
-    const pending = (instance.spec.pane.prefill && !instance.prefilled) || (instance.spec.pane.initialCommand && !instance.initialCommandSent)
+    const pending = (instance.spec.pane.prefill && !instance.prefilled) ||
+      ((instance.spec.pane.initialCommand || instance.spec.pane.profileLaunch) && !instance.initialCommandSent)
     if (pending && !readSessionStatus(ptySessionId)?.integrated) {
       // Shells without integration never announce a prompt; wait for output to settle.
       if (instance.runOnceTimer) clearTimeout(instance.runOnceTimer)
@@ -285,7 +297,8 @@ async function startPty(instance: TerminalInstance): Promise<void> {
     cols: instance.term.cols,
     rows: instance.term.rows,
     ...extras,
-    ...(target.kind === 'local' ? { cwd: startCwd(target, workspaceRoot), shellIntegration: behavior.shellIntegration } : {}),
+    ...(target.kind === 'local' ? { cwd: startCwd(target, workspaceRoot), shellIntegration: behavior.shellIntegration,
+      ...(instance.spec.pane.profileLaunch ? { env: instance.spec.pane.profileLaunch.env } : {}) } : {}),
     ...(target.kind === 'local' && (target.shell || behavior.shell) ? { shell: target.shell || behavior.shell } : {})
   }
   try {
@@ -301,6 +314,13 @@ async function startPty(instance: TerminalInstance): Promise<void> {
       updateSessionStatus(ptySessionId, { phase: 'error', error: 'message' in result ? result.message : 'SSH host key was not trusted.' })
       return
     }
+    if (target.kind === 'local' && instance.spec.pane.profileLaunch) {
+      if (!('shell' in result) || !result.shell) {
+        updateSessionStatus(ptySessionId, { phase: 'error', error: 'The terminal did not report its shell; profile launch was not executed.' })
+        return
+      }
+      instance.actualShell = result.shell
+    }
     updateSessionStatus(ptySessionId, {
       phase: 'ready',
       ...('unitId' in result && result.unitId ? { unitId: result.unitId } : {})
@@ -309,6 +329,12 @@ async function startPty(instance: TerminalInstance): Promise<void> {
     if ('replayed' in result && result.replayed) {
       instance.prefilled = true
       instance.initialCommandSent = true
+    } else if (instance.spec.pane.profileLaunch) {
+      if (readSessionStatus(ptySessionId)?.integrated) runOnce(instance)
+      else {
+        if (instance.runOnceTimer) clearTimeout(instance.runOnceTimer)
+        instance.runOnceTimer = setTimeout(() => { instance.runOnceTimer = null; runOnce(instance) }, 900)
+      }
     }
   } catch (error) {
     if (current()) updateSessionStatus(ptySessionId, { phase: 'error', error: error instanceof Error ? error.message : String(error) })
@@ -319,6 +345,13 @@ async function startPty(instance: TerminalInstance): Promise<void> {
 export function ensureTerminalInstance(spec: TerminalInstanceSpec): void {
   const existing = instances.get(spec.ptySessionId)
   if (existing) {
+    if (spec.pane.profileLaunch && JSON.stringify(spec.pane.profileLaunch) !== JSON.stringify(existing.spec.pane.profileLaunch)) {
+      existing.startToken += 1
+      existing.actualShell = null
+      if (existing.runOnceTimer) clearTimeout(existing.runOnceTimer)
+      updateSessionStatus(spec.ptySessionId, { phase: 'error', error: 'Open a new terminal to apply a different profile environment or command.' })
+      return
+    }
     existing.spec = spec
     return
   }

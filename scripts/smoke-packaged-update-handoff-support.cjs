@@ -101,6 +101,10 @@ function buildSmokeSettings({ dataDir, port, runtimeToken, workspaceRoot, baseUr
     version: 1,
     workspaceRoot,
     provider: {
+      // Once a provider object exists, released GUI normalization intentionally
+      // does not migrate credentials/URL from the legacy agents.kun slots.
+      apiKey: 'packaged-handoff-smoke-key',
+      baseUrl,
       providers: [{
         id: 'deepseek',
         models: [MODEL_NAME],

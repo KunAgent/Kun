@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { useVoiceDictation, type VoiceDictationIntent } from './use-voice-dictation'
+import type { SpeechTranscriptionRequest, SpeechTranscriptionResult } from '@shared/speech-to-text'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
 const deferred = <T,>() => {
@@ -41,7 +42,7 @@ describe('shared voice dictation lifecycle', () => {
   let renderer: ReactTestRenderer
   let voice: ReturnType<typeof useVoiceDictation>
   let getUserMedia: ReturnType<typeof vi.fn>
-  let transcribe: ReturnType<typeof vi.fn>
+  let transcribe: Mock<(request: SpeechTranscriptionRequest) => Promise<SpeechTranscriptionResult>>
   let trackStop: ReturnType<typeof vi.fn>
   let onText: Mock<(text: string, intent: VoiceDictationIntent) => void>
   const stream = () => ({ getTracks: () => [{ stop: trackStop }] })
@@ -51,7 +52,8 @@ describe('shared voice dictation lifecycle', () => {
     vi.stubGlobal('window', { setTimeout, clearTimeout })
     trackStop = vi.fn()
     getUserMedia = vi.fn().mockImplementation(async () => stream())
-    transcribe = vi.fn().mockResolvedValue({ ok: true, text: 'Fixture transcript' })
+    transcribe = vi.fn<(request: SpeechTranscriptionRequest) => Promise<SpeechTranscriptionResult>>()
+      .mockResolvedValue({ ok: true, text: 'Fixture transcript' })
     Object.assign(window, { kunGui: { transcribeSpeech: transcribe } })
     vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
     vi.stubGlobal('MediaRecorder', Recorder)
@@ -65,8 +67,8 @@ describe('shared voice dictation lifecycle', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
-  async function mount() {
-    function Probe() { voice = useVoiceDictation({ onText: (text, intent) => onText(text, intent) }); return null }
+  async function mount(transport?: typeof transcribe) {
+    function Probe() { voice = useVoiceDictation({ onText: (text, intent) => onText(text, intent), transcribe: transport }); return null }
     await act(async () => { renderer = create(createElement(Probe)) })
   }
   async function start() { await act(async () => voice.start()) }
@@ -100,6 +102,12 @@ describe('shared voice dictation lifecycle', () => {
     expect(onText).toHaveBeenCalledExactlyOnceWith('Fixture transcript', 'insert')
     expect(trackStop).toHaveBeenCalledTimes(1)
     expect(voice.status).toBe('idle')
+  })
+  it('uses a scoped speech transport without exposing the workbench bridge', async () => {
+    Object.assign(window, { kunGui: undefined })
+    await mount(transcribe); await start(); await stop()
+    expect(transcribe).toHaveBeenCalledWith(expect.objectContaining({ mimeType: 'audio/wav', durationMs: 600 }))
+    expect(onText).toHaveBeenCalledExactlyOnceWith('Fixture transcript', 'insert')
   })
   it('ignores cancelled transcription results even after another recording starts', async () => {
     const result = deferred<{ ok: true; text: string }>()

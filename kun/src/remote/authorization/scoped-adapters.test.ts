@@ -140,8 +140,13 @@ describe('Remote adapters require independent trusted scopes', () => {
         compatibility: { kunVersion: '0.1.0', supportedManifestVersions: [1], supportedApiVersions: ['1.0.0'] } })
       const manifest = parseExtensionManifest({ publisher: 'acme', name: 'demo', version: '1.0.0', displayName: 'Demo',
         description: 'Installed plugin', manifestVersion: 1, stateSchemaVersion: 1, apiVersion: '1.0.0', engines: { kun: '*' },
-        main: 'dist/main.mjs', activationEvents: ['onView:preview'], permissions: ['ui.views', 'webview'],
-        contributes: { 'views.rightSidebar': [{ id: 'preview', title: 'Preview', entry: 'dist/private.html' }] } })
+        main: 'dist/main.mjs', activationEvents: ['onView:preview', 'onView:native'], permissions: ['ui.views', 'webview'],
+        contributes: { 'views.rightSidebar': [
+          { id: 'preview', title: 'Preview', entry: 'dist/private.html' },
+          { id: 'native', title: 'Native preview', entry: 'dist/private.html', mobile: { version: 1,
+            blocks: [{ id: 'status', type: 'stat', label: 'Scope', value: 'Workspace' },
+              { id: 'detail', type: 'toggle', label: 'Details', initial: false }] } }
+        ] } })
       await mkdir(paths.packageVersion('acme.demo', '1.0.0'), { recursive: true })
       await registry.registerVersion('acme.demo', { version: '1.0.0', packagePath: paths.packageVersion('acme.demo', '1.0.0'),
         archiveSha256: 'a'.repeat(64), integrity: { algorithm: 'sha256', files: {} }, source: { type: 'local', locator: '/private/archive.kunx' },
@@ -151,12 +156,39 @@ describe('Remote adapters require independent trusted scopes', () => {
       f.runtime.extensionPlatform = { registry, paths, packageManager, manager: { activate } } as unknown as ExtensionPlatformRuntime
       const scope = authority('extensions.read')
       const catalog = await f.invoke(scope, 'plugin.catalog', {})
-      expect(catalog.plugins[0]).toMatchObject({ id: 'acme.demo', name: 'Demo', views: [{ id: 'preview', mode: 'desktop_only' }] })
+      expect(catalog.plugins[0]).toMatchObject({ id: 'acme.demo', name: 'Demo', views: [{ id: 'preview', mode: 'desktop_only' }, { id: 'native', mode: 'native', available: true }] })
       const view = await f.invoke(scope, 'plugin.view', { pluginId: 'acme.demo', contributionId: 'preview' })
       expect(view.actions).toEqual([]); expect(view.view.available).toBe(false)
-      const encoded = JSON.stringify({ catalog, view })
+      const native = await f.invoke(scope, 'plugin.view', { pluginId: 'acme.demo', contributionId: 'native' })
+      expect(native.view).toMatchObject({ id: 'native', mode: 'native', available: true })
+      expect(native.content.blocks).toEqual([{ id: 'status', type: 'stat', label: 'Scope', value: 'Workspace' },
+        { id: 'detail', type: 'toggle', label: 'Details', initial: false }])
+      expect(native.actions).toEqual([])
+      await expect(f.invoke(authority(), 'plugin.view', { pluginId: 'acme.demo', contributionId: 'native' })).rejects.toThrow('REMOTE_SCOPE_REQUIRED')
+      const encoded = JSON.stringify({ catalog, view, native })
       for (const privateField of ['private.html', 'archive.kunx', 'nonce', 'partition', 'grantedPermissions', 'packagePath'])
         expect(encoded).not.toContain(privateField)
+      expect(activate).not.toHaveBeenCalled()
+      const snapshot = await registry.read(), altered = structuredClone(snapshot)
+      const installed = altered.extensions['acme.demo']!.versions['1.0.0']!
+      const read = vi.spyOn(registry, 'read').mockImplementation(async () => structuredClone(altered))
+      installed.grantedPermissions = []
+      expect((await f.invoke(scope, 'plugin.catalog', {})).plugins[0].views).toEqual([])
+      await expect(f.invoke(scope, 'plugin.view', { pluginId: 'acme.demo', contributionId: 'native' })).rejects.toThrow('NOT_FOUND')
+      installed.grantedPermissions = ['ui.views', 'webview']
+      const declaration = installed.manifest.contributes['views.rightSidebar'][1]!
+      ;(declaration.mobile as unknown as Record<string, unknown>).script = 'not allowed'
+      expect((await f.invoke(scope, 'plugin.catalog', {})).plugins[0].views[1].available).toBe(false)
+      delete (declaration.mobile as unknown as Record<string, unknown>).script
+      const report = packageManager.compatibilityReport(manifest)
+      const compatibility = vi.spyOn(packageManager, 'compatibilityReport').mockReturnValue({ ...report,
+        kunEngine: { ...report.kunEngine, compatible: false } })
+      expect((await f.invoke(scope, 'plugin.catalog', {})).plugins[0]).toMatchObject({ compatible: false, views: [] })
+      await expect(f.invoke(scope, 'plugin.view', { pluginId: 'acme.demo', contributionId: 'native' })).rejects.toThrow('UNSUPPORTED_OPERATION')
+      compatibility.mockRestore(); read.mockRestore()
+      await registry.setGlobalEnabled('acme.demo', false)
+      expect((await f.invoke(scope, 'plugin.catalog', {})).plugins[0]).toMatchObject({ enabled: false, views: [] })
+      await expect(f.invoke(scope, 'plugin.view', { pluginId: 'acme.demo', contributionId: 'native' })).rejects.toThrow('NOT_FOUND')
       expect(activate).not.toHaveBeenCalled()
     } finally { await f.close() }
   })

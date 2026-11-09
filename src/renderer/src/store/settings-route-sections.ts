@@ -37,6 +37,8 @@ export type SettingsRouteSection =
   | 'mcp'
   | 'shortcuts'
   | 'easterEgg'
+  /** Desktop pets page. */
+  | 'pets'
   | 'claw'
   | 'updates'
   | 'terminal'

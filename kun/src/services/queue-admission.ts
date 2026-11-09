@@ -1,3 +1,6 @@
+import { NativeFollowUpAdmissionSchema, type NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
+import { assertNativeFollowUpRequest, nativeFollowUpRequest, NativeFollowUpRequestConflictError } from '../domain/native-followup-requests.js'
+import { withNativeFollowUpAdmission } from './native-followup-admission.js'
 import type { AttachmentAliases } from '../contracts/attachment-aliases.js'
 import type { StartTurnRequest, StartTurnResponse } from '../contracts/turns.js'
 import { withManagerDataMutex } from '../manager/data-mutex.js'
@@ -44,14 +47,21 @@ export async function reconcilePendingQueueAdmissions(service: TurnService, thre
 /** One serialized admission, including idempotent recovery, commit and rollback. */
 export async function enqueueTurnDurably(service: TurnService, input: {
   threadId: string; request: StartTurnRequest
-}, attachmentAliases?: AttachmentAliases): Promise<StartTurnResponse> {
+}, attachmentAliases?: AttachmentAliases, nativeFollowUp?: NativeFollowUpAdmission): Promise<StartTurnResponse> {
+  if (nativeFollowUp) {
+    nativeFollowUp = NativeFollowUpAdmissionSchema.parse(nativeFollowUp)
+    if (input.request.clientRequestId !== nativeFollowUp.requestId) throw new TurnConflictError('native follow-up requestId mismatch')
+  }
   return withManagerDataMutex(`thread:${input.threadId}`, async () => {
     let attemptedTurnId: string | undefined
     let stage = 'prepare'
     try {
-      const existing = (await service['deps'].threadStore.get(input.threadId))?.turns
+      const initial = await service['deps'].threadStore.get(input.threadId)
+      const existing = initial?.turns
         .find((turn) => input.request.clientRequestId && turn.clientRequestId === input.request.clientRequestId)
       const fingerprint = fingerprintStartTurnRequest(input.request)
+      const receipt = input.request.clientRequestId && initial ? nativeFollowUpRequest(initial, input.request.clientRequestId) : undefined
+      if (receipt && nativeFollowUp) assertNativeFollowUpRequest(receipt, fingerprint, nativeFollowUp)
       if (existing?.clientRequestFingerprint && existing.clientRequestFingerprint !== fingerprint) {
         throw new TurnConflictError('clientRequestId is already associated with a different request')
       }
@@ -66,14 +76,18 @@ export async function enqueueTurnDurably(service: TurnService, input: {
         if (thread.remoteRewind?.phase === 'pending') throw new TurnConflictError('history reconciliation required')
         assertRoomTurnAdmission(thread, input.request)
         if (thread.status === 'archived') throw new TurnConflictError(`thread is archived: ${input.threadId}`)
-        const replay = service['idempotentStartFromThread'](thread, input.request, fingerprint)
+        const replay = service['idempotentStartFromThread'](thread, input.request, fingerprint, Boolean(nativeFollowUp))
         if (replay) {
-          const turn = thread.turns.find((row) => row.id === replay.turnId)!
-          return { response: turn.status === 'queued' ? queuedResponse(thread, turn) : replay }
+          const turn = thread.turns.find((row) => row.id === replay.turnId)
+          return { response: turn?.status === 'queued' ? queuedResponse(thread, turn) : replay }
         }
-        attemptedTurnId = service['deps'].ids.next('turn')
+        const prior = nativeFollowUp ? nativeFollowUpRequest(thread, nativeFollowUp.requestId) : undefined
+        attemptedTurnId = prior?.turnId ?? service['deps'].ids.next('turn')
         stage = 'persist'
-        return { pending: await service['persistQueuedTurnRecord'](thread, input, attemptedTurnId, attachmentAliases) }
+        const persist = () => service['persistQueuedTurnRecord'](thread, input, attemptedTurnId, attachmentAliases, nativeFollowUp)
+        return { pending: nativeFollowUp
+          ? await withNativeFollowUpAdmission(service, thread, nativeFollowUp, 'enqueue', persist)
+          : await persist() }
       })
       if (started.response) return started.response
       stage = 'commit'
@@ -92,6 +106,7 @@ export async function enqueueTurnDurably(service: TurnService, input: {
         }
         await service['rollbackPendingAdmission'](input.threadId, attemptedTurnId).catch(() => false)
       }
+      if (error instanceof NativeFollowUpRequestConflictError) throw new TurnConflictError(error.message)
       if (error instanceof TurnConflictError || error instanceof ThreadClosingError) throw error
       console.warn(`[kun] queue admission failed thread=${input.threadId} stage=${stage}:`, error)
       throw new QueueAdmissionUncertainError(input.request.clientRequestId, stage, error)

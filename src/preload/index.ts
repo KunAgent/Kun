@@ -25,6 +25,7 @@ import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
+import { petsPreloadApi } from './pets-bridge'
 import { marketApi } from './market-api'
 import { gitCommitApi } from './git-commit-api'
 import { terminalDockApi } from './terminal-dock-api'
@@ -133,6 +134,7 @@ const api = {
   },
   createScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:create', payload),
   updateScheduleTask: (payload) => ipcRenderer.invoke('schedule:task:update', payload),
+  bulkScheduleTasks: (payload) => ipcRenderer.invoke('schedule:tasks:bulk', payload),
   deleteScheduleTask: (taskId) => ipcRenderer.invoke('schedule:task:delete', taskId),
   runScheduleTask: (taskId) =>
     ipcRenderer.invoke('schedule:task:run', taskId),
@@ -466,6 +468,8 @@ const api = {
     ipcRenderer.invoke('browser-use:control', input),
   navigateBrowserUse: (input) =>
     ipcRenderer.invoke('browser-use:navigate', input),
+  setBrowserUseZoom: (input) =>
+    ipcRenderer.invoke('browser-use:zoom', input),
   stopBrowserUse: (threadId, expectedTurnId) =>
     ipcRenderer.invoke('browser-use:stop', { threadId, expectedTurnId }),
   clearBrowserUse: (threadId, expectedTurnId) =>
@@ -674,6 +678,7 @@ const api = {
   ...marketApi,
   ...gitCommitApi,
   ...terminalDockApi,
-  ...appSandboxPreloadApi
+  ...appSandboxPreloadApi,
+  pets: petsPreloadApi
 } satisfies KunGuiApi
 contextBridge.exposeInMainWorld('kunGui', api)

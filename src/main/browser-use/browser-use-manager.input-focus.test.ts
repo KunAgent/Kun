@@ -131,6 +131,7 @@ function fakeHarness(target: Target) {
     }),
     stop: vi.fn(),
     getURL: () => currentUrl,
+    getZoomFactor: () => 1,
     getTitle: () => 'Example',
     capturePage: vi.fn(async () => image),
     isDestroyed: () => false,

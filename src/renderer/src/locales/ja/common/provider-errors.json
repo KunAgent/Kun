@@ -1,4 +1,9 @@
 {
+  "modelStreamInterrupted": "応答が中断されました",
+  "modelStreamInterruptedPartial": "応答が中断されました。途中までの内容は保存されています。続けて入力できます。",
+  "modelStreamInterruptedSummary": "応答が完了する前に中断されました。",
+  "modelStreamReplayConflict": "応答を復元できませんでした",
+  "modelStreamReplayConflictSummary": "以前の出力は保持されています。最初に中断した原因は不明です。会話を続けられます。",
   "modelErrorSourceProvider": "プロバイダーからの応答",
   "modelErrorSourceNoResponse": "プロバイダーから応答なし",
   "modelErrorSourceNotSent": "リクエスト未送信",

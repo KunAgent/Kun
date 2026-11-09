@@ -12,6 +12,9 @@ import {
 } from './data-mutex-context.js'
 
 export type { ManagerDataMutexOperationContext } from './data-mutex-context.js'
+export type ManagerDataMutexIdentity = {
+  baseUrl: string; token: string; flavor: RuntimeFlavor; instanceId: string
+}
 
 const LeaseSchema = z.object({
   resource: z.string(),
@@ -29,18 +32,28 @@ const localQueues = new Map<string, Promise<void>>()
 /** Serialize a shared-data mutation across Runtime processes. */
 export async function withManagerDataMutex<T>(
   resource: string,
-  operation: (context: ManagerDataMutexOperationContext) => Promise<T>
+  operation: (context: ManagerDataMutexOperationContext) => Promise<T>,
+  identity?: ManagerDataMutexIdentity
 ): Promise<T> {
   const inherited = currentManagerDataMutexContext()
-  if (inherited?.resource === resource) return operation(inherited)
-  return enqueueLocal(resource, () => withManagerDataMutexLocked(resource, operation))
+  if (inherited?.resource === resource) {
+    if (identity && (inherited.fence?.ownerInstanceId !== identity.instanceId ||
+      inherited.fence.ownerFlavor !== identity.flavor || inherited.managerBaseUrl !== identity.baseUrl)) {
+      // Enqueueing behind this operation would wait on the caller itself. A
+      // local-only lock also must not silently become a Manager reservation.
+      throw new Error('manager data mutex same-resource identity mismatch')
+    }
+    return operation(inherited)
+  }
+  return enqueueLocal(resource, () => withManagerDataMutexLocked(resource, operation, identity))
 }
 
 async function withManagerDataMutexLocked<T>(
   resource: string,
-  operation: (context: ManagerDataMutexOperationContext) => Promise<T>
+  operation: (context: ManagerDataMutexOperationContext) => Promise<T>,
+  identity?: ManagerDataMutexIdentity
 ): Promise<T> {
-  const manager = managerRuntimeIdentity()
+  const manager = identity ?? managerRuntimeIdentity()
   if (!manager) {
     const context = localContext(resource)
     return runWithManagerDataMutexContext(context, () => operation(context))
@@ -174,6 +187,7 @@ async function withManagerDataMutexLocked<T>(
     resource,
     signal: controller.signal,
     fence,
+    managerBaseUrl: manager.baseUrl,
     assertCurrent,
     withCommit
   }

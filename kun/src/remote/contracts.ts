@@ -1,4 +1,6 @@
+import { DispatchParamSchemas } from './dispatch/contracts.js'
 import { z } from 'zod'
+import { REMOTE_SCOPES } from '@kun/remote-protocol'
 import { REMOTE_METHOD_ORDER } from './method-order.js'
 import { CodeManagementParamSchemas, CodeTaskParamSchemas } from './code/contracts.js'
 import { AgentParamSchemas } from './agents/contracts.js'
@@ -10,6 +12,7 @@ import { ArtifactDirectoryParamSchemas } from './files/artifact-contracts.js'
 import { ExecutionQueueParamSchemas, ExecutionStopParamSchemas } from './execution/contracts.js'
 import { GoalParamSchemas } from './goals/contracts.js'
 import { ProjectFilesParamSchemas } from './files/project-contracts.js'
+import { WorkParamSchemas } from './work/contracts.js'
 import { CodeHistoryParamSchemas } from './code/history/contracts.js'
 import { GroupParamSchemas } from './groups/contracts.js'
 import { CollaborationParamSchemas } from './collaboration/contracts.js'
@@ -20,6 +23,7 @@ import { RequestParamSchemas } from './requests/contracts.js'
 import { ApprovalParamSchemas } from './approvals/contracts.js'
 export const RemoteId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
 const schemas = {
+  ...DispatchParamSchemas,
   ...CodeManagementParamSchemas,
   ...CodeTaskParamSchemas,
   ...AgentParamSchemas,
@@ -32,6 +36,7 @@ const schemas = {
   ...ExecutionStopParamSchemas,
   ...GoalParamSchemas,
   ...ProjectFilesParamSchemas,
+  ...WorkParamSchemas,
   ...CodeHistoryParamSchemas,
   ...GroupParamSchemas,
   ...CollaborationParamSchemas,
@@ -54,7 +59,7 @@ export const Envelope = z
     accountId: RemoteId,
     deviceId: RemoteId,
     authorizationId: RemoteId,
-    scopes: z.array(z.enum(['personal', 'groups.read', 'groups.write', 'collaboration.read', 'collaboration.control', 'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage'])).max(9).default(['personal']),
+    scopes: z.array(z.enum(REMOTE_SCOPES)).max(REMOTE_SCOPES.length).default(['personal']),
     call: z
       .object({
         method: z.enum(Object.keys(ParamSchemas) as [Method, ...Method[]]),

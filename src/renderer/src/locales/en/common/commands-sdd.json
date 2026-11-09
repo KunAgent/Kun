@@ -574,7 +574,7 @@
   "browserUseAllowOnce": "Allow once",
   "browserUseFloatingTitle": "Agent Browser",
   "browserUseShowPreview": "Show Agent Browser",
-  "browserUseClosePreview": "Close preview and keep safe work running in the background",
+  "browserUseClosePreview": "Collapse browser",
   "browserUseBackgroundRunning": "Browser working in background",
   "browserUseNeedsAttention": "Browser needs your approval",
   "browserNewTab": "New preview",

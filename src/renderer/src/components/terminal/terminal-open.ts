@@ -29,6 +29,8 @@ export type TerminalOpenRequest = {
   kunProcess?: { id: string; command: string; threadId: string }
   /** Run this command (with Enter) once the new shell is ready. */
   command?: string
+  /** Frozen custom profile; always starts a fresh local PTY with its own environment. */
+  profileLaunch?: TerminalPane['profileLaunch']
 }
 
 let pendingRequest: TerminalOpenRequest | null = null
@@ -83,6 +85,7 @@ export function paneForTerminalRequest(request: TerminalOpenRequest): TerminalPa
       ? { kind: 'agent', ...request.agent, ...(cwd ? { cwd } : {}) }
       : { kind: 'local', ...(cwd ? { cwd } : {}) },
     ...(request.prefill ? { prefill: request.prefill } : {}),
+    ...(request.profileLaunch ? { profileLaunch: request.profileLaunch } : {}),
     ...(request.command ? { initialCommand: request.command } : {}),
     ...(request.probeHarnessId ? { probeHarnessId: request.probeHarnessId } : {})
   }
@@ -96,7 +99,7 @@ export function applyTerminalOpenRequest(workspaceKey: string, request: Terminal
   const { tabs } = workspaceTerminals(workspaceKey)
   const existing = tabs.find((tab) => tab.panes.some((pane) => {
     if (request.kunProcess) return pane.target.kind === 'kun-process' && pane.target.processId === request.kunProcess.id
-    return Boolean(request.cwd) && !request.prefill && !request.agent && !request.command &&
+    return Boolean(request.cwd) && !request.prefill && !request.agent && !request.command && !request.profileLaunch &&
       pane.target.kind === 'local' && pane.target.cwd === request.cwd && !pane.prefill
   }))
   if (existing) {

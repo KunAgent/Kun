@@ -179,6 +179,21 @@ describe('FileSessionItemIndex pagination cache', () => {
 })
 
 describe('ItemIndexViewCache bounds', () => {
+  it('tracks the latest membership of both public and private turn items', () => {
+    const view = new ItemIndexView()
+    const row = { itemId: 'item', turnId: 'one', kind: 'assistant_text' as const,
+      isPublic: false, baseline: false, offset: 0, recordBytes: 1 }
+    view.applyRow(row)
+    expect(view.turnItemCounts.get('one')).toBe(1)
+    view.applyRow({ ...row, turnId: 'two', isPublic: true, offset: 1 })
+    expect(view.turnItemCounts.has('one')).toBe(false)
+    expect(view.turnItemCounts.get('two')).toBe(1)
+    view.applyRow({ ...row, turnId: 'two', offset: 2 })
+    expect(view.turnItemCounts.get('two')).toBe(1)
+    view.applyRow({ ...row, itemId: 'other', turnId: 'two', offset: 3 })
+    expect(view.turnItemCounts.get('two')).toBe(2)
+  })
+
   const identity = { size: 1, mtimeMs: 1, dev: 1, ino: 1 }
 
   it('evicts the least recently used entry under the entry limit', () => {

@@ -5,6 +5,7 @@ import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { createPersistentMemoryStore } from './runtime-factory-storage.js'
 import { RemoteRoomStore } from '../manager/remote-room-store.js'
 import { RoomExecutionLease } from '../manager/room-execution-lease.js'
+import { TurnConflictError } from '../services/turn-conflict-error.js'
 import { RoomRuntime } from '../rooms/room-runtime.js'
 import { assistantContinuationAuthority } from '../rooms/assistant-continuation-authority.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
@@ -38,6 +39,13 @@ export function createRuntimeRoomComposition(input: {
     memoryStore: ownedAgentMemory ?? input.services.memoryStore,
     memoryEnabled: () => true,
     store: executionStore,
+    manualFollowUp: executionStore instanceof RemoteRoomStore ? {
+      stage: (agentId, commitmentId, command) => executionStore.stageManualFollowUp(agentId, commitmentId, command),
+      claim: (attemptId) => executionStore.claimManualFollowUp(attemptId),
+      issue: (attemptId, claimToken) => executionStore.issueManualFollowUpPermit(attemptId, claimToken),
+      beginDispatch: (attemptId, claimToken) => executionStore.beginManualFollowUpDispatch(attemptId, claimToken),
+      reconcile: (attemptId) => executionStore.reconcileManualFollowUp(attemptId)
+    } : undefined,
     maxConcurrentTasks: options.runtime?.rooms?.maxConcurrentTasks,
     dataDir: options.dataDir,
     model: () => ({ model: input.options().model, providerId: activeModelConnectionProviderId(input.options()) }),
@@ -50,6 +58,13 @@ export function createRuntimeRoomComposition(input: {
     waitForOwnership: (signal) => lease?.waitForOwnership(signal) ?? Promise.resolve(),
     assertOwnership: () => executionStore.assertOwnership()
   }, () => lease?.held ?? true, apiStore)
+  if (executionStore instanceof RemoteRoomStore) {
+    const remote = executionStore
+    input.services.turns.setFollowUpAdmissionGuard(async (entry, operation) => {
+      if (!input.services.followUpFeatures?.().enabled) throw new TurnConflictError('native follow-up is not enabled')
+      return remote.withNativeFollowUpAdmission(entry, operation)
+    })
+  }
   let stopped = false
   let starting: Promise<unknown> | undefined
   return {

@@ -27,6 +27,7 @@ import {
 
 import {
   ManagerResourceFenceSchema,
+  ResourceFenceStaleError,
   RESOURCE_COMMIT_TTL_MS,
   RESOURCE_LEASE_TTL_MS
 } from './resource-lease-state.js'
@@ -57,6 +58,11 @@ import {
 import { addHostPowerRoute } from './service-manager-router-host-power.js'
 import { addManagerAtomicJsonRoutes } from './service-manager-router-atomic-json.js'
 import { addManagerRoomRoutes } from './service-manager-router-rooms.js'
+import { ManagerFollowUpWriteArbitration, assertFollowUpArbitrationFence } from './followup-arbitration.js'
+import { managerFollowUpThreadWriteGuard } from './followup-thread-writes.js'
+import { managerFollowUpThreadDeletionGuard } from './followup-thread-deletion.js'
+import { withThreadAdmissionWriteGuard, withThreadDeletionGuard } from './thread-admission-context.js'
+import { NativeFollowUpPermitError } from './native-followup-write-scope.js'
 import { addRuntimeRegistrationRoute } from './service-manager-router-runtime-registration.js'
 import {
   flushRenewal,
@@ -86,6 +92,7 @@ export function buildServiceManagerRouter(input: {
   recordParticipant?: (participant: { pid: number; instanceId: string; startedAt: string }) => Promise<void>
   state: ServiceManagerState
   sharedData?: ManagerSharedDataStore
+  manualFollowUpEnabled?: () => boolean
   documents?: RevisionedDocumentStore
   requestShutdown?: () => void
   flushState?: () => Promise<void>
@@ -103,11 +110,16 @@ export function buildServiceManagerRouter(input: {
 }): Router {
   const router = new Router()
   const mutationReplay = new ManagerMutationReplayCache(input.instanceId)
+  const followUpWrites = new ManagerFollowUpWriteArbitration()
   if (input.sharedData) addManagerRoomRoutes(router, {
     managerToken: input.managerToken,
     state: input.state,
     roomStore: input.sharedData.roomStore,
-    statePersistence: input.statePersistence
+    threadStore: input.sharedData.threadStore,
+    sessionStore: input.sharedData.sessionStore,
+    manualFollowUpEnabled: input.manualFollowUpEnabled,
+    statePersistence: input.statePersistence,
+    followUpWrites
   })
   const capabilities = input.sharedData
     ? KUN_MANAGER_CAPABILITIES
@@ -121,7 +133,7 @@ export function buildServiceManagerRouter(input: {
         capability !== 'history-reference-sources-v1' &&
         capability !== 'history-reference-sources-v2' &&
         capability !== 'agent-direct-chat-v1' && capability !== 'rooms-init-im-v1' && capability !== 'agent-identities-v1' &&
-        !capability.startsWith('room-store-') &&
+        !capability.startsWith('room-store-') && capability !== 'collaboration-followup-store-v1' &&
         capability !== 'item-turn-page-v1' && capability !== 'item-call-page-v1'
       )
   router.add('GET', '/health', () => {
@@ -406,14 +418,26 @@ export function buildServiceManagerRouter(input: {
           input.state, 'thread', operation.data, envelope,
           (threadId) => input.sharedData!.executeThread('get', { threadId })
         )
+        if (envelope.followUp) assertFollowUpArbitrationFence(input.state, envelope.followUp.arbitration)
         return await mutationReplay.execute(envelope.replay,
-          ['thread', operation.data, envelope.value, envelope.turnFence], async () => {
+          ['thread', operation.data, envelope.value, envelope.turnFence, envelope.followUp], async () => {
             assertCurrent?.()
-            const result = await input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent)
+            const guard = managerFollowUpThreadWriteGuard({ state: input.state,
+              roomStore: input.sharedData!.roomStore, writes: followUpWrites, scope: envelope.followUp,
+              turnFence: envelope.turnFence })
+            const deleteGuard = managerFollowUpThreadDeletionGuard({ rooms: input.sharedData!.roomStore,
+              writes: followUpWrites, assertCurrent })
+            const result = await withThreadDeletionGuard(deleteGuard, () => withThreadAdmissionWriteGuard(guard, () =>
+              input.sharedData!.executeThread(operation.data, envelope.value, assertCurrent)))
             return jsonResponse({ result })
           })
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid thread-store request', error.issues)
+        if (error instanceof ResourceFenceStaleError) return resourceFenceStale()
+        if (error instanceof NativeFollowUpPermitError) return jsonResponse({ code: error.code, message: error.message }, 409)
+        if (error instanceof Error && 'code' in error && error.code === 'native_followup_request_conflict') {
+          return jsonResponse({ code: error.code, message: error.message }, 409)
+        }
         if (error instanceof StaleTurnFenceError) {
           return jsonResponse({ code: error.code, message: error.message }, 409)
         }

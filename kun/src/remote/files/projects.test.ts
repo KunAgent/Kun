@@ -22,6 +22,13 @@ describe('Scoped project browsing and protected export', () => {
       const listed = await f.files.page(f.scope, { projectId: f.projectId, limit: 50 })
       const entry = listed.entries.find((e) => e.name === 'hello.txt')!
       expect(entry).toMatchObject({ kind: 'file', available: true, size: 16 })
+      expect(entry.fileId).toMatch(/^file_[a-f0-9]{64}$/)
+      const rescanned = await f.files.page(f.scope, { projectId: f.projectId, limit: 50 })
+      expect(rescanned.entries[0].fileRef).not.toBe(entry.fileRef)
+      expect(rescanned.entries[0].fileId).toBe(entry.fileId)
+      const restarted = new RemoteProjectFiles(f.runtime)
+      const afterRestart = await restarted.page(f.scope, { projectId: f.projectId, limit: 50 })
+      expect(afterRestart.entries[0].fileId).toBe(entry.fileId)
       const preview = await f.files.preview(f.scope, { projectId: f.projectId, fileRef: entry.fileRef, expectedRevision: entry.revision })
       expect(preview.export).toEqual({ projectId: f.projectId, fileRef: entry.fileRef, revision: entry.revision })
       expect(preview).not.toHaveProperty('data')

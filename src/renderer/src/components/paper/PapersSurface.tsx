@@ -5,7 +5,6 @@ import { usePaperSpaceStore } from '../../paper/paper-space-store'
 import { refreshPaperSpace } from '../../paper/paper-space'
 import { usePaperModeStore } from '../../paper/paper-mode-store'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
-import { openPaperSpaceAssistant } from '../../paper/paper-space-assistant'
 import { usePaperImportSession } from '../../paper/paper-import-session'
 import { useChatStore } from '../../store/chat-store'
 import { usePaperBatchInterpret } from '../../paper/paper-batch-interpret'
@@ -65,11 +64,7 @@ export function PapersSurface({ leftSidebarCollapsed, onToggleLeftSidebar, embed
       {reader ? (
         <Suspense fallback={<div className="papers-space-loading" aria-busy>{t('loading')}</div>}>
           <PapersReader key={reader.key} workspaceRoot={reader.libraryRoot} entry={reader.entry}
-            onBack={() => usePaperSpaceStore.setState({ readerKey: null })}
-            onSubmitPrompt={(prompt, images) => { void openPaperSpaceAssistant({ workspaceRoot: reader.libraryRoot,
-              unitDir: reader.entry.unitDir, title: reader.entry.meta.title, prompt, images }).catch((error: unknown) => {
-                usePaperSpaceStore.setState({ error: error instanceof Error ? error.message : String(error) })
-              }) }} />
+            onBack={() => usePaperSpaceStore.setState({ readerKey: null })} />
         </Suspense>
       ) : state.view === 'library' ? <PapersLibraryView /> : (
         <div className="flex min-h-0 flex-1 flex-col">
@@ -98,7 +93,7 @@ export function PapersSurface({ leftSidebarCollapsed, onToggleLeftSidebar, embed
             failed: importSession.items.filter((item) => item.status === 'failed').length }))}
         </button>
       </div> : null}
-      <footer className="papers-space-footer"><span>{t('paperSpaceOnDevice')}</span><span>{t('paperSpaceOneSpace')}</span></footer>
+      {!reader ? <footer className="papers-space-footer"><span>{t('paperSpaceOnDevice')}</span><span>{t('paperSpaceOneSpace')}</span></footer> : null}
       {state.workspaceRoot && state.status === 'ready' ? <PaperImportDialogHost workspaceRoot={state.workspaceRoot} paperReading={paperReading} /> : null}
       <PaperBatchInterpretDialogHost onOpenSession={openSession} />
       <PaperNoticeToast />

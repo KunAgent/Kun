@@ -40,7 +40,10 @@ export function gatewaySafeModelChunk(chunk: ModelStreamChunk): ModelStreamChunk
     ? status : undefined
   const diagnostic = chunk.code && Object.hasOwn(GATEWAY_DIAGNOSTICS, chunk.code) ? chunk.code : undefined
   const failure = chunk.failure ? { ...chunk.failure } : undefined
-  if (failure) delete failure.providerCode
+  if (failure) {
+    delete failure.providerCode
+    delete failure.firstStreamFailure
+  }
   return {
     kind: 'error',
     message: diagnostic ? diagnosticMessage(diagnostic, failure)

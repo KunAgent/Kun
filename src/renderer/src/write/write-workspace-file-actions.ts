@@ -1,3 +1,6 @@
+import { enqueueWriteDocumentOperation, relocateQueuedWriteDocumentOperations } from './write-document-operations'
+import { moveWriteSpreadsheetEditors } from './write-spreadsheet-editor-coordinator'
+import { flushWriteWorkspaceSaveQueue } from './write-save-coordinator'
 import i18n from '../i18n'
 import {
   isWriteCodeFilePath,
@@ -484,15 +487,24 @@ export function createWriteFileActions({
     },
 
     renameEntry: async (workspaceRoot, path, newName) => {
+      // Save before taking the rename reservation: saveDocument uses the same queue.
+      const plannedName = ensureMarkdownRenameExtension(path, newName.trim())
+      const document = get().documentsByPath[writeDocumentKey(path)]
+      if (document?.kind === 'text' && isWriteCodeFilePath(`${writeDirnameFromPath(path)}/${plannedName}`) &&
+        document.saveStatus !== 'saved') {
+        if (!await get().saveDocument(workspaceRoot, path)) return null
+      }
+      return enqueueWriteDocumentOperation(workspaceRoot, path, async (path) => {
+      if (!workspaceIsCurrent(workspaceRoot)) return null
+      await flushWriteWorkspaceSaveQueue(workspaceRoot, path, true)
       cancelExternalSyncAnimation()
       const nextName = ensureMarkdownRenameExtension(path, newName.trim())
       const plannedPath = `${writeDirnameFromPath(path)}/${nextName}`
       const renamedDocument = get().documentsByPath[writeDocumentKey(path)]
       const textToCodeRename = renamedDocument?.kind === 'text' && isWriteCodeFilePath(plannedPath)
-      if (textToCodeRename && renamedDocument.saveStatus !== 'saved') {
-        const saved = await get().saveDocument(workspaceRoot, path)
-        if (!saved || !workspaceIsCurrent(workspaceRoot)) return null
-      }
+      // A draft may change after the pre-save while this rename waits its turn.
+      // Do not turn those newer edits into a read-only, falsely saved code session.
+      if (textToCodeRename && renamedDocument.fileContent !== renamedDocument.persistedContent) return null
       if (textToCodeRename) {
         set((state) => projectRenamedDocumentKind(state, path, 'text', 'code'))
       }
@@ -552,6 +564,9 @@ export function createWriteFileActions({
           const epoch = nextPath === document.path
             ? document.documentEpoch
             : nextWriteDocumentEpoch(document.documentEpoch)
+          if (nextPath !== document.path && document.officePreview?.sourceFormat === 'xlsx') {
+            moveWriteSpreadsheetEditors(document.path, document.documentEpoch, nextPath, epoch)
+          }
           const kind = renamedWritingDocumentKind(document.kind, nextPath)
           const becameCode = kind === 'code' && (
             document.kind === 'text' || (renameLocked && pathsEqual(document.path, result.previousPath))
@@ -581,6 +596,7 @@ export function createWriteFileActions({
           fileError: null
         }
       })
+      relocateQueuedWriteDocumentOperations(workspaceRoot, result.previousPath, result.path)
       if (get().activeFilePath) {
         rememberActiveFile(workspaceRoot, get().activeFilePath)
       } else {
@@ -588,6 +604,7 @@ export function createWriteFileActions({
       }
       await get().refreshWorkspace(workspaceRoot)
       return result.path
+      })
     },
 
     deleteEntry: async (workspaceRoot, path) => {

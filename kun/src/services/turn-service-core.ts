@@ -1,6 +1,8 @@
-import { createHash } from 'node:crypto'
+import { TurnConflictError } from './turn-conflict-error.js'
+import { nativeFollowUpOperations } from './native-followup-admission.js'
+import type { NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
 import type { ThreadAgentSurface, ThreadRecord, ThreadStatus } from '../contracts/threads.js'
-import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
+export { fingerprintStartTurnRequest, canonicalizeFingerprintValue } from '../domain/turn-request-fingerprint.js'
 import type {
   CompactRequest,
   CompactResponse,
@@ -75,6 +77,8 @@ import { turnServiceItemPersistenceOperations } from './turn-service-item-persis
 import type { TurnServiceOperations } from './turn-service-operations-contract.js'
 
 export type TurnServiceDeps = {
+  /** Manager serializes this operation against stop/takeover, not just a preflight read. */
+  withFollowUpAdmission?: <T>(input: { thread: ThreadRecord; admission: NativeFollowUpAdmission; stage: 'enqueue' | 'promote' }, operation: () => Promise<T>) => Promise<T>
   threadStore: ThreadStore
   sessionStore: SessionStore
   events: RuntimeEventRecorder
@@ -164,7 +168,7 @@ export type TurnServiceDeps = {
   nowIso: () => string
 }
 
-export class TurnConflictError extends Error {}
+export { TurnConflictError } from './turn-conflict-error.js'
 
 export class TurnInProgressError extends TurnConflictError {
   constructor(message: string) {
@@ -322,7 +326,7 @@ export class TurnService {
     threadId: string
     request: StartTurnRequest
   }, requestFingerprint: string | undefined) => Promise<StartTurnResponse | null>
-  declare private idempotentStartFromThread: (thread: ThreadRecord, request: StartTurnRequest, requestFingerprint: string | undefined) => StartTurnResponse | null
+  declare private idempotentStartFromThread: (thread: ThreadRecord, request: StartTurnRequest, requestFingerprint: string | undefined, allowNativeRetry?: boolean) => StartTurnResponse | null
   declare private isRetryableFailedAdmission: (turn: Turn) => boolean
   declare private idempotentStartFromTurn: (
     turn: Turn,
@@ -355,7 +359,8 @@ export class TurnService {
     thread: ThreadRecord,
     input: { threadId: string; request: StartTurnRequest },
     allocatedTurnId?: string,
-    attachmentAliases?: import('../contracts/attachment-aliases.js').AttachmentAliases
+    attachmentAliases?: import('../contracts/attachment-aliases.js').AttachmentAliases,
+    nativeFollowUp?: NativeFollowUpAdmission
   ) => Promise<{ turnId: string; userItem: TurnItem }>
   declare private completeQueuedTurnAdmission: (input: {
     threadId: string
@@ -438,6 +443,12 @@ export class TurnService {
     this.maxConcurrentTurns = normalizeMaxConcurrentTurns(deps.maxConcurrentTurns)
   }
 
+  /** Install the host-owned follow-up fence once the Rooms coordinator exists. */
+  setFollowUpAdmissionGuard(guard: NonNullable<TurnServiceDeps['withFollowUpAdmission']>): void {
+    if (this.deps.withFollowUpAdmission) throw new Error('follow-up admission guard is already configured')
+    this.deps.withFollowUpAdmission = guard
+  }
+
   /** Global persisted workload, including room and delegated side threads. */
   async capacitySnapshot(): Promise<TurnCapacitySnapshot> {
     const { threadStore } = this.deps
@@ -491,6 +502,7 @@ export interface TurnService extends TurnServiceOperations {}
 
 installServiceOperations(
   TurnService.prototype,
+  nativeFollowUpOperations,
   turnServiceAdmissionOperations,
   turnServiceSteeringOperations,
   turnServiceCompactionOperations,
@@ -503,27 +515,6 @@ installServiceOperations(
   turnServiceItemPersistenceOperations
 )
 
-
-export function fingerprintStartTurnRequest(request: StartTurnRequest): string | undefined {
-  if (!request.clientRequestId?.trim()) return undefined
-  const normalized = StartTurnRequestSchema.parse(request)
-  // ackNoticeIds is transport metadata the renderer refetches per attempt;
-  // hashing it would break idempotent replay of an otherwise identical send.
-  const { ackNoticeIds: _ackNoticeIds, ...content } = normalized
-  const canonical = canonicalizeFingerprintValue(content)
-  return createHash('sha256').update(JSON.stringify(canonical), 'utf8').digest('hex')
-}
-
-export function canonicalizeFingerprintValue(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(canonicalizeFingerprintValue)
-  if (!value || typeof value !== 'object') return value
-  const canonical: Record<string, unknown> = {}
-  for (const key of Object.keys(value).sort()) {
-    const entry = (value as Record<string, unknown>)[key]
-    if (entry !== undefined) canonical[key] = canonicalizeFingerprintValue(entry)
-  }
-  return canonical
-}
 
 export function isActiveTurn(turn: Turn): turn is Turn & { status: 'queued' | 'running' } {
   return turn.status === 'queued' || turn.status === 'running'

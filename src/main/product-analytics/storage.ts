@@ -1,4 +1,4 @@
-import { access, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
@@ -8,15 +8,21 @@ import { settingsReadCandidates } from '../settings-file-paths'
 export type Installation = 'existing' | 'fresh' | 'unknown'
 let installation: Installation = 'unknown'
 /** Call before migrations/default settings create files. Read errors are never evidence of a fresh install. */
-export async function detectAnalyticsInstallation(userData: string, runtimeDir: string): Promise<void> {
+export async function detectAnalyticsInstallation(
+  userData: string,
+  runtimeDir: string,
+  additionalPaths: readonly string[] = []
+): Promise<Installation> {
   try {
     for (const path of [...settingsReadCandidates(userData), runtimeDir,
-      join(userData, 'kun-account'), join(userData, 'Local Storage')]) {
-      try { await access(path); installation = 'existing'; return }
+      join(userData, 'kun-account'), join(userData, 'Local Storage'), join(userData, 'pets'),
+      ...additionalPaths]) {
+      try { await lstat(path); installation = 'existing'; return installation }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
     installation = 'fresh'
   } catch { installation = 'unknown' }
+  return installation
 }
 export const AnalyticsDiskState = z.object({
   version: z.literal(1), enabled: z.boolean(), installation: z.enum(['existing', 'fresh', 'unknown']),

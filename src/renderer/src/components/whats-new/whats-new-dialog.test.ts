@@ -76,6 +76,47 @@ afterEach(async () => {
   vi.unstubAllGlobals()
 })
 
+describe('0.4.5 update announcement', () => {
+  it.each(['zh', 'en', 'hi', 'ja', 'ko', 'ru', 'th'])('shows current highlights and all additional features in %s', async (language) => {
+    await translations.changeLanguage(language)
+    const content = await release('v0.4.5', '0.4.4')
+    await render(content)
+    expect(host.querySelector('[data-whats-new-dialog="release"]')).not.toBeNull()
+    expect(host.querySelector('[data-release-layout]')).toBeNull()
+    expect(host.querySelector('[data-whats-new-workbench]')).toBeNull()
+    expect(host.querySelector('h2')?.textContent).toContain('0.4.5')
+    const titles = [...host.querySelectorAll('.kun-wn-highlight-title')].map((element) => element.textContent)
+    expect(titles).toEqual(content.current?.features.slice(0, 3).map((item) => item.title))
+    const disclosure = button('[data-whats-new-more-features]')
+    const list = document.getElementById(disclosure.getAttribute('aria-controls')!)!
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+    expect(disclosure.querySelector('.kun-wn-count')?.textContent).toBe('5')
+    expect(list.hidden).toBe(true)
+    await click('[data-whats-new-more-features]')
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
+    expect(list.hidden).toBe(false)
+    const additionalTitles = [...list.querySelectorAll('strong')].map((element) => element.textContent)
+    expect(additionalTitles).toEqual(content.current?.features.slice(3).map((item) => item.title))
+    expect([...titles, ...additionalTitles]).toHaveLength(8)
+    await click('[data-whats-new-more-features]')
+    expect(list.hidden).toBe(true)
+    await click('[data-whats-new-fixes]')
+    expect(host.querySelectorAll('.kun-wn-fixes .kun-wn-fix-list > li')).toHaveLength(6)
+  })
+
+  it('keeps earlier releases separate and the changelog and dismiss actions working', async () => {
+    await render(await release('0.4.5', '0.4.3'))
+    expect(host.querySelector('[data-whats-new-dialog="skipped"]')).not.toBeNull()
+    expect(button('.kun-wn-older button').textContent).toContain('0.4.4')
+    await click('.kun-wn-older button')
+    expect(host.querySelector('.kun-wn-older .kun-wn-fix-list')?.textContent).toContain('Work')
+    await click('.kun-wn-link')
+    expect(openExternal).toHaveBeenCalledWith('https://example.com/changelog')
+    await click('[data-whats-new-primary]')
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('0.4.4 update announcement', () => {
   it.each(['zh', 'en', 'hi', 'ja', 'ko', 'ru', 'th'])('renders localized release previews in %s', async (language) => {
     await translations.changeLanguage(language)

@@ -42,4 +42,5 @@ flow. Node and Webview clients receive the same scoped configuration API.
 
 References: [English Extension API reference](../../docs/extensions/api-reference.en.md) ·
 [中文 Extension API 参考](../../docs/extensions/api-reference.md) ·
-[Manifest JSON Schema](./schema/kun-extension.schema.json)
+[Manifest JSON Schema](./schema/kun-extension.schema.json) ·
+[Native mobile view declarations](../../docs/extensions/mobile-views.md)

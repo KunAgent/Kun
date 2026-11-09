@@ -1,0 +1,22 @@
+{
+  "browserUseMovePreview": "移动浏览器浮窗",
+  "browserUseMovePreviewHint": "拖动可移动，方向键移动，Shift 加方向键调整大小。",
+  "browserUseResizePreview": "调整浏览器浮窗大小",
+  "browserUseDockPreview": "在右侧面板打开浏览器",
+  "browserUseFloatPreview": "悬浮到会话上",
+  "browserUseMoreActions": "更多浏览器操作",
+  "browserUseExpandPreview": "展开浏览器",
+  "browserUseRestorePreview": "还原窗口大小",
+  "browserUsePageZoom": "网页缩放",
+  "browserUsePageZoomHint": "仅调整网页文字与内容，不改变窗口大小。选择 100% 可重置。",
+  "browserUseManualPaused": "你在操作 · AI 已暂停",
+  "browserUseStopped": "浏览器已停止",
+  "browserUseStoppedBody": "此会话已停止。清理后，可让 Kun 重新开启浏览器会话。",
+  "browserUsePreviewError": "浏览器需要处理",
+  "browserUsePreviewTooSmall": "当前空间不足以清晰显示网页。请展开浏览器，或移到右侧面板。",
+  "browserUseClearConfirmTitle": "清理此浏览器会话？",
+  "browserUseClearConfirmBody": "将关闭所有标签页并删除临时浏览数据，此操作无法撤销。",
+  "browserUseCancelClear": "保留会话",
+  "browserUseConfirmClear": "清理会话与数据",
+  "browserUseDismissError": "关闭错误提示"
+}

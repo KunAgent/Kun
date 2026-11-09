@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DesktopStartupState } from './desktop-startup-state'
+import { probeUpdateRuntimeAfterStartup } from './update-runtime-health-check'
 
 let version = '0.2.0'
 let pending: Record<string, unknown> | null
@@ -7,6 +9,8 @@ let recovery: Record<string, unknown> | null
 let transaction: Record<string, unknown> | null
 let healthCheck = vi.fn(async () => true)
 const emit = vi.fn()
+const logInfo = vi.fn()
+vi.mock('./logger', () => ({ logInfo }))
 const clearPending = vi.fn(async () => { pending = null })
 const clearResult = vi.fn(async () => { result = null })
 const clearRecovery = vi.fn(async () => { recovery = null })
@@ -249,6 +253,63 @@ describe('failed update lifetime recovery', () => {
 })
 
 describe('GuiUpdateInstaller reconciliation', () => {
+  it('preserves pending and zero health attempts until real startup readiness, then probes and finalizes', async () => {
+    result = { schemaVersion: 2, outcome: 'success', transactionState: 'committed',
+      backupDir: 'C:\\recovery\\backup', recoveryEnvironment: { KUN_INSTALLER_TRANSACTION: 'C:\\recovery\\txn.json' } }
+    const startup = new DesktopStartupState(() => null)
+    const instance = await installer()
+    const checking = instance.reconcile(() => probeUpdateRuntimeAfterStartup(
+      startup, async () => ({}), async () => ({ ok: await healthCheck() })
+    ))
+    await vi.waitFor(() => expect(recovery?.healthAttempts).toBe(0))
+    expect(healthCheck).not.toHaveBeenCalled()
+    expect(pending).not.toBeNull()
+    expect(result).not.toBeNull()
+    expect(finalizeUpdateTransactionAndCleanup).not.toHaveBeenCalled()
+    startup.transition('runtime_handoff')
+    startup.transition('ready')
+    await checking
+    expect(healthCheck).toHaveBeenCalledOnce()
+    expect(logInfo).toHaveBeenCalledExactlyOnceWith('kun-gui updater', 'Native update transaction finalized.', {
+      event: 'native_update_finalized', pid: process.pid, version, executablePath: process.execPath
+    })
+    expect(finalizeUpdateTransactionAndCleanup).toHaveBeenCalledOnce()
+    expect(pending).toBeNull()
+    expect(recovery).toBeNull()
+  })
+
+  it('retains recovery and records a real terminal startup failure rather than declaring health', async () => {
+    result = { schemaVersion: 2, outcome: 'success', transactionState: 'committed',
+      backupDir: 'C:\\recovery\\backup', recoveryEnvironment: { KUN_INSTALLER_TRANSACTION: 'C:\\recovery\\txn.json' } }
+    const startup = new DesktopStartupState(() => null)
+    const checking = (await installer()).reconcile(() => probeUpdateRuntimeAfterStartup(
+      startup, async () => ({}), async () => ({ ok: await healthCheck() })
+    ))
+    startup.transition('recovery_required')
+    await checking
+    expect(healthCheck).not.toHaveBeenCalled()
+    expect(recovery?.healthAttempts).toBe(1)
+    expect(recovery?.nextHealthCheckAt).toBeDefined()
+    expect(pending).not.toBeNull()
+    expect(result).not.toBeNull()
+    expect(finalizeUpdateTransactionAndCleanup).not.toHaveBeenCalled()
+  })
+
+  it.each(['already-finalized', 'unconfirmed'] as const)('does not emit native finalization proof for %s', async (kind) => {
+    result = { schemaVersion: 2, outcome: 'success', transactionState: 'committed',
+      recoveryEnvironment: { KUN_INSTALLER_TRANSACTION: 'C:\\recovery\\txn.json' } }
+    finalizeUpdateTransactionAndCleanup.mockResolvedValueOnce({ kind })
+    await (await installer()).reconcile(healthCheck)
+    expect(logInfo).not.toHaveBeenCalled()
+  })
+
+  it('does not emit native finalization proof for context-free cleanup', async () => {
+    result = { schemaVersion: 2, outcome: 'success', transactionState: 'committed' }
+    await (await installer()).reconcile(healthCheck)
+    expect(finalizeUpdateTransactionAndCleanup).not.toHaveBeenCalled()
+    expect(logInfo).not.toHaveBeenCalled()
+  })
+
   it('converges a successful cleanup_pending transaction', async () => {
     result = {
       schemaVersion: 2, outcome: 'success', code: 'success', message: '', at: new Date().toISOString(),
@@ -426,14 +487,17 @@ describe('GuiUpdateInstaller reconciliation', () => {
     pending = null
     recovery = {
       schemaVersion: 1, installedVersion: '0.2.0', channel: 'stable', verifiedAt: new Date().toISOString(),
-      healthAttempts: 1, nextHealthCheckAt: new Date(Date.now() + 6 * 60 * 60 * 1_000).toISOString(),
+      healthAttempts: 0,
       backupExpiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString()
     }
+    healthCheck = vi.fn(async () => true).mockResolvedValueOnce(false)
 
     const updateInstaller = await installer()
     await updateInstaller.reconcile(healthCheck)
-    expect(healthCheck).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1_000)
     expect(healthCheck).toHaveBeenCalledOnce()
+    await updateInstaller.reconcile(healthCheck)
+    expect(healthCheck).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1_000)
+    expect(healthCheck).toHaveBeenCalledTimes(2)
   })
 })

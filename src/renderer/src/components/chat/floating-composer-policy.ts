@@ -99,7 +99,7 @@ export function shouldSurfaceComposerUserInput(route: AppRoute, compact: boolean
   // Write owns a single compact composer in its assistant rail, so it must
   // surface the same runtime gate there. Other compact composers mirror a main
   // Chat/Design surface and would duplicate the prompt if they rendered it.
-  if (route === 'write') return true
+  if (route === 'write' || route === 'papers') return true
   return !compact && (route === 'chat' || route === 'design')
 }
 

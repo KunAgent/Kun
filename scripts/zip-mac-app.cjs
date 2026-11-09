@@ -3,6 +3,7 @@
 const { execFileSync } = require('node:child_process')
 const { existsSync, rmSync } = require('node:fs')
 const { join, resolve } = require('node:path')
+const { verifyMacAppSigning } = require('./mac-signing-policy.cjs')
 
 const arch = process.argv[2]
 if (arch !== 'arm64' && arch !== 'x64') {
@@ -36,6 +37,7 @@ if (!existsSync(appPath)) {
   process.exit(1)
 }
 
+verifyMacAppSigning(appPath, { bundleId: 'com.xingyuzhong.deepseekgui' })
 rmSync(zipPath, { force: true })
 console.log(`[zip-mac-app] Creating ${zipPath}`)
 execFileSync(

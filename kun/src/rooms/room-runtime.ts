@@ -5,6 +5,8 @@ import { AgentProfileImportService } from '../agents/agent-profile-import.js'
 import { AgentLifecycleService } from '../agents/agent-lifecycle-service.js'
 import { reconcileRoomNotificationGates } from './room-notification-observer.js'
 import { AgentCommitmentService } from '../agents/agent-commitment-service.js'
+import { FollowUpService } from '../agents/followup/service.js'
+import { runManualFollowUpPass } from '../agents/followup/dispatcher.js'
 import { AgentArtifactLibrary, bindAgentArtifactLibrary } from '../agents/agent-artifact-library.js'
 import { bindAgentCommitmentService } from '../agents/agent-commitment-tools.js'
 import { RoomTaskDueQueue } from './room-task-due-queue.js'
@@ -64,6 +66,7 @@ export class RoomRuntime {
   readonly lifecycle: AgentLifecycleService
   readonly agents: AgentIdentityService
   readonly commitments: AgentCommitmentService
+  readonly followUp: FollowUpService
   readonly artifactLibrary: AgentArtifactLibrary
   readonly service: RoomService
   readonly product: RoomProductService
@@ -105,6 +108,8 @@ export class RoomRuntime {
     this.service = new RoomService(deps.store, () => this.wake())
     this.service.setAgentDirectory(this.agents)
     this.commitments = new AgentCommitmentService(deps, this.agents)
+    this.followUp = new FollowUpService(deps, { wake: () => this.wake(),
+      features: deps.followUpFeatures ?? (() => ({ enabled: false, auto: false, github: false })) })
     this.artifactLibrary = new AgentArtifactLibrary(deps)
     bindAgentCommitmentService(deps.threadStore, this.commitments)
     bindAgentArtifactLibrary(deps.threadStore, this.artifactLibrary)
@@ -343,6 +348,17 @@ export class RoomRuntime {
     }) }
     try { if (await this.exclusive(() => this.assistantContinuations.tick())) outcome.active = true }
     catch { outcome.active = true }
+    // Explicit user continuations only: reconcile unknown outcomes before dispatching.
+    try {
+      const followUp = await this.exclusive(() => runManualFollowUpPass(this.deps, () => new Date().toISOString()))
+      if (followUp.active) outcome.active = true
+      if (followUp.nextWakeAt !== undefined) {
+        outcome.nextWakeAt = Math.min(outcome.nextWakeAt ?? Infinity, followUp.nextWakeAt)
+      }
+    } catch (error) {
+      console.warn('[kun] follow-up dispatch:', error instanceof Error ? error.message : String(error))
+      outcome.active = true
+    }
     try { await reconcileRoomNotificationGates(this.deps) }
     catch (error) {
       console.warn('[kun] room notification reconciliation:', error instanceof Error ? error.message : String(error))

@@ -1,0 +1,30 @@
+{
+  "settingsNavPets": "สัตว์เลี้ยง",
+  "petsTitle": "สัตว์เลี้ยงบนเดสก์ท็อป",
+  "petsDesc": "เลือกสัตว์เลี้ยงบนเดสก์ท็อป คงการแสดงผล และนำเข้าแพ็กเกจจาก Codex",
+  "petsDesktopOnly": "สัตว์เลี้ยงบนเดสก์ท็อปใช้ได้ในแอป Kun บนเดสก์ท็อปเท่านั้น",
+  "petsLoading": "กำลังโหลดสัตว์เลี้ยง...",
+  "petsLoadError": "โหลดคลังสัตว์เลี้ยงไม่สำเร็จ",
+  "petsEmpty": "ยังไม่มีสัตว์เลี้ยง เพิ่มแพ็กเกจที่มี pet.json ในโฟลเดอร์ของ Kun แล้วรีเฟรช",
+  "petsSelectFirst": "เลือกสัตว์เลี้ยงที่ใช้ได้ก่อน แล้วจึงแสดงบนเดสก์ท็อป",
+  "petsCurrent": "สัตว์เลี้ยงที่เลือก",
+  "petsNone": "ยังไม่ได้เลือก",
+  "petsImported": "สัตว์เลี้ยงที่นำเข้า",
+  "petsWake": "แสดงสัตว์เลี้ยง",
+  "petsHide": "ซ่อนสัตว์เลี้ยง",
+  "petsImportErrors": "ข้อผิดพลาดในการนำเข้า",
+  "petsShow": "แสดงสัตว์เลี้ยงบนเดสก์ท็อป",
+  "petsImportCodex": "นำเข้าสัตว์เลี้ยงจาก Codex อัตโนมัติ",
+  "petsRefresh": "รีเฟรช",
+  "petsOpenKunDir": "เปิดโฟลเดอร์สัตว์เลี้ยงของ Kun",
+  "petsOpenCodexDir": "เปิดโฟลเดอร์สัตว์เลี้ยงของ Codex",
+  "petsSourceMissing": "ไม่มีแพ็กเกจต้นทาง",
+  "petsReport": "ล้มเหลว {{failed}} หายไป {{missing}}",
+  "petsContextSettings": "ตั้งค่า",
+  "petsContextHide": "ซ่อน",
+  "petsSource": {
+    "kun-builtin": "ในตัว",
+    "kun-local": "ในเครื่อง",
+    "codex-custom": "Codex"
+  }
+}

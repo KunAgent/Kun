@@ -30,7 +30,7 @@ export async function loadIndexedLiveItemPageFromStore(input: Parameters<
   }))
   if (indexed && !input.options.turnId) {
     if ((await statSize(input.path)) >= input.compactionMinBytes) input.scheduleCompaction()
-  } else if (!indexed && !input.options.turnId) {
+  } else if (!indexed && (!input.options.turnId || input.options.durableOnly)) {
     input.itemIndex.scheduleRebuild({
       sourcePath: input.path,
       indexPath: input.indexPath,
@@ -39,6 +39,12 @@ export async function loadIndexedLiveItemPageFromStore(input: Parameters<
       evidencePath: input.evidencePath,
       withSourceRead: (operation) => input.fileAccess.withRead(input.path, operation)
     })
+  }
+  // Admission proof must not fall back to the cache or live checkpoint file:
+  // either may contain an item that never reached the durable messages log.
+  if (input.options.durableOnly) {
+    if (!indexed) throw new Error('durable item history index is unavailable')
+    return indexed
   }
   const page = indexed ?? await loadItemPageFromStore(input)
   if (input.options.before) return page

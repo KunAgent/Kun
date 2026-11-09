@@ -32,7 +32,7 @@ describe('AnimatedWorkLogo', () => {
   it('ships the Kun bird asset used as the default work mark', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
-    const birdFigure = await readFile(new URL('../../../../asset/img/kun_bird.png', import.meta.url))
+    const birdFigure = await readFile(new URL('../../assets/kun_bird.png', import.meta.url))
 
     expect(pngDimensions(birdFigure)).toEqual({ width: 751, height: 512 })
   })

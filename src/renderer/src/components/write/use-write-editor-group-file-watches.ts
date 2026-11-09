@@ -6,7 +6,7 @@ import {
 } from '../../write/write-editor-layout'
 import { startWriteWorkspaceFileWatch } from '../../write/write-file-watch'
 import { startWriteOfficeSessionWatch } from '../../write/write-office-session-watch'
-import { emptySelection } from '../../write/write-workspace-store-helpers'
+import { emptySelection, pathsEqual } from '../../write/write-workspace-store-helpers'
 import { isWriteWorkspaceSaveContentPending } from '../../write/write-save-coordinator'
 import {
   useWriteWorkspaceStore,
@@ -20,6 +20,7 @@ type Options = {
   editorLayout: WriteEditorLayoutV1
 }
 
+type OfficeWatchIdentity = { workspaceRoot: string; documentEpoch: number; sourceSha256?: string }
 const spreadsheetRebaseGenerations = new Map<string, number>()
 
 export function useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout }: Options): void {
@@ -28,6 +29,10 @@ export function useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout }: 
     .filter(Boolean)
     .sort()
     .join('\0')
+  const officeEpochKey = useWriteWorkspaceStore((state) => editorLayout.groups.map((group) => {
+    const document = group.activePath ? state.documentsByPath[writeDocumentKey(group.activePath)] : null
+    return document?.kind === 'office' ? document.documentEpoch : ''
+  }).join('\0'))
 
   useEffect(() => {
     if (!workspaceRoot.trim()) return
@@ -43,16 +48,25 @@ export function useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout }: 
       const document = state.documentsByPath[writeDocumentKey(path)]
       if (!document || document.kind === 'pdf') return []
       if (document.kind === 'office') {
+        const identity: OfficeWatchIdentity = {
+          workspaceRoot, documentEpoch: document.documentEpoch, sourceSha256: document.spreadsheetSourceSha256
+        }
         return [startWriteOfficeSessionWatch({
           api: window.kunGui,
           workspaceRoot,
           path,
           callbacks: {
-            onLoading: (officeLoading) => patchOfficeDocument(path, { officeLoading }),
-            onAgentEditing: (officeAgentEditing) => patchOfficeDocument(path, { officeAgentEditing }),
-            onRefreshError: (officeRefreshError) => patchOfficeDocument(path, { officeRefreshError }),
+            onLoading: (officeLoading) => {
+              if (officeLoading) {
+                const current = useWriteWorkspaceStore.getState().documentsByPath[writeDocumentKey(path)]
+                if (current?.documentEpoch === identity.documentEpoch) identity.sourceSha256 = current.spreadsheetSourceSha256
+              }
+              patchOfficeDocument(path, { officeLoading }, identity)
+            },
+            onAgentEditing: (officeAgentEditing) => patchOfficeDocument(path, { officeAgentEditing }, identity),
+            onRefreshError: (officeRefreshError) => patchOfficeDocument(path, { officeRefreshError }, identity),
             onPreview: (officePreview) => {
-              void reconcileWriteOfficePreview(path, officePreview)
+              void reconcileWriteOfficePreview(path, officePreview, identity)
             }
           }
         })]
@@ -163,17 +177,26 @@ export function useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout }: 
       })]
     })
     return () => cleanups.forEach((cleanup) => cleanup())
-  }, [visibleKey, workspaceRoot])
+  }, [visibleKey, workspaceRoot, officeEpochKey])
 }
 
 export async function reconcileWriteOfficePreview(
   path: string,
-  officePreview: WorkspaceOfficePreviewSuccess
+  officePreview: WorkspaceOfficePreviewSuccess,
+  expectedIdentity?: OfficeWatchIdentity
 ): Promise<void> {
   const key = writeDocumentKey(path)
-  const initial = useWriteWorkspaceStore.getState().documentsByPath[key]
+  const state = useWriteWorkspaceStore.getState()
+  const initial = state.documentsByPath[key]
   if (!initial || initial.kind !== 'office') return
+  const identity: OfficeWatchIdentity = expectedIdentity ? { ...expectedIdentity } : {
+    workspaceRoot: state.workspaceRoot, documentEpoch: initial.documentEpoch
+  }
+  if (!pathsEqual(state.workspaceRoot, identity.workspaceRoot) || initial.documentEpoch !== identity.documentEpoch) return
   const authoritativeSha256 = initial.spreadsheetSourceSha256 || initial.officePreview?.sourceSha256 || ''
+  // A request begun before a local save cannot roll its persisted baseline back.
+  if (identity.sourceSha256 !== undefined && identity.sourceSha256 !== authoritativeSha256 &&
+    officePreview.sourceSha256 !== authoritativeSha256) return
   const trueExternalSpreadsheet =
     officePreview.sourceFormat === 'xlsx' &&
     authoritativeSha256 !== officePreview.sourceSha256 &&
@@ -183,7 +206,7 @@ export async function reconcileWriteOfficePreview(
       latest,
       officePreview,
       i18n.t('common:writeSpreadsheetExternalConflict')
-    ))
+    ), identity)
     return
   }
 
@@ -237,22 +260,24 @@ export async function reconcileWriteOfficePreview(
         fileError: null,
         officeRefreshError: null
       }
-    })
+    }, identity)
   } catch (error) {
     if (spreadsheetRebaseGenerations.get(key) !== generation) return
     const message = error instanceof Error ? error.message : String(error)
-    patchOfficeDocument(path, { officeLoading: false, officeRefreshError: message })
+    patchOfficeDocument(path, { officeLoading: false, officeRefreshError: message }, identity)
   }
 }
 
 function patchOfficePreview(
   path: string,
-  update: (document: WriteDocumentSession) => WriteDocumentSession
+  update: (document: WriteDocumentSession) => WriteDocumentSession,
+  identity: OfficeWatchIdentity
 ): void {
   useWriteWorkspaceStore.setState((current) => {
     const key = writeDocumentKey(path)
     const latest = current.documentsByPath[key]
-    if (!latest || latest.kind !== 'office') return {}
+    if (!latest || latest.kind !== 'office' || latest.documentEpoch !== identity.documentEpoch ||
+      !pathsEqual(current.workspaceRoot, identity.workspaceRoot)) return {}
     const next = update(latest)
     if (next === latest) return {}
     const documentsByPath = { ...current.documentsByPath, [key]: next }
@@ -306,12 +331,14 @@ function patchOfficeDocument(
   patch: Partial<Pick<
     import('../../write/write-workspace-store').WriteDocumentSession,
     'officeLoading' | 'officeAgentEditing' | 'officeRefreshError'
-  >>
+  >>,
+  identity: OfficeWatchIdentity
 ): void {
   useWriteWorkspaceStore.setState((current) => {
     const key = writeDocumentKey(path)
     const latest = current.documentsByPath[key]
-    if (!latest || latest.kind !== 'office') return {}
+    if (!latest || latest.kind !== 'office' || latest.documentEpoch !== identity.documentEpoch ||
+      !pathsEqual(current.workspaceRoot, identity.workspaceRoot)) return {}
     const documentsByPath = {
       ...current.documentsByPath,
       [key]: { ...latest, ...patch }

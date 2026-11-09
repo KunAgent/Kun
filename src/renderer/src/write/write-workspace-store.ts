@@ -37,6 +37,7 @@ import {
   nextWriteDocumentEpoch,
   writeDocumentContextMatches
 } from './write-document-context'
+import { enqueueWriteDocumentOperation } from './write-document-operations'
 import {
   enqueueWriteWorkspaceSave,
   flushWriteWorkspaceSaveQueue,
@@ -456,6 +457,8 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
     if (activePath && get().documentsByPath[writeDocumentKey(activePath)]) {
       return get().saveDocument(workspaceRoot, activePath, options)
     }
+    if (!activePath) return true
+    return enqueueWriteDocumentOperation(workspaceRoot, activePath, async () => {
     for (;;) {
       const state = get()
       if (!state.activeFilePath || state.activeFileKind !== 'text') return true
@@ -554,6 +557,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
       // Content changed while the queued write was in flight. Loop once more
       // with the newest revision so navigation cannot treat it as persisted.
     }
+    })
   },
 
   setFileError: (message) => {

@@ -1,9 +1,12 @@
+import { dispatchMobileInvoke } from './invoke-dispatch'
+import { ComputerHostAccess } from './computer-host-access'
+import { requireComputerRemote } from '../computer-access/membership'
 import { appendHostMetadata } from './catalog-metadata'
 import { MobileShareHosts } from './share-host'
 import { desktopScheduleDescriptors } from './desktop-schedules'
 import { MobileNotifications } from './notifications'
 import { MobileLinkAuthorities } from './authorities'
-import { mobileLinkScopes } from '../../shared/mobile-link-scopes'
+import { mobileLinkScopes, computerDesktopScopes, MOBILE_REMOTE_SCOPES } from '../../shared/mobile-link-scopes'
 import { conditionalCall, conditionalResult } from './read-version'
 import { randomUUID } from 'node:crypto'
 import {
@@ -26,6 +29,7 @@ import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-option
 import { MobileSubscriptions, type SubscriptionAuthority } from './subscriptions'
 import { refreshAfterWrite } from './write-refresh'
 import { disableHost, sessionOperation } from './lifecycle'
+import { registerMobileHost } from './device-registration'
 // Kun refuses these before any receipt or mutation, so the phone may treat them as not applied.
 const CERTAIN_REJECTIONS = new Set([
   'INVALID_REQUEST',
@@ -42,6 +46,8 @@ export const PEER_LIST_INTERVAL_MS = 300000
 import type { LinkDependencies } from './service-dependencies'
 export type { LinkDependencies } from './service-dependencies'
 export class MobileLinkService {
+  private computers = new ComputerHostAccess()
+  private computerPairings = new Set<string>()
   private authorities = new MobileLinkAuthorities()
   private notifications: MobileNotifications
   private shared: MobileShareHosts
@@ -49,16 +55,19 @@ export class MobileLinkService {
   private totalRequestBudget = new RequestBudget()
   private authorizationId = randomUUID()
   private authorizationExpiresAt = 0
+  // Retained terminals keep the last authenticated lease, never a new socket's lease.
+  private authorizationLease = { expiresAt: 0 }
   private authorizationTimer?: ReturnType<typeof setTimeout>
   private transportEpoch = 0
   private lastRecoveryAt = -Infinity
   private suspended = false
-  private client?: RemoteClient
+  private client?: Pick<RemoteClient, 'online' | 'start' | 'stop' | 'reconnect' | 'resume' | 'send'>
   private api?: RemoteApi
   private owner?: string
   private observedOwner: string | null | undefined
   private generation = 0
   private enabled = false
+  private desktopAccess = false
   private online = false
   private error?: string
   private identity?: DeviceIdentity
@@ -139,8 +148,14 @@ export class MobileLinkService {
     this.client?.stop()
     this.client = undefined
     this.subscriptions.clear()
+    void this.deps.desktop?.stopAll('transport_closed').catch(() => {})
     this.peers.clear()
+    this.computers.reset(); this.computerPairings.clear()
     this.authorities.clear()
+    this.desktopAccess = false
+    void this.deps.desktop?.configureRemoteAccess?.(false).catch(() => {})
+    void this.deps.desktop?.stopAll('host_stopped').catch(() => {})
+    void this.deps.terminal?.stopAll('host_stopped').catch(() => {})
     this.notifications.stop()
     this.shared.stop()
     this.grantPeers.clear()
@@ -180,7 +195,7 @@ export class MobileLinkService {
       // USB/debug/VPN interfaces can churn while the active route is healthy.
       // Probe it; the existing pong deadline decides whether recovery is needed.
       this.deps.diagnostic?.('NETWORK_HINT_CHECK')
-      try { this.client.send({ kind: 'ping' }) }
+      try { this.client.resume() }
       catch { this.reconnect('NETWORK_RECOVERY') }
       return
     }
@@ -198,9 +213,13 @@ export class MobileLinkService {
     clearTimeout(this.authorizationTimer)
     this.authorizationTimer = undefined
     this.authorizationExpiresAt = 0
+    this.authorizationLease = { expiresAt: 0 }
     this.online = false
     this.authorizationId = randomUUID()
     this.subscriptions.clear()
+    void this.deps.desktop?.stopAll('transport_closed').catch(() => {})
+    // Fence old socket closures, but allow the same grant to attach within its retained lease.
+    this.deps.terminal?.detachAll()
     this.peers.clear()
   }
   private transportCurrent(generation: number, epoch: number, signal?: AbortSignal) {
@@ -209,6 +228,7 @@ export class MobileLinkService {
   }
   private authorizeUntil(expiresAt: number) {
     this.authorizationExpiresAt = expiresAt
+    this.authorizationLease.expiresAt = expiresAt
     clearTimeout(this.authorizationTimer)
     this.authorizationTimer = setTimeout(() => {
       if (this.authorizationExpiresAt === expiresAt) this.reconnect('LOCAL_LEASE_EXPIRED')
@@ -227,7 +247,7 @@ export class MobileLinkService {
   /** Relay notices: a phone that went away no longer needs its streams; changed grants are re-read now. */
   private relayNotice(notice: RelayNotice, refresh: () => Promise<void>) {
     if (notice.relay === 'presence') {
-      for (const peer of notice.peers) if (!peer.online) this.subscriptions.clear(peer.deviceId)
+      for (const peer of notice.peers) if (!peer.online) { this.subscriptions.clear(peer.deviceId); this.deps.desktop?.authorityChanged(peer.deviceId); this.deps.terminal?.peerGone(peer.deviceId) }
     } else if (notice.relay === 'authorization') {
       void refresh().catch(() => this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED'))
     }
@@ -263,13 +283,14 @@ export class MobileLinkService {
     if (this.api) {
       try {
         const [p, g] = await Promise.all([
-          this.api.request('/pairings'),
-          this.api.request('/grants')
+          this.computers.pairings(this.api),
+          this.computers.grants(this.api)
         ])
         if (generation === this.generation && grantsVersion === this.grantsVersion) {
           pairings = p.pairings
           grants = g.grants
           this.pairingPeers = new Map(p.pairings.map((pairing: { id: string; controllerId: string }) => [pairing.id, pairing.controllerId]))
+          this.computerPairings = new Set(p.pairings.filter(pairing => pairing.purpose === 'desktop').map(pairing => pairing.id))
           this.updateGrants(g.grants)
           if (!['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? '')) this.error = undefined
         }
@@ -280,6 +301,8 @@ export class MobileLinkService {
     }
     return {
       enabled: this.enabled,
+      desktopAccess: this.desktopAccess,
+      computerAccess: this.computers.active,
       starting: this.enabling && !this.enabled,
       online: this.online,
       error: this.error,
@@ -299,7 +322,7 @@ export class MobileLinkService {
     return this.status()
   }
 
-  async enable(value: boolean, keepGrants = false) {
+  async enable(value: boolean, keepGrants = false, desktopAccess = false) {
     if (!value) {
       ++this.enableOperation
       this.enabling = false
@@ -309,11 +332,16 @@ export class MobileLinkService {
     this.enabling = true
     const operation = ++this.enableOperation
     try {
-      return await this.setEnabled(value, keepGrants)
+      return await this.setEnabled(value, keepGrants, desktopAccess)
     } catch (error) {
-      if (operation === this.enableOperation && !this.enabled) this.stop()
+      if (operation !== this.enableOperation) throw error
+      if (!this.enabled) this.stop()
       if ((error as { code?: string })?.code === 'vip_mobile_remote_required') this.error = 'VIP_REQUIRED'
       if ((error as { code?: string })?.code === 'ENTITLEMENTS_UNAVAILABLE') this.error = 'ENTITLEMENTS_UNAVAILABLE'
+      if ((error as { code?: string })?.code === 'DEVICE_AUTHORIZATION_REQUIRED') {
+        this.error = 'DEVICE_AUTHORIZATION_REQUIRED'
+        this.deps.diagnostic?.('DEVICE_AUTHORIZATION_REQUIRED')
+      }
       throw error
     } finally {
       if (operation === this.enableOperation) this.enabling = false
@@ -347,21 +375,22 @@ export class MobileLinkService {
       }
     })
   }
-  private updateGrants(grants: { id: string; controllerId: string }[]) {
+  private updateGrants(grants: { id: string; controllerId: string; purpose?: 'desktop' }[]) {
     for (const grant of grants)
       if (this.deniedGrants.has(grant.id)) this.deniedGrants.set(grant.id, grant.controllerId)
     const previous = this.peers
     this.peers = new Set(grants.filter((grant) => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id)).map((grant) => grant.controllerId))
     for (const peer of previous) if (!this.peers.has(peer)) this.subscriptions.clear(peer)
     this.grantPeers = new Map(grants.map((grant) => [grant.id, grant.controllerId]))
-    for (const peer of this.authorities.sync(grants)) this.permissionsChanged(peer)
+    const eligibleGrants = grants.filter(grant => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id))
+    for (const peer of this.authorities.sync(eligibleGrants, this.desktopAccess ? MOBILE_REMOTE_SCOPES : undefined)) this.permissionsChanged(peer)
     const api = this.api, generation = this.generation
     const eligible = () => this.enabled && !this.sessionEnding && this.api === api && generation === this.generation &&
       [...this.grantPeers].some(([id, peer]) => !this.deniedGrants.has(id) && !this.deniedPeers.has(peer))
     if (api && eligible()) this.notifications.start(api, eligible)
     else this.notifications.stop()
   }
-  private async setEnabled(value: boolean, keepGrants = false) {
+  private async setEnabled(value: boolean, keepGrants = false, desktopAccess = false) {
     if (!value) {
       const identity = this.identity
       const token = this.lastToken
@@ -392,11 +421,7 @@ export class MobileLinkService {
     this.identity = identity
     const api = this.createApi(identity, generation, control.signal)
     this.api = api
-    await api.request('/devices', 'POST', {
-      name: this.deps.name,
-      platform: this.deps.platform,
-      role: 'host'
-    })
+    await registerMobileHost(api, this.deps.name, this.deps.platform)
     // Offline logout or a crashed app may not have completed cloud cleanup, so a fresh start revokes
     // previous grants before it can obtain a relay ticket. Resuming a start the user left on keeps them.
     if (!keepGrants) await api.request('/devices/enabled', 'PUT', { enabled: false })
@@ -404,6 +429,9 @@ export class MobileLinkService {
     try {
       await api.request('/devices/enabled', 'PUT', { enabled: true })
       if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
+      if (desktopAccess) await this.deps.desktop?.configureRemoteAccess?.(true, () => generation === this.generation && !this.sessionEnding)
+      if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
+      this.desktopAccess = desktopAccess
     } catch (error) {
       // An old enable request may finish after logout's disable request.
       // Repeat cleanup after that request settles, still with the old identity.
@@ -412,12 +440,14 @@ export class MobileLinkService {
       throw error
     }
     this.enabled = true
+    if (this.deps.computerAccess) await this.computers.advertise(api, true, false, owner)
+    if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
     this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
       current: () => this.enabled && generation === this.generation && !this.sessionEnding })
     let peersListedAt = -Infinity
     const refreshPeers = async (epoch: number, signal?: AbortSignal) => {
       const grantsVersion = this.grantsVersion
-      const { grants } = await api.request('/grants', 'GET', undefined, false, signal)
+      const { grants } = await this.computers.grants(api, signal)
       this.transportCurrent(generation, epoch, signal)
       if (grantsVersion !== this.grantsVersion) return
       this.updateGrants(grants)
@@ -452,6 +482,12 @@ export class MobileLinkService {
       budget: this.requestBudget,
       leaseChanged: (expiresAt: number) => {
         if (generation === this.generation && this.online) this.authorizeUntil(expiresAt)
+        if (generation === this.generation && this.computers.active) void this.computers.renew().then(allowed => {
+          if (allowed || generation !== this.generation) return
+          for (const [id, peer] of this.grantPeers) if (this.authorities.purpose(peer, id) === 'desktop') {
+            if (this.authorities.set(peer, id, [])) this.permissionsChanged(peer)
+          }
+        })
       },
       relay: (notice: RelayNotice) => {
         if (generation === this.generation) this.relayNotice(notice, () => refreshPeers(this.transportEpoch))
@@ -477,18 +513,21 @@ export class MobileLinkService {
         if (generation === this.generation) this.deps.diagnostic?.(code, details)
       }
     }
-    this.client = new RemoteClient(transport)
+    this.client = this.deps.createClient?.(transport) ?? new RemoteClient(transport)
     this.client.start()
     return this.status()
   }
   async confirm(id: string, rawScopes?: unknown) {
-    const scopes = mobileLinkScopes(rawScopes)
+    const computer = this.computerPairings.has(id)
+    const chosen = computer ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes)
+    const scopes = !computer && this.desktopAccess ? mobileLinkScopes([...new Set([...chosen, ...MOBILE_REMOTE_SCOPES])]) : chosen
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
       throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)
+    if (computer) await this.computers.requireMax()
     await this.deps.requireMembership(this.owner!)
     if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
-    await this.api.request('/pairings/' + id + '/confirm', 'POST')
+    await this.api.request((computer ? '/desktop' : '') + '/pairings/' + id + '/confirm', 'POST')
     if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     ++this.grantsVersion
     if (peer) {
@@ -500,20 +539,41 @@ export class MobileLinkService {
     if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     const grant = peer ? status.grants.find((grant) => grant.controllerId === peer && this.grantPeers.get(grant.id) === peer) : undefined
     if (grant && this.authorities.set(peer!, grant.id, scopes)) this.permissionsChanged(peer!)
-    else if (scopes.length > 1 && !grant) throw new Error('AUTHORIZATION_NOT_READY')
+    else if ((computer || scopes.length > 1) && !grant) throw new Error('AUTHORIZATION_NOT_READY')
     return { ...status, grants: status.grants.map((g) => ({ ...g, scopes: this.authorities.scopes(g.controllerId, g.id) })) }
   }
   async setScopes(id: string, rawScopes: unknown) {
-    const scopes = mobileLinkScopes(rawScopes), peer = this.grantPeers.get(id)
+    const generation = this.generation
+    const peer = this.grantPeers.get(id)
+    const scopes = this.authorities.purpose(peer ?? '', id) === 'desktop' ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes)
     if (!this.enabled || !peer || this.deniedGrants.has(id)) throw new Error('INVALID_GRANT')
+    if (scopes.length && this.authorities.purpose(peer, id) === 'desktop') {
+      await this.computers.requireMax()
+      if (generation !== this.generation || this.grantPeers.get(id) !== peer) throw Error('ACCOUNT_CHANGED')
+    }
+    const currentScopes = this.authorities.scopes(peer, id)
+    if (scopes.some(scope => !currentScopes.includes(scope))) {
+      const generation = this.generation, owner = this.owner
+      const authority = this.authorities.identity('', peer, id)
+      await this.deps.requireMembership(owner!)
+      if (generation !== this.generation || owner !== this.owner || this.sessionEnding || !this.enabled)
+        throw new Error('ACCOUNT_CHANGED')
+      // A revoke or permission reduction during verification must not be overwritten by a stale expansion.
+      if (this.grantPeers.get(id) !== peer || this.deniedGrants.has(id) || this.authorities.identity('', peer, id) !== authority)
+        throw new Error('INVALID_GRANT')
+    }
     if (this.authorities.set(peer, id, scopes)) this.permissionsChanged(peer)
     return this.status()
   }
   private peerAuthority(peer: string) {
     const grantId = [...this.grantPeers].find(([, controllerId]) => controllerId === peer)?.[0]
-    return { id: this.authorities.identity(this.authorizationId, peer, grantId), scopes: this.authorities.scopes(peer, grantId) }
+    return { id: this.authorities.identity(this.authorizationId, peer, grantId),
+      purpose: this.authorities.purpose(peer, grantId),
+      syncKey: this.authorities.identity('', peer, grantId), scopes: this.authorities.scopes(peer, grantId) }
   }
   private permissionsChanged(peer: string) {
+    this.deps.desktop?.authorityChanged(peer)
+    this.deps.terminal?.authorityChanged(peer)
     ++this.grantsVersion
     this.statusRequest = undefined
     this.subscriptions.clear(peer)
@@ -529,6 +589,8 @@ export class MobileLinkService {
     ++this.grantsVersion
     this.deniedGrants.set(id, peer)
     if (peer) {
+      this.deps.desktop?.authorityChanged(peer)
+      this.deps.terminal?.authorityChanged(peer)
       this.peers.delete(peer)
       this.deniedPeers.add(peer)
       this.authorities.remove(peer)
@@ -551,128 +613,39 @@ export class MobileLinkService {
       return
     if (frame.kind === 'subscribe') {
       const authority = this.peerAuthority(src)
+      if (authority.purpose === 'desktop') return
       void this.subscriptions.subscribe(src, frame.payload, { accountId: this.owner!, deviceId: src,
-        authorizationId: authority.id, scopes: authority.scopes }).catch(() => {})
+        authorizationId: authority.id, syncKey: authority.syncKey, scopes: authority.scopes }).catch(() => {})
       return
     }
     if (frame.kind !== 'invoke' || !frame.id) return
-    let fileReserved = false
-    let release: (() => void) | undefined
-    let control = false,
-      size = 0
     const authority = this.peerAuthority(src)
-    const current = () =>
-      generation === this.generation &&
-      this.online &&
-      Date.now() < this.authorizationExpiresAt &&
-      authority.id === this.peerAuthority(src).id &&
-      this.peers.has(src)
-    try {
-      // An optional read version is answered here; the runtime envelope never sees it.
-      const { call, ifVersion } = conditionalCall(validateCall(frame.payload))
-      if (call.requestId !== frame.id) throw new Error('INVALID_REQUEST')
-      if (!hasRemoteOperationScope(call.method, authority.scopes)) throw new Error('REMOTE_SCOPE_REQUIRED')
-      if (call.method.startsWith('attachment.')) {
-        if (this.filePeers.size >= 2 || this.filePeers.has(src))
-          throw new Error('BACKPRESSURE')
-        this.filePeers.add(src)
-        fileReserved = true
-      }
-      control = call.method === 'execution.stop'
-      size = Buffer.byteLength(JSON.stringify(call))
-      const releasePeer = this.requestBudget.reserve(src, size, control)
-      try {
-        const releaseTotal = this.totalRequestBudget.reserve('all', size, control)
-        release = () => { releasePeer(); releaseTotal() }
-      } catch (error) { releasePeer(); throw error }
-      if (call.expiresAt < Date.now() && !READ_METHODS.has(call.method))
-        throw new Error('REQUEST_EXPIRED')
-      const lease = await this.deps.lease()
-      if (!current()) return
-      let result: unknown
-      if (
-        call.method === 'attachment.receive' ||
-        call.method === 'attachment.export'
-      ) {
-        if (!this.deps.files || !this.api || !this.owner)
-          throw new Error('UNSUPPORTED_OPERATION')
-        result = await this.deps.files(
-          {
-            api: this.api,
-            peer: src,
-            owner: this.owner,
-            authorizationId: authority.id,
-            current,
-            lease: async () => lease
-          },
-          call
-        )
-      } else if (call.method === 'shares.list' || call.method === 'shares.manage') {
-        result = await this.shared.ownerInvoke(call.method, call, src, current)
-      } else if (call.method.startsWith('desktop.schedule.')) {
-        if (!this.deps.desktopSchedules || !this.owner) throw new Error('UNSUPPORTED_OPERATION')
-        result = await this.deps.desktopSchedules(call.method, call.params, {
-          accountId: this.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes }, lease)
-      } else {
-        const shareReceipt = call.method === 'request.get' ? await this.shared.ownerInvoke(call.method, call, src, current) : null
-        const response = shareReceipt ? { ok: true, status: 200, body: JSON.stringify(shareReceipt) } : await lease.request(
-          '/v1/remote/invoke',
-          'POST',
-          JSON.stringify({
-            accountId: this.owner,
-            deviceId: src,
-            authorizationId: authority.id,
-            scopes: authority.scopes,
-            call
-          })
-        )
-        const value = JSON.parse(response.body)
-        if (!response.ok)
-          throw new Error(
-            typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED'
-          )
-        if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []),
-          ...(this.deps.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...this.shared.descriptors(authority.scopes)]
-        if (call.method === 'catalog.get' && Array.isArray(value.capabilities))
-          value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY]
-        result = call.method === 'catalog.get' ? appendHostMetadata(value, {
-          deviceId: this.identity?.id, appVersion: this.deps.appVersion, platform: this.deps.platform }) : value
-      }
-      if (current())
-        this.client?.send({
-          kind: 'result',
-          id: frame.id,
-          dst: src,
-          payload: conditionalResult(call.method, result, ifVersion)
-        })
-      // The phone's own message should reach its live page now, not after the runtime's next event.
-      if (current()) refreshAfterWrite(this.subscriptions, src, call.method, call.params, result)
-    } catch (error) {
-      if (current()) {
-        try {
-          const code =
-            error instanceof Error && /^[A-Z_]+$/.test(error.message)
-              ? error.message
-              : 'REMOTE_ERROR'
-          this.client?.send({
-            kind: 'result',
-            id: frame.id,
-            dst: src,
-            payload: {
-              error: {
-                code,
-                uncertain:
-                  Boolean(release) &&
-                  !READ_METHODS.has(frame.payload?.method) &&
-                  !CERTAIN_REJECTIONS.has(code)
-              }
-            }
-          })
-        } catch { /* best-effort error reply; the peer may be gone */ }
-      }
-    } finally {
-      if (fileReserved) this.filePeers.delete(src)
-      release?.()
+    const epoch = this.transportEpoch, terminalLease = this.authorizationLease
+    const current = () => generation === this.generation && epoch === this.transportEpoch && this.online && Date.now() < this.authorizationExpiresAt &&
+      authority.id === this.peerAuthority(src).id && this.peers.has(src) && (authority.purpose !== 'desktop' || this.computers.current())
+    await dispatchMobileInvoke(frame, src, authority, current, { link: this.deps, owner: this.owner, hostId: this.identity?.id, api: this.api,
+      filePeers: this.filePeers, requestBudget: this.requestBudget, totalRequestBudget: this.totalRequestBudget, shared: this.shared, subscriptions: this.subscriptions,
+      authorizationRemaining: () => Math.max(0, this.authorizationExpiresAt - Date.now()),
+      terminalAuthorizationRemaining: () => Math.max(0, terminalLease.expiresAt - Date.now()), send: value => this.client?.send(value) })
+  }
+  async enableComputerAccess(enabled: boolean) {
+    if (!this.deps.computerAccess || !this.deps.desktop) throw Error('DESKTOP_UNSUPPORTED')
+    const initialGeneration = this.generation
+    if (enabled) {
+      await requireComputerRemote(this.deps.account, this.deps.fetch, this.deps.origin)
+      if (initialGeneration !== this.generation) throw Error('ACCOUNT_CHANGED')
     }
+    if (!enabled) await this.deps.desktop.configureRemoteAccess(false)
+    if (enabled && !this.enabled) await this.enable(true, true, false)
+    if (!this.api) return this.status()
+    const api = this.api, generation = this.generation
+    await this.computers.advertise(api, enabled, true, this.owner)
+    if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
+    if (enabled) await this.deps.desktop.configureRemoteAccess(true, () => generation === this.generation)
+    if (!enabled) for (const [id, peer] of this.grantPeers) if (this.authorities.purpose(peer, id) === 'desktop') {
+      this.authorities.remove(peer); this.peers.delete(peer)
+    }
+    ++this.grantsVersion; this.statusRequest = undefined
+    return this.status()
   }
 }

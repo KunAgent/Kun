@@ -47,6 +47,8 @@ export class ScheduleExecutionQueue {
     reject: (reason: unknown) => void
   }>()
   private worktreeLeases = new Map<string, { projectPath: string; poolIndex: number }>()
+  private worktreeProjectLocks = new Map<string, Promise<void>>()
+  private waitingWorktreeProjects = new Map<string, string>()
   private drainingQueue = false
   private readonly stopController = new AbortController()
   private readonly activeTasks = new Set<Promise<unknown>>()
@@ -102,6 +104,7 @@ export class ScheduleExecutionQueue {
     this.stopController.abort()
     this.queuedTaskIds.clear()
     this.queuedTaskModes.clear()
+    this.waitingWorktreeProjects.clear()
     for (const taskId of [...this.taskCompletions.keys()]) {
       this.resolveTaskCompletion(taskId, { ok: false, message: 'Schedule runtime stopped.' })
     }
@@ -180,6 +183,15 @@ export class ScheduleExecutionQueue {
     deferred.resolve(value)
   }
 
+
+  discardQueued(taskIds: ReadonlySet<string>): void {
+    for (const id of taskIds) {
+      if (this.runningTaskIds.has(id) || !this.queuedTaskIds.delete(id)) continue
+      this.queuedTaskModes.delete(id)
+      this.waitingWorktreeProjects.delete(id)
+      this.resolveTaskCompletion(id, { ok: false, message: 'Task was deleted before it started.' })
+    }
+  }
 
   async ensureNextRuns(_settings: AppSettingsV1): Promise<void> {
     if (this.stopped) return
@@ -314,12 +326,16 @@ export class ScheduleExecutionQueue {
             this.resolveTaskCompletion(task.id, { ok: false, message: cycleMessage })
             continue
           }
+          if (this.waitingWorktreeProjects.has(task.id)) continue
           if (dependencies.every((dependency) => dependency?.lastStatus === 'success')) {
             next = task
             break
           }
         }
         if (!next) break
+        // A previous candidate may have awaited a store write while deletion
+        // removed this id. Never launch a candidate from that stale snapshot.
+        if (!this.queuedTaskIds.has(next.id)) continue
         const scheduled = this.queuedTaskModes.get(next.id) ?? false
         const dequeued = next
         this.queuedTaskIds.delete(dequeued.id)
@@ -393,39 +409,36 @@ export class ScheduleExecutionQueue {
       }
       if (task.useWorktree) {
         const projectPath = workspaceRoot
-        const poolIndex = await findAvailablePoolIndex({ projectPath })
-        if (poolIndex === null) {
-          // No slot is currently available. If other worktree tasks are
-          // running, one of them will release a slot soon — re-enqueue this
-          // task so drainQueue picks it up once a slot frees. If nothing else
-          // is running, every slot is permanently in a state findAvailable...
-          // can't recover from (e.g. dirty from a non-scheduled lease); fall
-          // through to the existing error path so the user sees a clear
-          // failure instead of an unbounded re-queue loop.
-          const hasOtherWorktreeTasks = [...this.runningTaskIds].some((id) => {
-            if (id === task.id) return false
-            return this.worktreeLeases.has(id)
-          })
-          if (hasOtherWorktreeTasks) {
-            this.runningTaskIds.delete(task.id)
-            await this.updateTask(task.id, (current) => ({
-              ...current,
-              lastStatus: 'queued',
-              lastMessage: 'Waiting for a free worktree slot.',
-              updatedAt: new Date().toISOString()
-            }))
-            this.queuedTaskIds.add(task.id)
-            this.queuedTaskModes.set(task.id, scheduled)
-            // Defer the drain so the currently-running worktree task gets a
-            // chance to release before this one is re-picked.
-            setTimeout(() => { void this.drainQueue() }, 250).unref?.()
-            return { ok: true, threadId: '', queued: true, message: 'Task re-queued: no worktree slot available.' }
+        const acquiredPath = await this.withWorktreeProject(projectPath, async () => {
+          this.stopController.signal.throwIfAborted()
+          const poolIndex = await findAvailablePoolIndex({ projectPath })
+          if (poolIndex === null) {
+            // Only a lease from this project can free a slot for this task.
+            // Park it until release completes; completion drains must not
+            // repeatedly retry the same exhausted pool.
+            const hasOtherWorktreeTasks = [...this.worktreeLeases.values()]
+              .some((lease) => lease.projectPath === projectPath)
+            if (hasOtherWorktreeTasks) {
+              this.waitingWorktreeProjects.set(task.id, projectPath)
+              this.runningTaskIds.delete(task.id)
+              await this.updateTask(task.id, (current) => ({
+                ...current,
+                lastStatus: 'queued',
+                lastMessage: 'Waiting for a free worktree slot.',
+                updatedAt: new Date().toISOString()
+              }))
+              this.queuedTaskIds.add(task.id)
+              this.queuedTaskModes.set(task.id, scheduled)
+              return null
+            }
+            throw new Error('No worktree pool slot is available.')
           }
-          throw new Error('No worktree pool slot is available.')
-        }
-        const worktree = await acquireWorktree({ projectPath, poolIndex, taskId: task.id })
-        workspaceRoot = worktree.path
-        this.worktreeLeases.set(task.id, { projectPath, poolIndex })
+          const worktree = await acquireWorktree({ projectPath, poolIndex, taskId: task.id })
+          this.worktreeLeases.set(task.id, { projectPath, poolIndex })
+          return worktree.path
+        })
+        if (acquiredPath === null) return { ok: true, threadId: '', queued: true, message: 'Task re-queued: no worktree slot available.' }
+        workspaceRoot = acquiredPath
       }
       const modelConfig = this.resolveScheduleModelConfig(settings, {
         providerId: task.providerId,
@@ -512,15 +525,37 @@ export class ScheduleExecutionQueue {
     }
   }
 
+  // Selection, acquisition and release share a project lock; other projects
+  // can progress while an asynchronous worktree operation is still pending.
+  private async withWorktreeProject<T>(projectPath: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.worktreeProjectLocks.get(projectPath) ?? Promise.resolve()
+    let unlock!: () => void
+    const tail = new Promise<void>((resolve) => { unlock = resolve })
+    this.worktreeProjectLocks.set(projectPath, tail)
+    await previous
+    try {
+      return await operation()
+    } finally {
+      unlock()
+      if (this.worktreeProjectLocks.get(projectPath) === tail) this.worktreeProjectLocks.delete(projectPath)
+    }
+  }
+
   private async releaseTaskWorktree(taskId: string): Promise<void> {
     const lease = this.worktreeLeases.get(taskId)
     if (!lease) return
-    this.worktreeLeases.delete(taskId)
-    await releaseWorktree(lease).catch((error) => {
-      this.deps.logError('schedule-worktree', 'Failed to release task worktree', {
-        taskId,
-        message: error instanceof Error ? error.message : String(error)
+    await this.withWorktreeProject(lease.projectPath, async () => {
+      if (this.worktreeLeases.get(taskId) !== lease) return
+      await releaseWorktree(lease).catch((error) => {
+        this.deps.logError('schedule-worktree', 'Failed to release task worktree', {
+          taskId,
+          message: error instanceof Error ? error.message : String(error)
+        })
       })
+      this.worktreeLeases.delete(taskId)
+      for (const [id, projectPath] of this.waitingWorktreeProjects) {
+        if (projectPath === lease.projectPath) this.waitingWorktreeProjects.delete(id)
+      }
     })
   }
 

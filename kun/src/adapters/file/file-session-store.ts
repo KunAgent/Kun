@@ -38,6 +38,7 @@ import { listThreadDirs, loadLatestUsageSnapshotsFromIndex, loadUsageRecordsFrom
 import { JsonlFileAccessCoordinator } from './jsonl-file-access.js'
 import { serializeRuntimeEvent } from '../event-serialization.js'
 import { loadIndexedLiveItemPageFromStore } from './file-session-page.js'
+import { loadSingleDurableTurnProof } from './file-session-native-proof.js'
 import { FileSessionLiveItems, liveReplayAfterSeq, overlayLiveItems, readRecoveredLiveItems, readLiveItems, serializeItemRecord, serializeItemRecords } from './file-session-live-items.js'
 import { FileSessionLiveCheckpointCoordinator } from './file-session-live-checkpoint-coordinator.js'
 import { FileSessionItemIndex } from './file-session-item-index.js'
@@ -467,16 +468,10 @@ export class FileSessionStore implements SessionStore {
       options
     }))
   }
-
-  async loadItemPage(
-    threadId: string,
-    options: ItemHistoryPageOptions
-  ): Promise<ItemHistoryPage> {
-    if (!isSafeThreadId(threadId)) {
-      return { items: [], hasMore: false, itemBytes: 0 }
-    }
+  async loadItemPage(threadId: string, options: ItemHistoryPageOptions): Promise<ItemHistoryPage> {
+    if (!isSafeThreadId(threadId)) return { items: [], hasMore: false, itemBytes: 0 }
     const path = this.messagesPath(threadId)
-    return loadIndexedLiveItemPageFromStore({
+    const load = () => loadIndexedLiveItemPageFromStore({
       path,
       options,
       fileAccess: this.fileAccess,
@@ -492,8 +487,13 @@ export class FileSessionStore implements SessionStore {
       evidencePath: this.itemTailEvidencePath(threadId),
       liveItemsPath: this.liveItemsPath(threadId)
     })
+    return options.exactItemId ? loadSingleDurableTurnProof({
+      options, liveItemsPath: this.liveItemsPath(threadId), load,
+      flushPending: () => this.liveCheckpoints.flushThread(threadId),
+      withThreadWrite: (operation) => this.withThreadWrite(threadId, operation),
+      cachedItems: () => this.itemsCache.get(threadId)
+    }) : load()
   }
-
   private async loadItemsUnlocked(threadId: string): Promise<TurnItem[]> {
     const cached = this.itemsCache.get(threadId)
     if (cached) {

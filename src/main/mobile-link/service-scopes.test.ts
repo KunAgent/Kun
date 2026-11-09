@@ -6,6 +6,7 @@ const pairing = '44444444-4444-4444-8444-444444444444'
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
 function fixture() {
   let grants = [{ id: grant, controllerId: phone }], socket!: Socket
+  let owner = 'owner', accountChanged: Parameters<LinkDependencies['account']['onState']>[0] = () => {}
   const frames: any[] = [], calls: any[] = []
   let response: (() => Promise<{ ok: boolean; status: number; body: string }>) | undefined
   const request = vi.fn(async (_path: string, _method?: string, body?: string) => {
@@ -14,8 +15,8 @@ function fixture() {
   })
   const deps: LinkDependencies = { requireMembership: async () => {}, origin: 'https://relay.test', name: 'Host', platform: 'macos',
     account: { getState: async () => ({ status: 'authenticated', error: null,
-      user: { id: 'owner', name: 'Owner', email: 'owner@test.invalid', avatarUrl: null } }),
-    onState: () => () => {}, accessToken: async () => 'token', expire: async () => {} },
+      user: { id: owner, name: 'Owner', email: 'owner@test.invalid', avatarUrl: null } }),
+    onState: listener => { accountChanged = listener; return () => {} }, accessToken: async () => 'token', expire: async () => {} },
     identity: async () => ({ id: '11111111-1111-4111-8111-111111111111', credential: 'a'.repeat(64) }),
     lease: async () => ({ runtimeToken: 'runtime', request }),
     fetch: async (input) => { const path = new URL(String(input)).pathname
@@ -29,9 +30,88 @@ function fixture() {
   const invoke = (method: string, params: unknown, id = 'r', extra: Record<string, unknown> = {}) => socket.onmessage?.({ data: JSON.stringify({ v: 1,
     kind: 'invoke', src: phone, id, ...extra, scopes: ['groups.read'], payload: { method, params, requestId: id, expiresAt: Date.now() + 60000 } }) })
   return { service, calls, frames, request, hello, invoke, deps, grants: (value: typeof grants) => { grants = value },
+    changeOwner: async (next: string) => { owner = next; accountChanged(await deps.account.getState()) },
     pause: (value: typeof response) => { response = value } }
 }
 describe('trusted desktop permission dispatch', () => {
+  it.each(['ENTITLEMENTS_UNAVAILABLE', 'vip_mobile_remote_required'])('rejects scope expansion without changing grants when membership fails with %s', async code => {
+    const f = fixture()
+    try {
+      await f.service.enable(true)
+      const before = (await f.service.status()).grants
+      const requireMembership = vi.fn(async () => { throw new Error(code) })
+      f.deps.requireMembership = requireMembership
+      await expect(f.service.setScopes(grant, ['groups.read'])).rejects.toThrow(code)
+      expect(requireMembership).toHaveBeenCalledExactlyOnceWith('owner')
+      expect((await f.service.status()).grants).toEqual(before)
+      expect((await f.service.status()).enabled).toBe(true)
+    } finally { f.service.dispose(); await tick() }
+  })
+  it('allows permission reductions, unchanged scopes and revocation without a membership request', async () => {
+    const f = fixture()
+    try {
+      await f.service.enable(true)
+      await f.service.setScopes(grant, ['groups.read', 'schedules.read'])
+      const requireMembership = vi.fn(async () => { throw new Error('ENTITLEMENTS_UNAVAILABLE') })
+      f.deps.requireMembership = requireMembership
+      expect((await f.service.setScopes(grant, ['groups.read'])).grants[0].scopes).toEqual(['personal', 'groups.read'])
+      expect((await f.service.setScopes(grant, ['groups.read'])).grants[0].scopes).toEqual(['personal', 'groups.read'])
+      expect((await f.service.setScopes(grant, [])).grants[0].scopes).toEqual(['personal'])
+      await expect(f.service.revoke(grant)).resolves.toMatchObject({ enabled: true })
+      await expect(f.service.setScopes(grant, ['groups.read'])).rejects.toThrow('INVALID_GRANT')
+      expect(requireMembership).not.toHaveBeenCalled()
+    } finally { f.service.dispose(); await tick() }
+  })
+  it.each(['owner', 'generation'] as const)('rejects an expansion after %s changes during membership verification', async change => {
+    const f = fixture()
+    try {
+      await f.service.enable(true)
+      let release!: () => void
+      f.deps.requireMembership = vi.fn(() => new Promise<void>(resolve => { release = resolve }))
+      const pending = f.service.setScopes(grant, ['groups.read'])
+      const rejected = expect(pending).rejects.toThrow('ACCOUNT_CHANGED')
+      f.deps.requireMembership = async () => {}
+      if (change === 'owner') await f.changeOwner('new-owner')
+      else f.service.stop()
+      await f.service.enable(true)
+      release(); await rejected
+      expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
+    } finally { f.service.dispose(); await tick() }
+  })
+  it('does not overwrite a permission reduction completed during expansion verification', async () => {
+    const f = fixture()
+    try {
+      await f.service.enable(true)
+      await f.service.setScopes(grant, ['groups.read'])
+      let release!: () => void
+      f.deps.requireMembership = vi.fn(() => new Promise<void>(resolve => { release = resolve }))
+      const pending = f.service.setScopes(grant, ['groups.read', 'schedules.read'])
+      const rejected = expect(pending).rejects.toThrow('INVALID_GRANT')
+      await f.service.setScopes(grant, [])
+      release(); await rejected
+      expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
+    } finally { f.service.dispose(); await tick() }
+  })
+  it('one unified enable configures desktop and supplies paired phones desktop rights without setScopes', async () => {
+    const f = fixture(), configureRemoteAccess = vi.fn(async (_enabled: boolean, _current?: () => boolean) => undefined)
+    f.deps.desktop = { configureRemoteAccess, stopAll: async () => {}, authorityChanged() {} } as unknown as LinkDependencies['desktop']
+    try {
+      const status = await f.service.enable(true, true, true)
+      expect(configureRemoteAccess).toHaveBeenLastCalledWith(true, expect.any(Function))
+      expect(status.desktopAccess).toBe(true)
+      await vi.waitFor(async () => expect((await f.service.status()).grants[0]?.scopes).toEqual(['personal', 'desktop.view', 'desktop.control']))
+      const paired = await f.service.confirm(pairing)
+      expect(paired.grants[0].scopes).toEqual(['personal', 'desktop.view', 'desktop.control'])
+      await f.service.setScopes(grant, [])
+      expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
+      f.deps.requireMembership = async () => { throw Error('vip_mobile_remote_required') }
+      expect((await f.service.enable(false)).desktopAccess).toBe(false)
+      expect(configureRemoteAccess).toHaveBeenLastCalledWith(false)
+      configureRemoteAccess.mockClear()
+      await expect(f.service.enable(true, true, true)).rejects.toThrow('vip_mobile_remote_required')
+      expect(configureRemoteAccess.mock.calls.some(call => call[0])).toBe(false)
+    } finally { f.service.dispose(); await tick() }
+  })
   it('forwards only fixed history operations with the authenticated personal origin', async () => {
     const f = fixture()
     try {

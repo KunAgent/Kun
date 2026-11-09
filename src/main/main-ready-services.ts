@@ -1,6 +1,4 @@
 import { resolveKunStartupTimeoutMs } from './runtime/kun-runtime-health-monitor'
-import { detectAnalyticsInstallation } from './product-analytics/storage'
-import { homedir } from 'node:os'
 import {
   app,
   ipcMain,
@@ -24,8 +22,10 @@ import { syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath } from './main-paths'
 import {
   normalizeDarkUiColors,
+  resolveKunSpeechToTextSettings,
   type AppSettingsV1
 } from '../shared/app-settings'
+import { isSpeechToTextConfigured } from '../shared/speech-to-text'
 import {
   ManagerResourceLeaseClient,
   ManagerRevisionedDocumentClient
@@ -140,6 +140,7 @@ export interface MainServices {
  */
 export async function initializeMainServices(input: {
   productionSettingsPath: string
+  isFreshInstall?: boolean
   onPhase?: (
     phase: 'services_starting' | 'data_migrating' | 'manager_starting',
     detail?: string
@@ -154,7 +155,6 @@ export async function initializeMainServices(input: {
     const productionSettingsUserDataPath = appIdentity.flavor === 'production'
       ? app.getPath('userData')
       : join(app.getPath('appData'), 'Kun')
-    await detectAnalyticsInstallation(app.getPath('userData'), join(homedir(), '.kun'))
     const productionSettingsPath = input.productionSettingsPath
     if (appIdentity.flavor === 'production') {
       traceStartup('runtime data migration:start')
@@ -559,6 +559,13 @@ export async function initializeMainServices(input: {
       }
     })
     configureManagedWeixinBridgeUrlResolver(ensureWeixinBridgeRpcUrl)
+    const { startDesktopPets } = await import('./pets/pet-service')
+    await startDesktopPets({
+      isFreshInstall: input.isFreshInstall === true,
+      getVoiceInputAvailable: async () => isSpeechToTextConfigured(resolveKunSpeechToTextSettings(
+        await withStoredRegistryCredentials(await mainState.store.load())
+      ))
+    })
 
   return {
     initial,

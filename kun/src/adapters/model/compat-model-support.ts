@@ -400,8 +400,8 @@ export function* enforceNonStreamingLimits(
 
 export function isRecoverableStreamTransportError(
   chunk: ModelStreamChunk
-): chunk is Extract<ModelStreamChunk, { kind: 'error' }> {
-  return chunk.kind === 'error' && (
+): boolean {
+  return chunk.kind === 'error' && chunk.failure?.responsePhase === 'interrupted' && (
     chunk.code === 'stream_read_error' ||
     chunk.code === 'stream_truncated' ||
     chunk.code === 'stream_idle_timeout'

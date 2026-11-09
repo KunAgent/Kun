@@ -124,7 +124,7 @@ test('retains a separate 300 MiB signed ceiling above the ad-hoc budgets', () =>
   }, { signed: true }).length, 2)
 })
 
-test('CLI selects the signed budget only when MAC_SIGN is enabled', (t) => {
+test('CLI distinguishes explicit ad-hoc artifacts from Developer ID packages', (t) => {
   const distDir = mkdtempSync(join(tmpdir(), 'kun-package-size-signed-'))
   t.after(() => rmSync(distDir, { recursive: true, force: true }))
   mkdirSync(join(distDir, 'mac-arm64', 'Kun.app'), { recursive: true })
@@ -134,8 +134,8 @@ test('CLI selects the signed budget only when MAC_SIGN is enabled', (t) => {
     truncateSync(path, MAC_ARM64_BUDGETS[extension] + 1)
   }
   const args = [join(__dirname, 'check-package-size.cjs'), '--platform', 'darwin', '--arch', 'arm64', '--dist-dir', distDir, '--enforce']
-  const unsigned = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, MAC_SIGN: '0' } })
-  const signed = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, MAC_SIGN: '1' } })
+  const unsigned = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, MAC_SIGN: '0', KUN_MAC_ALLOW_ADHOC: '1' } })
+  const signed = spawnSync(process.execPath, args, { encoding: 'utf8', env: { ...process.env, MAC_SIGN: '1', KUN_MAC_ALLOW_ADHOC: '' } })
   assert.equal(unsigned.status, 1)
   assert.match(unsigned.stderr, /Package size budget failed/u)
   assert.equal(signed.status, 0, signed.stderr)
@@ -161,6 +161,7 @@ test('reports root and Kun dependencies plus aggregate extra resources', (t) => 
     ['ppt-toolchain/PROVENANCE.md', 41],
     ['installer-recovery/windows-installer-migration.ps1', 43],
     ['bin/kun', 47],
+    ['pets/anya/spritesheet.webp', 53],
     ['THIRD_PARTY_NOTICES.md', 31]
   ]
   for (const [relativePath, bytes] of files) {
@@ -183,7 +184,8 @@ test('reports root and Kun dependencies plus aggregate extra resources', (t) => 
   assert.equal(componentBytes['ppt-toolchain'], 41)
   assert.equal(componentBytes['installer-recovery'], 43)
   assert.equal(componentBytes['bin'], 47)
-  assert.equal(componentBytes['extra-resources'], 19 + 23 + 29 + 31)
+  assert.equal(componentBytes['pets'], 53)
+  assert.equal(componentBytes['extra-resources'], 19 + 23 + 29 + 31 + 53)
 })
 
 test('serializes machine-readable JSON reports', () => {

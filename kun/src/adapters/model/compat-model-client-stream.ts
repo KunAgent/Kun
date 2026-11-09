@@ -69,7 +69,6 @@ import { CompatModelClientBase } from './compat-model-client-base.js'
 import { IncrementalSseFrameBuffer } from './incremental-sse-frame-buffer.js'
 import { summarizeModelRetryFailure } from './model-retry-failure-summary.js'
 import { StreamOutputReplayBuffer } from './stream-output-replay-buffer.js'
-import { StreamTextReplayReconciler } from './stream-text-replay-reconciler.js'
 import type { ChatCompletionResponse, CompatPostResult, ModelStopReason } from './compat-model-types.js'
 import {
   isRecoverableStreamTransportError,
@@ -101,7 +100,10 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
     let usedRetryAttempts = input.usedRetryAttempts
     let rateLimitRecoveryMs: number | undefined
     let emittedReasoning = false
-    const textReplay = new StreamTextReplayReconciler()
+    let deliveredText = false
+    let committedOutput = false
+    let attemptedStreamRecovery = false
+    let firstStreamFailure: { code: string; message: string } | undefined
     // maxAttempts counts retries after the initial request everywhere, and
     // `0` is an explicit "no automatic transport retries" setting. Unlike the
     // older code, this stream-recovery budget must not sneak in a minimum of
@@ -110,17 +112,21 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
     const maxRetryAttempts = input.request.maxRetryAttempts !== undefined
       ? Math.min(input.retry.maxAttempts, input.request.maxRetryAttempts)
       : input.retry.maxAttempts
+    const exhaustedRetryMessage = maxRetryAttempts === 0
+      ? 'automatic request retries were disabled'
+      : `all ${maxRetryAttempts} configured request retries were exhausted`
 
     while (true) {
       if (!response.body) {
-        yield { kind: 'error', message: 'model response had no body' }
+        yield withFirstStreamFailure({ kind: 'error', message: 'model response had no body' }, firstStreamFailure)
         return
       }
 
       let recoverableError: Extract<ModelStreamChunk, { kind: 'error' }> | null = null
+      let pendingCompletion: Extract<ModelStreamChunk, { kind: 'completed' }> | undefined
+      let sawTerminalError = false
       const deferredOutput = new StreamOutputReplayBuffer()
-      const suppressReasoning = emittedReasoning || textReplay.hasDeliveredText
-      textReplay.beginAttempt()
+      const suppressReasoning = emittedReasoning
       for await (const chunk of this.streamSse(
         response.body,
         input.request.abortSignal,
@@ -134,14 +140,30 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
           // fail the turn with a misleading provider-looking message.
           if (input.request.abortSignal.aborted) return
           if (isRecoverableStreamTransportError(chunk)) {
-            recoverableError = chunk
+            // Once a provider/protocol error has been delivered, later socket
+            // noise must not replay the request or replace that diagnostic.
+            if (sawTerminalError) break
+            const message = summarizeModelRetryFailure(chunk.message, input.knownSecrets) ?? 'model stream interrupted'
+            recoverableError = { ...chunk, message }
+            firstStreamFailure ??= { code: chunk.code ?? 'stream_disconnected', message }
             continue
           }
+          sawTerminalError = true
           // Protocol/provider errors are terminal diagnostics, not replay
           // divergence. Commit any completed output before preserving the
           // provider's remaining error/completed terminal sequence.
-          for (const deferred of deferredOutput.drain()) yield deferred
-          yield chunk
+          for (const deferred of deferredOutput.drain()) {
+            committedOutput = true
+            yield deferred
+          }
+          if (attemptedStreamRecovery && firstStreamFailure) {
+            yield {
+              ...chunk,
+              failure: { category: 'unknown', failoverAllowed: false, ...chunk.failure, firstStreamFailure }
+            }
+          } else {
+            yield chunk
+          }
           continue
         }
         if (chunk.kind === 'assistant_reasoning_delta') {
@@ -149,21 +171,9 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
           emittedReasoning = true
         }
         if (chunk.kind === 'assistant_text_delta') {
-          const reconciled = textReplay.accept(chunk.text)
-          if (reconciled.kind === 'conflict') {
-            recoverableError = streamReplayConflict()
-            break
-          }
-          if (reconciled.kind === 'suppress') continue
-          yield { ...chunk, text: reconciled.text }
+          if (chunk.text) deliveredText = true
+          yield chunk
           continue
-        }
-        if (
-          textReplay.waitingForReplayPrefix &&
-          chunk.kind !== 'assistant_reasoning_delta'
-        ) {
-          recoverableError = streamReplayConflict()
-          break
         }
         if (deferredOutput.defer(chunk)) {
           // Tool calls and generated media become observable side effects in
@@ -172,17 +182,44 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
           continue
         }
         if (chunk.kind === 'usage' || chunk.kind === 'completed') {
-          for (const deferred of deferredOutput.drain()) yield deferred
+          for (const deferred of deferredOutput.drain()) {
+            committedOutput = true
+            yield deferred
+          }
+        }
+        if (chunk.kind === 'completed') {
+          // Do not claim success until the iterator really ends: an abnormal
+          // provider sequence can still deliver a transport error afterwards.
+          pendingCompletion = chunk
+          continue
         }
         yield chunk
       }
 
-      if (!recoverableError) return
+      if (!recoverableError) {
+        if (!input.request.abortSignal.aborted && pendingCompletion &&
+          (!sawTerminalError || pendingCompletion.stopReason === 'error')) yield pendingCompletion
+        return
+      }
       if (input.request.abortSignal.aborted) return
+      const interruptedFailure = {
+        category: recoverableError.failure?.category ?? 'network' as const,
+        failoverAllowed: recoverableError.failure?.failoverAllowed ?? true,
+        ...recoverableError.failure,
+        responsePhase: 'interrupted' as const,
+        partialOutput: deliveredText,
+        ...(attemptedStreamRecovery && firstStreamFailure ? { firstStreamFailure } : {}),
+        ...(deliveredText || committedOutput ? { failoverAllowed: false } : {})
+      }
+      if (deliveredText || committedOutput) {
+        yield { ...recoverableError, failure: interruptedFailure }
+        return
+      }
       if (usedRetryAttempts >= maxRetryAttempts) {
         yield {
           ...recoverableError,
-          message: `${recoverableError.message} (all ${maxRetryAttempts} configured stream retries were exhausted)`
+          failure: interruptedFailure,
+          message: `${recoverableError.message} (${exhaustedRetryMessage})`
         }
         return
       }
@@ -204,23 +241,32 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         return
       }
       usedRetryAttempts = nextAttempt
+      attemptedStreamRecovery = true
 
       while (true) {
         const retried = await input.post()
+        if (input.request.abortSignal.aborted) {
+          if (retried.kind === 'response') void retried.response.body?.cancel().catch(() => {})
+          return
+        }
         if (retried.kind === 'error') {
           const failoverCap = (input.request.failover?.alternatives ?? 0) > 0
             ? Math.min(1, maxRetryAttempts)
             : maxRetryAttempts
           if (
-            input.request.abortSignal.aborted ||
             retried.failure.failoverAllowed === false ||
             usedRetryAttempts >= failoverCap
           ) {
             yield {
               kind: 'error',
-              message: `${retried.message} (all ${maxRetryAttempts} configured stream retries were exhausted)`,
+              message: retried.failure.failoverAllowed !== false && usedRetryAttempts >= maxRetryAttempts
+                ? `${retried.message} (${exhaustedRetryMessage})`
+                : retried.message,
               ...(retried.code ? { code: retried.code } : {}),
-              failure: retried.failure
+              failure: {
+                ...retried.failure,
+                ...(firstStreamFailure ? { firstStreamFailure } : {})
+              }
             }
             return
           }
@@ -257,6 +303,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         let errorBody: { text: string; exceeded: boolean } | undefined
         if (input.retry.httpStatusCodes.includes(response.status)) {
           errorBody = await readLimitedResponseText(response, input.maxErrorBodyBytes)
+          if (input.request.abortSignal.aborted) return
           const { classification, budget } = httpFailureRetryDecision({
             status: response.status,
             body: errorBody.exceeded ? '' : errorBody.text,
@@ -297,12 +344,13 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         }
 
         errorBody ??= await readLimitedResponseText(response, input.maxErrorBodyBytes)
+        if (input.request.abortSignal.aborted) return
         if (errorBody.exceeded) {
-          yield {
+          yield withFirstStreamFailure({
             kind: 'error',
             message: `model error response exceeded ${input.maxErrorBodyBytes} bytes`,
             code: 'response_body_too_large'
-          }
+          }, firstStreamFailure)
           return
         }
         this.logHttpFailure({
@@ -319,11 +367,12 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
           response.headers.get('retry-after'),
           response.headers
         )
+        if (input.request.abortSignal.aborted) return
         yield {
           kind: 'error',
           message: `${classified.message}${rateLimitRecoverySuffix(rateLimitRecoveryMs)}`,
           code: classified.code,
-          failure: classified.failure
+          failure: { ...classified.failure, ...(firstStreamFailure ? { firstStreamFailure } : {}) }
         }
         return
       }
@@ -333,19 +382,20 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         response.headers.get('content-type')?.includes('application/json')
       ) {
         const json = await readLimitedResponseJson(response, input.streamLimits.maxTotalBytes)
+        if (input.request.abortSignal.aborted) return
         if (json.kind === 'limit') {
-          yield {
+          yield withFirstStreamFailure({
             kind: 'error',
             message: `model response exceeded ${json.maxBytes} bytes`,
             code: 'stream_resource_limit'
-          }
+          }, firstStreamFailure)
           return
         }
         if (json.kind === 'invalid_json') {
-          yield { kind: 'error', message: `model response contained invalid JSON: ${json.message}` }
+          yield withFirstStreamFailure({ kind: 'error', message: `model response contained invalid JSON: ${json.message}` }, firstStreamFailure)
           return
         }
-        yield* materializeCompatNonStreaming(
+        for (const chunk of materializeCompatNonStreaming(
           json.value as ChatCompletionResponse,
           input.endpointFormat,
           input.model,
@@ -354,7 +404,9 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
             normalizeUsage: (usage) => this.mapUsage(usage, input.model),
             parseToolArguments: (raw) => this.parseToolArguments(raw)
           }
-        )
+        )) {
+          yield chunk.kind === 'error' ? withFirstStreamFailure(chunk, firstStreamFailure) : chunk
+        }
         return
       }
     }
@@ -402,7 +454,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
             kind: 'error',
             message: `model stream stalled for ${idleTimeoutMs}ms without data`,
             code: 'stream_idle_timeout',
-            failure: { category: 'timeout', failoverAllowed: true }
+            failure: { category: 'timeout', failoverAllowed: true, responsePhase: 'interrupted' }
           }
           return
         }
@@ -412,7 +464,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
             kind: 'error',
             message: read.message,
             code: 'stream_read_error',
-            failure: { category: 'network', failoverAllowed: true }
+            failure: { category: 'network', failoverAllowed: true, responsePhase: 'interrupted' }
           }
           return
         }
@@ -518,7 +570,7 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
         kind: 'error',
         message: 'model stream ended before a terminal frame',
         code: 'stream_truncated',
-        failure: { category: 'network', failoverAllowed: true }
+        failure: { category: 'network', failoverAllowed: true, responsePhase: 'interrupted' }
       }
       return
     }
@@ -575,14 +627,12 @@ export class CompatModelStreamingClient extends CompatModelClientBase {
     })()
     yield { kind: 'completed', stopReason }
   }
-
 }
 
-function streamReplayConflict(): Extract<ModelStreamChunk, { kind: 'error' }> {
-  return {
-    kind: 'error',
-    message: 'model stream retry diverged before replaying the already-delivered assistant text',
-    code: 'stream_replay_conflict',
-    failure: { category: 'network', failoverAllowed: true }
-  }
+function withFirstStreamFailure(
+  chunk: Extract<ModelStreamChunk, { kind: 'error' }>,
+  firstStreamFailure: { code: string; message: string } | undefined
+): Extract<ModelStreamChunk, { kind: 'error' }> {
+  if (!firstStreamFailure) return chunk
+  return { ...chunk, failure: { category: 'unknown', failoverAllowed: false, ...chunk.failure, firstStreamFailure } }
 }

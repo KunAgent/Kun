@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import kunLogo from '../../../../asset/img/kun_bird.png'
+import kunLogo from '../../assets/kun_bird.png'
 import { useChatStore } from '../../store/chat-store'
 
 export const THREAD_HYDRATION_SLOW_MS = 15_000

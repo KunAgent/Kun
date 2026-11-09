@@ -120,16 +120,24 @@ export async function spawnCapture(
     }, timeoutMs)
     timeoutTimer.unref?.()
   }
-  child.stdout?.on('data', (chunk: Buffer | string) => {
-    appendOutput(stdout, chunk)
-  })
-  child.stderr?.on('data', (chunk: Buffer | string) => {
-    appendOutput(stderr, chunk)
-  })
+  const onStdout = (chunk: Buffer | string) => appendOutput(stdout, chunk)
+  const onStderr = (chunk: Buffer | string) => appendOutput(stderr, chunk)
+  child.stdout?.on('data', onStdout)
+  child.stderr?.on('data', onStderr)
+  let detachCompletion = () => {}
   const exitCode = await new Promise<number | null>((resolvePromise, rejectPromise) => {
-    child.once('error', rejectPromise)
-    child.once('close', (code) => resolvePromise(code))
+    const onError = (error: Error) => rejectPromise(error)
+    const onClose = (code: number | null) => resolvePromise(code)
+    child.once('error', onError)
+    child.once('close', onClose)
+    detachCompletion = () => {
+      child.removeListener('error', onError)
+      child.removeListener('close', onClose)
+    }
   }).finally(() => {
+    detachCompletion()
+    child.stdout?.removeListener('data', onStdout)
+    child.stderr?.removeListener('data', onStderr)
     options.signal?.removeEventListener('abort', onAbort)
     if (forceKillTimer) clearTimeout(forceKillTimer)
     if (timeoutTimer) clearTimeout(timeoutTimer)

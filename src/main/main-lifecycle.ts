@@ -1,3 +1,4 @@
+import { probeUpdateRuntimeAfterStartup } from './update-runtime-health-check'
 import { revokeBrowserBindingBeforeQuit } from './runtime/partial-startup-quit'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { DesktopShutdownSteps } from './runtime/desktop-shutdown-steps'
@@ -47,6 +48,7 @@ import {
   shutdownLocalWhisperService
 } from './services/local-whisper-service'
 import { shutdownLocalSanottsDownloads } from './services/local-sanotts-download-service'
+import { shutdownDesktopPets } from './pets/pet-service'
 import { shutdownLocalSanottsSynthesis } from './services/local-sanotts-synthesis-service'
 import {
   ManagedRuntimeShutdownCoordinator
@@ -188,6 +190,7 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
   })
   let browserUseBinding: ReturnType<typeof beginBrowserUseHostShutdown> | undefined
   await cleanup.group([
+    { name: 'desktop-pets', run: shutdownDesktopPets },
     { name: 'browser-admission', run: () => { browserUseBinding = beginBrowserUseHostShutdown() } },
     { name: 'sanotts-downloads', run: shutdownLocalSanottsDownloads }
   ], cleanup.deadline(1_000))
@@ -293,7 +296,9 @@ export async function loadGuiUpdaterModule(): Promise<GuiUpdaterModule> {
             prepareManagedRuntimesForUpdate,
             async () => (await mainState.store.load()).locale,
             setUpdateInstallQuitting,
-            async () => (await probeRuntimeApi(await mainState.store.load())).ok,
+            () => probeUpdateRuntimeAfterStartup(
+              mainState.startupState, () => mainState.store.load(), probeRuntimeApi
+            ),
             checkProviderMutationsBeforeUpdate
           )
           mainState.guiUpdaterInitialized = true

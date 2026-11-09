@@ -4,6 +4,7 @@ import type { RouteContext } from '../router.js'
 import { readJsonBody } from '../read-json-body.js'
 import { AgentCommitmentQuery } from '../../contracts/agent-commitments.js'
 import { AgentArtifactQuery, AgentArtifactVersionQuery } from '../../contracts/agent-artifacts.js'
+import { CommitmentTrackingActionSchema } from '../../contracts/collaboration-followup-api.js'
 
 type Add = (method: string, path: string, handle: (rooms: RoomRuntime, request: Request, context: RouteContext) => Promise<unknown>) => void
 const Id = z.string().min(1).max(256)
@@ -14,6 +15,14 @@ async function body(request: Request) {
   return result.value
 }
 const query = (request: Request) => Object.fromEntries(new URL(request.url).searchParams)
+/** Query strings arrive as text; the cursor is rebuilt from its three ordered parts. */
+function attentionQuery(request: Request) {
+  const raw = query(request)
+  const cursor = raw.priority !== undefined && raw.at !== undefined && raw.id !== undefined
+    ? { priority: Number(raw.priority), at: raw.at, id: raw.id } : undefined
+  return { ...(raw.status ? { status: raw.status } : {}), ...(cursor ? { cursor } : {}),
+    ...(raw.limit !== undefined ? { limit: raw.limit } : {}) }
+}
 export function registerAgentWorkRoutes(add: Add) {
   add('GET', '/v1/agents/:agentId/commitments', (rooms, request, { params }) =>
     rooms.commitments.list(Id.parse(params.agentId), AgentCommitmentQuery.parse(query(request))))
@@ -26,6 +35,67 @@ export function registerAgentWorkRoutes(add: Add) {
   add('PATCH', '/v1/agents/:agentId/commitments/:commitmentId', async (rooms, request, { params }) => {
     const input = await body(request)
     return rooms.exclusive(() => rooms.commitments.update(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  // Negotiation is commitment-independent: a client can learn the surface before one exists.
+  add('GET', '/v1/agents/follow-up/capabilities', async (rooms) => rooms.followUp.capability())
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/continue', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.continueExplicitly(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  // Business questions the host raises on the agent's behalf. Only a user surface
+  // answers them; nothing here approves a native gate or starts work.
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/attention', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.openAttention(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/attention/:attentionId', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.resolveAttention(Id.parse(params.agentId),
+      Id.parse(params.commitmentId), Id.parse(params.attentionId), input))
+  })
+  // Read surface and user controls. The projection is presentation only; none of
+  // these routes starts work, grants authority or answers a protected gate.
+  add('GET', '/v1/agents/:agentId/commitments/:commitmentId/follow-up', (rooms, _request, { params }) =>
+    rooms.followUp.get(Id.parse(params.agentId), Id.parse(params.commitmentId)))
+  add('GET', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/attention', (rooms, request, { params }) =>
+    rooms.followUp.attentionList(Id.parse(params.agentId), Id.parse(params.commitmentId), attentionQuery(request)))
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/tracking', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.enable(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('PATCH', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/tracking', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.update(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/tracking/:action', async (rooms, request, { params }) => {
+    const input = await body(request), action = CommitmentTrackingActionSchema.parse(params.action)
+    return rooms.exclusive(() => rooms.followUp.action(Id.parse(params.agentId), Id.parse(params.commitmentId), action, input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/stop', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.stop(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/reopen', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.reopen(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/links', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.link(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/links/release', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.releaseLink(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  // External read consent. A grant never widens execution or model authority.
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/grants', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.grantSource(Id.parse(params.agentId), Id.parse(params.commitmentId), input))
+  })
+  add('POST', '/v1/agents/:agentId/commitments/:commitmentId/follow-up/grants/:grantId/revoke', async (rooms, request, { params }) => {
+    const input = await body(request)
+    return rooms.exclusive(() => rooms.followUp.revokeSourceGrant(Id.parse(params.agentId),
+      Id.parse(params.commitmentId), input))
   })
   add('POST', '/v1/agents/:agentId/commitments/:commitmentId/cancel', async (rooms, request, { params }) => {
     const input = Action.parse(await body(request))

@@ -1,0 +1,265 @@
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { PET_IPC, type PetOverlayBootstrap } from '../../shared/pets'
+import { defaultPetEnsemble } from '../../shared/pets-ensemble'
+import { PetStore } from './pet-store'
+import { shutdownDesktopPets, startDesktopPets } from './pet-service'
+
+const host = vi.hoisted(() => ({
+  root: '', open: vi.fn(), close: vi.fn(), send: vi.fn(), globalConfigure: vi.fn(), globalDispose: vi.fn(),
+  power: new Map<string, () => void>(),
+  handlers: new Map<string, (...args: unknown[]) => unknown>()
+}))
+vi.mock('electron', () => ({
+  app: { isPackaged: false, getPath: () => path.join(host.root, 'profile'), getAppPath: () => host.root },
+  BrowserWindow: vi.fn(), screen: {}, shell: {}, powerMonitor: { on: (name: string, fn: () => void) => host.power.set(name, fn), off: (name: string) => host.power.delete(name) },
+  ipcMain: {
+    on: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),
+    handle: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),
+    removeHandler: (channel: string) => host.handlers.delete(channel), removeAllListeners: vi.fn()
+  }
+}))
+vi.mock('./pet-global-activity', () => ({
+  PET_GLOBAL_SENDER_ID: -1,
+  PetGlobalActivity: class {
+    configure = host.globalConfigure
+    dispose = host.globalDispose
+    status() { return { keyboard: 'off', microphone: 'off', recording: false } }
+  }
+}))
+vi.mock('../main-app-context', () => ({ mainState: { mainWindow: null }, developmentRendererUrl: () => undefined }))
+vi.mock('../main-paths', () => ({ resolveNamedPreloadPath: vi.fn() }))
+vi.mock('../main-runtime-settings', () => ({ runtimeRequest: vi.fn() }))
+vi.mock('./pet-window', () => ({
+  PetWindowController: class {
+    setSpriteWidth() {}
+    openAtSaved = host.open
+    close = host.close
+    send = host.send
+    senderId() { return 77 }
+    isOpen() { return true }
+    layout() { return { anchorX: 210, anchorY: 320, viewportWidth: 420, viewportHeight: 640 } }
+    mode() { return 'passthrough' }
+    policy = { note: null }
+  }
+}))
+
+beforeEach(async () => {
+  host.root = await mkdtemp(path.join(tmpdir(), 'kun-pet-startup-'))
+  host.open.mockReset()
+  host.close.mockReset()
+  host.send.mockReset()
+  host.globalConfigure.mockReset()
+  host.globalDispose.mockReset()
+  host.power.clear()
+  vi.stubEnv('CODEX_HOME', path.join(host.root, 'codex'))
+})
+afterEach(async () => {
+  await shutdownDesktopPets()
+  await rm(host.root, { recursive: true, force: true })
+  vi.unstubAllEnvs()
+})
+
+async function copyDefault() {
+  const destination = path.join(host.root, 'resources', 'pets', 'xiao-kun')
+  await mkdir(path.dirname(destination), { recursive: true })
+  await cp(path.resolve('resources/pets/xiao-kun'), destination, { recursive: true })
+  return destination
+}
+
+describe('desktop pet startup', () => {
+  it('automatically follows pet visibility, suspend/resume and shutdown for global observers', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const frame = {}, main = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }
+    const preferences = { keyboard: true, microphone: false }
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
+    host.power.get('suspend')!()
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
+    host.power.get('resume')!()
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
+    await host.handlers.get(PET_IPC.setOverlayOpen)!(main, false)
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, false)
+    await host.handlers.get(PET_IPC.setOverlayOpen)!(main, true)
+    expect(host.globalConfigure).toHaveBeenLastCalledWith(preferences, true)
+    await runtime.shutdown()
+    expect(host.globalDispose).toHaveBeenCalled()
+    expect(host.power.size).toBe(0)
+  })
+
+  it('delivers a fresh bottle once without changing the resident, opening the overlay or saving a reward', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const frame = {}, main = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }, overlay = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const initial = await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8')
+    const notify = host.handlers.get(PET_IPC.notifyPetBottleDrop)!
+    const signal = { dropIds: ['new-drop'], occurredAt: Date.now() }
+    const opens = host.open.mock.calls.length
+    host.send.mockClear()
+    await notify(main, signal)
+    expect(host.open).toHaveBeenCalledTimes(opens)
+    const boot = await host.handlers.get(PET_IPC.overlayBootstrap)!(overlay) as PetOverlayBootstrap
+    expect(boot.visitRequest).toMatchObject({ kind: 'bottle', bottleCount: 1, primaryId: 'kun:xiao-kun' })
+    expect(boot.petId).toBe('kun:xiao-kun')
+    expect(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8')).toBe(initial)
+    await host.handlers.get(PET_IPC.acknowledgeVisitRequest)!(overlay, boot.visitRequest!.id)
+    host.send.mockClear(); await notify(main, signal)
+    expect(host.send).not.toHaveBeenCalled()
+    await notify(main, null)
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayVisitRequested, expect.objectContaining({ kind: 'clear-bottle' }))
+  })
+
+  it('delivers one-off invitations without persisting a team and clears acknowledged or closed-window requests', async () => {
+    await copyDefault()
+    await cp(path.resolve('resources/pets/whale-girl'), path.join(host.root, 'resources', 'pets', 'whale-girl'), { recursive: true })
+    await startDesktopPets({ isFreshInstall: true })
+    const frame = {}, event = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const bootstrap = () => host.handlers.get(PET_IPC.overlayBootstrap)!(event) as Promise<PetOverlayBootstrap>
+    expect((await bootstrap()).visits).toEqual({ enabled: true, frequency: 'balanced' })
+    await host.handlers.get(PET_IPC.requestPetVisit)!(event, 'tea')
+    const requested = (await bootstrap()).visitRequest!
+    expect(requested).toMatchObject({ kind: 'invite', scene: 'tea', primaryId: 'kun:xiao-kun' })
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayVisitRequested, requested)
+    await host.handlers.get(PET_IPC.acknowledgeVisitRequest)!(event, requested.id)
+    expect((await bootstrap()).visitRequest).toBeNull()
+    const saved = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
+    expect(saved.visitRequest).toBeUndefined(); expect(saved.selectedPetId).toBe('kun:xiao-kun')
+    await host.handlers.get(PET_IPC.setPetVisitPreferences)!(event, { enabled: false, frequency: 'quiet' })
+    await host.handlers.get(PET_IPC.requestPetVisit)!(event)
+    expect((await bootstrap()).visitRequest?.kind).toBe('invite')
+    await host.handlers.get(PET_IPC.overlayClose)!(event)
+    expect((await bootstrap()).visitRequest).toBeNull()
+    const restarted = new PetStore(path.join(host.root, 'profile', 'pets')); await restarted.initialize()
+    expect(restarted.getSettings().visits).toEqual({ enabled: false, frequency: 'quiet' })
+  })
+
+  it('forwards automatic model/input feedback without changing pet selection or persisting activity', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({ isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const frame = {}, event = { sender: { id: 3, mainFrame: frame }, senderFrame: frame }
+    await host.handlers.get(PET_IPC.updatePetPresence)!(event, { type: 'model', model: 'gpt-5', provider: 'openai', announce: true })
+    await host.handlers.get(PET_IPC.updatePetPresence)!(event, { type: 'input', source: 'typing:1', kind: 'typing', level: 0 })
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayPresence, expect.objectContaining({ input: expect.objectContaining({ kind: 'typing' }) }))
+    const persisted = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
+    expect(persisted.selectedPetId).toBe('kun:xiao-kun')
+    expect(persisted.presence).toBeUndefined()
+    const bootEvent = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!(bootEvent) as PetOverlayBootstrap
+    expect(bootstrap.reactionsEnabled).toBe(true)
+    expect(bootstrap.interactions?.clips.typing.state).toBe('running')
+    expect(bootstrap.presence).toMatchObject({ model: { model: 'gpt-5' }, input: { kind: 'typing' } })
+    const restarted = new PetStore(path.join(host.root, 'profile', 'pets')); await restarted.initialize()
+    expect(restarted.getSettings().reactionsEnabled).toBe(true)
+  })
+
+  it('publishes available ensemble assets and persists overlay changes without replacing the selected pet', async () => {
+    await copyDefault()
+    for (const id of ['ikun', 'whale-girl']) {
+      await cp(path.resolve('resources/pets', id), path.join(host.root, 'resources', 'pets', id), { recursive: true })
+    }
+    await startDesktopPets({ isFreshInstall: true })
+    const frame = {}
+    const event = { sender: { id: 77, mainFrame: frame }, senderFrame: frame }
+    const ensemble = { ...defaultPetEnsemble(), enabled: true,
+      members: ['xiao-kun', 'ikun', 'whale-girl'] }
+    await host.handlers.get(PET_IPC.setPetEnsemble)!(event, ensemble)
+    const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!(event) as PetOverlayBootstrap
+    expect(bootstrap.ensemble).toEqual({ ...ensemble, enabled: false })
+    expect(bootstrap.ensemblePets).toHaveLength(3)
+    expect(bootstrap.ensemblePets?.every((pet) => pet.spritesheetUrl?.startsWith('kun-pet://'))).toBe(true)
+    expect(bootstrap.petId).toBe('kun:xiao-kun')
+    expect(host.send).toHaveBeenCalledWith(PET_IPC.overlayBootstrapChanged, expect.objectContaining({ ensemble: { ...ensemble, enabled: false } }))
+    const settings = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
+    expect(settings.ensemble).toEqual({ ...ensemble, enabled: false })
+  })
+
+  it('imports the default before opening one populated overlay', async () => {
+    await copyDefault()
+    await startDesktopPets({ isFreshInstall: true })
+    expect(host.open).toHaveBeenCalledTimes(1)
+    const notification = host.send.mock.calls.find(([channel]) => channel === PET_IPC.overlayBootstrapChanged)
+    expect(notification?.[1] as PetOverlayBootstrap).toMatchObject({
+      petId: 'kun:xiao-kun', displayName: '小 Kun', isOpen: true, welcomedPetIds: [],
+      spritesheetUrl: expect.stringContaining('kun-pet://asset/kun%3Axiao-kun/')
+    })
+    const settings = JSON.parse(await readFile(path.join(host.root, 'profile', 'pets', 'settings.json'), 'utf8'))
+    expect(settings).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: true })
+  })
+
+  it.each(['missing', 'corrupt'])('never opens a blank overlay with a %s bundled asset', async (kind) => {
+    if (kind === 'corrupt') {
+      const destination = await copyDefault()
+      await writeFile(path.join(destination, 'spritesheet.webp'), 'not an image')
+    }
+    await startDesktopPets({ isFreshInstall: true })
+    expect(host.open).not.toHaveBeenCalled()
+    expect(host.close).toHaveBeenCalled()
+  })
+
+  it('does not apply a first-run default from a cached copy when this import fails', async () => {
+    const destination = await copyDefault()
+    const store = new PetStore(path.join(host.root, 'profile', 'pets'))
+    await store.initialize()
+    await store.importOrUpdate({
+      source: 'kun-builtin', sourceId: 'xiao-kun', displayName: 'Kun', description: 'Cached',
+      spriteVersionNumber: 1, sourcePath: destination,
+      spritesheetSourcePath: path.join(destination, 'spritesheet.webp')
+    })
+    await writeFile(path.join(destination, 'spritesheet.webp'), 'broken replacement')
+    await startDesktopPets({ isFreshInstall: true })
+    expect(host.open).not.toHaveBeenCalled()
+  })
+
+  it('defaults to preserving an existing installation', async () => {
+    await copyDefault()
+    await startDesktopPets()
+    expect(host.open).not.toHaveBeenCalled()
+  })
+
+  it('passes the persisted pet center through startup rather than deriving it from the panel window', async () => {
+    const destination = await copyDefault()
+    const store = new PetStore(path.join(host.root, 'profile', 'pets'))
+    await store.initialize()
+    await store.importOrUpdate({ source: 'kun-builtin', sourceId: 'xiao-kun', displayName: 'Kun', description: 'Test pet',
+      spriteVersionNumber: 1, sourcePath: destination, spritesheetSourcePath: path.join(destination, 'spritesheet.webp') })
+    await store.selectPet('kun:xiao-kun')
+    await store.setOverlayOpen(true)
+    await store.setPlacement({ displayId: 'primary', workArea: { x: 0, y: 0, width: 1200, height: 800 },
+      windowBounds: { x: 300, y: 100, width: 420, height: 640 }, petCenter: { x: 510, y: 390 },
+      mascotWidthPx: 112, updatedAt: '2026-11-05T00:00:00.000Z' })
+    await startDesktopPets()
+    expect(host.open).toHaveBeenCalledWith(expect.objectContaining({ petCenter: { x: 510, y: 390 } }))
+  })
+
+  it('includes current activity when a freshly loaded overlay requests its bootstrap', async () => {
+    await copyDefault()
+    const runtime = await startDesktopPets({ isFreshInstall: true })
+    runtime.noteMainWindow({
+      isDestroyed: () => false, on: vi.fn(), removeListener: vi.fn(),
+      webContents: { id: 3, on: vi.fn(), removeListener: vi.fn(), send: vi.fn() }
+    } as unknown as Parameters<typeof runtime.noteMainWindow>[0])
+    const snapshot = {
+      generation: 1, profileKey: '/profile', emittedAtMs: 1_000,
+      items: [{ key: 'drawing:turn:running', generation: 1, status: 'running', threadId: 'drawing',
+        unitId: 'drawing', turnId: 'turn', stateSince: '2026-11-04T09:00:00.000Z', title: 'Drawing',
+        subtitle: 'Generating image', stalled: false, navigable: true, bubbleAllowed: true, updatedAtMs: 1_000 }]
+    }
+    const frame = {}
+    await host.handlers.get(PET_IPC.updateActivity)!({ sender: { id: 3, mainFrame: frame }, senderFrame: frame }, snapshot)
+    const bootstrap = await host.handlers.get(PET_IPC.overlayBootstrap)!({
+      sender: { id: 77, mainFrame: frame }, senderFrame: frame
+    }) as PetOverlayBootstrap
+    expect(bootstrap.activitySnapshot).toEqual(snapshot)
+  })
+})

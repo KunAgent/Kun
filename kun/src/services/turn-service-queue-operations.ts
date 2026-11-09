@@ -1,3 +1,6 @@
+import { initializeGraphPlanning } from './turn-service-graph-initialization.js'
+import type { NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
+import { prepareNativeFollowUpRequest, commitQueuedTurnPromotion } from './native-followup-admission.js'
 import { PRIVATE_QUEUE_LOCKED, withPrivateQueueAdmission, privateQueuedTurnAllowed } from '../rooms/private-turn-lifecycle.js'
 import { validateAttachmentAliases, type AttachmentAliases } from '../contracts/attachment-aliases.js'
 import { queueRevision, requirePolicyRevision } from '../domain/remote-policy-revision.js'
@@ -118,7 +121,7 @@ export const turnServiceQueueOperations = {
   async persistQueuedTurnRecord(this: TurnService, thread: ThreadRecord, input: {
     threadId: string
     request: StartTurnRequest
-  }, allocatedTurnId?: string, aliases?: AttachmentAliases): Promise<{ turnId: string; userItem: TurnItem }> {
+  }, allocatedTurnId?: string, aliases?: AttachmentAliases, nativeFollowUp?: NativeFollowUpAdmission): Promise<{ turnId: string; userItem: TurnItem }> {
     assertQueueCapacity(thread, input.threadId)
     const turnId = allocatedTurnId ?? this['deps'].ids.next('turn')
     const designAdmission = resolveDesignTurnAdmission({
@@ -267,7 +270,10 @@ export const turnServiceQueueOperations = {
           ...(freshAfterStop ? { queueResumeSourceTurnId: stopped.id } : {}) }],
         updatedAt: now
       }
-      const committed = await this['commitThreadRecordCAS'](next, current.revision ?? 0)
+      const prepared = nativeFollowUp ? prepareNativeFollowUpRequest({ current, next, request: input.request,
+        admission: nativeFollowUp, turnId, userMessageItemId: userItem.id,
+        requestFingerprint: fingerprintStartTurnRequest(input.request) }) : next
+      const committed = await this['commitThreadRecordCAS'](prepared, current.revision ?? 0)
       if (committed.applied) {
         // Phase 2: persist the session user item, the commit boundary.
         await this['deps'].sessionStore.appendItem(input.threadId, userItem)
@@ -325,13 +331,13 @@ export const turnServiceQueueOperations = {
   async enqueueTurn(this: TurnService, input: {
     threadId: string
     request: StartTurnRequest
-  }, options: { attachmentAliases?: AttachmentAliases } = {}): Promise<StartTurnResponse> {
+  }, options: { attachmentAliases?: AttachmentAliases; nativeFollowUp?: NativeFollowUpAdmission } = {}): Promise<StartTurnResponse> {
     const finishAdmission = this['beginExecutionAdmission']()
     try {
       if (this['deps'].migrationMaintenance?.isLocked()) {
         throw new TurnConflictError('runtime migration maintenance is in progress')
       }
-      const response = await enqueueTurnDurably(this, input, options.attachmentAliases)
+      const response = await enqueueTurnDurably(this, input, options.attachmentAliases, options.nativeFollowUp)
       this['notifyTurnQueued'](input.threadId)
       return response
     } finally {
@@ -450,6 +456,14 @@ export const turnServiceQueueOperations = {
               this['leasedTurns'].set(candidate.id, lease)
             }
             const now = this['deps'].nowIso()
+            const graphPlanningLifecycle = candidate.orchestration === 'graph'
+              ? await initializeGraphPlanning(this['deps'], {
+                  threadId: input.threadId,
+                  sourceTurnId: candidate.id,
+                  goal: candidate.prompt,
+                  workspace: thread.workspace
+                }, candidate.graphPlanningLifecycle)
+              : undefined
             const promotedTurn = candidate.admissionPending
               ? (() => {
                   const { admissionPending: _pending, ...committed } = startTurnRecord(candidate, now)
@@ -457,7 +471,11 @@ export const turnServiceQueueOperations = {
                 })()
               : startTurnRecord(candidate, now)
             const history = executableHistory(await this['deps'].sessionStore.loadItems(input.threadId), thread)
-            const startedTurn = { ...promotedTurn, queueExecutionAnchorItemId: history.at(-1)?.id }
+            const startedTurn = {
+              ...promotedTurn,
+              ...(graphPlanningLifecycle ? { graphPlanningLifecycle } : {}),
+              queueExecutionAnchorItemId: history.at(-1)?.id
+            }
             const next: ThreadRecord = {
               ...touchThread(thread, now),
               ...(designAdmission.locksSurface && designAdmission.effectiveSurface
@@ -470,7 +488,7 @@ export const turnServiceQueueOperations = {
               turns: thread.turns.map((turn) => turn.id === candidate.id ? startedTurn : turn),
               updatedAt: now
             }
-            const committed = await this['commitThreadRecordCAS'](next, thread.revision ?? 0)
+            const committed = await commitQueuedTurnPromotion(this, thread, candidate, next)
             if (!committed.applied) {
               // Another writer changed the record after we read it (e.g. a
               // cross-Runtime cancel/move). Roll back the admission/lease we
@@ -481,13 +499,6 @@ export const turnServiceQueueOperations = {
               })
               continue
             }
-            this['inflightTurns'].set(candidate.id, new AbortController())
-            this['deps'].inflight.begin({
-              id: candidate.id,
-              kind: 'model',
-              threadId: input.threadId,
-              turnId: candidate.id
-            })
             await this['deps'].events.record({
               kind: 'turn_started',
               threadId: input.threadId,

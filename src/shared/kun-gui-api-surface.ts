@@ -1,3 +1,4 @@
+import type { ScheduleTasksBulkInput, ScheduleTasksBulkResult } from './schedule-task-bulk'
 import type { UserAttentionRequest } from './user-attention'
 import type {
   AppSettingsPatch,
@@ -53,6 +54,7 @@ import type {
   BrowserUseDecisionInput,
   BrowserUseMountInput,
   BrowserUseNavigationInput,
+  BrowserUseZoomInput,
   BrowserUseViewState
 } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
@@ -172,14 +174,7 @@ import type {
   RemoteAccessStatus,
   RemoteTailscaleInfo
 } from './remote-access'
-import type {
-  TerminalCreatePayload,
-  TerminalCreateResult,
-  TerminalDataPayload,
-  TerminalExitPayload,
-  TerminalResizePayload,
-  TerminalWritePayload
-} from './terminal'
+import type { KunGuiTerminalApi } from './kun-gui-api-terminal'
 import type { ExtensionIpcApi } from './extension-ipc'
 import type {
   RuntimeImageAttachmentUploadRequest,
@@ -252,7 +247,7 @@ import {
 } from './kun-gui-api-contracts'
 import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
 import type { KunGuiMarketApi } from './market/kun-gui-api-market'
-export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
+export type KunGuiApi = KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
   import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi & import('./terminal-dock').KunGuiTerminalDockApi &
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
   import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi & import('./artifact-thumbnail').KunGuiArtifactThumbnailApi &
@@ -405,6 +400,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   onScheduleStatusChanged: (handler: (status: ScheduleRuntimeStatus) => void) => () => void
   createScheduleTask: (payload: ScheduleTaskCreateInput) => Promise<ScheduleTaskMutationResult>
   updateScheduleTask: (payload: ScheduleTaskUpdateInput) => Promise<ScheduleTaskMutationResult>
+  bulkScheduleTasks: (input: ScheduleTasksBulkInput) => Promise<ScheduleTasksBulkResult>
   deleteScheduleTask: (taskId: string) => Promise<ScheduleTaskDeleteResult>
   runScheduleTask: (taskId: string) => Promise<ScheduleRunResult>
   getDaemonStatus: () => Promise<DaemonRuntimeStatus>
@@ -665,6 +661,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   decideBrowserUseAction: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
   setBrowserUseControl: (input: BrowserUseControlInput) => Promise<BrowserUseViewState>
   navigateBrowserUse: (input: BrowserUseNavigationInput) => Promise<BrowserUseViewState>
+  setBrowserUseZoom: (input: BrowserUseZoomInput) => Promise<BrowserUseViewState>
   stopBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   clearBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   onBrowserUseState: (handler: (state: BrowserUseViewState) => void) => () => void
@@ -689,12 +686,7 @@ export type KunGuiApi = ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & Runti
   logError: (category: string, message: string, detail?: unknown) => Promise<void>
   getLogPath: () => Promise<string>
   openLogDir: () => Promise<{ ok: boolean; message?: string }>
-  createTerminal: (payload: TerminalCreatePayload) => Promise<TerminalCreateResult>
-  writeToTerminal: (payload: TerminalWritePayload) => Promise<boolean>
-  resizeTerminal: (payload: TerminalResizePayload) => Promise<boolean>
-  disposeTerminal: (sessionId: string) => Promise<boolean>
-  onTerminalData: (handler: (payload: TerminalDataPayload) => void) => () => void
-  onTerminalExit: (handler: (payload: TerminalExitPayload) => void) => () => void
+  pets: import('./pets').PetDesktopBridge
 }
 
 export type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from './kun-gui-api-protected-approval'

@@ -130,7 +130,8 @@ function buildReport(options) {
     join(resources, 'THIRD_PARTY_NOTICES.md'),
     join(resources, 'officecli'),
     join(resources, 'whisper'),
-    join(resources, 'bundled-extensions')
+    join(resources, 'bundled-extensions'),
+    join(resources, 'pets')
   ]
   const components = [
     { name: 'application', path: appPath },
@@ -143,6 +144,7 @@ function buildReport(options) {
     { name: 'kun-runtime', path: join(unpacked, 'kun') },
     { name: 'kun-unpacked-node_modules', path: join(unpacked, 'kun', 'node_modules') },
     { name: 'extra-resources', paths: extraResourcePaths },
+    { name: 'pets', path: join(resources, 'pets') },
     { name: 'officecli', path: join(resources, 'officecli') },
     { name: 'whisper', path: join(resources, 'whisper') },
     { name: 'bundled-extensions', path: join(resources, 'bundled-extensions') },
@@ -283,7 +285,7 @@ function main() {
     printBaselineComparison(compareWithBaseline(report, baseline))
   }
   if (!options.enforce) return
-  const signed = process.env.MAC_SIGN === '1'
+  const signed = require('./mac-signing-policy.cjs').macSigningEnabled()
   const failures = budgetFailures(report, { signed })
   if (failures.length > 0) {
     throw new Error(`Package size budget failed:\n${failures.map((entry) => `- ${entry}`).join('\n')}`)

@@ -59,7 +59,8 @@ public static class KunInstallerPayloadCopy {
   static Exception Error(string operation, string path) {
     return new IOException(operation + ": " + path, new Win32Exception(Marshal.GetLastWin32Error()));
   }
-  static string Extended(string path) {
+  public static string Extended(string path) {
+    if (path.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase)) return path;
     return path.StartsWith(@"\\") ? @"\\?\UNC\" + path.Substring(2) : @"\\?\" + path;
   }
   static uint Attributes(string path, bool optional) {
@@ -159,7 +160,13 @@ public static class KunInstallerPayloadCopy {
     ValidateAncestors(path);
     ValidateTree(Extended(path), false);
   }
+  static string OrdinaryLiteralPath(string path) {
+    if (path != null && path.StartsWith(@"\\?\UNC\", StringComparison.OrdinalIgnoreCase)) return @"\\" + path.Substring(8);
+    if (path != null && path.StartsWith(@"\\?\", StringComparison.OrdinalIgnoreCase)) return path.Substring(4);
+    return path;
+  }
   static void ValidateLiteralInspectionAncestors(string path) {
+    path = OrdinaryLiteralPath(path);
     // Do not invoke legacy System.IO normalization on the very long path being
     // diagnosed. Accept only ordinary absolute drive/UNC paths with literal,
     // normalized segments; device namespaces and traversal are not diagnostic
@@ -192,8 +199,50 @@ public static class KunInstallerPayloadCopy {
       current = separator < rootLength ? path.Substring(0, rootLength) : current.Substring(0, separator);
     }
   }
-  // Diagnostic only: exact literal metadata, not wildcard matching or permission
-  // to accept a file that the strict runtime integrity validator rejected.
+  public sealed class LiteralFileInfo {
+    public bool Exists { get; internal set; }
+    public bool IsDirectory { get; internal set; }
+    public ulong Length { get; internal set; }
+  }
+  public static LiteralFileInfo GetLiteralFileInfo(string path) {
+    ValidateLiteralInspectionAncestors(path);
+    FileData data;
+    if (!GetFileAttributesExW(Extended(path), 0, out data)) {
+      int error = Marshal.GetLastWin32Error();
+      if (error == 2 || error == 3) return new LiteralFileInfo();
+      throw new IOException("Cannot inspect payload: " + path, new Win32Exception(error));
+    }
+    if ((data.Attributes & Reparse) != 0) throw new IOException("Payload contains a reparse point: " + path);
+    return new LiteralFileInfo {
+      Exists = true, IsDirectory = (data.Attributes & Directory) != 0,
+      Length = ((ulong)data.SizeHigh << 32) | data.SizeLow
+    };
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  struct HandleFileData {
+    public uint Attributes;
+    public System.Runtime.InteropServices.ComTypes.FILETIME Creation, Access, Write;
+    public uint VolumeSerial, SizeHigh, SizeLow, Links, IndexHigh, IndexLow;
+  }
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+  static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFileW(
+    string path, uint access, uint share, IntPtr security, uint disposition, uint flags, IntPtr template);
+  [DllImport("kernel32.dll", SetLastError = true)]
+  static extern bool GetFileInformationByHandle(Microsoft.Win32.SafeHandles.SafeFileHandle handle, out HandleFileData data);
+  public static string ReadLiteralUtf8File(string path) {
+    ValidateLiteralInspectionAncestors(path);
+    // Native open + handle-based FileStream bypass .NET Framework's MAX_PATH
+    // normalization. Do not follow a leaf reparse point even if it races open.
+    using (var handle = CreateFileW(Extended(path), 0x80000000, 1, IntPtr.Zero, 3, 0x00200000, IntPtr.Zero)) {
+      if (handle.IsInvalid) throw Error("Cannot read payload", path);
+      HandleFileData data;
+      if (!GetFileInformationByHandle(handle, out data)) throw Error("Cannot inspect opened payload", path);
+      if ((data.Attributes & (Reparse | Directory)) != 0) throw new IOException("Payload is not a regular file: " + path);
+      using (var stream = new FileStream(handle, FileAccess.Read))
+      using (var reader = new StreamReader(stream, System.Text.Encoding.UTF8, true)) return reader.ReadToEnd();
+    }
+  }
+  // Diagnostic only: never parse this string to authorize a payload.
   public static string InspectLiteralFile(string path) {
     ValidateLiteralInspectionAncestors(path);
     FileData data;

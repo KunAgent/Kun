@@ -25,6 +25,17 @@ describe('Kun provider error projection', () => {
     expect(projected.message).not.toContain('sk-secret-value')
   })
 
+  it('preserves interruption details from both event and durable item', () => {
+    const details = { modelFailure: { responsePhase: 'interrupted', partialOutput: true } }
+    const event = runtimeErrorFromEvent({ kind: 'error', threadId: 'thread_1', turnId: 'turn_1',
+      seq: 1, timestamp: '2026-08-31T00:00:00.000Z', code: 'stream_disconnected', message: 'ended', details }, 'fallback')
+    expect(event.details).toEqual(details)
+    const item = { id: 'error_1', threadId: 'thread_1', turnId: 'turn_1', role: 'system' as const,
+      status: 'failed', createdAt: '2026-08-31T00:00:00.000Z', kind: 'error',
+      code: 'stream_disconnected', message: 'ended', details }
+    expect(systemErrorBlockFromItem(item)).toMatchObject({ streamPartialOutput: true })
+  })
+
   it('restores the same provenance from a durable Error Item', () => {
     const item = {
       id: 'error_1', threadId: 'thread_1', turnId: 'turn_1', role: 'system' as const,

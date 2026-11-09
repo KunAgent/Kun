@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactElement } from 'react'
 import { Eye, EyeOff, Loader2, Radar } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { RemoteAccessConfigPatch, RemoteAccessStatus, RemoteTailscaleInfo } from '@shared/remote-access'
+import { RemoteDisclosure } from './remote-compact-ui'
 import {
   REMOTE_BUTTON_CLASS,
   REMOTE_INPUT_CLASS,
@@ -9,7 +10,6 @@ import {
   RemoteGroup,
   RemoteRow,
   RemoteRowText,
-  RemoteSection,
   RemoteUrlRow
 } from './remote-panel-ui'
 
@@ -59,6 +59,7 @@ function PasswordEditor({
           type={visible ? 'text' : 'password'}
           autoComplete="new-password"
           placeholder={t('remoteAccessPasswordPlaceholder')}
+          aria-label={t('remoteAccessPasswordPlaceholder')}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           className={`${REMOTE_INPUT_CLASS} w-full pr-8`}
@@ -77,6 +78,7 @@ function PasswordEditor({
         type={visible ? 'text' : 'password'}
         autoComplete="new-password"
         placeholder={t('remoteAccessPasswordConfirmPlaceholder')}
+        aria-label={t('remoteAccessPasswordConfirmPlaceholder')}
         value={confirm}
         onChange={(event) => setConfirm(event.target.value)}
         className={REMOTE_INPUT_CLASS}
@@ -119,49 +121,20 @@ export function RemoteSettingsGroup({
   onError
 }: Props): ReactElement {
   const { t } = useTranslation('common')
-  const [editorOpen, setEditorOpen] = useState(false)
-  const [portInput, setPortInput] = useState('')
-  useEffect(() => {
-    if (!portInput) setPortInput(status.port > 0 ? String(status.port) : '')
-  }, [status.port, portInput])
+  const [portInput, setPortInput] = useState(status.port > 0 ? String(status.port) : '')
+  useEffect(() => { setPortInput(status.port > 0 ? String(status.port) : '') }, [status.port])
   const locked = busy || status.running
-  const showEditor = !status.passwordSet || editorOpen
   const tailscaleUrl =
     tailscale?.connected && tailscale.ipv4 ? `http://${tailscale.ipv4}:${status.port}` : ''
 
   return (
-    <RemoteSection title={t('remoteAccessSettingsSection')}>
-      <RemoteGroup>
-        <div>
-          <RemoteRow>
-            <RemoteRowText title={t('remoteAccessPasswordSection')} />
-            <span
-              className={`text-[12px] ${
-                status.passwordSet ? 'text-ds-muted' : 'font-medium text-amber-600 dark:text-amber-400'
-              }`}
-            >
-              {status.passwordSet ? t('remoteAccessPasswordSet') : t('remoteAccessPasswordUnset')}
-            </span>
-            {status.passwordSet && !editorOpen ? (
-              <button type="button" onClick={() => setEditorOpen(true)} className={REMOTE_BUTTON_CLASS}>
-                {t('remoteAccessChangePassword')}
-              </button>
-            ) : null}
-          </RemoteRow>
-          {showEditor ? (
-            <PasswordEditor
-              busy={busy}
-              canCancel={status.passwordSet}
-              onCancel={() => setEditorOpen(false)}
-              savePassword={async (password) => {
-                const saved = await savePassword(password)
-                if (saved) setEditorOpen(false)
-                return saved
-              }}
-              onError={onError}
-            />
-          ) : null}
-        </div>
+    <RemoteGroup>
+        <RemoteDisclosure title={t('remoteAccessPasswordSection')}
+          value={t(status.passwordSet ? 'remoteAccessPasswordSet' : 'remoteAccessPasswordUnset')} open={!status.passwordSet}>
+          <PasswordEditor busy={busy} canCancel={false} onCancel={() => {}} savePassword={savePassword} onError={onError} />
+        </RemoteDisclosure>
+        <RemoteDisclosure title={t('remoteAccessNetworkSection')}
+          value={`${t(status.bind === 'lan' ? 'remoteAccessBindLan' : 'remoteAccessBindLoopback')} · ${status.port || t('remoteAccessPortAuto')}`}>
         <RemoteRow>
           <label className="min-w-0 flex-1 text-[13px] font-medium text-ds-ink" htmlFor="remote-bind">
             {t('remoteAccessBind')}
@@ -203,6 +176,9 @@ export function RemoteSettingsGroup({
             </button>
           )}
         </RemoteRow>
+        {status.running ? <p className="px-3 pb-3 text-[12px] text-ds-muted">{t('remoteAccessStopToChange')}</p> : null}
+        </RemoteDisclosure>
+        <RemoteDisclosure title={t('remoteAccessTailscaleSection')} value={t(tailscaleSubtitle(tailscale))}>
         <RemoteRow className="flex-wrap">
           <RemoteRowText
             title={t('remoteAccessTailscaleSection')}
@@ -229,10 +205,7 @@ export function RemoteSettingsGroup({
             </p>
           ) : null}
         </RemoteRow>
-      </RemoteGroup>
-      {status.running ? (
-        <p className="px-1 text-[11px] leading-4 text-ds-faint">{t('remoteAccessStopToChange')}</p>
-      ) : null}
-    </RemoteSection>
+        </RemoteDisclosure>
+    </RemoteGroup>
   )
 }

@@ -26,6 +26,7 @@ function state(overrides: Partial<BrowserUseViewState> = {}): BrowserUseViewStat
       origin: 'https://example.com',
       sanitizedUrl: 'https://example.com/page',
       active: true,
+      zoomPercent: 100,
       loading: false,
       canGoBack: false,
       canGoForward: false
@@ -97,6 +98,12 @@ describe('AgentBrowserPanel supervision', () => {
       }))
     })
 
+    // The approval status must wrap in a narrow dock, not grow beyond its toolbar.
+    const status = renderer.root.findAllByType('span').find((node) =>
+      textContent(node) === i18n.t('common:browserUseNeedsAttention'))
+    expect(status?.props.className).toContain('break-words')
+    expect(status?.parent?.props.className).toContain('max-w-full')
+    expect(status?.parent?.props.className).not.toContain('shrink-0')
     expect(textContent(renderer.root)).toContain('Publish')
     expect(textContent(renderer.root)).not.toMatch(/always|permanent/i)
     await act(async () => {
@@ -152,6 +159,8 @@ describe('AgentBrowserPanel supervision', () => {
     expect(stopBrowserUse).toHaveBeenCalledWith('thread-1')
     const clear = renderer.root.findByProps({ 'aria-label': 'Clear session' })
     await act(async () => clear.props.onClick())
+    expect(clearBrowserUse).not.toHaveBeenCalled()
+    await act(async () => buttonByText(renderer, 'Clear session and data').props.onClick())
     expect(clearBrowserUse).toHaveBeenCalledWith('thread-1')
   })
 

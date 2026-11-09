@@ -53,14 +53,14 @@ describe('AcpRuntime.runTurn', () => {
     expect(binding?.nativeSessionId).toBe('sess-basic')
   })
 
-  test('populates the model catalog from the real conversation session only', async () => {
+  test('serves the live model catalog and keeps the real session catalog', async () => {
     const catalog = new AcpModelProbe()
     const h = await makeHarness('basic-chat.json', { deps: {
       onNativeSession: (definition, session) => catalog.seed(definition, acpSessionCatalog(definition, session))
     } })
-    expect(await catalog.probe(h.definition)).toEqual([])
+    expect(await catalog.probe(h.definition)).toEqual(['fake-model-1', 'fake-model-2'])
     expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
-    expect(h.requests('session/new')).toHaveLength(1)
+    expect(h.requests('session/new')).toHaveLength(2)
     expect(await catalog.probe(h.definition)).toEqual(['fake-model-1', 'fake-model-2'])
     expect(h.recorded.some((event) => event.kind === 'harness_session_state')).toBe(true)
   })

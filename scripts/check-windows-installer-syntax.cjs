@@ -22,7 +22,8 @@ const installerHelperPaths = [
   'windows-installer-migration-actions.ps1',
   'windows-installer-migration-runtime-integrity.ps1',
   'windows-installer-migration-recovery-env.ps1',
-  'windows-installer-migration-transaction.ps1'
+  'windows-installer-migration-transaction.ps1',
+  'windows-installer-pending-lease.ps1'
 ].map((path) => isAbsolute(path) ? path : join(__dirname, '..', 'build', path))
 
 function getWindowsPowerShellPath(env = process.env) {

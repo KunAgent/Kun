@@ -58,7 +58,7 @@ test('stable release reruns quality gates on the merge commit before preparation
   assert.equal(quality.name, 'Release quality gates')
   assert.equal(quality['timeout-minutes'], 45)
   assert.equal(normalizedExpression(quality.if), normalizedExpression(prepare.if))
-  assert.deepEqual(prepare.needs, ['quality'])
+  assert.deepEqual(prepare.needs, ['quality', 'tests'])
   assert.equal(stepByName(quality, 'Typecheck').env.NODE_OPTIONS,
     stepByName(readWorkflow('pr-checks.yml').jobs.quality, 'Typecheck').env.NODE_OPTIONS)
 
@@ -72,7 +72,6 @@ test('stable release reruns quality gates on the merge commit before preparation
     'npm ci',
     'npm run typecheck',
     'npm run lint',
-    'npm test',
     'npm run audit:production'
   ])
 })
@@ -88,7 +87,9 @@ test('manual candidate builds run quality and packaging without touching publish
     assert.equal(checkout.with.ref, source)
   }
   assert.match(stepByName(workflow.jobs.prepare, 'Compute release version').run, /--candidate-only/)
-  assert.deepEqual(workflow.jobs.prepare.needs, ['quality'])
+  assert.deepEqual(workflow.jobs.prepare.needs, ['quality', 'tests'])
+  assert.equal(workflow.jobs.tests.with.ref, source)
+  assert.equal(workflow.jobs.tests.uses, './.github/workflows/ci-tests.yml')
 })
 
 test('PR quality catches production advisories before the stable release merge', () => {
@@ -98,15 +99,15 @@ test('PR quality catches production advisories before the stable release merge',
   assert.equal(audit.run, 'npm run audit:production')
 })
 
-test('native Windows recovery, speech and path boundaries run early and fail closed before packaging and PR acceptance', () => {
+test('native Windows recovery, speech and path boundaries run independently and fail closed at PR acceptance', () => {
   const workflow = readWorkflow('pr-checks.yml')
   const recovery = workflow.jobs['windows-recovery']
   assert.equal(recovery['runs-on'], 'windows-latest')
-  assert.equal(recovery.needs, undefined)
-  assert.equal(recovery.if, undefined)
+  assert.equal(recovery.needs, 'changes')
+  assert.equal(recovery.if, "needs.changes.outputs.ci == 'true'")
   assert.equal(recovery['continue-on-error'], undefined)
   assert.equal(recovery['timeout-minutes'], 20)
-  assert.deepEqual(workflow.permissions, { contents: 'read' })
+  assert.deepEqual(workflow.permissions, { contents: 'read', 'pull-requests': 'read' })
   assert.equal(recovery.permissions, undefined)
   for (const step of recovery.steps) assert.equal(step['continue-on-error'], undefined)
   for (const [name, file] of [
@@ -116,7 +117,7 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
     const step = stepByName(recovery, name)
     const extra = file === 'recovery-safety'
       ? ' src/main/windows-installer-migration.payload-backup.test.ts'
-      : ' src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts --no-file-parallelism'
+      : ' src/main/windows-installer-migration.restart.test.ts src/main/windows-installer-file-contention.test.ts src/main/windows-installer-pending-lease.test.ts --no-file-parallelism'
     assert.equal(step.run, `npx vitest run src/main/windows-installer-migration.${file}.test.ts${extra}`)
     assert.equal(step.if, undefined)
   }
@@ -162,7 +163,7 @@ test('native Windows recovery, speech and path boundaries run early and fail clo
     'src/process/windows-startup-native.test.ts'
   ].join(' '))
   assert.ok(recovery.steps.indexOf(identity) > recovery.steps.indexOf(stepByName(recovery, 'Install root dependencies')))
-  assert.deepEqual(workflow.jobs['package-windows'].needs, ['quality', 'windows-recovery'])
+  assert.equal(workflow.jobs['package-windows'].needs, 'changes')
   for (const name of ['pr-gate', 'report-pr-check-feedback']) {
     const job = workflow.jobs[name]
     assert.ok(job.needs.includes('windows-recovery'))
@@ -239,6 +240,19 @@ test('an existing candidate can be revalidated without rebuilding or moving its 
   const binding = promotion.findIndex(step => step.run === 'node scripts/release-candidate-source.cjs')
   const verify = promotion.findIndex(step => step.run === 'node scripts/verify-public-release.mjs candidate')
   assert.ok(binding >= 0 && binding < verify)
+})
+
+test('0.4.5 preserves R2 rollback downloads and only previews cleanup', () => {
+  const release = readWorkflow('release.yml')
+  const cleanup = release.jobs['prune-r2']
+  assert.deepEqual(cleanup.needs, ['prepare', 'accept-and-publish'])
+  const preview = stepByName(cleanup, 'Preview superseded R2 cleanup for 0.4.5')
+  const prune = stepByName(cleanup, 'Delete superseded R2 release archives and installers')
+  assert.equal(preview.if, "env.TAG_NAME == 'v0.4.5'")
+  assert.equal(prune.if, "env.TAG_NAME != 'v0.4.5'")
+  assert.equal(preview.run, 'node ./scripts/publish-r2.mjs prune --tag "${TAG_NAME}" --channel stable --dry-run')
+  assert.equal(prune.run, 'node ./scripts/publish-r2.mjs prune --tag "${TAG_NAME}" --channel stable')
+  assert.equal(cleanup.steps.filter(step => step.run?.includes('publish-r2.mjs prune')).length, 2)
 })
 
 test('release verification retains artifact evidence without launching GUI upgrade tests', () => {

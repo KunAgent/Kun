@@ -27,7 +27,7 @@ function managerConnection(): ServiceManagerConnection {
   return {
     discovery: {
       version: 1,
-      protocolVersion: 6,
+      protocolVersion: 7,
       instanceId: 'manager-read-compatibility',
       pid: process.pid,
       startedAt: '2026-08-14T00:00:00.000Z',
@@ -355,5 +355,24 @@ describe('remote context telemetry', () => {
     expect(JSON.parse(options!.body as string)).toEqual({ value: { threadId: 'thread', maxSeq: 42 } })
     stubManagerResult({ kind: 'context_snapshot', seq: 42 })
     await expect(store.loadLatestContextSnapshot('thread', 42)).rejects.toThrow()
+  })
+})
+
+describe('remote memory retrieval policy compatibility', () => {
+  it.each([false, true])('uses the existing config envelope with an explicit policy: %s', async (override) => {
+    stubManagerResult([])
+    const config = MemoryCapabilityConfig.parse({ enabled: true, maxInjectedRecords: 1 })
+    const policy = MemoryCapabilityConfig.parse({ enabled: true, scopes: ['workspace'], maxInjectedRecords: 3 })
+    const input = { query: 'recorder', workspace: '/workspace', limit: 3, purpose: 'tool' as const,
+      ...(override ? { policy } : {}) }
+    const original = structuredClone(input)
+    await new ManagerRemoteMemoryStore(managerConnection(), config).retrieve(input)
+    const [url, options] = vi.mocked(fetch).mock.calls[0]!
+    expect(String(url)).toContain('/v1/data/memory/retrieve')
+    expect(JSON.parse(options!.body as string)).toEqual({
+      config: override ? policy : config,
+      value: { query: 'recorder', workspace: '/workspace', limit: 3, purpose: 'tool' }
+    })
+    expect(input).toEqual(original)
   })
 })

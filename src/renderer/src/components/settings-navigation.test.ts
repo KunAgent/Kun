@@ -56,6 +56,11 @@ describe('settings navigation model', () => {
     expect(mac).not.toContain('integrations')
   })
 
+  it('shows pets only in the desktop shell', () => {
+    expect(categories(visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' }))).not.toContain('pets')
+    expect(categories(visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin', desktopShell: true }))).toContain('pets')
+  })
+
   it('matches short names, full names, groups and descriptions case-insensitively', () => {
     const groups = visibleSettingsNavigationGroups({ extensionSettingsAvailable: false, platform: 'darwin' })
     expect(categories(filterSettingsNavigationGroups(groups, '  ', t))).toEqual(categories(groups))
@@ -94,6 +99,7 @@ describe('settings navigation model', () => {
     expect(settingsCategoryForRouteSection('worktree')).toBe('code')
     expect(settingsCategoryForRouteSection('imageGeneration')).toBe('mediaGeneration')
     expect(settingsCategoryForRouteSection('speak')).toBe('mediaGeneration')
+    expect(settingsCategoryForRouteSection('pets')).toBe('pets')
     expect(settingsCategoryForRouteSection(null)).toBe('agents')
   })
 })

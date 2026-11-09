@@ -1,5 +1,6 @@
 /** Stable wire/catalog order; independent of the modules that implement each operation. */
 export const REMOTE_METHOD_ORDER = [
+  "dispatch.list", "dispatch.catalog", "dispatch.act",
   "code.search",
   "agent.search",
   "code.rename",
@@ -58,6 +59,9 @@ export const REMOTE_METHOD_ORDER = [
   "project.files.list",
   "project.files.search",
   "file.preview",
+  "project.files.resolve",
+  "work.spaces.list",
+  "work.sessions.list",
   "group.create",
   "group.update",
   "group.archive",
@@ -95,6 +99,7 @@ export const REMOTE_METHOD_ORDER = [
 
 /** Historical capability presentation order is distinct from the wire schema order. */
 export const REMOTE_CAPABILITY_ORDER = [
+  "dispatch.list", "dispatch.catalog", "dispatch.act",
   "code.search",
   "agent.search",
   "code.rename",
@@ -153,6 +158,9 @@ export const REMOTE_CAPABILITY_ORDER = [
   "project.files.list",
   "project.files.search",
   "file.preview",
+  "project.files.resolve",
+  "work.spaces.list",
+  "work.sessions.list",
   "agent.directory.list",
   "group.get",
   "group.create",

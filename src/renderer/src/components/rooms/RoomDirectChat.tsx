@@ -18,16 +18,36 @@ export function useDirectChat(room: Room | null, onUpdated: () => Promise<void>)
   const resource = useAgentResource<AgentDirectActivity>(room?.conversationKind === 'user_agent' ? roomPath(room.id) + '/direct' : null,
     true, room ? `${room.id}:${room.privateEpoch ?? 0}` : null)
   const [error, setError] = useState('')
+  const failedStop = useRef<{ roomId: string; requestId: string } | null>(null)
   const scope = useRef(room?.id); scope.current = room?.id
-  useEffect(() => setError(''), [room?.id])
+  useEffect(() => {
+    const pending = failedStop.current
+    if (!pending || pending.roomId !== room?.id || resource.error) return
+    const request = resource.data?.requests.find((item) => item.id === pending.requestId)
+    // A transport error can follow a committed stop. Reconcile only from the
+    // same request's authoritative cancellation, never by replaying the action.
+    if (request?.status === 'cancelled' && resource.data?.active?.id !== pending.requestId) {
+      failedStop.current = null
+      setError('')
+    }
+  }, [room?.id, resource.data, resource.error, error])
+  useEffect(() => { failedStop.current = null; setError('') }, [room?.id])
   const act = async (action: 'stop' | 'retry', target = resource.data?.active) => {
     if (!room || !target) return
     setError('')
+    failedStop.current = null
     try { await roomsRequest(roomPath(room.id) + '/direct/' + target.id, 'POST', { clientRequestId: roomRequestId(), expectedRevision: target.revision, action }); resource.refresh() }
-    catch (cause) { if (scope.current === room.id) setError(String(cause)) }
+    catch (cause) {
+      if (scope.current === room.id) {
+        if (action === 'stop') failedStop.current = { roomId: room.id, requestId: target.id }
+        setError(String(cause))
+        resource.refresh()
+      }
+    }
   }
   const context = async (action: 'reset' | 'workspace') => {
     if (!room) return
+    failedStop.current = null
     setError('')
     try {
       const selection = action === 'workspace' ? await window.kunGui.pickWorkspaceDirectory() : undefined
@@ -39,6 +59,7 @@ export function useDirectChat(room: Room | null, onUpdated: () => Promise<void>)
   }
   const refresh = () => {
     if (scope.current !== room?.id) return
+    failedStop.current = null
     setError('')
     resource.refresh()
   }

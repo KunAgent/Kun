@@ -131,7 +131,7 @@ function managerConnection(dataDir: string): ServiceManagerConnection {
   return {
     discovery: {
       version: 1,
-      protocolVersion: 6,
+      protocolVersion: 7,
       instanceId: 'manager-startup-test',
       pid: process.pid,
       startedAt: new Date().toISOString(),

@@ -56,6 +56,7 @@ export function rowFromIndexRecord(record: ThreadIndexRecord, paths: {
       : thread.todos ? JSON.stringify(thread.todos) : null,
     extension_metadata_json: JSON.stringify({
       summaryMetadataVersion: 1,
+      activityAt: thread.activityAt,
       providerId: thread.providerId,
       harnessId: thread.harnessId,
       taskWorkspaceId: thread.taskWorkspaceId,
@@ -120,7 +121,7 @@ type ExtensionThreadMetadata = Pick<ThreadRecord,
   | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch' | 'planBuildRunId' | 'workbenchOrigin' | 'taskOrigin'
   | 'collaboration' | 'executionConfig'
   | 'planBuildAdmissionFingerprint' | 'planBuildAdmissionCapabilityHash'
-  | 'planBuildAdmissionFrozen'> & { turnCount?: number }
+  | 'planBuildAdmissionFrozen' | 'activityAt'> & { turnCount?: number }
 
 export function needsSummaryMetadataRepair(row: ThreadRow): boolean {
   return parseJson<{ summaryMetadataVersion?: number }>(row.extension_metadata_json)?.summaryMetadataVersion !== 1

@@ -7,6 +7,7 @@ import type { PendingPaperSelection } from './reader/use-paper-selection'
 import type { PaperReaderLayoutPreset } from '../../paper/paper-reader-layout'
 import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
 import { PapersReader, type PapersReaderProps } from './PapersReader'
+import { paperAssistantSession, patchPaperAssistant, usePaperAssistantStore } from '../../paper/paper-space-assistant-state'
 
 type PdfProps = {
   filePath: string
@@ -47,6 +48,19 @@ vi.mock('./reader/PapersNotesPane', async () => {
   }
 })
 
+vi.mock('./PapersAssistantPanel', async () => {
+  const React = await import('react')
+  const state = await import('../../paper/paper-space-assistant-state')
+  return { PapersAssistantPanel: ({ workspaceRoot, unitDir }: { workspaceRoot: string; unitDir: string }) => {
+    const key = `${workspaceRoot}\0${unitDir}`
+    const draft = state.usePaperAssistantStore((store) => store.sessions[key] ?? state.EMPTY_PAPER_ASSISTANT)
+    return React.createElement('aside', null, React.createElement('textarea', {
+      'aria-label': 'paperSpaceAskPaper', value: draft.input,
+      onChange: (event: { target: { value: string } }) => state.patchPaperAssistant(key, { input: event.target.value })
+    }))
+  } }
+})
+vi.mock('../../paper/paper-space-assistant', () => ({ openPaperSpaceAssistant: vi.fn(async () => null) }))
 vi.mock('./library/PaperMetaEditDialog', () => ({ PaperMetaEditDialog: () => null }))
 
 const layout = vi.hoisted(() => ({ read: vi.fn((): PaperReaderLayoutPreset => 'read'), store: vi.fn() }))
@@ -162,6 +176,7 @@ function promptTextareaValue(target: ReactTestRenderer): string {
 beforeEach(() => {
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
   vi.clearAllMocks()
+  usePaperAssistantStore.setState({ sessions: {} })
   capture.host = null
   capture.pdf.length = 0
   capture.notes.length = 0
@@ -278,12 +293,12 @@ describe('PapersReader navigation and layout', () => {
     expect(notesPanes(tree)).toHaveLength(0)
 
     await click(tree, 'paperSpaceNotes')
-    expect(layout.store).toHaveBeenLastCalledWith('notes')
+    expect(paperAssistantSession('/library-a\0papers/a').layout).toBe('notes')
     expect(notesPanes(tree)).toHaveLength(1)
     expect(promptTextareas(tree)).toHaveLength(0)
 
     await click(tree, 'paperSpaceAssistant')
-    expect(layout.store).toHaveBeenLastCalledWith('assistant')
+    expect(paperAssistantSession('/library-a\0papers/a').layout).toBe('assistant')
     expect(promptTextareas(tree)).toHaveLength(1)
     expect(notesPanes(tree)).toHaveLength(0)
 
@@ -301,40 +316,47 @@ describe('PapersReader reader assistant', () => {
     const onSubmitPrompt = vi.fn()
     const work = useWriteWorkspaceStore.getState()
     const setSelection = vi.spyOn(work, 'setSelection')
-    tree = await render({ workspaceRoot: '/library-a', entry: entry({ hasPdf: false }), onBack: vi.fn(), onSubmitPrompt })
+    tree = await render({ workspaceRoot: '/library-a', entry: entry(), onBack: vi.fn(), onSubmitPrompt })
 
     await act(async () => { capture.host!.onQuoteSelection!(selection('line one\nline two', 3)) })
 
-    expect(promptTextareaValue(tree)).toBe('page 3\n> line one\n> line two')
-    expect(layout.store).toHaveBeenLastCalledWith('assistant')
+    expect(promptTextareaValue(tree)).toBe('[page 3](papers/a/paper.pdf#page=3)\n> line one\n> line two')
+    expect(paperAssistantSession('/library-a\0papers/a').layout).toBe('assistant')
     expect(notesApi.save).not.toHaveBeenCalled()
     expect(onSubmitPrompt).not.toHaveBeenCalled()
     expect(setSelection).not.toHaveBeenCalled()
     expect(readWorkspaceFile).not.toHaveBeenCalled()
-    expect(readWorkspacePdf).not.toHaveBeenCalled()
+    expect(readWorkspacePdf).toHaveBeenCalledTimes(1)
     setSelection.mockRestore()
   })
 
-  it('clears staged image attachments when the reader source changes', async () => {
+  it('preserves each paper draft and screenshot without adding them to a reading-purpose request', async () => {
     const onSubmitPrompt = vi.fn()
     // Notes-only unit keeps the captured host deterministic: the assistant
     // exists without waiting on a PDF read.
-    tree = await render({ workspaceRoot: '/library-a', entry: entry({ hasPdf: false }), onBack: vi.fn(), onSubmitPrompt })
+    tree = await render({ workspaceRoot: '/library-a', entry: entry(), onBack: vi.fn(), onSubmitPrompt })
 
     const image = { dataBase64: 'aW1hZ2U=', name: 'figure.png' }
     await act(async () => { expect(await capture.host!.onAttachImage!(image)).toBe(true) })
     expect(onSubmitPrompt).not.toHaveBeenCalled()
 
     await act(async () => { capture.host!.onAskSelection!('why?', selection('quoted line', 2)) })
-    expect(onSubmitPrompt).toHaveBeenLastCalledWith('why?\n\npage 2\n> quoted line', [image])
+    expect(onSubmitPrompt).toHaveBeenLastCalledWith('why?\n\n[page 2](papers/a/paper.pdf#page=2)\n> quoted line')
+    expect(paperAssistantSession('/library-a\0papers/a').images).toEqual([image])
 
-    await act(async () => { expect(await capture.host!.onAttachImage!(image)).toBe(true) })
+    await act(async () => { patchPaperAssistant('/library-a\0papers/a', { input: 'A draft' }) })
     await act(async () => {
-      tree!.update(createElement(PapersReader, { workspaceRoot: '/library-b', entry: entry({ hasPdf: false }), onBack: vi.fn(), onSubmitPrompt }))
+      tree!.update(createElement(PapersReader, { workspaceRoot: '/library-b', entry: entry(), onBack: vi.fn(), onSubmitPrompt }))
     })
     await flush()
     await act(async () => { capture.host!.onAskSelection!('why again?', selection('quoted line', 2)) })
 
-    expect(onSubmitPrompt).toHaveBeenLastCalledWith('why again?\n\npage 2\n> quoted line', [])
+    expect(onSubmitPrompt).toHaveBeenLastCalledWith('why again?\n\n[page 2](papers/a/paper.pdf#page=2)\n> quoted line')
+    expect(paperAssistantSession('/library-b\0papers/a').images).toEqual([])
+    await act(async () => {
+      tree!.update(createElement(PapersReader, { workspaceRoot: '/library-a', entry: entry(), onBack: vi.fn(), onSubmitPrompt }))
+    })
+    expect(promptTextareaValue(tree)).toBe('A draft')
+    expect(paperAssistantSession('/library-a\0papers/a').images).toEqual([image])
   })
 })

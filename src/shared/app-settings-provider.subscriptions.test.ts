@@ -91,6 +91,64 @@ describe('ChatGPT subscription migration', () => {
     expect(provider.modelProfiles['gpt-5.3-codex-spark'].serviceTiers).toBeUndefined()
   })
 
+  it.each(['codex', 'codex-2'])('fills missing Terra reasoning metadata for %s without changing its model list', (id) => {
+    const normalized = normalizeModelProviderSettings({
+      providers: [{
+        id,
+        name: 'ChatGPT subscription',
+        presetSource: { presetId: 'codex', mode: 'api' },
+        apiKey: 'oauth-json',
+        baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
+        endpointFormat: 'custom_endpoint',
+        useProxy: false,
+        models: ['gpt-6.1-terra'],
+        modelProfiles: {
+          'gpt-6.1-terra': {
+            inputModalities: ['text', 'image'], outputModalities: ['text'],
+            supportsToolCalling: true, messageParts: ['text', 'image_url']
+          }
+        }
+      }]
+    })
+
+    const provider = normalized.providers.find((item) => item.id === id)!
+    expect(provider.models).toEqual(['gpt-6.1-terra'])
+    expect(provider.modelProfiles['gpt-6.1-terra']).toMatchObject({
+      contextWindowTokens: 500_000,
+      reasoning: {
+        supportedEfforts: ['low', 'medium', 'high', 'max'],
+        defaultEffort: 'low',
+        requestProtocol: 'openai-responses'
+      },
+      serviceTiers: ['priority']
+    })
+  })
+
+  it('preserves explicit Terra reasoning settings over the preset', () => {
+    const reasoning = {
+      supportedEfforts: ['low', 'high'] as const,
+      defaultEffort: 'high' as const,
+      requestProtocol: 'openai-responses' as const
+    }
+    const normalized = normalizeModelProviderSettings({
+      providers: [{
+        id: 'codex', name: 'ChatGPT subscription', apiKey: 'oauth-json',
+        baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
+        endpointFormat: 'custom_endpoint', useProxy: false, models: ['gpt-6.1-terra'],
+        modelProfiles: {
+          'gpt-6.1-terra': {
+            inputModalities: ['text', 'image'], outputModalities: ['text'],
+            supportsToolCalling: true, messageParts: ['text', 'image_url'],
+            reasoning: { ...reasoning, supportedEfforts: [...reasoning.supportedEfforts] }
+          }
+        }
+      }]
+    })
+
+    expect(normalized.providers.find((item) => item.id === 'codex')?.modelProfiles['gpt-6.1-terra'].reasoning)
+      .toEqual(reasoning)
+  })
+
   it('keeps explicit Codex service tiers over the static preset', () => {
     const normalized = normalizeModelProviderSettings({
       providers: [{

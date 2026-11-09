@@ -1,3 +1,5 @@
+!include "${PROJECT_DIR}\build\installer-extraction-tracing.nsh"
+
 !macro customCheckAppRunning
   !ifdef BUILD_UNINSTALLER
     ${if} $INSTDIR == ""
@@ -15,6 +17,7 @@
     File /oname=$PLUGINSDIR\windows-installer-migration-runtime-integrity.ps1 "${PROJECT_DIR}\build\windows-installer-migration-runtime-integrity.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-recovery-env.ps1 "${PROJECT_DIR}\build\windows-installer-migration-recovery-env.ps1"
     File /oname=$PLUGINSDIR\windows-installer-migration-transaction.ps1 "${PROJECT_DIR}\build\windows-installer-migration-transaction.ps1"
+    File /oname=$PLUGINSDIR\windows-installer-migration-privileged.ps1 "${PROJECT_DIR}\build\windows-installer-migration-privileged.ps1"
     StrCpy $KunInstallerHelperPath "$PLUGINSDIR\kun-windows-installer-migration.ps1"
     System::Call 'kernel32::GetCurrentProcessId() i .r0'
     StrCpy $KunInstallerCurrentPid $0
@@ -61,6 +64,7 @@
 
     KunInstallDirProcessesStopped:
   !else
+    !insertmacro KunInstallExtractionTracing
     Call KunPrepareInstallMigration
     StrCpy $appExe "$INSTDIR\${APP_EXECUTABLE_FILENAME}"
     ${ifNot} ${Silent}

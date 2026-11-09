@@ -3,7 +3,17 @@ import { Envelope, ParamSchemas } from './contracts.js'
 import { requireCode } from './code/access.js'
 import { allowedThread } from './authorization/thread-access.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
+import { REMOTE_SCOPES } from '@kun/remote-protocol'
 describe('mobile capability boundary', () => {
+  it.each([
+    ['personal'], ['personal', 'desktop.view'], ['personal', 'desktop.view', 'desktop.control'], [...REMOTE_SCOPES]
+  ].map((scopes) => ({ scopes })))('accepts registered grants $scopes for ordinary synchronization without accepting unknown scopes', ({ scopes }) => {
+    const envelope = { accountId: 'account', deviceId: 'phone', authorizationId: 'grant', scopes,
+      call: { method: 'catalog.get', requestId: 'catalog', expiresAt: 1, params: {} } }
+    expect(Envelope.parse(envelope).scopes).toEqual(scopes)
+    expect(Envelope.safeParse({ ...envelope, scopes: [...scopes, 'desktop.admin'] }).success).toBe(false)
+    expect(Envelope.safeParse({ ...envelope, call: { ...envelope.call, method: 'desktop.session.start' } }).success).toBe(false)
+  })
   it('rejects arbitrary IPC, directory paths and privilege fields', () => {
     expect(() =>
       Envelope.parse({

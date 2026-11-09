@@ -191,7 +191,7 @@ async function managerHarness() {
   const connection: ServiceManagerConnection = {
     discovery: {
       version: 1,
-      protocolVersion: 6,
+      protocolVersion: 7,
       instanceId: 'manager-feedback',
       pid: process.pid,
       startedAt: '2026-09-15T00:00:00.000Z',

@@ -44,7 +44,7 @@ function sanitizePane(value: unknown): TerminalPane | null {
   if (pane.target.kind === 'kun-process') return null
   if (!['local', 'ssh', 'agent'].includes(pane.target.kind)) return null
   // A setup prefill or one-shot command must never run twice after a restart.
-  const { prefill: _prefill, initialCommand: _initialCommand, fresh: _fresh, ...rest } = pane
+  const { prefill: _prefill, initialCommand: _initialCommand, profileLaunch: _profileLaunch, fresh: _fresh, ...rest } = pane
   return rest
 }
 

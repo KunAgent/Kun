@@ -60,6 +60,7 @@ export type RuntimeQueueSendInput = {
   ackNoticeIds: string[] | undefined
   queued: QueuedUserMessage | undefined
   overrides: SendMessageOverrides | undefined
+  submissionGuard?: () => boolean
   set: ChatStoreSet
   get: ChatStoreGet
   persistActiveQueuedMessages: () => void
@@ -101,6 +102,8 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
       model: composerModel
     })
     const settings = await rendererRuntimeClient.getSettings()
+    // Preparation may outlive the pet/paper target. No request has been sent yet.
+    if (input.submissionGuard?.() === false) return false
     const runtimeText = runtimePromptForSurface({
       channel,
       requestedAgentSurface,
@@ -195,6 +198,7 @@ export async function submitToRuntimeQueue(input: RuntimeQueueSendInput): Promis
     // Persist a `starting` row before admission so a crash between the runtime
     // accepting the turn and the local state update cannot silently drop a
     // queued turn. The idempotent clientRequestId keeps any later retry safe.
+    if (input.submissionGuard?.() === false) return false
     const startingRow = { ...queuedRow, deliveryState: 'starting' as const }
     set((s) => {
       const existingIndex = s.queuedMessages.findIndex((message) =>

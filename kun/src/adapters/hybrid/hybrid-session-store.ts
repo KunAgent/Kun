@@ -151,6 +151,10 @@ export class HybridSessionStore implements SessionStore {
     return this.delegate.loadItemPage(threadId, options)
   }
 
+  async loadDurableItemPage(threadId: string, options: ItemHistoryPageOptions): Promise<ItemHistoryPage> {
+    return this.delegate.loadItemPage(threadId, { ...options, durableOnly: true })
+  }
+
   async searchItemText(
     threadId: string,
     query: string,

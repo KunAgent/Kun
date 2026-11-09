@@ -1,0 +1,107 @@
+{
+  "id": "ikun",
+  "displayName": "iKun",
+  "description": "灰色中分、黑色运动服和篮球的 iKun，带着头顶的小黄鸡陪你工作。",
+  "spriteVersionNumber": 1,
+  "spritesheetPath": "spritesheet.webp",
+  "interactions": {
+    "version": 1,
+    "modelAliases": [],
+    "providerAliases": [],
+    "greeting": {
+      "states": [
+        "jumping",
+        "waving",
+        "jumping"
+      ],
+      "durationMs": 4600
+    },
+    "clips": {
+      "typing": {
+        "state": "running",
+        "tempo": 1.41,
+        "strength": 0.7
+      },
+      "listening": {
+        "state": "waiting",
+        "tempo": 0.85,
+        "strength": 0.5
+      },
+      "speaking": {
+        "state": "waving",
+        "tempo": 1.15,
+        "strength": 0.8
+      },
+      "transcribing": {
+        "state": "review",
+        "tempo": 0.7,
+        "strength": 0.3
+      }
+    },
+    "visits": {
+      "scenes": [
+        "beatbox",
+        "dance",
+        "cheer"
+      ],
+      "arrival": "hop"
+    },
+    "bottle": {
+      "catchStyle": "bounce",
+      "inspectState": "waiting",
+      "celebrateState": "jumping",
+      "durationMs": 7800
+    },
+    "joint": {
+      "version": 1,
+      "row": 5,
+      "blink": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        7
+      ],
+      "ground": 0.93,
+      "head": [
+        0.5,
+        0.54
+      ],
+      "arms": [
+        {
+          "shoulder": [
+            0.35,
+            0.58
+          ],
+          "hand": [
+            0.3,
+            0.73
+          ],
+          "radius": 0.06
+        },
+        {
+          "shoulder": [
+            0.65,
+            0.58
+          ],
+          "hand": [
+            0.7,
+            0.73
+          ],
+          "radius": 0.06
+        }
+      ],
+      "feet": [
+        [
+          0.39,
+          0.9
+        ],
+        [
+          0.62,
+          0.9
+        ]
+      ]
+    }
+  }
+}

@@ -4,8 +4,9 @@ const { chmod, mkdir, writeFile } = require('node:fs/promises')
 const { join } = require('node:path')
 
 const ROOMS_HARNESS_PROFILE = Object.freeze({ harnessId: 'devin', credentialMode: 'native-login' })
-// Fresh ACP catalogs expose only the Agent default until a real turn opens a session.
+// Readiness uses the Agent default; catalog discovery may already expose session models.
 const ROOMS_HARNESS_MODEL = 'default'
+const ROOMS_HARNESS_SESSION_MODEL = 'devin-fixture-model'
 const ROOMS_HARNESS_KEY = 'rooms-offline-fixture-no-service-access'
 
 /** Consent for exactly the offline fixture; persisted consent is not readiness. */
@@ -127,8 +128,13 @@ function roomsHarnessDiscoveryRoute(messages) {
     const output = JSON.parse(result?.content)
     if (output?.error || output?.isError === true || output?.authority !== 'reference_only' || !Array.isArray(output.agents)) return null
     const agent = output.agents.find((entry) => entry.harnessId === 'devin' && entry.available === true)
-    return agent?.models?.find((route) => route.harnessId === 'devin' && route.credentialMode === 'native-login' &&
-      route.model === ROOMS_HARNESS_MODEL) ?? null
+    // The shared picker can discover session models before this turn. Prefer
+    // the stub's concrete model when advertised, otherwise use its fresh default.
+    // Never invent a route absent from the successful live catalog.
+    const routes = agent?.models?.filter((route) => route.harnessId === 'devin' &&
+      route.credentialMode === 'native-login') ?? []
+    return routes.find((route) => route.model === ROOMS_HARNESS_SESSION_MODEL) ??
+      routes.find((route) => route.model === ROOMS_HARNESS_MODEL) ?? null
   } catch { return null }
 }
 
@@ -139,5 +145,5 @@ function assertRoomsHarnessDiscoveryOrder(observations) {
   assert(discovery >= 0 && proposal > discovery && observations[proposal].roomsHarnessDiscoverySucceeded === true,
     'Successful Code Agent discovery must precede the task proposal')
 }
-module.exports = { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL,
+module.exports = { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL, ROOMS_HARNESS_SESSION_MODEL,
   writeRoomsHarnessStub, roomsHarnessModelResponse, roomsHarnessDiscoveryRoute, assertRoomsHarnessDiscoveryOrder }

@@ -53,9 +53,9 @@ async function fixture(directory = true) {
   const send = (frame: Frame) => {
     for (const data of encodeFrames({ v: 1, src: phone, dst: host, ...frame })) socket.onmessage?.({ data })
   }
-  const invoke = (method: string) => {
+  const invoke = (method: string, params: Record<string, unknown> = {}) => {
     const id = randomUUID()
-    send({ kind: 'invoke', id, payload: { method, params: {}, requestId: id, expiresAt: Date.now() + 60000 } })
+    send({ kind: 'invoke', id, payload: { method, params, requestId: id, expiresAt: Date.now() + 60000 } })
     return id
   }
   const subscribe = (active: boolean, src = phone) => send({ kind: 'subscribe', id: randomUUID(), src,
@@ -65,7 +65,11 @@ async function fixture(directory = true) {
     close: async () => { service.dispose(); await runtime.close(); await server.close() } }
 }
 
-it('carries serialized directory subscriptions through authenticated Runtime HTTP/SSE and back to the phone, then fences cancellation', async () => {
+it.each([
+  { label: 'ordinary phone access', scopes: ['personal'] },
+  { label: 'desktop viewing', scopes: ['personal', 'desktop.view'] },
+  { label: 'desktop control', scopes: ['personal', 'desktop.view', 'desktop.control'] }
+])('keeps catalog, history and directory synchronization working with $label, then fences cancellation', async ({ scopes }) => {
   const f = await fixture()
   try {
     const original = f.registry.subscribe.bind(f.registry), detached = vi.fn()
@@ -75,20 +79,29 @@ it('carries serialized directory subscriptions through authenticated Runtime HTT
     })
     await f.service.enable(true)
     await vi.waitFor(async () => expect((await f.service.status()).online).toBe(true))
+    await f.service.setScopes(grant, scopes)
     const catalog = f.invoke('catalog.get')
-    await vi.waitFor(() => expect(f.frames.find((frame) => frame.id === catalog)?.payload.capabilities).toContain(DIRECTORY_LIVE_CAPABILITY))
+    await vi.waitFor(() => expect(f.frames.some((frame) => frame.id === catalog)).toBe(true))
+    expect(f.frames.find((frame) => frame.id === catalog)?.payload.error).toBeUndefined()
+    expect(f.frames.find((frame) => frame.id === catalog)?.payload.capabilities).toContain(DIRECTORY_LIVE_CAPABILITY)
     f.subscribe(true)
     await vi.waitFor(() => expect(f.directoryFrames()[0]?.payload.kind).toBe('subscribed'))
     expect(f.streams).toHaveLength(1)
     expect(f.streams[0].get('X-Kun-Remote-Device')).toBe(phone)
-    expect(f.streams[0].get('X-Kun-Remote-Scopes')).toBe('personal')
-    await f.code('Sensitive task title stays on the host')
+    expect(f.streams[0].get('X-Kun-Remote-Scopes')).toBe(scopes.join(','))
+    const code = await f.code('Sensitive task title stays on the host')
     await vi.waitFor(() => expect(f.directoryFrames().at(-1)?.payload).toEqual({
       resource: 'directory', resourceId: 'all', kind: 'directory_changed', resources: ['code', 'project'] }))
     await f.rooms.service.create({ clientRequestId: 'group-create', name: 'Sensitive group contents' })
     await vi.waitFor(() => expect(f.directoryFrames().at(-1)?.payload).toEqual({
       resource: 'directory', resourceId: 'all', kind: 'directory_changed', resources: ['agent'] }))
     expect(JSON.stringify(f.directoryFrames())).not.toContain('Sensitive')
+    const list = f.invoke('code.list')
+    await vi.waitFor(() => expect(f.frames.some((frame) => frame.id === list)).toBe(true))
+    expect(f.frames.find((frame) => frame.id === list)?.payload.threads).toEqual(expect.arrayContaining([expect.objectContaining({ id: code.id })]))
+    const history = f.invoke('code.history', { threadId: code.id })
+    await vi.waitFor(() => expect(f.frames.some((frame) => frame.id === history)).toBe(true))
+    expect(f.frames.find((frame) => frame.id === history)?.payload.error).toBeUndefined()
 
     f.subscribe(false)
     await vi.waitFor(() => expect(detached).toHaveBeenCalledOnce())

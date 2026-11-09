@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinkDependencies } from './service'
+import type { MobileLinkStatus } from '../../shared/mobile-link'
 const mock = vi.hoisted(() => ({
   handlers: new Map<string, (...args: any[]) => any>(),
   power: new Map<string, () => void>(),
   quit: undefined as undefined | (() => void), online: true, address: '192.0.2.1', remembered: false,
   deps: undefined as LinkDependencies | undefined,
-  status: vi.fn(async () => ({ enabled: false })), enable: vi.fn(), confirm: vi.fn(),
+  status: vi.fn<() => Promise<MobileLinkStatus>>(), enable: vi.fn(), confirm: vi.fn(),
+  resetIdentity: vi.fn(),
   revoke: vi.fn(), setScopes: vi.fn(), suspend: vi.fn(), reconnect: vi.fn(), dispose: vi.fn(),
   trusted: vi.fn(), info: vi.fn(), warn: vi.fn()
 }))
@@ -25,8 +27,9 @@ vi.mock('node:os', () => ({ hostname: () => 'desktop',
 vi.mock('../ipc/app-ipc-handler-utils', () => ({ assertTrustedWorkbenchSender: mock.trusted }))
 vi.mock('../logger', () => ({ logInfo: mock.info, logWarn: mock.warn }))
 vi.mock('./files', () => ({ transferFiles: vi.fn() }))
+vi.mock('../computer-access/register', () => ({ registerComputerAccess: vi.fn() }))
 vi.mock('./share-file-services', () => ({ transferSharedFiles: vi.fn() }))
-vi.mock('./identity', () => ({ loadIdentity: vi.fn() }))
+vi.mock('./identity', () => ({ loadIdentity: vi.fn(), resetIdentity: mock.resetIdentity }))
 vi.mock('./socket', () => ({ MobileLinkSockets: class { open = vi.fn(); dispose = vi.fn() } }))
 vi.mock('./relay-preference', () => ({ RelayPreference: class {
   remembered = async () => mock.remembered
@@ -44,6 +47,13 @@ vi.mock('./service', () => ({ MobileLinkService: class {
   reconnect = mock.reconnect
   dispose = mock.dispose
 } }))
+vi.mock('../remote-desktop/engine', () => ({ createDesktopEngine: () => ({
+  status: vi.fn(), configure: vi.fn(), stopAll: vi.fn(async () => {})
+}) }))
+vi.mock('../remote-terminal/engine', () => ({ createTerminalEngine: () => ({
+  invoke: vi.fn(async () => ({})), descriptors: vi.fn(() => []), capabilities: vi.fn(() => []),
+  detachAll: vi.fn(), stopAll: vi.fn(async () => {}), authorityChanged: vi.fn(), peerGone: vi.fn()
+}) }))
 import { registerMobileLink } from './register'
 import { RESUME_RETRY_MS } from './relay-resume'
 
@@ -58,11 +68,80 @@ beforeEach(() => {
   mock.handlers.clear(); mock.power.clear()
   mock.online = true; mock.address = '192.0.2.1'; mock.quit = undefined; mock.remembered = false
   mock.enable.mockReset()
+  mock.status.mockReset().mockResolvedValue({ enabled: false, online: false, pairings: [], grants: [] })
+  mock.resetIdentity.mockReset().mockResolvedValue(undefined)
   mock.trusted.mockImplementation(() => {})
 })
 afterEach(() => { mock.quit?.(); vi.useRealTimers() })
 
 describe('desktop mobile recovery composition', () => {
+  it('uses the unified consent for a trusted start and forgets it when revocation cannot be confirmed', async () => {
+    const signedIn = { status: 'authenticated', user: { id: 'owner' }, error: null }
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, { ...account, getState: async () => signedIn })
+    await vi.advanceTimersByTimeAsync(0)
+    mock.enable.mockResolvedValue({ enabled: true, desktopAccess: true, online: false, pairings: [], grants: [] })
+    await mock.handlers.get('mobile-link:enable')!({}, true)
+    expect(mock.enable).toHaveBeenLastCalledWith(true, false, true)
+    expect(mock.remembered).toBe(true)
+    mock.revoke.mockRejectedValueOnce(Error('cloud unavailable'))
+    await expect(mock.handlers.get('mobile-link:revoke')!({}, 'grant')).rejects.toThrow('cloud unavailable')
+    expect(mock.enable).toHaveBeenLastCalledWith(false)
+    expect(mock.remembered).toBe(false)
+  })
+  it('allows only the trusted workbench to reset a rejected device and leaves access off', async () => {
+    mock.remembered = true
+    const signedIn = { status: 'authenticated', user: { id: 'owner' }, error: null }
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, {
+      ...account, getState: async () => signedIn
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    mock.enable.mockClear()
+    mock.status.mockResolvedValue({ enabled: false, online: false, error: 'DEVICE_AUTHORIZATION_REQUIRED', pairings: [], grants: [] })
+    mock.trusted.mockImplementationOnce(() => { throw new Error('untrusted') })
+    await expect(mock.handlers.get('mobile-link:reset-identity')!({})).rejects.toThrow('untrusted')
+    expect(mock.resetIdentity).not.toHaveBeenCalled()
+    await mock.handlers.get('mobile-link:reset-identity')!({})
+    expect(mock.resetIdentity).toHaveBeenCalledWith('/tmp/mobile-link-test/mobile-link/owner/identity.enc')
+    expect(mock.enable.mock.calls).toEqual([[false]])
+    expect(mock.remembered).toBe(false)
+  })
+  it('refuses to reset a healthy or running device', async () => {
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, {
+      ...account, getState: async () => ({ status: 'authenticated', user: { id: 'owner' }, error: null })
+    })
+    for (const status of [{ enabled: false }, { enabled: true, error: 'DEVICE_AUTHORIZATION_REQUIRED' },
+      { enabled: false, starting: true, error: 'DEVICE_AUTHORIZATION_REQUIRED' }]) {
+      mock.status.mockResolvedValue({ online: false, pairings: [], grants: [], ...status })
+      await expect(mock.handlers.get('mobile-link:reset-identity')!({})).rejects.toThrow('INVALID_IDENTITY_RESET')
+    }
+    expect(mock.resetIdentity).not.toHaveBeenCalled()
+  })
+  it('does not replace credentials after the account changes while stopping', async () => {
+    let owner = 'first'
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, {
+      ...account, getState: async () => ({ status: 'authenticated', user: { id: owner }, error: null })
+    })
+    mock.status.mockResolvedValue({ enabled: false, online: false, error: 'DEVICE_AUTHORIZATION_REQUIRED', pairings: [], grants: [] })
+    mock.enable.mockImplementation(async () => { owner = 'second'; return { enabled: false } })
+    await expect(mock.handlers.get('mobile-link:reset-identity')!({})).rejects.toThrow('ACCOUNT_CHANGED')
+    expect(mock.resetIdentity).not.toHaveBeenCalled()
+  })
+  it('blocks a second reset and manual startup until the identity write finishes', async () => {
+    registerMobileLink({ getMainWindow: () => null, acquireRuntimeRequestLease: vi.fn() } as any, {
+      ...account, getState: async () => ({ status: 'authenticated', user: { id: 'owner' }, error: null })
+    })
+    mock.status.mockResolvedValue({ enabled: false, online: false, error: 'DEVICE_AUTHORIZATION_REQUIRED', pairings: [], grants: [] })
+    let finish!: () => void
+    mock.resetIdentity.mockImplementation(() => new Promise<void>((resolve) => { finish = resolve }))
+    const reset = mock.handlers.get('mobile-link:reset-identity')!({})
+    await vi.advanceTimersByTimeAsync(0)
+    expect(mock.resetIdentity).toHaveBeenCalledTimes(1)
+    await expect(mock.handlers.get('mobile-link:reset-identity')!({})).rejects.toThrow('OPERATION_IN_PROGRESS')
+    expect(() => mock.handlers.get('mobile-link:enable')!({}, true)).toThrow('OPERATION_IN_PROGRESS')
+    finish()
+    await reset
+    expect(mock.enable.mock.calls).toEqual([[false]])
+  })
   it('restarts an exhausted remembered startup on network restoration without re-enabling a healthy relay', async () => {
     mock.remembered = true
     mock.online = false

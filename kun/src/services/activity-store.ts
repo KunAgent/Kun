@@ -255,10 +255,16 @@ export class ActivityStore implements RuntimeEventObserver {
       if (!this.rows.has(unitId)) {
         this.autoRegister(event, unitId)
       }
+      if (event.kind === 'turn_started') this.clearPreview(unitId)
       if (projection.patch.lastMessagePreview !== undefined) {
-        this.applyPreviewThrottled(unitId, projection.patch.lastMessagePreview)
+        if (event.kind === 'item_created' || event.kind === 'item_completed') {
+          this.replacePreview(unitId, projection.patch.lastMessagePreview)
+        } else {
+          this.applyPreviewThrottled(unitId, projection.patch.lastMessagePreview)
+        }
         continue
       }
+      if (event.kind === 'turn_completed' || event.kind === 'turn_failed') this.flushPreview(unitId)
       this.applyRuntime(event, unitId, projection.patch)
     }
   }
@@ -397,6 +403,28 @@ export class ActivityStore implements RuntimeEventObserver {
     const timer = setTimeout(() => this.flushPreview(unitId), remaining)
     timer.unref?.()
     this.previewTimers.set(unitId, timer)
+  }
+
+  private clearPreview(unitId: string): void {
+    const timer = this.previewTimers.get(unitId)
+    if (timer) {
+      clearTimeout(timer)
+      this.previewTimers.delete(unitId)
+    }
+    this.pendingPreview.delete(unitId)
+    this.lastPreviewAt.delete(unitId)
+    if (this.rows.get(unitId)?.lastMessagePreview) this.apply(unitId, { lastMessagePreview: '' }, 'runtime')
+  }
+
+  private replacePreview(unitId: string, text: string): void {
+    const timer = this.previewTimers.get(unitId)
+    if (timer) {
+      clearTimeout(timer)
+      this.previewTimers.delete(unitId)
+    }
+    this.pendingPreview.delete(unitId)
+    this.lastPreviewAt.set(unitId, this.nowMs())
+    this.apply(unitId, { lastMessagePreview: text.slice(0, PREVIEW_MAX) }, 'runtime')
   }
 
   private flushPreview(unitId: string): void {

@@ -47,10 +47,25 @@ async function spawnWindowsPty(module: PtyModule, file: string, args: string[], 
   return {
     pty,
     exited,
-    ready: prepared.bind(facade).then(() => undefined),
-    release() {},
-    takeInitialOutput: () => { output.dispose(); return initialOutput },
-    ownership: { stop: () => stopWindowsOwnedProcess(facade, { graceMs: 0, timeoutMs: 5_000 }) }
+    // ready proves Job assignment, but deliberately leaves the target suspended.
+    // terminal-pty-ipc performs its final validation before calling release.
+    ready: prepared.bind(facade).then(() => undefined).catch((error) => {
+      output.dispose(); initialOutput = ''; throw error
+    }),
+    release() {
+      if (cancelled()) throw new Error('Terminal service is stopping.')
+      prepared.release()
+    },
+    takeInitialOutput: () => {
+      output.dispose()
+      const buffered = initialOutput
+      initialOutput = ''
+      return buffered
+    },
+    ownership: { stop: async () => {
+      output.dispose(); initialOutput = ''
+      await stopWindowsOwnedProcess(facade, { graceMs: 0, timeoutMs: 5_000 })
+    } }
   }
 }
 

@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { AppSettingsV1 } from '@shared/app-settings'
 import type { PaperLibraryEntry, PaperLibraryFilter, PaperLibrarySort } from '@shared/paper/paper-library-types'
 import { emptyPaperLibraryFilter, PAPER_DEFAULT_SORT } from './paper-mode-store'
-import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../lib/workspace-path'
 
 export type PaperSpaceView = 'library' | 'discover:search' | 'discover:arxiv' | 'discover:venue' | 'discover:feeds'
 
@@ -14,7 +14,7 @@ export type PaperSpaceItem = {
 }
 
 export function paperSpaceItemKey(libraryRoot: string, unitDir: string): string {
-  return `${normalizeWorkspaceRoot(libraryRoot)}\0${unitDir.replace(/\\/g, '/').replace(/\/$/, '')}`
+  return `${workspaceRootScopeKey(normalizeWorkspaceRoot(libraryRoot))}\0${unitDir.replace(/\\/g, '/').replace(/\/+$/, '')}`
 }
 
 type PaperSpaceState = {
@@ -32,6 +32,7 @@ type PaperSpaceState = {
   loaded: boolean
   view: PaperSpaceView
   readerKey: string | null
+  openReaderKeys: string[]
   libraryScrollTop: number
   filter: PaperLibraryFilter
   sort: PaperLibrarySort
@@ -59,6 +60,7 @@ export const usePaperSpaceStore = create<PaperSpaceState>((set) => ({
   loaded: false,
   view: 'library',
   readerKey: null,
+  openReaderKeys: [],
   libraryScrollTop: 0,
   filter: emptyPaperLibraryFilter(),
   sort: PAPER_DEFAULT_SORT,

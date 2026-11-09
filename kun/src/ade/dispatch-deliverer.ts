@@ -22,7 +22,7 @@ import type { FileDispatchStore } from './dispatch-store.js'
 import type { FileTeamStore } from './team-store.js'
 import { renderAssignment } from './assignment-template.js'
 import { reportLanguage } from './user-report.js'
-import { withAdeTeamMutex } from './ade-file.js'
+import { withAdeTeamMutex, withAdeDeliveryMutex } from './ade-file.js'
 
 export type DeliverOutcome = {
   accepted: boolean
@@ -157,12 +157,14 @@ export class DispatchDeliverer {
   }
 
   /**
-   * Deliver one dispatch if it is deliverable now. Serialized per team so two
+   * Deliver one dispatch if it is deliverable now. Serialized per worker so two
    * callers can never double-start the same dispatch or interleave delivery
-   * order across a team's workers.
+   * order for that worker.
    */
   async tryDeliver(teamId: string, dispatchId: string): Promise<DeliverOutcome> {
-    return withAdeTeamMutex(teamId, () => this.tryDeliverLocked(teamId, dispatchId))
+    const dispatch = await this.deps.dispatches.get(teamId, dispatchId)
+    if (!dispatch) return { accepted: false }
+    return withAdeDeliveryMutex(teamId, dispatch.workerId, () => this.tryDeliverLocked(teamId, dispatchId))
   }
 
   /**
@@ -202,16 +204,25 @@ export class DispatchDeliverer {
     return { accepted: false, failureReason: reason }
   }
 
-  private async notifyFailure(dispatch: DispatchRecord): Promise<void> {
-    if (!dispatch.failureReason) return
+  async notifyFailure(dispatch: DispatchRecord): Promise<void> {
+    if (dispatch.state !== 'failed' || !dispatch.failureReason) return
     const worker = await this.deps.teams.worker(dispatch.teamId, dispatch.workerId)
     if (worker && (worker.control === 'user' || worker.state !== 'active')) return
+    if (!worker) {
+      const intent = dispatch.dispatchIntentId ? await this.deps.agentDispatchService?.get(dispatch.dispatchIntentId) : undefined
+      if (intent?.cancellationRequested || intent?.takenOver) return
+      const source = await this.deps.threads.get(dispatch.teamId)
+      if (!source || source.status === 'archived' || source.status === 'deleted') return
+      const turn = source.turns.find(turn => turn.id === dispatch.parentTurnId)
+      if (turn?.status === 'aborted') return
+    }
     await this.deps.notices?.enqueue({
       noticeId: `ntc_${dispatch.dispatchId}`,
       teamId: dispatch.teamId,
       workerId: dispatch.workerId,
       parentTurnId: dispatch.parentTurnId,
       dispatchId: dispatch.dispatchId,
+      ...(dispatch.dispatchIntentId ? { dispatchIntentId: dispatch.dispatchIntentId } : {}),
       kind: 'dispatch_failed',
       title: dispatch.title,
       detail: dispatch.failureReason,
@@ -286,30 +297,65 @@ export class DispatchDeliverer {
     if (!this.deps.delegation) {
       return this.fail(teamId, dispatch, 'delegation runtime is not enabled')
     }
-    const latestWorker = await this.deps.teams.worker(teamId, worker.workerId)
-    if (latestWorker?.control === 'user' || await this.intentBlocked(worker, dispatch)) {
-      return { accepted: false, pendingReason: 'user-control' }
-    }
-    await this.deps.dispatches.update(teamId, dispatch.dispatchId, { state: 'delivering' })
     const prior = await this.deps.childRuns.get(dispatch.workerId).catch(() => undefined)
-    let run: Promise<ChildRunRecord>
+    const signal = this.signalFor(worker.workerId)
+    const claimed = await withAdeTeamMutex(teamId, async () => {
+      const latest = await this.deps.teams.worker(teamId, worker.workerId)
+      if (!latest || latest.state !== 'active' || latest.control !== 'manager' ||
+          signal.aborted || await this.intentBlocked(latest, dispatch)) return false
+      return Boolean(await this.deps.dispatches.update(teamId, dispatchId, { state: 'delivering' },
+        { expect: ['pending', 'uncertain'] }))
+    })
+    if (!claimed) return { accepted: false, pendingReason: 'user-control' }
+    let failure: unknown
     try {
-      run = this.startRun(team, dispatch, worker, workspace ?? null, prior ?? null)
+      await this.startRun(team, dispatch, worker, workspace ?? null, prior ?? null, signal)
     } catch (error) {
-      return this.fail(teamId, dispatch, error instanceof Error ? error.message : String(error))
+      failure = error
     }
-    // `runChild`/`resumeChild` resolve at admission (detached worker turns
-    // keep running in the background); a rejection means the start failed —
-    // classify before reporting so persisted state matches the outcome.
-    try {
-      await run
-    } catch (error) {
-      await this.classifyFailure(teamId, dispatch.dispatchId, error)
-      return { accepted: false, failureReason: error instanceof Error ? error.message : String(error) }
-    }
-    // turnId backfills from the admitted turn's clientRequestId.
-    await this.deps.dispatches.update(teamId, dispatch.dispatchId, { state: 'accepted' })
-    return { accepted: true }
+    // Admission is external I/O. Re-read controls before committing its result;
+    // release/stop/takeover may have completed while the child was starting.
+    const outcome = await withAdeTeamMutex(teamId, async (): Promise<DeliverOutcome> => {
+      const latest = await this.deps.teams.worker(teamId, worker.workerId)
+      const row = await this.deps.dispatches.get(teamId, dispatchId)
+      const blocked = !latest || latest.state !== 'active' || latest.control !== 'manager' ||
+        signal.aborted || await this.intentBlocked(latest, dispatch)
+      if (blocked || row?.state === 'cancelled') {
+        if (row && ['delivering', 'uncertain', 'accepted'].includes(row.state)) {
+          await this.cancel(teamId, row, 'worker control changed during admission')
+        }
+        return { accepted: false, pendingReason: 'user-control' }
+      }
+      if (row?.state !== 'delivering') return { accepted: row?.state === 'accepted' }
+      if (failure !== undefined) {
+        await this.classifyFailure(teamId, dispatchId, failure)
+        return { accepted: false, failureReason: failure instanceof Error ? failure.message : String(failure) }
+      }
+      await this.deps.dispatches.update(teamId, dispatchId, { state: 'accepted' })
+      return { accepted: true }
+    })
+    if (outcome.pendingReason === 'user-control') await this.stopLateAdmission(teamId, worker.workerId, dispatchId)
+    return outcome
+  }
+
+  private async stopLateAdmission(teamId: string, workerId: string, dispatchId: string): Promise<void> {
+    this.abortWorker(workerId)
+    this.deps.delegation?.abortChild?.(workerId)
+    const admitted = await this.deps.threads.get(workerId)
+    const turn = admitted?.turns.find(entry => entry.clientRequestId === dispatchId &&
+      (entry.status === 'running' || entry.status === 'queued'))
+    if (turn) await this.deps.turns.interruptTurn({ threadId: workerId, turnId: turn.id })
+      .catch(() => undefined)
+    // Takeover/release may have run before admission created the thread.
+    // Repair only its control metadata, using the latest persisted worker.
+    await withAdeTeamMutex(teamId, async () => {
+      const worker = await this.deps.teams.worker(teamId, workerId)
+      const thread = await this.deps.threads.get(workerId)
+      if (!thread?.executionUnit || thread.executionUnit.kind !== 'worker') return
+      if (!worker || worker.state !== 'active') delete thread.executionUnit
+      else thread.executionUnit = { ...thread.executionUnit, control: worker.control }
+      await this.deps.threads.upsert(thread)
+    })
   }
 
   private async intentBlocked(worker: WorkerRecord, dispatch: DispatchRecord): Promise<boolean> {
@@ -323,7 +369,8 @@ export class DispatchDeliverer {
     dispatch: DispatchRecord,
     worker: WorkerRecord,
     workspace: TaskWorkspaceRecord | null,
-    prior: ChildRunRecord | null
+    prior: ChildRunRecord | null,
+    signal: AbortSignal
   ): Promise<ChildRunRecord> {
     const common = {
       parentThreadId: team.managerThreadId,
@@ -342,7 +389,6 @@ export class DispatchDeliverer {
       gatewayBinding: worker.route.gatewayBinding,
       ...worker.permissionSnapshot
     }
-    const signal = this.signalFor(dispatch.workerId)
     if (prior) {
       return this.deps.delegation!.resumeChild({
         ...common,
@@ -460,23 +506,32 @@ export class DispatchDeliverer {
   async reconcileTeam(teamId: string): Promise<void> {
     const stuck = await this.deps.dispatches.listByState(teamId, ['delivering', 'uncertain'])
     for (const dispatch of stuck) {
-      const thread = await this.deps.threads.get(dispatch.workerId).catch(() => null)
-      const turn = thread?.turns.find((entry) => entry.clientRequestId === dispatch.dispatchId)
-      if (turn) {
-        // delivering -> accepted and uncertain -> accepted are both legal.
-        await this.deps.dispatches.update(teamId, dispatch.dispatchId, {
-          state: 'accepted',
-          turnId: turn.id
-        }).catch(() => undefined)
-        continue
-      }
-      // No admitted turn — 'delivering' has no path back to 'pending', so move
-      // through 'uncertain' (allowed to re-enter delivering) before retrying.
-      if (dispatch.state === 'delivering') {
-        await this.deps.dispatches.update(teamId, dispatch.dispatchId, { state: 'uncertain' })
-          .catch(() => undefined)
-      }
-      await this.tryDeliver(teamId, dispatch.dispatchId)
+      await withAdeDeliveryMutex(teamId, dispatch.workerId, async () => {
+        const current = await this.deps.dispatches.get(teamId, dispatch.dispatchId)
+        if (!current || !['delivering', 'uncertain'].includes(current.state)) return
+        const blocked = await withAdeTeamMutex(teamId, async () => {
+          const worker = await this.deps.teams.worker(teamId, dispatch.workerId)
+          if (!worker || worker.state !== 'active' || worker.control !== 'manager' ||
+              await this.intentBlocked(worker, dispatch)) {
+            await this.cancel(teamId, dispatch, 'worker control changed during admission')
+            return 'blocked'
+          }
+          const thread = await this.deps.threads.get(dispatch.workerId).catch(() => null)
+          const turn = thread?.turns.find((entry) => entry.clientRequestId === dispatch.dispatchId)
+          if (!turn) return 'retry'
+          await this.deps.dispatches.update(teamId, dispatch.dispatchId, {
+            state: 'accepted', turnId: turn.id
+          }, { expect: ['delivering', 'uncertain'] })
+          return 'accepted'
+        })
+        if (blocked === 'blocked') await this.stopLateAdmission(teamId, dispatch.workerId, dispatch.dispatchId)
+        if (blocked !== 'retry') return
+        if (current.state === 'delivering') {
+          await this.deps.dispatches.update(teamId, dispatch.dispatchId, { state: 'uncertain' },
+            { expect: ['delivering'] })
+        }
+        await this.tryDeliverLocked(teamId, dispatch.dispatchId)
+      })
     }
     const pending = await this.deps.dispatches.listByState(teamId, ['pending'])
     for (const workerId of new Set(pending.map((entry) => entry.workerId))) {

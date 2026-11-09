@@ -494,8 +494,10 @@ async finishTurn(this: TurnService, input: {
             ...(modelTiming ? { modelTiming } : {})
           }
         })
+        const activityAt = this['deps'].nowIso()
         await this['deps'].threadStore.upsert({
-          ...touchThread(current, this['deps'].nowIso()),
+          ...touchThread(current, activityAt),
+          activityAt,
           turns,
           ...(input.status === 'aborted' && turn.status === 'running'
             ? { queueControl: { reason: 'user_stop' as const, sourceTurnId: turn.id, pausedAt: this['deps'].nowIso() } } : {}),

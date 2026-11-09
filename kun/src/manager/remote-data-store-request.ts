@@ -4,6 +4,7 @@ import { MANAGER_MUTATION_REPLAY_CAPABILITY } from '../contracts/manager-request
 import { requestManagerJson, type ServiceManagerConnection } from './manager-client.js'
 import { isSessionMutation, isThreadMutation } from './shared-data-store-contracts.js'
 import { mutationFenceForValue } from './turn-mutation-context.js'
+import { currentNativeFollowUpWriteScope } from './native-followup-write-scope.js'
 import { isServiceManagerTimeoutError } from './usage-errors.js'
 
 type ManagerStore = 'thread' | 'session' | 'artifact' | 'memory' | 'graph' | 'attachment'
@@ -24,6 +25,8 @@ export async function callManagerStore(
   const turnFence = shouldFenceManagerStoreMutation(store, operation)
     ? mutationFenceForValue(value)
     : undefined
+  const followUp = store === 'thread' && ['upsert', 'upsertIfRevision'].includes(operation)
+    ? currentNativeFollowUpWriteScope() : undefined
   const timeoutMs = resolveManagerDataRequestTimeoutMs(store, operation)
   const replay = shouldFenceManagerStoreMutation(store, operation) &&
     manager.discovery.capabilities?.includes(MANAGER_MUTATION_REPLAY_CAPABILITY)
@@ -43,7 +46,8 @@ export async function callManagerStore(
         retrySafe: isManagerStoreRead(store, operation) || replay !== undefined,
         ...(replay ? { maxAttempts: 5 } : {}),
         body: store === 'thread' || store === 'session'
-          ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}), ...(replay ? { replay } : {}) }
+          ? { value: value ?? {}, ...(turnFence ? { turnFence } : {}),
+            ...(followUp ? { followUp } : {}), ...(replay ? { replay } : {}) }
           : value ?? {},
         timeoutMs
       })

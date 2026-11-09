@@ -1,5 +1,6 @@
 import { BrowserWindow, clipboard, dialog } from 'electron'
 import {
+  lstat,
   mkdir,
   open as openFile,
   readFile,
@@ -58,13 +59,13 @@ export async function renameWorkspaceEntry(
 ): Promise<WorkspaceEntryRenameResult> {
   try {
     const sourcePath = await resolveTargetPathWithinWorkspace(payload.path, payload.workspaceRoot)
-    await stat(sourcePath)
+    const sourceInfo = await stat(sourcePath)
     const nextName = validateEntryName(payload.newName)
-    const targetPath = await resolveTargetPathWithinWorkspace(
-      join(dirname(sourcePath), nextName),
-      payload.workspaceRoot
-    )
-    if (sourcePath === targetPath) {
+    // Resolve/check the parent, not the leaf: realpath of an existing leaf can
+    // erase a requested case-only rename on a case-insensitive filesystem.
+    const targetParent = await resolveTargetPathWithinWorkspace(await canonicalPath(dirname(sourcePath)), payload.workspaceRoot)
+    const targetPath = join(targetParent, nextName)
+    if (basename(sourcePath) === nextName) {
       return {
         ok: true,
         path: targetPath,
@@ -72,8 +73,21 @@ export async function renameWorkspaceEntry(
         renamedAt: new Date().toISOString()
       }
     }
-    if (await pathExists(targetPath)) {
-      return { ok: false, message: 'A file or directory with that name already exists.' }
+    const targetInfo = await lstat(targetPath).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return null
+      throw error
+    })
+    if (targetInfo) {
+      // Matching inode alone is insufficient: another spelling may be a distinct
+      // hard link (or a symlink to this source). Only a non-exact directory lookup
+      // of the source's own case-folded name is a case-only rename.
+      const caseAlias = !targetInfo.isSymbolicLink() &&
+        sourceInfo.dev === targetInfo.dev && sourceInfo.ino === targetInfo.ino &&
+        basename(sourcePath).toLowerCase() === nextName.toLowerCase() &&
+        !(await readdir(targetParent)).includes(nextName)
+      if (!caseAlias) {
+        return { ok: false, message: 'A file or directory with that name already exists.' }
+      }
     }
     await rename(sourcePath, targetPath)
     return {

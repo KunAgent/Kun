@@ -215,6 +215,7 @@ export const REMOTE_ALLOWED_INVOKE_CHANNELS: ReadonlySet<string> = new Set([
   'browser-use:action:decide',
   'browser-use:control',
   'browser-use:navigate',
+  'browser-use:zoom',
   'browser-use:stop',
   'browser-use:clear',
   'cli-install:status',

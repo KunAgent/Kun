@@ -72,6 +72,8 @@ This guide is for AI agents working in this repository. It collects the project 
 - Lint: `npm run lint`
 - File-size gate: `npm run check:file-lines` (every tracked non-binary, non-lockfile text file must be at most 700 physical lines)
 - Changes under `kun/` should pass `npm run build:kun`; top-level `dev` and `build` both run it first.
+- Built-in desktop capture permission changes also need `npm run smoke:desktop-capture-permissions` with the shipped Electron version. The fixture captures only its own web contents and verifies that physical camera access stays denied; unit tests alone do not prove Electron's permission names.
+- Desktop capture or packaging changes also need `npm run smoke:packaged-desktop-capture -- --app /path/to/Kun.app` on Apple Silicon macOS. This tests the real capture host, shipped preloads, WebRTC frames, heartbeat and native-guard cleanup using only a synthetic frame; keep preload/page paths anchored to `app.getAppPath()`, never a chunk's `__dirname`.
 - Before committing, run the smallest checks that cover the change. Cross-layer contracts, runtime behavior, settings, providers, and packaging changes usually need `npm run typecheck`, relevant `vitest` coverage, and `npm run build`.
 - If a check fails, separate newly introduced failures from existing baseline failures. Do not silently treat unrelated baseline failures as passing.
 - Documentation-only changes should at least pass `git diff --check`.
@@ -87,6 +89,8 @@ This guide is for AI agents working in this repository. It collects the project 
 - Windows: `npm run dist:win`
 - Linux: `npm run dist:linux`
 - Packaging configuration lives in `electron-builder.config.cjs`, release scripts live in `scripts/`, and the release workflow lives in `.github/workflows/release.yml`.
+- Production macOS packages require Developer ID signing by default, including local DMG builds. Keep the same Team ID and bundle identifier across updates; an ad-hoc replacement can invalidate Screen Recording and Accessibility grants.
+- `KUN_MAC_ALLOW_ADHOC=1` is only for disposable CI test artifacts. Do not use it to replace an installed production Kun. Use the separate development flavor for local unsigned experiments. Verify the actual signature, not only the version or permission switches, before installing a build.
 - For local macOS arm64 testing, unzip `dist/Kun-0.1.0-mac-arm64.zip` after packaging and test the extracted app, usually at `dist/Kun-0.1.0-mac-arm64-unzipped/Kun.app`.
 - Before a new packaged-app test, make sure old `Kun.app` processes have exited. Multiple worktree builds share the same bundle identifier, so macOS may reuse an old instance.
 - Startup debugging should not rely on a single port check. Combine the real process path, `open -n <Kun.app>`, `lsof -iTCP:18787,18788,18899`, `curl http://127.0.0.1:18899/health`, and `~/Library/Application Support/Kun/logs/kun-*.log`.

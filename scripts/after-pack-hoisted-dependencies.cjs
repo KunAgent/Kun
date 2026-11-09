@@ -61,6 +61,10 @@ const KUN_ROOT_HOISTED_SHARED_JS_PACKAGES = [
 // root versions. They still need explicit asarUnpack patterns so a package
 // loaded from app.asar.unpacked never crosses back into app.asar for a child.
 const KUN_ROOT_HOISTED_SUPPORTING_JS_PACKAGES = [
+  // The shared remote protocol now uses these for authenticated direct links.
+  // Keep every required nested version on disk; do not deduplicate by name.
+  '@noble/ciphers',
+  '@noble/hashes',
   'buffer-crc32',
   'lru-cache',
   'pend',

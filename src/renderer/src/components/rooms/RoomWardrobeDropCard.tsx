@@ -2,6 +2,7 @@ import { RoomWardrobeGuestDrop } from './RoomWardrobeGuestDrop'
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { kunWardrobeRules } from '@shared/rooms-api'
+import { useFocusModeStore } from '../../store/focus-mode-store'
 import { WardrobeBottleIcon } from './RoomWardrobeBottle'
 import { useWardrobeOpener } from './RoomWardrobeOpening'
 import { RoomUserAvatarEditor } from './RoomUserAvatarEditor'
@@ -18,6 +19,7 @@ import './room-wardrobe.css'
 export function RoomWardrobeDropCard(scope: WardrobeDropScope): ReactElement | null {
   const { t } = useTranslation('common')
   const state = useWardrobe()
+  const focusMode = useFocusModeStore((state) => state.enabled)
   const TEN = kunWardrobeRules(state.wardrobe).tenPull
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [dressing, setDressing] = useState(false)
   const opener = useWardrobeOpener({ onWear: wearDropOnMe, onDress: () => setDressing(true) })
@@ -25,6 +27,8 @@ export function RoomWardrobeDropCard(scope: WardrobeDropScope): ReactElement | n
   const shown = pending[0]
   // "Quiet" keeps the conversation clean; the rail icon and sidebar still count the bottles.
   const quiet = wardrobeSettings(state.wardrobe).notice === 'quiet'
+  // Hide presentation only; keep wardrobe subscriptions and account sync active.
+  if (focusMode) return null
   if (state.mode === 'guest') return quiet ? null : <RoomWardrobeGuestDrop hints={state.guestHints ?? []} scope={scope} />
   if ((!shown || quiet) && !opener.overlay && !dressing) return null
   const shelf = state.wardrobe?.pending.length ?? 0

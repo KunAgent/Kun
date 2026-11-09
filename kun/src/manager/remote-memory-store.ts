@@ -111,7 +111,13 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
   }
 
   async retrieve(input: MemoryRetrieveRequest) {
-    return MemoryRecord.array().parse(await this.call('retrieve', input))
+    // The Manager accepts retrieval policy in the config envelope, not value.
+    // Preserve per-call tool scopes and caps instead of substituting injection defaults.
+    const { policy, ...value } = input
+    return MemoryRecord.array().parse(await callManagerStore(this.manager, 'memory', 'retrieve', {
+      config: policy ?? this.config,
+      value
+    }))
   }
 
   async diagnostics() {

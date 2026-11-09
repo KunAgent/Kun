@@ -5,5 +5,7 @@ export const ProjectFilesParamSchemas = {
   'project.files.list': z.object({ ...Files, parentRef: Id.optional() }).strict(),
   'project.files.search': z.object({ ...Files, query: z.string().min(1).max(200), mode: z.enum(['name', 'content']).default('name') }).strict(),
   'file.preview': z.object({ projectId: Id, fileRef: Id,
-    expectedRevision: z.string().regex(/^file-v1:[a-f0-9]{64}$/) }).strict()
+    expectedRevision: z.string().regex(/^file-v1:[a-f0-9]{64}$/) }).strict(),
+  'project.files.resolve': z.object({ projectId: Id, baseRef: Id.optional(),
+    relativePath: z.string().min(1).max(1024).refine((path) => !/^[\\/]/.test(path) && !/^[a-zA-Z]:/.test(path) && !path.includes('\0')) }).strict()
 } as const

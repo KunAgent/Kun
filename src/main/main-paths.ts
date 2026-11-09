@@ -17,8 +17,13 @@ export type NamedPreloadName =
   | 'storage-relocation-recovery'
   | 'runtime-data-recovery'
   | 'tray-quota'
+  | 'pet-overlay'
   | 'protected-room-dialog'
   | 'app-sandbox-shell'
+  | 'remote-desktop-capture'
+  | 'remote-desktop-viewer'
+  | 'control-viewer-probe'
+  | 'remote-desktop-indicator'
 
 export function resolvePreloadPath(
   appPath: string,

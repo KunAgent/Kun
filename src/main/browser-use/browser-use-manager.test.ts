@@ -83,6 +83,7 @@ function fakeHarness(settingsPatch: Partial<KunBrowserUseSettingsV1> = {}) {
   const listeners = new Map<string, Array<(...args: unknown[]) => void>>()
   const debuggerListeners = new Map<string, Array<(...args: unknown[]) => void>>()
   let currentUrl = ''
+  let currentZoom = 1
   let currentTitle = 'Example'
   let currentBox = [10, 10, 110, 10, 110, 50, 10, 50]
   let currentTarget = {
@@ -174,6 +175,8 @@ function fakeHarness(settingsPatch: Partial<KunBrowserUseSettingsV1> = {}) {
     }),
     stop: vi.fn(),
     getURL: () => currentUrl,
+    getZoomFactor: vi.fn(() => currentZoom),
+    setZoomFactor: vi.fn((factor: number) => { currentZoom = factor }),
     getTitle: () => currentTitle,
     capturePage: vi.fn(async () => image),
     isDestroyed: () => false,
@@ -333,6 +336,34 @@ describe('BrowserUseManager', () => {
       entry.origin === 'https://example.com'
     )).toBe(true)
     expect(JSON.stringify(harness.manager.auditSnapshot())).not.toContain('secret=redacted')
+  })
+
+  it('zooms only the isolated page and rejects stale turns or invalid percentages', async () => {
+    const h = fakeHarness()
+    await openAuthorized(h)
+    const beforeBounds = h.view.setBounds.mock.calls.length
+    expect(h.manager.setZoom('thread-1', 125, 'turn-1').tabs[0].zoomPercent).toBe(125)
+    expect(h.webContents.setZoomFactor).toHaveBeenLastCalledWith(1.25)
+    expect(h.states.at(-1)?.tabs[0].zoomPercent).toBe(125)
+    expect(h.window.webContents.getZoomFactor()).toBe(1)
+    expect(h.view.setBounds).toHaveBeenCalledTimes(beforeBounds)
+    h.webContents.setZoomFactor.mockClear()
+    expect(() => h.manager.setZoom('thread-1', 100, 'old-turn')).toThrow('turn')
+    for (const zoom of [49, 201, 100.5, NaN]) expect(() => h.manager.setZoom('thread-1', zoom, 'turn-1')).toThrow()
+    expect(h.webContents.setZoomFactor).not.toHaveBeenCalled()
+    h.manager.stop('thread-1', 'turn-1')
+    expect(() => h.manager.setZoom('thread-1', 100, 'turn-1')).toThrow()
+  })
+
+  it('keeps manual control when the preview is hidden but still supervised', async () => {
+    const h = fakeHarness()
+    await openAuthorized(h)
+    const bounds = { x: 10, y: 20, width: 640, height: 400 }
+    h.manager.mount('thread-1', h.window as never, bounds, true, true, 'turn-1')
+    h.manager.setControlOwner('thread-1', 'manual', 'turn-1')
+    const collapsed = h.manager.mount('thread-1', h.window as never, bounds, false, true, 'turn-1')
+    expect(collapsed).toMatchObject({ visible: false, controlOwner: 'manual' })
+    expect(h.manager.mount('thread-1', h.window as never, bounds, true, true, 'turn-1').controlOwner).toBe('manual')
   })
 
   it('keeps a main-frame load failure visible after loading stops', async () => {

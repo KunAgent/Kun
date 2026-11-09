@@ -1,9 +1,10 @@
 import { randomBytes, randomUUID } from 'node:crypto'
-import { mkdir, readFile, writeFile, rename } from 'node:fs/promises'
+import { copyFile, mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises'
+import { constants } from 'node:fs'
 import { dirname } from 'node:path'
 import { safeStorage } from 'electron'
 import type { DeviceIdentity } from '@kun/remote-protocol'
-export async function loadIdentity(path: string): Promise<DeviceIdentity> {
+async function requireSecureStorage(): Promise<void> {
   const available =
     process.platform === 'darwin'
       ? await safeStorage.isAsyncEncryptionAvailable()
@@ -16,6 +17,19 @@ export async function loadIdentity(path: string): Promise<DeviceIdentity> {
       ))
   )
     throw new Error('SECURE_STORAGE_REQUIRED')
+}
+const identityWrites = new Map<string, Promise<DeviceIdentity>>()
+/** The host and controller can initialize concurrently without creating two host identities. */
+export function loadIdentity(path: string): Promise<DeviceIdentity> {
+  const pending = identityWrites.get(path)
+  if (pending) return pending
+  const task = readIdentity(path)
+  identityWrites.set(path, task)
+  void task.finally(() => { if (identityWrites.get(path) === task) identityWrites.delete(path) }).catch(() => {})
+  return task
+}
+async function readIdentity(path: string): Promise<DeviceIdentity> {
+  await requireSecureStorage()
   try {
     const bytes = await readFile(path)
     const text =
@@ -32,6 +46,16 @@ export async function loadIdentity(path: string): Promise<DeviceIdentity> {
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
+  return writeIdentity(path)
+}
+
+/** Explicit recovery only: keep the rejected identity encrypted and leave remote access off. */
+export async function resetIdentity(path: string): Promise<DeviceIdentity> {
+  await requireSecureStorage()
+  return writeIdentity(path, await readFile(path))
+}
+
+async function writeIdentity(path: string, previous?: Buffer): Promise<DeviceIdentity> {
   const value = {
     id: randomUUID(),
     credential: randomBytes(32).toString('hex')
@@ -42,7 +66,15 @@ export async function loadIdentity(path: string): Promise<DeviceIdentity> {
       : safeStorage.encryptString(JSON.stringify(value))
   await mkdir(dirname(path), { recursive: true, mode: 0o700 })
   const temporary = path + '.' + randomUUID() + '.tmp'
-  await writeFile(temporary, encrypted, { mode: 0o600 })
-  await rename(temporary, path)
+  try {
+    await writeFile(temporary, encrypted, { mode: 0o600, flag: 'wx' })
+    if (previous) {
+      if (!(await readFile(path)).equals(previous)) throw new Error('IDENTITY_CHANGED')
+      await copyFile(path, path + '.revoked-' + randomUUID() + '.bak', constants.COPYFILE_EXCL)
+    }
+    await rename(temporary, path)
+  } finally {
+    await rm(temporary, { force: true })
+  }
   return value
 }

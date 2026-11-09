@@ -4,7 +4,7 @@ import type {
   DesktopStartupStatePayload
 } from '@shared/desktop-startup-state'
 import { requestApplicationReload } from './lib/application-reload'
-import kunLogoUrl from '../../asset/img/kun_bird.png'
+import kunLogoUrl from './assets/kun_bird.png'
 import {
   mergeStartupPhase,
   startupPhaseLabel,

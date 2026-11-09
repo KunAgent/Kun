@@ -23,7 +23,7 @@ async function fixture() {
     }), host: '127.0.0.1', port: 0
   })
   const connection: ServiceManagerConnection = { discovery: {
-    version: 1, protocolVersion: 6, instanceId: 'relations-test', pid: process.pid,
+    version: 1, protocolVersion: 7, instanceId: 'relations-test', pid: process.pid,
     startedAt, host: '127.0.0.1', port: server.port, baseUrl: `http://127.0.0.1:${server.port}`,
     managerToken: 'test-token', serviceVersion: '0.4.1', dataDir, settingsPath: join(root, 'settings.json')
   } }

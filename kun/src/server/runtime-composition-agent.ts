@@ -1,3 +1,4 @@
+import { workerCapacity } from '../ade/team-execution-policy.js'
 import { freezeHarnessGatewayAliases } from '../harness/gateway-alias-binding.js'
 import { QueuedTurnDispatcher } from './queued-turn-dispatcher.js'
 import { createExecutionTaskTurnSettledHook } from './execution-task-turn-settlement.js'
@@ -234,6 +235,9 @@ export async function createRuntimeAgentComposition(
   // manager turns get delegation contract + team state + harness menu.
   const adeManagerContext = createAdeManagerContext({
     ...services.adeStores,
+    capacity: (threadId) => workerCapacity({ threads: threadStore, teams: services.adeStores.teams,
+      teamLimits: () => core.activeOptions.ade?.limits }, threadId),
+    language: () => Intl.DateTimeFormat().resolvedOptions().locale,
     harnessSummary: graphHarnessSummary,
     canStartNewWork: () => core.activeOptions.capabilities?.subagents?.enabled !== false,
     dispatchIntents: services.agentDispatchService,

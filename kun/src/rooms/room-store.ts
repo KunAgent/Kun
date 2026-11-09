@@ -1,3 +1,4 @@
+import { CollaborationDocumentKindSchema, type CollaborationQuery } from '../contracts/collaboration-store.js'
 import type { RoomMemoryErasure } from './room-memory-erasure.js'
 import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
@@ -8,6 +9,7 @@ import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replie
 import type { RoomRepositoryChoice, RoomSearchPage, RoomSearchQuery, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 
 export const RoomDocumentKindSchema = z.enum([
+  ...CollaborationDocumentKindSchema.options,
   'agent_lifecycle', 'agent_import', 'shared_attachment', 'shared_block', 'shared_resource', 'shared_receipt', 'shared_actor', 'desktop_schedule_run', 'remote_history', 'remote_receipt', 'remote_attachment_admission', 'agent_im_connection', 'agent_conversation_preparation', 'agent_conversation_cursor', 'room_result_inbox', 'assistant_continuation', 'agent_commitment', 'agent_artifact', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim',
   'room', 'message', 'request', 'task', 'dispatch', 'attempt',
   'workspace', 'delivery', 'review', 'amendment', 'rule', 'artifact',
@@ -154,6 +156,7 @@ export interface RoomStore {
   searchRooms(input: RoomSearchQuery): Promise<RoomSearchPage>
   roomRepositories(): Promise<RoomRepositoryChoice[]>
   runSummary(input: RoomRunSummaryQuery): Promise<RoomRunSummary>
+  collaborationQuery<T = unknown>(input: CollaborationQuery): Promise<RoomStoredDocument<T>[]>
   commit(input: RoomStoreCommit): Promise<RoomStoreCommitResult>
   getRequest(requestId: string): Promise<RoomStoreRequest | null>
   events(roomId: string, sinceSeq?: number, limit?: number): Promise<RoomStoreEvent[]>

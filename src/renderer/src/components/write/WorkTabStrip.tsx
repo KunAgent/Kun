@@ -13,6 +13,7 @@ import { openWorkSession, startWorkSession } from '../../write/work-session-acti
 import { useOpenSessionTabs, useWorkViewStore, type WorkLibraryTab } from '../../write/work-view-store'
 import { openArtifactsPage, useArtifactLibraryStore } from '../../artifacts/artifact-library-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
+import { usePaperSpaceStore, type PaperSpaceItem } from '../../paper/paper-space-store'
 import { preparePaperNotesForNavigation } from '../../paper/paper-notes-draft'
 import { WorkStageChromeContext } from '../../write/work-conversation-stage'
 import { RailReopenButton } from '../workbench/rail-collapse'
@@ -70,6 +71,15 @@ export function WorkTabStrip(): ReactElement | null {
   const titles = useWorkSessionStore((state) => state.titles)
   const busy = useChatStore((state) => state.busy)
   const route = useChatStore((state) => state.route)
+const activeThreadId = useChatStore((state) => state.activeThreadId)
+const { readerKey, openReaderKeys, paperItems } = usePaperSpaceStore(useShallow((state) => ({
+readerKey: state.readerKey, openReaderKeys: state.openReaderKeys, paperItems: state.items
+})))
+const readers = openReaderKeys.flatMap((key) => {
+const item = paperItems.find((candidate) => candidate.key === key)
+return item ? [item] : []
+})
+const activePaper = route === 'papers' ? readers.find((item) => item.key === readerKey) : undefined
   const artifactSource = useArtifactLibraryStore((state) => state.source)
   const artifactRoot = useArtifactLibraryStore((state) => state.workRoot)
   const activeLibrary: WorkLibraryTab | null = route === 'papers' ? 'papers'
@@ -112,7 +122,7 @@ export function WorkTabStrip(): ReactElement | null {
     const selected = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]')
     selected?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
   })
-  if (!workspaceRoot && !activeLibrary && libraryTabs.length === 0) return null
+  if (!workspaceRoot && !activeLibrary && libraryTabs.length === 0 && readers.length === 0) return null
 
   const documents: DocumentTab[] = []
   for (const group of layout.groups) {
@@ -127,12 +137,13 @@ export function WorkTabStrip(): ReactElement | null {
   const sessionOnStage = !activeLibrary && (sessionMain || !hasDocuments)
   const sessionIds = current && !openSessions.includes(current) ? [...openSessions, current] : openSessions
   const draftOpen = Boolean(workspaceRoot) && !current
-  const visibleLibraries = activeLibrary && !libraryTabs.includes(activeLibrary) ? [...libraryTabs, activeLibrary] : libraryTabs
+  const visibleLibraries = activeLibrary && !activePaper && !libraryTabs.includes(activeLibrary) ? [...libraryTabs, activeLibrary] : libraryTabs
   const entries: WorkStripEntry[] = [
     ...sessionIds.map((id): WorkStripEntry => ({ kind: 'session', key: `session:${id}`, id })),
     ...(draftOpen ? [{ kind: 'draft', key: DRAFT_KEY } as const] : []),
     ...documents.map((tab): WorkStripEntry => ({ kind: 'document', ...tab })),
-    ...visibleLibraries.map((tab): WorkStripEntry => ({ kind: 'library', key: `library:${tab}`, tab }))
+    ...visibleLibraries.map((tab): WorkStripEntry => ({ kind: 'library', key: `library:${tab}`, tab })),
+...readers.map((item): WorkStripEntry => ({ kind: 'paper', key: `paper:${item.key}`, readerKey: item.key }))
   ]
 
   const documentLabel = (item: WriteEditorItem): string => {
@@ -155,7 +166,21 @@ export function WorkTabStrip(): ReactElement | null {
     if (id === current && id === useChatStore.getState().activeThreadId) return
     void openWorkSession({ id, title: titles[id] ?? '', updatedAt: null, anchor: { kind: 'space' } }, undefined, { restoreWorkbench: false })
   }
-  const openLibrary = (tab: WorkLibraryTab): void => {
+  const activatePaper = async (item: PaperSpaceItem): Promise<void> => {
+if (!(await preparePaperNotesForNavigation())) return
+if (!usePaperSpaceStore.getState().openReaderKeys.includes(item.key)) return
+usePaperSpaceStore.setState({ readerKey: item.key })
+useChatStore.getState().setRoute('papers')
+}
+const openLibrary = (tab: WorkLibraryTab): void => {
+if (tab === 'papers') {
+void preparePaperNotesForNavigation().then((ready) => {
+if (!ready) return
+usePaperSpaceStore.setState({ readerKey: null })
+useChatStore.getState().setRoute('papers')
+})
+return
+}
     if (tab === 'artifacts' && (artifactSource !== 'work' || normalizeWorkspaceRoot(artifactRoot ?? '') !== normalizeWorkspaceRoot(workspaceRoot))) {
       openArtifactsPage({ from: 'work', workRoot: workspaceRoot })
     } else {
@@ -165,11 +190,26 @@ export function WorkTabStrip(): ReactElement | null {
   // Confirm paper notes before closing any tabs, then honor document save cancellation.
   const closeEntries = async (targets: WorkStripEntry[]): Promise<void> => {
     const closedLibraries = new Set(targets.flatMap((entry) => entry.kind === 'library' ? [entry.tab] : []))
-    if (closedLibraries.has('papers') && !(await preparePaperNotesForNavigation())) return
+    if ((closedLibraries.has('papers') || targets.some((entry) => entry.kind === 'paper')) && !(await preparePaperNotesForNavigation())) return
     for (const entry of targets) {
       if (entry.kind === 'document' && !(await closeTab(entry.groupId, entry.key))) return
     }
+    const closedPapers = new Set(targets.flatMap((entry) => entry.kind === 'paper' ? [entry.readerKey] : []))
+    const papersLeft = usePaperSpaceStore.getState().openReaderKeys.filter((key) => !closedPapers.has(key))
+    const closingReader = usePaperSpaceStore.getState().readerKey
+    const activePaperClosed = Boolean(closingReader && closedPapers.has(closingReader) && useChatStore.getState().route === 'papers')
+    if (closedPapers.size) usePaperSpaceStore.setState({ openReaderKeys: papersLeft,
+      readerKey: closingReader && closedPapers.has(closingReader) ? papersLeft.at(-1) ?? null : closingReader })
     for (const tab of closedLibraries) closeLibraryTab(tab)
+    if (activePaperClosed) {
+      const index = openReaderKeys.indexOf(closingReader!)
+      const next = openReaderKeys.slice(index + 1).find((key) => papersLeft.includes(key)) ?? papersLeft.at(-1) ?? null
+      usePaperSpaceStore.setState({ readerKey: next })
+      if (!next) {
+        if (!closedLibraries.has('papers')) openLibraryTab('papers')
+        else useChatStore.getState().setRoute('write')
+      }
+    }
     const closed = new Set(targets.flatMap((entry) => entry.kind === 'session' ? [entry.id] : []))
     for (const id of closed) closeSessionTab(workspaceRoot, id)
     let nextSession: string | undefined
@@ -184,7 +224,12 @@ export function WorkTabStrip(): ReactElement | null {
         if (documentsLeft && sessionOnStage) showDocument()
       }
     }
-    if (activeLibrary && closedLibraries.has(activeLibrary) && useChatStore.getState().route === activeLibrary) {
+    if (activeLibrary && !activePaper && closedLibraries.has(activeLibrary) && useChatStore.getState().route === activeLibrary
+      && !(activeLibrary === 'papers' && usePaperSpaceStore.getState().readerKey)) {
+if (activeLibrary === 'papers' && papersLeft.length) {
+usePaperSpaceStore.setState({ readerKey: papersLeft.at(-1)! })
+return
+}
       const nextLibrary = visibleLibraries.filter((tab) => !closedLibraries.has(tab)).at(-1)
       if (nextLibrary) openLibrary(nextLibrary)
       else {
@@ -200,6 +245,10 @@ export function WorkTabStrip(): ReactElement | null {
   const entryTitle = (entry: WorkStripEntry): string => {
     if (entry.kind === 'document') return documentLabel(entry.item)
     if (entry.kind === 'library') return t(entry.tab === 'papers' ? 'workSidebarPapersNav' : 'artifactsNav')
+if (entry.kind === 'paper') {
+const item = paperItems.find((candidate) => candidate.key === entry.readerKey)
+return item?.entry.meta.pdfFile || item?.entry.meta.title || 'PDF'
+}
     return entry.kind === 'session' ? titles[entry.id] || t('workSessionNew') : t('workSessionNew')
   }
   const openMenu = (event: MouseEvent<HTMLElement>, key: string): void => {
@@ -210,7 +259,7 @@ export function WorkTabStrip(): ReactElement | null {
   const menuState = (entry: WorkStripEntry): WorkTabMenuState => {
     const count = (scope: WorkTabCloseScope): number => workTabCloseTargets(entries, entry.key, scope).length
     return {
-      kind: entry.kind === 'document' ? 'document' : 'session',
+      kind: entry.kind === 'document' || entry.kind === 'paper' ? 'document' : 'session',
       canClose: entry.kind !== 'draft',
       othersCount: count('others'),
       rightCount: count('right'),
@@ -292,7 +341,7 @@ export function WorkTabStrip(): ReactElement | null {
                 onClick={() => openSession(id)}>
                 <span className="work-tab-session-mark" aria-hidden="true">K</span>
                 <span className="work-tab-label">{titles[id] || t('workSessionNew')}</span>
-                {busy && id === current ? <span className="work-tab-running" aria-label={t('sidebarThreadRunning')} /> : null}
+                {busy && id === activeThreadId ? <span className="work-tab-running" aria-label={t('sidebarThreadRunning')} /> : null}
               </button>
               <button type="button" className="work-tab-close" aria-label={t('workTabClose')} title={t('workTabClose')}
                 onClick={() => closeSession(id)}>
@@ -334,7 +383,7 @@ export function WorkTabStrip(): ReactElement | null {
         })}
         {visibleLibraries.map((tab) => {
           const key = `library:${tab}`
-          const selected = activeLibrary === tab
+          const selected = activeLibrary === tab && !activePaper
           const label = t(tab === 'papers' ? 'workSidebarPapersNav' : 'artifactsNav')
           const Icon = tab === 'papers' ? LibraryBig : Shapes
           return (
@@ -350,6 +399,21 @@ export function WorkTabStrip(): ReactElement | null {
               </button>
             </div>
           )
+        })}
+        {readers.map((item) => {
+          const key = `paper:${item.key}`
+          const selected = activePaper?.key === item.key
+          const label = item.entry.meta.pdfFile || item.entry.meta.title
+          return <div key={key} className="work-tab" data-kind="paper" data-reader-key={item.key} data-selected={selected ? 'true' : undefined}
+            data-menu-target={menu?.key === key ? 'true' : undefined} onContextMenu={(event) => openMenu(event, key)}>
+            <button type="button" role="tab" aria-selected={selected} className="work-tab-main" title={item.entry.meta.title}
+              onClick={() => void activatePaper(item)}>
+              <span className="work-tab-icon"><WorkFileTypeIcon name={label} size={16} /></span>
+              <span className="work-tab-label">{label}</span>
+            </button>
+            <button type="button" className="work-tab-close" aria-label={t('workTabClose')} title={t('workTabClose')}
+              onClick={() => void closeEntries([{ kind: 'paper', key, readerKey: item.key }])}><X className="h-3 w-3" strokeWidth={2.4} /></button>
+          </div>
         })}
         {workspaceRoot ? <button type="button" className="work-tab-add" aria-label={t('workSidebarNewSession')} title={t('workSidebarNewSession')}
           onClick={() => {
