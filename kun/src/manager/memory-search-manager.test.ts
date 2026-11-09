@@ -7,6 +7,7 @@ import { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import type { ToolHostContext } from '../ports/tool-host.js'
 import { startNodeHttpServer } from '../server/node-http-server.js'
 import type { ServiceManagerConnection } from './manager-client.js'
+import { KUN_MANAGER_PROTOCOL_VERSION } from './manager-discovery.js'
 import { ManagerRemoteMemoryStore } from './remote-memory-store.js'
 import { buildServiceManagerRouter, ServiceManagerState } from './service-manager.js'
 import { ManagerSharedDataStore } from './shared-data-store.js'
@@ -23,7 +24,7 @@ it('preserves tool policy through HTTP validation and backing retrieval without 
     }), host: '127.0.0.1', port: 0
   })
   const connection: ServiceManagerConnection = { discovery: {
-    version: 1, protocolVersion: 6, instanceId: 'search-test', pid: process.pid,
+    version: 1, protocolVersion: KUN_MANAGER_PROTOCOL_VERSION, instanceId: 'search-test', pid: process.pid,
     startedAt, host: '127.0.0.1', port: server.port, baseUrl: `http://127.0.0.1:${server.port}`,
     managerToken: 'test-token', serviceVersion: '0.4.4', dataDir, settingsPath: join(root, 'settings.json')
   } }
