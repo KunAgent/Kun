@@ -98,6 +98,12 @@ describe('AgentBrowserPanel supervision', () => {
       }))
     })
 
+    // The approval status must wrap in a narrow dock, not grow beyond its toolbar.
+    const status = renderer.root.findAllByType('span').find((node) =>
+      textContent(node) === i18n.t('common:browserUseNeedsAttention'))
+    expect(status?.props.className).toContain('break-words')
+    expect(status?.parent?.props.className).toContain('max-w-full')
+    expect(status?.parent?.props.className).not.toContain('shrink-0')
     expect(textContent(renderer.root)).toContain('Publish')
     expect(textContent(renderer.root)).not.toMatch(/always|permanent/i)
     await act(async () => {

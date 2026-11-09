@@ -117,7 +117,15 @@ test('parallel packaging preserves required cross-version and prepared-restart c
     assert.deepEqual(job.needs, ['package-windows'])
     assert.equal(job.if, undefined)
     assert.equal(job['continue-on-error'], "${{ matrix.source == 'published-release' }}")
-    assert.deepEqual(job.strategy.matrix.source, ['published-release', 'pull-request'])
+    if (name === 'windows-prepared-restart') {
+      assert.deepEqual(job.strategy.matrix.source, ['published-release', 'pull-request'])
+    } else {
+      assert.deepEqual(job.strategy.matrix.include, [
+        { source: 'published-release', baseline: '0.4.3' },
+        { source: 'pull-request', baseline: '0.4.3' },
+        { source: 'pull-request', baseline: '0.4.4' }
+      ])
+    }
     assert.equal(job.strategy['fail-fast'], false)
     for (const gateName of ['pr-gate', 'report-pr-check-feedback']) {
       assert.ok(pr.jobs[gateName].needs.includes(name))
@@ -134,5 +142,45 @@ test('parallel packaging preserves required cross-version and prepared-restart c
   for (const name of ['build-app', 'ci-workflow-performance', 'smoke-windows-installer-pending-protection',
     'smoke-windows-installer-relaunch', 'stage-windows-upgrade-evidence']) {
     assert.ok(scripts['test:release-workflows'].includes(`./scripts/${name}.test.cjs`), name)
+  }
+})
+
+test('current Windows stable upgrades the exact PR candidate with distinct evidence for every baseline', () => {
+  const job = pr.jobs['windows-cross-version']
+  const guard = job.steps.find(step => step.name === 'Require PR candidate newer than released baseline')
+  assert.equal(guard.if, "matrix.source == 'pull-request'")
+  const guardSource = /^node -e "(.*)"$/.exec(guard.run)?.[1]
+  assert.ok(guardSource, 'Version guard must be a standalone failing Node step')
+  const checkVersion = (version, baseline) => new Function('require', 'process', guardSource)(
+    name => name === './package.json' ? { version } : require(name),
+    { env: { GUI_UPGRADE_BASELINE: baseline } }
+  )
+  for (const baseline of ['0.4.3', '0.4.4']) {
+    for (const version of ['0.4.5', '0.4.10', '0.5.0', '1.0.0']) checkVersion(version, baseline)
+    for (const version of ['0.4.0', baseline]) {
+      assert.throws(() => checkVersion(version, baseline), /must be newer/)
+    }
+    checkVersion(require('../package.json').version, baseline)
+  }
+  const download = job.steps.find(step => step.uses === 'actions/download-artifact@v4')
+  assert.equal(download.if, "matrix.source == 'pull-request'")
+  assert.equal(download.with.name, 'pr-windows-nsis-package')
+  assert.equal(download.with.path, 'cross-version-candidate')
+  assert.equal(download.with['run-id'], undefined)
+  const smoke = job.steps.find(step => step.run?.includes('node scripts/smoke-gui-upgrade.cjs'))
+  assert.match(smoke.run, /--directory cross-version-candidate --version \$version --baseline-version \$env:GUI_UPGRADE_BASELINE/)
+  assert.match(smoke.run, /'published-release'\) \{ '0\.4\.4' \} else \{ node -p "require\('\.\/package.json'\).version" \}/)
+  assert.match(smoke.run, /'published-release'\) \{ 'normal' \} else \{ 'normal,busy,rollback' \}/)
+  const report = 'windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}.json'
+  assert.ok(smoke.run.includes(`--report ${report}`))
+  const stage = job.steps.find(step => step.id === 'stage_windows_evidence')
+  assert.ok(stage.run.includes(`--report ${report}`))
+  const upload = job.steps.find(step => step.uses === 'actions/upload-artifact@v4')
+  assert.equal(upload.with.name, 'windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}')
+  assert.ok(stage.run.includes(`--output ${upload.with.path}`))
+  const expand = (template, row) => template.replace('${{ matrix.baseline }}', row.baseline)
+    .replace('${{ matrix.source }}', row.source)
+  for (const template of [job.name, report, upload.with.name, upload.with.path]) {
+    assert.equal(new Set(job.strategy.matrix.include.map(row => expand(template, row))).size, 3)
   }
 })

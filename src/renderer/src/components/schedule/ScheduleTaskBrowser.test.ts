@@ -18,7 +18,8 @@ const button = (text: string): HTMLButtonElement => [...document.querySelectorAl
 const input = (label: string): HTMLInputElement => document.querySelector(`input[aria-label="${label}"]`)!
 const click = async (node: HTMLElement): Promise<void> => { await act(async () => node.click()) }
 const task = (id: string, patch: Partial<ScheduledTaskV1> = {}): ScheduledTaskV1 => ({
-  ...newScheduledTask(`/repo/${id}`), id, title: id, prompt: `instruction ${id}`, ...patch
+  ...newScheduledTask(`/repo/${id}`), id, title: id, prompt: `instruction ${id}`,
+  createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...patch
 })
 async function mount(): Promise<void> {
   await act(async () => root.render(createElement(ScheduleTaskBrowser, {
@@ -81,6 +82,14 @@ describe('scheduled task browser', () => {
     await click(button('Delete selected')); await click(button('Delete 2 tasks'))
     expect(bulk).toHaveBeenCalledExactlyOnceWith({ action: 'delete', taskIds: ['alpha', 'beta'] })
     expect(document.querySelector('[role="alertdialog"]')).toBeNull()
+  })
+
+  it('deletes selected ids in display order even when selection and creation orders differ', async () => {
+    tasks[1] = { ...tasks[1], updatedAt: '2026-01-02T00:00:00.000Z' }
+    await mount()
+    await click(input('Select alpha')); await click(input('Select beta'))
+    await click(button('Delete selected')); await click(button('Delete 2 tasks'))
+    expect(bulk).toHaveBeenCalledExactlyOnceWith({ action: 'delete', taskIds: ['beta', 'alpha'] })
   })
 
   it('keeps selection and the confirmation available after save failure', async () => {

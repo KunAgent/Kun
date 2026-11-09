@@ -176,10 +176,15 @@ test('Windows CI compares published control and required same-run PR candidate w
   const workflow = parse(await readFile(join(__dirname, '../.github/workflows/pr-checks.yml'), 'utf8'))
   const job = workflow.jobs['windows-cross-version']
   assert.equal(job['runs-on'], 'windows-latest')
-  assert.deepEqual(job.strategy.matrix.source, ['published-release', 'pull-request'])
+  assert.deepEqual(job.strategy.matrix.include, [
+    { source: 'published-release', baseline: '0.4.3' },
+    { source: 'pull-request', baseline: '0.4.3' },
+    { source: 'pull-request', baseline: '0.4.4' }
+  ])
+  assert.equal(job.env.GUI_UPGRADE_BASELINE, '${{ matrix.baseline }}')
   assert.equal(job['continue-on-error'], "${{ matrix.source == 'published-release' }}")
   const commands = job.steps.map(step => step.run || '').join('\n')
-  assert.match(commands, /--baseline-version 0\.4\.3/)
+  assert.match(commands, /--baseline-version \$env:GUI_UPGRADE_BASELINE/)
   assert.match(commands, /'normal,busy,rollback'/)
   assert.doesNotMatch(commands, /release (create|edit|upload)|publish-r2/)
   const stage = job.steps.findIndex(step => step.id === 'stage_windows_evidence')
@@ -187,7 +192,7 @@ test('Windows CI compares published control and required same-run PR candidate w
   assert.ok(stage >= 0 && upload > stage)
   assert.equal(job.steps[stage].if, 'always()')
   assert.equal(job.steps[upload].if, "${{ always() && steps.stage_windows_evidence.outcome == 'success' }}")
-  assert.equal(job.steps[upload].with.path, 'artifacts/windows-cross-version')
+  assert.equal(job.steps[upload].with.path, 'artifacts/windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}')
   assert.ok(workflow.jobs['pr-gate'].needs.includes('windows-cross-version'))
 })
 
