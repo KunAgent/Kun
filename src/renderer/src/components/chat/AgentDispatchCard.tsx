@@ -2,7 +2,7 @@ import { useTeamWorkers } from '../workers/use-team-workers'
 import { useChatStore } from '../../store/chat-store'
 import { useEffect, useId, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, GitBranch, ShieldCheck, Split, Timer } from 'lucide-react'
+import { Check, GitBranch, ShieldCheck, Timer } from 'lucide-react'
 import {
   AgentDispatchIntentPublicSchema,
   type AgentDispatchAssignmentRoute,
@@ -12,14 +12,12 @@ import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { useAgentDispatchIntent } from './use-agent-dispatch-intent'
 import { AgentDispatchIntentControls } from './AgentDispatchIntentControls'
 import { AgentDispatchStatusBadge } from './AgentDispatchStatusBadge'
-import { AgentDispatchAssignmentList } from './AgentDispatchAssignmentList'
+import { AgentDispatchWorkerGroup } from './AgentDispatchWorkerGroup'
 import { assignmentRoute, dispatchAssignments, dispatchRoutesEditable, replaceAssignmentRoute,
   sameAssignmentRoute } from './agent-dispatch-card-model'
 import { openWorkerSession } from '../workers/worker-view-store'
 import { TaskSuggestionCard } from './TaskSuggestionCard'
 import { AssistantMarkdown } from './AssistantMarkdown'
-import { AgentIcon } from '../agent-icon'
-import { agentIconId } from '../../lib/agent-icon-aliases'
 import { isTaskSuggestionBlock } from './task-suggestion-card-model'
 import { useDispatchInteractionHold } from './use-dispatch-interaction-hold'
 
@@ -80,8 +78,9 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const activeThreadId = useChatStore((state) => state.activeThreadId)
   const id = block.meta!.dispatchIntentId as string
   const parsed = AgentDispatchIntentPublicSchema.safeParse(block.meta?.dispatchIntent)
-  const { intent, act, busy, error } = useAgentDispatchIntent(id, parsed.success ? parsed.data : undefined)
-  const { overview } = useTeamWorkers(intent?.source.threadId ?? null, Boolean(intent?.target?.dispatchIds?.length))
+  const { intent, act, busy, error, refresh, loadError } = useAgentDispatchIntent(id, parsed.success ? parsed.data : undefined)
+  const { overview, loadFailed, reload } = useTeamWorkers(intent?.source.threadId ?? null,
+    Boolean(intent?.target?.dispatchIds?.length), intent?.target?.dispatchIds)
   const [draft, setDraft] = useState<Draft>()
   const [saveError, setSaveError] = useState('')
   const [routeFailed, setRouteFailed] = useState(false)
@@ -93,7 +92,7 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
     {error || t('dispatchIntent.loading')}
   </section>
   const recommendation = intent.recommendation
-  const assignments = dispatchAssignments(intent)
+  const assignments = dispatchAssignments(intent, overview?.dispatches)
   const batch = assignments.length > 1
   const locked = readOnly || activeThreadId !== intent.source.threadId
   // Older batch cards carry one shared route that Kun keeps fixed.
@@ -103,8 +102,6 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
     ...(sameAssignmentRoute(localRoutes[index], assignment) ? { workspaceIsolation: assignment.workspaceIsolation } : {}),
     ...(localRoutes[index].agentId === assignment.agentId && assignment.agentName ? { agentName: assignment.agentName } : {}) }))
     : assignments
-  const iconIds = shown.map((assignment) => agentIconId(assignment.agentId))
-  const sharedIconId = iconIds.every((id) => id === iconIds[0]) ? iconIds[0] : undefined
   const workerIds = intent.target?.workerIds ?? (intent.target?.threadId ? [intent.target.threadId] : [])
   const openWorker = (workerId: string, label?: string) => openWorkerSession(workerId, label)
   const changeRoute = (index: number, route: AgentDispatchAssignmentRoute) => {
@@ -133,18 +130,18 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
   const autoStarted = intent.decision?.decision === 'allow' && intent.decision.reason.startsWith('Started automatically')
   return <section className="min-w-0 overflow-hidden rounded-2xl border border-ds-border bg-ds-card shadow-sm"
     data-agent-dispatch-card data-intent-id={id} data-state={intent.state}>
-    <header className="flex min-w-0 items-start gap-3 px-4 py-3">
-      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-accent-tint/10 text-accent">
-        {sharedIconId ? <AgentIcon harnessId={sharedIconId} size={16} /> : <Split size={16} aria-hidden />}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[11.5px] font-medium text-ds-faint">{t(batch ? 'dispatchIntent.kickerBatch' : 'dispatchIntent.kicker')}</p>
-        <h4 className="mt-0.5 line-clamp-2 break-words text-[14px] font-semibold leading-5 text-ds-ink" title={recommendation.title}>
-          {batch ? t('dispatchIntent.batchTitle', { n: assignments.length }) : recommendation.title}
-        </h4>
-      </div>
-      <AgentDispatchStatusBadge intent={intent} dispatches={overview?.dispatches} />
-    </header>
+    <AgentDispatchWorkerGroup key={`${id}:workers`} intent={intent} dispatches={overview?.dispatches} assignments={shown}
+      editable={canEditRoutes} busy={busy && !hold.holding} onRouteChange={changeRoute} onInteract={hold.touch}
+      onPendingChange={hold.setPending} onOpenWorker={openWorker}
+      status={<AgentDispatchStatusBadge intent={intent} dispatches={overview?.dispatches} />} />
+    {loadFailed || loadError ? <div role="status" className="flex items-center gap-2 border-t border-ds-border-muted px-4 py-2 text-[12px] text-ds-status-warning">
+      <span className="min-w-0 flex-1">{t('dispatchIntent.group.stale')}</span>
+      <button type="button" className="shrink-0 rounded px-2 py-1 text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        onClick={() => { void refresh(); void reload() }}>{t('dispatchIntent.group.retry')}</button>
+    </div> : null}
+    {!recommendation.assignments?.length && (intent.target?.workerIds?.length ?? 0) > 1 &&
+      recommendation.title.split(' / ').length !== intent.target?.workerIds?.length ?
+      <p className="border-t border-ds-border-muted px-4 py-2 text-[12px] text-ds-muted">{t('dispatchIntent.group.legacy')}</p> : null}
     <AgentDispatchResult key={id} intent={intent} count={assignments.length} />
     {draft ? <div className="space-y-2 border-t border-ds-border-muted px-4 py-3 text-[13px]">
       {!batch ? <input value={draft.title} maxLength={512} aria-label={t('dispatchIntent.title')}
@@ -153,9 +150,6 @@ function AgentDispatchCard({ block, readOnly }: { block: ToolBlock; readOnly: bo
         placeholder={batch ? t('dispatchIntent.batchTaskHint') : undefined}
         onChange={(event) => setDraft({ ...draft, task: event.target.value })} className={`${fieldClass} text-[12.5px] leading-5`} />
     </div> : null}
-    {/* Held picks stay local, so the hold's own pause must not lock the pickers (a disabled chip eats the click). */}
-    <AgentDispatchAssignmentList intent={intent} dispatches={overview?.dispatches} assignments={shown} editable={canEditRoutes} busy={busy && !hold.holding}
-      onRouteChange={changeRoute} onInteract={hold.touch} onPendingChange={hold.setPending} onOpenWorker={openWorker} />
     <footer className="space-y-2.5 border-t border-ds-border-muted px-4 py-3">
       <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-ds-faint">
         {workspaceName ? <span className="inline-flex min-w-0 items-center gap-1" title={recommendation.workspace}>

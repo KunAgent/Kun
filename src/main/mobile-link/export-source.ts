@@ -2,6 +2,8 @@ import { z } from 'zod'
 
 const Id = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
 const Export = z.union([
+  z.object({ previewResource: z.object({ kind: z.enum(['code', 'agent']), id: Id }).strict(),
+    previewId: Id, previewRevision: z.string().regex(/^artifact-v1:[a-f0-9]{64}$/), previewAssetId: Id }).strict(),
   z.object({ attachmentId: z.string().regex(/^att_[a-f0-9]{24}$/), threadId: Id }).strict(),
   z.object({ artifactId: Id, threadId: Id }).strict(),
   z.object({ artifactId: Id, agentId: Id, version: z.number().int().positive().optional() }).strict(),
@@ -18,7 +20,14 @@ export function runtimeExportSource(
   const params = Export.parse(input)
   const headers: Record<string, string> = { Authorization: 'Bearer ' + runtimeToken }
   let path: string
-  if ('projectId' in params) {
+  if ('previewId' in params) {
+    Id.parse(scope.owner); Id.parse(scope.peer); Id.parse(scope.authorizationId)
+    path = '/v1/remote/artifact-previews/' + params.previewResource.kind + '/' + params.previewResource.id +
+      '/' + params.previewId + '/' + params.previewAssetId + '?revision=' + encodeURIComponent(params.previewRevision)
+    headers['X-Kun-Remote-Account'] = scope.owner
+    headers['X-Kun-Remote-Device'] = scope.peer
+    headers['X-Kun-Remote-Authorization'] = scope.authorizationId
+  } else if ('projectId' in params) {
     Id.parse(scope.owner); Id.parse(scope.peer); Id.parse(scope.authorizationId)
     path = '/v1/remote/project-files/' + params.projectId + '/' + params.fileRef +
       '?revision=' + encodeURIComponent(params.revision)

@@ -1,5 +1,5 @@
 import { dispatchMobileInvoke } from './invoke-dispatch'
-import { ComputerHostAccess } from './computer-host-access'
+import { ComputerHostAccess, COMPUTER_DESKTOP_SCOPES } from './computer-host-access'
 import { requireComputerRemote } from '../computer-access/membership'
 import { appendHostMetadata } from './catalog-metadata'
 import { MobileShareHosts } from './share-host'
@@ -48,6 +48,7 @@ export type { LinkDependencies } from './service-dependencies'
 export class MobileLinkService {
   private computers = new ComputerHostAccess()
   private computerPairings = new Set<string>()
+  private computerAccessOperation = 0
   private authorities = new MobileLinkAuthorities()
   private notifications: MobileNotifications
   private shared: MobileShareHosts
@@ -68,6 +69,7 @@ export class MobileLinkService {
   private generation = 0
   private enabled = false
   private desktopAccess = false
+  private phoneAccess = false
   private online = false
   private error?: string
   private identity?: DeviceIdentity
@@ -137,6 +139,7 @@ export class MobileLinkService {
     return result
   }
   stop() {
+    ++this.computerAccessOperation
     ++this.generation
     ++this.transportEpoch
     clearTimeout(this.authorizationTimer)
@@ -153,6 +156,7 @@ export class MobileLinkService {
     this.computers.reset(); this.computerPairings.clear()
     this.authorities.clear()
     this.desktopAccess = false
+    this.phoneAccess = false
     void this.deps.desktop?.configureRemoteAccess?.(false).catch(() => {})
     void this.deps.desktop?.stopAll('host_stopped').catch(() => {})
     void this.deps.terminal?.stopAll('host_stopped').catch(() => {})
@@ -287,11 +291,11 @@ export class MobileLinkService {
           this.computers.grants(this.api)
         ])
         if (generation === this.generation && grantsVersion === this.grantsVersion) {
-          pairings = p.pairings
-          grants = g.grants
-          this.pairingPeers = new Map(p.pairings.map((pairing: { id: string; controllerId: string }) => [pairing.id, pairing.controllerId]))
-          this.computerPairings = new Set(p.pairings.filter(pairing => pairing.purpose === 'desktop').map(pairing => pairing.id))
-          this.updateGrants(g.grants)
+          pairings = p.pairings.filter(item => this.phoneAccess || item.purpose === 'desktop')
+          grants = g.grants.filter(item => this.phoneAccess || item.purpose === 'desktop')
+          this.pairingPeers = new Map(pairings.map(pairing => [pairing.id, pairing.controllerId]))
+          this.computerPairings = new Set(pairings.filter(pairing => pairing.purpose === 'desktop').map(pairing => pairing.id))
+          this.updateGrants(grants)
           if (!['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? '')) this.error = undefined
         }
       } catch {
@@ -300,7 +304,7 @@ export class MobileLinkService {
       }
     }
     return {
-      enabled: this.enabled,
+      enabled: this.enabled && this.phoneAccess,
       desktopAccess: this.desktopAccess,
       computerAccess: this.computers.active,
       starting: this.enabling && !this.enabled,
@@ -322,7 +326,7 @@ export class MobileLinkService {
     return this.status()
   }
 
-  async enable(value: boolean, keepGrants = false, desktopAccess = false) {
+  async enable(value: boolean, keepGrants = false, desktopAccess = false, phoneAccess = true) {
     if (!value) {
       ++this.enableOperation
       this.enabling = false
@@ -332,7 +336,7 @@ export class MobileLinkService {
     this.enabling = true
     const operation = ++this.enableOperation
     try {
-      return await this.setEnabled(value, keepGrants, desktopAccess)
+      return await this.setEnabled(value, keepGrants, desktopAccess, phoneAccess)
     } catch (error) {
       if (operation !== this.enableOperation) throw error
       if (!this.enabled) this.stop()
@@ -376,6 +380,7 @@ export class MobileLinkService {
     })
   }
   private updateGrants(grants: { id: string; controllerId: string; purpose?: 'desktop' }[]) {
+    grants = grants.filter(grant => this.phoneAccess || grant.purpose === 'desktop')
     for (const grant of grants)
       if (this.deniedGrants.has(grant.id)) this.deniedGrants.set(grant.id, grant.controllerId)
     const previous = this.peers
@@ -383,14 +388,15 @@ export class MobileLinkService {
     for (const peer of previous) if (!this.peers.has(peer)) this.subscriptions.clear(peer)
     this.grantPeers = new Map(grants.map((grant) => [grant.id, grant.controllerId]))
     const eligibleGrants = grants.filter(grant => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id))
-    for (const peer of this.authorities.sync(eligibleGrants, this.desktopAccess ? MOBILE_REMOTE_SCOPES : undefined)) this.permissionsChanged(peer)
+    for (const peer of this.authorities.sync(eligibleGrants, this.desktopAccess ? MOBILE_REMOTE_SCOPES : undefined,
+      this.computers.current() ? [...COMPUTER_DESKTOP_SCOPES] : undefined)) this.permissionsChanged(peer)
     const api = this.api, generation = this.generation
-    const eligible = () => this.enabled && !this.sessionEnding && this.api === api && generation === this.generation &&
+    const eligible = () => this.phoneAccess && this.enabled && !this.sessionEnding && this.api === api && generation === this.generation &&
       [...this.grantPeers].some(([id, peer]) => !this.deniedGrants.has(id) && !this.deniedPeers.has(peer))
     if (api && eligible()) this.notifications.start(api, eligible)
     else this.notifications.stop()
   }
-  private async setEnabled(value: boolean, keepGrants = false, desktopAccess = false) {
+  private async setEnabled(value: boolean, keepGrants = false, desktopAccess = false, phoneAccess = true) {
     if (!value) {
       const identity = this.identity
       const token = this.lastToken
@@ -440,9 +446,11 @@ export class MobileLinkService {
       throw error
     }
     this.enabled = true
-    if (this.deps.computerAccess) await this.computers.advertise(api, true, false, owner)
+    this.phoneAccess = phoneAccess
+    // Phone access alone is not consent for unattended computer connections.
+    if (this.deps.computerAccess) await this.computers.advertise(api, false)
     if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
-    this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
+    if (this.phoneAccess) this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
       current: () => this.enabled && generation === this.generation && !this.sessionEnding })
     let peersListedAt = -Infinity
     const refreshPeers = async (epoch: number, signal?: AbortSignal) => {
@@ -547,20 +555,20 @@ export class MobileLinkService {
     const peer = this.grantPeers.get(id)
     const scopes = this.authorities.purpose(peer ?? '', id) === 'desktop' ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes)
     if (!this.enabled || !peer || this.deniedGrants.has(id)) throw new Error('INVALID_GRANT')
-    if (scopes.length && this.authorities.purpose(peer, id) === 'desktop') {
-      await this.computers.requireMax()
-      if (generation !== this.generation || this.grantPeers.get(id) !== peer) throw Error('ACCOUNT_CHANGED')
-    }
+    const authority = this.authorities.identity('', peer, id)
     const currentScopes = this.authorities.scopes(peer, id)
-    if (scopes.some(scope => !currentScopes.includes(scope))) {
-      const generation = this.generation, owner = this.owner
-      const authority = this.authorities.identity('', peer, id)
-      await this.deps.requireMembership(owner!)
-      if (generation !== this.generation || owner !== this.owner || this.sessionEnding || !this.enabled)
-        throw new Error('ACCOUNT_CHANGED')
-      // A revoke or permission reduction during verification must not be overwritten by a stale expansion.
+    const verify = () => {
+      if (generation !== this.generation || this.sessionEnding || !this.enabled) throw Error('ACCOUNT_CHANGED')
       if (this.grantPeers.get(id) !== peer || this.deniedGrants.has(id) || this.authorities.identity('', peer, id) !== authority)
-        throw new Error('INVALID_GRANT')
+        throw Error('INVALID_GRANT')
+    }
+    if (scopes.length && this.authorities.purpose(peer, id) === 'desktop') {
+      await this.computers.requireMax(); verify()
+    }
+    if (scopes.some(scope => !currentScopes.includes(scope))) {
+      await this.deps.requireMembership(this.owner!)
+      // Neither membership check may overwrite a concurrent reduction or revocation.
+      verify()
     }
     if (this.authorities.set(peer, id, scopes)) this.permissionsChanged(peer)
     return this.status()
@@ -630,22 +638,42 @@ export class MobileLinkService {
   }
   async enableComputerAccess(enabled: boolean) {
     if (!this.deps.computerAccess || !this.deps.desktop) throw Error('DESKTOP_UNSUPPORTED')
+    let operation = ++this.computerAccessOperation
     const initialGeneration = this.generation
+    const current = () => { if (operation !== this.computerAccessOperation) throw Error('ACCOUNT_CHANGED') }
     if (enabled) {
       await requireComputerRemote(this.deps.account, this.deps.fetch, this.deps.origin)
+      current()
       if (initialGeneration !== this.generation) throw Error('ACCOUNT_CHANGED')
     }
-    if (!enabled) await this.deps.desktop.configureRemoteAccess(false)
-    if (enabled && !this.enabled) await this.enable(true, true, false)
+    if (!enabled) {
+      this.computers.reset()
+      await this.deps.desktop.configureRemoteAccess(false)
+    }
+    if (enabled && !this.enabled) {
+      const starting = this.enable(true, true, false, false)
+      // enable() synchronously fences the previous host before its first await.
+      operation = this.computerAccessOperation
+      await starting
+    }
+    current()
     if (!this.api) return this.status()
     const api = this.api, generation = this.generation
-    await this.computers.advertise(api, enabled, true, this.owner)
+    if (enabled) await this.deps.desktop.configureRemoteAccess(true, () => generation === this.generation && operation === this.computerAccessOperation)
+    current()
     if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
-    if (enabled) await this.deps.desktop.configureRemoteAccess(true, () => generation === this.generation)
+    await this.computers.advertise(api, enabled, true, this.owner)
+    current()
+    if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
+    if (enabled) this.computers.watch(api, peer => !this.deniedPeers.has(peer), async () => {
+      ++this.grantsVersion; this.statusRequest = undefined
+      return this.status()
+    })
     if (!enabled) for (const [id, peer] of this.grantPeers) if (this.authorities.purpose(peer, id) === 'desktop') {
       this.authorities.remove(peer); this.peers.delete(peer)
     }
     ++this.grantsVersion; this.statusRequest = undefined
+    if (!enabled && !this.phoneAccess) return this.enable(false)
     return this.status()
   }
 }

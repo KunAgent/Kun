@@ -39,5 +39,5 @@ export function useAgentDispatchIntent(intentId: string, initial?: AgentDispatch
       return undefined
     } finally { busyRef.current = false; setBusy(false) }
   }, [intent, refresh])
-  return { intent, error: actionError || loadError, busy, act, refresh }
+  return { intent, error: actionError || loadError, loadError, busy, act, refresh }
 }

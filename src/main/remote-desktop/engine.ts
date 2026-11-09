@@ -8,7 +8,7 @@ import { NativeDesktopInput, desktopHelperAvailable } from './native-input'
 import { desktopInputArbiter } from './input-arbiter'
 import { getComputerUsePermissions } from '../services/computer-use-permissions'
 import { DesktopShareIndicator } from './indicator'
-import { bindDesktopPrivacyStops } from './host-lifecycle'
+import { bindDesktopDisplayStops, bindDesktopPrivacyStops } from './host-lifecycle'
 import { logInfo } from '../logger'
 import { stopComputerSessions } from '../computer-access/lifecycle'
 const engines = new Set<ControlDesktop>()
@@ -29,8 +29,7 @@ export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promis
     indicator: new DesktopShareIndicator(),
     now: () => performance.now(), id: randomUUID, arbiter: desktopInputArbiter
   })
-  const changed = () => { void service.stopAll('display_changed').catch(() => {}) }
-  screen.on('display-removed', changed); screen.on('display-metrics-changed', changed)
+  bindDesktopDisplayStops(screen, reason => service.stopAll(reason), value => logInfo('remote-desktop', 'Desktop display change.', value))
   bindDesktopPrivacyStops(powerMonitor, reason => service.stopAll(reason))
   engines.add(service)
   return service

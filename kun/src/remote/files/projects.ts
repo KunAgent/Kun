@@ -1,4 +1,3 @@
-import { homedir } from 'node:os'
 import { StringDecoder } from 'node:string_decoder'
 import { randomUUID } from 'node:crypto'
 import { opendir, realpath, stat } from 'node:fs/promises'
@@ -10,13 +9,11 @@ import { projects } from './project-directory.js'
 import { workSpaces } from '../work/spaces.js'
 import { FILE_MAX_BYTES, inside, fileRevision, rootRevision, checkedProjectRead } from './project-content.js'
 import { projectFileIdentity } from './identity.js'
+import { permittedProjectFile } from './project-file-permissions.js'
 const TTL = 10 * 60 * 1000
 const MIME: Record<string, string> = { '.pdf': 'application/pdf', '.png': 'image/png', '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.json': 'application/json', '.md': 'text/markdown',
   '.txt': 'text/plain', '.html': 'text/html', '.csv': 'text/csv' }
-// These are credential/configuration authorities, not source-code exclusions.
-const PRIVATE = new Set(['.git', '.codex', '.claude', '.gemini', '.ssh', '.aws', '.azure', '.gnupg', '.npmrc', '.netrc', '.pypirc',
-  '.git-credentials', '.docker', '.kube', 'credentials.json', 'service-account.json'])
 type Entry = { fileRef: string; fileId: string; name: string; kind: 'file' | 'directory'; revision: string;
   available: boolean; size?: number; mimeType?: string; displayPath?: string; parentRef?: string; modifiedAt?: number; snippet?: string }
 type Handle = { scope: string; projectId: string; root: string; rootVersion: string; path: string; entry: Entry; expires: number }
@@ -70,21 +67,8 @@ export class RemoteProjectFiles {
     if (!project) throw new Error('NOT_FOUND')
     return { root: project.path, rootVersion: rootRevision(await stat(project.path)) }
   }
-  private async permitted(root: string, path: string) {
-    const canonical = await realpath(path)
-    if (!inside(root, canonical)) return false
-    if (PRIVATE.has(basename(root).toLowerCase())) return false
-    const parts = relative(root, canonical).split(/[\\/]/)
-    if (parts.some((part, i) => part.toLowerCase() === '.kun' && ['control', 'credentials'].includes(parts[i + 1]?.toLowerCase()))) return false
-    if (parts.some((part) => PRIVATE.has(part.toLowerCase()) || part.toLowerCase() === '.env' || part.toLowerCase().startsWith('.env.'))) return false
-    const protectedPaths = [this.runtime.rooms!.deps.dataDir, ...(this.runtime.remoteProtectedPaths ?? []),
-      ...['.ssh', '.aws', '.azure', '.gnupg', '.kube', '.docker', '.claude', '.gemini'].map((name) => join(homedir(), name)),
-      join(homedir(), '.kun', 'control'), join(homedir(), '.codex', 'auth.json'), join(homedir(), '.codex', 'config.toml')]
-    for (const protectedPath of protectedPaths) {
-      const candidate = await realpath(protectedPath).catch(() => resolve(protectedPath))
-      if (inside(candidate, canonical)) return false
-    }
-    return true
+  private permitted(root: string, path: string) {
+    return permittedProjectFile(this.runtime, root, path)
   }
   private async issue(scan: Pick<Scan, 'scope' | 'projectId' | 'root' | 'rootVersion'>, path: string, parentRef?: string) {
     if (!await this.permitted(scan.root, path)) return null

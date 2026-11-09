@@ -19,7 +19,7 @@ type Dependencies = {
   gate?: DesktopActivityGate
   event?(value: ComputerViewerEvent): void
 }
-type Active = { hostId: string; name: string; phase: 'opening' | 'connected' | 'closing' | 'unconfirmed'; startId?: string; session?: DesktopSession; generation: number }
+type Active = { hostId: string; name: string; phase: 'opening' | 'connected' | 'closing' | 'unconfirmed'; pairing?: boolean; startId?: string; session?: DesktopSession; generation: number }
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
 
 /** The trusted controller owns credentials and the stop record even after its viewer is destroyed. */
@@ -98,12 +98,12 @@ export class ComputerAccessService {
         state: (online, reason) => {
           if (generation !== this.generation) return
           this.error = online ? undefined : reason
-          if (!online && this.active && !['closing', 'unconfirmed'].includes(this.active.phase)) void this.close('signaling_lost')
+          if (!online && this.active && !this.active.pairing && !['closing', 'unconfirmed'].includes(this.active.phase)) void this.close('signaling_lost')
         },
         frame: frame => {
           const active = this.active
           if (generation !== this.generation || !active || frame.src !== active.hostId) return
-          if (frame.kind === 'resync_required') { void this.close('authorization_changed'); return }
+          if (frame.kind === 'resync_required') { if (!active.pairing) void this.close('authorization_changed'); return }
           if (frame.kind !== 'event') return
           try {
             const value = validateDesktopEvent(frame.payload)
@@ -154,10 +154,9 @@ export class ComputerAccessService {
     await this.requireMax(true)
     if (this.active) throw Error(this.active.phase === 'unconfirmed' ? 'DESKTOP_CLEANUP_UNCONFIRMED' : 'DESKTOP_BUSY')
     const device = this.device(hostId)
-    if (!device.grantId) throw Error('AUTHORIZATION_REQUIRED')
     if (!this.client?.online) throw Error('DEVICE_OFFLINE')
     this.gate.claim(this.gateKey, 'outgoing')
-    const active: Active = { hostId, name: device.name, phase: 'opening', generation: this.generation }
+    const active: Active = { hostId, name: device.name, phase: 'opening', pairing: !device.grantId, generation: this.generation }
     this.active = active; this.closing = undefined
     this.membershipTimer = setInterval(() => {
       if (!this.active || ['closing', 'unconfirmed'].includes(this.active.phase)) return
@@ -166,6 +165,29 @@ export class ComputerAccessService {
     }, 1000)
     this.membershipTimer.unref?.()
     try {
+      if (active.pairing) {
+        await this.api!.request('/desktop/pairings', 'POST', { hostId })
+        // Grant creation rotates relay authority. Wait for both hosts to observe it, without
+        // replaying any session start or input; only this read-only preflight may be retried.
+        const deadline = Date.now() + 20000
+        for (;;) {
+          this.current(active.generation)
+          if (this.active !== active || active.phase !== 'opening') throw Error('DESKTOP_SESSION_EXPIRED')
+          await this.refresh()
+          if (this.devices.find(item => item.id === hostId)?.grantId && this.client?.online) {
+            try {
+              const access = await this.invoke('desktop.access.get', {})
+              if (access.viewAllowed) break
+            } catch (error) {
+              const code = error instanceof Error ? error.message : ''
+              if (!['REMOTE_SCOPE_REQUIRED', 'DESKTOP_SESSION_EXPIRED', 'DEVICE_OFFLINE', 'RESULT_UNKNOWN', 'REQUEST_TIMEOUT'].includes(code)) throw error
+            }
+          }
+          if (Date.now() >= deadline) throw Error('AUTHORIZATION_NOT_READY')
+          await new Promise(resolve => setTimeout(resolve, 500))
+        }
+        active.pairing = false
+      }
       const access = await this.invoke('desktop.access.get', {})
       if (!access.capabilities.includes(DESKTOP_DEVICE_CAPABILITY) || !access.capabilities.includes(DESKTOP_SCOPED_CAPABILITY)) throw Error('COMPUTER_HOST_UPDATE_REQUIRED')
       if (!access.enabled) throw Error('DESKTOP_DISABLED')

@@ -81,6 +81,24 @@ export function registerRemoteRoutes(router: Router, runtime: ServerRuntime) {
       }
     }
   )
+  router.add('GET', '/v1/remote/artifact-previews/:kind/:resourceId/:id/:assetId', async (request, { params }) => {
+    if (!authorize(request, runtime)) return jsonResponse({ code: 'unauthorized' }, 401)
+    try {
+      const scope = {
+        accountId: RemoteId.parse(request.headers.get('X-Kun-Remote-Account')),
+        deviceId: RemoteId.parse(request.headers.get('X-Kun-Remote-Device')),
+        authorizationId: RemoteId.parse(request.headers.get('X-Kun-Remote-Authorization'))
+      }
+      const file = await facade.previews.asset(scope, {
+        previewResource: { kind: z.enum(['code', 'agent']).parse(params.kind), id: RemoteId.parse(params.resourceId) },
+        previewId: RemoteId.parse(params.id), previewAssetId: RemoteId.parse(params.assetId),
+        previewRevision: z.string().regex(/^artifact-v1:[a-f0-9]{64}$/).parse(new URL(request.url).searchParams.get('revision'))
+      })
+      return new Response(new Uint8Array(file.data), { headers: {
+        'Content-Type': file.mimeType, 'X-Kun-File-Name': encodeURIComponent(file.name), 'Cache-Control': 'no-store'
+      } })
+    } catch { return jsonResponse({ code: 'FILE_NOT_ALLOWED' }, 403) }
+  })
   router.add('POST', '/v1/remote/transfer-receipt', async (request) => {
     if (!authorize(request, runtime))
       return jsonResponse({ code: 'unauthorized' }, 401)

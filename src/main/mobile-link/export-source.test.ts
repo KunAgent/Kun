@@ -33,6 +33,19 @@ describe('protected remote file export sources', () => {
       { agentId: 'agent', avatarRevision: 7, url: 'https://external.test/image' }
     ]) expect(() => runtimeExportSource(input, scope, 'token')).toThrow()
   })
+  it('exports only a manifest-addressed preview asset with the live connection scope', () => {
+    const params = { previewResource: { kind: 'code', id: 'task' }, previewId: 'artifact_preview',
+      previewRevision: 'artifact-v1:' + 'c'.repeat(64), previewAssetId: 'asset_html' }
+    const result = runtimeExportSource(params, scope, 'runtime-secret')
+    expect(result.path).toBe('/v1/remote/artifact-previews/code/task/artifact_preview/asset_html?revision=' + encodeURIComponent(params.previewRevision))
+    expect(result.headers).toEqual({ Authorization: 'Bearer runtime-secret',
+      'X-Kun-Remote-Account': 'account', 'X-Kun-Remote-Device': 'phone', 'X-Kun-Remote-Authorization': 'lease' })
+    for (const input of [
+      { ...params, path: '/private/secret' }, { ...params, artifactId: 'mixed' },
+      { ...params, previewResource: { ...params.previewResource, kind: 'room' } },
+      { ...params, previewAssetId: '../private' }, { ...params, previewRevision: 'latest' }
+    ]) expect(() => runtimeExportSource(input, scope, 'token')).toThrow()
+  })
   it('preserves the exact legacy attachment and artifact routes', () => {
     const attachment = 'att_' + 'b'.repeat(24)
     expect(runtimeExportSource({ attachmentId: attachment, threadId: 'task' }, scope, 'token').path)

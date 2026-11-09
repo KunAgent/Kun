@@ -1,5 +1,6 @@
 import type { TurnItem, AssistantTextTurnItem } from '../contracts/items.js'
 import type { RuntimeEvent } from '../contracts/events.js'
+import { backfillDispatchTiming } from './dispatch-turn-timing.js'
 import { workerResultSummary, clipWorkerResult } from './worker-result-summary.js'
 import type {
   DispatchRecord,
@@ -90,8 +91,8 @@ export class ManagerWorkerLifecycle {
     const thread = await this.deps.threads.get(workerThreadId).catch(() => null)
     const unit = thread?.executionUnit
     if (!thread || unit?.kind !== 'worker') return
-    const turn = thread.turns.find((entry) => entry.id === turnId)
-      ?? await this.deps.turns.getTurn(workerThreadId, turnId).catch(() => null)
+    const turn = await this.deps.turns.getTurn(workerThreadId, turnId).catch(() => null)
+      ?? thread.turns.find((entry) => entry.id === turnId)
     const key = turn?.clientRequestId
     const dispatch = key
       ? await this.deps.dispatches.findByClientRequestId(unit.teamId, key)
@@ -102,11 +103,7 @@ export class ManagerWorkerLifecycle {
       await this.teamControls.takeOverWorker(workerThreadId)
       return
     }
-    if (dispatch.turnId === turnId) return
-    if (dispatch.state === 'completed' || dispatch.state === 'failed' || dispatch.state === 'cancelled') {
-      return
-    }
-    await this.deps.dispatches.update(unit.teamId, dispatch.dispatchId, { turnId }).catch(() => undefined)
+    if (turn) await backfillDispatchTiming(this.deps.dispatches, unit.teamId, dispatch.dispatchId, turn)
   }
 
   /**
@@ -165,15 +162,14 @@ export class ManagerWorkerLifecycle {
     const team = await this.deps.teams.get(unit.teamId)
     const worker = team?.workers.find((entry) => entry.workerId === workerThreadId)
     if (!team || !worker) return
+    const turn = await this.deps.turns.getTurn(workerThreadId, turnId).catch(() => null)
+      ?? thread.turns.find((entry) => entry.id === turnId)
     let dispatch = await this.deps.dispatches.findByTurn(team.teamId, turnId)
-    if (!dispatch) {
-      const turn = thread.turns.find((entry) => entry.id === turnId)
-        ?? await this.deps.turns.getTurn(workerThreadId, turnId).catch(() => null)
-      if (turn?.clientRequestId) {
-        dispatch = await this.deps.dispatches.findByClientRequestId(team.teamId, turn.clientRequestId)
-      }
+    if (!dispatch && turn?.clientRequestId) {
+      dispatch = await this.deps.dispatches.findByClientRequestId(team.teamId, turn.clientRequestId)
     }
     if (!dispatch) return
+    if (turn) await backfillDispatchTiming(this.deps.dispatches, team.teamId, dispatch.dispatchId, turn)
     if (
       dispatch.state !== 'accepted' &&
       dispatch.state !== 'delivering' &&
@@ -418,14 +414,19 @@ export class ManagerWorkerLifecycle {
     await this.deps.deliverer.reconcileAll()
     for (const team of await this.deps.teams.list()) {
       const unstarted = new Set<string>()
-      for (const dispatch of await this.deps.dispatches.listByState(team.teamId, ['accepted'])) {
+      for (const dispatch of await this.deps.dispatches.list(team.teamId)) {
+        if (dispatch.state !== 'accepted' && (!dispatch.turnId || (dispatch.startedAt && dispatch.finishedAt))) continue
         const thread = await this.deps.threads.get(dispatch.workerId).catch(() => null)
-        const turn = thread?.turns.find((entry) => entry.id === dispatch.turnId)
+        const turn = (dispatch.turnId
+          ? await this.deps.turns.getTurn(dispatch.workerId, dispatch.turnId).catch(() => null)
+          : null)
           ?? thread?.turns.find((entry) => entry.clientRequestId === dispatch.dispatchId)
         if (!turn) {
-          unstarted.add(dispatch.workerId)
+          if (dispatch.state === 'accepted') unstarted.add(dispatch.workerId)
           continue
         }
+        await backfillDispatchTiming(this.deps.dispatches, team.teamId, dispatch.dispatchId, turn)
+        if (dispatch.state !== 'accepted') continue
         if (turn.status === 'completed' || turn.status === 'failed' || turn.status === 'aborted') {
           await this.handleWorkerTurnTerminal(dispatch.workerId, turn.id, turn.status)
             .catch((error) => {

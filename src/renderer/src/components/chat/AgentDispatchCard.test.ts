@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentDispatchIntentPublicSchema, type AgentDispatchIntentView } from '@shared/agent-dispatch'
+import type { AdeDispatchRecord } from '@shared/ade-teams'
 import type { ChatBlock } from '../../agent/types'
 import { AgentDispatchGroup } from './AgentDispatchCard'
 import { AssistantMarkdown } from './AssistantMarkdown'
@@ -10,7 +11,8 @@ import { AgentDispatchIntentControls } from './AgentDispatchIntentControls'
 import { rememberAgentIconAliases } from '../../lib/agent-icon-aliases'
 
 const state = vi.hoisted(() => ({ intent: undefined as AgentDispatchIntentView | undefined,
-  act: vi.fn(), busy: false, error: '', activeThreadId: 'parent', rows: {} as Record<string, unknown> }))
+  act: vi.fn(), refresh: vi.fn(), loadError: '', busy: false, error: '', activeThreadId: 'parent', rows: {} as Record<string, unknown>,
+  dispatches: [] as AdeDispatchRecord[], loadFailed: false, reload: vi.fn() }))
 const preview = vi.hoisted(() => vi.fn())
 vi.mock('./use-agent-dispatch-intent', () => ({ useAgentDispatchIntent: () => state }))
 vi.mock('react-i18next', async (importOriginal) => ({
@@ -23,7 +25,7 @@ vi.mock('../../store/chat-store', () => ({ useChatStore: (select: (value: unknow
 vi.mock('../../store/activity-store', () => ({ useActivityStore: (select: (value: unknown) => unknown) =>
   select({ rows: state.rows }) }))
 vi.mock('../workers/worker-view-store', () => ({ openWorkerSession: preview }))
-vi.mock('../workers/use-team-workers', () => ({ useTeamWorkers: () => ({ overview: undefined }) }))
+vi.mock('../workers/use-team-workers', () => ({ useTeamWorkers: () => ({ overview: { dispatches: state.dispatches }, loadFailed: state.loadFailed, reload: state.reload }) }))
 vi.mock('./FloatingComposerWorkersPill', () => ({ OPEN_WORKERS_PANEL_EVENT: 'open-workers-panel' }))
 vi.mock('./AgentDispatchIntentControls', () => ({ AgentDispatchIntentControls: (props: { readOnly: boolean }) =>
   createElement('div', { 'data-controls': props.readOnly ? 'read-only' : 'interactive' }) }))
@@ -45,6 +47,11 @@ beforeEach(() => {
   state.act.mockReset().mockResolvedValue(undefined)
   state.activeThreadId = 'parent'
   state.rows = {}
+  state.dispatches = []
+  state.loadFailed = false
+  state.loadError = ''
+  state.refresh.mockReset()
+  state.reload.mockReset()
   state.error = ''
   state.busy = false
   preview.mockReset()
@@ -84,6 +91,8 @@ describe('Agent dispatch card', () => {
     const text = await render()
     expect(renderer!.root.findByType(AgentDispatchIntentControls).props.initial.error).toBe(error)
     expect(text).not.toContain('dispatchIntent.worker.running')
+    expect(renderer!.root.findAllByType('button').filter((node) => node.props['aria-label']?.startsWith('dispatchIntent.viewProcess'))).toHaveLength(0)
+    expect(renderer!.root.findAllByType('li').flatMap((node) => node.findAllByType('button'))).toHaveLength(0)
     expect(preview).not.toHaveBeenCalled()
   })
 
@@ -153,7 +162,7 @@ describe('Agent dispatch card', () => {
     expect(headerIcons()).toHaveLength(1)
     expect(headerIcons()[0].props['data-agent-icon']).toBe(agentId)
     expect(headerIcons()[0].props['aria-hidden']).toBe(true)
-    expect(headerIcons()[0].props.style).toMatchObject({ width: 16, height: 16 })
+    expect(headerIcons()[0].props.style).toMatchObject({ width: 15, height: 15 })
     expect(header().findAllByType(Split)).toHaveLength(0)
   })
 
@@ -173,8 +182,8 @@ describe('Agent dispatch card', () => {
     state.intent = fixture({ state: 'running' })
     state.intent.recommendation.assignments![1].agentId = 'codex'
     await render()
-    expect(headerIcons()).toHaveLength(0)
-    expect(header().findAllByType(Split)).toHaveLength(1)
+    expect(headerIcons().map((node) => node.props['data-agent-icon'])).toEqual(['kun', 'codex'])
+    expect(header().findAllByType(Split)).toHaveLength(0)
     expect(renderer!.root.findAll((node) => node.type === 'span' && node.props['data-route-label'])
       .map((node) => node.props['data-route-label'])).toEqual(['kun', 'codex'])
   })
@@ -201,7 +210,7 @@ describe('Agent dispatch card', () => {
     await act(async () => { renderer!.root.findByType(AgentDispatchIntentControls).props.onEdit(state.intent) })
     const pickers = () => renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])
     await act(async () => { pickers()[0].props.onClick() })
-    expect(header().findAllByType(Split)).toHaveLength(1)
+    expect(headerIcons().map((node) => node.props['data-agent-icon'])).toEqual(['codex', 'kun'])
     await act(async () => { pickers()[1].props.onClick() })
     expect(headerIcons()[0].props['data-agent-icon']).toBe('codex')
     expect(state.act).not.toHaveBeenCalled()
@@ -222,7 +231,7 @@ describe('Agent dispatch card', () => {
     state.intent.recommendation.assignments![1].workspaceIsolation = 'local'
     const text = await render()
     expect(text).toContain('dispatchIntent.isolatedWorkspaceHint')
-    const hints = () => renderer!.root.findAll((node) => node.type === 'span' &&
+    const hints = () => renderer!.root.findAll((node) => node.type === 'p' &&
       node.props['data-dispatch-workspace-isolation'] === 'worktree')
     expect(hints()).toHaveLength(1)
     await act(async () => { renderer!.root.findByType(AgentDispatchIntentControls).props.onEdit(state.intent) })
@@ -235,7 +244,7 @@ describe('Agent dispatch card', () => {
   it('switches one worker route from a counting-down batch card', async () => {
     state.intent = fixture()
     const text = await render()
-    expect(text).toContain('dispatchIntent.batchTitle:{\\"n\\":2}')
+    expect(text).toContain('dispatchIntent.group.title:{\\"count\\":2}')
     expect(text).toContain('dispatchIntent.autoIn:{\\"time\\":\\"0:42\\"}')
     const pickers = renderer!.root.findAll((node) => node.type === 'button' && node.props['data-route-picker'])
     expect(pickers).toHaveLength(2)
@@ -332,8 +341,10 @@ describe('Agent dispatch card', () => {
   })
 
   it('locks routes and shows live worker progress once admitted', async () => {
-    state.intent = fixture({ state: 'running', deadline: undefined, target: { threadId: 'parent', workerIds: ['w1', 'w2'] } })
-    state.rows = { w1: { unitId: 'w1', threadId: 'w1', state: 'working', currentTool: 'read_file' } }
+    state.intent = fixture({ state: 'running', deadline: undefined, target: { threadId: 'parent', workerIds: ['w1', 'w2'], dispatchIds: ['d1', 'd2'] } })
+    state.dispatches = [1, 2].map((index) => ({ dispatchId: `d${index}`, workerId: `w${index}`, teamId: 'parent',
+      title: 'work', state: 'accepted', turnId: `t${index}`, createdAt: '', updatedAt: '' }))
+    state.rows = { w1: { unitId: 'w1', threadId: 'w1', turnId: 't1', state: 'working', currentTool: 'read_file' } }
     const text = await render()
     expect(renderer!.root.findAll((node) => node.props['data-route-picker'])).toHaveLength(0)
     expect(renderer!.root.findAll((node) => node.type === 'span' && node.props['data-route-label'])).toHaveLength(2)
@@ -363,6 +374,80 @@ describe('Agent dispatch card', () => {
     await act(async () => { view.props.onClick() })
     expect(preview).toHaveBeenCalledWith('w1', expect.any(String))
     expect(state.act).not.toHaveBeenCalled()
+  })
+
+  it('rolls up three workers, ticks one shared clock and freezes completion timing', async () => {
+    state.intent = fixture({ state: 'running', deadline: undefined,
+      target: { workerIds: ['w1', 'w2', 'w3'], dispatchIds: ['d1', 'd2', 'd3'] } })
+    state.intent.recommendation.assignments!.push({ label: 'Third task', agentId: 'codex' })
+    state.dispatches = [1, 2, 3].map((index) => ({ dispatchId: `d${index}`, workerId: `w${index}`, teamId: 'parent',
+      title: 'Task', state: index === 3 ? 'completed' : 'accepted', turnId: `t${index}`,
+      startedAt: '2026-10-22T02:00:00.000Z', ...(index === 3 ? { finishedAt: '2026-10-22T02:00:10.000Z', resultExcerpt: 'All tests passed' } : {}),
+      createdAt: '', updatedAt: '' }))
+    await render()
+    const text = () => JSON.stringify(renderer!.toJSON())
+    expect(text()).toContain('dispatchIntent.group.working:{\\"count\\":2}')
+    expect(text()).toContain('dispatchIntent.group.done:{\\"count\\":1}')
+    expect(text()).toContain('All tests passed')
+    expect(text()).toContain('dispatchIntent.worker.awaiting_review')
+    expect(vi.getTimerCount()).toBe(1)
+    await act(async () => { vi.advanceTimersByTime(2_000) })
+    expect(renderer!.root.findAllByProps({ 'data-dispatch-elapsed': true }).map((node) => node.children[0])).toEqual(['0:20', '0:20', '0:10'])
+    state.dispatches = state.dispatches.map((entry) => ({ ...entry, state: 'completed', finishedAt: '2026-10-22T02:00:20.000Z' }))
+    await act(async () => { renderer!.update(createElement(AgentDispatchGroup, { blocks: [block] })) })
+    expect(vi.getTimerCount()).toBe(0)
+    await act(async () => { vi.advanceTimersByTime(60_000) })
+    expect(renderer!.root.findAllByProps({ 'data-dispatch-elapsed': true }).map((node) => node.children[0])).toEqual(['0:20', '0:20', '0:20'])
+  })
+
+  it('discloses workers accessibly without hiding attention or the control footer', async () => {
+    state.intent = fixture({ state: 'running', target: { workerIds: ['w1', 'w2'], dispatchIds: ['d1', 'd2'] } })
+    state.dispatches = [1, 2].map((index) => ({ dispatchId: `d${index}`, workerId: `w${index}`, teamId: 'parent',
+      title: 'Task', state: 'accepted', turnId: `t${index}`, createdAt: '', updatedAt: '' }))
+    state.rows = { w1: { unitId: 'w1', threadId: 'w1', turnId: 't1', state: 'waiting', waitingReason: 'approval' } }
+    await render()
+    const trigger = header().findByType('button')
+    expect(trigger.props['aria-expanded']).toBe(true)
+    expect(trigger.props['aria-controls']).toBeTruthy()
+    await act(async () => { trigger.props.onClick() })
+    expect(trigger.props['aria-expanded']).toBe(false)
+    expect(renderer!.root.findAll((node) => node.type === 'li' && node.props['data-dispatch-assignment'] !== undefined)).toHaveLength(0)
+    expect(JSON.stringify(renderer!.toJSON())).toContain('dispatchIntent.waitingReason.approval')
+    expect(renderer!.root.findAllByProps({ 'data-controls': 'interactive' })).toHaveLength(1)
+    await act(async () => { renderer!.root.findAllByType('button').find((node) => node.children.includes('dispatchIntent.view'))!.props.onClick() })
+    expect(preview).toHaveBeenCalledWith('w1', 'Cursor review')
+    await act(async () => { trigger.props.onClick() })
+    expect(renderer!.root.findAll((node) => node.type === 'li' && node.props['data-dispatch-assignment'] !== undefined)).toHaveLength(2)
+  })
+
+  it('shows stale status and retries the intent and task history rather than guessing completion', async () => {
+    state.intent = fixture({ state: 'completed', target: { workerIds: ['w1', 'w2'], dispatchIds: ['d1', 'd2'] } })
+    state.loadFailed = true
+    const text = await render()
+    expect(text).toContain('dispatchIntent.group.stale')
+    expect(text).toContain('dispatchIntent.worker.unknown')
+    const retry = renderer!.root.findAllByType('button').find((node) => node.children.includes('dispatchIntent.group.retry'))!
+    await act(async () => { retry.props.onClick() })
+    expect(state.refresh).toHaveBeenCalledTimes(1)
+    expect(state.reload).toHaveBeenCalledTimes(1)
+  })
+
+  it.each(['review', 'report', 'partial'] as const)('keeps %s problems visible and navigable after folding a mixed batch', async (problem) => {
+    state.intent = fixture({ state: 'running', target: { workerIds: ['w1', 'w2'], dispatchIds: ['d1', 'd2'] } })
+    state.dispatches = [
+      { dispatchId: 'd1', workerId: 'w1', teamId: 'parent', title: 'Task', state: 'completed', turnId: 't1',
+        createdAt: '', updatedAt: '', verdict: { status: problem === 'review' ? 'rejected' : 'pending', checks: [], notes: 'Fix validation' },
+        ...(problem !== 'review' ? { workerReport: { summary: 'Unresolved checks', outcome: problem === 'partial' ? 'partial' as const : 'failed' as const, submittedAt: '' } } : {}) },
+      { dispatchId: 'd2', workerId: 'w2', teamId: 'parent', title: 'Task', state: 'accepted', turnId: 't2', createdAt: '', updatedAt: '' }
+    ]
+    await render()
+    await act(async () => { header().findByType('button').props.onClick() })
+    const text = JSON.stringify(renderer!.toJSON())
+    expect(text).toContain(problem === 'review' ? 'dispatchIntent.worker.rejected'
+      : `dispatchIntent.group.report.${problem === 'partial' ? 'partial' : 'failed'}`)
+    expect(text).toContain(problem === 'review' ? 'Fix validation' : 'Unresolved checks')
+    await act(async () => { renderer!.root.findAllByType('button').find((node) => node.children.includes('dispatchIntent.view'))!.props.onClick() })
+    expect(preview).toHaveBeenCalledWith('w1', 'Cursor review')
   })
 
   it('renders nothing for a process run without dispatch cards', async () => {

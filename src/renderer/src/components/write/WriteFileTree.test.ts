@@ -215,3 +215,40 @@ describe('WriteFileTree drag to the assistant', () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe('WriteFileTree row activity', () => {
+  let renderer: ReactTestRenderer | undefined
+
+  beforeEach(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal('window', { kunGui: { platform: 'linux' } })
+  })
+
+  afterEach(async () => {
+    await act(async () => renderer?.unmount())
+    renderer = undefined
+    vi.unstubAllGlobals()
+  })
+
+  const renderWithActivity = async (activity: 'running' | 'unread'): Promise<ReactTestRenderer> => {
+    await act(async () => {
+      renderer = create(createElement(WriteFileTree, {
+        rootDirectory: '/repo', entriesByDir: { '/repo': [entry] }, expandedDirs: new Set<string>(),
+        loadingDirs: {}, selectedFilePath: null, error: null, onToggleDir: noop, onSelectFile: noop,
+        onRevealEntry: noop, onRefresh: noop, showHeader: false, showRootLabel: false,
+        activityForPath: () => activity
+      }))
+    })
+    return renderer as ReactTestRenderer
+  }
+
+  it('never spins a row just because a conversation on it is running', async () => {
+    const tree = await renderWithActivity('running')
+    expect(tree.root.findAll((node) => String(node.props.className ?? '').includes('animate-spin'))).toHaveLength(0)
+  })
+
+  it('keeps the passive unread marker', async () => {
+    const tree = await renderWithActivity('unread')
+    expect(tree.root.findAll((node) => node.props['aria-label'] === 'sidebarThreadUnread')).toHaveLength(1)
+  })
+})

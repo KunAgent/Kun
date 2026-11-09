@@ -1,4 +1,5 @@
 import { stat } from 'node:fs/promises'
+import { backfillDispatchTiming } from './dispatch-turn-timing.js'
 import type { WorkerNoticeSink } from './worker-notice-store.js'
 import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 import type {
@@ -522,6 +523,7 @@ export class DispatchDeliverer {
           await this.deps.dispatches.update(teamId, dispatch.dispatchId, {
             state: 'accepted', turnId: turn.id
           }, { expect: ['delivering', 'uncertain'] })
+          await backfillDispatchTiming(this.deps.dispatches, teamId, dispatch.dispatchId, turn)
           return 'accepted'
         })
         if (blocked === 'blocked') await this.stopLateAdmission(teamId, dispatch.workerId, dispatch.dispatchId)

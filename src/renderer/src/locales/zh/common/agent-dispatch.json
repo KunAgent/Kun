@@ -73,6 +73,24 @@
     "autoStarted": "无人回应，已按推荐自动派发",
     "routeUpdateFailed": "无法切换：{{message}}",
     "batchTaskHint": "补充说明会附加到这一批的每个任务。",
+    "group": {
+      "title": "{{count}} 个 Worker",
+      "pending": "{{count}} 个待启动",
+      "working": "{{count}} 个运行中",
+      "waiting": "{{count}} 个等待处理",
+      "done": "{{count}} 个已完成",
+      "failed": "{{count}} 个失败",
+      "cancelled": "{{count}} 个已取消",
+      "unknown": "{{count}} 个状态待确认",
+      "refused": "{{count}} 个启动被拒绝",
+      "skipped": "{{count}} 个已跳过",
+      "elapsed": "执行经过时间（不含派工准备及后续验收）",
+      "timingUnknown": "该任务没有可用的执行时间记录",
+      "stale": "任务状态未能刷新，当前显示的是上次已知状态。",
+      "retry": "重试",
+      "legacy": "历史卡片：无法还原标题，按派工顺序列出 Worker。",
+      "report": { "partial": "Worker 报告部分完成", "failed": "Worker 报告未完成" }
+    },
     "worker": {
       "pending": "等待启动",
       "working": "执行中",
@@ -84,7 +102,10 @@
       "passed": "验收通过",
       "waived": "验收已豁免",
       "failed": "失败",
-      "cancelled": "已取消"
+      "cancelled": "已取消",
+      "unknown": "状态待确认",
+      "refused": "启动被拒绝",
+      "skipped": "未启动 · 已跳过"
     },
     "waitingReason": {
       "approval": "等待审批",

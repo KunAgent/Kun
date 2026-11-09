@@ -47,7 +47,7 @@ export function registerTeamsRoutes(router: Router, runtime: ServerRuntime): voi
   router.add('GET', '/v1/teams/by-manager/:threadId', async (request, ctx) => {
     const resolved = manager(request)
     if (denied(resolved)) return resolved
-    return teamOverviewResponse(resolved, ctx.params.threadId)
+    return teamOverviewResponse(resolved, ctx.params.threadId, request)
   })
   router.add('GET', '/v1/teams/workers/:workerId', async (request, ctx) => {
     const resolved = manager(request)

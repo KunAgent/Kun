@@ -204,6 +204,9 @@ export const WorkerReportSchema = z
   .strict()
 export type WorkerReport = z.infer<typeof WorkerReportSchema>
 
+/** Bounded, team-scoped history lookup for dispatch cards. */
+export const TeamOverviewDispatchIdsSchema = z.array(z.string().min(1).max(256).refine((id) => id.trim().length > 0)).max(64)
+
 export const DispatchRecordSchema = z
   .object({
     prelaunchDisposition: z.enum(['refused', 'skipped']).optional(),
@@ -245,6 +248,9 @@ export const DispatchRecordSchema = z
     /** Target version for an ephemeral cross-review dispatch. */
     revision: ReviewRevisionSchema.optional(),
     failureReason: z.string().max(4_000).optional(),
+    /** Actual execution boundaries, independent of later report/review writes. */
+    startedAt: z.string().optional(),
+    finishedAt: z.string().optional(),
     createdAt: z.string(),
     updatedAt: z.string()
   })

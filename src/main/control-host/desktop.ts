@@ -21,7 +21,7 @@ export class ControlDesktop {
   private admittedHandle?: string
   constructor(readonly deps: DesktopEngineDependencies, private ready: (required: boolean) => Promise<RpcPeer | undefined>) {
     this.ports = new DesktopPorts(this.id, deps, () => this.rpc, id => this.contexts.get(id), id => this.enabled && this.selected.has(id),
-      () => { void this.stopAll('host_user_ended').catch(() => {}) })
+      reason => { void this.stopAll(reason).catch(() => {}) })
   }
   private snapshot() { return { supported: this.deps.supported(), displays: this.deps.displays() } }
   async attach(rpc: RpcPeer) {

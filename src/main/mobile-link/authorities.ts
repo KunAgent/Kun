@@ -7,22 +7,25 @@ export class MobileLinkAuthorities {
   private entries = new Map<string, Advanced>()
   private grants = new Map<string, Grant>()
   clear() { this.entries.clear(); this.grants.clear() }
-  sync(grants: Grant[], defaults?: MobileLinkScope[]) {
+  sync(grants: Grant[], defaults?: MobileLinkScope[], computerDefaults?: MobileLinkScope[]) {
     const changed: string[] = []
     for (const [peer, value] of this.entries) if (!grants.some((g) => g.controllerId === peer && g.id === value.grantId && g.purpose === this.grants.get(peer)?.purpose)) {
       this.entries.delete(peer); changed.push(peer)
     }
     this.grants = new Map(grants.map(grant => [grant.controllerId, grant]))
-    if (defaults) for (const grant of grants) if (grant.purpose !== 'desktop' && !this.entries.has(grant.controllerId)) {
-      this.set(grant.controllerId, grant.id, defaults)
-      if (!changed.includes(grant.controllerId)) changed.push(grant.controllerId)
+    for (const grant of grants) {
+      const scopes = grant.purpose === 'desktop' ? computerDefaults : defaults
+      if (scopes && !this.entries.has(grant.controllerId)) {
+        this.set(grant.controllerId, grant.id, scopes)
+        if (!changed.includes(grant.controllerId)) changed.push(grant.controllerId)
+      }
     }
     return changed
   }
   set(peer: string, grantId: string, scopes: unknown) {
     const normalized = this.purpose(peer, grantId) === 'desktop' ? computerDesktopScopes(scopes) : mobileLinkScopes(scopes)
     const old = this.entries.get(peer)
-    // Retain explicit personal-only overrides so a later sync cannot reinstate defaults.
+    // Retain explicit overrides, including no desktop access, across later syncs.
     if (old?.grantId === grantId && JSON.stringify(old.scopes) === JSON.stringify(normalized)) return false
     this.entries.set(peer, { grantId, scopes: normalized, version: randomUUID() })
     return true

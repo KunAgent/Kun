@@ -176,7 +176,9 @@ while let line = readLine() {
     let e=CGEvent(mouseEventSource:nil,mouseType:t,mouseCursorPosition:lastPoint,mouseButton:mouseButton(button)); e?.flags=flags(); e?.setIntegerValueField(.mouseEventClickState, value: clickCounts[button] ?? 1); e?.post(tap:.cghidEventTap)
   } else if type == "pointer.wheel" {
     let dx=max(-1200,min(1200,event["deltaX"] as? Int ?? 0)); let dy=max(-1200,min(1200,event["deltaY"] as? Int ?? 0))
-    CGEvent(scrollWheelEvent2Source:nil,units:.pixel,wheelCount:2,wheel1:Int32(dy),wheel2:Int32(dx),wheel3:0)?.post(tap:.cghidEventTap)
+    let wheel = CGEvent(scrollWheelEvent2Source:nil,units:.pixel,wheelCount:2,wheel1:Int32(dy),wheel2:Int32(dx),wheel3:0)
+    wheel?.location = lastPoint; wheel?.flags = flags()
+    wheel?.post(tap:.cghidEventTap)
   } else if type == "key", let key=event["code"] as? String, let code=keyMap[key], let down=event["pressed"] as? Bool { postKey(code,down)
   } else if type == "text.commit", let text=event["text"] as? String, text.utf8.count<=1024 {
     let units=Array(text.utf16)

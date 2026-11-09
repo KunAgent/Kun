@@ -38,7 +38,7 @@ describe('dispatch card view model', () => {
       expect(workerProgress(card, 0, { w1: row('w1', { state: 'working' }) }, [later, original]).state).toBe(expected)
       expect(dispatchReviewState(card, [later, original])).toBe(expected)
       expect(dispatchReviewState(card, [later])).toBeUndefined()
-      expect(workerProgress(card, 0, { w1: row('w1', { state: 'working' }) }, [later]).state).toBe('done')
+      expect(workerProgress(card, 0, { w1: row('w1', { state: 'working' }) }, [later]).state).toBe('unknown')
       expect(dispatchReviewState(card, [{ ...original, workerId: 'another' }])).toBeUndefined()
     })
 
@@ -59,8 +59,8 @@ describe('dispatch card view model', () => {
   it('splits a legacy batch title only when it lines up with the admitted workers', () => {
     expect(dispatchAssignments(intent({ target: { workerIds: ['w1', 'w2'] } })).map((entry) => entry.label))
       .toEqual(['Review A', 'Review B'])
-    expect(dispatchAssignments(intent({ target: { workerIds: ['w1', 'w2', 'w3'] } }))).toEqual([
-      { label: 'Review A / Review B', agentId: 'kun', model: 'deepseek-flash' }])
+    expect(dispatchAssignments(intent({ target: { workerIds: ['w1', 'w2', 'w3'] } })).map((entry) => entry.label))
+      .toEqual(['w1', 'w2', 'w3'])
   })
 
   it('treats a depth-only edit as a route change and keeps sibling overrides', () => {
@@ -106,18 +106,22 @@ describe('dispatch card view model', () => {
   })
 
   it('maps live worker rows onto per-row progress', () => {
-    const running = intent({ state: 'running', deadline: undefined, target: { workerIds: ['w1', 'w2', 'w3'] } })
+    const running = intent({ state: 'running', deadline: undefined, target: { workerIds: ['w1', 'w2', 'w3'], dispatchIds: ['d1', 'd2', 'd3'] } })
+    const records: AdeDispatchRecord[] = ['w1', 'w2', 'w3'].map((workerId, index) => ({
+      workerId, dispatchId: `d${index + 1}`, teamId: 'parent', title: workerId,
+      state: index === 2 ? 'completed' : 'accepted', turnId: workerId, createdAt: '', updatedAt: ''
+    }))
     const rows = {
-      w1: row('w1', { state: 'working', currentTool: 'read_file' }),
-      w2: row('w2', { state: 'waiting', mainState: 'waiting', waitingReason: 'approval' }),
+      w1: row('w1', { state: 'working', turnId: 'w1', currentTool: 'read_file' }),
+      w2: row('w2', { state: 'waiting', turnId: 'w2', mainState: 'waiting', waitingReason: 'approval' }),
       w3: row('w3', { state: 'idle', mainState: 'idle', lastOutcome: 'completed' })
     }
-    expect(workerProgress(running, 0, rows)).toEqual({ workerId: 'w1', state: 'working', detail: 'read_file' })
-    expect(workerProgress(running, 1, rows)).toMatchObject({ workerId: 'w2', state: 'waiting', waitingReason: 'approval' })
-    expect(workerProgress(running, 2, rows)).toEqual({ workerId: 'w3', state: 'done' })
-    expect(workerProgress(running, 3, rows)).toEqual({ state: 'pending' })
+    expect(workerProgress(running, 0, rows, records)).toMatchObject({ workerId: 'w1', state: 'working', detail: 'read_file' })
+    expect(workerProgress(running, 1, rows, records)).toMatchObject({ workerId: 'w2', state: 'waiting', waitingReason: 'approval' })
+    expect(workerProgress(running, 2, rows, records)).toMatchObject({ workerId: 'w3', state: 'awaiting_review', executionState: 'done' })
+    expect(workerProgress(running, 3, rows)).toMatchObject({ state: 'unknown' })
     expect(workerProgress(intent({ state: 'running', deadline: undefined, target: { workerIds: ['w9'] } }), 0, {}))
-      .toEqual({ workerId: 'w9', state: 'working' })
+      .toMatchObject({ workerId: 'w9', state: 'unknown' })
   })
 })
 

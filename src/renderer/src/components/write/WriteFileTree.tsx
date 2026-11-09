@@ -194,6 +194,14 @@ export function WriteFileTree({
   const hasRootSnapshot = Object.prototype.hasOwnProperty.call(entriesByDir, rootDirectory)
   const rootEntries = (entriesByDir[rootDirectory] ?? []).filter(isWriteDocument)
 
+  /**
+   * A row here stands for a file or folder, never for a turn that is running, so a
+   * spinning "running" glyph reads as "this file is loading". Keep only the passive
+   * attention states (unread, failed, awaiting input) on rows.
+   */
+  const rowActivity = (activity: SidebarActivity): SidebarActivity =>
+    activity === 'running' ? 'idle' : activity
+
   const renderEntries = (dirPath: string, depth: number): ReactElement[] => {
     const entries = (entriesByDir[dirPath] ?? []).filter(isWriteDocument)
     return entries.flatMap((entry) => {
@@ -203,7 +211,7 @@ export function WriteFileTree({
       const selected = !isDirectory && selectedFilePath === entry.path
       const imageEntry = isImageEntry(entry)
       const codeEntry = isCodeEntry(entry)
-      const activity = activityForPath(entry.path, isDirectory)
+      const activity = rowActivity(activityForPath(entry.path, isDirectory))
       const row = (
         <div key={entry.path}>
           <SidebarTreeRow

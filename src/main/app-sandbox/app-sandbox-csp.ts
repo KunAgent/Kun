@@ -1,18 +1,6 @@
 import type { McpAppResourceMeta } from '../../../kun/src/contracts/mcp-apps'
-
-/**
- * Static origins a Gen UI page may load scripts, styles and fonts from. Common
- * library URLs on these hosts are served from bundled copies (see
- * app-sandbox-vendor.ts); everything else on them goes to the network.
- */
-export const GEN_UI_STATIC_ORIGINS = [
-  'https://cdn.jsdelivr.net',
-  'https://cdnjs.cloudflare.com',
-  'https://unpkg.com',
-  'https://esm.sh',
-  'https://fonts.googleapis.com',
-  'https://fonts.gstatic.com'
-] as const
+import { GEN_UI_STATIC_ORIGINS } from '../../../kun/src/contracts/gen-ui'
+export { GEN_UI_STATIC_ORIGINS } from '../../../kun/src/contracts/gen-ui'
 
 /** The shell only frames its own guest; it loads nothing else. */
 export function buildShellCsp(guestOrigin: string): string {

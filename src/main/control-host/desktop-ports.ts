@@ -18,7 +18,7 @@ export class DesktopPorts {
   private closing = false
   constructor(readonly id: string, readonly deps: DesktopEngineDependencies,
     private rpc: () => RpcPeer | undefined, private context: (id: string) => DesktopAuthority | undefined,
-    private allowedDisplay: (id: number) => boolean, private end: () => void) {}
+    private allowedDisplay: (id: number) => boolean, private end: (reason: 'host_user_ended' | 'input_helper_lost') => void) {}
   private emit(id: string, event: CaptureEvent) {
     if (event.event === 'health') {
       const value = event.value as any
@@ -67,7 +67,7 @@ export class DesktopPorts {
     if (operation === 'indicator.show' || operation === 'indicator.update') {
       const authority = this.require()
       const status = { ...value.value, peer: authority.deviceId }
-      if (operation === 'indicator.show') this.deps.indicator?.show(status, this.end)
+      if (operation === 'indicator.show') this.deps.indicator?.show(status, () => this.end('host_user_ended'))
       else this.deps.indicator?.update(status)
       return
     }
@@ -94,7 +94,7 @@ export class DesktopPorts {
         const identity = await (capture[1].port as DesktopCapturePort).identity()
         if (identity.pid !== args[1] || identity.birth !== args[2]) throw Error('DESKTOP_CAPTURE_NOT_ISOLATED')
         this.require(authority)
-        resource = { kind, authority, capture: capture[0], port: this.deps.input(() => { this.end() }) }
+        resource = { kind, authority, capture: capture[0], port: this.deps.input(() => { this.end('input_helper_lost') }) }
       } else throw Error('CONTROL_RPC_REJECTED')
       this.resources.set(resourceId, resource)
     }
