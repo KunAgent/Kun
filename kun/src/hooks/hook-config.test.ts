@@ -64,4 +64,31 @@ describe('resolveConfiguredHooks', () => {
     })
     expect(fetch).toHaveBeenCalledOnce()
   })
+  it('fails closed for a block workflow hook on a transport error', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => {
+      throw new Error('ECONNREFUSED')
+    }))
+    const hooks = resolveConfiguredHooks([{
+      phase: 'PreToolUse',
+      workflow: 'wf-block',
+      mode: 'block',
+      baseUrl: 'http://127.0.0.1:1'
+    }])
+    const input = {
+      call: { callId: 'call_1', toolName: 'bash', arguments: { command: 'rm -rf /tmp/x' } },
+      context: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        workspace: '/tmp/project',
+        approvalPolicy: 'auto' as const,
+        sandboxMode: 'workspace-write' as const,
+        clientSurface: 'tui' as const
+      }
+    }
+
+    const outcome = await runPreToolUseHooks(hooks, input)
+
+    expect(outcome.denied ?? '').toContain('workflow hook error')
+  })
+
 })
