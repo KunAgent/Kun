@@ -402,7 +402,7 @@ jobs:
             dist/pr-candidate-source.json
 
   windows-cross-version:
-    name: Windows 0.4.3 GUI upgrade (${{ matrix.source }})
+    name: Windows ${{ matrix.baseline }} GUI upgrade (${{ matrix.source }})
     runs-on: windows-latest
     needs: [package-windows]
     timeout-minutes: 90
@@ -412,10 +412,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        source: [published-release, pull-request]
+        include:
+          - source: published-release
+            baseline: '0.4.3'
+          - source: pull-request
+            baseline: '0.4.3'
+          - source: pull-request
+            baseline: '0.4.4'
     env:
       GH_TOKEN: ${{ github.token }}
       GUI_UPGRADE_SOURCE: ${{ matrix.source }}
+      GUI_UPGRADE_BASELINE: ${{ matrix.baseline }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -423,6 +430,9 @@ jobs:
           node-version: '22.23.1'
           cache: npm
       - run: npm ci
+      - name: Require PR candidate newer than released baseline
+        if: matrix.source == 'pull-request'
+        run: node -e "if (!require('semver').gt(require('./package.json').version, process.env.GUI_UPGRADE_BASELINE)) throw new Error('PR candidate must be newer than the released baseline')"
       - name: Download exact PR candidate from this run
         if: matrix.source == 'pull-request'
         uses: actions/download-artifact@v4
@@ -432,23 +442,23 @@ jobs:
       - name: Download published 0.4.4 control without publishing anything
         if: matrix.source == 'published-release'
         run: gh release download v0.4.4 -R KunAgent/Kun -p 'Kun-0.4.4-win-x64.exe' -p 'latest.yml' -D cross-version-candidate
-      - name: Upgrade normally launched released 0.4.3 through its real updater
+      - name: Upgrade normally launched released ${{ matrix.baseline }} through its real updater
         run: |
           $version = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { '0.4.4' } else { node -p "require('./package.json').version" }
           $scenarios = if ($env:GUI_UPGRADE_SOURCE -eq 'published-release') { 'normal' } else { 'normal,busy,rollback' }
-          node scripts/smoke-gui-upgrade.cjs --directory cross-version-candidate --version $version --baseline-version 0.4.3 --scenarios $scenarios --report windows-cross-version.json
+          node scripts/smoke-gui-upgrade.cjs --directory cross-version-candidate --version $version --baseline-version $env:GUI_UPGRADE_BASELINE --scenarios $scenarios --report windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}.json
       - name: Stage owned cross-version evidence on the checkout volume
         id: stage_windows_evidence
         if: always()
-        run: node scripts/stage-windows-upgrade-evidence.cjs --report windows-cross-version.json --output artifacts/windows-cross-version
+        run: node scripts/stage-windows-upgrade-evidence.cjs --report windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}.json --output artifacts/windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}
       - name: Preserve cross-version logs and transaction evidence
         if: ${{ always() && steps.stage_windows_evidence.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: windows-cross-version-${{ matrix.source }}
+          name: windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}
           if-no-files-found: warn
           retention-days: 14
-          path: artifacts/windows-cross-version
+          path: artifacts/windows-cross-version-${{ matrix.baseline }}-${{ matrix.source }}
 
   windows-prepared-restart:
     name: Windows prepared restart observation (${{ matrix.source }})
