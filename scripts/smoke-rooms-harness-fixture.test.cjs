@@ -3,7 +3,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 const { roomsHarnessModelResponse, assertRoomsHarnessDiscoveryOrder } = require('./smoke-rooms-harness-fixture.cjs')
 const { startModelFixture } = require('./smoke-development-ade-model.cjs')
-const { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL } = require('./smoke-rooms-harness-fixture.cjs')
+const { configureRoomsHarnessFixture, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL, ROOMS_HARNESS_SESSION_MODEL } = require('./smoke-rooms-harness-fixture.cjs')
 
 const publicationTools = ['add_board_card', 'create_code_task', 'request_app_connection', 'send_im_message', 'user_input']
 const fullTools = [...publicationTools, 'list_code_harnesses']
@@ -59,6 +59,18 @@ test('publication-only first step sends one start, then discovers before proposi
   assert.equal(args(step(messages)).phase, 'final')
 })
 
+for (const models of [
+  [{ ...route, model: ROOMS_HARNESS_SESSION_MODEL }, { ...route, model: 'devin-fixture-alternative' }],
+  [route, { ...route, model: ROOMS_HARNESS_SESSION_MODEL }]
+]) test('session-discovered catalog proposes its concrete fixture model without inventing a default', () => {
+  const messages = user()
+  settle(messages, step(messages), { ...catalog, agents: [{ ...catalog.agents[0], models }] })
+  const proposal = step(messages)
+  assert.equal(toolName(proposal), 'create_code_task')
+  assert.deepEqual(args(proposal).execution.model, { ...route, model: ROOMS_HARNESS_SESSION_MODEL })
+  assert(models.some((model) => JSON.stringify(model) === JSON.stringify(args(proposal).execution.model)))
+})
+
 test('an already open work phase discovers without an unnecessary start message', () => {
   assert.equal(toolName(step(user())), 'list_code_harnesses')
 })
@@ -69,6 +81,8 @@ for (const [label, output] of [
   ['malformed response', 'not JSON'],
   ['empty catalog', { authority: 'reference_only', agents: [] }],
   ['unavailable Agent', { ...catalog, agents: [{ ...catalog.agents[0], available: false }] }],
+  ['wrong credential mode', { ...catalog, agents: [{ ...catalog.agents[0], models: [{ ...route, credentialMode: 'provider' }] }] }],
+  ['wrong route harness', { ...catalog, agents: [{ ...catalog.agents[0], models: [{ ...route, harnessId: 'other' }] }] }],
   ['wrong model', { ...catalog, agents: [{ ...catalog.agents[0], models: [{ ...route, model: 'different-model' }] }] }]
 ]) test(`${label} cannot produce a task proposal`, () => {
   const messages = user()
@@ -93,7 +107,8 @@ test('ordering assertion rejects advertised-only, missing, failed and post-propo
   }
 })
 
-test('HTTP fixture records successful discovery at proposal time without waiting for a later request', async (t) => {
+for (const discoveredModel of [ROOMS_HARNESS_MODEL, ROOMS_HARNESS_SESSION_MODEL])
+test(`HTTP fixture records successful ${discoveredModel} discovery at proposal time`, async (t) => {
   const fixture = await startModelFixture('offline-fixture', { workspaceRoot: '/offline-fixture' })
   t.after(() => fixture.close())
   const messages = user()
@@ -109,9 +124,11 @@ test('HTTP fixture records successful discovery at proposal time without waiting
   settle(messages, start)
   const discovery = await request(fullTools)
   assert.equal(toolName(discovery), 'list_code_harnesses')
-  settle(messages, discovery, catalog)
+  settle(messages, discovery, { ...catalog, agents: [{ ...catalog.agents[0],
+    models: [{ ...route, model: discoveredModel }] }] })
   const proposal = await request(fullTools)
   assert.equal(toolName(proposal), 'create_code_task')
+  assert.deepEqual(args(proposal).execution.model, { ...route, model: discoveredModel })
   const observations = fixture.snapshot().observations
   assert.deepEqual(observations.map((entry) => entry.responseTools), [['send_im_message'], ['list_code_harnesses'], ['create_code_task']])
   assert.deepEqual(observations.map((entry) => entry.roomsHarnessDiscoverySucceeded), [false, false, true])

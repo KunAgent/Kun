@@ -1,7 +1,7 @@
 'use strict'
 const assert = require('node:assert/strict')
 const { writeFile, rm } = require('node:fs/promises')
-const { assertRoomsHarnessDiscoveryOrder, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL } = require('./smoke-rooms-harness-fixture.cjs')
+const { assertRoomsHarnessDiscoveryOrder, ROOMS_HARNESS_PROFILE, ROOMS_HARNESS_MODEL, ROOMS_HARNESS_SESSION_MODEL } = require('./smoke-rooms-harness-fixture.cjs')
 const { openAgentPrivateChat, roomWorkbenchSnapshot } = require('./smoke-agent-chat-workbench.cjs')
 
 /** Revalidate persisted fixture consent through the real local protocol path. */
@@ -51,8 +51,16 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   const proposed = links.find((link) => link.status === 'awaiting_confirmation')
   assert(proposed && !proposed.threadId, 'A proposal must not start an external task')
   assert.equal(proposed.request.execution.model.harnessId, 'devin')
-  assert.equal(proposed.request.execution.model.model, ROOMS_HARNESS_MODEL)
-  assertRoomsHarnessDiscoveryOrder(modelFixture.snapshot().observations)
+  assert.equal(proposed.request.execution.model.credentialMode, ROOMS_HARNESS_PROFILE.credentialMode)
+  assert([ROOMS_HARNESS_MODEL, ROOMS_HARNESS_SESSION_MODEL].includes(proposed.request.execution.model.model))
+  const observations = modelFixture.snapshot().observations
+  assertRoomsHarnessDiscoveryOrder(observations)
+  const discovery = observations.find((item) => item.responseTools?.includes('create_code_task')).roomsHarnessDiscovery
+  const advertised = discovery.agents.find((item) => item.harnessId === 'devin' && item.available).models
+  assert(advertised.some((model) => model.model === proposed.request.execution.model.model &&
+    model.harnessId === proposed.request.execution.model.harnessId &&
+    model.credentialMode === proposed.request.execution.model.credentialMode),
+  'The proposal must pin a route from its successful live discovery')
   await card.locator('[data-workbench-agent="devin"]').waitFor()
   await poll(async () => !(await page.locator('.rooms-composer .rooms-rich-input').innerText()).trim(), 20_000, 'acknowledged composer cleared')
   const dispatchControls = card.locator('[data-agent-dispatch-controls]')
@@ -101,6 +109,8 @@ async function runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, resize
   await card.evaluate((element) => element.scrollIntoView({ block: 'center' }))
   await capture('rooms-06-task-result')
   const completed = (await runtimeRequest(page, linkPath)).link
+  assert.deepEqual(completed.request.execution.model, proposed.request.execution.model,
+    'The discovered route must remain pinned through execution')
   const thread = await runtimeRequest(page, `/v1/threads/${completed.threadId}`)
   assert.equal(thread.harnessId, 'devin')
   assert.equal(thread.agentSurface, 'code')

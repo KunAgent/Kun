@@ -185,11 +185,11 @@ function ScopedAgentBrowserPanel({
               className="h-8 rounded-md border border-ds-border-muted bg-ds-card px-1 text-[11px] text-ds-ink disabled:opacity-35">
               {zoomOptions.map((value) => <option key={value} value={value}>{value}%</option>)}
             </select>
-            <div className={`flex shrink-0 items-center gap-1 text-[10.5px] font-semibold ${statusTone}`}>
+            <div className={`flex min-w-0 max-w-full items-center gap-1 text-[10.5px] font-semibold ${statusTone}`}>
               {state.controlOwner === 'manual'
                 ? <Hand className="h-3.5 w-3.5" />
                 : <ShieldCheck className="h-3.5 w-3.5" />}
-              {t(browserPreviewStatusKey(state, operationError))}
+              <span className="min-w-0 break-words">{t(browserPreviewStatusKey(state, operationError))}</span>
             </div>
           </div>
 
