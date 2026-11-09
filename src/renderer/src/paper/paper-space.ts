@@ -77,6 +77,8 @@ export async function refreshPaperSpace(): Promise<void> {
       const keys = new Set(items.map((item) => item.key))
       return {
         ...registration, status: 'ready', error: null, entriesByRoot, errorsByRoot, items, loading: false, loaded: true,
+        openReaderKeys: state.openReaderKeys.filter((key) => keys.has(key)),
+        readerKey: state.readerKey && keys.has(state.readerKey) ? state.readerKey : null,
         selection: new Set([...state.selection].filter((key) => keys.has(key)))
       }
     })
@@ -109,7 +111,8 @@ export async function openPaperSpaceItem(item: PaperSpaceItem): Promise<void> {
     const entries = state.entriesByRoot[item.libraryRoot] ?? []
     const entriesByRoot = entries.some((entry) => entry.unitDir === item.entry.unitDir) ? state.entriesByRoot
       : { ...state.entriesByRoot, [item.libraryRoot]: [...entries, item.entry] }
-    return { readerKey: item.key, entriesByRoot, items: paperSpaceItems(entriesByRoot) }
+    return { readerKey: item.key, openReaderKeys: state.openReaderKeys.includes(item.key) ? state.openReaderKeys : [...state.openReaderKeys, item.key],
+      entriesByRoot, items: paperSpaceItems(entriesByRoot) }
   })
   const { useChatStore } = await import('../store/chat-store')
   useChatStore.setState({ route: 'papers' })

@@ -4,7 +4,6 @@ import { WorkbenchStageRouter } from './WorkbenchStageRouter'
 import { RailSlot } from './rail-slot'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
 import { EXTERNAL_SUBAGENT_SOURCE_LABELS, externalSubagentSourceForThread } from '../../agent/external-subagent'
-import { AgentBrowserFloatingPreview } from '../AgentBrowserFloatingPreview'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import {
   canOpenHostContextMenuForTarget,
@@ -312,7 +311,6 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
       />
       </WriteAssistantStageContext.Provider>
       )}
-      <AgentBrowserFloatingPreview activeThreadId={activeThreadId} />
       {focusedCanvasWorkspace}
       {activeExtensionAuxiliaryPanel ? (
         <div className="ds-no-drag h-[min(38vh,360px)] min-h-48 shrink-0 border-t border-ds-border-muted">

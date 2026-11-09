@@ -1,3 +1,5 @@
+import { startPetBottlePublisher } from './pet-bottle-publisher'
+import { startPetPresencePublisher } from './pet-presence-publisher'
 import type { ActivityRow } from '@shared/activity-row'
 import { showWorkbenchFlash } from '../components/rooms/workbench-flash'
 import { summarizeToolLiveAction } from '../components/chat/message-timeline-tool-action'
@@ -6,11 +8,13 @@ import { deliverPetFollowUp } from './pet-follow-up'
 import { activityFeedGeneration, setPetOverlayActivityLive, useActivityStore } from '../store/activity-store'
 import { useChatStore } from '../store/chat-store'
 import type { ChatState } from '../store/chat-store-types'
-import type { ToolBlock } from '../agent/types'
 import { applyPetResultText, latestAssistantPreview, petWorkProcessText, presentPetRunningItem, projectPetActivity, semanticSnapshotKey, type PetThreadSupplement } from './pet-activity'
 import { loadPetConversationThreads, petConversationSupplements } from './pet-conversation-threads'
 import { PET_OPEN_SETTINGS_EVENT, queuePetNavigation, resolvePetThreadTarget } from './pet-navigation'
 import type { PetActionRequest } from '@shared/pets'
+import { currentPetThread, petSnapshotForDelivery, petUnreadBubbleAllowed } from './pet-publisher-snapshot'
+import { deliverPetChat } from './pet-new-chat'
+import { currentPetProgress } from './pet-live-progress'
 
 export function petBubbleAllowed(input: {
   preferenceEnabled: boolean
@@ -19,7 +23,6 @@ export function petBubbleAllowed(input: {
 }
 
 let stopPublisher: (() => void) | null = null
-let lastKey = ''
 let navigationMessage: string | null = null
 let preferences = { waiting: true, failed: true, done: true, stalled: true }
 let conversationSupplements: PetThreadSupplement[] = []
@@ -33,24 +36,37 @@ export function petNavigationNotice(): string | null {
 export function startPetActivityPublisher(): void {
   if (stopPublisher || typeof window === 'undefined' || !window.kunGui?.pets) return
   const pets = window.kunGui.pets
+  const stopPresence = startPetPresencePublisher(pets)
+  const stopBottles = startPetBottlePublisher(pets)
   let ready = true
   let overlayOpen = false
   let active = true
   let pending: PetActionRequest | null = null
+  let lastKey = ''
+  let lastUnreadSource: ChatState['unreadThreadIds'] | null = null
   const publish = (): void => {
     if (!active) return
     setPetOverlayActivityLive(overlayOpen)
-    if (!overlayOpen) return
-    refreshConversationThreads(publish)
+    const unreadSource = useChatStore.getState().unreadThreadIds
+    const unreadChanged = unreadSource !== lastUnreadSource
+    if (!overlayOpen && !unreadChanged) return
+    lastUnreadSource = unreadSource
+    if (overlayOpen) refreshConversationThreads(publish)
     void Promise.resolve().then(() => {
+      if (!active || (!overlayOpen && !unreadChanged)) return
       const state = useChatStore.getState()
-      const rows = Object.values(useActivityStore.getState().rows)
+      const current = currentPetThread(state)
+      // A previous turn's row must not mask this turn while metadata catches up.
+      const rows = Object.values(useActivityStore.getState().rows).filter((row) =>
+        !current || row.threadId !== current.threadId || row.turnId === current.latestTurnId
+      )
       const projected = projectPetActivity({
         generation: activityFeedGeneration(),
         profileKey: window.kunGui.appEnvironment?.profilePath || 'desktop',
         rows,
         supplements: [
-          ...state.threads.map((thread) => ({
+          ...(current ? [current] : []),
+          ...state.threads.filter((thread) => thread.id !== current?.threadId).map((thread) => ({
             threadId: thread.id,
             title: thread.title,
             status: thread.status,
@@ -60,10 +76,11 @@ export function startPetActivityPublisher(): void {
             archived: thread.archived,
             roomId: thread.roomContext?.roomId
           })),
-          ...conversationSupplements
+          ...conversationSupplements.filter((thread) => thread.threadId !== current?.threadId)
         ],
         nowMs: Date.now(),
-        bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) })
+        bubbleAllowed: (item) => petBubbleAllowed({ preferenceEnabled: preferenceFor(item) }) &&
+          petUnreadBubbleAllowed(item, state)
       })
       const withProcess = projected.items.map((item) => presentRunningPetItem(item, state, rows))
       const livePreview = state.activeThreadId ? latestAssistantPreview(state.blocks, 180, state.busy ? state.currentTurnId : null) : ''
@@ -71,7 +88,7 @@ export function startPetActivityPublisher(): void {
         if (threadId === state.activeThreadId && livePreview && !state.busy) return livePreview
         return state.threads.find((thread) => thread.id === threadId)?.preview
       })
-      const snapshot = items === projected.items ? projected : { ...projected, items }
+      const snapshot = petSnapshotForDelivery({ ...projected, items }, state.activeThreadId)
       const key = semanticSnapshotKey(snapshot)
       if (key === lastKey) return
       lastKey = key
@@ -80,6 +97,8 @@ export function startPetActivityPublisher(): void {
   }
   const refreshSettings = (): void => {
     void pets.getPetSettings().then((settings) => {
+      if (!active) return
+      if (settings.overlayOpen && !overlayOpen) lastKey = ''
       overlayOpen = settings.overlayOpen
       publish()
     }).catch(() => undefined)
@@ -121,18 +140,37 @@ export function startPetActivityPublisher(): void {
   const unsubscribeFollowUp = pets.onFollowUpRequested((request) => {
     void deliverPetFollowUp({
       threadId: request.threadId,
+      requestId: request.requestId,
       prompt: request.prompt,
       knownThreadIds: new Set(useChatStore.getState().threads.map((thread) => thread.id)),
       selectThread: (threadId) => useChatStore.getState().selectThread(threadId),
-      sendMessage: (prompt) => useChatStore.getState().sendMessage(prompt)
+      getActiveThreadId: () => useChatStore.getState().activeThreadId,
+      sendMessage: (prompt, mode, overrides) => useChatStore.getState().sendMessage(prompt, mode, overrides)
     }).then((result) => pets.completeFollowUp(request.requestId, result))
   })
-  const onFocus = (): void => { ready = true; if (pending) { const next = pending; pending = null; void deliver(next) } }
+  let creatingChat = false
+  const unsubscribeChatRequest = pets.onChatRequested((request) => {
+    if (creatingChat) {
+      pets.completeChat(request.requestId, { ok: false, code: 'conflict', message: '正在发送上一条消息' })
+      return
+    }
+    creatingChat = true
+    void deliverPetChat(request.prompt, request.requestId, useChatStore.getState)
+      .then((result) => pets.completeChat(request.requestId, result))
+      .finally(() => { creatingChat = false })
+  })
+  const onFocus = (): void => {
+    ready = true
+    publish()
+    if (pending) { const next = pending; pending = null; void deliver(next) }
+  }
   window.addEventListener('focus', onFocus)
   refreshSettings()
   pullNavigation()
   openPetSettings()
   stopPublisher = () => {
+    stopPresence()
+    stopBottles()
     active = false
     unsubscribeActivity()
     unsubscribeChat()
@@ -140,6 +178,7 @@ export function startPetActivityPublisher(): void {
     unsubscribeNavigation()
     unsubscribeSettings()
     unsubscribeFollowUp()
+    unsubscribeChatRequest()
     window.removeEventListener('kun-pet-settings-changed', refreshSettings)
     window.removeEventListener('focus', onFocus)
     setPetOverlayActivityLive(false)
@@ -202,66 +241,38 @@ function presentRunningPetItem(
   const row = rows.find((candidate) => candidate.unitId === item.unitId)
   const live = item.threadId === state.activeThreadId && state.busy && !state.busyUnconfirmed
   if (live) {
-    const assistant = currentTurnAssistantText(state)
-    if (assistant) return presentPetRunningItem(item, { assistantText: assistant })
+    const progress = currentPetProgress(state)
+    if (progress.kind === 'assistant') return presentPetRunningItem(item, {
+      assistantText: progress.text, liveSinceMs: liveSinceMs(state, item.stateSince)
+    })
+    const processText = petWorkProcessText({
+      toolAction: progress.kind === 'tool' ? summarizeToolLiveAction(progress.tool, translatePet) : undefined,
+      thinking: progress.kind === 'thinking', workingLabel: i18n.t('workingSprint', { ns: 'common' }),
+      thinkingLabel: i18n.t('thinkingNow', { ns: 'common' }),
+      toolLabel: (action) => i18n.t('workingToolAction', { ns: 'common', action })
+    })
     return presentPetRunningItem(item, {
-      processText: liveProcessText(state, row),
+      processText,
       liveSinceMs: liveSinceMs(state, item.stateSince)
     })
   }
-  if (item.subtitle?.trim()) return item
+  if (item.subtitle?.trim() && !row?.currentTool) return item
   return presentPetRunningItem(item, {
-    processText: liveProcessText(state, row, false),
+    processText: backgroundProcessText(row),
     liveSinceMs: Date.parse(item.stateSince)
   })
 }
 
-function currentTurnAssistantText(state: ChatState): string {
-  const turnId = state.currentTurnId
-  const fromBlocks = turnId ? latestAssistantPreview(state.blocks, 180, turnId) : ''
-  const live = state.liveAssistant.replace(/\s+/g, ' ').trim()
-  const liveMatches = !state.liveAssistantTurnId || !turnId || state.liveAssistantTurnId === turnId
-  const liveText = liveMatches ? live : ''
-  if (liveText.length > fromBlocks.length) {
-    return liveText.length > 180 ? `${liveText.slice(0, 180).trimEnd()}…` : liveText
-  }
-  return fromBlocks
-}
-
-function liveProcessText(state: ChatState, row: ActivityRow | undefined, live = true): string {
-  const tool = live ? runningToolBlock(state) : undefined
-  const toolAction = tool
-    ? summarizeToolLiveAction(tool, translatePet)
-    : toolActionName(row?.currentTool)
-  const thinking = live && !toolAction && hasCurrentReasoning(state)
+function backgroundProcessText(row: ActivityRow | undefined): string {
+  const toolAction = toolActionName(row?.currentTool)
   return petWorkProcessText({
     toolAction,
-    progressNote: live ? undefined : row?.progressNote,
-    thinking,
+    progressNote: row?.progressNote,
+    thinking: false,
     workingLabel: i18n.t('workingSprint', { ns: 'common' }),
     thinkingLabel: i18n.t('thinkingNow', { ns: 'common' }),
     toolLabel: (action) => i18n.t('workingToolAction', { ns: 'common', action })
   })
-}
-
-function runningToolBlock(state: ChatState): ToolBlock | undefined {
-  const turnId = state.currentTurnId
-  for (let index = state.blocks.length - 1; index >= 0; index -= 1) {
-    const block = state.blocks[index]
-    if (block?.kind !== 'tool' || block.status !== 'running') continue
-    if (turnId && block.turnId && block.turnId !== turnId) continue
-    return block
-  }
-  return undefined
-}
-
-function hasCurrentReasoning(state: ChatState): boolean {
-  const turnId = state.currentTurnId
-  const live = state.liveReasoning.trim()
-  if (live && (!state.liveReasoningTurnId || !turnId || state.liveReasoningTurnId === turnId)) return true
-  return state.blocks.some((block) =>
-    block.kind === 'reasoning' && (!turnId || block.turnId === turnId) && block.text.trim().length > 0
-  )
 }
 
 function toolActionName(name: string | undefined): string | undefined {

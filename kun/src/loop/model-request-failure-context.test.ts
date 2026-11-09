@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   modelPreflightFailureContext,
   modelRequestFailureContext,
-  recordModelPreflightFailure
+  recordModelPreflightFailure,
+  sanitizeModelFailure
 } from './model-request-failure-context.js'
 
 const request = { providerId: 'codex', model: 'gpt-5.6-sol' }
@@ -32,6 +33,37 @@ describe('model request failure context', () => {
       requestState: 'sent_no_response', providerId: 'codex', model: 'gpt-5.6-sol',
       category: 'network'
     })
+  })
+
+  it('redacts credentials in provider failure metadata', () => {
+    const failure = sanitizeModelFailure({ category: 'request', failoverAllowed: false,
+      providerCode: 'sk-abcdefghijklmnop1234567890' })
+    expect(JSON.stringify(failure)).not.toContain('sk-abcdefghijklmnop1234567890')
+  })
+
+  it('validates and bounds an earlier stream failure before persisting it', () => {
+    const safe = sanitizeModelFailure({ category: 'network', failoverAllowed: false,
+      firstStreamFailure: { code: 'stream_read_error', message: `socket ${'x'.repeat(1500)} sk-abcdefghijklmnop1234567890` } })
+    expect(safe?.firstStreamFailure?.message.length).toBeLessThanOrEqual(1024)
+    expect(JSON.stringify(safe)).not.toContain('sk-abcdefghijklmnop1234567890')
+    const malformed = sanitizeModelFailure({ category: 'network', failoverAllowed: false,
+      firstStreamFailure: { code: 42, message: null } } as never)
+    expect(malformed).not.toHaveProperty('firstStreamFailure')
+  })
+
+  it('does not call an interrupted response a missing response', () => {
+    expect(modelRequestFailureContext({
+      request, code: 'stream_read_error',
+      failure: { category: 'network', failoverAllowed: false, responsePhase: 'interrupted', partialOutput: true }
+    })).toBeUndefined()
+    expect(modelRequestFailureContext({
+      request, code: 'stream_read_error',
+      failure: { category: 'network', failoverAllowed: false, responsePhase: 'interrupted', httpStatus: 200 }
+    })).toBeUndefined()
+    expect(modelRequestFailureContext({
+      request, code: 'http_503',
+      failure: { category: 'unavailable', failoverAllowed: true, responsePhase: 'interrupted', httpStatus: 503 }
+    })).toMatchObject({ requestState: 'provider_responded', httpStatus: 503 })
   })
 
   it('uses explicit unsent evidence instead of a synthetic HTTP status', () => {

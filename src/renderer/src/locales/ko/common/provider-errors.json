@@ -1,4 +1,9 @@
 {
+  "modelStreamInterrupted": "응답 중단됨",
+  "modelStreamInterruptedPartial": "응답이 중단되었습니다. 일부 내용이 저장되었으며 계속 입력할 수 있습니다.",
+  "modelStreamInterruptedSummary": "응답이 완료되기 전에 중단되었습니다.",
+  "modelStreamReplayConflict": "응답 복구 실패",
+  "modelStreamReplayConflictSummary": "이전 출력은 보존되었습니다. 처음 중단된 원인은 알 수 없으며 대화를 계속할 수 있습니다.",
   "modelErrorSourceProvider": "공급자 응답",
   "modelErrorSourceNoResponse": "공급자 응답 없음",
   "modelErrorSourceNotSent": "요청이 전송되지 않음",

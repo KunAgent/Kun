@@ -179,6 +179,7 @@ function fakeHarness(settingsPatch: Partial<KunBrowserUseSettingsV1> = {}) {
     }),
     stop: vi.fn(),
     getURL: () => currentUrl,
+    getZoomFactor: () => 1,
     getTitle: () => currentTitle,
     capturePage: vi.fn(async () => image),
     isDestroyed: () => false,

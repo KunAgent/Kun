@@ -1,3 +1,4 @@
+import { AgentDispatchPreparationError } from './agent-dispatch-preparation.js'
 import { createHash } from 'node:crypto'
 import {
   AgentDispatchIntentSchema,
@@ -169,7 +170,10 @@ export class AgentDispatchService {
     // Readiness/model checks may take seconds; never hold the canonical store
     // mutex while waiting on them and block unrelated card cancellations.
     const preparedEdit = input.action === 'update'
-      ? await this.prepareEdit(intentId, input, requestHash) : undefined
+      ? await this.prepareEdit(intentId, input, requestHash).catch(error => {
+        if (error instanceof AgentDispatchConflictError) throw error
+        throw new AgentDispatchPreparationError(error)
+      }) : undefined
     let changedByAction = false
     const changed = await this.options.store.transaction((file) => {
       const intent = required(file.intents.find((entry) => entry.intentId === intentId))

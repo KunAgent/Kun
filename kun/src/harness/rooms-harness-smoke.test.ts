@@ -69,21 +69,22 @@ it('the exact Rooms fixture earns real readiness before live Code discovery with
     defaultModel: () => ({ model: 'offline-model' }) })
   const { agents } = await service.list()
   expect(agents.find((agent) => agent.harnessId === 'devin')).toMatchObject({ available: true, models: expect.arrayContaining([
-    { harnessId: 'devin', credentialMode: 'native-login', model: 'default' }
+    { harnessId: 'devin', credentialMode: 'native-login', model: 'devin-fixture-model' }
   ]) })
   expect(agents.filter((agent) => agent.harnessId !== 'kun').map((agent) => agent.harnessId)).toEqual(['devin'])
   const methods = await f.methods()
   expect(methods).toContain('initialize')
-  expect(methods).not.toContain('session/new')
+  // Discovery opens a small model session but must not send a prompt or authenticate.
+  expect(methods).toContain('session/new')
   expect(methods).not.toContain('session/prompt')
   expect(methods).not.toContain('authenticate')
 }, 60_000)
 
-it('discovers fixture models only when the actual offline turn creates its session', async () => {
+it('discovers fixture models from the real model probe and the offline turn without a prompt', async () => {
   const f = await fixture()
   const definition = f.harnesses.catalog.get('devin')!
-  expect(await f.harnesses.acpModels.probe(definition)).toEqual([])
   await writeFile(f.release, 'complete fixture\n')
+  expect(await f.harnesses.acpModels.probe(definition)).toEqual(['devin-fixture-model', 'devin-fixture-alternative'])
   const h = await makeHarness('basic-chat.json', {
     definition: { ...definition, acpPermission: undefined },
     thread: { harnessId: 'devin' },
@@ -99,8 +100,9 @@ it('discovers fixture models only when the actual offline turn creates its sessi
   expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
   expect(await f.harnesses.acpModels.probe(definition)).toEqual(['devin-fixture-model', 'devin-fixture-alternative'])
   const methods = await f.methods()
-  expect(methods.filter((method) => method === 'session/new')).toHaveLength(1)
-  expect(methods.indexOf('session/new')).toBeLessThan(methods.indexOf('session/prompt'))
+  // The probe and the turn each open a session; neither sends a prompt first.
+  expect(methods.filter((method) => method === 'session/new').length).toBeGreaterThanOrEqual(2)
+  expect(methods.lastIndexOf('session/new')).toBeLessThan(methods.indexOf('session/prompt'))
   expect(methods).not.toContain('authenticate')
   expect(h.deltas.map(({ delta }) => delta).join('')).toContain('Model: devin-fixture-model')
 }, 60_000)

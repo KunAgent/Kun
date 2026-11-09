@@ -3,8 +3,10 @@ import { PassThrough } from 'node:stream'
 import type { Transport } from '@modelcontextprotocol/client'
 import { getDefaultEnvironment, type StdioServerParameters } from '@modelcontextprotocol/client/stdio'
 import { spawnOwnedProcess, stopOwnedProcess } from '../../process/owned-process.js'
+import { mergeProcessEnvironments } from '../../process/process-environment.js'
 
 type Message = Parameters<NonNullable<Transport['onmessage']>>[0]
+type OwnedStdioServerParameters = Omit<StdioServerParameters, 'env'> & { env?: NodeJS.ProcessEnv }
 
 /** MCP stdio with the same process containment as runtime-owned commands. */
 export class OwnedStdioClientTransport implements Transport {
@@ -21,7 +23,7 @@ export class OwnedStdioClientTransport implements Transport {
 
   // The SDK's disposable stdio negotiation probe reconstructs this concrete
   // transport from these parameters and invokes its own _dispose method.
-  constructor(readonly _serverParams: StdioServerParameters) {}
+  constructor(readonly _serverParams: OwnedStdioServerParameters) {}
 
   get pid(): number | null { return this.child?.pid ?? null }
   get stderr(): PassThrough { return this.stderrStream }
@@ -36,7 +38,7 @@ export class OwnedStdioClientTransport implements Transport {
     const params = this._serverParams
     const child = await spawnOwnedProcess(params.command, params.args ?? [], {
       cwd: params.cwd,
-      env: { ...getDefaultEnvironment(), ...params.env },
+      env: mergeProcessEnvironments(process.platform, getDefaultEnvironment(), params.env ?? {}),
       windowsHide: true,
       stdio: ['pipe', 'pipe', params.stderr ?? 'inherit']
     })

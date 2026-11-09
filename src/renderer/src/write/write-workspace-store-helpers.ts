@@ -39,6 +39,7 @@ import {
 import type { WritePreviewMode, WriteWorkspaceState } from './write-workspace-store-types'
 import { normalizeWriteViewMode } from './write-editor-layout'
 import { writeSurfaceKeySuffix } from './write-surface'
+import { normalizeWritePath } from './write-path-normalization'
 
 export const WRITE_PREVIEW_MODE_KEY = 'kun.write.preview-mode'
 export const WRITE_ASSISTANT_OPEN_KEY = 'kun.write.assistant-open'
@@ -72,7 +73,7 @@ export function normalizeWriteAssistantModel(model: string | null | undefined): 
 }
 
 export function normalizePath(value: string): string {
-  return value.replaceAll('\\', '/').replace(/\/+$/, '')
+  return normalizeWritePath(value)
 }
 
 export function pathsEqual(a: string, b: string): boolean {
@@ -207,20 +208,22 @@ export function writeBasenameFromPath(value: string): string {
 
 export function writeDirnameFromPath(value: string): string {
   const normalized = normalizePath(value)
+  if (/^\/\/(?:[^/?]+\/[^/]+|\?\/UNC\/[^/]+\/[^/]+)$/i.test(normalized)) return normalized
   const index = normalized.lastIndexOf('/')
-  if (index <= 0) return normalized
-  return normalized.slice(0, index)
+  if (index < 0) return normalized
+  return normalizePath(normalized.slice(0, index + 1))
 }
 
 export function writeJoinPath(base: string, next: string): string {
   if (!base) return next
-  return `${normalizePath(base)}/${next.replace(/^\/+/, '')}`
+  const normalized = normalizePath(base)
+  return `${normalized}${normalized.endsWith('/') ? '' : '/'}${next.replace(/^\/+/, '')}`
 }
 
 export function writeRelativeToWorkspace(workspaceRoot: string, filePath: string): string {
   const normalizedRoot = normalizePath(workspaceRoot)
   const normalizedFile = normalizePath(filePath)
-  const prefix = `${normalizedRoot}/`
+  const prefix = normalizedRoot.endsWith('/') ? normalizedRoot : `${normalizedRoot}/`
   if (normalizedRoot && normalizedFile.startsWith(prefix)) return normalizedFile.slice(prefix.length)
   return writeBasenameFromPath(filePath)
 }

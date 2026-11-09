@@ -1,6 +1,7 @@
 import { access, mkdir, readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { isBuiltinPetId } from '../../shared/pets-builtin'
 import type { PetImportReport, PetSource, PetSourceState } from '../../shared/pets'
 import { directoryStateFromError } from './pet-paths'
 import { PetStore, pathExists } from './pet-store'
@@ -31,6 +32,7 @@ export async function refreshPetLibraries(input: {
   await mkdir(input.localRoot, { recursive: true })
   const report = emptyReport(input.store.getSettings().selectedPetId)
   report.sourceStates.builtin = await importTree(input.store, input.builtinRoot, 'kun-builtin', report)
+  await input.store.retireBuiltinPets()
   report.sourceStates.local = await importTree(input.store, input.localRoot, 'kun-local', report)
   if (input.importCodexPets) {
     report.sourceStates.codex = await importTree(input.store, path.join(input.codexHome, 'pets'), 'codex-custom', report)
@@ -83,6 +85,7 @@ async function importTree(
       })
       continue
     }
+    if (source === 'kun-builtin' && !isBuiltinPetId(validated.sourceId)) continue
     const previous = kept.get(validated.sourceId)
     if (previous) {
       report.conflicts.push({ sourcePath: candidate.petDir, sourceId: validated.sourceId, keptSourcePath: previous })
@@ -97,7 +100,8 @@ async function importTree(
         description: validated.description,
         spriteVersionNumber: validated.spriteVersionNumber,
         spritesheetSourcePath: validated.spritesheetPath,
-        sourcePath: candidate.petDir
+        sourcePath: candidate.petDir,
+        interactions: validated.interactions
       })
       report[result.status].push(result.manifest)
     } catch (error) {

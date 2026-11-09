@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MobileViewSchema } from './mobile-view.js'
 import { AgentProfileDeclarationSchema } from './agent.js'
 import { AgentProviderDeclarationSchema } from './agent-providers.js'
 import { AuthenticationProviderDeclarationSchema } from './accounts.js'
@@ -101,7 +102,8 @@ export const ViewContributionSchema = z.strictObject({
   order: OrderSchema,
   multiple: z.boolean().default(false),
   localResourceRoots: z.array(RelativePathSchema).max(32).default([]),
-  externalBrowser: ExternalBrowserContributionSchema.optional()
+  externalBrowser: ExternalBrowserContributionSchema.optional(),
+  mobile: MobileViewSchema.optional()
 })
 export type ViewContribution = z.infer<typeof ViewContributionSchema>
 

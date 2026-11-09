@@ -1,324 +1,79 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
-import { ChevronDown, Globe, Loader2, QrCode, RefreshCw } from 'lucide-react'
-import { QRCodeSVG } from 'qrcode.react'
+import { ControlPackageCard } from './ControlPackageCard'
+import { ComputerAccessPanel } from './ComputerAccessPanel'
+import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { RemoteAccessConfigPatch, RemoteAccessStatus, RemoteTailscaleInfo } from '@shared/remote-access'
-import { MobileChannelRow, MobileGrantRows, MobilePairingRequests } from './RemoteMobileLink'
-import { RemoteSettingsGroup } from './RemoteSettingsGroup'
+import { mobileManagementVisible } from './remote-access-state'
+import { RemoteAccessHome } from './RemoteAccessHome'
+import { RemoteBrowserAccess } from './RemoteBrowserAccess'
+import { RemoteDesktopAccess } from './RemoteDesktopAccess'
+import { MobileGrantRow } from './MobileGrantRow'
+import { MobilePairingRequests } from './RemoteMobileLink'
+import { RemoteDetailHeader } from './remote-compact-ui'
+import { REMOTE_BUTTON_CLASS } from './remote-panel-ui'
 import { useMobileLink } from './useMobileLink'
-import {
-  REMOTE_BUTTON_CLASS,
-  RemoteCopyButton,
-  RemoteGroup,
-  RemoteIconTile,
-  RemoteRow,
-  RemoteRowText,
-  RemoteSection,
-  RemoteStatusDot,
-  RemoteSwitch,
-  RemoteUrlRow,
-  describeUserAgent
-} from './remote-panel-ui'
+import { useRemoteBrowser } from './useRemoteBrowser'
+import { useDesktopAccess } from './useDesktopAccess'
+import { DirectMobileLink } from './DirectMobileLink'
 
-type Props = {
-  className?: string
-}
+type View = { page: 'home' | 'browser' | 'desktop' | 'computers' } | { page: 'device'; id: string }
 
-const EMPTY_URLS = { local: '', lan: [], primary: '', listen: '' }
-
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-export function RemoteAccessPanel({ className = '' }: Props): ReactElement {
+export function RemoteAccessPanel({ className = '' }: { className?: string }): ReactElement {
   const { t } = useTranslation('common')
-  const kunGui = typeof window !== 'undefined' ? window.kunGui : undefined
   const link = useMobileLink()
-
-  const [status, setStatus] = useState<RemoteAccessStatus | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
-  const [qrVisible, setQrVisible] = useState(true)
-  const [otherUrlsOpen, setOtherUrlsOpen] = useState(false)
-  const [tailscale, setTailscale] = useState<RemoteTailscaleInfo | null>(null)
-  const [tailscaleBusy, setTailscaleBusy] = useState(false)
-
-  const refresh = useCallback(async (): Promise<void> => {
-    if (!kunGui?.remoteAccessGetStatus) return
-    try {
-      setStatus(await kunGui.remoteAccessGetStatus())
-    } catch (loadError) {
-      setError(errorText(loadError))
-    }
-  }, [kunGui])
-
+  const browser = useRemoteBrowser()
+  const desktop = useDesktopAccess(link)
+  const [view, setView] = useState<View>({ page: 'home' })
+  const [directRunning, setDirectRunning] = useState(false)
+  const directOwner = link.signedIn ? link.account.state.user?.id ?? 'signed-out' : 'signed-out'
+  useEffect(() => { setDirectRunning(false) }, [directOwner])
+  const root = useRef<HTMLElement>(null)
+  const dirty = useRef(false)
+  const scrollPosition = useRef(0)
+  const onDirtyChange = useCallback((value: boolean) => { dirty.current = value }, [])
+  const mobileVisible = mobileManagementVisible(link)
+  const grant = view.page === 'device' && mobileVisible ? link.state?.grants.find(item => item.id === view.id && item.purpose !== 'desktop') : undefined
+  function navigate(next: View) {
+    if (dirty.current && !window.confirm(t('remoteCompact.discardQuestion'))) return
+    dirty.current = false
+    if (view.page === 'home') scrollPosition.current = root.current?.scrollTop ?? 0
+    setView(next)
+    if (root.current) { root.current.scrollTop = next.page === 'home' ? scrollPosition.current : 0; root.current.focus({ preventScroll: true }) }
+  }
   useEffect(() => {
-    void refresh()
-    const unsubscribe = kunGui?.onRemoteAccessStatusChanged?.((next) => setStatus(next))
-    return () => unsubscribe?.()
-  }, [kunGui, refresh])
-
-  const applyConfig = useCallback(
-    async (patch: RemoteAccessConfigPatch): Promise<void> => {
-      if (!kunGui?.remoteAccessSetConfig) return
-      setBusy(true)
-      setError('')
-      try {
-        setStatus(await kunGui.remoteAccessSetConfig(patch))
-      } catch (applyError) {
-        setError(errorText(applyError))
-      } finally {
-        setBusy(false)
-      }
-    },
-    [kunGui]
-  )
-
-  const savePassword = useCallback(
-    async (password: string): Promise<boolean> => {
-      if (!kunGui?.remoteAccessSetPassword) return false
-      setBusy(true)
-      setError('')
-      try {
-        setStatus(await kunGui.remoteAccessSetPassword(password))
-        return true
-      } catch (passwordError) {
-        setError(errorText(passwordError))
-        return false
-      } finally {
-        setBusy(false)
-      }
-    },
-    [kunGui]
-  )
-
-  const revokeSessions = useCallback(async (): Promise<void> => {
-    if (!kunGui?.remoteAccessRevokeSessions) return
-    setBusy(true)
-    try {
-      setStatus(await kunGui.remoteAccessRevokeSessions())
-    } finally {
-      setBusy(false)
+    if ((view.page === 'device' && !grant) || (view.page === 'desktop' && !mobileVisible)) {
+      dirty.current = false
+      setView({ page: 'home' })
     }
-  }, [kunGui])
-
-  const detectTailscale = useCallback(async (): Promise<void> => {
-    if (!kunGui?.remoteAccessDetectTailscale) return
-    setTailscaleBusy(true)
-    try {
-      setTailscale(await kunGui.remoteAccessDetectTailscale())
-    } catch {
-      setTailscale({ installed: false, connected: false, ipv4: null })
-    } finally {
-      setTailscaleBusy(false)
-    }
-  }, [kunGui])
-
-  useEffect(() => {
-    void detectTailscale()
-  }, [detectTailscale])
-
-  const urls = useMemo(() => status?.urls ?? EMPTY_URLS, [status])
-  const primaryUrl = urls.primary || urls.local
-  const otherUrls = useMemo(() => {
-    const rest = urls.lan.filter((url) => url !== urls.primary && url !== urls.local)
-    if (urls.local && urls.primary !== urls.local) rest.push(urls.local)
-    return rest
-  }, [urls])
-
-  const enabled = status?.enabled === true
-  const clients = status?.running ? status.clients : []
-  const grantCount = link.enabled ? link.state?.grants.length ?? 0 : 0
-  const anyChannelOn = Boolean(status?.running) || link.enabled
-  const browserSubtitle = !status?.passwordSet
-    ? t('remoteAccessPasswordRequired')
-    : status.running
-      ? clients.length > 0
-        ? t('remoteAccessClients', { count: clients.length })
-        : t('remoteAccessRunning')
-      : t('remoteAccessBrowserOff')
-
-  return (
-    <section
-      className={`flex min-h-0 flex-col overflow-y-auto bg-ds-sidebar ${className}`}
-      aria-label={t('rightPanelRemote')}
-    >
-      {!status ? (
-        <div className="flex items-center justify-center py-10 text-ds-muted">
-          <Loader2 size={16} className="animate-spin" />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-4 p-3.5">
-          {error || status.lastError ? (
-            <div
-              role="alert"
-              className="rounded-xl bg-ds-danger-soft px-3 py-2 text-[12px] leading-4 text-ds-danger"
-            >
-              {error || status.lastError}
-            </div>
-          ) : null}
-
-          <MobilePairingRequests link={link} />
-
-          <RemoteSection
-            title={t('remoteAccessChannels')}
-            aside={
-              <button
-                type="button"
-                onClick={() => void refresh()}
-                disabled={busy}
-                aria-label={t('remoteAccessRefresh')}
-                title={t('remoteAccessRefresh')}
-                className="inline-flex h-5 w-5 items-center justify-center rounded text-ds-faint transition hover:text-ds-ink disabled:opacity-50"
-              >
-                <RefreshCw size={12} className={busy ? 'animate-spin' : ''} />
-              </button>
-            }
-          >
-            <RemoteGroup>
-              <RemoteRow>
-                <RemoteIconTile active={status.running}>
-                  <Globe size={15} />
-                </RemoteIconTile>
-                <RemoteRowText
-                  title={t('remoteAccessBrowserChannel')}
-                  subtitle={browserSubtitle}
-                  subtitleClassName={
-                    status.passwordSet ? 'text-ds-muted' : 'text-amber-600 dark:text-amber-400'
-                  }
-                />
-                <RemoteSwitch
-                  checked={enabled}
-                  label={t('remoteAccessEnable')}
-                  disabled={busy || !status.passwordSet}
-                  onToggle={() => void applyConfig({ enabled: !enabled })}
-                />
-              </RemoteRow>
-              <MobileChannelRow link={link} />
-            </RemoteGroup>
-          </RemoteSection>
-
-          {status.running ? (
-            <RemoteSection title={t('remoteAccessUrls')}>
-              <RemoteGroup>
-                <div className="flex items-start gap-3 p-3">
-                  {qrVisible && urls.lan.length > 0 ? (
-                    <div className="shrink-0 rounded-lg border border-ds-border-muted bg-white p-1.5">
-                      <QRCodeSVG value={urls.primary} size={84} marginSize={1} />
-                    </div>
-                  ) : null}
-                  <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    <div className="break-all font-mono text-[12px] font-semibold leading-4 text-ds-ink">
-                      {primaryUrl}
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      <RemoteCopyButton text={primaryUrl} />
-                      <button
-                        type="button"
-                        onClick={() => window.kunGui?.openExternal?.(primaryUrl)}
-                        className={REMOTE_BUTTON_CLASS}
-                      >
-                        {t('remoteAccessOpenLocal')}
-                      </button>
-                      {urls.lan.length > 0 ? (
-                        <button
-                          type="button"
-                          onClick={() => setQrVisible((visible) => !visible)}
-                          aria-expanded={qrVisible}
-                          aria-label={t(qrVisible ? 'remoteAccessHideQr' : 'remoteAccessShowQr')}
-                          title={t(qrVisible ? 'remoteAccessHideQr' : 'remoteAccessShowQr')}
-                          className={`${REMOTE_BUTTON_CLASS} w-7 px-0 ${qrVisible ? 'text-accent' : ''}`}
-                        >
-                          <QrCode size={13} />
-                        </button>
-                      ) : null}
-                    </div>
-                    {qrVisible && urls.lan.length > 0 ? (
-                      <p className="text-[11px] leading-4 text-ds-faint">{t('remoteAccessQrHint')}</p>
-                    ) : null}
-                  </div>
-                </div>
-                {otherUrls.length > 0 ? (
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setOtherUrlsOpen((open) => !open)}
-                      aria-expanded={otherUrlsOpen}
-                      className="flex min-h-[36px] w-full items-center gap-2 px-3 text-left text-[12px] text-ds-muted transition hover:text-ds-ink"
-                    >
-                      <span className="flex-1">{t('remoteAccessOtherUrls', { n: otherUrls.length })}</span>
-                      <ChevronDown
-                        size={13}
-                        className={`transition ${otherUrlsOpen ? 'rotate-180' : ''}`}
-                        aria-hidden="true"
-                      />
-                    </button>
-                    {otherUrlsOpen ? (
-                      <div className="flex flex-col px-2 pb-2">
-                        {otherUrls.map((url) => (
-                          <RemoteUrlRow key={url} url={url} />
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </RemoteGroup>
-            </RemoteSection>
-          ) : null}
-
-          {clients.length > 0 || grantCount > 0 ? (
-            <RemoteSection
-              title={t('remoteAccessDevicesSection')}
-              aside={
-                clients.length > 0 ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void revokeSessions()}
-                    className="text-[12px] text-ds-danger transition hover:opacity-80 disabled:opacity-50"
-                  >
-                    {t('remoteAccessRevokeSessions')}
-                  </button>
-                ) : null
-              }
-            >
-              <RemoteGroup>
-                {clients.map((client) => (
-                  <RemoteRow key={client.id}>
-                    <RemoteStatusDot on />
-                    <RemoteRowText
-                      title={describeUserAgent(client.userAgent) || t('remoteAccessBrowserClient')}
-                      subtitle={client.remoteAddress}
-                    />
-                  </RemoteRow>
-                ))}
-                <MobileGrantRows link={link} />
-              </RemoteGroup>
-            </RemoteSection>
-          ) : anyChannelOn ? (
-            <p className="flex items-center gap-2 px-1 text-[12px] text-ds-muted">
-              <RemoteStatusDot on={false} />
-              {t('remoteAccessNoDevices')}
-            </p>
-          ) : null}
-
-          <RemoteSettingsGroup
-            status={status}
-            busy={busy}
-            tailscale={tailscale}
-            tailscaleBusy={tailscaleBusy}
-            applyConfig={applyConfig}
-            savePassword={savePassword}
-            detectTailscale={detectTailscale}
-            onError={setError}
-          />
-
-          <div className="space-y-2 px-1 text-[11px] leading-4 text-ds-faint">
-            <p>{t('remoteAccessSecurityHint')} {t('remoteAccessExternalHint')}</p>
-            {link.api ? <p>{t('remoteAccessMobileSecurityHint')}</p> : null}
-          </div>
-        </div>
-      )}
-    </section>
-  )
+  }, [view.page, grant, mobileVisible])
+  const error = browser.error || browser.status?.lastError
+  return <section ref={root}
+    className={`ds-no-drag flex min-h-0 min-w-0 flex-col touch-pan-y overscroll-contain overflow-y-auto overflow-x-hidden bg-ds-sidebar ${className}`}
+    aria-label={t('rightPanelRemote')} tabIndex={0}>
+    <div className="flex shrink-0 flex-col gap-3.5 px-4 pb-5 pt-5">
+      {mobileVisible ? <MobilePairingRequests link={link} /> : null}
+      {view.page === 'home' && link.signedIn && link.mobileAllowed ? <ControlPackageCard key={`control-package:${directOwner}`} zh={link.zh} /> : null}
+      {desktop.value?.active ? <div role="status" className="flex items-center gap-3 rounded-2xl bg-ds-danger-soft p-3">
+        <span className="min-w-0 flex-1 text-[12px] font-medium text-ds-ink">{t('remoteCompact.activeDesktop', { name: desktop.value.active.peer })}</span>
+        <button type="button" className={REMOTE_BUTTON_CLASS} disabled={desktop.busy} onClick={desktop.stop}>{t('remoteCompact.endDesktop')}</button>
+      </div> : null}
+      {error ? <div role="alert" className="space-y-2 rounded-xl bg-ds-danger-soft p-3 text-[12px] leading-4 text-ds-danger">
+        <p>{error}</p><button type="button" className={REMOTE_BUTTON_CLASS} onClick={() => void browser.refresh()}>{t('remoteCompact.retry')}</button>
+      </div> : null}
+      {view.page === 'home' ? <RemoteAccessHome link={link} browser={browser} desktop={desktop} directRunning={directRunning}
+        onBrowser={() => navigate({ page: 'browser' })} onDesktop={() => navigate({ page: 'desktop' })}
+        onDevice={id => navigate({ page: 'device', id })} /> : null}
+      {view.page === 'home' && link.api?.computers ? <button type="button" className={`${REMOTE_BUTTON_CLASS} justify-between`} onClick={() => navigate({ page: 'computers' })}>
+        <span>{link.zh ? '电脑与电脑远程桌面 · Max 专享' : 'Computer to computer desktop · Max'}</span>
+        <span>{link.state?.pairings.filter(item => item.purpose === 'desktop').length || '→'}</span>
+      </button> : null}
+      {view.page === 'computers' ? <ComputerAccessPanel key={directOwner} link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })} /> : null}
+      {view.page === 'home' ? <DirectMobileLink key={directOwner} onRunningChange={setDirectRunning} /> : null}
+      {view.page === 'browser' ? <RemoteBrowserAccess browser={browser} onBack={() => navigate({ page: 'home' })} /> : null}
+      {view.page === 'desktop' && mobileVisible ? <RemoteDesktopAccess link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })} /> : null}
+      {view.page === 'device' && grant ? <>
+        <RemoteDetailHeader title={grant.name ?? grant.controllerId} onBack={() => navigate({ page: 'home' })} />
+        <MobileGrantRow key={grant.id} link={link} grant={grant} onDirtyChange={onDirtyChange} />
+      </> : null}
+    </div>
+  </section>
 }

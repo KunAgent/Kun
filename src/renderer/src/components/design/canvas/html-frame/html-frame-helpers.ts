@@ -341,6 +341,31 @@ export function htmlFrameShouldPromotePreviewToReady({
   )
 }
 
+export function htmlFrameSurfaceClasses({
+  active,
+  hasPreview,
+  transparentGeneratingSurface,
+  hasError = false
+}: {
+  active: boolean
+  hasPreview: boolean
+  transparentGeneratingSurface: boolean
+  hasError?: boolean
+}): string {
+  // The brush placeholder can be transparent, but real (even streamed) HTML
+  // must not put its default black text directly onto the dark workbench.
+  if (!hasPreview && transparentGeneratingSurface && !hasError) {
+    return active
+      ? 'border-dashed border-accent bg-transparent shadow-none'
+      : 'border-dashed border-black/15 bg-transparent shadow-none dark:border-white/20'
+  }
+  const background = hasPreview ? 'bg-white' : 'bg-ds-card'
+  const border = active
+    ? 'border-accent shadow-[0_0_0_1px_var(--ds-accent),0_16px_38px_rgba(15,23,42,0.14)]'
+    : 'border-black/[0.08] shadow-[0_1px_2px_rgba(15,23,42,0.05),0_10px_28px_rgba(15,23,42,0.07)] dark:border-white/12'
+  return `${background} ${border}`
+}
+
 export function htmlFrameWebviewCanvasStyle({
   canvasWidth,
   visualCanvasHeight,

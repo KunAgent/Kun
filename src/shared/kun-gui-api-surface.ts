@@ -1,3 +1,4 @@
+import type { ScheduleTasksBulkInput, ScheduleTasksBulkResult } from './schedule-task-bulk'
 import type { UserAttentionRequest } from './user-attention'
 import type {
   AppSettingsPatch,
@@ -53,6 +54,7 @@ import type {
   BrowserUseDecisionInput,
   BrowserUseMountInput,
   BrowserUseNavigationInput,
+  BrowserUseZoomInput,
   BrowserUseViewState
 } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
@@ -398,6 +400,7 @@ export type KunGuiApi = KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & Pro
   onScheduleStatusChanged: (handler: (status: ScheduleRuntimeStatus) => void) => () => void
   createScheduleTask: (payload: ScheduleTaskCreateInput) => Promise<ScheduleTaskMutationResult>
   updateScheduleTask: (payload: ScheduleTaskUpdateInput) => Promise<ScheduleTaskMutationResult>
+  bulkScheduleTasks: (input: ScheduleTasksBulkInput) => Promise<ScheduleTasksBulkResult>
   deleteScheduleTask: (taskId: string) => Promise<ScheduleTaskDeleteResult>
   runScheduleTask: (taskId: string) => Promise<ScheduleRunResult>
   getDaemonStatus: () => Promise<DaemonRuntimeStatus>
@@ -658,6 +661,7 @@ export type KunGuiApi = KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & Pro
   decideBrowserUseAction: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
   setBrowserUseControl: (input: BrowserUseControlInput) => Promise<BrowserUseViewState>
   navigateBrowserUse: (input: BrowserUseNavigationInput) => Promise<BrowserUseViewState>
+  setBrowserUseZoom: (input: BrowserUseZoomInput) => Promise<BrowserUseViewState>
   stopBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   clearBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
   onBrowserUseState: (handler: (state: BrowserUseViewState) => void) => () => void

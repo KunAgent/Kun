@@ -1,3 +1,4 @@
+import type { NativeImage } from 'electron'
 import {
   useCallback,
   useEffect,
@@ -24,7 +25,9 @@ export type DesignHtmlPreviewWebviewElement = HTMLElement & {
   loadURL?: (url: string) => Promise<void>
   reload?: () => void
   getURL?: () => string
+  isLoading?: () => boolean
   setZoomFactor?: (factor: number) => void
+  capturePage?: () => Promise<NativeImage>
 }
 
 export type DesignHtmlPreviewState = {
@@ -92,6 +95,13 @@ export function shouldRenderDesignHtmlPreviewWebview({
   if (!fileUrl) return false
   if (hasRenderableContent) return true
   return mountWhileSkeleton && renderState === 'skeleton'
+}
+
+export function designHtmlPreviewWebviewStyle(style?: CSSProperties): CSSProperties {
+  // Preview documents own their palette. A transparent/default HTML page needs
+  // browser-like white paper, not the workbench's dark surface showing through.
+  // This only paints the host; authored backgrounds and text stay untouched.
+  return { backgroundColor: '#ffffff', colorScheme: 'light', ...style }
 }
 
 export function designHtmlPreviewWebviewZoomFactor(zoom: number): number {
@@ -347,7 +357,7 @@ export function useDesignHtmlPreview({
         partition={partition}
         webpreferences={mergedWebpreferences}
         className={options.className}
-        style={options.style}
+        style={designHtmlPreviewWebviewStyle(options.style)}
         title={options.title}
         {...(options.extraProps ?? {})}
       />

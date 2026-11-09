@@ -1,3 +1,5 @@
+import { normalizeWritePath } from './write-path-normalization'
+
 export type WriteDocumentContext = {
   workspaceRoot: string
   filePath: string
@@ -11,7 +13,7 @@ type WriteDocumentContextState = {
 }
 
 function normalizeContextPath(value: string): string {
-  return value.trim().replaceAll('\\', '/').replace(/\/+$/, '')
+  return normalizeWritePath(value.trim())
 }
 
 export function captureWriteDocumentContext(

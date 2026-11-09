@@ -1,0 +1,18 @@
+.pet-visit-stage { position: relative; overflow: hidden; pointer-events: none; isolation: isolate; }
+.pet-visit-caption { position: absolute; z-index: 400; top: 2px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 12px); display: flex; align-items: center; gap: 6px; padding: 4px 6px 4px 12px; border-radius: 18px; background: #fffcf3ed; color: #71604b; border: 1px solid #ffffffb0; box-shadow: 0 2px 10px #33220010; font: 12px/1.4 system-ui,sans-serif; white-space: nowrap; }
+.pet-visit-caption span { overflow: hidden; text-overflow: ellipsis; }
+.pet-visit-caption button { pointer-events: auto; appearance: none; padding: 3px; width: 24px; height: 24px; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; }
+.pet-visit-caption button:hover { background: #e8dfcf; }
+.pet-visit-caption svg { width: 14px; height: 14px; }
+.pet-visits-controls { display: grid; gap: 12px; padding: 16px; border: 1px solid #e0d7c7; border-radius: 18px; background: #fffcf6; color: #514738; font: 12px/1.5 system-ui,sans-serif; }
+.pet-visits-controls p { margin: 0; color: #897963; }
+.pet-visits-controls label { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.pet-visits-controls select, .pet-visits-controls button { min-width: 0; border: 1px solid #d8cbb7; border-radius: 10px; padding: 7px 10px; background: #fffefa; color: #514738; font: inherit; }
+.pet-visits-controls button { cursor: pointer; }
+.pet-visits-controls button:disabled { opacity: .45; cursor: default; }
+.pet-visits-controls button:hover:not(:disabled) { background: #ede4d4; }
+.pet-visits-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pet-visits-controls .pet-visits-invite { background: #6d604d; color: #fffaf1; border-color: #6d604d; }
+.pet-visits-controls [role='alert'] { color: #a13a31; }
+.pet-visits-settings { margin: 16px 0; }
+.pet-visits-settings > summary { cursor: pointer; font-size: 13px; font-weight: 600; padding: 8px 0; }

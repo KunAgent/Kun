@@ -100,15 +100,20 @@ describe('Devin ACP integration', () => {
     expect(checkHarnessAdmission({ ...input, workspace: { isolated: true } })).toMatchObject({ ok: true })
   })
 
-  it('preserves advertised login choices without creating a session during detection', async () => {
+  it('preserves advertised login choices and probes models without prompting', async () => {
     const f = await fixtureDefinition()
     const handshake = await probeAcpHandshake(f.definition, 'devin', { spawn: spawnFixture })
     expect(handshake).toMatchObject({ ok: true, authMethods: [{ id: 'browser' }] })
     expect(handshake.authRequired).toBeUndefined()
-    const probe = new AcpModelProbe()
-    expect(await probe.probe(f.definition)).toEqual([])
+    const afterHandshake = (await f.journal()).filter((entry) => entry.dir === 'in').map((entry) => entry.frame.method)
+    // Detection only initializes; listing models may open a small session.
+    expect(afterHandshake).not.toContain('session/new')
+    const probe = new AcpModelProbe({ spawn: spawnFixture })
+    try {
+      expect((await probe.probe(f.definition)).length).toBeGreaterThan(0)
+    } finally { probe.dispose() }
     const methods = (await f.journal()).filter((entry) => entry.dir === 'in').map((entry) => entry.frame.method)
-    expect(methods).not.toContain('session/new')
+    expect(methods).toContain('session/new')
     expect(methods).not.toContain('authenticate')
     expect(methods).not.toContain('session/prompt')
   })

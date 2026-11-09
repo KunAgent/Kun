@@ -1,3 +1,7 @@
+import { CollaborationQuerySchema, CollaborationDocumentKindSchema } from '../contracts/collaboration-store.js'
+import { ContinueCommitment } from '../contracts/collaboration-followup-api.js'
+import type { ThreadStore } from '../ports/thread-store.js'
+import type { SessionStore } from '../ports/session-store.js'
 import { RoomMemoryErasure } from '../rooms/room-memory-erasure.js'
 import { RoomSidebarQuery } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
@@ -23,23 +27,41 @@ import { authorizedAsync, validation } from './service-manager-router-auth.js'
 import { MAX_MANAGER_DATA_BODY_BYTES, type ServiceManagerState } from './service-manager-state.js'
 import { resourceFenceStale } from './service-manager-router-fenced-mutation.js'
 import { isManagerPersistenceDegraded, managerPersistenceDegradedResponse } from './service-manager-router-persistence.js'
+import { NativeFollowUpPermitError } from './native-followup-write-scope.js'
+import { assertNoNativePermitMint } from './followup-permit-writes.js'
+import { stageManualFollowUp } from './manual-followup-stage.js'
+import { issueManualNativeFollowUpPermit } from './native-followup-permit-issuer.js'
+import { claimManualFollowUp } from './manual-followup-claim.js'
+import { reconcileManualFollowUp } from './manual-followup-reconcile.js'
+import { beginManualFollowUpDispatch } from './manual-followup-dispatch.js'
+import { FollowUpArbitrationFenceSchema, ManagerFollowUpWriteArbitration,
+  assertFollowUpArbitrationFence, requiresFollowUpArbitration } from './followup-arbitration.js'
 
 export const ROOM_COORDINATOR_RESOURCE = 'rooms-coordinator'
 const Id = z.string().min(1).max(256)
 const Operations = z.enum(['get', 'list', 'listRooms', 'sidebarPage', 'replyPage', 'searchRooms', 'roomRepositories', 'runSummary',
-  'commit', 'scrubMemoryData', 'getRequest', 'events', 'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
+  'collaborationQuery', 'commit', 'stageManualFollowUp', 'claimManualFollowUp', 'issueManualFollowUpPermit',
+  'beginManualFollowUpDispatch', 'reconcileManualFollowUp', 'scrubMemoryData', 'getRequest', 'events',
+  'latestEventSeq', 'eventScope', 'requestOutcomes', 'assertOwnership'])
 
 export function addManagerRoomRoutes(router: Router, input: {
   managerToken: string
   state: ServiceManagerState
   roomStore: SqliteRoomStore
+  threadStore: ThreadStore
+  sessionStore?: SessionStore
+  manualFollowUpEnabled?: () => boolean
   statePersistence?: () => { degraded: boolean }
+  followUpWrites?: ManagerFollowUpWriteArbitration
 }): void {
+  const followUpWrites = input.followUpWrites ?? new ManagerFollowUpWriteArbitration()
   router.add('POST', '/v1/data/room/:operation', (request, context) => authorizedAsync(
     request, input.managerToken, async () => {
       const operation = Operations.safeParse(context.params.operation)
       if (!operation.success) return validation('invalid room-store operation')
-      if (['commit', 'scrubMemoryData'].includes(operation.data) && isManagerPersistenceDegraded(input.statePersistence)) {
+      if (['commit', 'scrubMemoryData', 'stageManualFollowUp', 'claimManualFollowUp', 'issueManualFollowUpPermit',
+        'beginManualFollowUpDispatch', 'reconcileManualFollowUp'].includes(operation.data) &&
+        isManagerPersistenceDegraded(input.statePersistence)) {
         return managerPersistenceDegradedResponse()
       }
       const body = await readJsonBody(request, MAX_MANAGER_DATA_BODY_BYTES)
@@ -59,6 +81,7 @@ export function addManagerRoomRoutes(router: Router, input: {
               beforeSeq: z.number().int().nonnegative().optional(), limit: z.number().int().min(1).max(100).optional() }).strict().parse(body.value)
             result = await input.roomStore.replyPage(value); break
           }
+          case 'collaborationQuery': result = await input.roomStore.collaborationQuery(CollaborationQuerySchema.parse(body.value)); break
           case 'sidebarPage': result = await input.roomStore.sidebarPage(RoomSidebarQuery.parse(body.value)); break
           case 'searchRooms': result = await input.roomStore.searchRooms(RoomSearchQuerySchema.parse(body.value)); break
           case 'roomRepositories': z.object({}).strict().parse(body.value); result = await input.roomStore.roomRepositories(); break
@@ -94,15 +117,60 @@ export function addManagerRoomRoutes(router: Router, input: {
             break
           }
           case 'commit': {
-            const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional() })
+            const value = z.object({ input: RoomStoreCommitSchema, fence: ManagerResourceFenceSchema.optional(),
+              arbitration: FollowUpArbitrationFenceSchema.optional() })
               .strict().parse(body.value)
-            if (!value.fence && value.input.puts.some((put) => (put.kind.startsWith('peer_') ||
+            if (!value.fence && value.input.puts.some((put) => (put.kind === 'agent_commitment' || CollaborationDocumentKindSchema.safeParse(put.kind).success || put.kind.startsWith('peer_') ||
               ['agent_lifecycle', 'agent_import', 'shared_attachment', 'shared_block', 'shared_resource', 'shared_receipt', 'shared_actor', 'desktop_schedule_run', 'remote_history', 'remote_receipt', 'remote_attachment_admission', 'agent_identity', 'agent_mapping', 'agent_bootstrap', 'agent_features', 'agent_handoff', 'agent_memory_job', 'agent_budget', 'agent_budget_claim', 'room_run', 'room_poll', 'room_reactions', 'room_avatar', 'room_proposal', 'room_reminder', 'workbench_link'].includes(put.kind)))) {
               throw new ResourceFenceStaleError()
             }
-            if (value.fence) assertCurrent(value.fence)
-            result = await input.roomStore.commit(value.input,
-              value.fence ? () => assertCurrent(value.fence!) : undefined)
+            result = await followUpWrites.run(async () => {
+              const requiresArbitration = await requiresFollowUpArbitration(input.roomStore, value.input)
+              const assertWrite = () => {
+                if (value.fence) assertCurrent(value.fence)
+                if (requiresArbitration) assertFollowUpArbitrationFence(input.state, value.arbitration)
+              }
+              // Revalidate before durable request replay as well as the physical transaction.
+              assertWrite()
+              await assertNoNativePermitMint(input.roomStore, value.input)
+              return input.roomStore.commit(value.input, assertWrite)
+            })
+            break
+          }
+          case 'stageManualFollowUp': {
+            const value = z.object({ participantAgentId: Id, commitmentId: Id, command: ContinueCommitment,
+              fence: ManagerResourceFenceSchema, arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await stageManualFollowUp({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'claimManualFollowUp': {
+            const value = z.object({ attemptId: Id, fence: ManagerResourceFenceSchema,
+              arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await claimManualFollowUp({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'issueManualFollowUpPermit': {
+            const value = z.object({ attemptId: Id, claimToken: z.number().int().nonnegative(),
+              fence: ManagerResourceFenceSchema, arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await issueManualNativeFollowUpPermit({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'beginManualFollowUpDispatch': {
+            const value = z.object({ attemptId: Id, claimToken: z.number().int().nonnegative(),
+              fence: ManagerResourceFenceSchema, arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await beginManualFollowUpDispatch({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, writes: followUpWrites, enabled: () => input.manualFollowUpEnabled?.() === true })
+            break
+          }
+          case 'reconcileManualFollowUp': {
+            const value = z.object({ attemptId: Id, fence: ManagerResourceFenceSchema,
+              arbitration: FollowUpArbitrationFenceSchema }).strict().parse(body.value)
+            result = await reconcileManualFollowUp({ ...value, state: input.state, store: input.roomStore,
+              threads: input.threadStore, sessions: input.sessionStore, writes: followUpWrites,
+              enabled: () => input.manualFollowUpEnabled?.() === true })
             break
           }
           case 'scrubMemoryData': {
@@ -122,6 +190,7 @@ export function addManagerRoomRoutes(router: Router, input: {
       } catch (error) {
         if (error instanceof z.ZodError) return validation('invalid room-store request', error.issues)
         if (error instanceof ResourceFenceStaleError) return resourceFenceStale()
+        if (error instanceof NativeFollowUpPermitError) return jsonResponse({ code: error.code, message: error.message }, 409)
         if (error instanceof RoomStoreConflictError) return jsonResponse({
           code: 'room_store_conflict', message: error.message, currentRevision: error.currentRevision
         }, 409)

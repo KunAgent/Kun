@@ -4,7 +4,7 @@ export type RoomEvent = {
   roomId: string
   kind: string
   createdAt?: string
-  payload?: { id?: string; taskId?: string; linkId?: string; status?: string; threadId?: string; gateKind?: 'approval' | 'input'; occurredAt?: string }
+  payload?: { dropId?: string; receiptId?: string; id?: string; taskId?: string; linkId?: string; status?: string; threadId?: string; gateKind?: 'approval' | 'input'; occurredAt?: string }
 }
 const listeners = new Set<(event: RoomEvent) => void>()
 export function subscribeRoomEvents(listener: (event: RoomEvent) => void) {

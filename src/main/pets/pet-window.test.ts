@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { petStopConflict, validatePetStop } from './pet-actions'
-import { clampPetBounds, dragBounds, fitPetOverlayWindow, placementFromDip, restorePetBounds } from './pet-geometry'
+import { clampPetBounds, dragBounds, petOverlayFrame, placementFromDip, restorePetBounds } from './pet-geometry'
 import { applyPetPlatformPolicy, petPlatformPolicy } from './pet-platform'
 import { PetWindowController, type PetWindowLike } from './pet-window'
 import type { PetActivitySnapshot } from '../../shared/pets'
@@ -122,15 +122,13 @@ describe('pet window policy', () => {
     expect(visibleLeft + visible.width).toBeLessThanOrEqual(workArea.x + workArea.width)
   })
 
-  it('grows the overlay with the notification and keeps the pet anchor', () => {
-    const current = { x: 100, y: 200, width: 220, height: 260 }
-    const fitted = fitPetOverlayWindow(current, { width: 300, height: 400 })
-    expect(fitted).toEqual({ x: 4, y: 44, width: 316, height: 416 })
-    expect(fitted.x + fitted.width).toBe(current.x + current.width)
-    expect(fitted.y + fitted.height).toBe(current.y + current.height)
+  it('reserves a canvas around the pet while keeping that canvas inside the work area', () => {
+    const area = { x: -1200, y: 20, width: 1200, height: 800 }
+    const fitted = petOverlayFrame({ x: -100, y: 100 }, area)
+    expect(fitted).toEqual({ x: -420, y: 20, width: 420, height: 640 })
   })
 
-  it('follows the display under the pointer and grows the window around the pet', async () => {
+  it('follows the display under the pointer without letting panel bounds move the pet', async () => {
     const windows: FakeWindow[] = []
     const controller = new PetWindowController({
       platform: 'darwin',
@@ -150,11 +148,10 @@ describe('pet window policy', () => {
     }, async () => undefined)
     await controller.open()
     const before = { ...windows[0].bounds }
+    const anchor = controller.layout()
     controller.reportBounds({ width: 300, height: 400, anchorX: 0, anchorY: 0 })
-    expect(windows[0].bounds.width).toBe(316)
-    expect(windows[0].bounds.height).toBe(416)
-    expect(windows[0].bounds.x + windows[0].bounds.width).toBe(before.x + before.width)
-    expect(windows[0].bounds.y + windows[0].bounds.height).toBe(before.y + before.height)
+    expect(windows[0].bounds).toEqual(before)
+    expect(controller.layout()).toEqual(anchor)
     controller.beginDrag({ x: 1000, y: 600 })
     controller.moveDrag({ x: 1700, y: 600 })
     expect(windows[0].bounds.x).toBeGreaterThanOrEqual(1200)
@@ -183,8 +180,55 @@ describe('pet window policy', () => {
     controller.moveDrag({ x: 40, y: 10 })
     controller.endDrag({ x: 40, y: 10 })
     await Promise.resolve()
-    expect(windows[0].bounds.width).toBe(220)
+    expect(windows[0].bounds.width).toBe(420)
     expect(savedWidth).toBe(112)
+  })
+
+  it('persists the pet center independently of panels and restores that exact anchor', async () => {
+    const windows: FakeWindow[] = []
+    let saved: ReturnType<typeof placementFromDip> | null = null
+    const controller = new PetWindowController({
+      platform: 'darwin', forwardMouseEvents: true,
+      createWindow: () => { const window = new FakeWindow(); windows.push(window); return window },
+      displays: () => [{ id: 'primary', scaleFactor: 2, workArea: { x: 0, y: 0, width: 1200, height: 800 } }],
+      cursor: () => ({ x: 0, y: 0 }), load: async () => undefined, onDisplayChange: () => () => undefined
+    }, async (placement) => { saved = placement })
+    await controller.openAtSaved({ displayId: 'primary', windowBounds: { x: 0, y: 0, width: 146, height: 159 }, petCenter: { x: 400, y: 300 } })
+    const world = () => ({ x: windows.at(-1)!.bounds.x + controller.layout().anchorX,
+      y: windows.at(-1)!.bounds.y + controller.layout().anchorY })
+    expect(world()).toEqual({ x: 400, y: 300 })
+    controller.reportBounds({ width: 400, height: 600, anchorX: 0, anchorY: 0 })
+    await controller.openAtSaved({ displayId: 'primary', windowBounds: { x: 900, y: 600, width: 200, height: 180 } })
+    expect(world()).toEqual({ x: 400, y: 300 })
+    await controller.finishResize(128)
+    expect(world()).toEqual({ x: 400, y: 300 })
+    expect(saved).toMatchObject({ petCenter: { x: 400, y: 300 }, mascotWidthPx: 128 })
+    controller.close()
+    await controller.openAtSaved(saved)
+    expect(world()).toEqual({ x: 400, y: 300 })
+  })
+
+  it('clamps the pet on a negative-coordinate display instead of jumping to the primary display', async () => {
+    const windows: FakeWindow[] = []
+    const changed = vi.fn()
+    const controller = new PetWindowController({
+      platform: 'darwin', forwardMouseEvents: true,
+      createWindow: () => { const window = new FakeWindow(); windows.push(window); return window },
+      displays: () => [
+        { id: 'primary', scaleFactor: 1, workArea: { x: 0, y: 0, width: 1200, height: 800 } },
+        { id: 'left', scaleFactor: 2, workArea: { x: -1400, y: 0, width: 1400, height: 900 } }
+      ],
+      cursor: () => ({ x: -700, y: 300 }), load: async () => undefined,
+      layoutChanged: changed, onDisplayChange: () => () => undefined
+    }, async () => undefined)
+    await controller.openAtSaved({ displayId: 'left', windowBounds: { x: -900, y: 200, width: 200, height: 200 },
+      petCenter: { x: -700, y: 300 } })
+    controller.beginDrag({ x: -700, y: 300 })
+    controller.endDrag({ x: -3000, y: -1000 })
+    const layout = controller.layout()
+    expect(windows[0].bounds.x + layout.anchorX).toBe(-1400 + 8 + 56)
+    expect(windows[0].bounds.y + layout.anchorY).toBe(8 + 121 / 2)
+    expect(changed).toHaveBeenCalled()
   })
 
   it('rejects a stale stop without interrupting the replacement turn', () => {

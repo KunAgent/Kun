@@ -1,0 +1,13 @@
+.pet-reaction-stage { position: relative; font: 12px/1.4 system-ui, sans-serif; pointer-events: none; animation: pet-reaction-enter .18s ease-out; }
+.pet-reaction-caption { position: absolute; z-index: 2; top: 0; left: 50%; transform: translateX(-50%); max-width: calc(100% - 8px); display: flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 16px; border: 1px solid #ffffffcc; color: #615545; background: #fffaf1ee; box-shadow: 0 2px 8px #3f2a1010; white-space: nowrap; }
+.pet-reaction-caption span { overflow: hidden; text-overflow: ellipsis; }
+.pet-reaction-caption svg { width: 14px; height: 14px; flex: none; }
+.pet-reaction-wave { position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 3px; width: 70px; height: 26px; padding: 3px; background: #fffcf3ed; border-radius: 14px; }
+.pet-reaction-wave i { display: block; width: 3px; border-radius: 3px; background: #a29072; height: 23px; will-change: transform; }
+.pet-reaction-caption-bottom { position: absolute; bottom: 7px; left: 50%; transform: translateX(-50%); max-width: calc(100% - 12px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 12px; padding: 2px 7px; background: #fffcf3ed; color: #8a7960; font-size: 10px; }
+@media (prefers-reduced-motion: reduce) { .pet-reaction-wave i { transition: none; } }
+
+@keyframes pet-reaction-enter { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pet-reaction-stage { animation: none; } }
+
+.pet-typing-stage { animation: none; }

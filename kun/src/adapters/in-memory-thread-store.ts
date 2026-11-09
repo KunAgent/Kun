@@ -9,6 +9,7 @@ import {
   type ThreadRecord,
   type ThreadSummary
 } from '../contracts/threads.js'
+import { retainNativeFollowUpRequests } from '../domain/native-followup-requests.js'
 import { toThreadSummary } from '../domain/thread.js'
 
 /**
@@ -39,7 +40,7 @@ export class InMemoryThreadStore implements ThreadStore {
 
   async upsert(thread: ThreadRecord): Promise<ThreadRecord> {
     const current = this.threads.get(thread.id)
-    const normalized = this.normalize({ ...thread, revision: (current?.revision ?? -1) + 1 })
+    const normalized = this.normalize({ ...retainNativeFollowUpRequests(current, thread), revision: (current?.revision ?? -1) + 1 })
     this.threads.set(normalized.id, normalized)
     return normalized
   }
@@ -51,7 +52,7 @@ export class InMemoryThreadStore implements ThreadStore {
     const current = this.threads.get(thread.id)
     const revision = current?.revision ?? 0
     if (!current || revision !== expectedRevision) return { applied: false, revision }
-    const normalized = this.normalize({ ...thread, revision: revision + 1 })
+    const normalized = this.normalize({ ...retainNativeFollowUpRequests(current, thread), revision: revision + 1 })
     this.threads.set(normalized.id, normalized)
     return { applied: true, thread: normalized, revision: normalized.revision ?? revision + 1 }
   }

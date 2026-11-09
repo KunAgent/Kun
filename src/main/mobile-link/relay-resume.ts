@@ -4,11 +4,11 @@ import type { MobileLinkStatus } from '../../shared/mobile-link'
 import type { RelayPreference } from './relay-preference'
 
 type Relay = {
-  enable(value: boolean, keepGrants?: boolean): Promise<MobileLinkStatus>
+  enable(value: boolean, keepGrants?: boolean, desktopAccess?: boolean): Promise<MobileLinkStatus>
   dispose(keepAccess?: boolean): void
 }
 // Retrying cannot help until the account or the user acts.
-const FINAL = new Set(['LOGIN_REQUIRED', 'SECURE_STORAGE_REQUIRED', 'vip_mobile_remote_required', 'ENTITLEMENTS_UNAVAILABLE'])
+const FINAL = new Set(['LOGIN_REQUIRED', 'SECURE_STORAGE_REQUIRED', 'vip_mobile_remote_required', 'ENTITLEMENTS_UNAVAILABLE', 'DEVICE_AUTHORIZATION_REQUIRED'])
 export const RESUME_RETRY_MS = [15000, 30000, 60000, 120000, 300000, 300000]
 
 /**
@@ -19,6 +19,7 @@ export const RESUME_RETRY_MS = [15000, 30000, 60000, 120000, 300000, 300000]
 export class MobileRelayResume {
   private owner: string | null | undefined
   private remembered = new Set<string>()
+  private desktopOwners = new Set<string>()
   private serial = 0
   private disposed = false
   private retryable = false
@@ -29,7 +30,7 @@ export class MobileRelayResume {
   constructor(private deps: {
     account: ArtAccountAccess
     relay: Relay
-    preference: Pick<RelayPreference, 'remembered' | 'remember' | 'forget'>
+    preference: Pick<RelayPreference, 'remembered' | 'remember' | 'forget'> & Partial<Pick<RelayPreference, 'desktopRemembered'>>
     diagnostic?(code: string): void
   }) {
     this.stopListening = deps.account.onState((state) => this.observe(state))
@@ -49,7 +50,7 @@ export class MobileRelayResume {
       if (owner) await this.forget(owner)
       return this.deps.relay.enable(false)
     }
-    const status = await this.deps.relay.enable(true, Boolean(owner && this.remembered.has(owner)))
+    const status = await this.deps.relay.enable(true, Boolean(owner && this.remembered.has(owner)), true)
     if (owner && this.current(owner, serial) && status.enabled) await this.remember(owner, serial)
     return status
   }
@@ -83,7 +84,10 @@ export class MobileRelayResume {
   }
   private async load(owner: string, serial: number) {
     if (!(await this.deps.preference.remembered(owner)) || !this.current(owner, serial)) return
+    const desktopAccess = await this.deps.preference.desktopRemembered?.(owner) === true
+    if (!this.current(owner, serial)) return
     this.remembered.add(owner)
+    if (desktopAccess) this.desktopOwners.add(owner)
     this.retryable = true
     await this.resume(owner, serial, 0)
   }
@@ -92,7 +96,8 @@ export class MobileRelayResume {
         !this.remembered.has(owner) || this.inFlight === serial) return
     this.inFlight = serial
     try {
-      await this.deps.relay.enable(true, true)
+      if (this.desktopOwners.has(owner)) await this.deps.relay.enable(true, true, true)
+      else await this.deps.relay.enable(true, true)
       if (!this.current(owner, serial)) return
       // Once enabled, the transport's own reconnect path owns recovery.
       this.retryable = false
@@ -116,9 +121,9 @@ export class MobileRelayResume {
   }
   private async remember(owner: string, serial: number) {
     try {
-      await this.deps.preference.remember(owner)
+      await this.deps.preference.remember(owner, true)
       // A sign-out that finished during the write must not leave the choice behind.
-      if (this.current(owner, serial)) this.remembered.add(owner)
+      if (this.current(owner, serial)) { this.remembered.add(owner); this.desktopOwners.add(owner) }
       else await this.deps.preference.forget(owner)
     } catch {
       this.deps.diagnostic?.('RELAY_PREFERENCE_FAILED')
@@ -126,6 +131,7 @@ export class MobileRelayResume {
   }
   private async forget(owner: string) {
     this.remembered.delete(owner)
+    this.desktopOwners.delete(owner)
     if (owner === this.owner) this.cancel()
     await this.deps.preference.forget(owner).catch(() => this.deps.diagnostic?.('RELAY_PREFERENCE_FAILED'))
   }

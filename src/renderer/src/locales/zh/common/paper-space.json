@@ -45,5 +45,9 @@
   "paperSpaceHideSidebar": "隐藏侧栏",
   "paperSpaceNotesSave": "保存笔记",
   "paperSpaceNotesReload": "重新读取笔记",
-  "paperSpaceNotesDiscardConfirm": "放弃未保存的论文笔记？"
+  "paperSpaceNotesDiscardConfirm": "放弃未保存的论文笔记？",
+  "paperAssistantCollapse": "收起论文助手",
+  "paperAssistantReady": "边读论文，边问 AI",
+  "paperAssistantScope": "提问或选中原文加入草稿。对话只属于当前论文，切换标签也会保留。",
+  "paperAssistantDraftHint": "选文先加入草稿，确认后再发送。"
 }

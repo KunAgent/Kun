@@ -14,6 +14,7 @@ import {
   type AnyComputerUseBridgeRequest as ComputerUseBridgeRequestValue
 } from '../../../kun/src/contracts/computer-use-bridge.js'
 import type { HostControlController } from '../../../kun/src/adapters/computer-use/host-control.js'
+import { desktopInputArbiter } from '../remote-desktop/input-arbiter'
 
 const MAX_REQUEST_BYTES = 64 * 1024
 const REQUEST_TIMEOUT_MS = 120_000
@@ -186,6 +187,10 @@ export class ComputerUseBridgeService {
     request: ComputerUseBridgeRequestValue,
     signal: AbortSignal
   ): Promise<unknown> {
+    const endInput = ['move_to', 'click', 'drag', 'scroll', 'type_text', 'press_hotkey'].includes(request.operation) ? desktopInputArbiter.beginAi() : undefined
+    try { return await this.executeAction(request, signal) } finally { endInput?.() }
+  }
+  private async executeAction(request: ComputerUseBridgeRequestValue, signal: AbortSignal): Promise<unknown> {
     const sessionId = 'sessionId' in request ? request.sessionId : undefined
     const frameId = 'frameId' in request ? request.frameId : undefined
     const context = request.contractVersion === COMPUTER_USE_BRIDGE_CONTRACT_VERSION

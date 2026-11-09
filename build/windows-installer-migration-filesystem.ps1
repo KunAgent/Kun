@@ -177,6 +177,7 @@ function Test-KnownApplicationEntry([IO.FileSystemInfo]$Entry) {
 }
 
 function Get-ExtendedLengthPath([string]$PathValue) {
+  if ($PathValue.StartsWith('\\?\', [StringComparison]::OrdinalIgnoreCase)) { return $PathValue }
   $normalized = Normalize-FullPath $PathValue
   if ($normalized.StartsWith('\\')) {
     return '\\?\UNC\' + $normalized.Substring(2)
@@ -381,13 +382,10 @@ function Get-ExpectedApplicationExecutable {
 }
 
 function Assert-NonEmptyPayloadFile([string]$PathValue, [string]$Label) {
-  if (-not (Test-Path -LiteralPath $PathValue -PathType Leaf)) {
+  . (Join-Path $PSScriptRoot 'windows-installer-migration-payload-copy.ps1')
+  $item = [KunInstallerPayloadCopy]::GetLiteralFileInfo($PathValue)
+  if (-not $item.Exists -or $item.IsDirectory) {
     throw "The installed Kun payload is missing ${Label}: $PathValue"
-  }
-
-  $item = Get-Item -LiteralPath $PathValue -Force
-  if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-    throw "The installed Kun payload must not use a reparse point for ${Label}: $PathValue"
   }
   if ($item.Length -le 0) {
     throw "The installed Kun payload is empty for ${Label}: $PathValue"
@@ -451,7 +449,7 @@ function Assert-RecoveryPayload([string]$Root) {
     throw "The automatic update recovery payload directory is missing: $Root"
   }
   Find-RecoveryPayloadExecutable $Root | Out-Null
-  Assert-NonEmptyPayloadFile (Join-Path $Root 'resources\\app.asar') 'the recovery resources\\app.asar'
+  Assert-NonEmptyPayloadFile (Join-Path $Root 'resources\app.asar') 'the recovery resources\app.asar'
 }
 
 function Get-InPlacePayloadBackupPath {

@@ -31,11 +31,14 @@ import {
   htmlFrameOverlayPointerEvents,
   htmlFrameShouldPromotePreviewToReady,
   htmlFrameShouldShowGeneratingCanvas,
+  htmlFrameSurfaceClasses,
   htmlFrameWebviewCanvasStyle,
   htmlFrameWebviewPartition,
   shouldAutoResizeHtmlFrame,
   type HtmlFramePreviewAsyncEpoch
 } from './html-frame-helpers'
+import { useHtmlFrameThumbnailCapture } from './use-html-frame-thumbnail-capture'
+import { HTML_FRAME_OVERVIEW_ZOOM } from './html-frame-preview-budget'
 import { useHtmlFrameAutoSize } from './use-html-frame-auto-size'
 import { useHtmlFrameAiCursor } from './use-html-frame-ai-cursor'
 import { useHtmlFrameCodeBindings } from './use-html-frame-code-bindings'
@@ -54,6 +57,9 @@ type ScreenOverlayProps = {
   panning: boolean
   onToggleInteractive?: (shapeId: string) => void
   onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
+  captureKey?: string
+  captureOnly?: boolean
+  onCapture?: (shapeId: string, key: string, image: string | null) => void
   /** The whole canvas is read-only (browsing a historical drawing). */
   canvasReadOnly?: boolean
 }
@@ -71,7 +77,10 @@ function ScreenOverlayInner({
   panning,
   onToggleInteractive,
   onUseElementAsContext,
-  canvasReadOnly = false
+  canvasReadOnly = false,
+  captureKey,
+  captureOnly = false,
+  onCapture
 }: ScreenOverlayProps): ReactElement {
   const [localPreviewError, setLocalPreviewError] = useState('')
   const previewAsyncEpochRef = useRef<HtmlFramePreviewAsyncEpoch | null>(null)
@@ -96,9 +105,6 @@ function ScreenOverlayInner({
   const pagesRun = useDesignWorkspaceStore((s) => s.pagesRun)
   const setFileError = useDesignWorkspaceStore((s) => s.setFileError)
   const setArtifactPreviewStatus = useDesignWorkspaceStore((s) => s.setArtifactPreviewStatus)
-  // A design turn is in flight: the agent is still streaming HTML into the file.
-  // Keep the frame in its transparent "generating" surface until the turn settles
-  // so a half-written page never shows the opaque white frame band beneath it.
   const chatBusy = useChatStore((s) => chatBusyForArtifact(s, artifactRelativePath))
   const threadBusy = useChatStore((s) => s.busy)
   const canvasWidth = Math.max(1, shape.width)
@@ -143,6 +149,15 @@ function ScreenOverlayInner({
     onError: reportPreviewError,
     onRevision: clearPreviewError
   })
+  useHtmlFrameThumbnailCapture({
+    shapeId: shape.id,
+    captureKey,
+    webview,
+    webviewUrl: preview.webviewUrl,
+    ready: preview.ready && preview.renderState === 'renderable' && !drawingActive,
+    enabled: Boolean(captureKey),
+    onCapture
+  })
   const previewAsyncEpoch = useMemo<HtmlFramePreviewAsyncEpoch | null>(() => {
     if (!artifact?.id || artifactKind !== 'html' || !artifactRelativePath || !preview.webviewUrl) return null
     if (preview.relativePath !== artifactRelativePath) return null
@@ -169,7 +184,7 @@ function ScreenOverlayInner({
     artifact: renderedArtifact,
     artifactKind,
     foundationRole,
-    autoResizeEnabled,
+    autoResizeEnabled: autoResizeEnabled && !captureOnly,
     drawingActive,
     previewWebviewUrl: preview.webviewUrl,
     previewRevision: preview.revision,
@@ -197,7 +212,7 @@ function ScreenOverlayInner({
   const { t } = useTranslation('common')
   // Hovering and clicking elements only needs the select tool.
   const activeTool = useCanvasViewportStore((s) => s.activeTool)
-  const pickAvailable = !isHistoricalVersion && !canvasReadOnly && !panning && !drawingActive && !interactive
+  const pickAvailable = !captureOnly && zoom >= HTML_FRAME_OVERVIEW_ZOOM && !isHistoricalVersion && !canvasReadOnly && !panning && !drawingActive && !interactive
   const pickEnabled = pickAvailable && activeTool === 'select'
   const pickBodyRef = useRef<HTMLDivElement | null>(null)
   const {
@@ -381,8 +396,10 @@ function ScreenOverlayInner({
   const frameRadius = Math.min(7, Math.max(3, screenWidth * 0.012))
   const chromeOffset = htmlFrameChromeOffset(screenWidth)
   // Labels stay readable at any zoom, like board names on a design canvas.
-  const showChrome = screenWidth > 60
+  const showChrome = !captureOnly && zoom >= HTML_FRAME_OVERVIEW_ZOOM && screenWidth > 60
   const placeholderPreview = !preview.hasRenderableContent && preview.renderState !== 'renderable'
+  // Keep the brush placeholder transparent only until an HTML preview mounts;
+  // streamed content needs the same opaque paper as a completed design.
   const transparentGeneratingSurface = placeholderPreview || drawingActive
   const generationFailed =
     !isHistoricalVersion && !drawingActive && !previewError && !failedMessage &&
@@ -410,7 +427,7 @@ function ScreenOverlayInner({
         ...motionStyle
       }}
     >
-      {selectionError && pickEnabled ? <div role="status" className="absolute left-2 top-2 z-30 rounded bg-white px-2 py-1 text-xs text-ds-ink">{selectionError}</div> : null}
+      {selectionError && pickEnabled ? <div role="status" className="absolute left-2 top-2 z-30 rounded bg-ds-elevated px-2 py-1 text-xs text-ds-ink">{selectionError}</div> : null}
       {showChrome ? (
         <HtmlFrameChrome
           active={active}
@@ -432,17 +449,12 @@ function ScreenOverlayInner({
       ) : null}
 
       <div
-        className={`relative h-full w-full overflow-hidden border ${
-          transparentGeneratingSurface
-            ? active
-              ? 'border-dashed border-accent bg-transparent shadow-none'
-              : 'border-dashed border-black/15 bg-transparent shadow-none dark:border-white/20'
-            : `bg-white dark:bg-[#101214] ${
-                active
-                  ? 'border-accent shadow-[0_0_0_1px_var(--ds-accent),0_16px_38px_rgba(15,23,42,0.14)]'
-                  : 'border-black/[0.08] shadow-[0_1px_2px_rgba(15,23,42,0.05),0_10px_28px_rgba(15,23,42,0.07)] dark:border-white/12'
-              }`
-        }`}
+        className={`relative h-full w-full overflow-hidden border ${htmlFrameSurfaceClasses({
+          active,
+          hasPreview: Boolean(preview.webviewUrl),
+          transparentGeneratingSurface,
+          hasError: Boolean(previewError || failedMessage || generationFailed)
+        })}`}
         style={{ borderRadius: frameRadius }}
       >
         <div

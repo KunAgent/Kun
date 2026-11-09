@@ -1,4 +1,5 @@
 import { writeThreadMetadata } from './thread-metadata-write.js'
+import { deleteThreadWithGuard } from './thread-admission-context.js'
 import { MemoryRelationCommand } from '../contracts/memory-relations.js'
 import { MemoryRelationContextRequest } from '../contracts/memory-working-context.js'
 import { rewriteSessionHistory } from './session-history-rewrite.js'
@@ -70,7 +71,6 @@ import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import { JsonlFileAccessCoordinator } from '../adapters/file/jsonl-file-access.js'
 import { RevisionConflictError } from './revisioned-document-store.js'
 import { buildPublicItemHistoryPage } from '../services/item-history-page.js'
-
 import { ManagerSharedDataStoreCore } from './shared-data-store-core.js'
 import { executeArtifactStoreOperation } from './shared-data-store-artifact.js'
 import {
@@ -162,9 +162,10 @@ export class ManagerSharedDataStore extends ManagerSharedDataStoreCore {
         )
       case 'delete': {
         const { threadId } = parseThreadId(value)
-        this.seqFloors.delete(threadId)
-        this.reservedSeqs.delete(threadId)
-        return this.threadStore.delete(threadId)
+        return deleteThreadWithGuard(this.threadStore, threadId, () => {
+          this.seqFloors.delete(threadId)
+          this.reservedSeqs.delete(threadId)
+        })
       }
       case 'deleteByWorkspace': {
         const body = z.object({ workspace: z.string().min(1) }).strict().parse(value)

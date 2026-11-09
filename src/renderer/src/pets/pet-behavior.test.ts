@@ -11,11 +11,11 @@ import { deliverPetFollowUp, petBubbleBody, petBubbleClock } from './pet-follow-
 import { petBubbleAllowed } from './pet-publisher'
 
 describe('pet animation and interaction', () => {
-  it('maps nine rows, slows idle, and returns to idle after three transient cycles', () => {
+  it('maps nine rows, holds open eyes, and returns to idle after three transient cycles', () => {
     for (const state of Object.keys(PET_ROWS) as Array<keyof typeof PET_ROWS>) {
       expect(frameAtElapsedMs(state, 0, 2).row).toBe(PET_ROWS[state].row)
     }
-    expect(frameDurationMs('idle', 0)).toBe(PET_ROWS.idle.frameDurationsMs[0] * 6)
+    expect(frameDurationMs('idle', 0)).toBe(PET_ROWS.idle.frameDurationsMs[0])
     const elapsed = totalCycleDurationMs('waiting') * 3
     expect(frameAtElapsedMs('waiting', elapsed, 2).row).toBe(PET_ROWS.idle.row)
     expect(staticFrame('running', 2).column).toBe(0)
@@ -38,7 +38,7 @@ describe('pet animation and interaction', () => {
     expect(nextMascotWidth(224, 1)).toBe(224)
     expect(overlayKeyAction('Enter')).toBe('reply')
     expect(overlayKeyAction('Escape')).toBe('close')
-    expect(petContextMenuLabels('zh-CN')).toEqual({ settings: '设置', hide: '隐藏' })
+    expect(petContextMenuLabels('zh-CN')).toEqual({ settings: '设置', hide: '隐藏', ensemble: '叫朋友来玩' })
     expect(petContextMenuLabels('en-US').settings).toBe('Settings')
     expect(petContextMenuLabels('fr').hide).toBe('Hide')
   })
@@ -148,12 +148,12 @@ describe('pet activity projection', () => {
     expect(petBubbleAllowed({ preferenceEnabled: false })).toBe(false)
     expect(petBubbleAllowed({ preferenceEnabled: true })).toBe(true)
     await expect(deliverPetFollowUp({
-      threadId: 'thr', prompt: '继续', knownThreadIds: new Set(['thr']),
-      selectThread: async () => undefined, sendMessage: async () => true
+      threadId: 'thr', requestId: 'follow-up', prompt: '继续', knownThreadIds: new Set(['thr']),
+      getActiveThreadId: () => 'thr', selectThread: async () => undefined, sendMessage: async () => true
     })).resolves.toEqual({ ok: true })
     await expect(deliverPetFollowUp({
-      threadId: 'missing', prompt: '继续', knownThreadIds: new Set(['thr']),
-      selectThread: async () => undefined, sendMessage: async () => true
+      threadId: 'missing', requestId: 'follow-up', prompt: '继续', knownThreadIds: new Set(['thr']),
+      getActiveThreadId: () => 'thr', selectThread: async () => undefined, sendMessage: async () => true
     })).resolves.toMatchObject({ ok: false })
   })
 
@@ -176,6 +176,16 @@ describe('pet activity projection', () => {
     expect(resolvePetThreadTarget({ request: { type: 'reply', threadId: 'missing' }, knownThreadIds: new Set(['current']) })).toEqual({ ok: false, reason: 'missing' })
     expect(resolvePetThreadTarget({ request: { type: 'open', threadId: 'room-thread', roomId: 'room' }, knownThreadIds: new Set(['room-thread']) })).toEqual({ ok: true, threadId: 'room-thread' })
     expect(queuePetNavigation({ ready: false, request: { type: 'reply', threadId: 'room-thread' }, pending: null }).deliver).toBeNull()
+  })
+
+  it('does not replace a newer event with an older bootstrap activity replay', () => {
+    const current = projectPetActivity({
+      generation: 1, profileKey: 'profile', nowMs: 2_000,
+      rows: [row({ state: 'done', lastMessagePreview: 'Image ready' })], supplements: []
+    })
+    const stale = { ...current, emittedAtMs: 1_000, items: [{ ...current.items[0], status: 'running' as const }] }
+    expect(acceptPetSnapshot(current, stale)).toBe(current)
+    expect(acceptPetSnapshot(stale, current)).toBe(current)
   })
 })
 

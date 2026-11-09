@@ -1,7 +1,7 @@
 import { useId, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Focus } from 'lucide-react'
-import kunLogoUrl from '../../../../asset/img/kun_bird.png'
+import kunLogoUrl from '../../assets/kun_bird.png'
 import { useFocusModeStore } from '../../store/focus-mode-store'
 import './whats-new-spotlight.css'
 

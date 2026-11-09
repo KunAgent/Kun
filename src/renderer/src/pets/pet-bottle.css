@@ -1,0 +1,7 @@
+.pet-bottle-stage { position: relative; overflow: hidden; isolation: isolate; pointer-events: none; }
+.pet-bottle-actor { position: absolute; z-index: 2; transform-origin: center; }
+.pet-bottle-prop { position: absolute; z-index: 3; object-fit: contain; pointer-events: none; }
+.pet-bottle-caption[data-below='true'] { top: auto; bottom: 2px; }
+.pet-bottle-shadow { position: absolute; z-index: 1; width: 25px; height: 5px; transform: translateX(-50%); border-radius: 50%; background: #486477; }
+.pet-bottle-spark { position: absolute; z-index: 4; color: #7cc3ce; pointer-events: none; }
+.pet-bottle-spark svg { width: 22px; height: 22px; }

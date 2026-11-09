@@ -29,7 +29,7 @@ export type ItemIndexViewStats = {
   evictions: number
 }
 
-const ROW_OVERHEAD_BYTES = 416
+const ROW_OVERHEAD_BYTES = 480
 const DEFAULT_MAX_ENTRIES = 4
 const DEFAULT_MAX_BYTES = 256 * 1024 * 1024
 
@@ -37,6 +37,8 @@ export class ItemIndexView {
   readonly latest = new Map<string, ItemIndexRow>()
   readonly order: string[] = []
   readonly positions = new Map<string, number>()
+  /** Count latest items per turn, including private model context. */
+  readonly turnItemCounts = new Map<string, number>()
   readonly publicRows: ItemIndexRow[] = []
   readonly publicPositions = new Map<string, number>()
   readonly anchorPositions = new Map<string, number>()
@@ -46,6 +48,14 @@ export class ItemIndexView {
   applyRow(row: ItemIndexRow): void {
     this.rowCount += 1
     const previous = this.latest.get(row.itemId)
+    if (!previous || previous.turnId !== row.turnId) {
+      if (previous) {
+        const count = this.turnItemCounts.get(previous.turnId) ?? 0
+        if (count <= 1) this.turnItemCounts.delete(previous.turnId)
+        else this.turnItemCounts.set(previous.turnId, count - 1)
+      }
+      this.turnItemCounts.set(row.turnId, (this.turnItemCounts.get(row.turnId) ?? 0) + 1)
+    }
     if (!previous) {
       this.positions.set(row.itemId, this.order.length)
       this.order.push(row.itemId)

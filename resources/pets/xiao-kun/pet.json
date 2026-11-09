@@ -1,0 +1,107 @@
+{
+  "id": "xiao-kun",
+  "displayName": "小 Kun",
+  "description": "蓝色身体、奶油色肚子和红脸颊的小 Kun，陪你工作、思考和探索。",
+  "spriteVersionNumber": 1,
+  "spritesheetPath": "spritesheet.webp",
+  "interactions": {
+    "version": 1,
+    "modelAliases": [],
+    "providerAliases": [],
+    "greeting": {
+      "states": [
+        "waving",
+        "jumping",
+        "review"
+      ],
+      "durationMs": 4600
+    },
+    "clips": {
+      "typing": {
+        "state": "running",
+        "tempo": 1.05,
+        "strength": 0.7
+      },
+      "listening": {
+        "state": "waiting",
+        "tempo": 0.85,
+        "strength": 0.5
+      },
+      "speaking": {
+        "state": "waving",
+        "tempo": 1.15,
+        "strength": 0.8
+      },
+      "transcribing": {
+        "state": "review",
+        "tempo": 0.7,
+        "strength": 0.3
+      }
+    },
+    "visits": {
+      "scenes": [
+        "dance",
+        "bubbles",
+        "cheer"
+      ],
+      "arrival": "hop"
+    },
+    "bottle": {
+      "catchStyle": "careful",
+      "inspectState": "waiting",
+      "celebrateState": "jumping",
+      "durationMs": 8400
+    },
+    "joint": {
+      "version": 1,
+      "row": 0,
+      "blink": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "ground": 0.91,
+      "head": [
+        0.5,
+        0.64
+      ],
+      "arms": [
+        {
+          "shoulder": [
+            0.29,
+            0.55
+          ],
+          "hand": [
+            0.15,
+            0.69
+          ],
+          "radius": 0.105
+        },
+        {
+          "shoulder": [
+            0.72,
+            0.56
+          ],
+          "hand": [
+            0.84,
+            0.69
+          ],
+          "radius": 0.11
+        }
+      ],
+      "feet": [
+        [
+          0.35,
+          0.88
+        ],
+        [
+          0.66,
+          0.89
+        ]
+      ]
+    }
+  }
+}

@@ -96,6 +96,32 @@ beforeEach(() => {
 })
 
 describe('submitToRuntimeQueue', () => {
+  it.each(['provider', 'settings'])('rechecks the target after awaiting %s preparation', async (stage) => {
+    const { state, set, get } = buildHarness()
+    const otherRows = [{ id: 'other', text: 'other thread' }]
+    const switchTarget = async () => {
+      state.activeThreadId = 'thr_other'
+      state.queuedMessages = otherRows
+      return { workspaceRoot: '' }
+    }
+    if (stage === 'provider') actionHelpersMock.ensureRuntimeProviderForSend.mockImplementation(switchTarget)
+    else runtimeClientMock.getSettings.mockImplementation(switchTarget)
+    const sendUserMessage = vi.fn()
+    const persistActiveQueuedMessages = vi.fn()
+    const result = await submitToRuntimeQueue({
+      provider: { sendUserMessage } as never,
+      activeThreadId: 'thr_1', trimmedText: 'follow up', clientRequestId: 'guarded-request',
+      orchestration: 'direct', composerModel: 'test', composerProviderId: 'deepseek',
+      composerContexts: [], ackNoticeIds: undefined, set, get, persistActiveQueuedMessages,
+      submissionGuard: () => state.activeThreadId === 'thr_1'
+    } as unknown as Parameters<typeof submitToRuntimeQueue>[0])
+    expect(result).toBe(false)
+    expect(sendUserMessage).not.toHaveBeenCalled()
+    expect(checkpointMock.startWorkspaceCheckpointSnapshot).not.toHaveBeenCalled()
+    expect(persistActiveQueuedMessages).not.toHaveBeenCalled()
+    expect(state.queuedMessages).toBe(otherRows)
+  })
+
   it.each(['default', 'named-native-account'])('forwards the explicit native profile %s to queued admission', async (providerId) => {
     const { state, set, get } = buildHarness()
     const sendUserMessage = vi.fn(async () => ({ turnId: 'turn_new', userMessageItemId: 'user_new' }))

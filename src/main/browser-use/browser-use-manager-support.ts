@@ -99,6 +99,7 @@ export type BrowserUseManagerOptions = {
 }
 
 export type BrowserMount = {
+  cornerRadius?: number
   expectedTurnId?: string
   window: BrowserWindow
   bounds: Rectangle

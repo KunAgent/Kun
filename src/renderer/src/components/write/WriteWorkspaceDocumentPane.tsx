@@ -318,6 +318,8 @@ export function WriteWorkspaceDocumentPane({
             </div>
           )}>
             <WorkspaceUniverSpreadsheetEditor
+              documentPath={activeFilePath ?? officePreview.path}
+              documentEpoch={documentEpoch}
               result={officePreview}
               mutations={spreadsheetMutations}
               sourceSha256={spreadsheetSourceSha256 || officePreview.sourceSha256}

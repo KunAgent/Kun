@@ -1,5 +1,10 @@
+import { defaultPetGlobalActivity, parsePetGlobalActivityPreferences, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
+import { defaultPetVisits, parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
+import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
+import { isBuiltinPetId, RETIRED_AI_PET_IDS, RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
+import { normalizeSavedPetEnsemble, parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { createHash, randomUUID } from 'node:crypto'
-import { access, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { access, lstat, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import {
   boundDismissedKeys
@@ -20,11 +25,13 @@ import { spritesheetFileName } from './pet-validator'
 
 const SETTINGS_FILE = 'settings.json'
 const LIBRARY_DIR = 'library'
+export const DEFAULT_BUILTIN_PET_ID = petIdForSource('kun-builtin', 'xiao-kun')
 
 export class PetStore {
   private settings: PetSettings = defaultPetSettings()
   private catalog = new Map<string, PetManifest>()
   private writeChain: Promise<void> = Promise.resolve()
+  private settingsMissing = false
   private readonly settingsPath: string
   private readonly libraryDir: string
 
@@ -68,6 +75,17 @@ export class PetStore {
     return this.libraryDir
   }
 
+  async applyFirstRunDefault(isFreshInstall: boolean): Promise<void> {
+    await this.enqueue(async () => {
+      if (!isFreshInstall || !this.settingsMissing) return
+      const pet = this.catalog.get(DEFAULT_BUILTIN_PET_ID)
+      if (!pet || pet.sourceMissing) return
+      this.settings.selectedPetId = pet.id
+      this.settings.overlayOpen = true
+      await this.writeSettings()
+    })
+  }
+
   async selectPet(petId: string | null): Promise<PetSettings> {
     return this.mutate(async () => {
       if (petId !== null && !this.catalog.has(petId)) throw new Error('pet not found')
@@ -84,6 +102,54 @@ export class PetStore {
       }
       this.settings.overlayOpen = open
     })
+  }
+
+  async setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings> {
+    return this.mutate(async () => {
+      const preferences = parsePetVisitPreferences(input)
+      if (!preferences) throw new Error('invalid pet visit preferences')
+      this.settings.visits = preferences
+    })
+  }
+
+  async setPetGlobalActivity(input: PetGlobalActivityPreferences): Promise<PetSettings> {
+    return this.mutate(async () => {
+      const preferences = parsePetGlobalActivityPreferences(input)
+      if (!preferences) throw new Error('invalid pet global activity preferences')
+      this.settings.globalActivity = preferences
+    })
+  }
+
+  async setPetEnsemble(ensemble: PetEnsembleSettings): Promise<PetSettings> {
+    return this.mutate(async () => {
+      const parsed = parsePetEnsemble(ensemble)
+      if (!parsed) throw new Error('invalid pet ensemble')
+      if (parsed.enabled && parsed.members.some((id) => !this.catalog.has(petIdForSource('kun-builtin', id)))) {
+        throw new Error('an ensemble member is unavailable; refresh the pet library')
+      }
+      this.settings.ensemble = normalizeSavedPetEnsemble(parsed)
+    })
+  }
+
+  async retireBuiltinPets(): Promise<void> {
+    await this.enqueue(async () => {
+      const retired = new Set([...RETIRED_BUILTIN_PET_IDS].map((id) => petIdForSource('kun-builtin', id)))
+      for (const manifest of this.catalog.values()) {
+        if (manifest.source === 'kun-builtin' && !isBuiltinPetId(manifest.sourceId)) retired.add(manifest.id)
+      }
+      // Keep cached files intact, but stop offering retired packages as built-ins.
+      for (const id of retired) this.catalog.delete(id)
+      if (!this.settings.selectedPetId || !retired.has(this.settings.selectedPetId)) return
+      const fallback = RETIRED_AI_PET_IDS.has(this.settings.selectedPetId.slice(4)) && this.catalog.has('kun:whale-girl')
+        ? 'kun:whale-girl' : DEFAULT_BUILTIN_PET_ID
+      this.settings.selectedPetId = this.catalog.has(fallback) ? fallback : null
+      if (!this.settings.selectedPetId) this.settings.overlayOpen = false
+      await this.writeSettings()
+    })
+  }
+
+  async setBubblesCollapsed(collapsed: boolean): Promise<void> {
+    await this.mutate(async () => { this.settings.bubblesCollapsed = collapsed })
   }
 
   async setImportPreferences(input: { importCodexPets?: boolean }): Promise<PetSettings> {
@@ -137,6 +203,7 @@ export class PetStore {
     spriteVersionNumber: PetSpriteVersion
     spritesheetSourcePath: string
     sourcePath: string
+    interactions?: PetInteractionPack
   }): Promise<{ manifest: PetManifest; status: 'imported' | 'updated' | 'unchanged' }> {
     return this.enqueueResult(() => this.importOrUpdateNow(input))
   }
@@ -149,6 +216,7 @@ export class PetStore {
     spriteVersionNumber: PetSpriteVersion
     spritesheetSourcePath: string
     sourcePath: string
+    interactions?: PetInteractionPack
   }): Promise<{ manifest: PetManifest; status: 'imported' | 'updated' | 'unchanged' }> {
     const petId = petIdForSource(input.source, input.sourceId)
     const fingerprint = await fingerprintPackage(input)
@@ -163,6 +231,7 @@ export class PetStore {
         description: input.description,
         sourcePath: input.sourcePath,
         sourceMissing: false,
+        ...(input.interactions ? { interactions: input.interactions } : {}),
         importedAt: new Date().toISOString()
       }
       await this.writeManifest(restored)
@@ -177,6 +246,7 @@ export class PetStore {
       description: input.description,
       spriteVersionNumber: input.spriteVersionNumber,
       spritesheetFile: spritesheetFileName(input.spritesheetSourcePath),
+      ...(input.interactions ? { interactions: input.interactions } : {}),
       source: input.source,
       sourcePath: input.sourcePath,
       sourceFingerprint: fingerprint,
@@ -253,16 +323,23 @@ export class PetStore {
       spritesheetUrl: petAssetUrl(manifest.id, manifest.sourceFingerprint),
       available: true,
       sourceMissing: manifest.sourceMissing === true,
+      ...(manifest.interactions ? { interactions: manifest.interactions } : {}),
       ...(manifest.sourceMissing ? { warning: 'The original package is missing. Kun is using its saved copy.' } : {})
     }
   }
 
   private async readSettings(): Promise<PetSettings> {
+    this.settingsMissing = false
     try {
       const text = await readFile(this.settingsPath, 'utf8')
       return normalizeSettings(JSON.parse(text))
     } catch (error) {
       const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : ''
+      if (code === 'ENOENT') {
+        // A dangling settings symlink is existing data, not a new profile.
+        try { await lstat(this.settingsPath) }
+        catch (missing) { this.settingsMissing = (missing as NodeJS.ErrnoException).code === 'ENOENT' }
+      }
       if (code !== 'ENOENT') {
         const backup = `${this.settingsPath}.corrupt-${Date.now()}`
         await rename(this.settingsPath, backup).catch(() => undefined)
@@ -276,6 +353,8 @@ export class PetStore {
     const temporary = `${this.settingsPath}.${randomUUID()}.tmp`
     await writeFile(temporary, `${JSON.stringify(this.settings, null, 2)}\n`, 'utf8')
     await rename(temporary, this.settingsPath)
+    // Any explicit settings write wins over pending first-run defaults.
+    this.settingsMissing = false
   }
 
   private async writeManifest(manifest: PetManifest): Promise<void> {
@@ -329,6 +408,7 @@ export async function fingerprintPackage(input: {
   description: string
   spriteVersionNumber: PetSpriteVersion
   spritesheetSourcePath: string
+  interactions?: PetInteractionPack
 }): Promise<string> {
   const image = createHash('sha256').update(await readFile(input.spritesheetSourcePath)).digest('hex')
   return createHash('sha256').update(JSON.stringify({
@@ -337,7 +417,8 @@ export async function fingerprintPackage(input: {
     sourceId: input.sourceId,
     displayName: input.displayName,
     description: input.description,
-    spriteVersionNumber: input.spriteVersionNumber
+    spriteVersionNumber: input.spriteVersionNumber,
+    ...(input.interactions ? { interactions: input.interactions } : {})
   })).digest('hex')
 }
 
@@ -350,8 +431,15 @@ function normalizeSettings(value: unknown): PetSettings {
     schemaVersion: 1,
     selectedPetId: typeof candidate.selectedPetId === 'string' ? candidate.selectedPetId : null,
     overlayOpen: candidate.overlayOpen === true,
+    bubblesCollapsed: candidate.bubblesCollapsed === true,
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
+    // Typing follows pet visibility; recording detection is an explicit
+    // opt-in that must survive restarts.
+    globalActivity: parsePetGlobalActivityPreferences(candidate.globalActivity) ?? defaultPetGlobalActivity(),
+    reactionsEnabled: true,
+    ...(candidate.ensemble !== undefined ? { ensemble: normalizeSavedPetEnsemble(candidate.ensemble) } : {}),
+    ...(candidate.visits !== undefined ? { visits: parsePetVisitPreferences(candidate.visits) ?? defaultPetVisits() } : {}),
     welcomedPetIds: stringList(candidate.welcomedPetIds),
     dismissedNotificationKeys: boundDismissedKeys(stringList(candidate.dismissedNotificationKeys)),
     placementByDisplay: placement && typeof placement === 'object' && !Array.isArray(placement)
@@ -371,6 +459,7 @@ function normalizeManifest(value: unknown): PetManifest | null {
   const id = petIdForSource(source, candidate.sourceId)
   if (candidate.id !== id) return null
   if (candidate.spritesheetFile !== 'spritesheet.png' && candidate.spritesheetFile !== 'spritesheet.webp') return null
+  const interactions = parsePetInteractionPack(candidate.interactions)
   return {
     schemaVersion: 1,
     id,
@@ -383,7 +472,8 @@ function normalizeManifest(value: unknown): PetManifest | null {
     ...(typeof candidate.sourcePath === 'string' ? { sourcePath: candidate.sourcePath } : {}),
     ...(typeof candidate.sourceFingerprint === 'string' ? { sourceFingerprint: candidate.sourceFingerprint } : {}),
     ...(typeof candidate.importedAt === 'string' ? { importedAt: candidate.importedAt } : {}),
-    sourceMissing: candidate.sourceMissing === true
+    sourceMissing: candidate.sourceMissing === true,
+    ...(interactions ? { interactions } : {})
   }
 }
 

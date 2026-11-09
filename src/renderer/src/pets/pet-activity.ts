@@ -17,7 +17,7 @@ export type PetThreadSupplement = {
   roomId?: string
 }
 
-const STATUS_PRIORITY: PetActivityItem['status'][] = ['waiting', 'failed', 'review', 'running']
+const STATUS_PRIORITY: PetActivityItem['status'][] = ['waiting', 'running', 'failed', 'review']
 
 export function projectPetActivity(input: {
   generation: number
@@ -108,7 +108,7 @@ export function presentPetRunningItem(item: PetActivityItem, input: {
 }): PetActivityItem {
   if (item.status !== 'running') return item
   const assistant = input.assistantText?.replace(/\s+/g, ' ').trim() ?? ''
-  if (assistant) return withRunningSubtitle(item, assistant)
+  if (assistant) return withRunningSubtitle(item, assistant, input.liveSinceMs)
   const process = input.processText?.replace(/\s+/g, ' ').trim() ?? ''
   if (!process) return item
   return withRunningSubtitle(item, process, input.liveSinceMs)
@@ -156,6 +156,8 @@ export function visiblePetNotifications(
 
 export function acceptPetSnapshot(current: PetActivitySnapshot | null, next: PetActivitySnapshot): PetActivitySnapshot | null {
   if (current && next.generation < current.generation) return current
+  if (current && next.profileKey === current.profileKey && next.generation === current.generation &&
+    next.emittedAtMs < current.emittedAtMs) return current
   return next
 }
 

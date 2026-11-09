@@ -5,6 +5,8 @@ import { petBubbleBody, petBubbleClock } from './pet-follow-up'
 export function PetWorkBubbles(props: {
   notifications: PetActivityItem[]
   mascotWidth: number
+  reservedHeight?: number
+  maxHeight?: number
   expanded: boolean
   editing: string | null
   drafts: Record<string, string>
@@ -25,13 +27,13 @@ export function PetWorkBubbles(props: {
   return (
     <div
       className={`pet-bubble-list${!props.expanded && props.notifications.length > 1 ? ' pet-bubble-stack' : ''}`}
-      style={{ maxHeight: Math.min(248, 363 - Math.ceil(props.mascotWidth * 208 / 192)) }}
+      style={{ maxHeight: props.maxHeight ?? Math.max(64, Math.min(248, 363 - Math.ceil(props.mascotWidth * 208 / 192) - (props.reservedHeight ?? 0))) }}
     >
       {visible.map((item) => {
         const id = item.threadId
         const queued = props.queued[id]
         return (
-          <div key={item.key} className="pet-work-bubble">
+          <div key={item.key} className="pet-work-bubble" data-stoppable={item.status === 'running' && Boolean(item.turnId)}>
             <div className="pet-bubble-row">
               <button
                 type="button"
@@ -43,7 +45,7 @@ export function PetWorkBubbles(props: {
                   {item.status === 'review' ? <ReviewMark /> : null}
                   {item.title}
                 </span>
-                <span className="pet-work-bubble-body">
+                <span className={`pet-work-bubble-body${item.status === 'running' ? ' pet-work-bubble-body-running' : ''}`}>
                   {petBubbleClock(
                     petBubbleBody({ status: item.status, stalled: item.stalled, subtitle: item.subtitle, queued, sending: props.sending.has(id) }),
                     item.status,
@@ -52,18 +54,20 @@ export function PetWorkBubbles(props: {
                   )}
                 </span>
               </button>
-              <button type="button" className="pet-round-action" aria-label="输入跟进消息" aria-pressed={props.editing === id} onClick={() => props.onEdit(id)}>
-                <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20 5v5a4 4 0 0 1-4 4H4m5-5-5 5 5 5" />
-                </svg>
-              </button>
-              {item.status === 'running' && item.turnId ? (
-                <button type="button" className="pet-round-action" aria-label="终止当前运行" onClick={() => props.onStop(item)}>
-                  <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" /></svg>
+              <div className="pet-bubble-actions">
+                <button type="button" className="pet-round-action" aria-label="输入跟进消息" aria-pressed={props.editing === id} onClick={() => props.onEdit(id)}>
+                  <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 5v5a4 4 0 0 1-4 4H4m5-5-5 5 5 5" />
+                  </svg>
                 </button>
-              ) : null}
-              <button type="button" className="pet-bubble-dismiss" aria-label="关闭气泡" onClick={(event) => props.onDismiss(item, event)}>×</button>
+                {item.status === 'running' && item.turnId ? (
+                  <button type="button" className="pet-round-action" aria-label="终止当前运行" onClick={() => props.onStop(item)}>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2.5" fill="currentColor" /></svg>
+                  </button>
+                ) : null}
+              </div>
             </div>
+            <button type="button" className="pet-bubble-dismiss" aria-label="关闭气泡" onClick={(event) => props.onDismiss(item, event)}>×</button>
             {props.editing === id ? (
               <input
                 autoFocus
@@ -84,14 +88,14 @@ export function PetWorkBubbles(props: {
               />
             ) : null}
             {item.status === 'waiting' ? (
-              <button type="button" className="pet-bubble-collapse" onClick={() => props.onAnswer(item)}>在会话中回答</button>
+              <button type="button" className="pet-bubble-collapse pet-bubble-hover-action" onClick={() => props.onAnswer(item)}>在会话中回答</button>
             ) : null}
             {props.errors[id] ? <div className="pet-bubble-error" role="alert">{props.errors[id]}</div> : null}
           </div>
         )
       })}
       {props.expanded && props.notifications.length > 1 ? (
-        <button type="button" className="pet-bubble-collapse" onClick={props.onCollapse}>收起</button>
+        <button type="button" className="pet-bubble-collapse pet-bubble-list-action" onClick={props.onCollapse}>收起</button>
       ) : null}
     </div>
   )

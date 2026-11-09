@@ -18,6 +18,40 @@ describe('withManagerDataMutex', () => {
     vi.restoreAllMocks()
   })
 
+  it('rejects incompatible same-resource identity without waiting on its own local queue', async () => {
+    vi.stubEnv('KUN_MANAGER_BASE_URL', '')
+    vi.stubEnv('KUN_MANAGER_TOKEN', '')
+    vi.stubEnv('KUN_RUNTIME_INSTANCE_ID', '')
+    const fetch = vi.fn()
+    vi.stubGlobal('fetch', fetch)
+    const identity = { baseUrl: BASE_URL, token: 'manager-token', flavor: 'production' as const, instanceId: 'runtime-1' }
+    await withManagerDataMutex('followup', async () => {
+      await expect(withManagerDataMutex('followup', async () => 'unreachable', identity))
+        .rejects.toThrow('same-resource identity mismatch')
+    })
+    await expect(withManagerDataMutex('followup', async () => 'released')).resolves.toBe('released')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('reuses only an explicit identity from the same Manager and Runtime owner', async () => {
+    const identity = { baseUrl: BASE_URL, token: 'manager-token', flavor: 'production' as const, instanceId: 'runtime-1' }
+    const operations: string[] = []
+    vi.stubGlobal('fetch', managerFetch(async (operation) => {
+      operations.push(operation)
+      if (operation === 'acquire') return acquireResponse(true)
+      if (operation === 'release') return releaseResponse()
+      throw new Error(`unexpected operation: ${operation}`)
+    }))
+    await withManagerDataMutex('followup', async (outer) => {
+      await withManagerDataMutex('followup', async (inner) => { expect(inner).toBe(outer) }, identity)
+      for (const other of [{ ...identity, instanceId: 'runtime-2' }, { ...identity, baseUrl: 'http://127.0.0.1:19002' }]) {
+        await expect(withManagerDataMutex('followup', async () => 'unreachable', other))
+          .rejects.toThrow('same-resource identity mismatch')
+      }
+    }, identity)
+    expect(operations).toEqual(['acquire', 'release'])
+  })
+
   it('runs the operation while token-conditional renewals keep the lease alive', async () => {
     vi.useFakeTimers()
     stubManagerEnv()

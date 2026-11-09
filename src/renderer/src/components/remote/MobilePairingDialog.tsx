@@ -60,9 +60,11 @@ export function MobilePairingDialog(): ReactElement | null {
           {zh ? `允许「${current.name}」访问这台电脑？` : `Allow "${current.name}" to access this computer?`}
         </h2>
         <p id="mobile-pairing-body" className="text-[13px] leading-[19px] text-ds-muted">
-          {zh
-            ? '允许后，这台手机可以通过 Kun iOS 查看和发送对话、操作工作区。只允许你自己的设备。'
-            : 'Once allowed, this phone can read and send conversations and work in your workspace through Kun iOS. Only allow your own devices.'}
+          {state?.desktopAccess ? zh
+            ? '配对后，这台手机可以访问 Kun、查看并控制桌面，无需再次授权。只允许你信任的设备。'
+            : 'Pairing includes Kun access, desktop viewing and control. Only allow devices you trust.'
+            : zh ? '允许后，这台手机可以通过 Kun iOS 查看和发送对话、操作工作区。只允许你自己的设备。'
+              : 'Once allowed, this phone can read and send conversations and work in your workspace through Kun iOS. Only allow your own devices.'}
         </p>
         {others > 0 ? (
           <p className="text-[12px] text-ds-faint">
@@ -80,7 +82,7 @@ export function MobilePairingDialog(): ReactElement | null {
           </button>
           <button
             type="button"
-            disabled={Boolean(busy)}
+            disabled={Boolean(busy) || !link.mobileAllowed}
             onClick={(event) => runTrustedUserActivation(event, () => confirm(current.id))}
             className="h-9 flex-1 rounded-[10px] bg-accent text-[13px] font-medium text-white transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-tint/40 disabled:cursor-not-allowed disabled:opacity-50"
           >

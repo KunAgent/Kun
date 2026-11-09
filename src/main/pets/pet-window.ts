@@ -1,5 +1,5 @@
-import { PET_DRAG_THRESHOLD_PX, clampMascotWidth, type PetOverlayBounds, type ScreenPoint } from '../../shared/pets'
-import { clampPetBounds, dragBounds, fitPetOverlayWindow, PET_OVERLAY_CONTENT_MARGIN, placementFromDip, restorePetBounds, type PetDisplay, type Rect } from './pet-geometry'
+import { PET_DRAG_THRESHOLD_PX, clampMascotWidth, type PetOverlayBounds, type PetOverlayLayout, type PetOverlayPlacement, type ScreenPoint } from '../../shared/pets'
+import { clampPetCenter, petOverlayFrame, placementFromDip, type PetDisplay, type Rect } from './pet-geometry'
 import { applyPetPlatformPolicy, petPlatformPolicy, type PetInteractionMode } from './pet-platform'
 
 export type PetWindowLike = {
@@ -34,16 +34,18 @@ export type PetWindowHost = {
   cursor(): ScreenPoint
   load(window: PetWindowLike): Promise<void>
   onDisplayChange(handler: () => void): () => void
+  layoutChanged?(layout: PetOverlayLayout): void
 }
 
-type DragSession = { origin: Rect; cursor: ScreenPoint; moved: boolean; visible: Rect }
+type SavedPetPlacement = Pick<PetOverlayPlacement, 'displayId' | 'windowBounds' | 'petCenter'>
+type DragSession = { origin: Rect; cursor: ScreenPoint; moved: boolean; petCenter: ScreenPoint }
 
 export class PetWindowController {
   private window: PetWindowLike | null = null
   private loading: Promise<void> | null = null
   private drag: DragSession | null = null
   private spriteWidth = 112
-  private visible: Rect = { x: 0, y: 0, width: 160, height: 180 }
+  private petCenter: ScreenPoint = { x: 0, y: 0 }
   private unsubscribe: (() => void) | null = null
   readonly policy: ReturnType<typeof petPlatformPolicy>
   navigationDenied: string[] = []
@@ -68,7 +70,7 @@ export class PetWindowController {
     return this.policy.mode
   }
 
-  async open(): Promise<PetWindowLike> {
+  async open(saved: SavedPetPlacement | null = null): Promise<PetWindowLike> {
     if (this.isOpen()) {
       const window = this.window!
       await this.loading
@@ -87,13 +89,20 @@ export class PetWindowController {
         if (event?.url) this.navigationDenied.push(event.url)
       })
       if (this.policy.mode === 'passthrough') window.setIgnoreMouseEvents(true, { forward: this.host.forwardMouseEvents })
-      const restored = restorePetBounds({
-        saved: null,
-        displays: this.host.displays(),
-        fallbackSize: { width: 220, height: 260 }
-      })
-      window.setBounds(restored.bounds)
-      this.visible = { ...restored.bounds }
+      const displays = this.host.displays()
+      const display = displays.find((item) => item.id === saved?.displayId) ?? displays[0]
+      if (!display) throw new Error('no display is available')
+      const area = display.workArea
+      const height = Math.round(this.spriteWidth * 208 / 192)
+      const stored = saved?.petCenter
+      // Older versions stored the full popup window, with the pet near its lower-right corner.
+      const fallback = saved ? {
+        x: saved.windowBounds.x + saved.windowBounds.width - 16 - this.spriteWidth / 2,
+        y: saved.windowBounds.y + saved.windowBounds.height - 60 - height / 2
+      } : { x: area.x + area.width - 24 - this.spriteWidth / 2, y: area.y + area.height - 24 - height / 2 }
+      this.petCenter = clampPetCenter(stored && Number.isFinite(stored.x) && Number.isFinite(stored.y) ? stored : fallback,
+        this.spriteWidth, area)
+      window.setBounds(petOverlayFrame(this.petCenter, area))
       this.loading = this.host.load(window)
       await this.loading
     } catch (error) {
@@ -106,17 +115,15 @@ export class PetWindowController {
     return window
   }
 
-  async openAtSaved(saved: { displayId: string; windowBounds: Rect } | null): Promise<void> {
-    const window = await this.open()
-    if (this.window !== window || window.isDestroyed()) return
-    const previous = window.getBounds()
-    const restored = restorePetBounds({
-      saved,
-      displays: this.host.displays(),
-      fallbackSize: { width: previous.width, height: previous.height }
-    })
-    window.setBounds(restored.bounds)
-    this.shiftVisible(restored.bounds.x - previous.x, restored.bounds.y - previous.y)
+  async openAtSaved(saved: SavedPetPlacement | null): Promise<void> {
+    // Refreshes, notification changes, and pet selection must never restore an old panel rectangle.
+    await this.open(saved)
+  }
+
+  layout(): PetOverlayLayout {
+    const frame = this.window?.getBounds() ?? { x: 0, y: 0, width: 420, height: 640 }
+    return { anchorX: this.petCenter.x - frame.x, anchorY: this.petCenter.y - frame.y,
+      viewportWidth: frame.width, viewportHeight: frame.height }
   }
 
   close(): void {
@@ -136,7 +143,7 @@ export class PetWindowController {
 
   beginDrag(point: ScreenPoint): void {
     if (!this.isOpen()) return
-    this.drag = { origin: this.window!.getBounds(), cursor: point, moved: false, visible: { ...this.visible } }
+    this.drag = { origin: this.window!.getBounds(), cursor: point, moved: false, petCenter: { ...this.petCenter } }
   }
 
   moveDrag(point: ScreenPoint): void {
@@ -145,15 +152,10 @@ export class PetWindowController {
     const dy = point.y - this.drag.cursor.y
     if (Math.hypot(dx, dy) >= PET_DRAG_THRESHOLD_PX) this.drag.moved = true
     if (!this.drag.moved) return
-    const proposed = { ...this.drag.origin, x: this.drag.origin.x + dx, y: this.drag.origin.y + dy }
+    const proposed = { x: this.drag.petCenter.x + dx, y: this.drag.petCenter.y + dy }
     const display = this.displayFor(proposed, point)
-    const next = dragBounds(this.drag.origin, dx, dy, display.workArea, this.drag.visible)
-    this.window!.setBounds(next)
-    this.visible = {
-      ...this.drag.visible,
-      x: this.drag.visible.x + next.x - this.drag.origin.x,
-      y: this.drag.visible.y + next.y - this.drag.origin.y
-    }
+    this.petCenter = clampPetCenter(proposed, this.spriteWidth, display.workArea)
+    this.applyFrame(display)
   }
 
   endDrag(point: ScreenPoint): 'click' | 'drag' | 'cancel' {
@@ -172,43 +174,26 @@ export class PetWindowController {
       return
     }
     this.window!.setBounds(this.drag.origin)
-    this.visible = { ...this.drag.visible }
+    this.petCenter = { ...this.drag.petCenter }
+    this.host.layoutChanged?.(this.layout())
     this.drag = null
   }
 
   resize(width: number): void {
+    this.setSpriteWidth(width)
     if (!this.isOpen()) return
-    const bounds = this.window!.getBounds()
-    const nextWidth = clampMascotWidth(width)
-    const height = Math.round(nextWidth * (208 / 192))
-    const display = this.displayFor(bounds)
-    const next = clampPetBounds({ ...bounds, width: nextWidth + 48, height: height + 80 }, display.workArea)
-    this.shiftVisible(next.x - bounds.x, next.y - bounds.y)
-    this.window!.setBounds(next)
+    const display = this.displayFor(this.petCenter)
+    this.petCenter = clampPetCenter(this.petCenter, this.spriteWidth, display.workArea)
+    this.applyFrame(display)
   }
 
   async finishResize(width: number): Promise<void> {
-    this.setSpriteWidth(width)
     this.resize(width)
     if (this.window) await this.flush(this.window.getBounds(), this.spriteWidth)
   }
 
-  reportBounds(bounds: PetOverlayBounds): void {
-    if (!this.isOpen() || this.drag || bounds.width <= 0 || bounds.height <= 0) return
-    const current = this.window!.getBounds()
-    const fitted = fitPetOverlayWindow(current, bounds)
-    const visible = {
-      x: fitted.x + PET_OVERLAY_CONTENT_MARGIN,
-      y: fitted.y + PET_OVERLAY_CONTENT_MARGIN,
-      width: Math.max(1, Math.min(bounds.width, fitted.width - PET_OVERLAY_CONTENT_MARGIN)),
-      height: Math.max(1, Math.min(bounds.height, fitted.height - PET_OVERLAY_CONTENT_MARGIN))
-    }
-    const display = this.displayFor(fitted)
-    const next = clampPetBounds(fitted, display.workArea, visible)
-    this.visible = { ...visible, x: visible.x + next.x - fitted.x, y: visible.y + next.y - fitted.y }
-    if (sameRect(current, next)) return
-    this.window!.setBounds(next)
-    void this.flush(next, this.spriteWidth)
+  reportBounds(_bounds: PetOverlayBounds): void {
+    // Kept for preload compatibility. Content size no longer controls the pet's native position.
   }
 
   send(channel: string, payload: unknown): void {
@@ -217,42 +202,46 @@ export class PetWindowController {
 
   private reclamp(): void {
     if (!this.isOpen() || this.drag) return
-    const bounds = this.window!.getBounds()
-    const display = this.displayFor(bounds)
-    const next = clampPetBounds(bounds, display.workArea, this.visible.width ? this.visible : bounds)
-    this.shiftVisible(next.x - bounds.x, next.y - bounds.y)
-    this.window!.setBounds(next)
+    const display = this.displayFor(this.petCenter)
+    this.petCenter = clampPetCenter(this.petCenter, this.spriteWidth, display.workArea)
+    this.applyFrame(display)
   }
 
-  private shiftVisible(dx: number, dy: number): void {
-    this.visible = { ...this.visible, x: this.visible.x + dx, y: this.visible.y + dy }
+  private applyFrame(display: PetDisplay): void {
+    if (!this.isOpen()) return
+    const next = petOverlayFrame(this.petCenter, display.workArea)
+    if (!sameRect(this.window!.getBounds(), next)) this.window!.setBounds(next)
+    this.host.layoutChanged?.(this.layout())
   }
 
   private async flush(bounds: Rect, mascotWidthPx = this.spriteWidth): Promise<void> {
-    const display = this.displayFor(bounds)
+    const display = this.displayFor(this.petCenter)
     await this.persist(placementFromDip({
       display,
       bounds,
+      petCenter: this.petCenter,
       mascotWidthPx: clampMascotWidth(mascotWidthPx),
       updatedAt: new Date().toISOString()
     }))
   }
 
-  private displayFor(bounds: Rect, point?: ScreenPoint): PetDisplay {
+  private displayFor(center: ScreenPoint, cursor?: ScreenPoint): PetDisplay {
     const displays = this.host.displays()
-    return displays.find((display) => contains(display.workArea, bounds))
-      ?? (point ? displays.find((display) => containsPoint(display.workArea, point)) : undefined)
-      ?? displays[0]
+    return displays.find((display) => containsPoint(display.workArea, center))
+      ?? (cursor ? displays.find((display) => containsPoint(display.workArea, cursor)) : undefined)
+      ?? [...displays].sort((left, right) => distanceToArea(center, left.workArea) - distanceToArea(center, right.workArea))[0]
       ?? { id: 'primary', workArea: { x: 0, y: 0, width: 1280, height: 800 }, scaleFactor: 1 }
   }
 }
 
-function contains(area: Rect, bounds: Rect): boolean {
-  return containsPoint(area, { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 })
-}
-
 function containsPoint(area: Rect, point: ScreenPoint): boolean {
   return point.x >= area.x && point.x < area.x + area.width && point.y >= area.y && point.y < area.y + area.height
+}
+
+function distanceToArea(point: ScreenPoint, area: Rect): number {
+  const dx = Math.max(area.x - point.x, 0, point.x - area.x - area.width)
+  const dy = Math.max(area.y - point.y, 0, point.y - area.y - area.height)
+  return dx * dx + dy * dy
 }
 
 function sameRect(left: Rect, right: Rect): boolean {

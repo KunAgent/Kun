@@ -1,12 +1,24 @@
-import { PET_IPC, type PetActionResult, type PetFollowUpRequest } from '../../shared/pets'
+import { PET_IPC, type PetActionResult, type PetChatRequest, type PetFollowUpRequest } from '../../shared/pets'
 
 type FollowUpTarget = { webContents: { send(channel: string, payload: unknown): void } }
 
 const pending = new Map<string, (result: PetActionResult) => void>()
 
 export function askPetFollowUp(target: FollowUpTarget, request: { threadId: string; prompt: string }): Promise<PetActionResult> {
+  return askPetConversation(target, PET_IPC.followUpRequested, request)
+}
+
+export function askPetChat(target: FollowUpTarget, prompt: string): Promise<PetActionResult> {
+  return askPetConversation(target, PET_IPC.chatRequested, { prompt })
+}
+
+function askPetConversation(
+  target: FollowUpTarget,
+  channel: string,
+  request: Omit<PetFollowUpRequest, 'requestId'> | Omit<PetChatRequest, 'requestId'>
+): Promise<PetActionResult> {
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
-  const payload: PetFollowUpRequest = { requestId, threadId: request.threadId, prompt: request.prompt }
+  const payload = { ...request, requestId }
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(requestId)
@@ -16,7 +28,7 @@ export function askPetFollowUp(target: FollowUpTarget, request: { threadId: stri
       clearTimeout(timer)
       resolve(result)
     })
-    target.webContents.send(PET_IPC.followUpRequested, payload)
+    target.webContents.send(channel, payload)
   })
 }
 

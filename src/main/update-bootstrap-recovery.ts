@@ -16,7 +16,7 @@ import {
   type InstallerUpdateTransaction
 } from './gui-updater-pending'
 import { resolveUpdateTransactionFacts } from './update-transaction-states'
-import { scheduleUpdateRollbackAfterExit } from './update-transaction-helper'
+import { finalizeUpdateTransactionAndCleanup, scheduleUpdateRollbackAfterExit } from './update-transaction-helper'
 
 export type UpdateBootstrapRecoveryDeps = {
   platform: NodeJS.Platform
@@ -24,7 +24,7 @@ export type UpdateBootstrapRecoveryDeps = {
   scheduleRollback: typeof scheduleUpdateRollbackAfterExit
   relaunch: () => void
   exit: (code: number) => void
-  readTransaction?: (match: { oldVersion: string, newVersion: string }) => Promise<InstallerUpdateTransaction | null>
+  readTransaction?: (match: { oldVersion: string, newVersion: string, installDir?: string }) => Promise<InstallerUpdateTransaction | null>
   installerIsAlive?: typeof runtimeProcessIsAlive
   log?: (message: string) => void
 }
@@ -50,7 +50,7 @@ type InstallerRecoveryContext = {
  */
 async function resolveInstallerRecoveryContext(
   deps: UpdateBootstrapRecoveryDeps,
-  pending: { oldVersion: string, newVersion: string }
+  pending: { oldVersion: string, newVersion: string, installDir?: string }
 ): Promise<InstallerRecoveryContext | null> {
   const result = await readPendingUpdateResult()
   const resultState = result?.outcome === 'success' ? result.transactionState : undefined
@@ -62,7 +62,7 @@ async function resolveInstallerRecoveryContext(
     }
   }
 
-  const transaction = await (deps.readTransaction ?? readInstallerUpdateTransaction)(pending)
+  const transaction = await readBootstrapTransaction(deps, pending)
   if (transaction && resolveUpdateTransactionFacts(transaction.phase).countsAsInstalled) {
     return {
       recoveryEnvironment: transaction.recoveryEnvironment,
@@ -71,6 +71,17 @@ async function resolveInstallerRecoveryContext(
     }
   }
   return null
+}
+
+async function readBootstrapTransaction(deps: UpdateBootstrapRecoveryDeps,
+  pending: { oldVersion: string; newVersion: string; installDir?: string }): Promise<InstallerUpdateTransaction | null> {
+  try {
+    return await (deps.readTransaction ?? ((match) => readInstallerUpdateTransaction(match, { platform: deps.platform })))(pending)
+  } catch (error) {
+    // Refused elevation is retryable, not proof that rollback authority vanished.
+    deps.log?.(`[kun-gui updater] transaction inspection deferred: ${String(error)}`)
+    throw error
+  }
 }
 
 async function startRecoveryFromCommittedUpdate(deps: UpdateBootstrapRecoveryDeps) {
@@ -112,8 +123,19 @@ export async function recoverUpdateBeforeRuntimeStart(
 ): Promise<boolean> {
   if (deps.platform !== 'win32') return false
   const [pending, result] = await Promise.all([readPendingUpdate(), readPendingUpdateResult()])
+  let transaction: InstallerUpdateTransaction | null = null
+  let inspectionDeferred = false
   if (pending) {
-    const transaction = await (deps.readTransaction ?? readInstallerUpdateTransaction)(pending)
+    try { transaction = await readBootstrapTransaction(deps, pending) }
+    catch {
+      inspectionDeferred = true
+      if (!await readGuiUpdateRecovery() && result?.outcome !== 'success') {
+        // Unknown cutover ownership must not start Runtime or discard authority.
+        deps.exit(0)
+        return true
+      }
+      transaction = null
+    }
     if (installerOwnsUpdateCutover(transaction, deps.installerIsAlive)) {
       // Do not clear pending recovery or arm runtime/watchdog recovery while
       // the exact installer still owns cutover. Health probes use a separate entry.
@@ -121,6 +143,19 @@ export async function recoverUpdateBeforeRuntimeStart(
       deps.exit(0)
       return true
     }
+  }
+  // Refused inspection cannot authorize summary-only cleanup or charge a
+  // failed new-payload boot to the old executable that is already running.
+  if (pending && inspectionDeferred && deps.version() === pending.oldVersion) return false
+  if (pending && transaction?.phase === 'rolled_back' && deps.version() === pending.oldVersion) {
+    // The old payload is already restored. Retrying administrative cleanup must
+    // neither count as another failed new-payload boot nor request rollback again.
+    try {
+      const outcome = await finalizeUpdateTransactionAndCleanup({ environment: transaction.recoveryEnvironment,
+        backupDir: transaction.backupDir }, { platform: deps.platform })
+      if (outcome.kind === 'unconfirmed') deps.log?.('[kun-gui updater] restored payload cleanup is deferred')
+    } catch (error) { deps.log?.(`[kun-gui updater] restored payload cleanup deferred: ${String(error)}`) }
+    return false
   }
   if (pending && result?.outcome === 'success' && deps.version() === pending.oldVersion) {
     await Promise.all([clearGuiUpdateRecovery(), clearPendingUpdate(), clearPendingUpdateResult()])

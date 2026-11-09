@@ -16,7 +16,8 @@ const STATIC_IMPORT =
   /(?:^|[\n;}])\s*(?:import|export)\s+(?!type\s)(?:[^'";]*?\sfrom\s*)?['"]([^'"]+)['"]/gu
 const ENTRY_POINTS = [
   { file: 'agent-cli.ts', mustReach: 'server/runtime-factory.ts' },
-  { file: 'serve-entry.ts', mustReach: 'server/runtime-factory.ts' }
+  { file: 'serve-main.ts', mustReach: 'server/runtime-factory.ts' },
+  { file: 'serve-entry.ts', mustReach: 'cli/node-version.ts' }
 ] as const
 
 function resolveRelativeTarget(fromFile: string, specifier: string): string | undefined {

@@ -1,4 +1,9 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { FileSessionStore } from '../adapters/file/file-session-store.js'
+import { CompatModelClient } from '../adapters/model/compat-model-client.js'
 import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
 import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
 import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
@@ -6,6 +11,7 @@ import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import { createThreadRecord } from '../domain/thread.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../ports/model-client.js'
+import type { SessionStore } from '../ports/session-store.js'
 import { SequentialIdGenerator } from '../ports/id-generator.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import {
@@ -44,8 +50,7 @@ class DisconnectingModel implements ModelClient {
   }
 }
 
-function createHarness(model: ModelClient) {
-  const sessionStore = new InMemorySessionStore()
+function createHarness(model: ModelClient, sessionStore: SessionStore = new InMemorySessionStore()) {
   const threadStore = new InMemoryThreadStore()
   const eventBus = new InMemoryEventBus()
   const inflight = new InflightTracker()
@@ -116,6 +121,10 @@ describe('stream disconnection failure rewrite', () => {
   })
 
   it('keeps provider business errors untouched', () => {
+    expect(rewriteStreamDisconnectFailure({
+      error: 'stream terminated: quota exceeded', code: 'quota_exceeded',
+      details: { modelFailure: { responseReceived: true, category: 'quota', providerCode: 'quota_exceeded' } }
+    })).toBeNull()
     expect(rewriteStreamDisconnectFailure({
       error: 'model request failed with status 404',
       code: 'http_404'
@@ -188,6 +197,110 @@ describe('AgentLoop stream disconnect during blocking tool call abort', () => {
       id: `item_${started.turnId}_owner_lease_expired`,
       status: 'failed'
     }])
+  })
+
+  it('preserves partial text and interruption details in the failed turn', async () => {
+    const model: ModelClient = {
+      provider: 'test', model: 'disconnect-model',
+      async *stream() {
+        yield { kind: 'assistant_text_delta', text: '部分答案 🐈' }
+        yield { kind: 'error', code: 'stream_read_error', message: 'connection reset',
+          failure: { category: 'network', failoverAllowed: false, responsePhase: 'interrupted', partialOutput: true } }
+      }
+    }
+    const harness = createHarness(model)
+    const started = await startTurn(harness, 'thr_partial', model)
+    await expect(harness.loop.runTurn('thr_partial', started.turnId)).resolves.toBe('failed')
+    const items = await harness.sessionStore.loadItems('thr_partial')
+    expect(items.filter((item) => item.kind === 'assistant_text')).toMatchObject([{ text: '部分答案 🐈' }])
+    expect(items.filter((item) => item.kind === 'error')).toMatchObject([{
+      code: 'stream_disconnected', details: {
+        rawCode: 'stream_read_error', modelFailure: { responsePhase: 'interrupted', partialOutput: true }
+      }
+    }])
+    const events = harness.eventBus.snapshotSince('thr_partial', 0)
+    expect(events.filter((event) => event.kind === 'turn_failed')).toHaveLength(1)
+    expect(events.some((event) => event.kind === 'turn_completed')).toBe(false)
+  })
+
+  it('keeps interrupted SSE text in history for a subsequent turn', async () => {
+    const requests: string[] = []
+    const encoder = new TextEncoder()
+    const fetchImpl = (async (_url: string | URL | Request, init?: RequestInit) => {
+      requests.push(String(init?.body))
+      if (requests.length === 1) {
+        let sent = false
+        return new Response(new ReadableStream<Uint8Array>({
+          pull(controller) {
+            if (!sent) {
+              sent = true
+              controller.enqueue(encoder.encode(
+                'data: {"type":"response.output_text.delta","delta":"已保存的部分 🐈"}\n\n'
+              ))
+            } else controller.error(new Error('simulated socket reset'))
+          }
+        }), { headers: { 'content-type': 'text/event-stream' } })
+      }
+      return new Response([
+        'data: {"type":"response.output_text.delta","delta":"继续完成"}\n\n',
+        'data: {"type":"response.completed","response":{"status":"completed","output":[]}}\n\n'
+      ].join(''), { headers: { 'content-type': 'text/event-stream' } })
+    }) as typeof fetch
+    const model = new CompatModelClient({ baseUrl: 'https://provider.example/v1/responses', apiKey: 'test',
+      model: 'disconnect-model', endpointFormat: 'responses',
+      retry: { maxAttempts: 2, initialDelayMs: 0, httpStatusCodes: [] }, fetchImpl })
+    const root = await mkdtemp(join(tmpdir(), 'kun-stream-history-'))
+    const sessionStore = new FileSessionStore({ dataDir: root })
+    try {
+      const harness = createHarness(model, sessionStore)
+      const first = await startTurn(harness, 'thr_sse_history', model)
+      await expect(harness.loop.runTurn('thr_sse_history', first.turnId)).resolves.toBe('failed')
+      expect(requests).toHaveLength(1)
+      const reopenedStore = new FileSessionStore({ dataDir: root })
+      try {
+        const failedItems = await reopenedStore.loadItems('thr_sse_history')
+        expect(failedItems.filter((item) => item.kind === 'assistant_text')).toMatchObject([{ text: '已保存的部分 🐈' }])
+        expect(failedItems.filter((item) => item.kind === 'error')).toMatchObject([{
+          code: 'stream_disconnected', details: { rawCode: 'stream_read_error',
+            rawMessage: 'model stream read failed: simulated socket reset' }
+        }])
+      } finally {
+        await reopenedStore.close()
+      }
+
+      const next = await harness.turns.startTurn({
+        threadId: 'thr_sse_history', request: { prompt: '继续', model: model.model }
+      })
+      await expect(harness.loop.runTurn('thr_sse_history', next.turnId)).resolves.toBe('completed')
+      expect(requests).toHaveLength(2)
+      expect(requests[1]).toContain('已保存的部分 🐈')
+      const reloaded = await sessionStore.loadItems('thr_sse_history')
+      expect(reloaded.filter((item) => item.kind === 'assistant_text')).toMatchObject([
+        { text: '已保存的部分 🐈' }, { text: '继续完成' }
+      ])
+      const events = harness.eventBus.snapshotSince('thr_sse_history', 0)
+      expect(events.filter((event) => event.kind === 'turn_failed' && event.turnId === first.turnId)).toHaveLength(1)
+      expect(events.some((event) => event.kind === 'turn_completed' && event.turnId === first.turnId)).toBe(false)
+    } finally {
+      await sessionStore.close()
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('redacts provider codes in persisted failures', async () => {
+    const secret = 'sk-abcdefghijklmnop1234567890'
+    const model: ModelClient = {
+      provider: 'test', model: 'disconnect-model',
+      async *stream() {
+        yield { kind: 'error', code: secret, message: `provider error ${secret}`,
+          failure: { category: 'request', failoverAllowed: false, responseReceived: true, providerCode: secret } }
+      }
+    }
+    const harness = createHarness(model)
+    const started = await startTurn(harness, 'thr_secret', model)
+    await expect(harness.loop.runTurn('thr_secret', started.turnId)).resolves.toBe('failed')
+    const recorded = [await harness.sessionStore.loadItems('thr_secret'), harness.eventBus.snapshotSince('thr_secret', 0)]
+    expect(JSON.stringify(recorded)).not.toContain(secret)
   })
 
   it('rewrites a real disconnect failure instead of blaming the provider', async () => {

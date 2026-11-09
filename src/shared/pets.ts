@@ -1,3 +1,11 @@
+import { defaultPetGlobalActivity, type PetGlobalActivityPreferences, type PetGlobalActivityStatus } from './pets-global-activity'
+import type { PetBottleDrop } from './pets-bottle'
+import type { PetVisitPreferences, PetVisitRequest } from './pets-visits'
+import type { PetSceneId } from './pets-ensemble'
+import type { PetInteractionPack, PetPresenceSignal, PetPresenceSnapshot } from './pets-interactions'
+import type { PetEnsembleSettings } from './pets-ensemble'
+import type { SpeechTranscriptionRequest, SpeechTranscriptionResult } from './speech-to-text'
+
 export type PetAnimationState =
   | 'idle'
   | 'running-right'
@@ -28,6 +36,7 @@ export type PetManifest = {
   sourceFingerprint?: string
   importedAt?: string
   sourceMissing?: boolean
+  interactions?: PetInteractionPack
 }
 
 export type PetSummary = {
@@ -41,12 +50,14 @@ export type PetSummary = {
   available: boolean
   sourceMissing: boolean
   warning?: string
+  interactions?: PetInteractionPack
 }
 
 export type PetOverlayPlacement = {
   displayId: string
   workArea: { x: number; y: number; width: number; height: number }
   windowBounds: { x: number; y: number; width: number; height: number }
+  petCenter?: ScreenPoint
   mascotWidthPx: number
   updatedAt: string
 }
@@ -55,8 +66,13 @@ export type PetSettings = {
   schemaVersion: 1
   selectedPetId: string | null
   overlayOpen: boolean
+  bubblesCollapsed?: boolean
   mascotWidthPx: number
   importCodexPets: boolean
+  ensemble?: PetEnsembleSettings
+  reactionsEnabled?: boolean
+  globalActivity?: PetGlobalActivityPreferences
+  visits?: PetVisitPreferences
   welcomedPetIds: string[]
   dismissedNotificationKeys: string[]
   placementByDisplay: Record<string, PetOverlayPlacement>
@@ -109,6 +125,7 @@ export type PetActionRequest =
   | { type: 'follow-up'; threadId: string; prompt: string; unitId?: string; roomId?: string }
 
 export type PetFollowUpRequest = { requestId: string; threadId: string; prompt: string }
+export type PetChatRequest = { requestId: string; prompt: string }
 
 export type PetActionResult =
   | { ok: true }
@@ -128,6 +145,24 @@ export type PetOverlayBootstrap = {
   dismissedNotificationKeys: string[]
   interactionMode: PetInteractionMode
   interactionNote: string | null
+  /** Replay current work when the overlay loads after the last activity event. */
+  activitySnapshot?: PetActivitySnapshot
+  bubblesCollapsed?: boolean
+  layout?: PetOverlayLayout
+  ensemble?: PetEnsembleSettings
+  ensemblePets?: PetSummary[]
+  interactions?: PetInteractionPack
+  presence?: PetPresenceSnapshot
+  reactionsEnabled?: boolean
+  visits?: PetVisitPreferences
+  visitRequest?: PetVisitRequest | null
+}
+
+export type PetOverlayLayout = {
+  anchorX: number
+  anchorY: number
+  viewportWidth: number
+  viewportHeight: number
 }
 
 export type PetOverlayBounds = { width: number; height: number; anchorX: number; anchorY: number }
@@ -135,10 +170,19 @@ export type PetOverlayBounds = { width: number; height: number; anchorX: number;
 export type ScreenPoint = { x: number; y: number }
 
 export type PetDesktopBridge = {
+  getPetGlobalActivityStatus: () => Promise<PetGlobalActivityStatus>
+  setPetGlobalActivity: (preferences: PetGlobalActivityPreferences) => Promise<PetSettings>
+  requestPetKeyboardAccess: () => Promise<void>
+  notifyPetBottleDrop: (drop: PetBottleDrop | null) => void
+  setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
+  requestPetVisit: (scene?: PetSceneId) => Promise<void>
+  dismissPetVisit: () => Promise<void>
+  updatePetPresence: (signal: PetPresenceSignal) => void
   listPets: () => Promise<PetSummary[]>
   getPetSettings: () => Promise<PetSettings>
   selectPet: (petId: string | null) => Promise<PetSettings>
   setOverlayOpen: (open: boolean) => Promise<PetSettings>
+  setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
   setImportPreferences: (input: { importCodexPets?: boolean }) => Promise<PetSettings>
   refreshPets: () => Promise<PetImportReport>
   openKunPetsDirectory: () => Promise<void>
@@ -152,13 +196,24 @@ export type PetDesktopBridge = {
   getPetInteraction: () => Promise<{ mode: PetInteractionMode; note: string | null }>
   onFollowUpRequested: (handler: (request: PetFollowUpRequest) => void) => () => void
   completeFollowUp: (requestId: string, result: PetActionResult) => void
+  onChatRequested: (handler: (request: PetChatRequest) => void) => () => void
+  completeChat: (requestId: string, result: PetActionResult) => void
 }
 
 export type PetOverlayBridge = {
+  onVisitRequested: (handler: (request: PetVisitRequest) => void) => () => void
+  acknowledgeVisitRequest: (id: string) => void
+  setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
+  requestPetVisit: (scene?: PetSceneId) => Promise<void>
+  dismissPetVisit: () => Promise<void>
+  updatePetPresence: (signal: PetPresenceSignal) => void
+  onPresenceChanged: (handler: (snapshot: PetPresenceSnapshot) => void) => () => void
+  setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
   getBootstrap: () => Promise<PetOverlayBootstrap>
   onBootstrapChanged: (handler: (value: PetOverlayBootstrap) => void) => () => void
   onActivityChanged: (handler: (value: PetActivitySnapshot) => void) => () => void
   onMainWindowFocused: (handler: () => void) => () => void
+  onLayoutChanged: (handler: (layout: PetOverlayLayout) => void) => () => void
   beginDrag: (point: ScreenPoint) => void
   moveDrag: (point: ScreenPoint) => void
   endDrag: (point: ScreenPoint) => void
@@ -173,10 +228,15 @@ export type PetOverlayBridge = {
   openMainWindow: () => void
   openPetSettings: () => void
   closeOverlay: () => void
+  startChat: (prompt: string) => Promise<PetActionResult>
+  getVoiceInputAvailable: () => Promise<boolean>
+  transcribeSpeech: (request: Omit<SpeechTranscriptionRequest, 'speechToText'>) => Promise<SpeechTranscriptionResult>
+  setBubblesCollapsed: (collapsed: boolean) => Promise<void>
 }
 
 export const PET_ROWS: Record<PetAnimationState, { row: number; frames: number; frameDurationsMs: number[] }> = {
-  idle: { row: 0, frames: 6, frameDurationsMs: [280, 110, 110, 140, 140, 320] },
+  // Rest on the open eyes; the eyelids themselves must move quickly.
+  idle: { row: 0, frames: 6, frameDurationsMs: [3200, 55, 55, 70, 55, 3165] },
   'running-right': { row: 1, frames: 8, frameDurationsMs: [120, 120, 120, 120, 120, 120, 120, 220] },
   'running-left': { row: 2, frames: 8, frameDurationsMs: [120, 120, 120, 120, 120, 120, 120, 220] },
   waving: { row: 3, frames: 4, frameDurationsMs: [140, 140, 140, 280] },
@@ -201,6 +261,7 @@ export const PET_MASCOT_MAX_WIDTH_PX = 224
 export const PET_FIRST_AWAKE_TTL_MS = 8_000
 export const PET_DRAG_THRESHOLD_PX = 4
 export const PET_DISMISSED_KEY_LIMIT = 500
+export const PET_ACTIVITY_MAX_ITEMS = 64
 export const PET_MANIFEST_MAX_BYTES = 64 * 1024
 export const PET_SPRITESHEET_MAX_BYTES = 16 * 1024 * 1024
 
@@ -218,6 +279,18 @@ export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
 }
 
 export const PET_IPC = {
+  getPetGlobalActivityStatus: 'kun:pets:global-activity:status',
+  setPetGlobalActivity: 'kun:pets:global-activity:preferences',
+  requestPetKeyboardAccess: 'kun:pets:global-activity:keyboard-access',
+  notifyPetBottleDrop: 'kun:pets:bottle-drop',
+  setPetVisitPreferences: 'kun:pets:visits:preferences',
+  requestPetVisit: 'kun:pets:visits:request',
+  dismissPetVisit: 'kun:pets:visits:dismiss',
+  overlayVisitRequested: 'kun:pets:overlay:visit-requested',
+  acknowledgeVisitRequest: 'kun:pets:overlay:visit-ack',
+  updatePetPresence: 'kun:pets:presence',
+  overlayPresence: 'kun:pets:overlay:presence',
+  setPetEnsemble: 'kun:pets:ensemble',
   listPets: 'kun:pets:list',
   getSettings: 'kun:pets:settings:get',
   selectPet: 'kun:pets:select',
@@ -239,6 +312,7 @@ export const PET_IPC = {
   overlayBootstrapChanged: 'kun:pets:overlay:bootstrap-changed',
   overlayActivity: 'kun:pets:overlay:activity',
   overlayFocused: 'kun:pets:overlay:main-focused',
+  overlayLayoutChanged: 'kun:pets:overlay:layout-changed',
   overlayDragStart: 'kun:pets:overlay:drag-start',
   overlayDragMove: 'kun:pets:overlay:drag-move',
   overlayDragEnd: 'kun:pets:overlay:drag-end',
@@ -252,7 +326,12 @@ export const PET_IPC = {
   overlayWelcomed: 'kun:pets:overlay:welcomed',
   overlayOpenMain: 'kun:pets:overlay:open-main',
   overlayOpenSettings: 'kun:pets:overlay:open-settings',
-  overlayClose: 'kun:pets:overlay:close'
+  overlayClose: 'kun:pets:overlay:close',
+  overlayChat: 'kun:pets:overlay:chat',
+  overlayVoiceAvailable: 'kun:pets:overlay:voice-available',
+  overlayBubblesCollapsed: 'kun:pets:overlay:bubbles-collapsed',
+  chatRequested: 'kun:pets:chat-requested',
+  chatResult: 'kun:pets:chat-result'
 } as const
 
 export const PET_ASSET_SCHEME = 'kun-pet'
@@ -280,8 +359,11 @@ export function defaultPetSettings(): PetSettings {
     schemaVersion: 1,
     selectedPetId: null,
     overlayOpen: false,
+    bubblesCollapsed: false,
     mascotWidthPx: PET_MASCOT_DEFAULT_WIDTH_PX,
     importCodexPets: true,
+    reactionsEnabled: true,
+    globalActivity: defaultPetGlobalActivity(),
     welcomedPetIds: [],
     dismissedNotificationKeys: [],
     placementByDisplay: {}

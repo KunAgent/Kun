@@ -33,6 +33,7 @@ describe('Windows PTY ownership adapter', () => {
     vi.mocked(prepareWindowsOwnedPty).mockResolvedValue({
       command: 'C:\\cache\\kun-owned-launcher.exe', args: [], env: { KUN_OWNED_LAUNCH_CONFIG: 'config' },
       bind: async (child) => { facade = child; Object.defineProperty(child, 'pid', { value: 1002 }); return child },
+      release: vi.fn(),
       abort: vi.fn(async () => undefined)
     })
     const spawn = vi.fn(() => pty as unknown as IPty)
@@ -56,7 +57,7 @@ describe('Windows PTY ownership adapter', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     const abort = vi.fn(async () => undefined)
     const bind = vi.fn()
-    vi.mocked(prepareWindowsOwnedPty).mockResolvedValue({ command: 'launcher.exe', args: [], env: {}, bind, abort })
+    vi.mocked(prepareWindowsOwnedPty).mockResolvedValue({ command: 'launcher.exe', args: [], env: {}, bind, release: vi.fn(), abort })
     await expect(spawnPtyBehindGate({ spawn: () => { throw new Error('ConPTY unavailable') } }, 'cmd.exe', [], {}))
       .rejects.toThrow('ConPTY unavailable')
     expect(abort).toHaveBeenCalledOnce()
@@ -70,7 +71,7 @@ describe('Windows PTY ownership adapter', () => {
     vi.mocked(prepareWindowsOwnedPty).mockImplementation(async () => {
       order.push('prepare')
       await Promise.resolve()
-      return { command: 'launcher.exe', args: [], env: {}, bind, abort: vi.fn(async () => undefined) }
+      return { command: 'launcher.exe', args: [], env: {}, bind, release: vi.fn(), abort: vi.fn(async () => undefined) }
     })
     const pty = { pid: 1001, onExit: () => ({ dispose: vi.fn() }), onData: () => ({ dispose: vi.fn() }), kill: vi.fn() }
     const spawn = vi.fn(() => { order.push('spawn'); return pty as unknown as IPty })
@@ -89,7 +90,7 @@ describe('Windows PTY ownership adapter', () => {
     vi.mocked(prepareWindowsOwnedPty).mockImplementation(async () => {
       await Promise.resolve()
       enabled = false
-      return { command: 'launcher.exe', args: [], env: {}, bind, abort }
+      return { command: 'launcher.exe', args: [], env: {}, bind, release: vi.fn(), abort }
     })
     const spawn = vi.fn()
     const validate = vi.fn(async () => { if (!enabled) throw new Error('Agent profile changed before launch') })

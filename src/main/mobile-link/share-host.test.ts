@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { RemoteApi, RequestBudget, type Socket } from '@kun/remote-protocol'
+import { LIMITS, RemoteApi, RequestBudget, type Socket } from '@kun/remote-protocol'
 import { MobileShareHosts } from './share-host'
 import { EVENT_FRAME_SPACING_MS } from './event-coalescer'
 import { shareFixture } from '../../../kun/src/remote/sharing/guest.test-support'
@@ -158,7 +158,7 @@ describe('independent Main ShareHost with real local Runtime and Manager store',
     const f = await fixture()
     try {
       f.hello(); await vi.waitFor(() => expect(f.frames.some((frame) => frame.kind === 'resync_required')).toBe(true))
-      const releases = Array.from({ length: 62 }, () => f.deps.budget.reserve('guestphone', 1))
+      const releases = Array.from({ length: LIMITS.pending - LIMITS.controlPending - LIMITS.desktopControlPending }, () => f.deps.budget.reserve('guestphone', 1))
       try {
         f.guestFrame('invoke', f.call('code.turn.start', { threadId: f.task.id, text: 'not accepted' }, 'blocked'), 'blocked')
         await vi.waitFor(() => expect(f.frames.find((frame) => frame.id === 'blocked' && frame.kind === 'result')?.payload.error).toMatchObject({ code: 'BACKPRESSURE', uncertain: false }))

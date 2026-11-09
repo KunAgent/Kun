@@ -487,14 +487,17 @@ describe('GuiUpdateInstaller reconciliation', () => {
     pending = null
     recovery = {
       schemaVersion: 1, installedVersion: '0.2.0', channel: 'stable', verifiedAt: new Date().toISOString(),
-      healthAttempts: 1, nextHealthCheckAt: new Date(Date.now() + 6 * 60 * 60 * 1_000).toISOString(),
+      healthAttempts: 0,
       backupExpiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString()
     }
+    healthCheck = vi.fn(async () => true).mockResolvedValueOnce(false)
 
     const updateInstaller = await installer()
     await updateInstaller.reconcile(healthCheck)
-    expect(healthCheck).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1_000)
     expect(healthCheck).toHaveBeenCalledOnce()
+    await updateInstaller.reconcile(healthCheck)
+    expect(healthCheck).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1_000)
+    expect(healthCheck).toHaveBeenCalledTimes(2)
   })
 })

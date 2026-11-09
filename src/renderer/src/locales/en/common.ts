@@ -1,4 +1,5 @@
 import writeSelectionMenu from './common/write-selection-menu.json'
+import browserFloating from './common/browser-floating.json'
 import githubApp from './common/github-app.json'
 import composerSubscriptionQuota from './common/composer-subscription-quota.json'
 import toolApprovalDetails from './common/tool-approval-details.json'
@@ -99,6 +100,7 @@ import toast from './common/toast.json'
 import workTabMenu from './common/work-tab-menu.json'
 
 const common = {
+  ...browserFloating,
   ...writeSelectionMenu,
   ...githubApp,
   ...composerSubscriptionQuota,

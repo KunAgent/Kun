@@ -1,8 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { PET_IPC } from '../../shared/pets'
-import { askPetFollowUp, parseFollowUpResult, settlePetFollowUp } from './pet-follow-up'
+import { askPetChat, askPetFollowUp, parseFollowUpResult, settlePetFollowUp } from './pet-follow-up'
 
 describe('pet follow-up delivery', () => {
+  it('requests a fresh conversation and waits for workbench acceptance', async () => {
+    const send = vi.fn()
+    const result = askPetChat({ webContents: { send } }, 'Hello')
+    const [channel, payload] = send.mock.calls[0]
+    expect(channel).toBe(PET_IPC.chatRequested)
+    expect(payload).toMatchObject({ prompt: 'Hello', requestId: expect.any(String) })
+    expect(payload.threadId).toBeUndefined()
+    settlePetFollowUp(payload.requestId, { ok: true })
+    await expect(result).resolves.toEqual({ ok: true })
+  })
   it('resolves when the workbench reports the send result', async () => {
     const sent: unknown[] = []
     const pending = askPetFollowUp({

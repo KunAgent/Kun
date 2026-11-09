@@ -23,7 +23,7 @@ const assistant = '@kun/assistant-agent'
 const remote = '@kun/remote-protocol'
 const dependencies = {
   [assistant]: 'file:vendor/kun-assistant/kun-assistant-agent-0.7.2.tgz',
-  [remote]: 'file:vendor/kun-remote/kun-remote-protocol-0.22.1.tgz',
+  [remote]: 'file:vendor/kun-remote/kun-remote-protocol-0.24.2.tgz',
   '@kun/extension-api': '1.5.0'
 }
 

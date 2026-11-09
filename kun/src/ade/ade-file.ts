@@ -48,3 +48,13 @@ export function withAdeTeamMutex<T>(teamId: string, operation: () => Promise<T>)
 function isMissingFile(error: unknown): boolean {
   return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')
 }
+
+/** Creation owns capacity until persistence; never acquire this from the team mutex. */
+export function withAdeCreationMutex<T>(teamId: string, operation: () => Promise<T>): Promise<T> {
+  return withManagerDataMutex(`ade-create:${teamId}`, () => operation())
+}
+
+/** Serialize admission for one worker, independently of team control/notice writes. */
+export function withAdeDeliveryMutex<T>(teamId: string, workerId: string, operation: () => Promise<T>): Promise<T> {
+  return withManagerDataMutex(`ade-deliver:${teamId}:${workerId}`, () => operation())
+}

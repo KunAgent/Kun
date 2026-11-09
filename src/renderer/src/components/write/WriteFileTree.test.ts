@@ -117,6 +117,79 @@ describe('WriteFileTree reveal action', () => {
   })
 })
 
+describe('WriteFileTree row action layout', () => {
+  let renderer: ReactTestRenderer | undefined
+
+  beforeEach(() => {
+    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    vi.stubGlobal('window', { kunGui: { platform: 'linux' } })
+  })
+
+  afterEach(async () => {
+    await act(async () => renderer?.unmount())
+    vi.unstubAllGlobals()
+  })
+
+  it.each([
+    { name: 'teacher-competition-scoring-criteria-condensed-version.docx', ext: '.docx', type: 'file' },
+    { name: 'teacher-competition-scoring-criteria-detailed-version.pdf', ext: '.pdf', type: 'file' },
+    { name: 'teacher-competition-reference-materials-and-presentations', ext: '', type: 'directory' }
+  ] as const)('reserves space for $type actions instead of covering $name', async (details) => {
+    const longEntry: WorkspaceEntry = { ...details, path: `/repo/${details.name}` }
+    const onSelectFile = vi.fn()
+    const onToggleDir = vi.fn()
+    const onCreateFile = vi.fn()
+    const onCreateDirectory = vi.fn()
+    const onRenameEntry = vi.fn()
+    const onDeleteEntry = vi.fn()
+    const onRevealEntry = vi.fn()
+    const onOpenPdfAsPaper = vi.fn()
+    await act(async () => {
+      renderer = create(createElement(WriteFileTree, {
+        rootDirectory: '/repo', entriesByDir: { '/repo': [longEntry] },
+        expandedDirs: new Set<string>(), loadingDirs: {}, selectedFilePath: longEntry.path,
+        error: null, onSelectFile, onToggleDir, onCreateFile, onCreateDirectory,
+        onRenameEntry, onDeleteEntry, onRevealEntry, onOpenPdfAsPaper,
+        onRefresh: noop, showHeader: false, showRootLabel: false
+      }))
+    })
+
+    const row = renderer!.root.find((node) =>
+      node.type === 'div' && node.props.className?.split(' ').includes('ds-sidebar-tree-row')
+    )
+    expect(row.props.title).toBe(longEntry.name)
+    const actionWrap = row.findAllByType('div').find((node) =>
+      node.children.some((child) => typeof child !== 'string' && child.type === 'div'
+        && child.children.some((action) => typeof action !== 'string' && action.props.title === 'Reveal in file manager'))
+    )!
+    const actionClasses = actionWrap.props.className.split(' ')
+    expect(actionClasses).not.toContain('absolute')
+    expect(actionClasses).toEqual(expect.arrayContaining(['hidden', 'shrink-0', 'group-hover:flex', 'group-focus-within:flex']))
+    const primaryButton = row.findAllByType('button')[0]
+    expect(primaryButton.props.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'flex-1']))
+    const label = primaryButton.find((node) => node.type === 'span' && node.children.includes(longEntry.name))
+    expect(label.props.className.split(' ')).toEqual(expect.arrayContaining(['min-w-0', 'flex-1', 'truncate']))
+
+    await act(async () => primaryButton.props.onClick())
+    expect(longEntry.type === 'directory' ? onToggleDir : onSelectFile).toHaveBeenCalledWith(longEntry.path)
+    const actionCases = [
+      ['Reveal in file manager', onRevealEntry, longEntry],
+      ['Rename', onRenameEntry, longEntry],
+      [longEntry.type === 'directory' ? 'writeDeleteFolder' : 'Delete file', onDeleteEntry, longEntry],
+      ...(longEntry.type === 'directory'
+        ? [['writeCreateFileInFolder', onCreateFile, longEntry.path], ['writeCreateFolderInFolder', onCreateDirectory, longEntry.path]] as const
+        : longEntry.ext === '.pdf' ? [['writePaperOpenAsPaper', onOpenPdfAsPaper, longEntry]] as const : [])
+    ] as const
+    for (const [label, handler, argument] of actionCases) {
+      const stopPropagation = vi.fn()
+      await act(async () => row.findByProps({ 'aria-label': label }).props.onClick({ stopPropagation }))
+      expect(stopPropagation).toHaveBeenCalledOnce()
+      expect(handler).toHaveBeenCalledWith(argument)
+    }
+    expect(longEntry.type === 'directory' ? onToggleDir : onSelectFile).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('WriteFileTree drag to the assistant', () => {
   it('drags a row as an @ reference relative to the space', async () => {
     ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true

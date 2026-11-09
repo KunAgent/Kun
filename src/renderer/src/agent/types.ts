@@ -427,6 +427,7 @@ export type ChatBlock = ({
       text: string
       code?: string
       detail?: string
+      streamPartialOutput?: boolean
       modelRequestFailure?: CoreModelRequestFailureJson
       severity?: RuntimeErrorSeverity
       /** Distinguishes durable runtime failures from ordinary system status rows. */

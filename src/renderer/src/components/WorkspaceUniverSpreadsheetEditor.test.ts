@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { WorkspaceUniverSpreadsheetEditor } from './WorkspaceUniverSpreadsheetEditor'
 import {
   clearWriteSpreadsheetEditorRegistrationsForTests,
+  commitWriteSpreadsheetEditorSave,
+  finishWriteSpreadsheetEditorSave,
+  moveWriteSpreadsheetEditors,
   prepareWriteSpreadsheetEditorSave
 } from '../write/write-spreadsheet-editor-coordinator'
 
@@ -96,7 +99,8 @@ beforeEach(() => {
   mocks.disposeCommand.mockClear()
   mocks.disposeSelection.mockClear()
   mocks.createWorkbook.mockClear()
-  mocks.endEditingAsync.mockClear()
+  mocks.endEditingAsync.mockReset().mockResolvedValue(true)
+  mocks.getSnapshot.mockClear()
   mocks.commandCallback = undefined
   mocks.selectionCallback = undefined
 })
@@ -108,6 +112,89 @@ afterEach(() => {
 })
 
 describe('WorkspaceUniverSpreadsheetEditor', () => {
+  it('keeps the live workbook registered at its renamed identity while preview metadata catches up', async () => {
+    const onMutationsChange = vi.fn()
+    const host = { replaceChildren: vi.fn() }
+    const props = {
+      result, documentPath: result.path, documentEpoch: 4, mutations: [], sourceSha256: result.sourceSha256,
+      commitRevision: 0, focused: true, onMutationsChange
+    }
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(WorkspaceUniverSpreadsheetEditor, props), { createNodeMock: () => host })
+      await flush()
+    })
+    const nextPath = '/work/Book.xlsx'
+    moveWriteSpreadsheetEditors(result.path, 4, nextPath, 5)
+    await act(async () => {
+      renderer.update(createElement(WorkspaceUniverSpreadsheetEditor, { ...props, documentPath: nextPath, documentEpoch: 5 }))
+      await flush()
+    })
+    await act(async () => {
+      const prepared = await prepareWriteSpreadsheetEditorSave(nextPath, 5)
+      expect(prepared?.prepared.mutations).toEqual([{ kind: 'cell', sheetName: 'Data', address: 'A1', value: 42 }])
+      finishWriteSpreadsheetEditorSave(nextPath, prepared!.registrationId)
+    })
+    expect(mocks.endEditingAsync).toHaveBeenCalledExactlyOnceWith(true)
+    expect(onMutationsChange).toHaveBeenCalledOnce()
+    await act(async () => {
+      renderer.update(createElement(WorkspaceUniverSpreadsheetEditor, {
+        ...props, documentPath: nextPath, documentEpoch: 5,
+        result: { ...result, path: nextPath, name: 'Book.xlsx', data: new Uint8Array([1]) }
+      }))
+      await flush()
+    })
+    expect(mocks.createWorkbook).toHaveBeenCalledOnce()
+    expect(mocks.disposeUniver).not.toHaveBeenCalled()
+    await act(async () => {
+      const prepared = await prepareWriteSpreadsheetEditorSave(nextPath, 5)
+      commitWriteSpreadsheetEditorSave(nextPath, prepared!.registrationId, prepared!.prepared.token, 'b'.repeat(64))
+      finishWriteSpreadsheetEditorSave(nextPath, prepared!.registrationId)
+    })
+    const savedProps = {
+      ...props, documentPath: nextPath, documentEpoch: 5, sourceSha256: 'b'.repeat(64),
+      result: { ...result, path: nextPath, sourceSha256: 'b'.repeat(64), data: new Uint8Array([2]) }
+    }
+    await act(async () => { renderer.update(createElement(WorkspaceUniverSpreadsheetEditor, savedProps)); await flush() })
+    expect(mocks.createWorkbook).toHaveBeenCalledOnce()
+    // Equal bytes/hash are not evidence of the same document instance.
+    await act(async () => {
+      renderer.update(createElement(WorkspaceUniverSpreadsheetEditor, { ...savedProps, documentEpoch: 6 }))
+      await flush()
+    })
+    expect(mocks.createWorkbook).toHaveBeenCalledTimes(2)
+    expect(mocks.disposeUniver).toHaveBeenCalledOnce()
+    await act(async () => renderer.unmount())
+  })
+
+  it('does not publish a late active-cell snapshot to a replacement epoch', async () => {
+    let finishCell!: (value: boolean) => void
+    mocks.endEditingAsync.mockImplementationOnce(() => new Promise<boolean>((resolve) => { finishCell = resolve }))
+    const onMutationsChange = vi.fn()
+    const props = {
+      result, documentPath: result.path, documentEpoch: 10, mutations: [], sourceSha256: result.sourceSha256,
+      commitRevision: 0, focused: true, onMutationsChange
+    }
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(WorkspaceUniverSpreadsheetEditor, props), { createNodeMock: () => ({ replaceChildren: vi.fn() }) })
+      await flush()
+    })
+    let prepared!: ReturnType<typeof prepareWriteSpreadsheetEditorSave>
+    await act(async () => { prepared = prepareWriteSpreadsheetEditorSave(result.path, 10); await flush() })
+    const rejected = expect(prepared).rejects.toThrow('document changed')
+    await act(async () => {
+      renderer.update(createElement(WorkspaceUniverSpreadsheetEditor, { ...props, documentEpoch: 11 }))
+      await flush()
+    })
+    await act(async () => {
+      finishCell(true)
+      await rejected
+    })
+    expect(onMutationsChange).not.toHaveBeenCalled()
+    await act(async () => renderer.unmount())
+  })
+
   it('creates a workbook, publishes mutations and selections, and disposes the session', async () => {
     const onMutationsChange = vi.fn()
     const onSelectionChange = vi.fn()

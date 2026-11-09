@@ -24,7 +24,8 @@ export function WorkbenchRightSidebar({ visible, width, header, children, panelR
       className={`${visible ? 'flex' : 'hidden'} ds-sidebar-surface h-full min-h-0 min-w-0 shrink-0 flex-col ${className}`}
       style={{ width }}>
       {header}
-      <div className="ds-sidebar-surface-body relative min-h-0 min-w-0 flex-1">
+      {/* Panel content, including native scrollbar gutters, must receive pointer events. */}
+      <div className="ds-sidebar-surface-body ds-no-drag relative min-h-0 min-w-0 flex-1">
         {children}
       </div>
     </div>

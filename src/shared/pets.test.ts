@@ -25,12 +25,14 @@ describe('pet contracts', () => {
     expect(petAssetUrl('kun:kun-dot', 'abc')).toBe('kun-pet://asset/kun%3Akun-dot/spritesheet?v=abc')
   })
 
-  it('starts closed at 112 DIP with Codex import enabled', () => {
+  it('starts closed at 112 DIP with automatic activity and Codex import enabled', () => {
     expect(defaultPetSettings()).toMatchObject({
       selectedPetId: null,
       overlayOpen: false,
       mascotWidthPx: PET_MASCOT_DEFAULT_WIDTH_PX,
-      importCodexPets: true
+      importCodexPets: true,
+      reactionsEnabled: true,
+      globalActivity: { keyboard: true, microphone: false }
     })
   })
 

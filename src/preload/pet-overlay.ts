@@ -9,10 +9,19 @@ function listen<T>(channel: string, handler: (value: T) => void): () => void {
 }
 
 const api: PetOverlayBridge = {
+  onVisitRequested: (handler) => listen(PET_OVERLAY_IPC.overlayVisitRequested, handler),
+  acknowledgeVisitRequest: (id) => ipcRenderer.send(PET_OVERLAY_IPC.acknowledgeVisitRequest, id),
+  setPetVisitPreferences: (input) => ipcRenderer.invoke(PET_OVERLAY_IPC.setPetVisitPreferences, input),
+  requestPetVisit: (scene) => ipcRenderer.invoke(PET_OVERLAY_IPC.requestPetVisit, scene),
+  dismissPetVisit: () => ipcRenderer.invoke(PET_OVERLAY_IPC.dismissPetVisit),
+  updatePetPresence: (signal) => ipcRenderer.send(PET_OVERLAY_IPC.updatePetPresence, signal),
+  onPresenceChanged: (handler) => listen(PET_OVERLAY_IPC.overlayPresence, handler),
+  setPetEnsemble: (settings) => ipcRenderer.invoke(PET_OVERLAY_IPC.setPetEnsemble, settings),
   getBootstrap: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayBootstrap),
   onBootstrapChanged: (handler) => listen(PET_OVERLAY_IPC.overlayBootstrapChanged, handler),
   onActivityChanged: (handler) => listen(PET_OVERLAY_IPC.overlayActivity, handler),
   onMainWindowFocused: (handler) => listen(PET_OVERLAY_IPC.overlayFocused, () => handler()),
+  onLayoutChanged: (handler) => listen(PET_OVERLAY_IPC.overlayLayoutChanged, handler),
   beginDrag: (point) => ipcRenderer.send(PET_OVERLAY_IPC.overlayDragStart, point),
   moveDrag: (point) => ipcRenderer.send(PET_OVERLAY_IPC.overlayDragMove, point),
   endDrag: (point) => ipcRenderer.send(PET_OVERLAY_IPC.overlayDragEnd, point),
@@ -26,7 +35,12 @@ const api: PetOverlayBridge = {
   recordPetWelcomed: (petId) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayWelcomed, petId),
   openMainWindow: () => ipcRenderer.send(PET_OVERLAY_IPC.overlayOpenMain),
   openPetSettings: () => ipcRenderer.send(PET_OVERLAY_IPC.overlayOpenSettings),
-  closeOverlay: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayClose)
+  closeOverlay: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayClose),
+  startChat: (prompt) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayChat, prompt),
+  getVoiceInputAvailable: () => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayVoiceAvailable),
+  transcribeSpeech: ({ audioBase64, mimeType, durationMs }) =>
+    ipcRenderer.invoke('speech:transcribe', { audioBase64, mimeType, durationMs }),
+  setBubblesCollapsed: (collapsed) => ipcRenderer.invoke(PET_OVERLAY_IPC.overlayBubblesCollapsed, collapsed)
 }
 
 contextBridge.exposeInMainWorld('kunPetOverlay', api)

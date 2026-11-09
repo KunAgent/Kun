@@ -1,0 +1,22 @@
+{
+  "browserUseMovePreview": "Move browser preview",
+  "browserUseMovePreviewHint": "Drag to move. Arrow keys move; Shift + arrows resize.",
+  "browserUseResizePreview": "Resize browser preview",
+  "browserUseDockPreview": "Open browser in right panel",
+  "browserUseFloatPreview": "Float browser over conversation",
+  "browserUseMoreActions": "More browser actions",
+  "browserUseExpandPreview": "Expand browser",
+  "browserUseRestorePreview": "Restore browser size",
+  "browserUsePageZoom": "Page zoom",
+  "browserUsePageZoomHint": "Changes webpage text and content, not the window size. Choose 100% to reset.",
+  "browserUseManualPaused": "You're in control · AI paused",
+  "browserUseStopped": "Browser stopped",
+  "browserUseStoppedBody": "This session is stopped. Clear it before asking Kun to start a new browser session.",
+  "browserUsePreviewError": "Browser needs attention",
+  "browserUsePreviewTooSmall": "Not enough room for a readable webpage. Expand the browser or move it to the side panel.",
+  "browserUseClearConfirmTitle": "Clear this browser session?",
+  "browserUseClearConfirmBody": "This closes all tabs and removes temporary browsing data. It cannot be undone.",
+  "browserUseCancelClear": "Keep session",
+  "browserUseConfirmClear": "Clear session and data",
+  "browserUseDismissError": "Dismiss error"
+}

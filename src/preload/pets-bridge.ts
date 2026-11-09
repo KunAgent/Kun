@@ -8,6 +8,15 @@ function listen(channel: string, handler: () => void): () => void {
 }
 
 export const petsPreloadApi: PetDesktopBridge = {
+  getPetGlobalActivityStatus: () => ipcRenderer.invoke(PET_IPC.getPetGlobalActivityStatus),
+  setPetGlobalActivity: (preferences) => ipcRenderer.invoke(PET_IPC.setPetGlobalActivity, preferences),
+  requestPetKeyboardAccess: () => ipcRenderer.invoke(PET_IPC.requestPetKeyboardAccess),
+  notifyPetBottleDrop: (drop) => ipcRenderer.send(PET_IPC.notifyPetBottleDrop, drop),
+  setPetVisitPreferences: (input) => ipcRenderer.invoke(PET_IPC.setPetVisitPreferences, input),
+  requestPetVisit: (scene) => ipcRenderer.invoke(PET_IPC.requestPetVisit, scene),
+  dismissPetVisit: () => ipcRenderer.invoke(PET_IPC.dismissPetVisit),
+  updatePetPresence: (signal) => ipcRenderer.send(PET_IPC.updatePetPresence, signal),
+  setPetEnsemble: (settings) => ipcRenderer.invoke(PET_IPC.setPetEnsemble, settings),
   listPets: () => ipcRenderer.invoke(PET_IPC.listPets),
   getPetSettings: () => ipcRenderer.invoke(PET_IPC.getSettings),
   selectPet: (petId) => ipcRenderer.invoke(PET_IPC.selectPet, petId),
@@ -32,5 +41,11 @@ export const petsPreloadApi: PetDesktopBridge = {
     ipcRenderer.on(PET_IPC.followUpRequested, wrapped)
     return () => ipcRenderer.removeListener(PET_IPC.followUpRequested, wrapped)
   },
-  completeFollowUp: (requestId, result) => ipcRenderer.send(PET_IPC.followUpResult, { requestId, result })
+  completeFollowUp: (requestId, result) => ipcRenderer.send(PET_IPC.followUpResult, { requestId, result }),
+  onChatRequested: (handler) => {
+    const wrapped = (_event: Electron.IpcRendererEvent, value: Parameters<typeof handler>[0]): void => handler(value)
+    ipcRenderer.on(PET_IPC.chatRequested, wrapped)
+    return () => ipcRenderer.removeListener(PET_IPC.chatRequested, wrapped)
+  },
+  completeChat: (requestId, result) => ipcRenderer.send(PET_IPC.chatResult, { requestId, result })
 }

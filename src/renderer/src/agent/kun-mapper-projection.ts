@@ -1,4 +1,5 @@
 import { positiveInteger, nonnegativeInteger } from './kun-mapper-numbers'
+import { interruptedStreamPartialOutput } from './stream-interruption'
 export { positiveInteger, nonnegativeInteger } from './kun-mapper-numbers'
 export { contextSnapshotFromCore } from './kun-context-snapshot'
 import type {
@@ -574,6 +575,7 @@ export function runtimeErrorDetail(message: string, code?: string, details?: unk
 export function systemErrorBlockFromItem(item: CoreTurnItemJson): ChatBlock {
   const message = item.message ?? 'Runtime error'
   const detail = runtimeErrorDetail(message, item.code, item.details)
+  const streamPartialOutput = interruptedStreamPartialOutput(item.details)
   return {
     kind: 'system',
     id: item.id,
@@ -582,6 +584,7 @@ export function systemErrorBlockFromItem(item: CoreTurnItemJson): ChatBlock {
     text: redactSecretText(message),
     ...(item.code ? { code: item.code } : {}),
     ...(detail ? { detail } : {}),
+    ...(streamPartialOutput !== undefined ? { streamPartialOutput } : {}),
     ...(item.modelRequestFailure ? { modelRequestFailure: item.modelRequestFailure } : {}),
     severity: errorSeverity(item.severity, item.code),
     runtimeError: true

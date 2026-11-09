@@ -1,4 +1,5 @@
 import { latestExecutedTurn } from '../domain/queue-execution-state.js'
+import { withNativeFollowUpAdmission } from './native-followup-admission.js'
 import { createHash } from 'node:crypto'
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
 import { StartTurnRequest as StartTurnRequestSchema } from '../contracts/turns.js'
@@ -230,6 +231,10 @@ async markTurnAdmissionCompleted(this: TurnService,
       if (existing.status !== 'queued' && existing.status !== 'running') {
         throw new Error(`pending admission is already terminal: ${turnId}`)
       }
+      const native = current.nativeFollowUpRequests?.find((row) => row.turnId === turnId)
+      if (native?.phase === 'known_not_admitted' || native?.executionStartedAt || native?.terminalStatus) {
+        throw new Error('native admission preparation is no longer committable')
+      }
       const completedAt = this['deps'].nowIso()
       const turns = current.turns.map((turn) => {
         if (turn.id !== turnId) return turn
@@ -251,9 +256,18 @@ async markTurnAdmissionCompleted(this: TurnService,
         ...(locks.sandboxMode ? { sandboxMode: locks.sandboxMode } : {}),
         ...(locks.approvalReviewer ? { approvalReviewer: locks.approvalReviewer } : {}),
         turns,
+        // Stamp accepted input once; the completed-admission replay returns above.
+        activityAt: !current.activityAt || completedAt > current.activityAt ? completedAt : current.activityAt,
         updatedAt: completedAt
       }
       try {
+        if (native) {
+          return await withNativeFollowUpAdmission(this, current, native.admission, 'enqueue', async () => {
+            const result = await this['deps'].threadStore.upsertIfRevision?.(next, current.revision ?? 0)
+            if (!result?.applied || !result.thread) throw new Error('native admission changed before commit')
+            return result.thread
+          })
+        }
         return await this['deps'].threadStore.upsert(next)
       } catch (error) {
         // Some durable stores can report a transport/fsync error after their
@@ -283,6 +297,8 @@ async rollbackPendingAdmission(this: TurnService,
         current.designProfile?.lockedAtTurnId === turnId
       )
       if (!pending || (!pending.admissionPending && !legacyProvisional)) return false
+      const native = current.nativeFollowUpRequests?.find((row) => row.turnId === turnId)
+      if (native?.phase === 'admitted') return false
       const history = await rewriteItemHistoryWithRetry({
         sessionStore: this['deps'].sessionStore,
         threadId,
@@ -298,11 +314,15 @@ async rollbackPendingAdmission(this: TurnService,
       })
       if (history.status === 'closed' || history.status === 'conflict') return false
       const turns = current.turns.filter((turn) => turn.id !== turnId)
+      const now = this['deps'].nowIso()
       const next: ThreadRecord = {
         ...current,
+        ...(current.nativeFollowUpRequests ? { nativeFollowUpRequests: current.nativeFollowUpRequests.map((row) =>
+          row.turnId === turnId && row.phase === 'preparing'
+            ? { ...row, phase: 'known_not_admitted' as const, updatedAt: now } : row) } : {}),
         status: threadStatusAfterTurnTransition(current.status, turns),
         turns,
-        updatedAt: this['deps'].nowIso()
+        updatedAt: now
       }
       // Heal records written by the earlier provisional-lock implementation.
       if (next.designProfile?.lockedAtTurnId === turnId) delete next.designProfile
@@ -314,6 +334,7 @@ async rollbackPendingAdmission(this: TurnService,
       ) {
         delete next.agentSurface
       }
+      if (native) return Boolean((await this['deps'].threadStore.upsertIfRevision?.(next, current.revision ?? 0))?.applied)
       await this['deps'].threadStore.upsert(next)
       return true
     })

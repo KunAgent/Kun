@@ -9,7 +9,7 @@ import {
   UI_PLUGIN_CHARACTER_SCALE_STEP
 } from '../lib/ui-plugin-character-scale'
 import { useUiPluginStore } from '../store/ui-plugin-store'
-import kunBirdFigure from '../../../asset/img/kun_bird.png'
+import kunBirdFigure from '../assets/kun_bird.png'
 import { SettingsCard, SettingRow } from './settings-controls'
 
 type ModeCard = {

@@ -44,6 +44,7 @@ function harness() {
     decideAction: vi.fn(() => ({ lifecycle: 'ready' })),
     setControlOwner: vi.fn(() => ({ lifecycle: 'manual-control' })),
     navigate: vi.fn(() => ({ lifecycle: 'ready' })),
+    setZoom: vi.fn(() => ({ lifecycle: 'ready' })),
     stop: vi.fn(() => ({ lifecycle: 'stopped' })),
     clear: vi.fn(async () => true)
   }
@@ -96,6 +97,7 @@ describe('registerBrowserUseIpc', () => {
       threadId: 'thread-1',
       visible: true,
       supervisionActive: true,
+      cornerRadius: 12,
       bounds: { x: 0, y: 0, width: 800, height: 600 }
     })).toEqual({ lifecycle: 'ready' })
     expect(h.manager.mount).toHaveBeenCalledWith(
@@ -104,7 +106,8 @@ describe('registerBrowserUseIpc', () => {
       { x: 0, y: 0, width: 800, height: 600 },
       true,
       true,
-      undefined
+      undefined,
+      12
     )
   })
 
@@ -117,6 +120,24 @@ describe('registerBrowserUseIpc', () => {
       decision: 'allow-once'
     })).toThrow('not bound')
     expect(h.manager.decideAction).not.toHaveBeenCalled()
+  })
+
+  it('requires a trusted, bound renderer and a strict bounded zoom payload', () => {
+    const h = harness(), zoom = h.handlers.get('browser-use:zoom')!
+    const input = { threadId: 'thread-1', expectedTurnId: 'turn-1', zoomPercent: 125 }
+    expect(() => zoom({ ...h.event, sender: { id: 99 } }, input)).toThrow('trusted workbench')
+    expect(() => zoom(h.event, input)).toThrow('not bound')
+    h.handlers.get('browser-use:mount')!(h.event, {
+      threadId: 'thread-1', visible: true, supervisionActive: true,
+      bounds: { x: 0, y: 0, width: 640, height: 400 }
+    })
+    for (const percent of [49, 201, 125.5, Infinity]) {
+      expect(() => zoom(h.event, { ...input, zoomPercent: percent })).toThrow()
+    }
+    expect(() => zoom(h.event, { ...input, webContentsId: 77 })).toThrow()
+    expect(h.manager.setZoom).not.toHaveBeenCalled()
+    zoom(h.event, input)
+    expect(h.manager.setZoom).toHaveBeenCalledWith('thread-1', 125, 'turn-1')
   })
 
   it('offers only allow-once/deny and removes every handler on dispose', () => {
@@ -150,7 +171,7 @@ it('forwards exact expected turn identity on every browser read and mutation', a
   invoke('state:get', identity)
   expect(h.manager.stateForThread).toHaveBeenLastCalledWith('thread-1', 'turn-current')
   invoke('mount', { ...identity, visible: true, supervisionActive: true, bounds: { x: 0, y: 0, width: 400, height: 300 } })
-  expect(h.manager.mount).toHaveBeenLastCalledWith('thread-1', h.window, { x: 0, y: 0, width: 400, height: 300 }, true, true, 'turn-current')
+  expect(h.manager.mount).toHaveBeenLastCalledWith('thread-1', h.window, { x: 0, y: 0, width: 400, height: 300 }, true, true, 'turn-current', undefined)
   invoke('control', { ...identity, controlOwner: 'manual' })
   expect(h.manager.setControlOwner).toHaveBeenLastCalledWith('thread-1', 'manual', 'turn-current')
   invoke('navigate', { ...identity, command: 'back' })

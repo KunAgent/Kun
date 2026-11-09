@@ -25,10 +25,12 @@ import {
   writePaperViewTabKey,
   writeWhiteboardIdFromTabKey
 } from './write-editor-layout'
+import { enqueueWriteDocumentOperation } from './write-document-operations'
 import { enqueueWriteWorkspaceSave, flushWriteWorkspaceSaveQueue } from './write-save-coordinator'
 import {
   commitWriteSpreadsheetEditorSave,
   finishWriteSpreadsheetEditorSave,
+  hasWriteSpreadsheetEditor,
   prepareWriteSpreadsheetEditorSave,
   type CoordinatedSpreadsheetSave
 } from './write-spreadsheet-editor-coordinator'
@@ -133,8 +135,11 @@ export function createWriteEditorGroupActions(
   const saveDocument = async (
     workspaceRoot: string,
     path: string,
-    options: { resolveExternalConflict?: 'keep-local' } = {}
-  ): Promise<boolean> => {
+    options: { resolveExternalConflict?: 'keep-local' } = {},
+    // Close requests must not save a replacement that appeared while queued.
+    expectedEpoch?: number
+  ): Promise<boolean> => enqueueWriteDocumentOperation(workspaceRoot, path, async (path) => {
+    if (get().workspaceRoot && !pathsEqual(get().workspaceRoot, workspaceRoot)) return false
     const key = writeDocumentKey(path)
     for (;;) {
       const rawSnapshot = get()
@@ -142,13 +147,20 @@ export function createWriteEditorGroupActions(
       if (capturedDocuments !== rawSnapshot.documentsByPath) set({ documentsByPath: capturedDocuments })
       const snapshot = { ...rawSnapshot, documentsByPath: capturedDocuments }
       const document = snapshot.documentsByPath[key]
-      if (!document) return true
+      if (!document || (expectedEpoch !== undefined && document.documentEpoch !== expectedEpoch)) return true
       if (document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx') {
         if (document.spreadsheetConflictPreview) return false
+        const isCurrentSpreadsheetSave = (): boolean => {
+          const state = get()
+          const current = state.documentsByPath[key]
+          return pathsEqual(state.workspaceRoot, workspaceRoot) &&
+            current?.documentEpoch === document.documentEpoch && current.kind === 'office'
+        }
         let coordinated: CoordinatedSpreadsheetSave | null = null
         try {
-          coordinated = await prepareWriteSpreadsheetEditorSave(path)
+          coordinated = await prepareWriteSpreadsheetEditorSave(path, document.documentEpoch)
         } catch (error) {
+          if (!isCurrentSpreadsheetSave()) return false
           set((state) => {
             const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
               ...current,
@@ -160,7 +172,7 @@ export function createWriteEditorGroupActions(
           return false
         }
         const latestDocument = get().documentsByPath[key]
-        if (!latestDocument || latestDocument.kind !== 'office') {
+        if (!isCurrentSpreadsheetSave() || !latestDocument || latestDocument.kind !== 'office') {
           if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
           return true
         }
@@ -172,6 +184,7 @@ export function createWriteEditorGroupActions(
         const unsupportedReason = coordinated?.prepared.unsupportedReason ?? latestDocument.spreadsheetUnsupportedReason
         if (unsupportedReason) {
           if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          if (!isCurrentSpreadsheetSave()) return true
           set((state) => {
             const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
               ...current, saveStatus: 'error', fileError: unsupportedReason
@@ -182,6 +195,7 @@ export function createWriteEditorGroupActions(
         }
         if (mutations.length === 0) {
           if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          if (!isCurrentSpreadsheetSave()) return true
           set((state) => {
             const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
               ...current,
@@ -204,6 +218,10 @@ export function createWriteEditorGroupActions(
           ))
           return withProjection(documentsByPath, state.editorLayout)
         })
+        if (!isCurrentSpreadsheetSave()) {
+          if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          return true
+        }
         let result: Awaited<ReturnType<typeof window.kunGui.saveWorkspaceSpreadsheet>>
         try {
           result = await window.kunGui.saveWorkspaceSpreadsheet({
@@ -219,8 +237,13 @@ export function createWriteEditorGroupActions(
             message: error instanceof Error ? error.message : String(error)
           }
         }
+        if (!isCurrentSpreadsheetSave()) {
+          if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          return true
+        }
         if (!result.ok) {
           if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+          if (!isCurrentSpreadsheetSave()) return true
           set((state) => {
             const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
               ...current,
@@ -243,6 +266,7 @@ export function createWriteEditorGroupActions(
             )
           : null
         if (coordinated) finishWriteSpreadsheetEditorSave(path, coordinated.registrationId)
+        if (!isCurrentSpreadsheetSave()) return true
         set((state) => {
           const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
             ...current,
@@ -274,7 +298,7 @@ export function createWriteEditorGroupActions(
       if (document.pendingAgentReview && !resolveConflict) return false
       await flushWriteWorkspaceSaveQueue(workspaceRoot, document.path)
       const latest = get().documentsByPath[key]
-      if (!latest) return true
+      if (!latest || latest.documentEpoch !== document.documentEpoch) return true
       if (latest.fileContent === latest.persistedContent) {
         set((state) => {
           const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
@@ -294,10 +318,16 @@ export function createWriteEditorGroupActions(
         )
         return withProjection(documentsByPath, state.editorLayout)
       })
+      const isCurrentSave = (): boolean => {
+        const state = get()
+        return pathsEqual(state.workspaceRoot, workspaceRoot) &&
+          state.documentsByPath[key]?.documentEpoch === latest.documentEpoch
+      }
       let result: Awaited<ReturnType<typeof window.kunGui.writeWorkspaceFile>>
       try {
         result = await enqueueWriteWorkspaceSave({ path: latest.path, workspaceRoot, content })
       } catch (error) {
+        if (!isCurrentSave()) return false
         set((state) => {
           const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
             ...current,
@@ -308,6 +338,7 @@ export function createWriteEditorGroupActions(
         })
         return false
       }
+      if (!isCurrentSave()) return true
       if (!result.ok) {
         set((state) => {
           const documentsByPath = updateDocument(state.documentsByPath, path, (current) => ({
@@ -332,7 +363,7 @@ export function createWriteEditorGroupActions(
       const afterSave = get().documentsByPath[key]
       if (!afterSave || afterSave.fileContent === afterSave.persistedContent) return true
     }
-  }
+  })
 
   return {
     /**
@@ -396,22 +427,26 @@ export function createWriteEditorGroupActions(
       const filePath = isWriteVirtualTabKey(path) ? null : path
       const document = filePath ? snapshot.documentsByPath[writeDocumentKey(filePath)] : undefined
       const lastReference = documentReferenceCount(snapshot, path) <= 1
+      // A live active-cell edit may not have reached the debounced mutation store.
+      const captureActiveCell = document?.officePreview?.sourceFormat === 'xlsx' && document.saveStatus === 'saved' &&
+        hasWriteSpreadsheetEditor(filePath ?? path, document.documentEpoch)
       const needsDecision = lastReference && document && (
-        document.saveStatus === 'dirty' || document.saveStatus === 'error' || document.reviewActive
+        captureActiveCell || document.saveStatus === 'dirty' || document.saveStatus === 'error' ||
+        document.saveStatus === 'saving' || document.reviewActive
       )
       if (needsDecision && !force) {
         const savable = document.kind === 'text' || (
           document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx'
         )
-        if (snapshot.autoSaveEnabled && savable) {
-          const saved = await saveDocument(snapshot.workspaceRoot, filePath ?? path, { resolveExternalConflict: 'keep-local' })
+        if ((snapshot.autoSaveEnabled || captureActiveCell || document.saveStatus === 'saving') && savable) {
+          const saved = await saveDocument(snapshot.workspaceRoot, filePath ?? path, { resolveExternalConflict: 'keep-local' }, document.documentEpoch)
           if (!saved) return false
         } else {
           const saveBeforeClosing = savable && window.confirm(
             i18n.t('common:writeSaveUnsavedTabConfirm')
           )
           if (saveBeforeClosing) {
-            const saved = await saveDocument(snapshot.workspaceRoot, filePath ?? path, { resolveExternalConflict: 'keep-local' })
+            const saved = await saveDocument(snapshot.workspaceRoot, filePath ?? path, { resolveExternalConflict: 'keep-local' }, document.documentEpoch)
             if (!saved) return false
           } else if (!window.confirm(i18n.t('common:writeCloseUnsavedTabConfirm'))) {
             return false
@@ -419,6 +454,8 @@ export function createWriteEditorGroupActions(
         }
       }
       const rawState = get()
+      if (!pathsEqual(rawState.workspaceRoot, snapshot.workspaceRoot) || (document && filePath &&
+        rawState.documentsByPath[writeDocumentKey(filePath)]?.documentEpoch !== document.documentEpoch)) return true
       const state = { ...rawState, documentsByPath: captureFocusedDocument(rawState) }
       const next = removeTabFromGroup(state, groupId, path)
       persist(state.workspaceRoot, next.editorLayout)

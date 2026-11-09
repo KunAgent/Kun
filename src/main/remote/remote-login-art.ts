@@ -1,5 +1,5 @@
 /**
- * Resized copy of src/asset/img/kun_bird.png (the loading-animation mascot)
+ * Resized copy of src/renderer/src/assets/kun_bird.png (the loading-animation mascot)
  * for the Remote login page. Inlined as a data URI so the page needs no
  * auth-exempt asset route.
  */

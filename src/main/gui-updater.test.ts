@@ -117,7 +117,8 @@ async function downloadInstallEligibleUpdate(
   await expect(module.downloadGuiUpdate(channel)).resolves.toMatchObject({ ok: true })
 }
 
-describe('checkGuiUpdate feed URL', () => {
+// The first dynamic import of gui-updater transforms its full dependency graph.
+describe('checkGuiUpdate feed URL', { timeout: 20_000 }, () => {
   it('uses architecture-specific Linux update metadata', async () => {
     const { platformManifestName: manifestName } = await import('./gui-updater-support')
     expect(manifestName('linux', 'x64')).toBe('latest-linux.yml')

@@ -1,4 +1,9 @@
 {
+  "modelStreamInterrupted": "Ответ прерван",
+  "modelStreamInterruptedPartial": "Ответ прерван, часть содержимого сохранена. Вы можете продолжить ввод.",
+  "modelStreamInterruptedSummary": "Ответ был прерван до завершения.",
+  "modelStreamReplayConflict": "Не удалось восстановить ответ",
+  "modelStreamReplayConflictSummary": "Предыдущий вывод сохранён. Причина первоначального прерывания неизвестна; можно продолжить диалог.",
   "modelErrorSourceProvider": "Ответ поставщика",
   "modelErrorSourceNoResponse": "Нет ответа поставщика",
   "modelErrorSourceNotSent": "Запрос не отправлен",

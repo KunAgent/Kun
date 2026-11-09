@@ -1,3 +1,9 @@
+import { parsePetGlobalActivityPreferences, type PetGlobalActivityPreferences, type PetGlobalActivityStatus } from '../../shared/pets-global-activity'
+import { parsePetBottleDrop, type PetBottleDrop } from '../../shared/pets-bottle'
+import { parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
+import { PET_SCENE_IDS, type PetSceneId } from '../../shared/pets-ensemble'
+import { parsePetPresenceSignal, type PetPresenceSignal } from '../../shared/pets-interactions'
+import { parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import {
   PET_IPC,
   type PetActionRequest,
@@ -23,6 +29,16 @@ import { petSenderAllowed } from './pet-protocol'
 export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 'main' | 'overlay' | 'other' }
 
 export type PetIpcApi = {
+  getPetGlobalActivityStatus(): PetGlobalActivityStatus
+  setPetGlobalActivity(preferences: PetGlobalActivityPreferences): Promise<PetSettings>
+  requestPetKeyboardAccess(): Promise<void>
+  notifyBottleDrop(drop: PetBottleDrop | null): void
+  setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings>
+  requestPetVisit(scene?: PetSceneId): Promise<void>
+  dismissPetVisit(): Promise<void>
+  acknowledgeVisitRequest(id: string): void
+  updatePresence(senderId: number, signal: PetPresenceSignal): void
+  setPetEnsemble(settings: PetEnsembleSettings): Promise<PetSettings>
   listPets(): Promise<PetSummary[]>
   getSettings(): Promise<PetSettings>
   selectPet(petId: string | null): Promise<PetSettings>
@@ -49,8 +65,11 @@ export type PetIpcApi = {
   takePendingSettings(): Promise<boolean>
   openMainWindow(): void
   openPetSettings(): void
-  closeOverlay(): void
+  closeOverlay(): Promise<void> | void
   completeFollowUp(requestId: string, result: PetActionResult): void
+  startChat(prompt: string): Promise<PetActionResult>
+  getVoiceInputAvailable(): Promise<boolean>
+  setBubblesCollapsed(collapsed: boolean): Promise<void>
   allows(event: PetIpcEvent, kinds: Array<'main' | 'overlay'>): boolean
 }
 
@@ -63,7 +82,52 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
   const overlay = (event: PetIpcEvent) => {
     if (!api.allows(event, ['overlay'])) throw new Error('pet overlay ipc is limited to the pet window')
   }
+  const controls = (event: PetIpcEvent): void => {
+    if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet controls ipc is limited to pet windows')
+  }
   return {
+    [PET_IPC.getPetGlobalActivityStatus]: (event) => { main(event); return api.getPetGlobalActivityStatus() },
+    [PET_IPC.setPetGlobalActivity]: async (event, input) => {
+      main(event)
+      const parsed = parsePetGlobalActivityPreferences(input)
+      if (!parsed) throw new Error('invalid pet global activity preferences')
+      return api.setPetGlobalActivity(parsed)
+    },
+    [PET_IPC.requestPetKeyboardAccess]: async (event) => { main(event); await api.requestPetKeyboardAccess() },
+    [PET_IPC.notifyPetBottleDrop]: (event, input) => {
+      if (!api.allows(event, ['main'])) return
+      if (input === null) { api.notifyBottleDrop(null); return }
+      const value = parsePetBottleDrop(input)
+      if (value) api.notifyBottleDrop(value)
+    },
+    [PET_IPC.setPetVisitPreferences]: async (event, input) => {
+      controls(event)
+      const value = parsePetVisitPreferences(input)
+      if (!value) throw new Error('invalid pet visit preferences')
+      return api.setPetVisitPreferences(value)
+    },
+    [PET_IPC.requestPetVisit]: async (event, scene) => {
+      controls(event)
+      if (scene !== undefined && !(PET_SCENE_IDS as readonly unknown[]).includes(scene)) throw new Error('invalid visit scene')
+      await api.requestPetVisit(scene as PetSceneId | undefined)
+    },
+    [PET_IPC.dismissPetVisit]: async (event) => { controls(event); await api.dismissPetVisit() },
+    [PET_IPC.acknowledgeVisitRequest]: (event, id) => {
+      overlay(event)
+      if (typeof id === 'string' && id.length <= 80) api.acknowledgeVisitRequest(id)
+    },
+    [PET_IPC.updatePetPresence]: (event, input) => {
+      if (!api.allows(event, ['main', 'overlay'])) return
+      const parsed = parsePetPresenceSignal(input)
+      if (!parsed || (parsed.type === 'model' && event.senderKind !== 'main')) return
+      api.updatePresence(event.senderId, parsed)
+    },
+    [PET_IPC.setPetEnsemble]: async (event, input) => {
+      if (!api.allows(event, ['main', 'overlay'])) throw new Error('pet ensemble ipc is limited to pet controls')
+      const parsed = parsePetEnsemble(input)
+      if (!parsed) throw new Error('invalid pet ensemble')
+      return api.setPetEnsemble(parsed)
+    },
     [PET_IPC.listPets]: async (event) => { main(event); return api.listPets() },
     [PET_IPC.getSettings]: async (event) => { main(event); return api.getSettings() },
     [PET_IPC.selectPet]: async (event, petId) => {
@@ -137,7 +201,25 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     [PET_IPC.settingsPending]: async (event) => { main(event); return api.takePendingSettings() },
     [PET_IPC.overlayOpenMain]: (event) => { overlay(event); api.openMainWindow() },
     [PET_IPC.overlayOpenSettings]: (event) => { overlay(event); api.openPetSettings() },
-    [PET_IPC.overlayClose]: async (event) => { overlay(event); api.closeOverlay() },
+    [PET_IPC.overlayClose]: async (event) => { overlay(event); await api.closeOverlay() },
+    [PET_IPC.overlayChat]: async (event, prompt) => {
+      overlay(event)
+      if (typeof prompt !== 'string' || !prompt.trim() || prompt.trim().length > 16_000) {
+        return { ok: false, code: 'rejected', message: '请输入有效消息' }
+      }
+      return api.startChat(prompt.trim())
+    },
+    [PET_IPC.overlayVoiceAvailable]: (event) => { overlay(event); return api.getVoiceInputAvailable() },
+    [PET_IPC.overlayBubblesCollapsed]: async (event, collapsed) => {
+      overlay(event)
+      if (typeof collapsed !== 'boolean') throw new Error('invalid collapsed state')
+      await api.setBubblesCollapsed(collapsed)
+    },
+    [PET_IPC.chatResult]: (event, payload) => {
+      main(event)
+      const parsed = parseFollowUpResult(payload)
+      if (parsed) api.completeFollowUp(parsed.requestId, parsed.result)
+    },
     [PET_IPC.followUpResult]: (event, payload) => {
       main(event)
       const parsed = parseFollowUpResult(payload)

@@ -1,3 +1,4 @@
+import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -16,6 +17,7 @@ export type ValidatedPetPackage = {
   spriteVersionNumber: PetSpriteVersion
   spritesheetPath: string
   warnings: string[]
+  interactions?: PetInteractionPack
 }
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -68,7 +70,10 @@ function readManifest(value: unknown, folderName: string): Omit<ValidatedPetPack
   if (isUnsafePetRelativePath(spritesheetPath)) throw new Error('spritesheetPath must be a relative path inside the pet directory')
   const warnings: string[] = []
   if (folderName !== id) warnings.push(`folder ${folderName} does not match id ${id}`)
-  return { sourceId: id, displayName, description, spriteVersionNumber: version, spritesheetPath, warnings }
+  const interactions = candidate.interactions === undefined ? undefined : parsePetInteractionPack(candidate.interactions)
+  if (interactions === null) throw new Error('invalid pet interaction recipes')
+  return { sourceId: id, displayName, description, spriteVersionNumber: version, spritesheetPath, warnings,
+    ...(interactions ? { interactions } : {}) }
 }
 
 export function spritesheetFileName(sourcePath: string): 'spritesheet.png' | 'spritesheet.webp' {

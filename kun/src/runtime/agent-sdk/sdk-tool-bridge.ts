@@ -149,41 +149,76 @@ export function buildBridgedToolSpecs(
  * Best-effort JSON-Schema(object) -> Zod raw shape for the SDK `tool()` helper.
  * kun validates arguments inside its own executor, so this only needs to convey
  * the parameter surface to the model; unknown/complex types fall back to a
- * permissive `z.any()`. Top-level only (the SDK tool schema is one object).
+ * permissive `z.any()`.
+ *
+ * Nested objects and arrays are converted recursively. A top-level-only shape
+ * collapses `tasks: [{ title, query }]` into `z.array(z.any())`, so the model
+ * never learns the item's required keys and calls the tool with a bare
+ * `[{ query }]` — which kun's own validator rejects.
  */
 export function jsonSchemaToZodShape(
   schema: Record<string, unknown>,
   options: { nullableOptionals?: boolean } = {}
 ): z.ZodRawShape {
   const shape: Record<string, z.ZodTypeAny> = {}
-  const properties = (schema?.properties as Record<string, Record<string, unknown>> | undefined) ?? {}
-  const required = new Set((schema?.required as string[] | undefined) ?? [])
-  const nullableOptionals = options.nullableOptionals === true
+  const properties = asRecord(schema?.properties) ?? {}
+  const required = new Set(asStringArray(schema?.required))
   for (const [key, prop] of Object.entries(properties)) {
-    let base: z.ZodTypeAny
-    switch (prop?.type) {
-      case 'string':
-        base = z.string()
-        break
-      case 'number':
-      case 'integer':
-        base = z.number()
-        break
-      case 'boolean':
-        base = z.boolean()
-        break
-      case 'array':
-        base = z.array(z.any())
-        break
-      default:
-        base = z.any()
-    }
-    if (typeof prop?.description === 'string') base = base.describe(prop.description)
+    const base = jsonSchemaToZodValue(prop)
     shape[key] = required.has(key)
       ? base
-      : nullableOptionals ? base.nullable().optional() : base.optional()
+      : options.nullableOptionals === true ? base.nullable().optional() : base.optional()
   }
   return shape
+}
+
+/** Nesting deeper than this is not worth describing to the model. */
+const JSON_SCHEMA_MAX_DEPTH = 6
+
+function jsonSchemaToZodValue(value: unknown, depth = 0): z.ZodTypeAny {
+  const prop = asRecord(value)
+  if (!prop || depth > JSON_SCHEMA_MAX_DEPTH) return z.any()
+  let base: z.ZodTypeAny
+  switch (prop.type) {
+    case 'string':
+      base = z.string()
+      break
+    case 'number':
+    case 'integer':
+      base = z.number()
+      break
+    case 'boolean':
+      base = z.boolean()
+      break
+    case 'array': {
+      const item = prop.items === undefined ? z.any() : jsonSchemaToZodValue(prop.items, depth + 1)
+      let array = z.array(item)
+      if (typeof prop.minItems === 'number') array = array.min(prop.minItems)
+      if (typeof prop.maxItems === 'number') array = array.max(prop.maxItems)
+      base = array
+      break
+    }
+    case 'object': {
+      const nested = jsonSchemaToZodShape(prop)
+      base = Object.keys(nested).length === 0
+        ? z.record(z.string(), z.any())
+        : prop.additionalProperties === false ? z.object(nested) : z.object(nested).catchall(z.unknown())
+      break
+    }
+    default:
+      base = z.any()
+  }
+  return typeof prop.description === 'string' ? base.describe(prop.description) : base
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : []
 }
 
 /**

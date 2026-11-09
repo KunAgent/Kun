@@ -31,7 +31,7 @@ it('settles and recovers a thread larger than the real Manager HTTP limit withou
   })
   try {
     const connection = { discovery: {
-      version: 1 as const, protocolVersion: 6 as const, instanceId: 'test-manager', pid: process.pid,
+      version: 1 as const, protocolVersion: 7 as const, instanceId: 'test-manager', pid: process.pid,
       startedAt: new Date().toISOString(), host: '127.0.0.1', port: server.port,
       baseUrl: `http://127.0.0.1:${server.port}`, managerToken: 'test-token',
       serviceVersion: '0.4.0', dataDir: root, settingsPath: join(root, 'settings.json')

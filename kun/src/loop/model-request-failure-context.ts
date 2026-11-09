@@ -12,6 +12,27 @@ const PREFLIGHT_PATTERNS = [
   /model provider id is required/i
 ]
 
+export function sanitizeModelDiagnostic(value: string): string {
+  return redactSecretText(value).replace(/\b(?:sk|pk|rk|ghp|github_pat|xox[baprs])[-_][a-z0-9_-]{12,}/gi, '<redacted>')
+}
+
+export function sanitizeModelFailure(failure: ModelFailureMetadata | undefined): ModelFailureMetadata | undefined {
+  if (!failure) return undefined
+  const { firstStreamFailure, ...rest } = failure
+  return {
+    ...rest,
+    ...(failure.providerCode ? { providerCode: sanitizeModelDiagnostic(failure.providerCode) } : {}),
+    ...(failure.providerId ? { providerId: sanitizeModelDiagnostic(failure.providerId) } : {}),
+    ...(failure.modelId ? { modelId: sanitizeModelDiagnostic(failure.modelId) } : {}),
+    ...(firstStreamFailure && typeof firstStreamFailure.code === 'string' && typeof firstStreamFailure.message === 'string'
+      ? { firstStreamFailure: {
+          code: sanitizeModelDiagnostic(firstStreamFailure.code).slice(0, 128),
+          message: sanitizeModelDiagnostic(firstStreamFailure.message).slice(0, 1024)
+        } }
+      : {})
+  }
+}
+
 export function modelRequestFailureContext(input: {
   request: Pick<ModelRequest, 'providerId' | 'model'>
   failure?: ModelFailureMetadata
@@ -21,8 +42,11 @@ export function modelRequestFailureContext(input: {
   const localNotSent = failure?.requestSent === false
   const preflightFailure = localNotSent || input.code === 'credential_refresh_failed' ||
     input.code === 'missing_api_key' || input.code === 'model_request_not_sent'
-  const providerResponded = failure?.responseReceived === true ||
-    failure?.httpStatus !== undefined || Boolean(failure?.providerCode)
+  const providerResponded = failure?.responseReceived === true || Boolean(failure?.providerCode) ||
+    (failure?.httpStatus !== undefined && (failure.responsePhase !== 'interrupted' || failure.httpStatus >= 400))
+  // A successful stream that later broke is neither an absent response nor a
+  // provider error. Its phase is carried in the existing error details.
+  if (!preflightFailure && !providerResponded && failure?.responsePhase === 'interrupted') return undefined
   const transportFailure = failure?.category === 'network' || failure?.category === 'timeout' ||
     input.code === 'model_provider_unreachable' || input.code?.startsWith('stream_') === true
   const requestState = preflightFailure

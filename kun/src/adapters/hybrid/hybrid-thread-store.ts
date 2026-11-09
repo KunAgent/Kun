@@ -1,3 +1,4 @@
+import { retainNativeFollowUpRequests } from '../../domain/native-followup-requests.js'
 import { repairLegacySummaryMetadata } from './hybrid-thread-summary-repair.js'
 import { historyReferenceThreadIds, hasThreadHistoryReference } from './hybrid-thread-reference-lookup.js'
 import { mkdir, open, rm, stat } from 'node:fs/promises'
@@ -252,7 +253,8 @@ export class HybridThreadStore implements ThreadStore {
   }
 
   private async storeRevision(thread: ThreadRecord, revision: number): Promise<ThreadRecord> {
-    const stored = ThreadSchema.parse({ ...thread, revision: revision + 1 })
+    const retained = retainNativeFollowUpRequests(await this.documents.readMetadata(thread.id), thread)
+    const stored = ThreadSchema.parse({ ...retained, revision: revision + 1 })
     await this.appendMetadataNow(stored)
     this.invalidateFilesystemCache()
     this.upsertIndexTrackingFailure(this.indexRecordForThread(stored))

@@ -79,6 +79,34 @@ describe('loadWhatsNewContent', () => {
     expect(content.changelogUrl).toBe(changelogUrl)
   })
 
+  it.each(['zh', 'en'] as const)('loads bundled 0.4.5 in %s without feed notes or a network request', async (language) => {
+    const content = await loadWhatsNewContent(
+      { version: 'v0.4.5', previousVersion: 'v0.4.4', changelogUrl: 'https://example.com/0.4.5' },
+      language
+    )
+    expect(content.version).toBe('0.4.5')
+    expect(content.current?.intro).toContain(language === 'zh' ? '0.4.5 把 Kun' : 'Kun 0.4.5 brings')
+    expect(content.current?.features).toHaveLength(8)
+    expect(content.current?.fixes).toHaveLength(6)
+    const highlights = content.current ? pickHighlights(content.current) : null
+    expect(highlights?.highlights.map((item) => item.title)).toEqual(language === 'zh'
+      ? ['桌面伙伴', '手机与桌面远控', 'PDF 标签页与论文助手']
+      : ['Desktop companions', 'Phone and desktop control', 'PDF tabs and paper assistant'])
+    expect(content.current?.features[7]?.title).toBe(language === 'zh' ? 'Design 预览与缩略图' : 'Design previews and thumbnails')
+    expect(content.current?.fixes[0]?.title).toBe(language === 'zh' ? '响应中断' : 'Interrupted responses')
+    expect(content.older).toEqual([])
+    expect(content.previousVersion).toBe('0.4.4')
+    expect(content.changelogUrl).toBe('https://example.com/0.4.5')
+  })
+
+  it('keeps 0.4.4 in the history when upgrading to 0.4.5 from 0.4.3', async () => {
+    const content = await loadWhatsNewContent(
+      { version: '0.4.5', previousVersion: '0.4.3', changelogUrl: '' }, 'zh'
+    )
+    expect(content.current?.version).toBe('0.4.5')
+    expect(content.older.map((summary) => summary.version)).toEqual(['0.4.4'])
+  })
+
   it('maps UI locales to the two release-note languages', () => {
     expect(releaseNotesLanguage('zh')).toBe('zh')
     expect(releaseNotesLanguage('zh-CN')).toBe('zh')

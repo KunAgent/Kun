@@ -1,7 +1,9 @@
 import { app } from 'electron'
 import { readFile, readdir, realpath, rm } from 'node:fs/promises'
 import * as path from 'node:path'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
+import { commonInstallerRecoveryRoot, installerRecoveryIdentity, recoveryPathApi, registeredInstallerLocations, trustedCommonRecoveryFile } from './installer-recovery-identity'
+import { privilegedUpdateOperation } from './update-elevated-transaction'
 import { atomicWriteFile } from './atomic-json-file'
 import type { GuiUpdateChannel } from '../shared/gui-update'
 
@@ -289,7 +291,8 @@ export async function readPendingUpdateResult(userDataPath?: string): Promise<Pe
 function installerRecoveryRoot(userDataPath = app.getPath('userData')): string {
   // The installer writes recovery state under the roaming profile next to the
   // per-flavor userData directory; mirror the path the installer uses.
-  return resolve(dirname(userDataPath), 'KunInstallerRecovery')
+  const paths = recoveryPathApi(userDataPath)
+  return paths.resolve(paths.dirname(userDataPath), 'KunInstallerRecovery')
 }
 
 function mapTransactionFieldToEnvironmentKey(key: string): string | null {
@@ -348,11 +351,12 @@ function hasCompleteInstallerRecoveryEnvironment(
  * Read the installer-owned transaction journal. It is the authoritative
  * rollback record: the GUI result file is only an execution summary and may
  * be missing when the installer dies between the payload cutover and its
- * result write. The transaction GUID is unknown at runtime, so candidates are
- * matched by the old/new version pair recorded in the pending update.
+ * result write. Default discovery verifies the running package identity and
+ * installation across current-user and machine roots; ambiguous records fail closed.
+ * An explicit recoveryRoot remains a caller-selected recovery journal source.
  */
 export async function readInstallerUpdateTransaction(
-  match: { oldVersion: string, newVersion: string },
+  match: { oldVersion: string, newVersion: string, installDir?: string },
   options: {
     recoveryRoot?: string
     platform?: NodeJS.Platform
@@ -361,29 +365,94 @@ export async function readInstallerUpdateTransaction(
   } = {}
 ): Promise<InstallerUpdateTransaction | null> {
   if ((options.platform ?? process.platform) !== 'win32') return null
-  const root = options.recoveryRoot ?? installerRecoveryRoot()
+  const explicitRoot = options.recoveryRoot
+  const identity = explicitRoot === undefined ? installerRecoveryIdentity() : null
+  const registrations = identity ? await registeredInstallerLocations(identity.appGuid) : []
+  const paths = identity ? recoveryPathApi(identity.executable) : path
+  const normalize = (value: string) => paths === path.win32 ? paths.resolve(value).toLowerCase() : paths.resolve(value)
+  const runningDir = identity ? paths.dirname(identity.executable) : ''
+  const sourceDir = match.installDir ?? runningDir
+  const relevantDirectories = [sourceDir, runningDir, paths.join(paths.dirname(sourceDir), identity?.productName ?? '')]
+  const hasMachineInstallation = registrations.some((registration) => registration.scope === 'all' &&
+    relevantDirectories.some((directory) => {
+      const registered = normalize(registration.installDir), expected = normalize(directory)
+      const stagePrefix = expected + '.kun-stage-'
+      return registered === expected || (registered.startsWith(stagePrefix) && /^\d+$/u.test(registered.slice(stagePrefix.length)))
+    }))
+  // A separate machine install must not introduce UAC into current-user recovery.
+  const commonRoot = hasMachineInstallation ? await commonInstallerRecoveryRoot() : null
+  const roots = explicitRoot !== undefined
+    ? [{ root: explicitRoot, scope: '' }]
+    : [{ root: installerRecoveryRoot(), scope: 'current' }, ...(commonRoot ? [{ root: commonRoot, scope: 'all' }] : [])]
+  const candidates: InstallerUpdateTransaction[] = []
   const listDir = options.readdirApi ?? ((dir: string) => readdir(dir))
   const readFileBound = options.readApi ?? ((filePath: string) => readFile(filePath, 'utf8'))
-  let entries: string[]
-  try {
-    entries = await listDir(root)
-  } catch {
-    return null
-  }
-
-  for (const entry of entries) {
-    if (!entry.endsWith('-update.json')) continue
-    const transactionPath = join(root, entry)
+  const entriesByRoot = await Promise.all(roots.map(async ({ root, scope }) => {
+    try { return (await listDir(root)).map((entry) => ({ root, scope, entry })) }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (scope === 'all' && identity && (code === 'EACCES' || code === 'EPERM')) {
+        return [{ root, scope, entry: `${identity.appGuid}-update.json` }]
+      }
+      return []
+    }
+  }))
+  for (const { root, scope, entry } of entriesByRoot.flat()) {
+    const paths = explicitRoot !== undefined ? path : recoveryPathApi(root)
+    if (!entry.endsWith('-update.json') || paths.basename(entry) !== entry) continue
+    const transactionPath = paths.join(root, entry)
     let value: unknown
+    let privileged = false
     try {
       value = JSON.parse((await readFileBound(transactionPath)).replace(/^\uFEFF/u, '')) as unknown
-    } catch {
-      continue
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (scope !== 'all' || !identity || (code !== 'EACCES' && code !== 'EPERM')) continue
+      // Permission denial is not absence. Only the constrained elevated reader
+      // can inspect a protected transaction; refusal remains retryable.
+      const reply = await privilegedUpdateOperation('inspect', { ...match,
+        installDir: match.installDir ?? recoveryPathApi(identity.executable).dirname(identity.executable) })
+      value = reply.transaction
+      privileged = true
     }
     if (!value || typeof value !== 'object') continue
     const record = value as Record<string, unknown>
     if (String(record.OldVersion ?? '') !== match.oldVersion) continue
     if (String(record.NewVersion ?? '') !== match.newVersion) continue
+    if (identity) {
+      const samePath = (left: unknown, right: string) => {
+        if (typeof left !== 'string' || !paths.isAbsolute(left) || !paths.isAbsolute(right)) return false
+        const actual = paths.resolve(left), expected = paths.resolve(right)
+        return paths === path.win32 ? actual.toLowerCase() === expected.toLowerCase() : actual === expected
+      }
+      const executablePaths = recoveryPathApi(identity.executable)
+      const runningDirectory = executablePaths.dirname(identity.executable)
+      const sourceDirectory = match.installDir ?? runningDirectory
+      const canonicalTarget = paths.join(paths.dirname(sourceDirectory), identity.productName)
+      if (record.SchemaVersion !== 4 ||
+          String(record.AppGuid).toLowerCase() !== identity.appGuid.toLowerCase() ||
+          entry.toLowerCase() !== `${identity.appGuid}-update.json`.toLowerCase() ||
+          record.InstallMode !== scope || record.ProductName !== identity.productName ||
+          record.AppExecutable !== executablePaths.basename(identity.executable) ||
+          record.CanonicalLeaf !== identity.productName ||
+          record.InstallRegistryKey !== `Software\\${identity.appGuid}` ||
+          record.UninstallRegistryKey !== `Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\${identity.appGuid}` ||
+          !samePath(record.Source, sourceDirectory) ||
+          (!samePath(record.Target, sourceDirectory) && !samePath(record.Target, canonicalTarget)) ||
+          (!samePath(record.Source, runningDirectory) && !samePath(record.Target, runningDirectory)) ||
+          !samePath(record.JournalPath, paths.join(root, `${identity.appGuid}.json`)) ||
+          typeof record.BackupRoot !== 'string' || !resolveBackupDeleteTarget(root, record.BackupRoot, paths) ||
+          typeof record.StageRoot !== 'string' || !samePath(paths.dirname(record.StageRoot), paths.dirname(String(record.Target))) ||
+          !paths.basename(record.StageRoot).startsWith(`${paths.basename(String(record.Target))}.kun-stage-`) ||
+          !/^\d+$/u.test(paths.basename(record.StageRoot).slice(`${paths.basename(String(record.Target))}.kun-stage-`.length)) ||
+          (record.TransactionPath !== undefined && !samePath(record.TransactionPath, transactionPath))) continue
+      const scopes = new Set(registrations.filter((registration) =>
+        samePath(record.Source, registration.installDir) || samePath(record.Target, registration.installDir) ||
+        samePath(record.StageRoot, registration.installDir)
+      ).map((registration) => registration.scope))
+      if (scopes.size !== 1 || !scopes.has(scope)) continue
+      if (scope === 'all' && !privileged && !await trustedCommonRecoveryFile(root, transactionPath)) continue
+    }
 
     const recoveryEnvironment: InstallerRecoveryEnvironment = {}
     for (const key of INSTALLER_RECOVERY_ENVIRONMENT_KEYS) {
@@ -398,7 +467,7 @@ export async function readInstallerUpdateTransaction(
     const journalPath = recoveryEnvironment.KUN_INSTALLER_JOURNAL
     if (!journalPath) continue
 
-    return {
+    candidates.push({
       ...(Number.isSafeInteger(record.InstallerPid) && Number(record.InstallerPid) > 0 &&
           typeof record.InstallerProcessIdentity === 'string' && /^win32-v1:\d{4}-.*Z$/u.test(record.InstallerProcessIdentity)
         ? { installerPid: Number(record.InstallerPid), installerProcessIdentity: record.InstallerProcessIdentity } : {}),
@@ -409,11 +478,12 @@ export async function readInstallerUpdateTransaction(
       newVersion: match.newVersion,
       backupDir: typeof record.BackupRoot === 'string' ? record.BackupRoot : '',
       journalPath,
-      transactionRoot: dirname(transactionPath),
+      transactionRoot: paths.dirname(transactionPath),
       recoveryEnvironment
-    }
+    })
   }
-  return null
+  // Ambiguous matching transactions cannot safely authorize a rollback.
+  return candidates.length === 1 ? candidates[0] : null
 }
 
 export async function clearPendingUpdateResult(userDataPath?: string): Promise<void> {

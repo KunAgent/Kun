@@ -1,3 +1,10 @@
+import { ContinueCommitment, ContinueCommitmentResult, ManualFollowUpClaim, ManualFollowUpDispatch } from '../contracts/collaboration-followup-api.js'
+import { CommitmentEffectSchema, CommitmentExecutionSchema, CommitmentExecutionPermitSchema, FollowUpReceiptSchema,
+  type CommitmentExecutionPermit, type FollowUpReceipt } from '../contracts/collaboration-effects.js'
+import type { NativeFollowUpAdmission } from '../contracts/native-followup-requests.js'
+import type { ThreadRecord } from '../contracts/threads.js'
+import { NativeFollowUpPermitError, withNativeFollowUpWriteScope } from './native-followup-write-scope.js'
+import { CollaborationQuerySchema, type CollaborationQuery } from '../contracts/collaboration-store.js'
 import type { RoomMemoryErasure } from '../rooms/room-memory-erasure.js'
 import type { RoomSidebarQuery, RoomSidebarPage } from '../contracts/room-sidebar.js'
 import { z } from 'zod'
@@ -28,6 +35,7 @@ import type { RoomReplyPage, RoomReplyPageInput } from '../contracts/room-replie
 import type { RoomSearchQuery, RoomSearchPage, RoomRepositoryChoice, RoomRunSummary, RoomRunSummaryQuery } from '../contracts/room-experience.js'
 import { invalidateTickReads, tickCachedRead } from '../rooms/room-tick-reads.js'
 import { notifyRoomStoreCommit } from '../rooms/room-commit-signal.js'
+import { currentFollowUpArbitrationFence, mayChangeFollowUpAdmission, withFollowUpArbitration } from './followup-arbitration.js'
 
 /** Runtime proxy. Canonical room data never opens a local file in this process. */
 export class RemoteRoomStore implements RoomStore {
@@ -49,18 +57,106 @@ export class RemoteRoomStore implements RoomStore {
       z.array(RoomStoredDocumentSchema).parse(await this.call('list', { kind, options })) as RoomStoredDocument<T>[])
   }
 
+  async collaborationQuery<T = unknown>(input: CollaborationQuery): Promise<RoomStoredDocument<T>[]> {
+    const query = CollaborationQuerySchema.parse(input)
+    return tickCachedRead(`collaboration\0${JSON.stringify(query)}`, async () =>
+      z.array(RoomStoredDocumentSchema).parse(await this.call('collaborationQuery', query)) as RoomStoredDocument<T>[])
+  }
+
   async commit(input: RoomStoreCommit): Promise<RoomStoreCommitResult> {
     invalidateTickReads()
     try {
       await this.options.ready?.()
       const fence = this.fence()
-      const result = RoomStoreCommitResultSchema.parse(await this.call('commit', { input, ...(fence ? { fence } : {}) }))
+      const commit = async () => {
+        const arbitration = currentFollowUpArbitrationFence()
+        return RoomStoreCommitResultSchema.parse(await this.call('commit', {
+          input, ...(fence ? { fence } : {}), ...(arbitration ? { arbitration } : {})
+        }))
+      }
+      const result = fence && mayChangeFollowUpAdmission(input)
+        ? await withFollowUpArbitration(commit, {
+          baseUrl: this.manager.discovery.baseUrl, token: this.manager.discovery.managerToken,
+          flavor: fence.ownerFlavor, instanceId: fence.ownerInstanceId
+        }) : await commit()
       // A replay may be the first response after an ambiguous Manager connection loss.
       notifyRoomStoreCommit(input)
       return result
     } finally {
       invalidateTickReads()
     }
+  }
+
+  private async followUpMutation(operation: 'stageManualFollowUp' | 'claimManualFollowUp' | 'issueManualFollowUpPermit' |
+    'beginManualFollowUpDispatch' | 'reconcileManualFollowUp', body: Record<string, unknown>): Promise<unknown> {
+    const fence = this.options.getFence?.()
+    if (!fence) throw new NativeFollowUpPermitError('rooms coordinator fence is required for manual follow-up')
+    try {
+      return await withFollowUpArbitration(async () => {
+        const arbitration = currentFollowUpArbitrationFence()
+        if (!arbitration) throw new NativeFollowUpPermitError('follow-up arbitration is unavailable')
+        return this.call(operation, { ...body, fence, arbitration })
+      }, { baseUrl: this.manager.discovery.baseUrl, token: this.manager.discovery.managerToken,
+        flavor: fence.ownerFlavor, instanceId: fence.ownerInstanceId })
+    } finally { invalidateTickReads() }
+  }
+
+  /** A manual action is minted only by Manager; a generic room commit is not authority. */
+  async stageManualFollowUp(participantAgentId: string, commitmentId: string, raw: unknown): Promise<ContinueCommitmentResult> {
+    await this.options.ready?.()
+    const command = ContinueCommitment.parse(raw)
+    const result = ContinueCommitmentResult.parse(await this.followUpMutation('stageManualFollowUp',
+      { participantAgentId, commitmentId, command }))
+    notifyRoomStoreCommit()
+    return result
+  }
+
+  async claimManualFollowUp(attemptId: string): Promise<ManualFollowUpClaim> {
+    return ManualFollowUpClaim.parse(await this.followUpMutation('claimManualFollowUp', { attemptId }))
+  }
+
+  async issueManualFollowUpPermit(attemptId: string, claimToken: number): Promise<CommitmentExecutionPermit> {
+    return CommitmentExecutionPermitSchema.parse(await this.followUpMutation('issueManualFollowUpPermit', { attemptId, claimToken }))
+  }
+
+  async beginManualFollowUpDispatch(attemptId: string, claimToken: number): Promise<ManualFollowUpDispatch> {
+    return ManualFollowUpDispatch.parse(await this.followUpMutation('beginManualFollowUpDispatch', { attemptId, claimToken }))
+  }
+
+  async reconcileManualFollowUp(attemptId: string): Promise<FollowUpReceipt> {
+    const receipt = FollowUpReceiptSchema.parse(await this.followUpMutation('reconcileManualFollowUp', { attemptId }))
+    notifyRoomStoreCommit()
+    return receipt
+  }
+
+  /** Runs only inside the caller's existing thread mutation lock. */
+  async withNativeFollowUpAdmission<T>(input: { thread: ThreadRecord; admission: NativeFollowUpAdmission;
+    stage: 'enqueue' | 'promote' }, operation: () => Promise<T>): Promise<T> {
+    const fence = this.options.getFence?.()
+    if (!fence) throw new NativeFollowUpPermitError('rooms coordinator fence is required for native admission')
+    return withFollowUpArbitration(async () => {
+      const arbitration = currentFollowUpArbitrationFence()
+      if (!arbitration) throw new NativeFollowUpPermitError('native admission arbitration is unavailable')
+      // Do not use tick-cached reads for a mutable claim or permit.
+      const [effectRow, executionRow] = await Promise.all([
+        this.call('get', { kind: 'commitment_effect', id: input.admission.effectId }),
+        this.call('get', { kind: 'commitment_execution', id: input.admission.attemptId })
+      ])
+      if (!effectRow || !executionRow) throw new NativeFollowUpPermitError('native admission records are unavailable')
+      const effect = CommitmentEffectSchema.parse(RoomStoredDocumentSchema.parse(effectRow).value)
+      const execution = CommitmentExecutionSchema.parse(RoomStoredDocumentSchema.parse(executionRow).value)
+      const permit = execution.permit
+      if (!permit?.native || execution.nativeRequest?.threadId !== input.thread.id ||
+        effect.id !== input.admission.effectId || effect.envelope.attemptId !== input.admission.attemptId ||
+        effect.requestId !== input.admission.requestId || effect.admissionKey !== input.admission.admissionKey ||
+        effect.fingerprint !== input.admission.fingerprint ||
+        input.stage === 'enqueue' && (!effect.claim || effect.claim.ownerId !== fence.ownerInstanceId)) {
+        throw new NativeFollowUpPermitError('native admission scope no longer matches its reservation')
+      }
+      return withNativeFollowUpWriteScope({ admission: input.admission, stage: input.stage,
+        claimToken: effect.claim?.token ?? permit.claimToken, arbitration, coordinatorFence: fence }, operation)
+    }, { baseUrl: this.manager.discovery.baseUrl, token: this.manager.discovery.managerToken,
+      flavor: fence.ownerFlavor, instanceId: fence.ownerInstanceId })
   }
 
   async listRooms(options: RoomListOptions = {}): Promise<RoomListPage> {

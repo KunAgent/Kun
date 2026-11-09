@@ -1,4 +1,9 @@
 {
+  "modelStreamInterrupted": "响应中断",
+  "modelStreamInterruptedPartial": "响应中断，已保留部分内容。你可以继续输入。",
+  "modelStreamInterruptedSummary": "响应在完成前中断。",
+  "modelStreamReplayConflict": "响应恢复失败",
+  "modelStreamReplayConflictSummary": "此前输出已保留。首次中断的原因未知，你可以继续输入。",
   "modelErrorSourceProvider": "供应商返回",
   "modelErrorSourceNoResponse": "未收到供应商响应",
   "modelErrorSourceNotSent": "请求未发送",

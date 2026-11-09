@@ -57,11 +57,13 @@ export default function WhatsNewDialog({ content, onClose: dismiss }: Props): Re
     ? pickHighlights(summary, spotlight ? { exclude: spotlight.covers, limit: SPOTLIGHT_HIGHLIGHT_LIMIT } : {})
     : null), [spotlight, summary])
   const fixesOnly = Boolean(summary && !spotlight && !picked?.highlights.length && summary.fixes.length)
-  const workbench = content.version.trim().replace(/^v/i, '') === '0.4.4' && (summary?.features.length ?? 0) >= 3
+  const releaseVersion = content.version.trim().replace(/^v/i, '')
+  const workbench = releaseVersion === '0.4.4' && (summary?.features.length ?? 0) >= 3
   const [featuresOpen, setFeaturesOpen] = useState(false)
   const [fixesOpen, setFixesOpen] = useState(fixesOnly)
-  const otherFeatures = spotlight?.id === 'artifacts' && summary
-    ? summary.features.filter((item) => !spotlight.covers.test(item.title) && !isCatchAllItem(item)).slice(SPOTLIGHT_HIGHLIGHT_LIMIT)
+  // 0.4.5 has more features than the generic three highlights and four chips can show.
+  const otherFeatures = summary && (spotlight?.id === 'artifacts' || releaseVersion === '0.4.5')
+    ? summary.features.filter((item) => !spotlight?.covers.test(item.title) && !isCatchAllItem(item)).slice(picked?.highlights.length ?? 0)
     : []
   const fixesRef = useRef<HTMLDivElement>(null)
   const skipped = content.older.length

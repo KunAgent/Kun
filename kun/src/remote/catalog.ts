@@ -1,4 +1,6 @@
 import { VERSION as REMOTE_PROTOCOL_VERSION, DIRECTORY_LIVE_CAPABILITY, MODEL_INFO_CAPABILITY, OPERATION_READ_METHODS, REASONING_EFFORT_CAPABILITY } from '@kun/remote-protocol'
+import { FILE_IDENTITY_CAPABILITY, CODE_HISTORY_SYNC_CAPABILITY } from '@kun/remote-protocol'
+import { DispatchParamSchemas } from './dispatch/contracts.js'
 import { KUN_VERSION, KUN_RELEASE_CHANNEL } from '../version.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import type { Envelope } from './contracts.js'
@@ -13,6 +15,7 @@ import type { RemoteSourceContent } from './messages/source/content.js'
 import { AttentionParamSchemas } from './attention/contracts.js'
 import { ArtifactDirectoryParamSchemas } from './files/artifact-contracts.js'
 import { ProjectFilesParamSchemas } from './files/project-contracts.js'
+import { WorkParamSchemas } from './work/contracts.js'
 import { ExecutionQueueParamSchemas } from './execution/contracts.js'
 import { GoalParamSchemas } from './goals/contracts.js'
 import { GroupParamSchemas } from './groups/contracts.js'
@@ -40,6 +43,7 @@ export async function remoteCapabilityDescriptors(
         supported: true, enabled: true, authorized: true, online: true, limits: { ...limits } })
     }
   }
+  add(DispatchParamSchemas, 'code', { pageSize: 30, assignments: 16 }, Boolean(runtime.agentDispatchService))
   add(CodeManagementParamSchemas, 'code', { pageSize: 50 })
   const search = descriptors.find((descriptor) => descriptor.operation === 'code.search')
   if (search) search.limits.dateRange = 1
@@ -60,6 +64,7 @@ export async function remoteCapabilityDescriptors(
   for (const [operation, schema] of Object.entries(ProjectFilesParamSchemas)) {
     add({ [operation]: schema }, 'file', { pageSize: operation.startsWith('project.') ? 50 : 20 })
   }
+  add(WorkParamSchemas, 'code', { pageSize: 50 })
   add(GroupParamSchemas, 'group', { pageSize: 20 }, Boolean(runtime.rooms))
   const send = descriptors.find((descriptor) => descriptor.operation === 'group.message.send')
   if (send) send.limits.attachments = 0
@@ -103,7 +108,8 @@ export async function remoteCatalog(runtime: ServerRuntime, scope: Envelope, mod
     projects: list.map(({ id, name }) => ({ id, name })), models: availableModels,
     defaultModel: runtime.defaultModel,
     agents: await codeAgents(runtime, availableModels),
-    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, 'approvals', 'attachments',
+    capabilities: ['agent', 'code', 'code.agents', REASONING_EFFORT_CAPABILITY, MODEL_INFO_CAPABILITY, FILE_IDENTITY_CAPABILITY, 'approvals', 'attachments',
+      ...(runtime.sessionStore.iterateEventsSince ? [CODE_HISTORY_SYNC_CAPABILITY] : []),
       ...(runtime.threadActivity ? [DIRECTORY_LIVE_CAPABILITY] : [])],
     scopes: scope.scopes, capabilityDescriptors: await descriptors(), attachmentMaxBytes: 10 * 1024 * 1024
   }

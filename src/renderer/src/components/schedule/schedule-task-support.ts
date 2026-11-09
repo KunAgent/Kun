@@ -19,7 +19,7 @@ import {
   modelProviderModelProfile
 } from '@shared/app-settings-provider-core'
 
-export type TaskFilter = 'all' | 'enabled' | 'running' | 'done'
+export type TaskFilter = 'all' | 'enabled' | 'running' | 'done' | 'failed'
 export type ScheduleClientMode = 'code' | 'im'
 export type ScheduleModelProviderOption = {
   providerId: string
@@ -32,7 +32,7 @@ export type TaskDialogState =
   | { mode: 'create'; draft: ScheduledTaskV1 }
   | { mode: 'edit'; taskId: string; draft: ScheduledTaskV1 }
 
-export const SCHEDULE_FILTERS: TaskFilter[] = ['all', 'enabled', 'running', 'done']
+export const SCHEDULE_FILTERS: TaskFilter[] = ['all', 'enabled', 'running', 'done', 'failed']
 export const SCHEDULE_KIND_OPTIONS: ScheduleKind[] = ['daily', 'at', 'interval', 'manual']
 export const SCHEDULE_REASONING_OPTIONS: ScheduleReasoningEffort[] = [...SCHEDULE_REASONING_EFFORT_IDS]
 export const EMPTY_SCHEDULE_TASKS: ScheduledTaskV1[] = []
@@ -310,11 +310,20 @@ export function validateScheduledTaskDraft(
   return null
 }
 
-export function filterScheduledTasks(tasks: ScheduledTaskV1[], filter: TaskFilter): ScheduledTaskV1[] {
+export function filterScheduledTasks(
+  tasks: ScheduledTaskV1[], filter: TaskFilter, query = '',
+  runtime?: { runningTaskIds: string[]; queuedTaskIds: string[] } | null
+): ScheduledTaskV1[] {
+  const search = query.trim().toLocaleLowerCase()
   const filtered = tasks.filter((task) => {
+    if (search && ![task.title, task.prompt, task.workspaceRoot].some((value) =>
+      value.toLocaleLowerCase().includes(search)
+    )) return false
+    const status = scheduledTaskDisplayStatus(task, runtime)
     if (filter === 'enabled') return task.enabled
-    if (filter === 'running') return task.lastStatus === 'queued' || task.lastStatus === 'running'
-    if (filter === 'done') return task.lastStatus === 'success' || task.lastStatus === 'error'
+    if (filter === 'running') return status === 'queued' || status === 'running'
+    if (filter === 'done') return status === 'success' || status === 'error'
+    if (filter === 'failed') return status === 'error'
     return true
   })
   return [...filtered].sort((a, b) => {
@@ -325,6 +334,15 @@ export function filterScheduledTasks(tasks: ScheduledTaskV1[], filter: TaskFilte
     if (Number.isFinite(bNext)) return 1
     return Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
   })
+}
+
+export function scheduledTaskDisplayStatus(
+  task: ScheduledTaskV1,
+  runtime?: { runningTaskIds: string[]; queuedTaskIds: string[] } | null
+): ScheduledTaskV1['lastStatus'] {
+  if (runtime?.runningTaskIds.includes(task.id)) return 'running'
+  if (runtime?.queuedTaskIds.includes(task.id)) return 'queued'
+  return task.lastStatus
 }
 
 export function scheduledTaskLastThreadId(task: Pick<ScheduledTaskV1, 'lastThreadId'>): string {

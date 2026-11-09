@@ -1,4 +1,5 @@
 import { BrowserWindow } from 'electron'
+import { BrowserUseZoomInputSchema } from '../../shared/browser-use'
 import type {
   BrowserUseAuditEntry,
   BrowserUseDecisionInput,
@@ -150,7 +151,8 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     rawBounds: BrowserUseRect,
     visible: boolean,
     supervisionActive = visible,
-    expectedTurnId?: string
+    expectedTurnId?: string,
+    cornerRadius = 0
   ): BrowserUseViewState {
     const entry = this.sessions.get(threadId)
     if (!entry) return this.defaultState()
@@ -173,6 +175,7 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
       lifecycleWindow.once?.('closed', onRendererLost)
     }
     entry.mount = {
+      cornerRadius,
       expectedTurnId,
       window,
       bounds,
@@ -347,6 +350,26 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
       action: `user-${command}`,
       outcome: 'success'
     }, tab.id)
+    this.publish(entry)
+    return this.state(entry)
+  }
+
+  setZoom(threadId: string, zoomPercent: number, expectedTurnId?: string): BrowserUseViewState {
+    BrowserUseZoomInputSchema.parse({ threadId, zoomPercent, expectedTurnId })
+    this.assertExpectedTurn(threadId, expectedTurnId)
+    const entry = this.requireSession(threadId)
+    if (entry.stopping) throw new Error('This Browser Use session is stopped. Clear it before starting a new session.')
+    if (entry.pendingOriginDecision || entry.pendingActionDecision) {
+      throw new Error('Resolve the pending browser permission before changing page zoom.')
+    }
+    const tab = this.requireActiveTab(entry)
+    const contents = tab.view.webContents
+    if (contents.isDestroyed()) throw new Error('The browser page is no longer available.')
+    this.cancelActiveOperations(entry)
+    // Page zoom affects the isolated page only, never the workbench zoom or
+    // the DIP bounds of its native view. Retire pre-zoom observation refs.
+    contents.setZoomFactor(zoomPercent / 100)
+    this.invalidateDocument(entry, 'user-zoom')
     this.publish(entry)
     return this.state(entry)
   }

@@ -150,6 +150,8 @@ async steerTurn(this: TurnService, input: {
               `steering queue capacity reached for active turn: ${input.turnId}`
             )
           }
+          const activityAt = this['deps'].nowIso()
+          await this['deps'].threadStore.upsert({ ...current!, activityAt, updatedAt: activityAt })
           return 'accepted' as const
         })
         if (action === 'accepted') break
@@ -327,8 +329,10 @@ async interruptTurn(this: TurnService, input: { threadId: string; turnId: string
               )
             : candidate
         )
+        const activityAt = this['deps'].nowIso()
         await this['deps'].threadStore.upsert({
-          ...touchThread(current, this['deps'].nowIso()),
+          ...touchThread(current, activityAt),
+          ...(turn.status === 'running' ? { activityAt } : {}),
           turns,
           ...(turn.status === 'running' && !input.preserveQueue ? { queueControl: { reason: 'user_stop' as const, sourceTurnId: turn.id, pausedAt: this['deps'].nowIso() } } : {}),
           status: threadStatusAfterTurnTransition(current.status, turns),

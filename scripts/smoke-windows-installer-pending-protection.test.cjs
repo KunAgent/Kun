@@ -1,7 +1,7 @@
 'use strict'
 const assert = require('node:assert/strict')
 const test = require('node:test')
-const { mkdtemp, writeFile, readFile, rm, rename } = require('node:fs/promises')
+const { mkdtemp, writeFile, readFile, rm, rename, realpath } = require('node:fs/promises')
 const { join } = require('node:path')
 const { tmpdir } = require('node:os')
 const { EventEmitter } = require('node:events')
@@ -10,7 +10,8 @@ const { pendingFingerprint, samePending, reconcileDenial, captureRestartOutput, 
 const { observePreparedRestart } = require('./smoke-windows-installer-prepared-restart.cjs')
 
 async function temporary(t) {
-  const root = await mkdtemp(join(tmpdir(), 'kun-pending-protection-'))
+  // The owned-path reader rejects aliases; macOS /var is a symlink to /private/var.
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'kun-pending-protection-')))
   t.after(() => rm(root, { recursive: true, force: true }))
   return root
 }

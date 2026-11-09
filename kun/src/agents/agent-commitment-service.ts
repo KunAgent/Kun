@@ -7,6 +7,7 @@ import type { RoomRuntimeDeps, RoomTaskExecution } from '../rooms/room-runtime-t
 import { RoomStoreConflictError } from '../rooms/room-store.js'
 import { roomFingerprint } from '../rooms/room-service.js'
 import { agentStableId, type AgentIdentityService } from './agent-identity-service.js'
+import { guardLegacyCommitmentUpdate } from './followup/legacy-update.js'
 
 /** Durable commitments track outcomes across turns. Execution remains with existing tasks/threads. */
 export class AgentCommitmentService {
@@ -62,6 +63,8 @@ export class AgentCommitmentService {
   }
 
   async create(agentId: string, raw: unknown): Promise<AgentCommitmentEntry> {
+    await this.deps.waitForOwnership?.()
+    await this.deps.assertOwnership()
     const input = CreateAgentCommitment.parse(raw)
     const id = agentStableId('commitment', agentId, input.clientRequestId), receipt = id + ':create'
     const fingerprint = roomFingerprint({ agentId, input })
@@ -86,6 +89,8 @@ export class AgentCommitmentService {
   }
 
   async update(agentId: string, id: string, raw: unknown): Promise<AgentCommitmentEntry> {
+    await this.deps.waitForOwnership?.()
+    await this.deps.assertOwnership()
     const input = UpdateAgentCommitment.parse(raw), receipt = id + ':update:' + input.clientRequestId
     const fingerprint = roomFingerprint({ agentId, id, input })
     const old = await this.deps.store.getRequest(receipt)
@@ -111,10 +116,11 @@ export class AgentCommitmentService {
     if (['waiting', 'blocked'].includes(value.status) && !value.waitingOn?.trim()) throw new Error('waiting or blocked requires a waitingOn explanation')
     if (['completed', 'cancelled'].includes(value.status)) { value.finishedAt = now; value.nextCheckAt = null }
     else delete value.finishedAt
+    const followUp = await guardLegacyCommitmentUpdate(this.deps.store, prior, value)
     const result = { ...value, revision: revision + 1 }
     await this.deps.store.commit({ requestId: receipt, fingerprint,
-      checks: [{ kind: 'agent_commitment', id, expectedRevision: revision }],
-      puts: [{ kind: 'agent_commitment', id, roomId: value.sourceRoomId, value }],
+      checks: [{ kind: 'agent_commitment', id, expectedRevision: revision }, ...followUp.checks],
+      puts: [{ kind: 'agent_commitment', id, roomId: value.sourceRoomId, value }, ...followUp.puts],
       events: [{ roomId: value.sourceRoomId, kind: 'agent.commitment.updated', payload: { id, participantAgentId: agentId } }], result })
     return result
   }

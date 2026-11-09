@@ -64,8 +64,9 @@ describe('gateway route bounds and disclosure', () => {
     { kind: 'assistant_text_delta', text: 'partial' },
     { kind: 'assistant_reasoning_delta', text: 'thinking' },
     { kind: 'tool_call_delta', callId: 'call', argumentsDelta: '{' },
-    { kind: 'tool_call_complete', callId: 'call', toolName: 'search', arguments: {} }
-  ])('never retries after content or tool commitment: $kind', async (committed) => {
+    { kind: 'tool_call_complete', callId: 'call', toolName: 'search', arguments: {} },
+    { kind: 'image_generation_complete', imageBase64: 'aW1hZ2U=', mimeType: 'image/png' }
+  ])('never retries after content, tool, or media commitment: $kind', async (committed) => {
     const fake = direct(async function* () { yield committed; yield fail() })
     const client = new RoutePoolModelClient(fake.client, [route()], capabilities)
     const chunks = await drain(client.stream(request()))

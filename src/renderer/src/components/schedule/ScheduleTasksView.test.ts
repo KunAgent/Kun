@@ -119,6 +119,21 @@ describe('ScheduleTasksView helpers', () => {
     ], 'done').map((item) => item.id)).toEqual(['success', 'error'])
   })
 
+  it('combines search, failed filters and live runtime status without changing done semantics', () => {
+    const tasks = [
+      task('name', { title: 'Ops summary', lastStatus: 'success' }),
+      task('prompt', { prompt: 'Check OPS', lastStatus: 'error' }),
+      task('workspace', { workspaceRoot: '/repo/ops', lastStatus: 'error' }),
+      task('other', { title: 'Unrelated', lastStatus: 'idle' })
+    ]
+    expect(filterScheduledTasks(tasks, 'all', '  oPs ').map((item) => item.id)).toEqual(['name', 'prompt', 'workspace'])
+    expect(filterScheduledTasks(tasks, 'failed', 'ops').map((item) => item.id)).toEqual(['prompt', 'workspace'])
+    expect(filterScheduledTasks(tasks, 'done').map((item) => item.id)).toEqual(['name', 'prompt', 'workspace'])
+    const runtime = { runningTaskIds: ['prompt'], queuedTaskIds: ['other'] }
+    expect(filterScheduledTasks(tasks, 'running', '', runtime).map((item) => item.id)).toEqual(['prompt', 'other'])
+    expect(filterScheduledTasks(tasks, 'failed', '', runtime).map((item) => item.id)).toEqual(['workspace'])
+  })
+
   it('summarizes schedule timing for the list UI', () => {
     expect(scheduleTaskSummary(task('daily', {
       schedule: { kind: 'daily', everyMinutes: 60, timeOfDay: '08:30', atTime: '' }

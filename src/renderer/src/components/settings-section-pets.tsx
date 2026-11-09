@@ -4,6 +4,8 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { PET_CELL_HEIGHT, PET_CELL_WIDTH, PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetImportReport, type PetSettings, type PetSummary } from '@shared/pets'
 import { staticFrame } from '../pets/pet-animation'
 import { settingsButtonClass } from './settings-button'
+import { SettingsPetGlobalActivity } from './settings-pet-global-activity'
+import { SettingsPetVisits } from './settings-pet-visits'
 import './settings-pets.css'
 
 type PetsView = {
@@ -18,7 +20,7 @@ type PetsView = {
 const initialView: PetsView = { status: 'loading', pets: [], settings: null, report: null, error: null, interactionNote: null }
 
 export function PetsSettingsSection(): ReactElement {
-  const { t } = useTranslation('settings')
+  const { t, i18n } = useTranslation('settings')
   const [view, setView] = useState<PetsView>(initialView)
   const petsApi = typeof window === 'undefined' ? undefined : window.kunGui?.pets
 
@@ -77,6 +79,12 @@ export function PetsSettingsSection(): ReactElement {
           <span>{selectedPet?.description ?? t('petsSelectFirst')}</span>
         </div>
       </div>
+      <SettingsPetGlobalActivity api={petsApi} settings={view.settings} language={i18n?.language ?? 'en'} />
+      <SettingsPetVisits pets={view.pets} settings={view.settings} api={petsApi}
+        language={i18n?.language ?? 'en'} onSettings={(settings) => {
+          setView((current) => ({ ...current, settings }))
+          window.dispatchEvent(new Event('kun-pet-settings-changed'))
+        }} />
       <div className="pets-settings-section">
         <div className="pets-settings-section-header">
           <h2>{t('petsImported')}</h2>

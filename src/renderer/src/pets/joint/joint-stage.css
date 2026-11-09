@@ -1,0 +1,9 @@
+.pet-joint-stage { isolation: isolate; }
+.pet-joint-canvas { position: absolute; inset: 0; pointer-events: none; }
+.pet-joint-hit { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; background: transparent; pointer-events: auto; cursor: grab; touch-action: none; }
+.pet-joint-hit:active { cursor: grabbing; }
+.pet-joint-hit:focus-visible { outline: 2px solid #86bbc7; outline-offset: -3px; }
+.pet-joint-caption { opacity: .6; transition: opacity .15s; font-size: 11px; background: #fffcf3b0; box-shadow: none; }
+.pet-joint-stage:hover .pet-joint-caption, .pet-joint-stage:focus-within .pet-joint-caption { opacity: 1; }
+.pet-joint-error { position: absolute; bottom: 30px; left: 0; right: 0; text-align: center; font: 12px system-ui; color: #78695c; }
+@media (prefers-reduced-motion: reduce) { .pet-joint-caption { transition: none; } }

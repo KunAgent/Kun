@@ -87,6 +87,7 @@ export function useFloatingComposerActions(
     steerWindowExpiresAtRef.current = Date.now() + DOUBLE_ENTER_STEER_WINDOW_MS
   }, [busy, onGuideQueuedMessage, queuedMessages.length])
   const applySlashCommand = (commandId: SlashCommandId): void => {
+    if (route === 'papers') return
     if (commandId.startsWith('harness:')) {
       // Harness-native commands go out verbatim — the owning harness parses
       // them, so the builtin parsers must never touch the text.
@@ -320,6 +321,11 @@ export function useFloatingComposerActions(
     // An approval / ask-user card holds the input slot; the hidden editor (and
     // voice "send") must not submit underneath it. Answers go through the card.
     if (composerInterrupt) return
+    // PDF composers own a source-scoped send; global commands target a different projection.
+    if (route === 'papers') {
+      if (!primaryActionDisabled) { inputHistory.push(input); onSend() }
+      return
+    }
     if (highlightedSlashCommand) {
       if (highlightedSlashCommand.disabled) return
       applySlashCommand(highlightedSlashCommand.id)
@@ -395,7 +401,7 @@ export function useFloatingComposerActions(
 
     if (fileMentions.handleKeyDown(event, composing)) return
 
-    if (slashCommandMenu.handleKeyDown(event, composing)) return
+    if (route !== 'papers' && slashCommandMenu.handleKeyDown(event, composing)) return
 
     if (inputHistory.handleKeyDown(event, { input, setInput, composing })) return
 

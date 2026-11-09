@@ -13,7 +13,8 @@ export function VipEntitlements({ owner }: { owner: string }): ReactElement {
     {shown?.expiresAt ? <p>{zh ? '有效期至：' : 'Expires: '}{new Date(shown.expiresAt).toLocaleString()}</p> : null}
     {shown?.status === 'active' && !shown.expiresAt ? <p>{zh ? '长期有效' : 'No expiry'}</p> : null}
     <p>Plus · {zh ? '手机远控' : 'Mobile remote access'}</p>
-    <p>Pro / Max · {zh ? '手机远控、个人助手' : 'Mobile remote access and personal assistants'}</p>
+    <p>Pro · {zh ? '手机远控、个人助手' : 'Mobile remote access and personal assistants'}</p>
+    <p>Max · {zh ? '手机远控、个人助手、电脑互控' : 'Mobile remote access, personal assistants and computer remote desktop'}</p>
     <button type="button" className="mt-2 flex w-full items-center justify-between rounded-md bg-ds-subtle px-2 py-2 text-ds-ink" onClick={() => { setOpeningFailed(false); const open = window.kunGui?.kunAccount?.openMembership; if (open) void open().catch(() => setOpeningFailed(true)); else setOpeningFailed(true) }}>{zh ? '兑换邀请码 / 体验码' : 'Redeem invitation / trial code'}<span aria-hidden="true">↗</span></button>
     {openingFailed ? <p role="alert">{zh ? '打开失败，请在官网个人中心的会员页兑换。' : 'Open the membership tab in your account on the website.'}</p> : null}
   </section>

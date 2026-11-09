@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getModelProviderPreset, modelProviderPresetProfile } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import i18n from '../../i18n'
 import { FloatingComposerModelPicker } from './FloatingComposerModelPicker'
@@ -68,6 +69,24 @@ const buttonWithText = (text: string): HTMLButtonElement | undefined =>
   [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] button')].find((button) => button.textContent?.trim() === text)
 
 describe('composer model and reasoning control', () => {
+  it('offers Terra reasoning levels from the subscription preset instead of Auto alone', async () => {
+    const provider = modelProviderPresetProfile(getModelProviderPreset('codex')!)
+    const onReasoning = vi.fn()
+    const trigger = await renderPicker({
+      composerModel: 'gpt-6.1-terra', composerProviderId: provider.id, composerReasoningEffort: 'auto',
+      composerModelGroups: [{ providerId: provider.id, label: provider.name, modelIds: ['gpt-6.1-terra'],
+        modelProfiles: provider.modelProfiles }],
+      onComposerReasoningEffortChange: onReasoning
+    })
+    expect(onReasoning).toHaveBeenLastCalledWith('low')
+    await act(async () => trigger.click())
+    const buttons = [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] button[data-reasoning-effort]')]
+    expect(buttons.map((button) => button.dataset.reasoningEffort)).toEqual(['low', 'medium', 'high', 'max'])
+    expect(buttons.find((button) => button.dataset.reasoningEffort === 'low')?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => buttons.find((button) => button.dataset.reasoningEffort === 'max')!.click())
+    expect(onReasoning).toHaveBeenLastCalledWith('max')
+  })
+
   it('keeps a task picker open across model and reasoning changes until Done', async () => {
     const onModel = vi.fn()
     const onReasoning = vi.fn()

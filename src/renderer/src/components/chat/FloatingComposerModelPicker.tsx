@@ -1,3 +1,4 @@
+import { publishPetModel } from '../../pets/pet-presence-client'
 import { AgentModelCatalogFooter } from '../ade/AgentModelCatalogFooter'
 import { useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react'
 import { ComposerPickerPortalContext } from './composer-picker-portal-context'
@@ -143,6 +144,15 @@ export function FloatingComposerModelPicker({
         : emptyModelState === 'agent-not-ready' ? 'agentUpdate.composerNotReadyHint'
           : emptyModelState === 'unavailable' ? 'composerModelsUnavailableHint' : 'composerAgentDefaultModelHint') : undefined
   const needsProviderSetup = !emptyModelMessage && shouldShowProviderSetupPrompt(providerMenuGroups)
+  const petModel = needsProviderSetup ? '' : currentModel
+  const previousPetModel = useRef({ model: petModel, provider: composerProviderId })
+  useEffect(() => {
+    const previous = previousPetModel.current
+    previousPetModel.current = { model: petModel, provider: composerProviderId }
+    if (taskScoped || !petModel || (previous.model === petModel && previous.provider === composerProviderId)) return
+    const group = composerModelGroups.find((entry) => entry.providerId === composerProviderId)
+    publishPetModel(petModel, group?.presetSource || group?.nativeHarnessId || composerProviderId, Boolean(previous.model))
+  }, [petModel, composerProviderId, composerModelGroups, taskScoped])
   const reasoningSelection = resolveComposerReasoningSelection({ groups: providerMenuGroups, model: currentModel,
     providerId: selectedProviderId, effort: composerReasoningEffort, allowedEfforts: allowedReasoningEfforts,
     requireReportedLevels: taskScoped })
@@ -321,6 +331,8 @@ export function FloatingComposerModelPicker({
   return (
     <div
       ref={pickerRef}
+      data-pet-model={taskScoped || needsProviderSetup ? undefined : currentModel}
+      data-pet-provider={needsProviderSetup ? undefined : selectedProviderGroup?.presetSource || composerModelGroups.find((group) => group.providerId === selectedProviderId)?.nativeHarnessId || composerProviderId}
       className={`ds-composer-model-picker ds-no-drag relative flex h-9 items-center ${widthClass} ${
         mode === 'combobox' && stretch ? 'justify-end' : ''
       }`}

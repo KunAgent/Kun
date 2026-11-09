@@ -1,6 +1,7 @@
 const { createHash } = require('node:crypto')
 const { readFileSync, writeFileSync } = require('node:fs')
 const { join } = require('node:path')
+const { verifyMacAppSigning } = require('./mac-signing-policy.cjs')
 
 // Builder signs unpacked executables after afterPack. Hash the final bytes,
 // not the compiler output, before NSIS consumes the application directory.
@@ -20,6 +21,14 @@ function finalizeWindowsStartup(context) {
 
 exports.default = async function afterSign(context) {
   if (context.electronPlatformName === 'win32') finalizeWindowsStartup(context)
-  else await require('./mac-notarize.cjs').default(context)
+  else {
+    if (context.electronPlatformName === 'darwin') {
+      const config = context.packager.config
+      verifyMacAppSigning(join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`), {
+        bundleId: config.appId, flavor: config.extraMetadata?.kunAppFlavor
+      })
+    }
+    await require('./mac-notarize.cjs').default(context)
+  }
 }
 exports.finalizeWindowsStartup = finalizeWindowsStartup

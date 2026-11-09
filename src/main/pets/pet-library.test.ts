@@ -43,13 +43,13 @@ describe('pet packages', () => {
 
   it('imports v1 and v2, keeps selection, and preserves the last good copy', async () => {
     const root = await temp()
-    const builtin = path.join(root, 'builtin', 'kun-dot')
+    const builtin = path.join(root, 'builtin', 'xiao-kun')
     const local = path.join(root, 'local', '小 猫')
     const codex = path.join(root, 'codex-home', 'pets')
     const first = path.join(codex, 'a-pet')
     const duplicate = path.join(codex, 'b-pet')
     const broken = path.join(codex, 'c-pet')
-    await writePackage(builtin, 'kun-dot', sheet)
+    await writePackage(builtin, 'xiao-kun', sheet)
     await writePackage(local, 'local-cat', sheet)
     await writePackage(first, 'same-id', sheet)
     await writePackage(duplicate, 'same-id', sheet)
@@ -69,7 +69,7 @@ describe('pet packages', () => {
     expect(report.conflicts).toHaveLength(1)
     expect(store.listPets().map((pet) => pet.id).sort()).toEqual([
       petIdForSource('codex-custom', 'same-id'),
-      petIdForSource('kun-builtin', 'kun-dot'),
+      petIdForSource('kun-builtin', 'xiao-kun'),
       petIdForSource('kun-local', 'local-cat')
     ].sort())
     const selected = petIdForSource('codex-custom', 'same-id')
@@ -138,7 +138,7 @@ describe('pet packages', () => {
     const store = new PetStore(root)
     await store.initialize()
     const builtin = path.join(root, 'src')
-    await writePackage(path.join(builtin, 'kun-dot'), 'kun-dot', sheet)
+    await writePackage(path.join(builtin, 'xiao-kun'), 'xiao-kun', sheet)
     await refreshPetLibraries({
       store,
       builtinRoot: builtin,
@@ -146,7 +146,7 @@ describe('pet packages', () => {
       codexHome: path.join(root, 'missing-codex'),
       importCodexPets: false
     })
-    const id = petIdForSource('kun-builtin', 'kun-dot')
+    const id = petIdForSource('kun-builtin', 'xiao-kun')
     const url = `kun-pet://asset/${encodeURIComponent(id)}/spritesheet?v=1`
     expect(parsePetAssetUrl(url)?.petId).toBe(id)
     expect(parsePetAssetUrl('file:///etc/passwd')).toBeNull()
@@ -157,7 +157,7 @@ describe('pet packages', () => {
     expect((await readPetAsset('file:///etc/passwd', () => '/etc/passwd', store.libraryRoot())).status).toBe(404)
   })
 
-  it('accepts every shipped built-in pet, including the Awaken set', async () => {
+  it('ships only the two Kun mascots and DS', async () => {
     const root = path.resolve('resources/pets')
     const names = (await readdir(root)).sort()
     const imported: string[] = []
@@ -168,33 +168,19 @@ describe('pet packages', () => {
       expect(validated.warnings, name).toEqual([])
       imported.push(`${validated.sourceId}:v${validated.spriteVersionNumber}`)
     }
-    expect(imported).toEqual([
-      'alo-asuna:v1',
-      'anya:v1',
-      'artoria:v1',
-      'dordor:v1',
-      'gojo:v1',
-      'goku:v1',
-      'kawaii-bear-puppy:v1',
-      'lulu-capybara:v1',
-      'nezuko:v1',
-      'nezukocoder:v1',
-      'snowy:v1',
-      'trae:v2',
-      'yi-er:v1',
-      'zodiac-pig:v1'
-    ])
+    expect(imported).toEqual(['ikun:v1', 'whale-girl:v1', 'xiao-kun:v1'])
   })
 
   it('loads the offline built-in pet from a packaged resource root', async () => {
     const root = await temp()
     const packaged = path.join(root, 'Resources', 'pets')
-    const source = path.resolve('resources/pets/anya')
     await mkdir(packaged, { recursive: true })
     const { cp } = await import('node:fs/promises')
-    await cp(source, path.join(packaged, 'anya'), { recursive: true })
-    const validated = await validatePetPackage(path.join(packaged, 'anya'), 'anya')
-    expect(validated).toMatchObject({ sourceId: 'anya', spriteVersionNumber: 1 })
+    for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
+      await cp(path.resolve('resources/pets', id), path.join(packaged, id), { recursive: true })
+    }
+    const validated = await validatePetPackage(path.join(packaged, 'xiao-kun'), 'xiao-kun')
+    expect(validated).toMatchObject({ sourceId: 'xiao-kun', spriteVersionNumber: 1 })
     const store = new PetStore(path.join(root, 'user', 'pets'))
     await store.initialize()
     const report = await refreshPetLibraries({
@@ -204,8 +190,30 @@ describe('pet packages', () => {
       codexHome: path.join(root, 'no-codex'),
       importCodexPets: false
     })
-    expect(report.imported.map((pet) => pet.sourceId)).toContain('anya')
-    expect(store.assetPath(petIdForSource('kun-builtin', 'anya'))).toBeTruthy()
+    expect(report.imported.map((pet) => pet.sourceId)).toContain('xiao-kun')
+    expect(store.listPets()).toContainEqual(expect.objectContaining({
+      id: 'kun:ikun', displayName: 'iKun', source: 'kun-builtin', available: true
+    }))
+    expect(store.listPets()).toContainEqual(expect.objectContaining({
+      id: 'kun:whale-girl', displayName: '鲸鱼娘', source: 'kun-builtin', spriteVersionNumber: 1, available: true
+    }))
+    await store.applyFirstRunDefault(true)
+    expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: true })
+    expect(store.assetPath(petIdForSource('kun-builtin', 'xiao-kun'))).toBeTruthy()
+    expect(store.assetPath(petIdForSource('kun-builtin', 'ikun'))).toBeTruthy()
+    const whaleGirlAsset = await readPetAsset(
+      'kun-pet://asset/kun%3Awhale-girl/spritesheet?v=1',
+      (petId) => store.assetPath(petId),
+      store.libraryRoot()
+    )
+    expect(whaleGirlAsset.status).toBe(200)
+    expect(whaleGirlAsset.headers.get('Content-Type')).toBe('image/webp')
+    expect((await whaleGirlAsset.arrayBuffer()).byteLength).toBeGreaterThan(0)
+    await store.selectPet('kun:whale-girl')
+    const restarted = new PetStore(path.join(root, 'user', 'pets'))
+    await restarted.initialize()
+    await restarted.applyFirstRunDefault(true)
+    expect(restarted.getSettings()).toMatchObject({ selectedPetId: 'kun:whale-girl', overlayOpen: true })
   })
 
   it('finds Codex pets through CODEX_HOME and packaged resource roots', () => {

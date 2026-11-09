@@ -7,6 +7,11 @@ vi.mock('../../../kun/src/process/owned-process.js', () => ({
 }))
 
 import { registerTerminalPtyIpc } from './terminal-pty-ipc'
+import { prepareWindowsOwnedPty, stopWindowsOwnedProcess } from '../../../kun/src/process/owned-process-windows.js'
+
+vi.mock('../../../kun/src/process/owned-process-windows.js', () => ({
+  prepareWindowsOwnedPty: vi.fn(), stopWindowsOwnedProcess: vi.fn(async () => undefined)
+}))
 
 type PtySpawn = Pick<typeof import('node-pty'), 'spawn'>['spawn']
 
@@ -78,6 +83,7 @@ function setup(
     ...extra
   })
   return {
+    sender,
     ptyModule,
     call: (name: string, args: unknown) =>
       handlers.get(name)!({ sender } as never, args as never)
@@ -102,6 +108,51 @@ function fakeRuntime(calls: Array<{ path: string; body: unknown }>): RuntimeFetc
 }
 
 describe('terminal agent PTY launch', () => {
+  it.each(['expired', 'cancelled', 'normal'])('releases the Windows suspended gate only after final validation: %s', async outcome => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const release = vi.fn()
+    vi.mocked(prepareWindowsOwnedPty).mockResolvedValue({
+      command: 'controlled-launcher.exe', args: [], env: {},
+      bind: async child => child, release, abort: async () => undefined
+    })
+    const calls: Array<{ path: string; body: unknown }> = []
+    const base = fakeRuntime(calls)
+    let validations = 0
+    let invalidateSender = () => {}
+    const runtime: RuntimeFetch = async (path, init) => {
+      if (path.endsWith('/validate-launch') && ++validations === 2) {
+        expect(release).not.toHaveBeenCalled()
+        await Promise.resolve()
+        if (outcome === 'expired') return new Response(JSON.stringify({ message: 'proof expired at final check' }), { status: 409 })
+        if (outcome === 'cancelled') invalidateSender()
+      }
+      return base(path, init)
+    }
+    try {
+      const { sender, call, ptyModule } = setup(runtime)
+      invalidateSender = () => { vi.spyOn(sender, 'isDestroyed').mockReturnValue(true) }
+      const result = await call('terminal:create', { sessionId: `windows-${outcome}`,
+        agent: { harnessId: 'claude-code', title: 'test' } })
+      expect(validations).toBe(2)
+      expect(ptyModule.spawnArgs?.file).toBe('controlled-launcher.exe')
+      if (outcome === 'normal') {
+        expect(result).toMatchObject({ ok: true })
+        expect(release).toHaveBeenCalledOnce()
+        await call('terminal:dispose', `windows-${outcome}`)
+      } else {
+        expect(result).toMatchObject({ ok: false, message: expect.stringContaining(outcome === 'expired' ? 'proof expired' : 'stopping') })
+        expect(release).not.toHaveBeenCalled()
+        expect(stopWindowsOwnedProcess).toHaveBeenCalled()
+      }
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+      vi.mocked(prepareWindowsOwnedPty).mockReset()
+      vi.mocked(stopWindowsOwnedProcess).mockClear()
+    }
+  })
+
+
   it('registers the unit, injects callback env, and launches the harness command', async () => {
     const calls: Array<{ path: string; body: unknown }> = []
     const { ptyModule, call } = setup(fakeRuntime(calls))
