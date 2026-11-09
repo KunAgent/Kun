@@ -14,6 +14,7 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
   const [tab, setTab] = useState<'connect' | 'host'>('connect')
   const [value, setValue] = useState<ComputerAccessStatus>()
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false)
+  const [connectingId, setConnectingId] = useState<string>()
   const [choices, setChoices] = useState<Record<string, boolean>>({})
   const generation = useRef(0), inFlight = useRef(false)
   useEffect(() => {
@@ -67,21 +68,24 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
       </button>
     </div></RemoteGroup> : null}
     {tab === 'connect' ? <>
-      <p className="text-[12px] text-ds-muted">{zh ? '首版支持同账号 Apple Silicon Mac。连接后先查看，再接管键鼠。' : 'Connect two Apple Silicon Macs on the same account. View first, then take control.'}</p>
+      <p className="text-[12px] text-ds-muted">{zh ? '同账号 Apple Silicon Mac 开启「允许访问本机」后即可直接连接，无需在对端再次确认。连接后先查看，再接管键鼠。' : 'Enable access on an Apple Silicon Mac on the same account, then connect without another approval. View first, then take control.'}</p>
       <button type="button" className={`${REMOTE_BUTTON_CLASS} self-start`} disabled={!api || !link.signedIn || !link.computerAllowed || busy} onClick={() => void run(() => api!.refresh())}><RefreshCw size={13} />{zh ? '刷新电脑' : 'Refresh'}</button>
       {value?.devices.map(device => <RemoteGroup key={device.id}><div className="space-y-2 p-3">
         <div className="flex items-center gap-2"><Monitor size={16} /><span className="min-w-0 break-words text-[13px] font-medium text-ds-ink">{device.name}</span></div>
-        <p className="text-[12px] text-ds-muted">{device.platform} · {!device.supported ? zh ? '需要更新对端' : 'Host update needed' : !device.enabled ? zh ? '对端未开启' : 'Access off' : device.online !== true ? zh ? '离线或状态未知' : 'Offline or unknown' : device.grantId ? zh ? '在线 · 已配对' : 'Online · Paired' : zh ? '在线 · 待授权' : 'Online · Approval needed'}</p>
-        <button type="button" className={device.grantId ? REMOTE_PRIMARY_BUTTON_CLASS : REMOTE_BUTTON_CLASS} disabled={busy || Boolean(value.active) || !device.supported || !device.enabled || device.online !== true || !link.computerAllowed}
-          onClick={event => runTrustedUserActivation(event, () => { void run(() => device.grantId ? api!.open(device.id) : api!.pair(device.id), device.grantId ? '' : zh ? '申请已发出，请在对端电脑允许本次桌面访问。' : 'Request sent. Approve desktop access on the other computer.') })}>
-          {device.grantId ? zh ? '连接桌面' : 'Open desktop' : zh ? '申请连接' : 'Request access'}
+        <p className="text-[12px] text-ds-muted">{device.platform} · {!device.supported ? zh ? '需要更新对端' : 'Host update needed' : !device.enabled ? zh ? '对端未开启' : 'Access off' : device.online !== true ? zh ? '离线或状态未知' : 'Offline or unknown' : zh ? '在线 · 可连接' : 'Online · Ready to connect'}</p>
+        <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={busy || Boolean(value.active) || !device.supported || !device.enabled || device.online !== true || !link.computerAllowed}
+          onClick={event => runTrustedUserActivation(event, () => {
+            setConnectingId(device.id)
+            void run(() => api!.open(device.id)).finally(() => setConnectingId(undefined))
+          })}>
+          {connectingId === device.id ? zh ? '连接中…' : 'Connecting…' : zh ? '连接桌面' : 'Open desktop'}
         </button>
       </div></RemoteGroup>)}
       {value && !value.devices.length ? <p className="text-[12px] text-ds-muted">{zh ? '请在另一台 Mac 登录相同账号，并打开「允许访问本机」。' : 'Sign in on another Mac and enable access there.'}</p> : null}
     </> : <>
       <RemoteGroup><div className="space-y-2 p-3"><div className="flex items-center gap-2"><span className="flex-1 text-[13px] text-ds-ink">{zh ? '允许桌面访问' : 'Allow desktop access'}</span>
         <button type="button" className={REMOTE_BUTTON_CLASS} disabled={!api || !link.signedIn || busy || (!hosting && !link.computerAllowed)} onClick={event => runTrustedUserActivation(event, () => { void run(() => api!.enableHost(!hosting)) })}>{hosting ? zh ? '关闭' : 'Turn off' : zh ? '开启' : 'Turn on'}</button>
-      </div><p className="text-[12px] text-ds-muted">{zh ? '只授权桌面，不附带聊天、终端或文件权限。授权在本次 Kun 启用周期有效。' : 'Desktop permission does not include chat, terminals or files. Consent lasts for this app session.'}</p></div></RemoteGroup>
+      </div><p className="text-[12px] text-ds-muted">{zh ? '开启后，同账号电脑可直接查看本机桌面，并在连接后接管键鼠，无需再次确认。不会授予聊天、终端或文件权限；关闭即可停止访问。仅在本次 Kun 启用周期有效。' : 'When enabled, computers on the same account can view this desktop and take control after connecting, without another approval. Chat, terminals and files stay private. Turn off to stop access. Consent lasts for this app session.'}</p></div></RemoteGroup>
       {hosting && desktop.value?.enabled ? <RemoteGroup><fieldset className="space-y-2 p-3 text-[12px]"><legend className="px-1 text-ds-muted">{zh ? '允许分享的显示器' : 'Displays available to share'}</legend>
         {desktop.value.displays.map(item => <label key={item.token} className="flex items-center gap-2"><input type="checkbox" checked={item.allowed}
           disabled={busy || !link.computerAllowed || item.allowed && desktop.value!.displays.filter(display => display.allowed).length === 1}

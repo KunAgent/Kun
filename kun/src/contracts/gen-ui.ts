@@ -11,6 +11,15 @@ import { z } from 'zod'
 
 export const GEN_UI_TOOL_NAME = 'render_widget' as const
 export const GEN_UI_PROVIDER_ID = 'gen-ui' as const
+/** Static library origins shared by desktop and remote artifact previews. */
+export const GEN_UI_STATIC_ORIGINS = [
+  'https://cdn.jsdelivr.net',
+  'https://cdnjs.cloudflare.com',
+  'https://unpkg.com',
+  'https://esm.sh',
+  'https://fonts.googleapis.com',
+  'https://fonts.gstatic.com'
+] as const
 /** Fragment size accepted from the model, inline or from a workspace file. */
 export const GEN_UI_HTML_MAX_BYTES = 1_000_000
 export const GEN_UI_TITLE_MAX_CHARS = 120

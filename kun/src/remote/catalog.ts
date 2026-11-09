@@ -74,6 +74,8 @@ export async function remoteCapabilityDescriptors(
   add(PluginParamSchemas, 'plugin', { pageSize: 20 }, Boolean(runtime.extensionPlatform))
   const order = new Map<string, number>(REMOTE_CAPABILITY_ORDER.map((method, index) => [method, index]))
   return descriptors.filter(({ operation }) => {
+    if (operation === 'artifact.widget.state.update') return Boolean(runtime.genUi?.store && runtime.sessionStore.loadItemPage)
+    if (operation === 'artifact.catalog.list' || operation === 'artifact.preview.get') return Boolean(runtime.rooms && runtime.sessionStore.loadItemPage)
     if (operation === 'message.source.get') return source.available
     return !['code.search', 'message.search', 'message.get', 'artifact.list'].includes(operation) ||
       Boolean(runtime.sessionStore.loadItemPage)

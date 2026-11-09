@@ -1,6 +1,7 @@
 /** Stable wire/catalog order; independent of the modules that implement each operation. */
 export const REMOTE_METHOD_ORDER = [
   "dispatch.list", "dispatch.catalog", "dispatch.act",
+  "artifact.catalog.list", "artifact.preview.get", "artifact.widget.state.update",
   "code.search",
   "agent.search",
   "code.rename",
@@ -100,6 +101,7 @@ export const REMOTE_METHOD_ORDER = [
 /** Historical capability presentation order is distinct from the wire schema order. */
 export const REMOTE_CAPABILITY_ORDER = [
   "dispatch.list", "dispatch.catalog", "dispatch.act",
+  "artifact.catalog.list", "artifact.preview.get", "artifact.widget.state.update",
   "code.search",
   "agent.search",
   "code.rename",
