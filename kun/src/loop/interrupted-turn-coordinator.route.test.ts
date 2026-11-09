@@ -38,4 +38,39 @@ describe('InterruptedTurnCoordinator route', () => {
       interruptedResume: { sourceTurnId: 'turn_interrupted' }
     })
   })
+  it('resumes with the interrupted turn permission snapshot', async () => {
+    const base = createThreadRecord({
+      id: 'thr_perm', title: 'Permissions', workspace: '/workspace', model: 'default',
+      status: 'idle', createdAt: '2026-08-19T00:00:00.000Z'
+    })
+    const thread = {
+      ...base,
+      turns: [createTurnRecord({
+        id: 'turn_interrupted', threadId: base.id, prompt: 'Investigate', status: 'failed',
+        approvalPolicy: 'on-request', sandboxMode: 'workspace-write', approvalReviewer: 'user'
+      })]
+    }
+    const startTurn = vi.fn(async (_request: unknown, _options?: unknown) => ({ turnId: 'turn_resume' }))
+    const coordinator = new InterruptedTurnCoordinator({
+      threadStore: { get: vi.fn(async () => thread), upsert: vi.fn(async () => undefined) } as never,
+      turns: { startTurn } as never,
+      events: { record: vi.fn(async () => undefined) } as never,
+      nowIso: () => '2026-08-19T00:01:00.000Z',
+      nowMs: () => Date.parse('2026-08-19T00:01:00.000Z'),
+      runTurn: vi.fn(async () => 'completed' as const),
+      loadSessionItems: async () => [
+        { turnId: 'turn_interrupted', kind: 'assistant_text', role: 'assistant', status: 'completed' }
+      ] as never
+    })
+
+    await expect(coordinator.resumeInterruptedTurns([{ threadId: 'thr_perm', turnId: 'turn_interrupted' }])).resolves.toBe(1)
+    const [input] = startTurn.mock.calls[0]!
+    expect((input as { request: unknown }).request).toMatchObject({
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write',
+      approvalReviewer: 'user',
+      interruptedResume: { sourceTurnId: 'turn_interrupted' }
+    })
+  })
+
 })
