@@ -69,9 +69,13 @@ export async function retireOrphanedAppSessionManager(input: AppSessionReservati
     }
     const managers = live.filter((entry) => entry.instanceId.startsWith('manager-'))
     const runtimes = live.filter((entry) => !entry.instanceId.startsWith('manager-'))
-    if (managers.some((entry) => !manager?.appOwner || entry.pid !== manager.pid ||
+    // Manager close unpublishes discovery before the process exits. If exit
+    // stalls, the dead owner, all canonical claims and verified process birth
+    // identities still authorize explicit recovery. An existing discovery must
+    // agree with those claims; an invalid record is rejected by the strict read.
+    if (manager && (managers.some((entry) => !manager.appOwner || entry.pid !== manager.pid ||
       entry.instanceId !== `manager-${manager.appOwner.generation}`) ||
-      (manager && runtimeProcessIsAlive(manager.pid, manager) && !managers.some((entry) => entry.pid === manager.pid))) {
+      (runtimeProcessIsAlive(manager.pid, manager) && !managers.some((entry) => entry.pid === manager.pid)))) {
       throw new Error('Leftover Manager does not match the recorded application session')
     }
     const assertEvidence = async () => {
