@@ -52,6 +52,9 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   profile claims, matching participant records and process birth identities.
   Keep Manager alive until consumers exit. Recheck identity before each signal
   and escalation; never infer shutdown authority from an HTTP timeout.
+  Manager discovery can already be unpublished while its process is still
+  exiting. Recovery may then use the matching canonical claims and verified
+  process birth identities; invalid or conflicting discovery still blocks it.
 - Main-window close, platform Quit, updater exit, and storage relocation use
   the same shutdown barrier. Close admission and restart/recovery timers before
   awaiting cleanup; collect each failure without skipping remaining resources.
