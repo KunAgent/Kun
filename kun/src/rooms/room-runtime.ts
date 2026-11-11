@@ -39,6 +39,7 @@ import { bindRoomPeerStore } from './room-peer-tools.js'
 import { bindImMessageService } from './room-im-message-tool.js'
 import { roomPeerTopicPage, roomPeerMetricPage, stopRoomPeerTopic, deliverRoomPeerTaskProgress } from './room-peer-api.js'
 import { roomDiscussionBusy, roomRequestDiscussionTarget, cancelSupersededRoomRequest } from './room-discussion-scheduler.js'
+import { savePrivateRequestWithRunSettlement, reconcileTerminalPrivateRuns } from './private-request-run-settlement.js'
 import { peerCoordinationNeeded, pendingPeerRoomAmendment } from './room-peer-dispatch-guard.js'
 import { isRoomRouteReason, roomRouteMessage } from './room-router.js'
 import { bindRoomContinuationDispatcher } from './room-continuation-dispatch.js'
@@ -89,6 +90,7 @@ export class RoomRuntime {
   private memoryCaptureWarning?: { message: string; at: number }
   private actionQueue: Promise<unknown> = Promise.resolve()
   private requestCursor?: number
+  private runSettlementCursor?: number
   private readonly executionService: RoomService
   private readonly unbindPrivateLifecycle: () => void
   private readonly unbindContinuations: () => void
@@ -331,8 +333,10 @@ export class RoomRuntime {
           await this.executionService.append(row.roomId!, 'error-' + row.id, message,
             clarify ? row.value.roomSnapshot.defaultMemberId : undefined)
         }
-        await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!,
-          { ...row.value, status, error: message, ...(clarify ? { clarification: message } : {}) }, row)
+        const value: RoomRequestState = { ...row.value, status, error: message,
+          ...(clarify ? { clarification: message } : {}) }
+        if (row.value.privateProtocol) await savePrivateRequestWithRunSettlement(this.deps, row, value)
+        else await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
       }
   }
 
@@ -397,6 +401,13 @@ export class RoomRuntime {
       }
     }
     if (await this.exclusive(() => this.handoffRunner.tick(new Set(), false))) outcome.active = true
+    try {
+      this.runSettlementCursor = await this.exclusive(() => reconcileTerminalPrivateRuns(this.deps, this.runSettlementCursor))
+      if (this.runSettlementCursor !== undefined) { outcome.active = true; outcome.catchUp = true }
+    } catch (error) {
+      console.warn('[kun] private run reconciliation:', error instanceof Error ? error.message : String(error))
+      outcome.active = true
+    }
     const discussionBusy = new Set([...await roomDiscussionBusy(this.deps, true), ...await this.handoffRunner.busy()])
     for (const row of requests) {
       if (this.stopped) return { active: true }

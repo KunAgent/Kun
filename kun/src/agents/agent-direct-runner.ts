@@ -15,6 +15,7 @@ import type { RoomRuntimeDeps, RoomRequestState } from '../rooms/room-runtime-ty
 import type { RoomStoredDocument } from '../rooms/room-store.js'
 import { TurnConflictError, ThreadClosingError } from '../services/turn-service.js'
 import { putRoomDocument, type RoomService } from '../rooms/room-service.js'
+import { savePrivateRequestWithRunSettlement } from '../rooms/private-request-run-settlement.js'
 import { prepareRoomRun, updateRoomRun, observeRecordedRoomTurn, roomRunId } from '../rooms/room-run-recording.js'
 import { freezeAgentMemoryInput } from './agent-memory-input.js'
 import { agentMainModel, assertAgentModel } from './agent-models.js'
@@ -385,7 +386,8 @@ export class AgentDirectRunner {
   }
   private async save(row: RoomStoredDocument<RoomRequestState>, value: RoomRequestState) {
     if (JSON.stringify(row.value) !== JSON.stringify(value)) {
-      await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
+      if (value.status === 'failed' || value.status === 'cancelled') await savePrivateRequestWithRunSettlement(this.deps, row, value)
+      else await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
     }
     await settleRoomResultInbox(this.deps.store, value)
   }
