@@ -248,5 +248,17 @@ export const MODEL_PROVIDER_PRESETS_CLOUD: ModelProviderPreset[] = [
     models: [],
     docsUrl: 'https://omlx.ai',
     apiKeyUrl: 'https://omlx.ai'
+  },
+  {
+    id: 'rapid-mlx',
+    name: 'Rapid-MLX',
+    origin: 'local',
+    note: 'Local MLX server, no key required',
+    keyOptional: true,
+    baseUrl: 'http://localhost:8000/v1',
+    endpointFormat: 'chat_completions',
+    models: [],
+    docsUrl: 'https://rapidmlx.com/docs/',
+    apiKeyUrl: 'https://rapidmlx.com/docs/'
   }
 ]

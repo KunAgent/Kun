@@ -209,6 +209,9 @@ exports[`preset request URLs > builds stable URLs for every preset, region and p
     "messages": "https://api.pipellm.ai/v1/messages",
     "responses": "https://api.pipellm.ai/v1/responses",
   },
+  "rapid-mlx": {
+    "chat_completions": "http://localhost:8000/v1/chat/completions",
+  },
   "siliconflow": {
     "chat_completions": "https://api.siliconflow.cn/v1/chat/completions",
   },

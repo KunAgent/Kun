@@ -9,10 +9,10 @@ import {
 describe('provider catalog', () => {
   it('publishes every GUI base preset and Token Plan as stable entries', () => {
     const entries = providerCatalogEntries()
-    expect(PROVIDER_CATALOG).toHaveLength(58)
-    expect(entries).toHaveLength(66)
+    expect(PROVIDER_CATALOG).toHaveLength(59)
+    expect(entries).toHaveLength(67)
     expect(entries.filter((entry) => entry.category === 'subscription')).toHaveLength(21)
-    expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(45)
+    expect(entries.filter((entry) => entry.category === 'api')).toHaveLength(46)
     expect(entries.filter((entry) => entry.category === 'free')).toEqual([])
     expect(entries.find((entry) => entry.profileId === 'zenmux'))
       .toMatchObject({ credentialRequirement: 'required' })
@@ -30,6 +30,18 @@ describe('provider catalog', () => {
       'aliyun-token-plan',
       'tencentcloud-token-plan'
     ]))
+  })
+
+  it('publishes Rapid-MLX as a local server with optional credentials and live model discovery', () => {
+    expect(getProviderCatalogPreset('rapid-mlx')).toMatchObject({
+      name: 'Rapid-MLX',
+      origin: 'local',
+      kind: 'http',
+      credentialRequirement: 'optional',
+      baseUrl: 'http://localhost:8000/v1',
+      endpointFormat: 'chat_completions',
+      models: []
+    })
   })
 
   it('publishes separate ZenMux pay-as-you-go and Builder Plan entries', () => {

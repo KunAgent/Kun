@@ -43,6 +43,7 @@ import openaiIconUrl from '../assets/provider-icons/openai.svg?url'
 import opencodeGoIconUrl from '../assets/provider-icons/opencodego.svg?url'
 import openrouterIconUrl from '../assets/provider-icons/openrouter.svg?url'
 import pipellmIconUrl from '../assets/provider-icons/pipellm.svg?url'
+import rapidMlxIconUrl from '../assets/provider-icons/rapid-mlx.svg?url'
 import siliconflowIconUrl from '../assets/provider-icons/siliconflow.svg?url'
 import stepfunIconUrl from '../assets/provider-icons/stepfun.svg?url'
 import tencentcloudIconUrl from '../assets/provider-icons/tencentcloud.svg?url'
@@ -96,6 +97,7 @@ export type ProviderBrandIconKey =
   | 'opencodego'
   | 'openrouter'
   | 'pipellm'
+  | 'rapid-mlx'
   | 'siliconflow'
   | 'stepfun'
   | 'tencentcloud'
@@ -148,6 +150,7 @@ const PROVIDER_ICON_ASSETS: Readonly<Record<ProviderBrandIconKey, string>> = {
   opencodego: opencodeGoIconUrl,
   openrouter: openrouterIconUrl,
   pipellm: pipellmIconUrl,
+  'rapid-mlx': rapidMlxIconUrl,
   siliconflow: siliconflowIconUrl,
   stepfun: stepfunIconUrl,
   tencentcloud: tencentcloudIconUrl,
@@ -201,6 +204,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   openrouter: 'openrouter',
   opper: 'gateway',
   pipellm: 'pipellm',
+  'rapid-mlx': 'rapid-mlx',
   siliconflow: 'siliconflow',
   stepfun: 'stepfun',
   'tencent-tokenhub': 'tencentcloud',

@@ -81,6 +81,7 @@ export type ModelProviderPresetId =
   | 'cherryin'
   | 'yylx'
   | 'omlx'
+  | 'rapid-mlx'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
