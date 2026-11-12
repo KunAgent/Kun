@@ -208,6 +208,7 @@ export function useWorkDirectoryActions() {
     revealWritePath,
     pickWriteWorkspace,
     openCreateFileDialog,
+    ensureDocsSpace,
     openCreateDirectoryDialog,
     openRenameEntryDialog,
     openDeleteEntryDialog,

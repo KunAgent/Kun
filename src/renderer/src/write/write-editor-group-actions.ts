@@ -1,4 +1,6 @@
 import i18n from '../i18n'
+import { saveLatexSession } from './latex/latex-project-store'
+import { releaseLatexSession } from './latex/latex-session-lifecycle'
 import type {
   WriteDocumentSession,
   WriteEditorGroupId,
@@ -148,6 +150,7 @@ export function createWriteEditorGroupActions(
       const snapshot = { ...rawSnapshot, documentsByPath: capturedDocuments }
       const document = snapshot.documentsByPath[key]
       if (!document || (expectedEpoch !== undefined && document.documentEpoch !== expectedEpoch)) return true
+      if (document.kind === 'latex') return saveLatexSession(workspaceRoot, document.path)
       if (document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx') {
         if (document.spreadsheetConflictPreview) return false
         const isCurrentSpreadsheetSave = (): boolean => {
@@ -435,7 +438,7 @@ export function createWriteEditorGroupActions(
         document.saveStatus === 'saving' || document.reviewActive
       )
       if (needsDecision && !force) {
-        const savable = document.kind === 'text' || (
+        const savable = document.kind === 'text' || document.kind === 'latex' || (
           document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx'
         )
         if ((snapshot.autoSaveEnabled || captureActiveCell || document.saveStatus === 'saving') && savable) {
@@ -460,6 +463,7 @@ export function createWriteEditorGroupActions(
       const next = removeTabFromGroup(state, groupId, path)
       persist(state.workspaceRoot, next.editorLayout)
       set(withProjection(clearWriteOfficeSelections(next.documentsByPath), next.editorLayout))
+      if (lastReference && document?.kind === 'latex') releaseLatexSession(snapshot.workspaceRoot, document.path)
       return true
     },
 
@@ -665,7 +669,7 @@ export function createWriteEditorGroupActions(
     saveAllDocuments: async (workspaceRoot) => {
       const paths = Object.values(get().documentsByPath)
         .filter((document) => (
-          document.kind === 'text' ||
+          document.kind === 'text' || document.kind === 'latex' ||
           (document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx')
         ) && document.saveStatus !== 'saved')
         .map((document) => document.path)

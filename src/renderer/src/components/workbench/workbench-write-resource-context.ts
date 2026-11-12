@@ -13,7 +13,7 @@ export function activeWriteResourceReference(
   return {
     sourceName: locator,
     locator,
-    resourceKind: fileKind,
+    resourceKind: fileKind === 'latex' ? 'text' : fileKind,
     access: fileKind === 'text' || fileKind === 'code' || (fileKind === 'office' && sourceFormat === 'xlsx')
       ? 'read-write'
       : 'read-only',

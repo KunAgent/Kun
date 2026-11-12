@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next'
 import { Crosshair } from 'lucide-react'
 import { useWriteEditorBridge, type WriteReviewChunkSummary } from '../../write/write-editor-bridge'
 import { WriteRightPanelEmpty, WriteRightPanelHeader } from './WriteRightPanelHeader'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { latexSessionKey } from '../../write/latex/latex-project-store'
+import { LatexReviewPanel } from './latex/LatexReviewPanel'
 
 const KIND_KEYS: Record<WriteReviewChunkSummary['kind'], string> = {
   added: 'workReviewAdded',
@@ -13,11 +16,13 @@ const KIND_KEYS: Record<WriteReviewChunkSummary['kind'], string> = {
 
 export function WriteReviewPanel({ onCollapse }: { onCollapse: () => void }): ReactElement {
   const { t } = useTranslation('common')
+  const latexKey = useWriteWorkspaceStore((state) => state.activeFileKind === 'latex' && state.activeFilePath ? latexSessionKey(state.workspaceRoot, state.activeFilePath) : null)
   const { chunks, commands } = useWriteEditorBridge(useShallow((state) => ({
     chunks: state.reviewChunks,
     commands: state.commands
   })))
 
+  if (latexKey) return <LatexReviewPanel sessionKey={latexKey} onCollapse={onCollapse} />
   return (
     <div className="flex h-full min-h-0 flex-col">
       <WriteRightPanelHeader id="review" onCollapse={onCollapse} />
