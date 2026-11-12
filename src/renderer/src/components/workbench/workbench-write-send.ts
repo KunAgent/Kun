@@ -38,6 +38,7 @@ import { retrieveWorkbenchWriteContext } from './workbench-write-retrieval'
 import { readWriteDocumentSha256 } from './read-write-document-sha256'
 import { beginWorkSubmission, observeWorkSubmission } from '../../product-analytics/work'
 import { useWorkPaperSearchMode, withWorkPaperSearchScope } from '../../write/work-paper-search-mode'
+import { withLatexAssistantContext, watchLatexAssistantReply } from '../../write/latex/latex-assistant-context'
 
 export type WorkbenchWriteSendDeps = {
   activeThreadId: string | null
@@ -295,6 +296,9 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
     }
     // 找论文: the turn carries the paper-search scope line; the bubble keeps the typed text.
     promptText = withWorkPaperSearchScope(promptText, useWorkPaperSearchMode.getState())
+    if (!contextDetached && writeActiveDocument?.kind === 'latex') {
+      promptText = withLatexAssistantContext(promptText, writeWorkspaceRoot, writeActiveFilePath)
+    }
     if (officeDocument && !writeOfficeSemanticContextMatches(officeDocument)) {
       restorePrompt()
       return
@@ -306,6 +310,7 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
       writeSource.fileReference,
       ...composerReferencesToUserFileReferences(fileReferences)
     ])
+    const previousReplyIds = new Set(useChatStore.getState().blocks.map((block) => block.id))
     const sent = await sendMessage(
       promptText,
       externalAgent || writeActiveDocument?.kind === 'office' ? 'agent' : composerMode === 'plan' ? 'plan' : 'agent',
@@ -340,6 +345,10 @@ export function sendWorkbenchWritePrompt(deps: WorkbenchWriteSendDeps, value: st
       }
     )
     if (sent) {
+      const threadId = useChatStore.getState().activeThreadId
+      if (!contextDetached && writeActiveDocument?.kind === 'latex' && writeActiveFilePath && threadId) {
+        watchLatexAssistantReply(writeWorkspaceRoot, writeActiveFilePath, threadId, previousReplyIds)
+      }
       // Consume only the captured ids. Quotes/attachments added while the
       // runtime starts remain in the composer, even if the active file moved.
       const latest = useWriteWorkspaceStore.getState()

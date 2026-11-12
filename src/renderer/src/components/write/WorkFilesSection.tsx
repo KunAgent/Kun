@@ -17,6 +17,7 @@ import { WorkSidebarSection } from './WorkSidebarSection'
 import type { WorkDirectoryActions } from './use-work-directory-actions'
 import { useWorkViewStore } from '../../write/work-view-store'
 import { useFilesPaneResize } from './work-sidebar-layout'
+import { latexSessionKey, useLatexProjectStore } from '../../write/latex/latex-project-store'
 
 /**
  * 文件: the current space's file tree, last in 资料 so it can take the rest of
@@ -49,6 +50,10 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
     openFile: s.openFile,
     refreshWorkspace: s.refreshWorkspace
   })))
+  const latexSourcePath = useLatexProjectStore((state) => {
+    const session = activeFilePath ? state.sessions[latexSessionKey(workspaceRoot, activeFilePath)] : undefined
+    return session ? `${session.project.rootPath}/${session.activeFile}` : null
+  })
   const { root } = actions
   const { height, handleProps } = useFilesPaneResize(writeWorkspaceKey(workspaceRoot))
   const writeRegistry = readWriteThreadRegistry()
@@ -100,7 +105,7 @@ export function WorkFilesSection({ actions }: { actions: WorkDirectoryActions })
           entriesByDir={visibleEntries}
           expandedDirs={expandedDirs}
           loadingDirs={loadingDirs}
-          selectedFilePath={activeFilePath}
+          selectedFilePath={latexSourcePath ?? activeFilePath}
           error={treeError}
           rootLoading={rootLoading}
           onToggleDir={(path) => void toggleDirectory(workspaceRoot, path)}

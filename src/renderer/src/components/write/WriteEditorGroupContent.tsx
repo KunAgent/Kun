@@ -22,6 +22,7 @@ import { WorkWhiteboardSurface } from './WorkWhiteboardSurface'
 import { WorkWhiteboardUnavailable } from './WorkWhiteboardUnavailable'
 import { isMarkdownFile } from './write-workspace-view-utils'
 import { boardIdFromWriteTabKey } from '../../write/work-whiteboard'
+import { LatexDocumentPane } from './latex/LatexDocumentPane'
 
 type Props = {
   document: WriteDocumentSession | undefined
@@ -189,6 +190,12 @@ export function WriteEditorGroupContent({
         <WorkWhiteboardUnavailable boardId={unavailableBoardId} workspaceRoot={workspaceRoot} />
       </div>
     )
+  }
+
+  if (kind === 'latex' && path) {
+    return <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
+      <LatexDocumentPane workspaceRoot={workspaceRoot} path={path} focused={focused} onSelectionChange={onSelectionChange} onAskAssistant={onAskAssistant} />
+    </div>
   }
 
   return (

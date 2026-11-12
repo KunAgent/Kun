@@ -9,6 +9,7 @@ import { registerBuiltinGitHubMcpAuthorizationIpc } from '../github-mcp-authoriz
 import { ensureBundledSkills } from '../skill-bundled'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { registerAppContentIpcHandlers } from './register-app-content-ipc-handlers'
+import { registerAppLatexIpcHandlers } from './register-app-latex-ipc-handlers'
 import { registerAppFileIpcHandlers } from './register-app-file-ipc-handlers'
 import { registerAppGitIpcHandlers } from './register-app-git-ipc-handlers'
 import { registerAppGitCommitIpcHandlers } from './register-app-git-commit-ipc-handlers'
@@ -68,6 +69,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppGitTurnUndoIpcHandlers(options)
   registerAppStorageCleanupIpcHandlers(options)
   registerAppFileIpcHandlers(options)
+  registerAppLatexIpcHandlers(options)
   registerAppPaperIpcHandlers(options)
   registerAppPaperLibraryIpcHandlers(options)
   registerAppPaperWorkspaceIpcHandlers(options)

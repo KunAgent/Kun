@@ -40,6 +40,7 @@ import type { WritePaperViewId } from '../../write/write-workspace-store-types'
 import { usePaperTabLabel } from '../../paper/use-paper-tab-label'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 import { WriteAssistantPanelToggleIcon } from './WriteAssistantIcons'
+import { WorkFileTypeIcon } from './WorkFileTypeIcon'
 
 type Props = {
   group: WriteEditorGroup
@@ -64,6 +65,7 @@ type Props = {
 }
 
 function fileIcon(document: WriteDocumentSession | undefined): ReactElement {
+  if (document?.kind === 'latex') return <WorkFileTypeIcon kind="latex" size={14} />
   if (document?.kind === 'image') return <FileImage className="h-3.5 w-3.5" strokeWidth={1.9} />
   if (document?.officePreview?.viewer === 'spreadsheet') return <FileSpreadsheet className="h-3.5 w-3.5" strokeWidth={1.9} />
   if (document?.officePreview?.viewer === 'presentation') return <Presentation className="h-3.5 w-3.5" strokeWidth={1.9} />
@@ -121,7 +123,7 @@ function WriteEditorTabTitle({
                 ? 'writePaperTabInterpret'
                 : 'writePaperTabFile'
           )}`
-      : writeBasenameFromPath(tab.path)
+      : document?.latexTitle || writeBasenameFromPath(tab.path)
   return (
     <span className="flex min-w-0 items-center gap-2" title={isWriteFileTab(tab) ? tab.path : undefined}>
       {icon}

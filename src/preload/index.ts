@@ -23,6 +23,7 @@ import { worktreePreloadApi } from './worktree-bridge'
 import { gitTurnUndoPreloadApi } from './git-turn-undo-api'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
+import { latexApi } from './latex-api'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { petsPreloadApi } from './pets-bridge'
@@ -316,6 +317,7 @@ const api = {
     return () => ipcRenderer.removeListener('file:workspace-changed', wrapped)
   },
   ...writeBridge,
+  ...latexApi,
   exportConversation: (payload) =>
     ipcRenderer.invoke('conversation:export', payload),
   exportConversationBatch: (payload) =>

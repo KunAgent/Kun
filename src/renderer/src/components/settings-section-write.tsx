@@ -47,6 +47,7 @@ import {
   Toggle
 } from './settings-controls'
 import { WriteAgentPresetsSettingsPanel } from './settings-section-write-agent-presets'
+import { WriteLatexSettingsCard } from './settings-section-write-latex'
 
 const textInputClass =
   'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
@@ -213,6 +214,7 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                   }
                 />
               </SettingsCard>
+              <WriteLatexSettingsCard settings={form} update={update} />
               <SettingsCard title={t('writeTypography')} className="mt-5">
                 <SettingRow
                   title={t('writeFontPreset')}

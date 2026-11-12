@@ -414,7 +414,7 @@ export function WriteWorkspaceView({
       const state = useWriteWorkspaceStore.getState()
       const hasDirtyDocuments = Object.values(state.documentsByPath).some(
         (document) => (
-          document.kind === 'text' ||
+          document.kind === 'text' || document.kind === 'latex' ||
           (document.kind === 'office' && document.officePreview?.sourceFormat === 'xlsx')
         ) && document.saveStatus !== 'saved'
       )

@@ -1,4 +1,5 @@
 import type { WorkspaceEntry } from './workspace-file'
+import { isLatexFilePath } from './latex-project'
 
 export const WRITE_TEXT_FILE_EXTENSIONS = new Set([
   '.md',
@@ -179,12 +180,13 @@ export function isWriteOfficeFilePath(path: string): boolean {
 }
 
 export function isWriteWorkspaceFilePath(path: string): boolean {
-  return isWriteTextFilePath(path) || isWriteCodeFilePath(path) || isWriteImageFilePath(path) ||
+  return isLatexFilePath(path) || isWriteTextFilePath(path) || isWriteCodeFilePath(path) || isWriteImageFilePath(path) ||
     isWritePdfFilePath(path) || isWriteOfficeFilePath(path)
 }
 
 export function isWriteWorkspaceEntry(entry: WorkspaceEntry): boolean {
   return entry.type === 'directory' ||
+    isLatexFilePath(entry.name) ||
     isWriteTextFileExtension(entry.ext) ||
     isWriteCodeFileExtension(entry.ext) ||
     isWriteCodeFileName(entry.name) ||

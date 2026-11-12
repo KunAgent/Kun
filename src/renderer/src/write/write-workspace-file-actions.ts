@@ -2,6 +2,9 @@ import { enqueueWriteDocumentOperation, relocateQueuedWriteDocumentOperations } 
 import { moveWriteSpreadsheetEditors } from './write-spreadsheet-editor-coordinator'
 import { flushWriteWorkspaceSaveQueue } from './write-save-coordinator'
 import i18n from '../i18n'
+import { isLatexFilePath } from '@shared/latex-project'
+import { openLatexSession } from './latex/latex-project-store'
+import { forgetLatexEntry, releaseLatexWorkspace, relocateLatexSessions } from './latex/latex-session-lifecycle'
 import {
   isWriteCodeFilePath,
   isWriteImageFilePath,
@@ -135,6 +138,7 @@ export function createWriteFileActions({
       }
 
       cancelExternalSyncAnimation()
+      if (current.workspaceRoot) releaseLatexWorkspace(current.workspaceRoot)
       set((state) => ({
         ...initialState(),
         workspaceRoot: normalized,
@@ -305,17 +309,33 @@ export function createWriteFileActions({
         return
       }
       if (!fileRequestIsCurrent(groupId, generation, workspaceRoot)) return
-      const viewMode = options.viewMode ?? defaultWriteViewModeForPath(path)
       const current = get()
       if (
         current.autoSaveEnabled &&
         current.activeFilePath &&
-        current.activeFileKind === 'text' &&
+        (current.activeFileKind === 'text' || current.activeFileKind === 'latex') &&
         !pathsEqual(current.activeFilePath, path) &&
         current.saveStatus !== 'saved'
       ) {
         void current.saveDocument(workspaceRoot, current.activeFilePath)
       }
+      if (isLatexFilePath(path)) {
+        try {
+          const session = await openLatexSession(workspaceRoot, path)
+          if (!fileRequestIsCurrent(groupId, generation, workspaceRoot)) return
+          const mainPath = session.project.mainPath
+          rememberActiveFile(workspaceRoot, mainPath)
+          set((state) => openWriteDocumentState(state,
+            state.documentsByPath[writeDocumentKey(mainPath)] ?? createWriteDocumentSession({
+              path: mainPath, kind: 'latex', latexTitle: session.project.config.title,
+              documentEpoch: nextWriteDocumentEpoch(state.documentEpoch)
+            }), groupId, 'plain'))
+        } catch (error) {
+          if (fileRequestIsCurrent(groupId, generation, workspaceRoot)) set({ fileLoading: false, fileError: error instanceof Error ? error.message : String(error) })
+        }
+        return
+      }
+      const viewMode = options.viewMode ?? defaultWriteViewModeForPath(path)
       const existing = get().documentsByPath[writeDocumentKey(path)]
       if (existing) {
         rememberActiveFile(workspaceRoot, existing.path)
@@ -529,6 +549,7 @@ export function createWriteFileActions({
         set({ fileError: result.message })
         return null
       }
+      relocateLatexSessions(workspaceRoot, result.previousPath, result.path)
       saveWriteThreadRegistry(moveWriteFileThreads(
         workspaceRoot,
         result.previousPath,
@@ -622,6 +643,7 @@ export function createWriteFileActions({
         return false
       }
       saveWriteThreadRegistry(forgetWriteFileThreads(workspaceRoot, result.path))
+      forgetLatexEntry(workspaceRoot, result.path)
       const deletedPath = normalizePath(result.path)
       set((state) => {
         const expandedDirs = new Set<string>()

@@ -14,6 +14,10 @@ type Props = {
   workspaceRoot: string
   viewerRef?: RefObject<HTMLDivElement | null>
   onSelectionChange: (selection: WriteEditorSelectionState) => void
+  syncPoint?: { page: number; x: number; y: number; token: number } | null
+  onSourceSync?: (point: { page: number; x: number; y: number }) => void
+  fitWidth?: boolean
+  compact?: boolean
 }
 
 import {
@@ -31,7 +35,11 @@ export function WritePdfViewer({
   mtimeMs,
   workspaceRoot,
   viewerRef,
-  onSelectionChange
+  onSelectionChange,
+  syncPoint,
+  onSourceSync,
+  fitWidth = false,
+  compact = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const localViewerRef = useRef<HTMLDivElement | null>(null)
@@ -63,6 +71,22 @@ export function WritePdfViewer({
     updatePageText
   } = useWritePdfDocument({ filePath, dataBase64, mtimeMs, publishSelection })
 
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!fitWidth || !pdfDocument || !scroller) return
+    let cancelled = false
+    let observer: ResizeObserver | undefined
+    void pdfDocument.getPage(1).then((page) => {
+      if (cancelled) return
+      const width = page.getViewport({ scale: 1 }).width
+      const fit = (): void => { if (scroller.clientWidth > 0) setScale(Math.max(.25, Math.min(2, (scroller.clientWidth - 40) / width))) }
+      fit()
+      observer = new ResizeObserver(fit)
+      observer.observe(scroller)
+    }).catch(() => {})
+    return () => { cancelled = true; observer?.disconnect() }
+  }, [fitWidth, pdfDocument])
+
   const {
     currentPage,
     pageInput,
@@ -76,6 +100,15 @@ export function WritePdfViewer({
     schedulePageSync,
     jumpSearch
   } = useWritePdfNavigation({ filePath, pdfDocument, pageCount, pageTexts, scrollerRef })
+
+  useEffect(() => {
+    if (!syncPoint || !pdfDocument) return
+    scrollToPage(syncPoint.page)
+    const timer = window.setTimeout(() => {
+      pageRefs.current.get(syncPoint.page)?.querySelector('[data-latex-sync-marker]')?.scrollIntoView({ block: 'center', inline: 'nearest' })
+    }, 80)
+    return () => window.clearTimeout(timer)
+  }, [syncPoint, pdfDocument, scrollToPage, pageRefs])
 
   // The document load resets page state; mirror that for the selection.
   useEffect(() => {
@@ -156,18 +189,18 @@ export function WritePdfViewer({
       ref={rootRef}
       className="write-pdf-viewer flex h-full min-h-0 min-w-0 flex-1 flex-col"
     >
-      <div className="write-pdf-toolbar shrink-0 border-b border-ds-border-muted bg-white/88 px-3 py-2 dark:bg-ds-card/95">
+      <div className={compact ? 'write-pdf-toolbar latex-pdf-capsule' : 'write-pdf-toolbar shrink-0 border-b border-ds-border-muted bg-white/88 px-3 py-2 dark:bg-ds-card/95'}>
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="min-w-0 flex-1 truncate text-[12px] text-ds-muted">
+          {!compact ? <div className="min-w-0 flex-1 truncate text-[12px] text-ds-muted">
             {formatSize(size)} · {workspaceRoot ? filePath.replace(`${workspaceRoot}/`, '') : filePath}
-          </div>
+          </div> : null}
           <div className="flex items-center gap-1 rounded-lg border border-ds-border-muted bg-ds-surface-subtle p-1 dark:bg-white/6">
             <button
               type="button"
               className="write-pdf-icon-button"
               title={t('writePdfZoomOut')}
               aria-label={t('writePdfZoomOut')}
-              onClick={() => setScale((value) => Math.max(0.65, Number((value - 0.1).toFixed(2))))}
+              onClick={() => setScale((value) => Math.max(fitWidth ? .25 : .65, Number((value - 0.1).toFixed(2))))}
             >
               <Minus className="h-4 w-4" strokeWidth={1.9} />
             </button>
@@ -221,7 +254,7 @@ export function WritePdfViewer({
               <ChevronRight className="h-4 w-4" strokeWidth={1.9} />
             </button>
           </div>
-          <div className="flex min-w-[180px] flex-1 items-center gap-1 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-2 py-1 dark:bg-white/6 sm:max-w-[260px]">
+          {!compact ? <div className="flex min-w-[180px] flex-1 items-center gap-1 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-2 py-1 dark:bg-white/6 sm:max-w-[260px]">
             <Search className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.9} />
             <input
               className="min-w-0 flex-1 bg-transparent text-[12.5px] text-ds-ink outline-none placeholder:text-ds-faint"
@@ -252,7 +285,7 @@ export function WritePdfViewer({
             >
               <ChevronRight className="h-4 w-4" strokeWidth={1.9} />
             </button>
-          </div>
+          </div> : null}
         </div>
       </div>
       <div
@@ -263,6 +296,15 @@ export function WritePdfViewer({
         onMouseUp={syncSelectionSoon}
         onKeyUp={syncSelectionSoon}
         onScroll={schedulePageSync}
+        onDoubleClick={(event) => {
+          if (!onSourceSync) return
+          const page = (event.target as Element).closest<HTMLElement>('[data-write-pdf-page]')
+          const canvas = page?.querySelector('canvas')
+          if (!page || !canvas) return
+          const rect = canvas.getBoundingClientRect()
+          const factor = parseFloat(canvas.style.width) / Math.max(1, rect.width) / scale
+          onSourceSync({ page: Number(page.dataset.writePdfPage), x: (event.clientX - rect.left) * factor, y: (event.clientY - rect.top) * factor })
+        }}
       >
         {loading ? (
           <div className="flex h-full min-h-[320px] items-center justify-center gap-2 text-[13px] text-ds-muted">
@@ -283,6 +325,7 @@ export function WritePdfViewer({
             {Array.from({ length: pdfDocument.numPages }, (_, index) => index + 1).map((pageNumber) => (
               <div
                 key={pageNumber}
+                className="relative"
                 ref={(node) => {
                   if (node) pageRefs.current.set(pageNumber, node)
                   else pageRefs.current.delete(pageNumber)
@@ -295,6 +338,10 @@ export function WritePdfViewer({
                   selectionRects={committedRectsByPage.get(pageNumber) ?? []}
                   onPageText={updatePageText}
                 />
+                {syncPoint?.page === pageNumber ? (
+                  <span data-latex-sync-marker className="pointer-events-none absolute z-10 h-5 w-28 rounded bg-accent/20 ring-1 ring-accent/40"
+                    style={{ left: syncPoint.x * scale, top: syncPoint.y * scale }} />
+                ) : null}
                 <div className="mt-1 select-none text-center text-[11px] text-ds-faint">
                   {t('writePdfPageLabel', { page: pageNumber })}
                 </div>

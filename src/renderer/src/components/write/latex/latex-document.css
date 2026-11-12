@@ -1,0 +1,483 @@
+.latex-document {
+  --latex-command: #6c579e;
+  --latex-math: #b35561;
+  --latex-comment: #8b959c;
+  --latex-number: #8f7340;
+  --latex-bracket: #68727d;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--ds-text);
+  background: var(--ds-surface-card);
+}
+
+.latex-document button,.latex-references button,.latex-review-panel button {
+  font: inherit;
+  cursor: pointer;
+}
+
+.latex-document button:disabled,.latex-references button:disabled,.latex-review-panel button:disabled {
+  opacity: .45;
+  cursor: default;
+}
+
+.latex-document button:focus-visible,.latex-references button:focus-visible,.latex-review-panel button:focus-visible {
+  outline: 2px solid #5b78ff;
+  outline-offset: 2px;
+}
+
+.latex-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--ds-border);
+  background: color-mix(in srgb,#5b78ff 6%,var(--ds-surface-card));
+  font-size: 12px;
+}
+
+.latex-notice>span {
+  flex: 1;
+}
+
+.latex-notice>button {
+  flex: none;
+  color: #5b78ff;
+}
+
+.latex-notice select {
+  max-width: 240px;
+  background: var(--ds-surface-card);
+  border: 1px solid var(--ds-border);
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.latex-notice.is-error,.latex-document .is-error {
+  color: #cf4b4b;
+}
+
+.latex-split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.latex-source {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.latex-source-editor {
+  display: flex;
+}
+
+.latex-source-editor>.cm-editor {
+  width: 100%;
+}
+
+.latex-divider {
+  flex: none;
+  width: 5px;
+  margin: 0 -2px;
+  z-index: 2;
+  cursor: col-resize;
+  border-left: 1px solid var(--ds-border);
+}
+
+.latex-divider:hover,.latex-divider:focus-visible {
+  background: #5b78ff55;
+}
+
+.latex-source-actions {
+  display: flex;
+  flex: none;
+  gap: 12px;
+  align-items: center;
+  height: 30px;
+  padding: 0 16px;
+  border-top: 1px solid color-mix(in srgb,var(--ds-border) 50%,transparent);
+  font-size: 11px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-source-actions>span {
+  flex: 1;
+}
+
+.latex-source-actions button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.latex-revise-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: color-mix(in srgb,#5b78ff 5%,var(--ds-surface-card));
+  border-top: 1px solid var(--ds-border);
+  font-size: 11px;
+}
+
+.latex-revise-selection input {
+  flex: 1;
+  min-width: 120px;
+  border: 0;
+  outline: none;
+  background: transparent;
+}
+
+.latex-revise-selection button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: #5b78ff;
+}
+
+.latex-pdf {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: color-mix(in srgb,var(--ds-text) 3%,var(--ds-surface-card));
+}
+
+.latex-pdf .write-pdf-toolbar {
+  font-size: 11px;
+  padding: 5px 8px;
+  background: var(--ds-surface-card);
+}
+
+.latex-pdf .write-pdf-toolbar>.flex {
+  gap: 4px;
+}
+
+.latex-pdf .write-pdf-toolbar input {
+  min-width: 0;
+}
+
+.latex-pdf .write-pdf-toolbar .write-pdf-search {
+  display: none;
+}
+
+.latex-pdf-stale {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex: none;
+  padding: 8px 12px;
+  background: color-mix(in srgb,#d09c31 7%,var(--ds-surface-card));
+  color: var(--ds-text-muted,#777);
+  border-bottom: 1px solid var(--ds-border);
+  font-size: 11px;
+}
+
+.latex-pdf-stale button {
+  flex: none;
+  color: var(--ds-text);
+}
+
+.latex-empty-pdf {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  padding: 36px 28px;
+  text-align: center;
+  overflow: auto;
+}
+
+.latex-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 68px;
+  border: 1px solid var(--ds-border);
+  border-radius: 11px;
+  background: var(--ds-surface-card);
+  color: var(--ds-text-muted,#777);
+  box-shadow: 0 4px 12px #00000005;
+}
+
+.latex-empty-pdf h3 {
+  margin: 4px 0 0;
+  font-size: 17px;
+  letter-spacing: -.02em;
+  font-weight: 600;
+}
+
+.latex-empty-pdf p {
+  max-width: 330px;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-empty-pdf dl {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 10px 30px;
+  padding: 14px 18px;
+  text-align: left;
+  font: 11.5px ui-monospace,monospace;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.latex-empty-pdf dd {
+  margin: 0;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-empty-pdf small {
+  max-width: 340px;
+  overflow-wrap: anywhere;
+  font-size: 10px;
+  line-height: 1.7;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-empty-actions {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.latex-empty-actions button {
+  padding: 7px 11px;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+}
+
+.latex-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--ds-text);
+  color: var(--ds-surface-card);
+  font-size: 12px!important;
+}
+
+.latex-build-progress {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  height: 2px;
+  width: 30%;
+  background: #5b78ff;
+  animation: latex-progress 1.6s infinite ease-in-out;
+}
+
+.latex-pulse {
+  animation: latex-pulse 1.2s infinite;
+}
+
+@keyframes latex-progress {
+  from {
+    left: -30%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@keyframes latex-pulse {
+  50% {
+    opacity: .3;
+  }
+}
+
+.latex-status-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+  min-height: 31px;
+  border-top: 1px solid var(--ds-border);
+  padding: 0 13px;
+  font-size: 10.5px;
+  color: var(--ds-text-muted,#777);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.latex-status-bar button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.latex-status-spacer {
+  flex: 1;
+}
+
+.latex-dirty-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #b79142;
+}
+
+.latex-problems {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  height: 210px;
+  max-height: 40%;
+  min-height: 100px;
+  border-top: 1px solid var(--ds-border);
+}
+
+.latex-problems header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--ds-border);
+  font-size: 11px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-problems header>span {
+  flex: 1;
+}
+
+.latex-problems header button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.latex-problems .is-active {
+  color: var(--ds-text);
+  font-weight: 600;
+}
+
+.latex-problems pre {
+  margin: 0;
+  padding: 12px 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font: 11px/1.8 ui-monospace,monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.latex-diagnostics {
+  flex: 1;
+  overflow: auto;
+  font-size: 12px;
+}
+
+.latex-diagnostics>p {
+  padding: 14px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-diagnostics>button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 15px;
+  width: 100%;
+  text-align: left;
+  border-bottom: 1px solid color-mix(in srgb,var(--ds-border) 50%,transparent);
+}
+
+.latex-diagnostics>button>span {
+  flex: 1;
+  min-width: 0;
+}
+
+.latex-diagnostics strong {
+  display: block;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.latex-diagnostics small {
+  display: block;
+  margin-top: 4px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-diagnostics code {
+  font-size: 10px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-document {
+  container-type: inline-size;
+}
+
+:root[data-theme="dark"] .latex-document {
+  --latex-command: #bba3eb;
+  --latex-math: #dda0a8;
+  --latex-comment: #91999e;
+  --latex-number: #ceb78a;
+  --latex-bracket: #b4bdc3;
+}
+
+.latex-pdf-capsule {
+  position: absolute;
+  z-index: 4;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  height: 36px;
+  padding: 2px 5px!important;
+  border: 1px solid var(--ds-border);
+  border-radius: 999px;
+  box-shadow: 0 5px 20px #0002;
+  background: var(--ds-surface-card)!important;
+  backdrop-filter: blur(10px);
+}
+
+.latex-pdf-capsule>.flex {
+  flex-wrap: nowrap;
+  gap: 2px;
+}
+
+.latex-pdf-capsule>.flex>div {
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.latex-pdf-capsule .write-pdf-icon-button {
+  width: 27px;
+  height: 27px;
+}
+
+.latex-pdf-capsule>.flex>div:first-child {
+  order: 2;
+}
