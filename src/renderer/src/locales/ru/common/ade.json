@@ -218,6 +218,8 @@
     "continueLocalSession": "Продолжить локальную сессию",
     "nextTurnHint": "Применяется со следующего хода. Ветки Code всегда используют Kun.",
     "switchConfirmTitle": "Переключиться на {{name}}?",
+    "workspaceScope": "Рабочая область не меняется · папок: {{total}}",
+    "workspaceUnsupported": "{{name}} пока не поддерживает рабочую область из нескольких папок. Kun и все папки остаются выбранными.",
     "switchConfirmBody": "Следующий ход начнёт новую сессию в новом harness и передаст сводку контекста. Прежние ходы останутся в исходном harness.",
     "switchConfirmYes": "Переключить harness"
   },

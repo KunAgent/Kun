@@ -15,10 +15,14 @@ const completed = (sourceRevision: number): LatexBuild => ({ buildId: 'build', s
   diagnostics: [], log: '', pdf: { buildId: 'build', sourceHash: 'hash', dataBase64: 'pdf', mtimeMs: 1, size: 3 }, tools: { latexmk: '/tex', engine: '/tex', synctex: null, searchedPaths: [] } })
 beforeEach(() => {
   useLatexProjectStore.setState({ sessions: {} })
-  api = { latexSave: vi.fn(async () => ({ ok: true })), latexBuild: vi.fn(async (input) => ({ ok: true, build: completed(input.sourceRevision) })) }
+  const disk: Record<string, string> = { 'main.tex': 'source', 'intro.tex': 'source', 'refs.bib': '' }
+  api = { latexSave: vi.fn(async ({ edits }) => {
+    for (const edit of edits) disk[edit.file] = edit.after
+    return { ok: true }
+  }), latexBuild: vi.fn(async (input) => ({ ok: true, build: completed(input.sourceRevision) })) }
   vi.stubGlobal('window', { kunGui: { ...api,
     latexReadProject: vi.fn(async () => ({ ok: true, project })),
-    latexReadSource: vi.fn(async ({ path }) => ({ ok: true, content: path.endsWith('.bib') ? '' : 'source' })),
+    latexReadSource: vi.fn(async ({ path }: { path: string }) => ({ ok: true, content: disk[path.split('/').at(-1)!] ?? '' })),
     latexReadPdf: vi.fn(async () => ({ ok: true, pdf: null, currentSourceHash: '' })),
     onLatexBuildLog: vi.fn(() => () => {})
   } })

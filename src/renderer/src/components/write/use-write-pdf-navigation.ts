@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { PDFDocumentProxy } from 'pdfjs-dist/build/pdf.mjs'
 import type { PageText } from './WritePdfPage'
 import { subscribeKnowledgeSourceNavigation } from '../../lib/knowledge-source-navigation'
@@ -15,6 +15,8 @@ export function useWritePdfNavigation(input: {
   pdfSha256?: string
   pageTexts: PageText[]
   scrollerRef: RefObject<HTMLDivElement | null>
+  preservePosition?: boolean
+  renderScale?: number
 }): {
   currentPage: number
   pageInput: string
@@ -27,19 +29,73 @@ export function useWritePdfNavigation(input: {
   scrollToPage: (page: number) => void
   schedulePageSync: () => void
   jumpSearch: (direction: 1 | -1) => void
+  onPageViewport: (page: number, size: { width: number; height: number }) => void
 } {
-  const { filePath, pdfDocument, pageCount, pageTexts, scrollerRef, pdfSha256 } = input
+  const { filePath, pdfDocument, pageCount, pageTexts, scrollerRef, pdfSha256, preservePosition = false, renderScale = 1 } = input
   const pageRefs = useRef<Map<number, HTMLDivElement>>(new Map())
   const scrollRafRef = useRef<number | null>(null)
   const [pageInput, setPageInput] = useState('1')
   const [currentPage, setCurrentPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchIndex, setSearchIndex] = useState(0)
+  const retained = useRef({ filePath, page: 1, offset: 0 })
+  const pendingRestore = useRef<{ page: number; offset: number } | null>(null)
+  const readyPages = useRef(new Set<number>())
+  const restoreRaf = useRef<number | null>(null)
+  const rendered = useRef<{ filePath: string; pdfDocument: PDFDocumentProxy | null; preservePosition: boolean } | null>(null)
+  const currentFrame = useRef({ pdfDocument, renderScale })
+  currentFrame.current = { pdfDocument, renderScale }
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const previous = rendered.current
+    rendered.current = { filePath, pdfDocument, preservePosition }
+    if (!preservePosition && previous?.filePath === filePath && previous.pdfDocument === pdfDocument && !previous.preservePosition) return
+    readyPages.current.clear()
+    if (preservePosition && retained.current.filePath === filePath) {
+      const page = Math.max(1, Math.min(pdfDocument?.numPages ?? retained.current.page, retained.current.page))
+      retained.current.page = page
+      pendingRestore.current = { page, offset: retained.current.offset }
+      setCurrentPage(page)
+      setPageInput(String(page))
+      return
+    }
+    retained.current = { filePath, page: 1, offset: 0 }
+    pendingRestore.current = null
     setPageInput('1')
     setCurrentPage(1)
-  }, [pdfDocument])
+  }, [filePath, pdfDocument, preservePosition, renderScale])
+
+  const scheduleRestore = useCallback((): void => {
+    if (restoreRaf.current !== null) window.cancelAnimationFrame(restoreRaf.current)
+    restoreRaf.current = window.requestAnimationFrame(() => {
+      restoreRaf.current = null
+      const anchor = pendingRestore.current
+      const scroller = scrollerRef.current
+      if (!anchor || !scroller) return
+      for (let number = 1; number <= anchor.page; number++) if (!readyPages.current.has(number)) return
+      const node = pageRefs.current.get(anchor.page)
+      if (!node) return
+      const rect = node.getBoundingClientRect()
+      const frame = scroller.getBoundingClientRect()
+      if (rect.height <= 0 || frame.height <= 0) return
+      const uiScale = scroller.clientHeight > 0 ? frame.height / scroller.clientHeight : 1
+      scroller.scrollTop += (rect.top - frame.top + anchor.offset * rect.height) / uiScale
+      pendingRestore.current = null
+    })
+  }, [scrollerRef])
+
+  const onPageViewport = useCallback((page: number, _size: { width: number; height: number }): void => {
+    if (!preservePosition || !pdfDocument || currentFrame.current.pdfDocument !== pdfDocument || currentFrame.current.renderScale !== renderScale) return
+    readyPages.current.add(page)
+    scheduleRestore()
+  }, [pdfDocument, preservePosition, renderScale, scheduleRestore])
+
+  useEffect(() => {
+    if (!preservePosition || !scrollerRef.current || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(scheduleRestore)
+    observer.observe(scrollerRef.current)
+    return () => observer.disconnect()
+  }, [preservePosition, scrollerRef, scheduleRestore])
 
   const searchMatches = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -54,8 +110,10 @@ export function useWritePdfNavigation(input: {
     const clamped = Math.max(1, Math.min(pageCount || 1, Math.round(page)))
     setCurrentPage(clamped)
     setPageInput(String(clamped))
+    retained.current = { filePath, page: clamped, offset: 0 }
+    pendingRestore.current = null
     pageRefs.current.get(clamped)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
-  }, [pageCount])
+  }, [pageCount, filePath])
 
   useEffect(() => subscribeKnowledgeSourceNavigation(filePath, (location) => {
     if (location.kind !== 'pdf' || !pdfDocument) return false
@@ -68,8 +126,9 @@ export function useWritePdfNavigation(input: {
 
   const updateCurrentPageFromScroll = useCallback((): void => {
     const scroller = scrollerRef.current
-    if (!scroller || pageRefs.current.size === 0) return
+    if (!scroller || pageRefs.current.size === 0 || (preservePosition && (!pdfDocument || pendingRestore.current))) return
     const scrollerRect = scroller.getBoundingClientRect()
+    if (preservePosition && scrollerRect.height <= 0) return
     const targetY = scrollerRect.top + scrollerRect.height * 0.42
     let bestPage = 1
     let bestDistance = Number.POSITIVE_INFINITY
@@ -87,7 +146,9 @@ export function useWritePdfNavigation(input: {
 
     setCurrentPage((value) => value === bestPage ? value : bestPage)
     setPageInput((value) => value === String(bestPage) ? value : String(bestPage))
-  }, [scrollerRef])
+    const rect = pageRefs.current.get(bestPage)?.getBoundingClientRect()
+    retained.current = { filePath, page: bestPage, offset: rect && rect.height > 0 ? (scrollerRect.top - rect.top) / rect.height : 0 }
+  }, [scrollerRef, filePath, pdfDocument, preservePosition])
 
   const schedulePageSync = useCallback((): void => {
     if (scrollRafRef.current != null) return
@@ -115,6 +176,7 @@ export function useWritePdfNavigation(input: {
         window.cancelAnimationFrame(scrollRafRef.current)
         scrollRafRef.current = null
       }
+      if (restoreRaf.current !== null) window.cancelAnimationFrame(restoreRaf.current)
     }
   }, [])
 
@@ -129,6 +191,7 @@ export function useWritePdfNavigation(input: {
     pageRefs,
     scrollToPage,
     schedulePageSync,
-    jumpSearch
+    jumpSearch,
+    onPageViewport
   }
 }

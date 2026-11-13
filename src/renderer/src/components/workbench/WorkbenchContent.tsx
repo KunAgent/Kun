@@ -1,5 +1,6 @@
 import { useEffect, useMemo, type ReactElement } from 'react'
 import { WorkbenchLeftSidebar } from './WorkbenchLeftSidebar'
+import { CodeWorkspaceProjectDialog } from '../chat/CodeWorkspaceProjectDialog'
 import { WorkbenchStageRouter } from './WorkbenchStageRouter'
 import { RailSlot } from './rail-slot'
 import { WriteAssistantStageContext } from '../write/WriteAssistantStageContext'
@@ -143,6 +144,7 @@ export function WorkbenchContent({ context }: { context: Context }): ReactElemen
         onBeginResize={beginLeftResize}
         onBackdropClose={toggleLeftSidebar}
       />
+      <CodeWorkspaceProjectDialog />
 
       <div className="ds-workbench-card relative flex min-h-0 min-w-0 flex-1">
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">

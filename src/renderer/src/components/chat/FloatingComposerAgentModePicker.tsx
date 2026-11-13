@@ -20,6 +20,10 @@ export type ComposerAgentModeControls = {
   harnessLabel: string
   rows: AdeHarnessRow[]
   loading: boolean
+  /** The active thread's full scope, primary first (host-resolved mirror). */
+  workspaceRoots?: string[]
+  /** Host-derived row capability; unknown/false means "cannot host extra roots". */
+  supportsAdditionalRoots?: (harnessId: string) => boolean
   needsConfirm: (harnessId: string) => boolean
   onSelect: (harnessId: string, surface: AgentModeSurface) => void
   onOpen: () => void
@@ -52,6 +56,11 @@ export function FloatingComposerAgentModePicker({
   const pendingFocus = useRef<'first' | 'last' | 'selected' | null>(null)
   const menuId = useId()
   const kunRow = controls.rows.find((row) => row.definition.id === 'kun')
+  const scopeRoots = controls.workspaceRoots ?? []
+  const scopeCount = scopeRoots.length
+  const supportsAdditionalRoots = controls.supportsAdditionalRoots ?? ((): boolean => false)
+  const workspaceBlocked = (selection: Selection): boolean =>
+    scopeCount > 1 && !supportsAdditionalRoots(selection.harnessId)
   const externalRows = controls.rows.filter((row) => row.definition.id !== 'kun' && harnessRowAvailable(row))
   const kun = controls.harnessId === 'kun'
   const triggerLabel = kun ? 'Kun' : controls.harnessLabel
@@ -142,7 +151,8 @@ export function FloatingComposerAgentModePicker({
   }
   const select = (selection: Selection): void => {
     if (disabled || !selectionAvailable(selection)) return
-    if (selection.harnessId !== controls.harnessId && controls.needsConfirm(selection.harnessId)) {
+    const blocked = workspaceBlocked(selection)
+    if (selection.harnessId !== controls.harnessId && (blocked || controls.needsConfirm(selection.harnessId))) {
       setPending(selection)
       return
     }
@@ -175,21 +185,32 @@ export function FloatingComposerAgentModePicker({
       className="ds-composer-task-surface-menu ds-no-drag fixed z-50 overflow-y-auto rounded-xl border border-ds-border-muted bg-white p-1.5 text-[13px] text-ds-ink shadow-[0_18px_52px_rgba(15,23,42,0.18)] dark:bg-ds-card">
       {pending ? (
         <div className="px-2.5 py-2" data-agent-mode-confirm data-harness-switch-confirm>
-          <p className="break-words text-[12px] text-ds-ink">{t('adeHarnessPicker.switchConfirmTitle', { name: pending.label })}</p>
-          <p className="mt-1 text-[11px] leading-4 text-ds-muted">{t('adeHarnessPicker.switchConfirmBody')}</p>
+          <p className="break-words text-[13px] text-ds-ink">{t('adeHarnessPicker.switchConfirmTitle', { name: pending.label })}</p>
+          <p className="mt-1 text-[12px] leading-5 text-ds-muted">{t('adeHarnessPicker.switchConfirmBody')}</p>
+          {scopeCount > 0 ? (
+            <div className="mt-2.5 border-t border-ds-border-muted pt-2.5" data-agent-workspace-scope>
+              <p className="text-[12px] leading-5 text-ds-muted">{t('adeHarnessPicker.workspaceScope', { total: scopeCount })}</p>
+              <ul className="mt-1 space-y-0.5">
+                {scopeRoots.map((root) => (
+                  <li key={root} title={root} className="truncate text-[11px] leading-4 text-ds-faint">{root}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {workspaceBlocked(pending) ? <p role="status" data-agent-workspace-blocked className="mt-2 text-[12px] leading-5 text-ds-muted">{t('adeHarnessPicker.workspaceUnsupported', { name: pending.label })}</p> : null}
           {!selectionAvailable(pending) ? <p role="status" className="mt-2 text-[11px] text-ds-muted">{t('adeHarnessUnavailable.unavailable')}</p> : null}
           <div className="mt-3 flex justify-end gap-2">
             <button type="button" role="menuitem" onClick={() => {
               pendingFocus.current = 'selected'
               setPending(null)
             }} data-agent-mode-confirm-cancel className="rounded-lg px-2.5 py-1 text-[12px] text-ds-muted hover:bg-ds-hover">{t('cancel')}</button>
-            <button type="button" role="menuitem" disabled={!selectionAvailable(pending)} onClick={() => {
-              if (disabled || !selectionAvailable(pending)) return
+            <button type="button" role="menuitem" disabled={!selectionAvailable(pending) || workspaceBlocked(pending)} onClick={() => {
+              if (disabled || !selectionAvailable(pending) || workspaceBlocked(pending)) return
               controls.onSelect(pending.harnessId, pending.surface)
               close()
               triggerRef.current?.focus()
             }} data-agent-mode-confirm-yes data-harness-switch-confirm-yes
-              className="rounded-lg bg-accent px-2.5 py-1 text-[12px] text-white disabled:cursor-not-allowed disabled:opacity-55">{t('adeHarnessPicker.switchConfirmYes')}</button>
+              className="inline-flex h-9 items-center justify-center rounded-full bg-ds-ink px-4 text-[12px] font-semibold text-ds-card transition hover:opacity-90 disabled:cursor-not-allowed disabled:bg-ds-subtle disabled:text-ds-faint">{t('adeHarnessPicker.switchConfirmYes')}</button>
           </div>
         </div>
       ) : (

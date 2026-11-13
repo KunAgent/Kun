@@ -281,6 +281,8 @@
     "continueLocalSession": "接续本机会话",
     "nextTurnHint": "对下一轮生效，当前轮次继续使用原 Agent。",
     "switchConfirmTitle": "切换到 {{name}}？",
+    "workspaceScope": "工作范围不变 · {{total}} 个目录",
+    "workspaceUnsupported": "{{name}} 暂不支持多目录工作范围，已保留 Kun 与全部目录。",
     "switchConfirmBody": "下一轮会由新 Agent 开始新的执行会话，并携带交接摘要。之前的对话记录会保留。",
     "switchConfirmYes": "切换 Agent"
   },

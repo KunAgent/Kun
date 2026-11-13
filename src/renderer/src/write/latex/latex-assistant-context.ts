@@ -3,7 +3,9 @@ import type { LatexEdit } from '@shared/latex-project'
 import { isLatexFilePath } from '@shared/latex-project'
 import { useChatStore } from '../../store/chat-store'
 import { useWriteWorkspaceStore } from '../write-workspace-store'
-import { latexSession, latexSessionKey, patchLatex } from './latex-project-store'
+import { isLatexSessionCurrent, latexSession, latexSessionKey, patchLatexSession } from './latex-project-store'
+import { beginLatexProposal, canStageLatexProposal, finishLatexProposal } from './latex-proposal-requests'
+import i18n from '../../i18n'
 
 export function withLatexAssistantContext(prompt: string, workspaceRoot: string, mainPath: string | null): string {
   if (!mainPath) return prompt
@@ -35,26 +37,31 @@ export function parseLatexAssistantEdits(key: string, text: string): LatexEdit[]
 /** Bind the reply to the paper captured at send time, including background replies. */
 export function watchLatexAssistantReply(workspaceRoot: string, mainPath: string, threadId: string, previousIds: Set<string>): void {
   const key = latexSessionKey(workspaceRoot, mainPath)
+  const request = beginLatexProposal(key)
+  if (!request) return
   let observed = useChatStore.getState().busy
-  patchLatex(key, { proposing: true })
   let unsubscribe = (): void => {}
   const settle = (state: ReturnType<typeof useChatStore.getState>): void => {
-    if (!latexSession(key)) { unsubscribe(); return }
+    if (!isLatexSessionCurrent(key, request.instanceId)) { unsubscribe(); return }
     if (state.activeThreadId !== threadId) return
     observed ||= state.busy
     if (state.busy) return
     const replies = state.blocks.filter((block) => block.kind === 'assistant' && !previousIds.has(block.id))
     if (!observed && !replies.length) return
     unsubscribe()
-    patchLatex(key, { proposing: false })
-    if (!replies.length) return
     try {
+      if (!replies.length) return
+      if (!canStageLatexProposal(request)) {
+        patchLatexSession(key, request.instanceId, { error: i18n.t('common:latexProposalStale') })
+        return
+      }
       const edits = parseLatexAssistantEdits(key, replies.filter((block) => block.kind === 'assistant').map((block) => block.text).join('\n'))
       if (!edits.length) return
-      patchLatex(key, { review: edits, reviewOrigin: 'ai', reviewAccepted: false })
+      patchLatexSession(key, request.instanceId, { review: edits, reviewOrigin: 'ai', reviewAccepted: false })
       const work = useWriteWorkspaceStore.getState()
       if (work.workspaceRoot === workspaceRoot && work.activeFilePath === mainPath) work.openWriteRightPanel('review')
-    } catch (error) { patchLatex(key, { error: String(error) }) }
+    } catch (error) { patchLatexSession(key, request.instanceId, { error: String(error) }) }
+    finally { finishLatexProposal(request) }
   }
   unsubscribe = useChatStore.subscribe(settle)
   settle(useChatStore.getState())

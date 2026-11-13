@@ -12,6 +12,13 @@ export type DelegatedSessionRoute = {
   providerId: string
   credentialIdentity: string
   workspace: string
+  /**
+   * Canonical additional roots the native session was launched with. Part of
+   * the route identity (not only the capability fingerprint) so a root change
+   * can never be ignored by a native capability resume. Absent/empty keeps the
+   * single-directory identity of older bindings.
+   */
+  additionalWorkspaceRoots?: readonly string[]
   model: string
   /**
    * `session`: the Agent applies the turn's model to its live native session

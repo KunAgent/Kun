@@ -6,7 +6,8 @@ import { useChatStore } from '../../store/chat-store'
 import type { TaskWorkspacePrep } from '../../store/task-workspace-store'
 import { ensureThreadBinding, useReviewStore } from '../../store/review-store'
 import { normalizeWorkspaceRoot, workspaceRootIdentityKey } from '../../lib/workspace-path'
-import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { codeWorkspaceProjectDisplayName } from '../../lib/code-workspace-folder-sets'
+import { openCodeProjectCreate } from '../../store/code-workspace-project-editor'
 import { readThreadWorktreeRegistry } from '../../lib/thread-worktree-registry'
 import { buildWorkspaceProjectPickerOptions } from './WorkspaceProjectPicker'
 import { useComposerPickerPopover } from './use-composer-picker-popover'
@@ -34,7 +35,7 @@ export function AdeWorkspaceProjectPicker({
   const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const removedCodeWorkspaces = useChatStore((s) => s.removedCodeWorkspaces)
   const selectAdeWorkspaceRoot = useChatStore((s) => s.selectAdeWorkspaceRoot)
-  const chooseAdeWorkspace = useChatStore((s) => s.chooseAdeWorkspace)
+  const folderSets = useChatStore((s) => s.codeWorkspaceFolderSets)
   const binding = useReviewStore((s) => activeThreadId ? s.bindings[activeThreadId] : undefined)
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -62,12 +63,13 @@ export function AdeWorkspaceProjectPicker({
     workspaceRoots: codeWorkspaceRoots,
     threadWorktrees: readThreadWorktreeRegistry().worktrees,
     conversationWorkspaceRoot,
-    removedCodeWorkspaces
-  }), [codeWorkspaceRoots, conversationWorkspaceRoot, removedCodeWorkspaces, sourceRoot])
+    removedCodeWorkspaces,
+    folderSets
+  }), [codeWorkspaceRoots, conversationWorkspaceRoot, removedCodeWorkspaces, sourceRoot, folderSets])
   const filtered = useMemo(() => {
     const normalized = query.trim().toLowerCase()
     return normalized
-      ? options.filter((option) => option.label.toLowerCase().includes(normalized) ||
+      ? options.filter((option) => option.projectName.toLowerCase().includes(normalized) ||
           option.root.toLowerCase().includes(normalized))
       : options
   }, [options, query])
@@ -101,22 +103,16 @@ export function AdeWorkspaceProjectPicker({
     }
   }
 
-  const browse = async (): Promise<void> => {
+  const browse = (): void => {
     if (pending.current || disabledReason) return
-    pending.current = true
-    setActing(true)
-    try {
-      const selected = await chooseAdeWorkspace()
-      if (selected) closeMenu()
-    } finally {
-      pending.current = false
-      setActing(false)
-    }
+    closeMenu()
+    // Project creation owns its own draft; ADE only adopts the result.
+    openCodeProjectCreate({ seedFolder: sourceRoot || workspaceRoot, selectAfterSave: 'ade' })
   }
 
   const label = sourceLoading
     ? t('adeWorkspace.loadingProject')
-    : sourceRoot ? workspaceLabelFromPath(sourceRoot) : t('selectWorkspace')
+    : sourceRoot ? codeWorkspaceProjectDisplayName(folderSets, sourceRoot) : t('selectWorkspace')
   const pathTitle = [sourceUnavailable ? t('adeWorkspace.sourceUnavailable') : sourceRoot,
     executionRoot && (executionRoot !== sourceRoot || sourceUnavailable)
       ? t('adeWorkspace.executionPath', { path: executionRoot }) : ''].filter(Boolean).join('\n')
@@ -174,8 +170,13 @@ export function AdeWorkspaceProjectPicker({
             >
               <Folder className="mt-0.5 h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium">{option.label}</span>
-                {option.context ? <span className="block truncate text-xs text-ds-faint">{option.context}</span> : null}
+                <span className="block truncate text-sm font-medium">{option.projectName}</span>
+                <span className="flex items-center gap-1.5 text-xs text-ds-faint">
+                  {option.context ? <span className="truncate">{option.context}</span> : null}
+                  <span className="shrink-0 tabular-nums" title={t('codeProjectFolderCount', { count: option.folderCount })}>
+                    {option.folderCount}
+                  </span>
+                </span>
               </span>
               {selected ? <Check className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={2} /> : null}
             </button>
@@ -192,7 +193,7 @@ export function AdeWorkspaceProjectPicker({
           type="button"
           role="menuitem"
           disabled={blocked}
-          onClick={() => void browse()}
+          onClick={() => browse()}
           className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm font-medium text-ds-ink hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-50"
           data-ade-project-browse
         >

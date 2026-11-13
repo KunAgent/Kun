@@ -496,7 +496,7 @@ export abstract class ModelStepPreparationService {
       nowIso: this.deps.nowIso
     })
     const toolPreferenceInstruction = buildToolPreferenceInstruction(requestToolSpecs)
-    const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread?.additionalWorkspaces)
+    const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(prepared.additionalWorkspaces)
     const contextBlocks: KunTurnContextBlock[] = [
       ...historyReferenceContextBlocks(thread),
       kunContextBlock(

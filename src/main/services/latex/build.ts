@@ -14,7 +14,7 @@ export class LatexBuildService {
   private queues = new Map<string, Promise<unknown>>()
   private closing = false
   private cancelled = new Set<string>()
-  constructor(readonly cacheRoot: string) {}
+  constructor(readonly cacheRoot: string, readonly managedToolRoot?: string) {}
 
   projectCache(project: LatexProject): string {
     return join(this.cacheRoot, createHash('sha256').update(project.rootPath).digest('hex').slice(0, 32))
@@ -95,7 +95,7 @@ export class LatexBuildService {
     const outputPath = join(directory, 'output')
     let succeeded = false
     try {
-      const tools = await detectLatexTools(project.config.engine, project.config.toolDirectory)
+      const tools = await detectLatexTools(project.config.engine, project.config.toolDirectory, this.managedToolRoot)
       const base = { buildId: input.buildId, sourceRevision: input.sourceRevision, sourceHash: '', durationMs: 0, completedAt: Date.now(),
         diagnostics: [], log: '', pdf: null, tools } satisfies Omit<LatexBuild, 'status'>
       if (!tools.latexmk || !tools.engine) return { ...base, status: 'missing-tools' }

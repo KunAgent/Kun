@@ -10,13 +10,8 @@ import {
   type AddWorkspaceFolderError
 } from '../lib/code-workspace-folder-sets'
 import { folderSetPrimaryForWorkspace } from '../lib/code-workspace-folder-lookup'
-import { workspaceRootIdentityKey } from '../lib/workspace-path'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
-import {
-  commitCodeWorkspaceFolderSets,
-  syncThreadAdditionalWorkspaces,
-  threadFolderSetPrimary
-} from './chat-store-workspace-folder-sync'
+import { commitCodeWorkspaceFolderSets } from './chat-store-workspace-folder-sync'
 
 function addFolderErrorMessage(error: AddWorkspaceFolderError): string {
   if (error === 'same-as-primary') return i18n.t('common:workspaceFolderSameAsPrimary')
@@ -30,18 +25,6 @@ function addFolderErrorMessage(error: AddWorkspaceFolderError): string {
 export function createWorkspaceFolderActions(
   { set, get }: { set: ChatStoreSet; get: ChatStoreGet }
 ): Pick<ChatState, 'addWorkspaceFolder' | 'removeWorkspaceFolder'> {
-  const syncActiveThread = async (primary: string): Promise<void> => {
-    const activeId = get().activeThreadId
-    if (!activeId) return
-    const thread = get().threads.find((candidate) => candidate.id === activeId)
-    if (
-      !thread ||
-      workspaceRootIdentityKey(threadFolderSetPrimary(thread, get().workspaceRoot)) !==
-        workspaceRootIdentityKey(primary)
-    ) return
-    await syncThreadAdditionalWorkspaces({ set, get, threadId: activeId })
-  }
-
   return {
     addWorkspaceFolder: async (workspacePath) => {
       const primary = folderSetPrimaryForWorkspace(workspacePath || get().workspaceRoot)
@@ -73,7 +56,6 @@ export function createWorkspaceFolderActions(
         }
         commitCodeWorkspaceFolderSets(set, added.registry)
         set({ error: null })
-        await syncActiveThread(primary)
         return true
       } catch (error) {
         set({ error: formatWorkspacePickerError(error) })
@@ -89,7 +71,6 @@ export function createWorkspaceFolderActions(
       const removed = removeWorkspaceFolderFromRegistry(primary, extraRoot, get().codeWorkspaceFolderSets)
       commitCodeWorkspaceFolderSets(set, removed.registry)
       set({ error: null })
-      await syncActiveThread(primary)
       return true
     }
   }

@@ -12,6 +12,7 @@ import {
 } from 'node:path'
 import {
   mkdir,
+  realpath,
   stat
 } from 'node:fs/promises'
 import {
@@ -74,9 +75,13 @@ export function registerAppWorkspaceIpcHandlers(options: RegisterAppIpcHandlersO
       ? await dialog.showOpenDialog(mainWindow, options)
       : await dialog.showOpenDialog(options)
     if (!result.canceled && result.filePaths[0]) report({ name: 'workspace_ready', properties: {} })
+    const pickedPath = result.canceled ? null : (result.filePaths[0] ?? null)
+    // Canonicalize so a symlinked folder cannot be added twice under two
+    // spellings, and project identity matches the physical folder.
+    const path = pickedPath ? await realpath(pickedPath).catch(() => pickedPath) : null
     return {
       canceled: result.canceled,
-      path: result.canceled ? null : (result.filePaths[0] ?? null)
+      path
     }
   })
 

@@ -511,3 +511,67 @@ test('resumes compatible native capability upgrades while retaining account and 
   await expect(coordinator.prepare({ threadId: 'thread_1', route: updated, priorItems: [user('turn_1', 'edited')], allowNativeCapabilityResume: true }))
     .resolves.toMatchObject({ resumed: false, rebaseReason: 'history_changed' })
 })
+
+test('keeps route identity stable across root ordering but not root changes', () => {
+  expect(delegatedRouteKey(route({ additionalWorkspaceRoots: ['/tmp/a', '/tmp/b'] })))
+    .toBe(delegatedRouteKey(route({ additionalWorkspaceRoots: ['/tmp/b', '/tmp/a'] })))
+  expect(delegatedRouteKey(route({ additionalWorkspaceRoots: ['/tmp/a'] })))
+    .not.toBe(delegatedRouteKey(route({ additionalWorkspaceRoots: ['/tmp/a', '/tmp/b'] })))
+  expect(delegatedRouteKey(route()))
+    .not.toBe(delegatedRouteKey(route({ additionalWorkspaceRoots: ['/tmp/a'] })))
+})
+
+test('parks a session when the root set changes instead of resuming the old grant', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-root-change-'))
+  const coordinator = new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root))
+  const prior = [user('turn_1', 'hello')]
+  const prepared = await coordinator.prepare({
+    threadId: 'thread_1', route: route({ additionalWorkspaceRoots: ['/tmp/a'] }), priorItems: []
+  })
+  await coordinator.commit({
+    preparation: prepared, committedItems: prior, lastCommittedTurnId: 'turn_1', nativeSessionId: 'agent_1'
+  })
+
+  await expect(coordinator.prepare({
+    threadId: 'thread_1', route: route({ additionalWorkspaceRoots: ['/tmp/a'] }), priorItems: prior
+  })).resolves.toMatchObject({ resumed: true, nativeSessionId: 'agent_1' })
+  const widened = await coordinator.prepare({
+    threadId: 'thread_1', route: route({ additionalWorkspaceRoots: ['/tmp/a', '/tmp/b'] }), priorItems: prior
+  })
+  expect(widened).toMatchObject({ resumed: false, rebaseReason: 'route_changed' })
+  expect(widened.nativeSessionId).toBeUndefined()
+
+  // Switching back to the original folder set restores the parked session
+  // instead of starting another fresh one.
+  await coordinator.commit({
+    preparation: widened, committedItems: prior, lastCommittedTurnId: 'turn_2', nativeSessionId: 'agent_2'
+  })
+  await expect(coordinator.prepare({
+    threadId: 'thread_1', route: route({ additionalWorkspaceRoots: ['/tmp/a'] }), priorItems: prior
+  })).resolves.toMatchObject({ resumed: true, nativeSessionId: 'agent_1' })
+})
+
+test('native capability resume cannot ignore a root change', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'kun-root-bypass-'))
+  const coordinator = new DelegatedSessionCoordinator(new FileDelegatedSessionBindingStore(root))
+  const codex = route({
+    providerKind: 'codex-app-server',
+    additionalWorkspaceRoots: ['/tmp/a'],
+    capabilityFingerprint: delegatedCapabilityFingerprint('v1')
+  })
+  const prior = [user('turn_1', 'hello')]
+  const prepared = await coordinator.prepare({ threadId: 'thread_1', route: codex, priorItems: [] })
+  await coordinator.commit({
+    preparation: prepared, committedItems: prior, lastCommittedTurnId: 'turn_1', nativeSessionId: 'codex-native-1'
+  })
+  await expect(coordinator.prepare({
+    threadId: 'thread_1',
+    route: {
+      ...codex,
+      additionalWorkspaceRoots: ['/tmp/a', '/tmp/b'],
+      capabilityFingerprint: delegatedCapabilityFingerprint('v2')
+    },
+    priorItems: prior,
+    allowNativeCapabilityResume: true
+  })).resolves.toMatchObject({ resumed: false, rebaseReason: 'route_changed' })
+})

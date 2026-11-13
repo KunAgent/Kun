@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Check, ChevronDown, Folder, FolderPlus, Loader2, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
-import { extraRootsForPrimary } from '../../lib/code-workspace-folder-sets'
+import { extraRootsForPrimary, codeWorkspaceProjectDisplayName, codeWorkspaceProjectFolderCount, type CodeWorkspaceFolderSetsRegistry } from '../../lib/code-workspace-folder-sets'
+import { openCodeProjectCreate } from '../../store/code-workspace-project-editor'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import {
   isClawWorkspacePath,
@@ -28,6 +29,10 @@ type Props = {
 type WorkspaceOption = {
   root: string
   label: string
+  /** Project display name: stored name, or basename for legacy folders. */
+  projectName: string
+  /** Main folder plus every extra folder. */
+  folderCount: number
   /** Parent folder, shown muted to disambiguate same-named projects. */
   context: string
 }
@@ -68,6 +73,7 @@ export function buildWorkspaceProjectPickerOptions(options: {
   threadWorktrees?: WorkspaceProjectPickerWorktrees
   conversationWorkspaceRoot?: string
   removedCodeWorkspaces?: RemovedCodeWorkspacesRegistry
+  folderSets?: CodeWorkspaceFolderSetsRegistry
 }): { currentRoot: string, options: WorkspaceOption[] } {
   const threadWorktrees = options.threadWorktrees ?? {}
   const candidateProjectPaths = [
@@ -91,11 +97,17 @@ export function buildWorkspaceProjectPickerOptions(options: {
     if (seen.has(key)) continue
     seen.add(key)
     const label = workspaceLabelFromPath(root)
-    out.push({ root, label, context: workspaceContext(root, label) })
+    out.push({
+      root,
+      label,
+      projectName: codeWorkspaceProjectDisplayName(options.folderSets, root),
+      folderCount: codeWorkspaceProjectFolderCount(options.folderSets, root),
+      context: workspaceContext(root, label)
+    })
   }
   return {
     currentRoot,
-    options: out.sort((a, b) => a.label.localeCompare(b.label))
+    options: out.sort((a, b) => a.projectName.localeCompare(b.projectName))
   }
 }
 
@@ -116,7 +128,6 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
   const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const removedCodeWorkspaces = useChatStore((s) => s.removedCodeWorkspaces)
   const selectWorkspaceRoot = useChatStore((s) => s.selectWorkspaceRoot)
-  const chooseWorkspace = useChatStore((s) => s.chooseWorkspace)
   const folderSets = useChatStore((s) => s.codeWorkspaceFolderSets)
   const removeWorkspaceFolder = useChatStore((s) => s.removeWorkspaceFolder)
   const runtimeReady = useChatStore((s) => s.runtimeConnection === 'ready')
@@ -134,16 +145,17 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
       workspaceRoots: codeWorkspaceRoots,
       threadWorktrees: readThreadWorktreeRegistry().worktrees,
       conversationWorkspaceRoot,
-      removedCodeWorkspaces
+      removedCodeWorkspaces,
+      folderSets
     })
-  }, [codeWorkspaceRoots, current, conversationWorkspaceRoot, removedCodeWorkspaces])
+  }, [codeWorkspaceRoots, current, conversationWorkspaceRoot, removedCodeWorkspaces, folderSets])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return options
     return options.filter(
       (option) =>
-        option.label.toLowerCase().includes(q) ||
+        option.projectName.toLowerCase().includes(q) ||
         option.root.toLowerCase().includes(q)
     )
   }, [options, query])
@@ -168,7 +180,7 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
   }, [open, showSearch])
 
   const extraRoots = extraRootsForPrimary(currentRoot, folderSets)
-  const label = currentRoot ? workspaceLabelFromPath(currentRoot) : t('selectWorkspace')
+  const label = currentRoot ? codeWorkspaceProjectDisplayName(folderSets, currentRoot) : t('selectWorkspace')
 
   const handleSelect = async (root: string): Promise<void> => {
     if (acting) return
@@ -186,19 +198,13 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
     }
   }
 
-  const handleAdd = async (): Promise<void> => {
+  const handleAdd = (): void => {
     if (acting) return
-    setActing(true)
-    try {
-      // Pick a directory (no thread select), then land on a clean new
-      // conversation for it — same end-state as choosing an existing project.
-      const picked = await chooseWorkspace({ selectThreadAfter: false })
-      if (picked) await selectWorkspaceRoot(picked)
-      setOpen(false)
-      setQuery('')
-    } finally {
-      setActing(false)
-    }
+    setOpen(false)
+    setQuery('')
+    // A project draft owns its folder picks; it must not move the global
+    // workspace root while the user is still editing.
+    openCodeProjectCreate({ seedFolder: currentRoot, selectAfterSave: 'code' })
   }
 
   return (
@@ -282,12 +288,13 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
                 >
                   <Folder className="mt-0.5 h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[15px] font-medium">{option.label}</span>
-                    {option.context ? (
-                      <span className="mt-0.5 block truncate text-[12px] text-ds-faint">
-                        {option.context}
+                    <span className="block truncate text-[15px] font-medium">{option.projectName}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[12px] text-ds-faint">
+                      <span className="truncate">{option.context}</span>
+                      <span className="shrink-0 tabular-nums" title={t('codeProjectFolderCount', { count: option.folderCount })}>
+                        {option.folderCount}
                       </span>
-                    ) : null}
+                    </span>
                   </span>
                   {isCurrent ? (
                     <Check className="mt-0.5 h-5 w-5 shrink-0 text-ds-muted" strokeWidth={2} />

@@ -87,6 +87,7 @@ export const ModelRequestTraceDelegatedSchema = z.object({
     'route_changed',
     'capabilities_changed',
     'history_changed',
+    'workspace_roots_changed',
     'native_state_unavailable'
   ]).optional(),
   contextManagement: z.literal('sdk-managed'),

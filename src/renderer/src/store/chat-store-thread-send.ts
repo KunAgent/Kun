@@ -56,7 +56,6 @@ import type {
 import { queuedMessageGuidancePayload } from './queued-message-guidance'
 import { threadWorkspaceBlocksSend, useTaskWorkspaceStore } from './task-workspace-store'
 import { queuedTaskWorkspaceRequirement } from './task-workspace-queue-identity'
-import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { currentTurnStartGeneration } from './turn-start-fence'
 import {
   isPendingQueuedMessage,
@@ -212,10 +211,6 @@ export async function sendThreadMessage(
   if (get().route === 'ade' && !get().activeThreadId && !adeDraft) return false
     const trimmedText = text.trim()
     if (!trimmedText) return false
-    const activeSyncThreadId = get().activeThreadId
-    if (activeSyncThreadId) {
-      await syncThreadAdditionalWorkspaces({ set, get, threadId: activeSyncThreadId })
-    }
     // The first streaming token usually lands before the lazy Streamdown
     // chunk finishes loading on a cold start. Warm it as soon as the user
     // commits a turn so the fallback plain-text frame is as short as possible.

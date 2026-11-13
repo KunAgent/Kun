@@ -45,7 +45,7 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
         throw new Error('REQUEST_EXPIRED')
       const desktopCall = call.method.startsWith('desktop.') && !call.method.startsWith('desktop.schedule.')
       // Desktop and terminal calls are ephemeral: no runtime lease, no durable receipt.
-      const lease = desktopCall || call.method.startsWith('terminal.') ? undefined : await deps.link.lease()
+      const lease = desktopCall || call.method.startsWith('terminal.') || call.method.startsWith('simulator.') ? undefined : await deps.link.lease()
       if (!current()) return
       let result: unknown
       if (
@@ -76,6 +76,11 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
         if (!deps.link.desktop || !deps.owner) throw new Error('DESKTOP_UNSUPPORTED')
         result = await deps.link.desktop.invoke(call.method, call.params, { accountId: deps.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes, purpose: authority.purpose, hostId: deps.hostId, current, validForMs: deps.authorizationRemaining,
           emit: value => { if (current()) deps.send({ kind: 'event', id: randomUUID(), dst: src, payload: value }) } })
+      } else if (call.method.startsWith('simulator.')) {
+        if (!deps.link.simulator || !deps.owner) throw new Error('SIMULATOR_UNSUPPORTED')
+        result = await deps.link.simulator.invoke(call.method, call.params, {
+          accountId: deps.owner, deviceId: src, authorizationId: authority.id, scopes: authority.scopes, current
+        })
       } else if (call.method.startsWith('terminal.')) {
         if (!deps.link.terminal || !deps.owner) throw new Error('TERMINAL_UNSUPPORTED')
         // Stable grant identity permits attach after a socket change; current() still fences old transports.
@@ -105,7 +110,7 @@ export async function dispatchMobileInvoke(frame: Frame, src: string, authority:
             typeof value.code === 'string' ? value.code : 'RUNTIME_REJECTED'
           )
         if (call.method === 'catalog.get') value.capabilityDescriptors = [...(value.capabilityDescriptors ?? []), ...usageDescriptors(authority.scopes),
-          ...(deps.link.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...(deps.shared?.descriptors(authority.scopes) ?? []), ...(deps.link.desktop?.descriptors(authority.scopes) ?? []), ...(deps.link.terminal?.descriptors(authority.scopes) ?? [])]
+          ...(deps.link.desktopSchedules ? desktopScheduleDescriptors(authority.scopes) : []), ...(deps.shared?.descriptors(authority.scopes) ?? []), ...(deps.link.desktop?.descriptors(authority.scopes) ?? []), ...(deps.link.terminal?.descriptors(authority.scopes) ?? []), ...(deps.link.simulator?.descriptors(authority.scopes) ?? [])]
         if (call.method === 'catalog.get' && Array.isArray(value.capabilities))
           value.capabilities = [...value.capabilities, READ_CONDITIONAL_CAPABILITY, HISTORY_LIVE_CAPABILITY,
             ...(deps.link.files ? [ATTACHMENT_PREVIEW_CAPABILITY] : []), ...(deps.link.desktop?.capabilities() ?? []), ...(deps.link.terminal?.capabilities(authority.scopes) ?? [])]

@@ -48,6 +48,11 @@ import { mkdir } from 'node:fs/promises'
 import { buildAdditionalWorkspacesInstruction, buildClientSurfaceInstruction } from '../../prompt/kun-prompt-context.js'
 import { projectTurnDynamicContext } from '../../prompt/turn-persona-context.js'
 import {
+  assertAdditionalRootsSupported,
+  assertIsolatedWorkspaceRoots,
+  resolveWorkspaceRoots
+} from '../workspace-roots.js'
+import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
   delegatedProviderStateKey,
@@ -97,6 +102,20 @@ export function createAgentSdkTurnRuntimeDeps(
         (userItem as { attachmentIds?: string[] } | undefined)?.attachmentIds ?? []
       const images = await resolveImages(threadId, thread.workspace, attachmentIds)
       if (!userText.trim() && images.length === 0) return null
+
+      // Canonical roots are the one source for the SDK launch, the tool
+      // sandbox and the delegated-session identity. A missing directory
+      // fails closed instead of launching with a narrower scope.
+      const workspaceRoots = await resolveWorkspaceRoots({
+        workspace: thread.workspace,
+        additionalWorkspaces: thread.additionalWorkspaces
+      })
+      assertAdditionalRootsSupported('agent-sdk', workspaceRoots.extras)
+      assertIsolatedWorkspaceRoots(
+        thread.executionUnit?.taskWorkspaceId ?? thread.taskWorkspaceId,
+        workspaceRoots.extras,
+        deps.taskWorkspaces
+      )
 
       const requestedProviderId = turn?.providerId?.trim()
       const requestedRouteProviderId = requestedProviderId || thread.providerId?.trim()
@@ -244,6 +263,7 @@ export function createAgentSdkTurnRuntimeDeps(
       // the native Kun loop.
       const scope = await toolBridge.resolveTurnScope(threadId, turnId, {
         skillPrompt: userText,
+        workspaceRoots,
         actingModelRoute
       })
       if (!scope) return null
@@ -277,7 +297,7 @@ export function createAgentSdkTurnRuntimeDeps(
       const planMode = plan.planMode
 
       const instructionResolution = deps.instructionRuntime
-        ? await deps.instructionRuntime.resolveTurn({ workspace: thread.workspace })
+        ? await deps.instructionRuntime.resolveTurn({ workspace: workspaceRoots.primary })
         : undefined
 
       // Directives are injected on every turn — including empty-prompt
@@ -285,7 +305,7 @@ export function createAgentSdkTurnRuntimeDeps(
       // keep the memory-free boundary.
       const memoryContext = await resolveMemoryTurnContext(
         thread.roomContext ? undefined : deps.memoryStore,
-        { query: userText, workspace: thread.workspace }
+        { query: userText, workspace: workspaceRoots.primary }
       )
       const directiveBlocks = memoryContext.directiveBlocks
       const memoryBlocks = memoryContext.referenceBlocks
@@ -306,7 +326,7 @@ export function createAgentSdkTurnRuntimeDeps(
         })
       }
 
-      const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(thread.additionalWorkspaces)
+      const additionalWorkspacesInstruction = buildAdditionalWorkspacesInstruction(workspaceRoots.extras)
       // planning-phase harness menu as dynamic context (not the
       // stable delegated-session prefix).
       const graphHarnessInstruction =
@@ -352,7 +372,12 @@ export function createAgentSdkTurnRuntimeDeps(
               credentialSourceId: gatewayEnv ? 'kun-gateway' : providerCfg?.credentialSourceId,
               credentialSecret: token
             }),
-            workspace: thread.workspace,
+            workspace: workspaceRoots.primary,
+            // Root-set identity: adding, removing or re-pointing a directory
+            // rebases the native session instead of resuming a stale grant.
+            ...(workspaceRoots.extras.length
+              ? { additionalWorkspaceRoots: workspaceRoots.extras }
+              : {}),
             model: model ?? 'claude-default',
             // The SDK applies `model` on every query, including a resumed one,
             // so an explicit model change continues the same Claude session.
@@ -442,8 +467,8 @@ export function createAgentSdkTurnRuntimeDeps(
         occurredAt: turn.createdAt
       })
       return {
-        workspace: thread.workspace,
-        additionalWorkspaces: thread.additionalWorkspaces,
+        workspace: workspaceRoots.primary,
+        additionalWorkspaces: workspaceRoots.extras,
         userText: modelUserText,
         threadPersona: thread.systemPrompt?.trim() || undefined,
         approvalPolicy,

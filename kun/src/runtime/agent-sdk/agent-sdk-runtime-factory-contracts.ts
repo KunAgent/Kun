@@ -190,7 +190,7 @@ export interface AgentSdkRuntimeFactoryDeps {
   /** Shared durable provider-session coordinator. */
   sessionCoordinator?: DelegatedSessionCoordinator
   /** Host task-workspace index for handoff work-state merging. */
-  taskWorkspaces?: {
+  taskWorkspaces?: import('../workspace-roots.js').WorkspaceIsolationLookup & {
     list(filter?: { ownerThreadId?: string }): Array<{
       ownerThreadId: string
       path: string

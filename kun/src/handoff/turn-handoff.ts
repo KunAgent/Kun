@@ -17,7 +17,7 @@ import type {
  * Structural view of the task-workspace service a delegated runtime needs —
  * avoids a hard dependency on the service implementation.
  */
-export type TaskWorkspaceLister = {
+export type TaskWorkspaceLister = import('../runtime/workspace-roots.js').WorkspaceIsolationLookup & {
   list(filter: { ownerThreadId: string }): readonly {
     path: string
     branch?: string

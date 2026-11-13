@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
-import { realpath } from 'node:fs/promises'
-import { basename, join, relative, resolve } from 'node:path'
+import { lstat, realpath } from 'node:fs/promises'
+import { basename, dirname, join, relative, resolve } from 'node:path'
 import type { ServerRuntime } from '../../server/routes/server-runtime.js'
 import { inside } from './project-content.js'
 
@@ -14,6 +14,27 @@ const PRIVATE = new Set([
 /** The same protected-path boundary applies to project browsing and artifact dependencies. */
 export async function permittedProjectFile(runtime: ServerRuntime, root: string, path: string) {
   const canonical = await realpath(path)
+  return permittedCanonicalPath(runtime, root, canonical)
+}
+
+/** Deleted Git paths have no file to realpath, but retain the same credential/configuration boundary. */
+export async function permittedProjectChange(runtime: ServerRuntime, root: string, path: string) {
+  if (!inside(root, path)) return false
+  let ancestor = path
+  const suffix: string[] = []
+  for (;;) {
+    try {
+      const canonical = join(await realpath(ancestor), ...suffix)
+      return permittedCanonicalPath(runtime, root, canonical)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || ancestor === root || dirname(ancestor) === ancestor) return false
+      if ((await lstat(ancestor).catch(() => null))?.isSymbolicLink()) return false
+      suffix.unshift(basename(ancestor)); ancestor = dirname(ancestor)
+    }
+  }
+}
+
+async function permittedCanonicalPath(runtime: ServerRuntime, root: string, canonical: string) {
   if (!inside(root, canonical)) return false
   if (PRIVATE.has(basename(root).toLowerCase())) return false
   const parts = relative(root, canonical).split(/[\\/]/)

@@ -2,7 +2,8 @@ import type { Dispatch, DragEvent as ReactDragEvent, FormEvent,
   MouseEvent as ReactMouseEvent, ReactElement, SetStateAction } from 'react'
 import { ChevronDown, ChevronRight, Folder, FolderPlus, FolderOpen, Plus } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
-import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { codeWorkspaceProjectDisplayName, codeWorkspaceProjectFolderCount } from '../../lib/code-workspace-folder-sets'
+import { useChatStore } from '../../store/chat-store'
 import { workspaceRootIdentityKey } from '../../lib/workspace-path'
 import { SidebarIconButton, SidebarSearchField, SidebarTreeRow } from '../sidebar/SidebarPrimitives'
 import { SidebarProjectsHeader } from './SidebarProjectsHeader'
@@ -176,6 +177,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
     submitMoveThreadDialog, closeActionDialog, submitActionDialog,
     scheduledThreadCount, onOpenSchedule
   } = props
+  const folderSets = useChatStore((state) => state.codeWorkspaceFolderSets)
   const runningLabel = t('sidebarThreadRunning')
 
   const renderThreadRow = (
@@ -228,7 +230,6 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
       <SidebarProjectsHeader
         allGroupsCollapsed={allGroupsCollapsed}
         searchVisible={searchVisible}
-        workspaceRoot={workspaceRoot}
         onToggle={toggleAllGroups}
         onToggleSearch={() => setSearchOpen((open) => !open)}
         onPickWorkspace={onPickWorkspace}
@@ -276,7 +277,8 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
         ) : null}
 
         {displayGroups.map(([workspacePath, list]) => {
-          const folderName = workspaceLabelFromPath(workspacePath)
+          const folderName = codeWorkspaceProjectDisplayName(folderSets, workspacePath)
+          const projectFolderCount = codeWorkspaceProjectFolderCount(folderSets, workspacePath)
           const workspaceContext = workspaceContextLabel(workspacePath, folderName)
           const isCollapsed = isSidebarWorkspaceCollapsed(sidebarCollapse, workspacePath)
           const isDragOver =
@@ -399,6 +401,11 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                   <FolderOpen className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.75} />
                 )}
                 <span className="min-w-0 flex-1 truncate">{folderName}</span>
+                {projectFolderCount > 0 ? (
+                  <span className="shrink-0 rounded-md bg-ds-card/70 px-1.5 py-0.5 text-[10.5px] text-ds-faint tabular-nums">
+                    {t('codeProjectFolderCount', { count: projectFolderCount })}
+                  </span>
+                ) : null}
                 {workspaceContext ? (
                   <span className="min-w-0 max-w-[42%] shrink truncate text-[12.5px] text-ds-faint transition group-hover:opacity-0 group-focus-within:opacity-0">
                     {workspaceContext}

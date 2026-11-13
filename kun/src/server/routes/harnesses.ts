@@ -21,6 +21,7 @@ import { probeAcpHandshake } from '../../harness/acp-handshake-probe.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 import { cursorHarnessModelInfo } from '../../harness/cursor-subscription-catalog.js'
+import { harnessWorkspaceSupport } from '../../runtime/workspace-roots.js'
 
 /**
  * `GET /v1/harnesses` — definitions plus detection status. With `wait_ms`
@@ -92,7 +93,9 @@ export async function listHarnesses(
       // Warming already started for every row above; only report its state.
       // A background refresh of a valid proof is not "detecting" (the Agent stays usable).
       if (harnesses.readiness?.verifying(definition.id)) status.detecting = true
-      const row: Record<string, unknown> = { definition, status, enabled: !harnesses.catalog.isDisabled(definition.id), enabledProfiles, readyProfiles }
+      const row: Record<string, unknown> = { definition, status, enabled: !harnesses.catalog.isDisabled(definition.id), enabledProfiles, readyProfiles,
+        // Host-derived from the transport; a custom manifest cannot claim it.
+        workspaceSupport: harnessWorkspaceSupport(definition.transport) }
       if (usage && runtime.harnessAdmission && status) {
         row.admission = await runtime
           .harnessAdmission({ definition, status, usage })

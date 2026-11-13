@@ -35,6 +35,10 @@ import { isKunModelProviderGroup } from '../../lib/kun-model-provider-groups'
 import { selectHarnessProvider } from '../../lib/harness-provider-selection'
 import { useCodeProjectDefaults } from './use-code-project-defaults'
 import { readHarnessLastModel, rememberHarnessLastModel } from '../../lib/harness-last-model'
+import {
+  additionalWorkspacesForThread,
+  extraRootsForPrimary
+} from '../../lib/code-workspace-folder-sets'
 
 /**
  * ADE composer wiring: harness catalog, per-harness
@@ -97,6 +101,24 @@ export function useAdeComposerControls(input: {
   const managedDraft = useChatStore((state) => state.adeDraftOpen && !state.activeThreadId)
   const setComposerIsolation = useChatStore((state) => state.setComposerIsolation)
   const setComposerExecutionSettings = useChatStore((state) => state.setComposerExecutionSettings)
+  // The picker's scope mirrors the active thread snapshot, not the project's
+  // latest registry: a thread bound elsewhere must show its own roots.
+  const activeThreadSnapshot = useChatStore((state) =>
+    state.activeThreadId ? (state.threads ?? []).find((entry) => entry.id === state.activeThreadId) : undefined
+  )
+  const workspaceRoots = useMemo(() => {
+    const primary = activeThreadSnapshot?.workspace?.trim() || workspaceRoot.trim()
+    if (!primary) return [] as string[]
+    const extras = activeThreadId
+      ? additionalWorkspacesForThread(primary, activeThreadSnapshot?.additionalWorkspaces ?? [])
+      : additionalWorkspacesForThread(primary, extraRootsForPrimary(primary))
+    return [primary, ...extras]
+  }, [activeThreadId, activeThreadSnapshot, workspaceRoot])
+  /** Host-derived capability row: absence means "unknown", which is blocked. */
+  const supportsAdditionalRoots = (nextHarnessId: string): boolean => {
+    if (nextHarnessId === 'kun') return true
+    return rows.find((entry) => entry.definition.id === nextHarnessId)?.workspaceSupport?.additionalRoots === true
+  }
   const requestAdeThreadWorkspace = useChatStore((state) => state.requestAdeThreadWorkspace)
   // Projects, worktrees and their default Agent are Code's; Work only switches Agents.
   const codeProject = useChatStore((state) => state.route !== 'write')
@@ -275,6 +297,8 @@ export function useAdeComposerControls(input: {
 
   const selectHarness = (nextId: string, nextCredentialMode?: string): void => {
     const nextRow = rows.find((entry) => entry.definition.id === nextId)
+    // Keep the current Agent instead of switching into a scope it cannot host.
+    if (nextId !== 'kun' && workspaceRoots.length > 1 && !supportsAdditionalRoots(nextId)) return
     // picker rows are filtered, but a stale persisted pick can still
     // call in with a terminal-only id — it cannot host turns.
     if (nextId !== 'kun' && (!nextRow || !harnessRowRunsTurns(nextRow) || !harnessRowAvailable(nextRow))) return
@@ -366,6 +390,9 @@ export function useAdeComposerControls(input: {
     permissionModes: row?.definition.permissionModes,
     requestedPermissionMode: harnessDefaults[harnessId]?.permissionMode,
     transport: row?.definition.transport,
+    /** The active thread's full scope (primary first). */
+    workspaceRoots,
+    supportsAdditionalRoots,
     rowUnavailableCode: harnessRowUnavailableCode,
     refreshRows: () => {
       void loadHarnesses()

@@ -215,6 +215,8 @@ export interface AssembleSdkOptionsParams {
   model?: string
   reasoningEffort?: string
   cwd: string
+  /** Canonical extra roots handed to the SDK as additional directories. */
+  additionalDirectories?: readonly string[]
   kunSystemPrompt: string
   threadPersona?: string
   approvalPolicy: ApprovalPolicy
@@ -256,6 +258,9 @@ export function assembleSdkOptions(params: AssembleSdkOptionsParams): SdkQueryOp
   ]
   const options: SdkQueryOptions = {
     cwd: params.cwd,
+    ...(params.additionalDirectories?.length
+      ? { additionalDirectories: [...params.additionalDirectories] }
+      : {}),
     systemPrompt: buildClaudeSystemPrompt(params.kunSystemPrompt, params.threadPersona),
     // `tools` is the availability boundary; `allowedTools` is only an
     // auto-approval list. Always provide both explicitly so restricted native

@@ -266,6 +266,8 @@
   "adeHarnessPicker.continueLocalSession": "Continue a local session",
   "adeHarnessPicker.nextTurnHint": "Applies to the next turn. The current turn keeps its Agent.",
   "adeHarnessPicker.switchConfirmTitle": "Switch to {{name}}?",
+  "adeHarnessPicker.workspaceScope": "Workspace stays the same · {{total}} folders",
+  "adeHarnessPicker.workspaceUnsupported": "{{name}} cannot host a multi-folder workspace yet. Kun and every folder stay selected.",
   "adeHarnessPicker.switchConfirmBody": "The next turn starts a new execution session with this Agent and a handoff summary. Your earlier conversation stays available.",
   "adeHarnessPicker.switchConfirmYes": "Switch Agent",
   "adeHarnessUnavailable.notInstalled": "Not installed",

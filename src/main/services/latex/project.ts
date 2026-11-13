@@ -9,7 +9,8 @@ export const LATEX_MANIFEST = '.kun-latex.json'
 export const MAX_PROJECT_BYTES = 100 * 1024 * 1024
 export const MAX_SOURCE_BYTES = 1536 * 1024
 const excluded = new Set(['.git', '.kun', '.kun-latex', '.cache', '.kun-design', '.codex', '.agents', 'node_modules', 'build', 'out', 'dist', 'coverage', '.DS_Store'])
-const generated = /\.(?:aux|log|fls|fdb_latexmk|synctex(?:\.gz)?|toc|lof|lot|out|bbl|blg|bcf|run\.xml|nav|snm|vrb|xdv|dvi)$/i
+// A .bbl may be the only bibliography supplied with an existing paper.
+const generated = /\.(?:aux|log|fls|fdb_latexmk|synctex(?:\.gz)?|toc|lof|lot|out|blg|bcf|run\.xml|nav|snm|vrb|xdv|dvi)$/i
 export const latexConfigSchema = z.object({
   version: z.literal(1), title: z.string().min(1).max(200), mainFile: z.string().min(1).max(1024),
   engine: z.enum(['xelatex', 'pdflatex', 'lualatex']), autoBuild: z.boolean(),

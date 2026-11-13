@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
@@ -469,5 +472,71 @@ describe('TurnContextResolver', () => {
       memories: [expect.objectContaining({ id: 'memory_live' })]
     })
     expect(currentMemoryStore.setLastInjected).toHaveBeenCalledWith(['memory_live'])
+  })
+})
+
+
+describe('native turn workspace boundary', () => {
+  async function fixture() {
+    const base = await realpath(await mkdtemp(join(tmpdir(), 'kun-native-roots-')))
+    for (const name of ['repo', 'extra', 'other']) await mkdir(join(base, name))
+    const listTools = vi.fn(async () => [])
+    const resolveAttachments = vi.fn(async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }))
+    const current = thread({ workspace: join(base, 'repo'), additionalWorkspaces: [join(base, 'extra')] })
+    const currentTurn = turn()
+    const input = {
+      threadId: current.id, turnId: currentTurn.id, thread: current, turn: currentTurn, history: [],
+      model: 'model_1', modelCapabilities: capabilities(['text']), signal: new AbortController().signal,
+      mode: resolveTurnModeContext({ turn: currentTurn, workspace: current.workspace, threadMode: 'agent' }),
+      goalNoToolRecoverySteps: 0
+    }
+    const deps = { toolHost: { listTools }, resolveAttachments,
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' as const }) } }
+    return { base, current, input, deps, listTools, resolveAttachments }
+  }
+
+  it('freezes canonical roots across model steps and releases them with the turn', async () => {
+    const f = await fixture()
+    try {
+      const alias = join(f.base, 'alias')
+      await symlink(join(f.base, 'extra'), alias, 'dir')
+      f.current.additionalWorkspaces = [alias, join(f.base, 'extra')]
+      const resolver = new TurnContextResolver(f.deps)
+      const first = await resolver.resolve(f.input)
+      expect(first.additionalWorkspaces).toEqual([join(f.base, 'extra')])
+      await rm(alias)
+      await symlink(join(f.base, 'other'), alias, 'dir')
+      f.current.additionalWorkspaces = [alias]
+      const second = await resolver.resolve(f.input)
+      expect(second.additionalWorkspaces).toEqual(first.additionalWorkspaces)
+      expect(second.toolDiscoveryContext.additionalWorkspaces).toEqual(first.additionalWorkspaces)
+      resolver.releaseTurn(f.current.id, f.input.turnId)
+      expect((await resolver.resolve(f.input)).additionalWorkspaces).toEqual([join(f.base, 'other')])
+    } finally { await rm(f.base, { recursive: true, force: true }) }
+  })
+
+  it.each(['local', 'directory', 'worktree', 'missing'] as const)('enforces %s task isolation before discovery', async (isolation) => {
+    const f = await fixture()
+    try {
+      f.current.taskWorkspaceId = 'tw_1'
+      const resolver = new TurnContextResolver({ ...f.deps,
+        taskWorkspaces: { get: () => isolation === 'missing' ? undefined : { isolation } } })
+      if (isolation === 'local' || isolation === 'directory') {
+        expect((await resolver.resolve(f.input)).additionalWorkspaces).toEqual([join(f.base, 'extra')])
+      } else {
+        await expect(resolver.resolve(f.input)).rejects.toMatchObject({ code: 'additional_roots_unsupported' })
+        expect(f.listTools).not.toHaveBeenCalled()
+        expect(f.resolveAttachments).not.toHaveBeenCalled()
+      }
+    } finally { await rm(f.base, { recursive: true, force: true }) }
+  })
+
+  it('fails closed instead of dropping a missing extra directory', async () => {
+    const f = await fixture()
+    try {
+      f.current.additionalWorkspaces = [join(f.base, 'missing')]
+      await expect(new TurnContextResolver(f.deps).resolve(f.input)).rejects.toMatchObject({ code: 'workspace_root_missing' })
+      expect(f.listTools).not.toHaveBeenCalled()
+    } finally { await rm(f.base, { recursive: true, force: true }) }
   })
 })

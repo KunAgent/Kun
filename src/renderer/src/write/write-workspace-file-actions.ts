@@ -1,10 +1,11 @@
+import { createWriteDeleteAction } from './write-workspace-delete-action'
 import { enqueueWriteDocumentOperation, relocateQueuedWriteDocumentOperations } from './write-document-operations'
 import { moveWriteSpreadsheetEditors } from './write-spreadsheet-editor-coordinator'
 import { flushWriteWorkspaceSaveQueue } from './write-save-coordinator'
 import i18n from '../i18n'
 import { isLatexFilePath } from '@shared/latex-project'
 import { openLatexSession } from './latex/latex-project-store'
-import { forgetLatexEntry, releaseLatexWorkspace, relocateLatexSessions } from './latex/latex-session-lifecycle'
+import { releaseLatexWorkspace, relocateLatexSessions } from './latex/latex-session-lifecycle'
 import {
   isWriteCodeFilePath,
   isWriteImageFilePath,
@@ -30,7 +31,6 @@ import {
   writeDirnameFromPath
 } from './write-workspace-store-helpers'
 import {
-  forgetWriteFileThreads,
   moveWriteFileThreads,
   saveWriteThreadRegistry
 } from './write-thread-registry'
@@ -628,63 +628,6 @@ export function createWriteFileActions({
       })
     },
 
-    deleteEntry: async (workspaceRoot, path) => {
-      cancelExternalSyncAnimation()
-      let result: Awaited<ReturnType<typeof window.kunGui.deleteWorkspaceEntry>>
-      try {
-        result = await window.kunGui.deleteWorkspaceEntry({ workspaceRoot, path })
-      } catch (error) {
-        if (workspaceIsCurrent(workspaceRoot)) set({ fileError: formatWriteFileActionError(error) })
-        return false
-      }
-      if (!workspaceIsCurrent(workspaceRoot)) return false
-      if (!result.ok) {
-        set({ fileError: result.message })
-        return false
-      }
-      saveWriteThreadRegistry(forgetWriteFileThreads(workspaceRoot, result.path))
-      forgetLatexEntry(workspaceRoot, result.path)
-      const deletedPath = normalizePath(result.path)
-      set((state) => {
-        const expandedDirs = new Set<string>()
-        for (const dirPath of state.expandedDirs) {
-          const normalizedDir = normalizePath(dirPath)
-          if (normalizedDir !== deletedPath && !normalizedDir.startsWith(`${deletedPath}/`)) {
-            expandedDirs.add(dirPath)
-          }
-        }
-        const removed = (candidate: string): boolean => {
-          const normalized = normalizePath(candidate)
-          return normalized === deletedPath || normalized.startsWith(`${deletedPath}/`)
-        }
-        const groups = state.editorLayout.groups.map((group) => {
-          const tabs = group.tabs.filter((tab) => !isWriteFileTab(tab) || !removed(tab.path))
-          return {
-            ...group,
-            tabs,
-            activePath: group.activePath && (
-              writeWhiteboardIdFromTabKey(group.activePath) || !removed(group.activePath)
-            )
-              ? group.activePath
-              : tabs[0] ? writeEditorItemKey(tabs[0]) : null
-          }
-        })
-        const editorLayout = { ...state.editorLayout, groups }
-        const documentsByPath = { ...state.documentsByPath }
-        for (const document of Object.values(documentsByPath)) {
-          if (removed(document.path)) delete documentsByPath[writeDocumentKey(document.path)]
-        }
-        persistWriteEditorLayout(workspaceRoot, editorLayout)
-        return {
-          expandedDirs,
-          documentsByPath,
-          editorLayout,
-          ...projectFocusedDocument(editorLayout, documentsByPath)
-        }
-      })
-      rememberActiveFile(workspaceRoot, get().activeFilePath)
-      await get().refreshWorkspace(workspaceRoot)
-      return true
-    }
+    deleteEntry: createWriteDeleteAction({ set, get, cancelExternalSyncAnimation, workspaceIsCurrent })
   }
 }

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import JSZip from 'jszip'
 import { configureLatexProject, createLatexProject, listProjectFiles, MAX_SOURCE_BYTES, readLatexProject, readLatexSource } from './project'
 import { importLatexProject, latexSourceZip } from './import-export'
+import { snapshotProject } from './snapshot'
 
 let root: string
 beforeEach(async () => { root = await realpath(await mkdtemp(join(tmpdir(), 'kun-latex-project-'))) })
@@ -63,5 +64,29 @@ describe('LaTeX project discovery and files', () => {
     await writeFile(join(root, 'unsafe.zip'), await zip.generateAsync({ type: 'nodebuffer' }))
     await expect(importLatexProject(root, join(root, 'unsafe.zip'), 'zip')).rejects.toThrow('unsafe')
     expect(await readFile(join(root, 'unsafe.zip'))).toBeInstanceOf(Buffer)
+  })
+  it('retains a supplied bibliography through snapshots, source ZIPs and both import formats', async () => {
+    const project = await createLatexProject({ workspaceRoot: root, name: 'paper', template: 'blank', autoBuild: false })
+    const bibliography = '\\begin{thebibliography}{1}\n\\bibitem{paper}A paper.\n\\end{thebibliography}\n'
+    await writeFile(project.mainPath, '\\documentclass{article}\n\\begin{document}\\cite{paper}\n\\input{references.bbl}\n\\end{document}\n')
+    await rm(join(project.rootPath, 'references.bib'))
+    await writeFile(join(project.rootPath, 'references.bbl'), bibliography)
+    await writeFile(join(project.rootPath, 'main.aux'), 'generated')
+    const snapshot = join(root, 'snapshot')
+    const hash = await snapshotProject(project, snapshot)
+    expect(await readFile(join(snapshot, 'references.bbl'), 'utf8')).toBe(bibliography)
+    const bytes = await latexSourceZip(project)
+    const zip = await JSZip.loadAsync(bytes)
+    expect(await zip.file('references.bbl')?.async('string')).toBe(bibliography)
+    expect(zip.file('main.aux')).toBeNull()
+    const destination = join(root, 'imports')
+    await mkdir(destination)
+    const folder = await importLatexProject(destination, project.rootPath, 'folder')
+    expect(await readFile(join(folder.rootPath, 'references.bbl'), 'utf8')).toBe(bibliography)
+    await writeFile(join(root, 'from-zip.zip'), bytes)
+    const archive = await importLatexProject(destination, join(root, 'from-zip.zip'), 'zip')
+    expect(await readFile(join(archive.rootPath, 'references.bbl'), 'utf8')).toBe(bibliography)
+    await writeFile(join(project.rootPath, 'references.bbl'), bibliography + '% updated\n')
+    expect(await snapshotProject(project)).not.toBe(hash)
   })
 })

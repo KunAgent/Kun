@@ -63,7 +63,8 @@ async function runTurn(ctxOverrides: Record<string, unknown> = {}) {
     ok: true,
     ctx: { definition, thread: { id: 'thread' }, turn: { id: 'turn-1' }, workspace: '/repo', poolKey: 'codex:native',
       credentialEnv: {}, secretEnv: {}, credentialIdentity: 'account', model: 'gpt', items, ...ctxOverrides,
-      userItem: { text: 'hi' }, instructionBlocks: [], redactedRequestValues: [] } as unknown as SessionTurnContext
+      userItem: { text: 'hi' }, instructionBlocks: [], redactedRequestValues: [],
+      workspaceRoots: { primary: '/repo', roots: ['/repo'], extras: [], identity: '["/repo"]' } } as unknown as SessionTurnContext
   })
   const finishTurn = vi.fn(async (_args: unknown) => undefined)
   const runtime = new SessionTurnRuntime({

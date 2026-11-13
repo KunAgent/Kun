@@ -1,4 +1,4 @@
-import { app, dialog, ipcMain } from 'electron'
+import { app, dialog, ipcMain, net } from 'electron'
 import { join, basename } from 'node:path'
 import { stat, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
@@ -15,6 +15,7 @@ import { proposeLatexFix } from '../services/latex/propose-fix'
 import { snapshotProject } from '../services/latex/snapshot'
 import { resolveOpenTargetPath } from '../services/workspace-paths'
 import { dirname } from 'node:path'
+import { LatexToolchainInstaller } from '../services/latex/toolchain-install'
 
 const path = z.string().min(1).max(4096).refine((value) => !value.includes('\0'))
 const target = z.object({ workspaceRoot: path, path }).strict()
@@ -23,8 +24,13 @@ const source = z.string().max(1536 * 1024)
 const edit = z.object({ file: path.refine(isLatexFilePath), before: source, after: source }).strict()
 
 export function registerAppLatexIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
-  const service = new LatexBuildService(join(app.getPath('userData'), 'cache', 'latex'))
-  app.once('before-quit', () => service.stop())
+  const managedRoot = join(app.getPath('userData'), 'toolchains', 'latex')
+  const service = new LatexBuildService(join(app.getPath('userData'), 'cache', 'latex'), managedRoot)
+  const installer = new LatexToolchainInstaller(managedRoot, { fetch: (url, init) => net.fetch(url, init), onState: (state) => {
+    const window = options.getMainWindow()
+    if (window && !window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send('latex:toolchain-state', state)
+  } })
+  app.once('before-quit', () => { installer.stop(); service.stop() })
   function handle<T, R extends object>(channel: string, schema: z.ZodType<T>, fn: (value: T, event: Electron.IpcMainInvokeEvent) => Promise<R>): void {
     ipcMain.handle(channel, async (event, payload): Promise<LatexResult<R>> => {
       assertTrustedWorkbenchSender(event, options.getMainWindow)
@@ -32,6 +38,14 @@ export function registerAppLatexIpcHandlers(options: RegisterAppIpcHandlersOptio
       catch (error) { return { ok: false, message: error instanceof Error ? error.message : String(error) } }
     })
   }
+  handle('latex:toolchain-status', z.object({ engine: z.enum(['pdflatex', 'xelatex', 'lualatex']), toolDirectory: path.or(z.literal('')).optional() }).strict(),
+    async (input) => installer.status(input.engine, input.toolDirectory))
+  handle('latex:install-tools', z.object({}).strict(), async () => ({ state: await installer.install() }))
+  handle('latex:cancel-tool-install', z.object({ jobId: buildId }).strict(), async (input) => { installer.cancel(input.jobId); return {} })
+  handle('latex:choose-tool-directory', z.object({}).strict(), async () => {
+    const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
+    return result.canceled || !result.filePaths[0] ? { canceled: true } : { toolDirectory: result.filePaths[0] }
+  })
   handle('latex:read-project', target, async (input) => ({ project: await readLatexProject(input) }))
   handle('latex:configure', target.extend({ config: latexConfigSchema }), async (input) => ({
     project: await service.serialized((await readLatexProject(input)).rootPath, () => configureLatexProject(input, input.config))
@@ -51,7 +65,7 @@ export function registerAppLatexIpcHandlers(options: RegisterAppIpcHandlersOptio
   handle('latex:save', target.extend({ edits: z.array(edit).max(50) }), async (input) => { await service.save(input, input.edits); return {} })
   handle('latex:detect-tools', target, async (input) => {
     const project = await readLatexProject(input)
-    return { tools: await detectLatexTools(project.config.engine, project.config.toolDirectory) }
+    return { tools: await detectLatexTools(project.config.engine, project.config.toolDirectory, managedRoot) }
   })
   handle('latex:pick-tools', target, async (input) => {
     const result = await dialog.showOpenDialog({ properties: ['openDirectory'] })
@@ -63,9 +77,9 @@ export function registerAppLatexIpcHandlers(options: RegisterAppIpcHandlersOptio
     build: await service.build(input, (text) => { if (!event.sender.isDestroyed()) event.sender.send('latex:build-log', { buildId: input.buildId, text }) })
   }))
   handle('latex:abort-build', target.extend({ buildId }), async (input) => { await service.abort(input); return {} })
-  handle('latex:read-pdf', target, async (input) => {
+  handle('latex:read-pdf', target.extend({ metadataOnly: z.boolean().optional() }), async (input) => {
     const project = await readLatexProject(input)
-    return { pdf: await service.readPdf(project), currentSourceHash: await snapshotProject(project) }
+    return { pdf: input.metadataOnly ? null : await service.readPdf(project), currentSourceHash: await snapshotProject(project) }
   })
   handle('latex:sync', target.extend({ buildId, direction: z.enum(['forward', 'inverse']), file: path.optional(), line: z.number().int().min(1).optional(),
     page: z.number().int().min(1).optional(), x: z.number().finite().optional(), y: z.number().finite().optional() }),

@@ -218,6 +218,8 @@
     "continueLocalSession": "ต่อเซสชันในเครื่อง",
     "nextTurnHint": "มีผลกับตาถัดไป เธรด Code ใช้ Kun เสมอ",
     "switchConfirmTitle": "สลับไปใช้ {{name}}?",
+    "workspaceScope": "ขอบเขตงานไม่เปลี่ยน · {{total}} โฟลเดอร์",
+    "workspaceUnsupported": "{{name}} ยังไม่รองรับขอบเขตงานหลายโฟลเดอร์ Kun และทุกโฟลเดอร์ยังถูกเลือกอยู่",
     "switchConfirmBody": "ตาถัดไปจะเริ่มเซสชันใหม่ในฮาร์เนสใหม่และส่งสรุปการส่งต่อไปด้วย ตาก่อนหน้ายังคงอยู่ในฮาร์เนสเดิม",
     "switchConfirmYes": "สลับฮาร์เนส"
   },

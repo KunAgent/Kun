@@ -166,7 +166,6 @@ import {
   type StoreActionContext,
   type ThreadActionRuntime
 } from './chat-store-thread-actions-support'
-import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 import { completionIsCurrentlyVisible } from './unread-completions'
 
 export function createThreadSelectionActions(
@@ -321,14 +320,6 @@ export function createThreadSelectionActions(
         if (cached.busy) armBusyWatchdog(set, get)
         if (!(await restoreThreadWorkspaceOwner(p, id, set, get, selectionStillCurrent))) return
         if (queuedMessages.length > 0) void get().drainQueuedMessages()
-        if (!cached.busy) {
-          void syncThreadAdditionalWorkspaces({
-            set,
-            get,
-            threadId: id,
-            mergeExtras: targetThread?.additionalWorkspaces
-          })
-        }
         return
       }
     }

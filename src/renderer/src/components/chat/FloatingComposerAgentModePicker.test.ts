@@ -31,7 +31,9 @@ beforeEach(async () => {
   controls = {
     contextKey: 'thread-a', harnessId: 'kun', harnessLabel: 'Kun', loading: false,
     rows: [row('kun', 'Kun'), row('claude-code', 'Claude Code'), row('cursor', 'Cursor', 'no'), row('devin', 'Devin')],
-    needsConfirm: () => false, onSelect: vi.fn(), onOpen: vi.fn(), onManage: vi.fn()
+    needsConfirm: () => false, onSelect: vi.fn(), onOpen: vi.fn(), onManage: vi.fn(),
+    workspaceRoots: ['/repo'],
+    supportsAdditionalRoots: (id) => id === 'kun' || id === 'claude-code'
   }
 })
 
@@ -201,5 +203,33 @@ describe('Agent and Kun mode picker', () => {
     await act(async () => document.querySelector<HTMLButtonElement>('[data-continue-local-session]')!.click())
     expect(controls.onContinueLocalSession).toHaveBeenCalledOnce()
     expect(document.querySelector('[data-agent-mode-menu]')).toBeNull()
+  })
+
+  it('shows the unchanged scope and full directory list in the handoff confirmation', async () => {
+    controls = {
+      ...controls, needsConfirm: () => true,
+      workspaceRoots: ['/repo', '/repo-api', '/repo-web']
+    }
+    await open()
+    await act(async () => choice('claude-code').click())
+    const scope = document.querySelector('[data-agent-workspace-scope]')
+    expect(scope?.textContent).toContain('3 folders')
+    expect(scope?.textContent).toContain('/repo-api')
+    expect(scope?.textContent).toContain('/repo-web')
+    expect(document.querySelector('[data-agent-workspace-blocked]')).toBeNull()
+    const confirm = document.querySelector<HTMLButtonElement>('[data-agent-mode-confirm-yes]')!
+    expect(confirm.disabled).toBe(false)
+    await act(async () => confirm.click())
+    expect(controls.onSelect).toHaveBeenCalledExactlyOnceWith('claude-code', 'code')
+  })
+
+  it('keeps the current Agent when a multi-root thread picks an unsupported Agent', async () => {
+    controls = { ...controls, workspaceRoots: ['/repo', '/repo-api', '/repo-web'] }
+    await open()
+    await act(async () => choice('devin').click())
+    expect(controls.onSelect).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-agent-workspace-blocked]')?.textContent).toContain('Devin')
+    expect(document.querySelector<HTMLButtonElement>('[data-agent-mode-confirm-yes]')!.disabled).toBe(true)
+    expect(document.querySelector('[data-agent-workspace-scope]')?.textContent).toContain('3 folders')
   })
 })

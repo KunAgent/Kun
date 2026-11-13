@@ -6,6 +6,7 @@ import {
   DEFAULT_DELEGATED_MODEL,
   delegatedRouteKey,
   delegatedProviderStateKey,
+  sameWorkspaceRoots,
   sha256,
   stableStringify
 } from './delegated-session-binding-keys.js'
@@ -552,6 +553,9 @@ function toParkedSession(
     providerId: binding.providerId,
     credentialIdentity: binding.credentialIdentity,
     workspace: binding.workspace,
+    ...(binding.additionalWorkspaceRoots?.length
+      ? { additionalWorkspaceRoots: [...binding.additionalWorkspaceRoots] }
+      : {}),
     model: binding.model,
     modelScope: binding.modelScope,
     providerStateKey: delegatedProviderStateKey(binding),
@@ -612,6 +616,7 @@ function sameRoute(
     binding.providerId === route.providerId &&
     binding.credentialIdentity === route.credentialIdentity &&
     binding.workspace === route.workspace &&
+    sameWorkspaceRoots(binding.additionalWorkspaceRoots, route.additionalWorkspaceRoots) &&
     sameModel(binding, route) &&
     binding.capabilityFingerprint === route.capabilityFingerprint &&
     binding.continuationMode === route.continuationMode
@@ -648,6 +653,9 @@ function rebaseReason(
     !sameModel(binding, route) ||
     binding.continuationMode !== route.continuationMode
   ) return 'route_changed'
+  if (!sameWorkspaceRoots(binding.additionalWorkspaceRoots, route.additionalWorkspaceRoots)) {
+    return 'route_changed'
+  }
   if (binding.capabilityFingerprint !== route.capabilityFingerprint) {
     return 'capabilities_changed'
   }

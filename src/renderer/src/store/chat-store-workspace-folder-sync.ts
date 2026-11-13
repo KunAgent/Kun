@@ -3,10 +3,10 @@ import type { NormalizedThread } from '../agent/types'
 import {
   additionalWorkspacesEqual,
   additionalWorkspacesForThread,
+  codeWorkspaceProjectFor,
   extraRootsForPrimary,
   forgetCodeWorkspaceFolderSet,
   saveCodeWorkspaceFolderSets,
-  unionWorkspaceFoldersIntoRegistry,
   type CodeWorkspaceFolderSetsRegistry
 } from '../lib/code-workspace-folder-sets'
 import { folderSetPrimaryForWorkspace } from '../lib/code-workspace-folder-lookup'
@@ -60,19 +60,20 @@ export async function syncThreadAdditionalWorkspaces(options: {
   set: ChatStoreSet
   get: ChatStoreGet
   threadId: string
-  mergeExtras?: readonly string[]
 }): Promise<boolean> {
-  const { set, get, threadId, mergeExtras } = options
-  const thread = get().threads.find((candidate) => candidate.id === threadId)
+  const { set, get, threadId } = options
+  const thread = get().threads.find((candidate) => candidate.id === threadId) ??
+    (get().adeThreads ?? []).find((candidate) => candidate.id === threadId)
   if (!thread) return false
   const primary = threadFolderSetPrimary(thread, get().workspaceRoot)
   if (!primary) return false
 
-  let registry = get().codeWorkspaceFolderSets
-  if (mergeExtras?.length) {
-    const merged = unionWorkspaceFoldersIntoRegistry(primary, mergeExtras, registry)
-    if (merged.changed) registry = commitCodeWorkspaceFolderSets(set, merged.registry)
-  }
+  // Project folders are authoritative here. Aging thread snapshots are not
+  // merged back in, so a folder removed from a project stays removed.
+  const registry = get().codeWorkspaceFolderSets
+  // Without a project record there is nothing authoritative to sync from;
+  // legacy thread snapshots keep their own extras.
+  if (!codeWorkspaceProjectFor(registry, primary)) return false
 
   const extras = additionalWorkspacesForThread(thread.workspace ?? primary, extraRootsForPrimary(primary, registry))
   if (additionalWorkspacesEqual(thread.additionalWorkspaces, extras)) return false
@@ -83,6 +84,11 @@ export async function syncThreadAdditionalWorkspaces(options: {
   try {
     const updated = await update.call(getProvider(), threadId, extras)
     set((state) => ({
+      adeThreads: (state.adeThreads ?? []).map((candidate) =>
+        candidate.id === threadId
+          ? { ...candidate, ...updated, additionalWorkspaces: extras }
+          : candidate
+      ),
       threads: state.threads.map((candidate) =>
         candidate.id === threadId
           ? { ...candidate, ...updated, additionalWorkspaces: extras }

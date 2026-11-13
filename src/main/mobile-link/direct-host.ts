@@ -148,6 +148,7 @@ export class DirectHost {
     await transfers?.stop()
     await this.deps.link.desktop?.stopAll('host_stopped').catch(() => {})
     await this.deps.link.terminal?.stopAll('host_stopped').catch(() => {})
+    await this.deps.link.simulator?.stopAll().catch(() => {})
   }
   async endSession() { this.ownerId = undefined; await this.stop(); this.settings = emptyDirectSettings() }
 }

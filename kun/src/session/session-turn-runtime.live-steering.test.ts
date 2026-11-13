@@ -68,7 +68,8 @@ async function harness(options: {
     ok: true,
     ctx: { definition, thread: { id: 'thread' }, turn: { id: 'turn-1' }, workspace: '/repo', poolKey: 'codex:native',
       credentialEnv: {}, secretEnv: {}, credentialIdentity: 'account', model: 'gpt', items,
-      userItem: { text: 'hi' }, instructionBlocks: ['stay in the repo'], redactedRequestValues: [] } as unknown as SessionTurnContext
+      userItem: { text: 'hi' }, instructionBlocks: ['stay in the repo'], redactedRequestValues: [],
+      workspaceRoots: { primary: '/repo', roots: ['/repo'], extras: [], identity: '["/repo"]' } } as unknown as SessionTurnContext
   })
   const finished: Array<{ status: string }> = []
   const runtime = new SessionTurnRuntime({

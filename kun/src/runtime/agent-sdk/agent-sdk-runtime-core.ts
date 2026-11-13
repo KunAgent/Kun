@@ -240,6 +240,12 @@ export class AgentSdkRuntime {
       let activeRebaseReason = ctx.sessionPreparation?.rebaseReason
       const buildOptions = (maxTurns?: number) => assembleSdkOptions({
           cwd: ctx.workspace,
+          // Canonical extra roots are a native SDK boundary, not prompt text.
+          // Read-only/permission posture is unchanged: canUseTool and the
+          // sandbox decision still adjudicate every built-in call.
+          ...(ctx.additionalWorkspaces?.length
+            ? { additionalDirectories: [...ctx.additionalWorkspaces] }
+            : {}),
           kunSystemPrompt: this.deps.kunSystemPrompt(),
           threadPersona: ctx.threadPersona,
           // Plan turns never enter SDK bypassPermissions; bridged calls still

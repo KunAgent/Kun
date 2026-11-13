@@ -23,7 +23,8 @@ function fixture() {
   const ctx = { definition: { id: 'pi', transport: 'pi-rpc', launch: { command: 'fake-pi' } },
     thread: { id: 'thread' }, turn: { id: 'turn' }, workspace: '/tmp', poolKey: 'pi:profile',
     credentialEnv: {}, secretEnv: {}, credentialIdentity: 'identity', items: [],
-    userItem: { text: 'hello' }, instructionBlocks: [], redactedRequestValues: [] } as unknown as SessionTurnContext
+    userItem: { text: 'hello' }, instructionBlocks: [], redactedRequestValues: [],
+    workspaceRoots: { primary: '/tmp', roots: ['/tmp'], extras: [], identity: '["/tmp"]' } } as unknown as SessionTurnContext
   vi.mocked(resolveSessionTurnContext).mockResolvedValue({ ok: true, ctx })
   const validateTurn = vi.fn(async () => { if (!enabled) throw new Error('profile disabled'); return 'proof' })
   const prepare = vi.fn(async () => preparation)
