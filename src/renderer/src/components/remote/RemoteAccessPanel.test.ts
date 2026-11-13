@@ -2,6 +2,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ComputerAccessApi } from '@shared/computer-access'
 import type { ControlPackageApi } from '@shared/control-package'
 import type { RemoteAccessStatus } from '@shared/remote-access'
 import type { DesktopAccessStatus } from '@shared/remote-desktop'
@@ -22,7 +23,7 @@ let api: {
   remoteAccessDetectTailscale: ReturnType<typeof vi.fn>
   requestComputerUsePermission: ReturnType<typeof vi.fn>
   onRemoteAccessStatusChanged: (listener: typeof emit) => () => void
-  mobileLink: { desktopStatus: ReturnType<typeof vi.fn>; desktopConfigure: ReturnType<typeof vi.fn>; desktopStop: ReturnType<typeof vi.fn>; controlPackage: ControlPackageApi }
+  mobileLink: { desktopStatus: ReturnType<typeof vi.fn>; desktopConfigure: ReturnType<typeof vi.fn>; desktopStop: ReturnType<typeof vi.fn>; controlPackage: ControlPackageApi; computers?: ComputerAccessApi }
 }
 const control = (label: string) => container.querySelector(`[role="switch"][aria-label="${label}"]`) as HTMLButtonElement
 const button = (text: string) => [...container.querySelectorAll('button')].find(b => b.textContent?.includes(text))!
@@ -44,6 +45,11 @@ beforeEach(async () => {
     requestComputerUsePermission: vi.fn(async () => undefined),
     onRemoteAccessStatusChanged: listener => { emit = listener; return () => {} },
     mobileLink: {
+      computers: {
+        status: vi.fn(async () => ({ supported: true, online: true, devices: [] })),
+        refresh: vi.fn(async () => ({ supported: true, online: true, devices: [] })),
+        pair: vi.fn(), open: vi.fn(), close: vi.fn(), confirmClosed: vi.fn(), enableHost: vi.fn()
+      },
       controlPackage: {
         status: vi.fn(async () => ({ phase: 'ready', version: '0.1.7' })),
         check: vi.fn(), install: vi.fn(), apply: vi.fn()
@@ -56,6 +62,7 @@ beforeEach(async () => {
   mocks.link = { api: api.mobileLink, zh: false, account: { state: { user: { id: 'owner' } } }, signedIn: true,
     state: { enabled: true, desktopAccess: true, online: true, pairings: [], grants: [{ id: 'phone', controllerId: 'controller', name: 'iPhone', scopes: ['personal', 'desktop.view', 'desktop.control'] }] },
     enabled: true, starting: false, busy: null, canStop: true, mobileAllowed: true, membershipState: 'active', connectionError: '',
+    computerAllowed: false, computerMembershipState: 'maxRequired',
     toggle: vi.fn(), confirm: vi.fn(), setScopes: vi.fn(async () => true), revoke: vi.fn(), refreshMembership: vi.fn() } as unknown as MobileLink
   mocks.gate = true
   vi.stubGlobal('kunGui', api)
@@ -71,6 +78,44 @@ it('shows a compact overview without settings forms, a QR image or nested button
   expect(container.querySelectorAll('.overflow-y-auto')).toHaveLength(1)
   expect(container.querySelector('section')?.className).toContain('overscroll-contain')
   expect(container.querySelectorAll('button').length).toBeLessThan(12)
+})
+it.each(['maxRequired', 'expired', 'loading', 'unavailable', 'signedOut'] as const)('hides the computer entry when membership is %s', async computerMembershipState => {
+  mocks.link = { ...mocks.link, computerMembershipState, signedIn: computerMembershipState !== 'signedOut' }
+  await render()
+  expect(button('Computer to computer desktop')).toBeUndefined()
+  expect(container.textContent).not.toContain('Max')
+  expect(api.mobileLink.computers!.status).not.toHaveBeenCalled()
+  expect(api.mobileLink.computers!.refresh).not.toHaveBeenCalled()
+})
+it.each([false, true])('shows the computer entry without a Max label for active Max members (zh=%s)', async zh => {
+  mocks.link = { ...mocks.link, zh, computerAllowed: true, computerMembershipState: 'active' }
+  await render()
+  const label = zh ? '电脑与电脑远程桌面' : 'Computer to computer desktop'
+  expect(button(label)?.querySelector('span')?.textContent).toBe(label)
+  await click(label)
+  expect(container.textContent).toContain(zh ? '连接其他电脑' : 'Connect to a computer')
+  expect(api.mobileLink.computers!.refresh).toHaveBeenCalledOnce()
+})
+it('updates the computer entry when Max eligibility changes', async () => {
+  await render()
+  expect(button('Computer to computer desktop')).toBeUndefined()
+  mocks.link = { ...mocks.link, computerAllowed: true, computerMembershipState: 'active' }
+  await render()
+  expect(button('Computer to computer desktop')).toBeTruthy()
+  mocks.link = { ...mocks.link, computerAllowed: false, computerMembershipState: 'expired' }
+  await render()
+  expect(button('Computer to computer desktop')).toBeUndefined()
+})
+it('hides the computer entry after sign-out even with stale Max eligibility', async () => {
+  mocks.link = { ...mocks.link, signedIn: false, computerAllowed: true, computerMembershipState: 'signedOut' }
+  await render()
+  expect(button('Computer to computer desktop')).toBeUndefined()
+})
+it('hides the computer entry when the computer API is unavailable', async () => {
+  mocks.link = { ...mocks.link, computerAllowed: true, computerMembershipState: 'active' }
+  delete api.mobileLink.computers
+  await render()
+  expect(button('Computer to computer desktop')).toBeUndefined()
 })
 it.each(['free', 'loading', 'unavailable', 'signedOut'] as const)('hides mobile and package UI when membership is %s without gating the browser', async membershipState => {
   mocks.link = { ...mocks.link, mobileAllowed: false, membershipState, signedIn: membershipState !== 'signedOut', enabled: false, canStop: false,
@@ -274,14 +319,15 @@ it('requires a signed-in owner even if the previous entitlement flag remains tru
   expect(container.textContent).not.toContain('Remote control package')
   expect(api.mobileLink.controlPackage.status).not.toHaveBeenCalled()
 })
-it('preserves independently authorized local/private and computer connections without mobile relay membership', async () => {
+it('preserves local/private and Max computer access independently of mobile relay membership', async () => {
   const direct = {
     status: vi.fn(async () => ({ ready: true, running: false, enabled: false, bind: 'lan', port: 0,
       addresses: [], localAddresses: [], hasIceServers: false, grants: [] })),
     configure: vi.fn()
   }
-  Object.assign(api.mobileLink, { direct, computers: {} })
+  Object.assign(api.mobileLink, { direct })
   mocks.link = { ...mocks.link, mobileAllowed: false, membershipState: 'free', enabled: false, canStop: false,
+    computerAllowed: true, computerMembershipState: 'active',
     state: { ...mocks.link.state!, enabled: false, online: false, grants: [] } }
   await render()
   expect(container.textContent).not.toContain('Remote control package')

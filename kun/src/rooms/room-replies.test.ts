@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RoomMessage } from '../contracts/rooms.js'
 import { RoomRunRecordSchema } from '../contracts/room-runs.js'
-import { RoomService } from './room-service.js'
+import { RoomService, putRoomDocument } from './room-service.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
 import { prepareRoomReplyContext, uniqueRoomReplyTrigger } from './room-replies.js'
 import { initializeRoomReplyIndex, projectRoomReplyCounts, roomReplyPage } from './room-replies-sqlite.js'
@@ -15,13 +15,13 @@ import type { RoomRequestState, RoomRuntimeDeps } from './room-runtime-types.js'
 
 const cleanup: Array<() => Promise<void> | void> = []
 afterEach(async () => { for (const close of cleanup.splice(0).reverse()) await close() })
-async function fixture() {
+async function fixture(collaborationMode: 'peer' | 'directed' = 'peer') {
   const directory = await mkdtemp(join(tmpdir(), 'kun-replies-'))
   const path = join(directory, 'rooms.sqlite')
   const store = new SqliteRoomStore({ path }), wake = vi.fn()
   cleanup.push(async () => { await store.close(); await rm(directory, { recursive: true, force: true }) })
   const service = new RoomService(store, wake)
-  const room = (await service.create({ clientRequestId: 'create', name: 'Replies' })).room
+  const room = (await service.create({ clientRequestId: 'create', name: 'Replies', collaborationMode })).room
   const send = (clientRequestId: string, replyToMessageId?: string, rootRequestId?: string) => service.send(room.id,
     { clientRequestId, body: clientRequestId, replyToMessageId, rootRequestId, executionIntent: 'discussion' })
   const put = async (message: RoomMessage) => store.commit({ requestId: message.id,
@@ -31,6 +31,37 @@ async function fixture() {
 }
 
 describe('host-derived reply display roots', () => {
+  it.each(['cancelled', 'stopping', 'cancellationRequested'] as const)('starts a fresh non-peer budget for replies to a %s root', async (state) => {
+    const f = await fixture('directed'), original = await f.send('original')
+    const root = (await f.store.get<RoomRequestState>('request', original.requestId))!
+    await putRoomDocument(f.store, 'request', root.id, f.room.id, { ...root.value,
+      ...(state === 'cancellationRequested' ? { cancellationRequested: true } : { status: state }) }, root)
+    const implicit = await f.send('implicit', original.message.id)
+    const explicit = await f.send('explicit', original.message.id, original.requestId)
+    for (const reply of [implicit, explicit]) {
+      expect(reply.message).toMatchObject({ rootRequestId: reply.requestId, displayThreadRootId: original.message.id })
+      expect((await f.store.get<RoomRequestState>('request', reply.requestId))!.value)
+        .toMatchObject({ rootRequestId: reply.requestId, collaborationProtocol: 'legacy' })
+    }
+    expect((await f.store.get<RoomRequestState>('request', original.requestId))!.value).toEqual({ ...root.value,
+      ...(state === 'cancellationRequested' ? { cancellationRequested: true } : { status: state }) })
+  })
+
+  it('retains peer topic identity when replying to a stopped peer request', async () => {
+    const f = await fixture(), original = await f.send('original')
+    const root = (await f.store.get<RoomRequestState>('request', original.requestId))!
+    await putRoomDocument(f.store, 'request', root.id, f.room.id, { ...root.value, status: 'cancelled' }, root)
+    const reply = await f.send('peer-reply', original.message.id, original.requestId)
+    expect(reply.message.rootRequestId).toBe(original.requestId)
+    expect((await f.store.get<RoomRequestState>('request', reply.requestId))!.value.collaborationProtocol).toBe('peer')
+  })
+
+  it('still rejects mismatched available roots and missing roots', async () => {
+    const f = await fixture('directed'), first = await f.send('first'), second = await f.send('second')
+    await expect(f.send('mismatched', first.message.id, second.requestId)).rejects.toThrow('different room requests')
+    await expect(f.send('missing-root', first.message.id, 'missing')).rejects.toThrow('unavailable')
+  })
+
   it('flattens nested replies without replacing the original discussion topic and replays sends exactly once', async () => {
     const f = await fixture()
     const root = await f.send('root')

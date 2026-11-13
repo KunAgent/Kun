@@ -179,7 +179,8 @@ describe('trusted desktop permission dispatch', () => {
       await f.service.confirm(pairing, ['schedules.read'])
       f.invoke('catalog.get', {}, 'native_catalog')
       await vi.waitFor(() => expect(f.frames.find((v) => v.id === 'native_catalog' && v.kind === 'result')?.payload.capabilityDescriptors)
-        .toMatchObject([{ operation: 'desktop.schedule.list' }, { operation: 'desktop.schedule.runs.list' }]))
+        .toMatchObject([{ operation: 'usage.summary.get' }, { operation: 'usage.quotas.list' },
+          { operation: 'desktop.schedule.list' }, { operation: 'desktop.schedule.runs.list' }]))
       f.invoke('desktop.schedule.list', {}, 'native_list')
       await vi.waitFor(() => expect(native).toHaveBeenCalledOnce())
       expect(native.mock.calls[0]![2]).toMatchObject({ accountId: 'owner', deviceId: phone, scopes: ['personal', 'schedules.read'] })

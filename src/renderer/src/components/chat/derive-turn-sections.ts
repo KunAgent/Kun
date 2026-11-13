@@ -11,6 +11,7 @@ import { isDesignOpenBlock } from '../../agent/design-open-request'
 import { isReportOpenBlock } from '../../agent/report-open-request'
 import { isPendingRenderChartTool } from '../../agent/chart-spec-adapter'
 import { isPendingPaperReportTool } from '../../agent/paper-list-adapter'
+import { latestComponentPrototypeBlocks } from './component-prototype-blocks'
 import {
   isAppendedUserBlock,
   isProcessBlock,
@@ -347,11 +348,13 @@ export function deriveTurnSections({
     (block): block is ToolBlock => block.kind === 'tool' && hasGeneratedFiles(block)
   )
 
-  const componentPrototypeBlocks: ToolBlock[] = turn.blocks.filter((block): block is ToolBlock => (
-    block.kind === 'tool' &&
-    block.meta?.toolName === 'design_component' &&
-    Boolean(block.meta.componentPrototype)
-  ))
+  const componentPrototypeBlocks: ToolBlock[] = latestComponentPrototypeBlocks(
+    turn.blocks.filter((block): block is ToolBlock => (
+      block.kind === 'tool' &&
+      block.meta?.toolName === 'design_component' &&
+      Boolean(block.meta.componentPrototype)
+    ))
+  )
   const designOpenBlocks: ToolBlock[] = turn.blocks.filter(isDesignOpenBlock)
   const reportOpenBlocks: ToolBlock[] = turn.blocks.filter(isReportOpenBlock)
   const diagramPrototypeBlocks: ToolBlock[] = turn.blocks.filter((block): block is ToolBlock => (
