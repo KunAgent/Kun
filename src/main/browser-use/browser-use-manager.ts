@@ -8,8 +8,12 @@ import type {
 } from '../../shared/browser-use'
 import {
   BrowserUseActionInput,
+  BrowserUseToolResult,
+  BROWSER_USE_BATCH_MAX_SNAPSHOTS,
+  type BrowserUseBatchStepInput,
   type BrowserUseKunApprovalGrant,
   type BrowserUseKunApprovalMode,
+  type BrowserUseStepResult,
   type BrowserUseToolResult as BrowserUseResult
 } from '../../../kun/src/contracts/browser-use.js'
 import { BrowserUseManagerInteractions } from './browser-use-manager-interactions'
@@ -48,6 +52,16 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     const reviewerSource = kunApprovalMode && kunApprovalGrant?.source === kunApprovalMode
       ? kunApprovalGrant.source
       : undefined
+    if (action.action === 'batch') {
+      return this.executeBatch(
+        threadId,
+        turnId,
+        action.steps,
+        signal,
+        kunApprovalGrant,
+        kunApprovalMode
+      )
+    }
     if (action.action === 'open') {
       const existing = this.sessions.get(threadId)
       if (!existing && this.sessions.size >= MAX_BROWSER_USE_SESSIONS) {
@@ -142,6 +156,71 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
         default:
           return resultError('unsupported_action', 'Unsupported Browser Use action.', entry)
       }
+    })
+  }
+
+  /**
+   * Runs steps sequentially through the ordinary single-action path, so every
+   * per-step guard (origin policy, expectedTarget freshness, manual takeover,
+   * budgets, approval scope) still applies. The batch stops at the first
+   * failure and reports only the steps that actually ran.
+   */
+  private async executeBatch(
+    threadId: string,
+    turnId: string,
+    steps: readonly BrowserUseBatchStepInput[],
+    signal?: AbortSignal,
+    kunApprovalGrant?: BrowserUseKunApprovalGrant,
+    kunApprovalMode?: BrowserUseKunApprovalMode
+  ): Promise<BrowserUseResult> {
+    const snapshots = steps.filter((step) => step.action === 'snapshot').length
+    if (snapshots > BROWSER_USE_BATCH_MAX_SNAPSHOTS) {
+      return resultError(
+        'batch_snapshot_limit',
+        `A browser_use batch may request at most ${BROWSER_USE_BATCH_MAX_SNAPSHOTS} snapshots (got ${snapshots}).`
+      )
+    }
+    const results: BrowserUseStepResult[] = []
+    let last: BrowserUseResult | undefined
+    for (const [index, step] of steps.entries()) {
+      if (signal?.aborted) {
+        return resultError('aborted', 'Browser Use batch was cancelled.')
+      }
+      const result = await this.execute(
+        threadId,
+        turnId,
+        step,
+        signal,
+        kunApprovalGrant,
+        kunApprovalMode
+      )
+      results.push({
+        index,
+        action: step.action,
+        ok: result.ok,
+        code: result.code,
+        message: result.message,
+        ...(result.snapshot ? { snapshot: result.snapshot } : {}),
+        ...(result.tabs ? { tabs: result.tabs } : {})
+      })
+      if (!result.ok) {
+        return BrowserUseToolResult.parse({
+          ok: false,
+          code: result.code,
+          message: `Batch stopped at step ${index + 1} of ${steps.length}: ${result.message}`
+            .slice(0, 2048),
+          ...batchScope(result),
+          steps: results
+        })
+      }
+      last = result
+    }
+    return BrowserUseToolResult.parse({
+      ok: true,
+      code: 'batch_completed',
+      message: `Completed ${results.length} browser_use steps.`,
+      ...(last ? batchScope(last) : {}),
+      steps: results
     })
   }
 
@@ -404,4 +483,15 @@ export class BrowserUseManager extends BrowserUseManagerInteractions {
     return this.auditEntries.map((entry) => ({ ...entry }))
   }
 
+}
+
+// A batch result carries the session scope of the step it stopped on or of the
+// last completed step, so the model can keep using the same session and tab.
+function batchScope(result: BrowserUseResult): Partial<BrowserUseResult> {
+  return {
+    ...(result.sessionId ? { sessionId: result.sessionId } : {}),
+    ...(result.tabId ? { tabId: result.tabId } : {}),
+    ...(result.snapshot ? { snapshot: result.snapshot } : {}),
+    ...(result.tabs ? { tabs: result.tabs } : {})
+  }
 }

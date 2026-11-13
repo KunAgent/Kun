@@ -4,6 +4,7 @@ import {
   BrowserUseBridgeRequest,
   BrowserUseBridgeResponse,
   BrowserUseHostChallengeRequest,
+  isBrowserUseApprovalBoundaryAction,
   isBrowserUseStateAdvancingAction,
   normalizeBrowserUseActionInput,
   redactBrowserUseActionForPersistence,
@@ -291,5 +292,75 @@ describe('redactBrowserUseUrl', () => {
     expect(isBrowserUseStateAdvancingAction({ action: 'wait' })).toBe(true)
     expect(isBrowserUseStateAdvancingAction({ action: 'tabs', operation: 'switch', tabId: 'tab-1' })).toBe(true)
     expect(isBrowserUseStateAdvancingAction({ action: 'navigate', url: 'https://example.com' })).toBe(false)
+  })
+})
+
+describe('BrowserUseActionInput batch', () => {
+  const typeStep = {
+    action: 'type' as const,
+    ref: 'opaque-reference-1234',
+    expectedTarget,
+    text: 'Public note text'
+  }
+  const clickStep = {
+    action: 'click' as const,
+    ref: 'opaque-reference-1234',
+    expectedTarget
+  }
+
+  it('accepts ordinary single actions as steps and nothing else', () => {
+    const batch = { action: 'batch', steps: [typeStep, clickStep] }
+    expect(BrowserUseActionInput.parse(batch)).toEqual(batch)
+    expect(BrowserUseActionInput.safeParse({ action: 'batch', steps: [] }).success).toBe(false)
+    expect(BrowserUseActionInput.safeParse({
+      action: 'batch',
+      steps: [{ action: 'screenshot' }]
+    }).success).toBe(false)
+    expect(BrowserUseActionInput.safeParse({
+      action: 'batch',
+      steps: [{ action: 'close' }]
+    }).success).toBe(false)
+    expect(BrowserUseActionInput.safeParse({
+      action: 'batch',
+      steps: [{ action: 'batch', steps: [{ action: 'snapshot' }] }]
+    }).success).toBe(false)
+    expect(BrowserUseActionInput.safeParse({
+      action: 'batch',
+      steps: Array.from({ length: 11 }, () => ({ action: 'snapshot' }))
+    }).success).toBe(false)
+  })
+
+  it('inherits approval and loop-protection scope from its steps', () => {
+    expect(isBrowserUseApprovalBoundaryAction({
+      action: 'batch',
+      steps: [{ action: 'snapshot' }, typeStep]
+    })).toBe(true)
+    expect(isBrowserUseApprovalBoundaryAction({
+      action: 'batch',
+      steps: [{ action: 'snapshot' }, { action: 'wait', milliseconds: 100 }]
+    })).toBe(false)
+    expect(isBrowserUseStateAdvancingAction({
+      action: 'batch',
+      steps: [{ action: 'snapshot' }]
+    })).toBe(false)
+    expect(isBrowserUseStateAdvancingAction({
+      action: 'batch',
+      steps: [{ action: 'snapshot' }, typeStep]
+    })).toBe(true)
+  })
+
+  it('redacts entered text inside steps before persistence', () => {
+    const redacted = redactBrowserUseActionForPersistence({
+      action: 'batch',
+      steps: [
+        { ...typeStep },
+        { action: 'open', url: 'https://example.com/path?token=secret' }
+      ]
+    }) as { steps: Array<Record<string, unknown>> }
+    expect(redacted.steps[0]).toMatchObject({
+      text: '[redacted]',
+      expectedTarget: { name: '[redacted]' }
+    })
+    expect(redacted.steps[1]).toEqual({ action: 'open', url: 'https://example.com/path' })
   })
 })

@@ -9,6 +9,8 @@ import { uploadRuntimeImageAttachment } from '../services/runtime-image-attachme
 import { readLocalPdfText } from '../services/write-pdf-text-service'
 import type { LinkDependencies } from './service'
 import { runtimeExportSource } from './export-source'
+import { readFileBody } from './file-body'
+import { previewAttachment } from './attachment-preview'
 const Receive = z
   .object({
     transferId: z.string().uuid(),
@@ -22,28 +24,11 @@ const Receive = z
     sha256: z.string().regex(/^[a-f0-9]{64}$/)
   })
   .strict()
-async function bytes(response: Response, max: number) {
-  if (!response.body) throw new Error('FILE_UNAVAILABLE')
-  const reader = response.body.getReader(),
-    chunks: Buffer[] = []
-  let count = 0
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      count += value.length
-      if (count > max) throw new Error('FILE_LIMIT')
-      chunks.push(Buffer.from(value))
-    }
-  } finally {
-    await reader.cancel().catch(() => {})
-  }
-  return Buffer.concat(chunks, count)
-}
 export const transferFiles: NonNullable<LinkDependencies['files']> = async (
   scope,
   call
 ) => {
+  if (call.method === 'attachment.preview') return previewAttachment(scope, call)
   const lease = await scope.lease()
   // Commit the receipt before touching R2 or local files; a lost response is queried, never guessed.
   const identity = {
@@ -85,7 +70,7 @@ const performTransfer: NonNullable<LinkDependencies['files']> = async (
       signal: AbortSignal.timeout(30000)
     })
     if (!response.ok) throw new Error('FILE_NOT_ALLOWED')
-    const data = await bytes(response, 25 * 1024 * 1024)
+    const data = await readFileBody(response, 25 * 1024 * 1024)
     if (!scope.current()) throw new Error('ACCOUNT_CHANGED')
     const sha256 = createHash('sha256').update(data).digest('hex')
     const transfer = await scope.api.request('/transfers', 'POST', {
@@ -124,7 +109,7 @@ const performTransfer: NonNullable<LinkDependencies['files']> = async (
     undefined,
     true
   )
-  const data = await bytes(response, p.size)
+  const data = await readFileBody(response, p.size)
   if (
     data.length !== p.size ||
     createHash('sha256').update(data).digest('hex') !== p.sha256

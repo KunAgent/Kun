@@ -1,5 +1,12 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
+import {
+  BROWSER_USE_BATCH_STEP_SCHEMAS,
+  BrowserUseExpectedTarget,
+  BrowserUseRef,
+  BrowserUseTabId,
+  BrowserUseTopLevelUrl
+} from './browser-use-actions.js'
 
 export const BROWSER_USE_BRIDGE_CONTRACT_VERSION = 2 as const
 export const KUN_BROWSER_USE_BRIDGE_URL_ENV = 'KUN_BROWSER_USE_BRIDGE_URL' as const
@@ -7,56 +14,9 @@ export const KUN_BROWSER_USE_BRIDGE_TOKEN_ENV = 'KUN_BROWSER_USE_BRIDGE_TOKEN' a
 export const KUN_BROWSER_USE_APPROVAL_SIGNING_KEY_ENV =
   'KUN_BROWSER_USE_APPROVAL_SIGNING_KEY' as const
 
-const BrowserUseRef = z.string().min(16).max(512)
-const BrowserUseTabId = z.string().min(1).max(256)
-const BrowserUseExpectedTarget = z.object({
-  sessionId: z.string().min(16).max(256),
-  tabId: BrowserUseTabId,
-  documentGeneration: z.number().int().nonnegative(),
-  origin: z.string().url().max(2_048).refine((value) => {
-    try {
-      const parsed = new URL(value)
-      return (
-        (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-        parsed.origin === value &&
-        !parsed.username &&
-        !parsed.password
-      )
-    } catch {
-      return false
-    }
-  }, 'expected target origin must be an exact credential-free HTTP(S) origin'),
-  sanitizedUrl: z.string().url().max(2_048).refine((value) => {
-    try {
-      const parsed = new URL(value)
-      return (
-        (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-        !parsed.username &&
-        !parsed.password &&
-        !parsed.search &&
-        !parsed.hash
-      )
-    } catch {
-      return false
-    }
-  }, 'expected target URL must be a credential-free URL without query or fragment'),
-  role: z.string().max(128),
-  name: z.string().max(512)
-}).strict()
-export type BrowserUseExpectedTarget = z.infer<typeof BrowserUseExpectedTarget>
-
-const BrowserUseTopLevelUrl = z.string().url().max(4096).refine((value) => {
-  try {
-    const url = new URL(value)
-    return (
-      (url.protocol === 'http:' || url.protocol === 'https:') &&
-      !url.username &&
-      !url.password
-    )
-  } catch {
-    return false
-  }
-}, 'browser use only accepts credential-free http or https top-level URLs')
+// The action catalog's target and URL validators live in browser-use-actions.ts
+// with the per-action schemas so this module stays inside the file-size gate.
+export * from './browser-use-actions.js'
 
 export const BROWSER_USE_ACTIONS = [
   'open',
@@ -69,10 +29,33 @@ export const BROWSER_USE_ACTIONS = [
   'scroll',
   'wait',
   'tabs',
-  'close'
+  'close',
+  'batch'
 ] as const
 
 export type BrowserUseActionName = typeof BROWSER_USE_ACTIONS[number]
+
+// A batch is only a transport for ordinary single actions. Actions that tear
+// down the session (close) or embed a large payload (screenshot) stay separate
+// so one step cannot silently consume the whole result budget, and a batch
+// cannot nest another batch.
+export const BROWSER_USE_BATCH_STEP_ACTIONS = [
+  'open',
+  'snapshot',
+  'click',
+  'type',
+  'select',
+  'press',
+  'scroll',
+  'wait',
+  'tabs'
+] as const
+
+export type BrowserUseBatchStepActionName = typeof BROWSER_USE_BATCH_STEP_ACTIONS[number]
+export const BROWSER_USE_BATCH_MAX_STEPS = 10
+// Each snapshot is a full structured page state. Cap how many a single batch
+// may return and reject the batch up front instead of dropping one silently.
+export const BROWSER_USE_BATCH_MAX_SNAPSHOTS = 3
 
 export const BROWSER_USE_ACTION_FIELDS: Readonly<Record<BrowserUseActionName, {
   required: readonly string[]
@@ -88,7 +71,8 @@ export const BROWSER_USE_ACTION_FIELDS: Readonly<Record<BrowserUseActionName, {
   scroll: { required: ['action', 'direction'], allowed: ['action', 'direction', 'amount'] },
   wait: { required: ['action'], allowed: ['action', 'milliseconds'] },
   tabs: { required: ['action'], allowed: ['action', 'operation', 'tabId'] },
-  close: { required: ['action'], allowed: ['action'] }
+  close: { required: ['action'], allowed: ['action'] },
+  batch: { required: ['action', 'steps'], allowed: ['action', 'steps'] }
 }
 
 export type BrowserUseValidationIssueCode =
@@ -177,7 +161,9 @@ export function summarizeBrowserUseActionValidation(input: unknown): BrowserUseV
 
   const requiredFields = shape?.required ?? []
   const allowedFields = shape?.allowed ?? []
-  const guidance = action
+  const guidance = action === 'batch'
+    ? `Use browser_use action "batch" with steps listing 1-${BROWSER_USE_BATCH_MAX_STEPS} ordinary actions (no close, no screenshot, no nested batch). Every step is validated before the first one runs and the batch stops at the first failure.`
+    : action
     ? `Use browser_use action "${action}" with only these fields: ${allowedFields.join(', ')}. Required fields: ${requiredFields.join(', ')}.`
     : 'Use browser_use with one supported action. To open a page: {"action":"open","url":"https://example.com"}. To inspect the current page: {"action":"snapshot"}.'
 
@@ -193,72 +179,23 @@ export function summarizeBrowserUseActionValidation(input: unknown): BrowserUseV
   }
 }
 
+export const BrowserUseBatchStepInput = z.discriminatedUnion(
+  'action',
+  BROWSER_USE_BATCH_STEP_SCHEMAS
+)
+export type BrowserUseBatchStepInput = z.infer<typeof BrowserUseBatchStepInput>
+
 export const BrowserUseActionInput = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('open'),
-    url: BrowserUseTopLevelUrl,
-    newTab: z.boolean().optional()
-  }).strict(),
-  z.object({
-    action: z.literal('snapshot')
-  }).strict(),
+  ...BROWSER_USE_BATCH_STEP_SCHEMAS,
   z.object({
     action: z.literal('screenshot')
   }).strict(),
   z.object({
-    action: z.literal('click'),
-    ref: BrowserUseRef,
-    expectedTarget: BrowserUseExpectedTarget
-  }).strict(),
-  z.object({
-    action: z.literal('type'),
-    ref: BrowserUseRef,
-    expectedTarget: BrowserUseExpectedTarget,
-    text: z.string().max(2000)
-  }).strict(),
-  z.object({
-    action: z.literal('select'),
-    ref: BrowserUseRef,
-    expectedTarget: BrowserUseExpectedTarget,
-    value: z.string().max(512)
-  }).strict(),
-  z.object({
-    action: z.literal('press'),
-    ref: BrowserUseRef,
-    expectedTarget: BrowserUseExpectedTarget,
-    key: z.enum([
-      'Enter',
-      'Escape',
-      'Tab',
-      'ArrowUp',
-      'ArrowDown',
-      'ArrowLeft',
-      'ArrowRight',
-      'Home',
-      'End',
-      'PageUp',
-      'PageDown',
-      'Backspace',
-      'Delete',
-      'Space'
-    ])
-  }).strict(),
-  z.object({
-    action: z.literal('scroll'),
-    direction: z.enum(['up', 'down', 'left', 'right']),
-    amount: z.number().int().min(1).max(2000).default(600)
-  }).strict(),
-  z.object({
-    action: z.literal('wait'),
-    milliseconds: z.number().int().min(100).max(5000).default(500)
-  }).strict(),
-  z.object({
-    action: z.literal('tabs'),
-    operation: z.enum(['list', 'switch', 'close']).default('list'),
-    tabId: BrowserUseTabId.optional()
-  }).strict(),
-  z.object({
     action: z.literal('close')
+  }).strict(),
+  z.object({
+    action: z.literal('batch'),
+    steps: z.array(BrowserUseBatchStepInput).min(1).max(BROWSER_USE_BATCH_MAX_STEPS)
   }).strict()
 ])
 export type BrowserUseActionInput = z.infer<typeof BrowserUseActionInput>
@@ -301,6 +238,27 @@ export const BrowserUseImage = z.object({
 }).strict()
 export type BrowserUseImage = z.infer<typeof BrowserUseImage>
 
+export const BrowserUseTabSummary = z.object({
+  id: BrowserUseTabId,
+  title: z.string().max(512),
+  origin: z.string().max(2048),
+  active: z.boolean()
+}).strict()
+export type BrowserUseTabSummary = z.infer<typeof BrowserUseTabSummary>
+
+// One entry per executed batch step. Later steps are reported only when they
+// ran, so a halted batch never claims work it did not do.
+export const BrowserUseStepResult = z.object({
+  index: z.number().int().nonnegative(),
+  action: z.enum(BROWSER_USE_BATCH_STEP_ACTIONS),
+  ok: z.boolean(),
+  code: z.string().min(1).max(128),
+  message: z.string().max(2048),
+  snapshot: BrowserUseSnapshot.optional(),
+  tabs: z.array(BrowserUseTabSummary).max(3).optional()
+}).strict()
+export type BrowserUseStepResult = z.infer<typeof BrowserUseStepResult>
+
 export const BrowserUseToolResult = z.object({
   ok: z.boolean(),
   code: z.string().min(1).max(128),
@@ -309,12 +267,8 @@ export const BrowserUseToolResult = z.object({
   tabId: BrowserUseTabId.optional(),
   snapshot: BrowserUseSnapshot.optional(),
   image: BrowserUseImage.optional(),
-  tabs: z.array(z.object({
-    id: BrowserUseTabId,
-    title: z.string().max(512),
-    origin: z.string().max(2048),
-    active: z.boolean()
-  }).strict()).max(3).optional()
+  tabs: z.array(BrowserUseTabSummary).max(3).optional(),
+  steps: z.array(BrowserUseStepResult).max(BROWSER_USE_BATCH_MAX_STEPS).optional()
 }).strict()
 export type BrowserUseToolResult = z.infer<typeof BrowserUseToolResult>
 
@@ -608,6 +562,14 @@ function canonicalBrowserUseValue(value: unknown): unknown {
 }
 
 export function isBrowserUseApprovalBoundaryAction(action: BrowserUseActionInput): boolean {
+  return action.action === 'batch'
+    ? action.steps.some(isBrowserUseApprovalBoundaryStep)
+    : isBrowserUseApprovalBoundaryStep(action)
+}
+
+function isBrowserUseApprovalBoundaryStep(
+  action: BrowserUseBatchStepInput | Extract<BrowserUseActionInput, { action: 'close' | 'screenshot' }>
+): boolean {
   return action.action === 'open' ||
     action.action === 'click' ||
     action.action === 'type' ||
@@ -623,7 +585,14 @@ export function isBrowserUseApprovalBoundaryAction(action: BrowserUseActionInput
 export function isBrowserUseStateAdvancingAction(input: unknown): boolean {
   const parsed = BrowserUseActionInput.safeParse(input)
   if (!parsed.success) return false
-  switch (parsed.data.action) {
+  if (parsed.data.action === 'batch') return parsed.data.steps.some(isBrowserUseStateAdvancingStep)
+  return isBrowserUseStateAdvancingStep(parsed.data)
+}
+
+function isBrowserUseStateAdvancingStep(
+  action: BrowserUseBatchStepInput | Extract<BrowserUseActionInput, { action: 'close' | 'screenshot' }>
+): boolean {
+  switch (action.action) {
     case 'open':
     case 'click':
     case 'type':
@@ -634,7 +603,7 @@ export function isBrowserUseStateAdvancingAction(input: unknown): boolean {
     case 'close':
       return true
     case 'tabs':
-      return parsed.data.operation !== 'list'
+      return action.operation !== 'list'
     case 'snapshot':
     case 'screenshot':
       return false
@@ -670,6 +639,18 @@ export function redactBrowserUseActionForPersistence(input: unknown): unknown {
     return safe
   }
   const action = parsed.data
+  if (action.action === 'batch') {
+    return {
+      action: 'batch',
+      steps: action.steps.map((step) => redactBrowserUseStepForPersistence(step))
+    }
+  }
+  return redactBrowserUseStepForPersistence(action)
+}
+
+function redactBrowserUseStepForPersistence(
+  action: BrowserUseBatchStepInput | Extract<BrowserUseActionInput, { action: 'close' | 'screenshot' }>
+): Record<string, unknown> {
   if (action.action === 'open') {
     return { ...action, url: redactBrowserUseUrl(action.url) }
   }

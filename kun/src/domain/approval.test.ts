@@ -236,6 +236,48 @@ describe('approval action envelopes', () => {
     expect(safeApprovalActionSummary(action)).toContain('Delete account')
   })
 
+  it('summarizes a Browser Use batch as one reviewer-readable target', () => {
+    const action = createApprovalActionEnvelope({
+      toolName: 'browser_use',
+      providerId: 'browserUse',
+      providerKind: 'gui',
+      arguments: {
+        action: 'batch',
+        steps: [
+          { action: 'snapshot' },
+          {
+            action: 'type',
+            ref: 'opaque-reference-1234',
+            expectedTarget: {
+              sessionId: 'session-1234567890',
+              tabId: 'tab-1',
+              documentGeneration: 7,
+              origin: 'https://accounts.example.test',
+              sanitizedUrl: 'https://accounts.example.test/form',
+              role: 'textbox',
+              name: 'Public note'
+            },
+            text: 'literal reviewer-secret'
+          }
+        ]
+      },
+      effects: {
+        network: true,
+        externalWrite: true,
+        processExecution: false,
+        guiAutomation: true
+      },
+      workspace: '/workspace',
+      reason: 'browser interaction requires explicit approval'
+    })
+
+    expect(action.targets).toContainEqual({
+      kind: 'resource',
+      value: 'browser-batch 2 steps snapshotx1 typex1'
+    })
+    expect(JSON.stringify(action)).not.toContain('literal reviewer-secret')
+  })
+
   it('keeps Browser Use query credentials and entered values out of review and audit data', () => {
     const open = createApprovalActionEnvelope({
       toolName: 'browser_use',
