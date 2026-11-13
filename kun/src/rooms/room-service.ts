@@ -182,14 +182,22 @@ export class RoomService {
     if (body.replyToMessageId && (!reply || reply.roomId !== id)) {
       throw new RoomStoreConflictError('reply message is unavailable in this room')
     }
-    if (body.rootRequestId && reply?.value.rootRequestId && body.rootRequestId !== reply.value.rootRequestId) {
-      throw new RoomStoreConflictError('reply and topic refer to different room requests')
-    }
-    const inheritedRootId = body.rootRequestId ?? reply?.value.rootRequestId
-    const root = inheritedRootId ? await this.store.get<RoomRequestState>('request', inheritedRootId) : null
+    const privateTarget = room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId
+    let inheritedRootId = body.rootRequestId ?? reply?.value.rootRequestId
+    let root = inheritedRootId ? await this.store.get<RoomRequestState>('request', inheritedRootId) : null
     if (inheritedRootId && (!root || root.roomId !== id ||
       (root.value.rootRequestId && root.value.rootRequestId !== inheritedRootId))) {
       throw new RoomStoreConflictError('root request is unavailable in this room')
+    }
+    // Direct private chats use the peer room setting without a peer topic lifecycle.
+    // A new user reply keeps its display branch but needs a fresh response budget.
+    if ((privateTarget || room.collaborationMode !== 'peer') && root &&
+      (root.value.cancellationRequested || ['cancelled', 'stopping'].includes(root.value.status))) {
+      root = null
+      inheritedRootId = undefined
+    }
+    if (root && body.rootRequestId && reply?.value.rootRequestId && body.rootRequestId !== reply.value.rootRequestId) {
+      throw new RoomStoreConflictError('reply and topic refer to different room requests')
     }
     const requestId = roomId()
     const protocol = root ? root.value.collaborationProtocol ??
@@ -206,7 +214,6 @@ export class RoomService {
       attachmentIds: body.attachmentIds, clientRequestId: body.clientRequestId,
       requestFingerprint: roomFingerprint(body), createdAt: new Date().toISOString()
     })
-    const privateTarget = room.conversationKind === 'user_agent' && !body.taskId && !body.executionAgentId
     const taskParticipants = this.agents ? await prepareAgentTaskParticipants(this.agents, room, body) : undefined
     const request: RoomRequestState = privateTarget
       ? {

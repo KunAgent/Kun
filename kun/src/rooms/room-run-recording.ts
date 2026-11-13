@@ -12,6 +12,7 @@ import { captureRoomTurnUsageBaseline, readRoomTurnUsage } from './room-run-usag
 import { agentStableId } from '../agents/agent-identity-service.js'
 import { roomRunSegmentMessageId } from './room-run-segments.js'
 import { beginActivity, finishActivity } from './engagement/queue.js'
+import { TurnConflictError } from '../services/turn-service.js'
 
 export const roomRunId = (roomId: string, clientRequestId: string, triage = false): string =>
   'run-' + createHash('sha256').update(JSON.stringify([roomId, clientRequestId, triage])).digest('hex').slice(0, 40)
@@ -214,14 +215,94 @@ export async function reconcileRecordedRoomRuns(deps: RoomRuntimeDeps,
     const rows = await deps.store.list<RoomRunRecord>('room_run', { ...filter, afterSeq, order: 'asc', limit: 100,
       status: ['queued', 'running', 'recovery_required'] })
     for (const row of rows) {
-      if (!row.value.threadId) continue
-      const thread = await deps.threads.getMetadata(row.value.threadId)
-      if (thread?.roomContext?.roomId !== row.value.roomId || thread.roomContext.memberId !== row.value.memberId) continue
-      const turn = thread.turns.find((value) => row.value.turnId ? value.id === row.value.turnId : value.clientRequestId === row.value.clientRequestId)
-      if (turn?.clientRequestId === row.value.clientRequestId) await observeRecordedRoomTurn(deps, thread, turn)
-      else if (row.value.admissionAttempted) await updateRoomRun(deps.store, row.id, { status: 'recovery_required' })
+      if (!row.value.threadId && !await requestOwnsRecordedRun(deps, row.value)) continue
+      const request = row.value.requestId ? await deps.store.get<RoomRequestState>('request', row.value.requestId) : null
+      await reconcileRecordedRoomRun(deps, row.value, request?.value)
     }
     if (rows.length < 100) return
+    afterSeq = rows.at(-1)!.seq
+  }
+}
+
+/** Only these runs share their request's lifecycle; tasks, handoffs and peer activations have their own owners. */
+async function requestOwnsRecordedRun(deps: RoomRuntimeDeps, run: RoomRunRecord): Promise<boolean> {
+  if (!run.requestId || run.taskId || run.integrationId || run.handoffId ||
+    !['conversation', 'coordination', 'discussion'].includes(run.phase)) return false
+  return !(run.phase === 'discussion' && run.rootRequestId && await deps.store.get('peer_topic', run.rootRequestId))
+}
+
+async function reconcileRecordedRoomRun(deps: RoomRuntimeDeps, run: RoomRunRecord,
+  request?: RoomRequestState): Promise<void> {
+  const terminalRequest = !request || ['failed', 'cancelled'].includes(request.status)
+  let thread: ThreadRecord | null
+  try { thread = run.threadId ? await deps.threads.getMetadata(run.threadId) : null }
+  catch { return } // Unreadable metadata is not proof that execution stopped.
+  if (thread && (thread.roomContext?.roomId !== run.roomId || thread.roomContext.memberId !== run.memberId)) return
+  let turn = thread?.turns.find((value) => run.turnId ? value.id === run.turnId : value.clientRequestId === run.clientRequestId)
+  if (turn && !run.mergedIntoRunId && turn.clientRequestId !== run.clientRequestId) return
+  if (thread && turn?.status === 'queued' && terminalRequest && !run.mergedIntoRunId &&
+    await requestOwnsRecordedRun(deps, run)) {
+    try { await deps.turns.cancelQueuedTurn({ threadId: thread.id, turnId: turn.id }) }
+    catch (error) { if (!(error instanceof TurnConflictError)) throw error }
+    // Admission or execution can win the cancellation race. Retain that exact turn's lane.
+    const turnId = turn.id
+    thread = await deps.threads.getMetadata(thread.id)
+    turn = thread?.turns.find((value) => value.id === turnId)
+  }
+  if (thread && turn) {
+    if (run.mergedIntoRunId) {
+      await updateRoomRun(deps.store, run.id, { status: turn.status === 'aborted' ? 'cancelled' : turn.status,
+        startedAt: turn.startedAt, endedAt: turn.finishedAt })
+    } else await observeRecordedRoomTurn(deps, thread, turn)
+    if (turn.status === 'aborted' || turn.status === 'failed') {
+      await updateRoomRun(deps.store, run.id, { outcome: turn.status === 'aborted' ? 'cancelled' : 'failed',
+        error: (run.error ?? request?.error)?.slice(0, 4000) })
+    }
+    return
+  }
+  if ((run.admissionAttempted || run.turnId) &&
+    (!run.threadId || !await deps.proveStopped?.(run.threadId, run.turnId))) {
+    await updateRoomRun(deps.store, run.id, { status: 'recovery_required' })
+    return
+  }
+  const status = request?.status === 'cancelled' ? 'cancelled' : 'failed'
+  await updateRoomRun(deps.store, run.id, { status, outcome: status, endedAt: new Date().toISOString(),
+    error: (run.error ?? request?.error ?? 'admission never started').slice(0, 4000) })
+}
+
+/** A rejected request cannot leave an unadmitted run holding its conversation lane. */
+export async function settleTerminalRoomRuns(deps: RoomRuntimeDeps, requestId: string): Promise<void> {
+  const request = await deps.store.get<RoomRequestState>('request', requestId)
+  if (!request || !['failed', 'cancelled'].includes(request.value.status)) return
+  let afterSeq: number | undefined
+  for (;;) {
+    const rows = await deps.store.list<RoomRunRecord>('room_run', { requestId, roomId: request.roomId, afterSeq,
+      order: 'asc', limit: 100, status: ['queued', 'running', 'recovery_required'] })
+    for (const row of rows) if (await requestOwnsRecordedRun(deps, row.value)) {
+      await reconcileRecordedRoomRun(deps, row.value, request.value)
+    }
+    if (rows.length < 100) return
+    afterSeq = rows.at(-1)!.seq
+  }
+}
+
+/** Bounded upgrade repair; old uncertain admissions still require proof that their execution stopped. */
+export async function recoverAbandonedRoomRuns(deps: RoomRuntimeDeps): Promise<void> {
+  let afterSeq: number | undefined
+  const expiredBefore = Date.now() - 5 * 60_000
+  for (let page = 0; page < 3; page++) {
+    const rows = await deps.store.list<RoomRunRecord>('room_run', { afterSeq, order: 'asc', limit: 200,
+      status: ['queued', 'running', 'recovery_required'], summaryOnly: true })
+    for (const row of rows) {
+      if (!await requestOwnsRecordedRun(deps, row.value)) continue
+      const request = await deps.store.get<RoomRequestState>('request', row.value.requestId!)
+      const expired = row.value.status === 'queued' && !row.value.turnId && !row.value.admissionAttempted &&
+        Date.parse(row.value.createdAt) < expiredBefore
+      if (!request || ['failed', 'cancelled'].includes(request.value.status) || expired) {
+        await reconcileRecordedRoomRun(deps, row.value, request?.value)
+      }
+    }
+    if (rows.length < 200) return
     afterSeq = rows.at(-1)!.seq
   }
 }

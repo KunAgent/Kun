@@ -635,4 +635,65 @@ describe('BrowserUseManager', () => {
     expect(harness.webContents.close).toHaveBeenCalledOnce()
   })
 
+  it('runs batch steps in order and stops at the first failure', async () => {
+    const harness = fakeHarness()
+    await openAuthorized(harness)
+
+    const snapshot = await harness.manager.execute('thread-1', 'turn-1', { action: 'snapshot' })
+    const click = clickAction(snapshot)
+    const staleClick = {
+      ...click,
+      expectedTarget: { ...click.expectedTarget, name: 'a different button entirely' }
+    }
+    const batch = {
+      action: 'batch' as const,
+      steps: [
+        { action: 'wait' as const, milliseconds: 100 },
+        staleClick,
+        { action: 'snapshot' as const }
+      ]
+    }
+
+    const result = await harness.manager.execute(
+      'thread-1',
+      'turn-1',
+      batch,
+      undefined,
+      kunApprovalGrant(batch),
+      'agent'
+    )
+
+    expect(result.ok).toBe(false)
+    expect(result.message).toContain('Batch stopped at step 2 of 3')
+    expect(result.steps).toHaveLength(2)
+    expect(result.steps?.map((step) => [step.action, step.ok])).toEqual([
+      ['wait', true],
+      ['click', false]
+    ])
+  })
+
+  it('completes a batch of observations and returns the last page state', async () => {
+    const harness = fakeHarness()
+    await openAuthorized(harness)
+
+    const result = await harness.manager.execute('thread-1', 'turn-1', {
+      action: 'batch',
+      steps: [{ action: 'wait', milliseconds: 100 }, { action: 'snapshot' }]
+    })
+
+    expect(result).toMatchObject({ ok: true, code: 'batch_completed' })
+    expect(result.steps?.map((step) => step.action)).toEqual(['wait', 'snapshot'])
+    expect(result.snapshot).toMatchObject({ origin: 'https://example.com' })
+  })
+
+  it('rejects a batch that asks for more snapshots than one result may carry', async () => {
+    const harness = fakeHarness()
+    await openAuthorized(harness)
+
+    await expect(harness.manager.execute('thread-1', 'turn-1', {
+      action: 'batch',
+      steps: Array.from({ length: 4 }, () => ({ action: 'snapshot' as const }))
+    })).resolves.toMatchObject({ ok: false, code: 'batch_snapshot_limit' })
+  })
+
 })

@@ -6,12 +6,14 @@ import './pet-quick-chat.css'
 function labelsFor(language: string) {
   return language.toLowerCase().startsWith('zh') ? {
     chat: '直接对话', voice: '语音输入', stop: '结束录音', hide: '收起通知', show: '展开通知',
+    enableVisits: '开启伙伴来互动', disableVisits: '关闭伙伴来互动',
     placeholder: '开始新对话', send: '发送', close: '收起输入框', recording: '正在录音，再次点击语音按钮结束',
     transcribing: '正在识别语音…', sending: '正在发送…', failed: '发送失败，请重试',
     tooShort: '录音太短，请重试', micDenied: '无法访问麦克风，请检查系统权限', captureFailed: '录音失败，请重试',
     voiceFailed: (message: string) => `语音输入失败：${message}`
   } : {
     chat: 'New chat', voice: 'Voice input', stop: 'Finish recording', hide: 'Collapse notifications', show: 'Show notifications',
+    enableVisits: 'Enable companion visits', disableVisits: 'Disable companion visits',
     placeholder: 'Start new chat', send: 'Send', close: 'Close composer', recording: 'Recording. Click voice input to finish.',
     transcribing: 'Transcribing…', sending: 'Sending…', failed: 'Could not send. Please try again.',
     tooShort: 'Recording too short. Please try again.', micDenied: 'Check your microphone permission.', captureFailed: 'Could not record. Please try again.',
@@ -24,8 +26,8 @@ export function PetQuickChat(props: {
   notificationCount: number
   bubblesHidden: boolean
   revealed: boolean
-  onEnsemble?: () => void
-  ensembleActive?: boolean
+  visitsEnabled?: boolean
+  onToggleVisits?: () => void
   onToggleBubbles: () => void
   onInteractiveChange: (interactive: boolean) => void
 }): ReactElement {
@@ -134,9 +136,9 @@ export function PetQuickChat(props: {
             onClick={() => { if (open) close(); else begin() }}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 5H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2v-7M16 3l5 5-9 9-5 1 1-5Z" /></svg>
           </button>
-          {props.onEnsemble ? <button type="button" aria-label={props.ensembleActive ? (navigator.language.toLowerCase().startsWith('zh') ? '让朋友先回去' : 'End this visit') : (navigator.language.toLowerCase().startsWith('zh') ? '叫朋友来玩' : 'Invite friends')}
-            title={props.ensembleActive ? (navigator.language.toLowerCase().startsWith('zh') ? '让朋友先回去' : 'End this visit') : (navigator.language.toLowerCase().startsWith('zh') ? '叫朋友来玩' : 'Invite friends')}
-            aria-pressed={props.ensembleActive} onClick={props.onEnsemble}>
+          {props.onToggleVisits ? <button type="button" aria-label={props.visitsEnabled ? labels.disableVisits : labels.enableVisits}
+            title={props.visitsEnabled ? labels.disableVisits : labels.enableVisits}
+            aria-pressed={props.visitsEnabled} data-enabled={props.visitsEnabled} onClick={props.onToggleVisits}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /><circle cx="9" cy="7" r="4" /></svg>
           </button> : null}
           {voiceAvailable ? <button type="button" aria-label={recording ? labels.stop : labels.voice}

@@ -48,6 +48,7 @@ import { bindRoomReminderWake } from './room-reminder-tools.js'
 import { WorkbenchBridge, bindWorkbenchBridge } from '../workbench-bridge/bridge.js'
 import { reconcileWorkbench } from '../workbench-bridge/reconcile.js'
 import { withRoomTickReads } from './room-tick-reads.js'
+import { recoverAbandonedRoomRuns, settleTerminalRoomRuns } from './room-run-recording.js'
 
 /** A tick reports whether live work remains and, when idle, the next scheduled wake time. */
 type RoomTickOutcome = { active: boolean; nextWakeAt?: number; catchUp?: boolean }
@@ -89,6 +90,7 @@ export class RoomRuntime {
   private memoryCaptureWarning?: { message: string; at: number }
   private actionQueue: Promise<unknown> = Promise.resolve()
   private requestCursor?: number
+  private runRecoveryPending = false
   private readonly executionService: RoomService
   private readonly unbindPrivateLifecycle: () => void
   private readonly unbindContinuations: () => void
@@ -146,7 +148,7 @@ export class RoomRuntime {
         return result
       }))
   }
-  start() { this.stopped = false; this.lifecycle.start(); this.wake() }
+  start() { this.stopped = false; this.runRecoveryPending = true; this.lifecycle.start(); this.wake() }
   /**
    * Immediate wake: a pending idle timer is cancelled so new room work never
    * waits out the backoff window. A wake arriving mid-tick is queued and
@@ -333,12 +335,17 @@ export class RoomRuntime {
         }
         await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!,
           { ...row.value, status, error: message, ...(clarify ? { clarification: message } : {}) }, row)
+        await settleTerminalRoomRuns(this.deps, row.id)
       }
   }
 
   private async tick(): Promise<RoomTickOutcome> {
     if (!this.held()) return { active: false }
     await this.deps.assertOwnership()
+    if (this.runRecoveryPending) {
+      await this.exclusive(() => recoverAbandonedRoomRuns(this.deps))
+      this.runRecoveryPending = false
+    }
     await this.agents.initialize()
     // Memory capture is background work. Its failure must never hold up the
     // requests, stops and tasks below, and it does not keep the active cadence.

@@ -1,6 +1,7 @@
 import { petTypingCutouts, petTypingRig } from './pets/typing/typing-rig'
 import { loadJointTexture } from './pets/joint/assets'
 import type { PetVisit } from '@shared/pets-visits'
+import { defaultPetVisits } from '@shared/pets-visits'
 import { PetReactionStage } from './pets/pet-reaction-stage'
 import { usePetPresence } from './pets/use-pet-presence'
 import { startPetTypingPresence } from './pets/pet-presence-client'
@@ -184,8 +185,9 @@ function PetOverlayApp(): React.JSX.Element {
   const notifications = snapshot ? visiblePetNotifications(snapshot, dismissed, now, retained) : []
   const active = notifications[0] ?? null
   const bubblesHidden = bubblesCollapsed || quickChatInteractive || !active
+  const bubblesRevealed = !bubblesHidden && hover
   const controlsSize = usePetSurfaceSize(controlsRef, true, { width: 140, height: 44 })
-  const noticeSize = usePetSurfaceSize(noticeRef, !bubblesHidden, { width: 330, height: 80 })
+  const noticeSize = usePetSurfaceSize(noticeRef, bubblesRevealed, { width: 330, height: 80 })
   const menuSize = usePetSurfaceSize(menuRef, menuOpen, { width: 136, height: 74 })
   const liveVisit = usePetVisits({ bridge, bootstrap, presence: reactions.presence, work: snapshot,
     blocked: dragging || menuOpen || quickChatInteractive || Boolean(editing) })
@@ -330,7 +332,7 @@ function PetOverlayApp(): React.JSX.Element {
   return (
     <div className="pet-overlay">
       <div className="pet-hit" ref={hitRef}>
-        {!bubblesHidden && placement.notificationMaxHeight >= 48 ? (
+        {bubblesRevealed && placement.notificationMaxHeight >= 48 ? (
           <div className="pet-notification-position" ref={noticeRef} style={{ left: placement.notification.left,
             top: placement.notification.top, width: placement.notification.width }}>
             <PetWorkBubbles
@@ -435,8 +437,12 @@ function PetOverlayApp(): React.JSX.Element {
           <div className="pet-controls-position" ref={controlsRef}
             style={{ left: placement.controls.left, top: placement.controls.top }}>
             <PetQuickChat bridge={bridge} notificationCount={notifications.length} bubblesHidden={bubblesHidden}
-              revealed={controlsRevealed} ensembleActive={Boolean(visit)}
-              onEnsemble={() => { if (visit) void bridge.dismissPetVisit(); else void bridge.requestPetVisit() }}
+              revealed={controlsRevealed} visitsEnabled={(bootstrap?.visits ?? defaultPetVisits()).enabled}
+              onToggleVisits={() => {
+                const current = bootstrap?.visits ?? defaultPetVisits()
+                if (current.enabled && visit) void bridge.dismissPetVisit()
+                void bridge.setPetVisitPreferences({ ...current, enabled: !current.enabled })
+              }}
               onInteractiveChange={setQuickChatInteractive} onToggleBubbles={() => {
                 const collapsed = !bubblesHidden
                 setBubblesCollapsed(collapsed)

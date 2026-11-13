@@ -55,22 +55,27 @@ export async function roomDiscussionBusy(deps: RoomRuntimeDeps, includePeer = fa
       order: 'asc', afterSeq: runCursor, limit: 100, summaryOnly: true })
     for (const row of rows) {
       if (!['discussion', 'coordination', 'conversation'].includes(row.value.phase)) continue
-      if (row.value.phase === 'conversation' && row.value.requestId) {
-        const request = await deps.store.get<RoomRequestState>('request', row.value.requestId)
+      const request = row.value.requestId ? await deps.store.get<RoomRequestState>('request', row.value.requestId) : null
+      if (row.value.phase === 'conversation') {
         if (request?.value.privateProtocol && !request.value.cancellationRequested && !await privateRequestCanRun(deps.store, request.value)) continue
       }
-      if (!includePeer && row.value.phase === 'discussion' && !row.value.handoffId) {
+      const topic = row.value.phase === 'discussion' && !row.value.handoffId && row.value.rootRequestId
+        ? await deps.store.get('peer_topic', row.value.rootRequestId) : null
+      if (!includePeer && topic) {
         // Active peer reservations are counted by the peer runner itself.
-        const topic = row.value.rootRequestId ? await deps.store.get('peer_topic', row.value.rootRequestId) : null
-        if (topic) continue
+        continue
       }
-      let ended = false
+      // An unadmitted orphan has no execution to reserve. Peer activations reserve
+      // their lane before creating a thread and are governed by their topic instead.
+      let ended = !row.value.admissionAttempted && !row.value.turnId && !topic && !row.value.handoffId
       if (row.value.threadId) {
         try {
           const thread = await deps.threads.getMetadata(row.value.threadId)
           const turn = thread?.turns.find((turn) => row.value.turnId ? turn.id === row.value.turnId : turn.clientRequestId === row.value.clientRequestId)
-          ended = Boolean(turn && !['queued', 'running'].includes(turn.status))
-        } catch { /* Unknown executions retain their lanes. */ }
+          if (turn) ended = !['queued', 'running'].includes(turn.status)
+          else if (request && ['failed', 'cancelled'].includes(request.value.status) &&
+            await deps.proveStopped?.(row.value.threadId, row.value.turnId)) ended = true
+        } catch { ended = false } // Unreadable metadata cannot prove that an execution ended.
       }
       if (ended) continue
       busy.add(row.value.roomId + ':' + row.value.memberId)
