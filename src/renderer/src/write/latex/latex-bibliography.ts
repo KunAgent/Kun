@@ -30,7 +30,7 @@ export function latexCiteCandidates(key: string): LatexCiteCandidate[] {
 
 export function stageLatexCitation(key: string, candidate: LatexCiteCandidate): string {
   const session = latexSession(key)!
-  if (session.review.length) throw new Error('Resolve the source review before inserting a citation.')
+  if (session.deleting || session.review.length) throw new Error('Finish the source operation or review before inserting a citation.')
   const main = session.buffers[session.project.config.mainFile]
   if (main) editLatexBuffer(key, session.project.config.mainFile, main.content.replace(/^%\s*(\\bibliographystyle\{plain\}|\\bibliography\{references\})/gm, '$1'))
   if (candidate.existing) return candidate.key

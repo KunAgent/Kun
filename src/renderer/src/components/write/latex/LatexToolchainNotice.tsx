@@ -1,13 +1,13 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { FileText, ExternalLink } from 'lucide-react'
+import { FileText, Settings2 } from 'lucide-react'
 import { buildLatex } from '../../../write/latex/latex-build-controller'
-import { latexTarget, patchLatex, type LatexSession } from '../../../write/latex/latex-project-store'
+import { patchLatexSession, type LatexSession } from '../../../write/latex/latex-project-store'
 
-export function LatexToolchainNotice({ sessionKey, session }: { sessionKey: string; session: LatexSession }): ReactElement {
+export function LatexToolchainNotice({ sessionKey, session, onEnvironment }: { sessionKey: string; session: LatexSession; onEnvironment: () => void }): ReactElement {
   const { t } = useTranslation('common')
   const missing = session.build?.status === 'missing-tools'
-  const run = (operation: () => Promise<unknown>): void => { void operation().catch((error) => patchLatex(sessionKey, { error: String(error) })) }
+  const run = (operation: () => Promise<unknown>): void => { void operation().catch((error) => patchLatexSession(sessionKey, session.instanceId, { error: String(error) })) }
   return (
     <div className="latex-empty-pdf">
       <div className="latex-empty-icon"><FileText size={25} strokeWidth={1.3} /></div>
@@ -18,12 +18,7 @@ export function LatexToolchainNotice({ sessionKey, session }: { sessionKey: stri
           <dt>{session.project.config.engine}</dt><dd>{session.tools?.engine ?? t('latexNotFound')}</dd></dl>
         <small>{t('latexSearchedPaths')}: {session.tools?.searchedPaths.join(' · ')}</small>
         <div className="latex-empty-actions">
-          <button type="button" className="latex-primary" onClick={() => run(() => window.kunGui.openExternal('https://www.tug.org/texlive/'))}>{t('latexInstallGuide')}<ExternalLink size={12} /></button>
-          <button type="button" onClick={() => run(async () => {
-            const result = await window.kunGui.latexPickTools(latexTarget(session))
-            if (!result.ok) throw new Error(result.message)
-            if (result.project) patchLatex(sessionKey, { project: { ...result.project, mainPath: session.project.mainPath } })
-          })}>{t('latexChooseTools')}</button>
+          <button type="button" className="latex-primary" disabled={session.deleting} onClick={onEnvironment}><Settings2 size={13} />{t('latexEnvironmentManage')}</button>
           <button type="button" onClick={() => run(() => buildLatex(sessionKey))}>{t('latexDetectAgain')}</button>
         </div>
       </> : <button type="button" className="latex-primary" disabled={!!session.buildId} onClick={() => run(() => buildLatex(sessionKey))}>{t(session.buildId ? 'latexBuilding' : 'latexCompile')}</button>}

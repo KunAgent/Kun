@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentProvider } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import type { BrowserStorageLike } from '../lib/browser-storage'
@@ -118,5 +119,34 @@ describe('createThread for a project', () => {
     expect(selectThread).not.toHaveBeenCalled()
     expect(getThreadSnapshot('thr_late')).toBeNull()
     expect(state.activeThreadId).toBeNull()
+  })
+})
+
+
+describe('explicit multi-directory project creation', () => {
+  afterEach(() => { rendererRuntimeClient.invalidateSettings(); clearThreadSnapshotCache(); vi.unstubAllGlobals() })
+  it.each(['code', 'ade'] as const)('preserves project roots in a new local %s thread', async (workspaceMode) => {
+    const createThread = vi.fn(async (options: Parameters<AgentProvider['createThread']>[0]) => ({ id: 'thr_project', title: 'New chat',
+      updatedAt: '2026-11-13T00:00:00Z', model: 'model', mode: 'agent', status: 'idle', ...options }))
+    registryMock.getProvider.mockReturnValue({ createThread })
+    vi.stubGlobal('window', { kunGui: {
+      getSettings: vi.fn(async () => ({ agents: { kun: { subagents: { profiles: [] } } } })),
+      workspaceDirectoryExists: vi.fn(async () => true)
+    } })
+    rendererRuntimeClient.invalidateSettings()
+    const { actions, state } = buildHarness()
+    Object.assign(state, { composerIsolation: 'local', composerIsolationExplicitWorkspaceRoot: '/workspace/app',
+      codeWorkspaceFolderSets: { version: 1, sets: [{ primary: '/workspace/app', extraRoots: ['/workspace/api'] }] },
+      selectThread: vi.fn(async () => undefined), refreshThreads: vi.fn(async () => undefined),
+      refreshAdeThreads: vi.fn(async () => undefined),
+      threads: [{ id: 'old_empty', title: 'New chat', titleAuto: true, turnCount: 0, updatedAt: '2026-11-13T00:00:00Z',
+        model: 'model', mode: 'agent', status: 'idle', workspace: '/workspace/app', additionalWorkspaces: ['/workspace/old-api'] }] })
+    await expect(actions.createThread({ workspaceRoot: '/workspace/app',
+      workspaceMode: workspaceMode === 'ade' ? 'ade' : undefined, forceNew: false })).resolves.toBe('thr_project')
+    expect(createThread).toHaveBeenCalledWith(expect.objectContaining({
+      workspace: '/workspace/app', additionalWorkspaces: ['/workspace/api']
+    }))
+    vi.unstubAllGlobals()
+    rendererRuntimeClient.invalidateSettings()
   })
 })

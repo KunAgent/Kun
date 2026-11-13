@@ -7,6 +7,7 @@ import { WritePdfViewer } from '../WritePdfViewer'
 import { LatexSourceEditor, type LatexSourceHandle } from './LatexSourceEditor'
 import { LatexToolbar } from './LatexToolbar'
 import { LatexToolchainNotice } from './LatexToolchainNotice'
+import { LatexToolchainDialog } from './LatexToolchainDialog'
 import { LatexProblems } from './LatexProblems'
 import { useLatexWorkspace } from './use-latex-workspace'
 import { latexCitationInsertions } from './LatexReferencesPanel'
@@ -14,7 +15,7 @@ import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { usePaperSpaceStore, paperSpaceItems } from '../../../paper/paper-space-store'
 import { buildLatex } from '../../../write/latex/latex-build-controller'
 import { proposeLatexRevision } from '../../../write/latex/latex-revision'
-import { configureLatex, editLatexBuffer, latexDirty, latexSession, latexSessionKey, latexTarget, loadLatexBuffer, openLatexSession, patchLatex, saveLatexSession, selectLatexFile, useLatexProjectStore } from '../../../write/latex/latex-project-store'
+import { configureLatex, editLatexBuffer, isLatexSessionCurrent, latexDirty, latexSession, latexSessionKey, latexTarget, loadLatexBuffer, openLatexSession, patchLatex, patchLatexSession, reconcileLatexProject, saveLatexSession, selectLatexFile, useLatexProjectStore } from '../../../write/latex/latex-project-store'
 import type { WriteEditorSelectionState } from '../WriteMarkdownEditor'
 import './latex.css'
 
@@ -24,6 +25,8 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
 }): ReactElement {
   const { t } = useTranslation('common')
   const key = latexSessionKey(workspaceRoot, path)
+  const activeKey = useRef(key)
+  activeKey.current = key
   const session = useLatexProjectStore((state) => state.sessions[key])
   const host = useRef<HTMLDivElement>(null)
   const source = useRef<LatexSourceHandle | null>(null)
@@ -32,14 +35,19 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
   const [cursor, setCursor] = useState({ line: 1, column: 1 })
   const [selection, setSelection] = useState<WriteEditorSelectionState | null>(null)
   const [instruction, setInstruction] = useState('')
-  const [syncPoint, setSyncPoint] = useState<(LatexSyncPoint & { token: number }) | null>(null)
+  const [toolchainOwner, setToolchainOwner] = useState<{ key: string; instanceId: string } | null>(null)
+  const [syncTarget, setSyncTarget] = useState<{ key: string; instanceId: string; buildId: string; point: LatexSyncPoint & { token: number } } | null>(null)
+  const syncPoint = syncTarget?.key === key && syncTarget.instanceId === session?.instanceId && syncTarget.buildId === session.pdf?.buildId ? syncTarget.point : null
   const setPanel = useWriteWorkspaceStore((state) => state.openWriteRightPanel)
   const assistantProvider = useWriteWorkspaceStore((state) => state.assistantProviderId)
   const assistantModel = useWriteWorkspaceStore((state) => state.assistantModel)
   const buildStatus = session?.build?.status
   const buildId = session?.build?.buildId
   useEffect(() => { if (buildStatus === 'failed') setProblems('problems') }, [buildStatus, buildId])
-  const run = useCallback((operation: () => Promise<unknown>): void => { void operation().catch((error) => patchLatex(key, { error: String(error) })) }, [key])
+  const run = useCallback((operation: () => Promise<unknown>): void => {
+    const owner = latexSession(key)
+    void operation().catch((error) => { if (owner) patchLatexSession(key, owner.instanceId, { error: String(error) }) })
+  }, [key])
   const save = useCallback((compile = true): void => run(async () => {
     const current = latexSession(key)
     if (!current) return
@@ -50,7 +58,8 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
 
   useEffect(() => {
     if (!latexSession(key)) run(() => openLatexSession(workspaceRoot, path))
-  }, [workspaceRoot, path, key, run])
+    else if (focused) run(() => reconcileLatexProject(key))
+  }, [workspaceRoot, path, key, run, focused])
   const hasSession = !!session
   useEffect(() => {
     if (!host.current) return
@@ -68,7 +77,7 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
         if (cancelled) break
         await loadLatexBuffer(key, file)
       }
-    })().catch((error) => patchLatex(key, { error: String(error) }))
+    })().catch((error) => patchLatexSession(key, current.instanceId, { error: String(error) }))
     return () => { cancelled = true }
   }, [key, rootPath])
   useEffect(() => {
@@ -108,6 +117,7 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
   const fix = (prompt?: string): void => run(async () => {
     const current = latexSession(key)!
     await proposeLatexRevision(key, prompt || t('latexFixInstruction'), assistantProvider, assistantModel)
+    if (activeKey.current !== key || !isLatexSessionCurrent(key, current.instanceId)) return
     if (latexSession(key)?.review.length) setPanel('review')
     if (current.activeFile) setInstruction('')
   })
@@ -116,9 +126,10 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
     if (!current.pdf || current.pdfRevision !== current.revision) return
     const result = await window.kunGui.latexSync({ ...latexTarget(current), buildId: current.pdf.buildId, direction,
       file: current.activeFile, line: cursor.line, ...point })
+    if (activeKey.current !== key || !isLatexSessionCurrent(key, current.instanceId) || latexSession(key)?.pdf?.buildId !== current.pdf.buildId) return
     if (!result.ok) throw new Error(result.message)
     if (!result.point) return
-    if (direction === 'forward') { setSyncPoint({ ...result.point, token: Date.now() }); if (narrow) patchLatex(key, { view: 'pdf' }) }
+    if (direction === 'forward') { setSyncTarget({ key, instanceId: current.instanceId, buildId: current.pdf.buildId, point: { ...result.point, token: Date.now() } }); if (narrow) patchLatex(key, { view: 'pdf' }) }
     else await selectLatexFile(key, result.point.file, result.point.line)
   })
   const beginResize = (event: React.PointerEvent): void => {
@@ -137,7 +148,12 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
   const diagnostics = session.build?.diagnostics ?? []
   return (
     <div ref={host} className="latex-document" data-latex-view={view}>
-      <LatexToolbar sessionKey={key} session={session} narrow={narrow} onSave={() => save(false)} onReferences={() => setPanel('references')} onSync={() => sync('forward')} onProblems={() => setProblems((value) => value === 'problems' ? null : 'problems')} onLog={() => setProblems('log')} />
+      <LatexToolbar sessionKey={key} session={session} narrow={narrow} onSave={() => save(false)} onReferences={() => setPanel('references')} onSync={() => sync('forward')} onProblems={() => setProblems((value) => value === 'problems' ? null : 'problems')} onLog={() => setProblems('log')} onEnvironment={() => setToolchainOwner({ key, instanceId: session.instanceId })} />
+      {toolchainOwner?.key === key && toolchainOwner.instanceId === session.instanceId ? <LatexToolchainDialog engine={session.project.config.engine} toolDirectory={session.project.config.toolDirectory}
+        onClose={() => setToolchainOwner(null)} onDirectoryChange={async (toolDirectory) => {
+          if (isLatexSessionCurrent(key, toolchainOwner.instanceId)) await configureLatex(key, { ...latexSession(key)!.project.config, toolDirectory })
+        }} onTools={(tools) => patchLatexSession(key, toolchainOwner.instanceId, (current) => ({ tools, ...(tools.latexmk && tools.engine && current.build?.status === 'missing-tools' ? { build: null } : {}) }))}
+        onCompile={() => { setToolchainOwner(null); if (isLatexSessionCurrent(key, toolchainOwner.instanceId)) run(() => buildLatex(key)) }} /> : null}
       {session.needsMainChoice ? <div className="latex-notice"><span>{t('latexChooseMain')}</span><select aria-label={t('latexMainFile')} value="" onChange={(event) => run(() => configureLatex(key, { ...session.project.config, mainFile: event.target.value }))}>
         <option value="" disabled>{t('latexMainFile')}</option>{session.project.mainCandidates.map((file) => <option key={file}>{file}</option>)}</select></div> : null}
       {session.error ? <div className="latex-notice is-error" role="alert"><AlertCircle size={14} /><span>{session.error}</span><button type="button" aria-label={t('latexClose')} onClick={() => patchLatex(key, { error: null })}><X size={14} /></button></div> : null}
@@ -145,14 +161,14 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
       {buffer?.truncated ? <div className="latex-notice"><span>{t('latexLargeSource')}</span></div> : null}
       <div className="latex-split">
         <div className="latex-source" style={{ display: view === 'pdf' ? 'none' : 'flex', flex: view === 'split' ? `0 0 ${session.ratio * 100}%` : '1' }}>
-          {buffer ? <LatexSourceEditor sessionKey={key} file={session.activeFile} value={buffer.content} readOnly={!!session.review.length || buffer.truncated === true} diagnostics={diagnostics} jump={session.jump}
+          {buffer ? <LatexSourceEditor sessionKey={key} file={session.activeFile} value={buffer.content} readOnly={session.deleting || !!session.review.length || buffer.truncated === true} diagnostics={diagnostics} jump={session.jump}
             onChange={(content) => editLatexBuffer(key, session.activeFile, content)} onSave={() => save()} handleRef={source}
             onSelection={(selection, cursor) => { setSelection(selection); setCursor(cursor); if (focused) onSelectionChange(selection) }} /> : <p>{t('filePreviewLoading')}</p>}
           <div className="latex-source-actions"><button type="button" onClick={() => setPanel('references')}><BookOpen size={13} />{t('latexInsertCitation')}</button>
             <span />{session.tools?.synctex && session.pdf && !stale ? <button type="button" onClick={() => sync('forward')}><LocateFixed size={13} />{t('latexLocateCursor')}</button> : null}</div>
           {selection?.text ? <form className="latex-revise-selection" onSubmit={(event) => { event.preventDefault(); fix(`${instruction}\nOnly revise this selection in ${session.activeFile}, lines ${selection.ranges[0]?.startLine}-${selection.ranges.at(-1)?.endLine}:\n${selection.text}`) }}>
             <input value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder={t('latexRevisePlaceholder')} aria-label={t('latexRevisePlaceholder')} />
-            <button type="submit" disabled={!instruction.trim() || session.proposing || !!session.review.length || buffer?.truncated}><Sparkles size={13} />{t('latexProposeRevision')}</button>
+            <button type="submit" disabled={!instruction.trim() || session.deleting || session.proposing || !!session.review.length || buffer?.truncated}><Sparkles size={13} />{t('latexProposeRevision')}</button>
             <button type="button" onClick={() => onAskAssistant(`${t('latexDiscussSelection')}\n${session.project.rootPath}/${session.activeFile}:${cursor.line}\n${selection.text}`)}>{t('latexDiscuss')}</button>
           </form> : null}
         </div>
@@ -162,8 +178,8 @@ export function LatexDocumentPane({ workspaceRoot, path, focused, onSelectionCha
           {session.pdf ? <>
             {stale ? <div className="latex-pdf-stale">{t('latexOldPdf', { time: new Date(session.pdf.mtimeMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) })}<button type="button" onClick={() => setProblems('log')}>{t('latexViewLog')}</button></div> : null}
             <WritePdfViewer filePath={`${session.project.rootPath}/${session.project.config.mainFile.replace(/\.(tex|ltx)$/i, '.pdf')}`} workspaceRoot={workspaceRoot} dataBase64={session.pdf.dataBase64} size={session.pdf.size} mtimeMs={session.pdf.mtimeMs}
-              onSelectionChange={() => {}} fitWidth compact syncPoint={syncPoint} onSourceSync={session.tools?.synctex && !stale ? (point) => sync('inverse', point) : undefined} />
-          </> : <LatexToolchainNotice sessionKey={key} session={session} />}
+              onSelectionChange={() => {}} fitWidth compact preservePosition syncPoint={syncPoint} onSourceSync={session.tools?.synctex && !stale ? (point) => sync('inverse', point) : undefined} />
+          </> : <LatexToolchainNotice sessionKey={key} session={session} onEnvironment={() => setToolchainOwner({ key, instanceId: session.instanceId })} />}
           {!!session.buildId && <div className="latex-build-progress" />}
         </div>
       </div>

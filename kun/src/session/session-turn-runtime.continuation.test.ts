@@ -40,7 +40,8 @@ async function runTwoTurns(models: [string | undefined, string | undefined], ext
     stored.push(userItem)
     return { definition, thread: { id: 'thread' }, turn: { id: turnId }, workspace: '/repo', poolKey: 'codex:native',
       credentialEnv: {}, secretEnv: {}, credentialIdentity: 'account', model, items: [...stored],
-      userItem, instructionBlocks: ['Host policy'], redactedRequestValues: [] } as unknown as SessionTurnContext
+      userItem, instructionBlocks: ['Host policy'], redactedRequestValues: [],
+      workspaceRoots: { primary: '/repo', roots: ['/repo'], extras: [], identity: '["/repo"]' } } as unknown as SessionTurnContext
   }
   const events = { record: vi.fn(async (_draft: { kind: string }) => undefined) }
   const deps = { transport: 'codex-app-server', providerKind: 'codex-app-server', pool,

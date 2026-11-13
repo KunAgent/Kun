@@ -36,7 +36,7 @@ export function LatexReferencesPanel({ sessionKey, onCollapse }: { sessionKey: s
               else setQuery(candidate.key)
             }}><code>{candidate.key}</code><strong>{candidate.title}</strong><small>{candidate.detail}</small></button>
             <div><span>{t(candidate.existing ? 'latexAlreadyInBib' : 'latexWillAddBib')}{uses.has(candidate.key) ? ` · ${t('latexCitedCount', { count: uses.get(candidate.key)!.length })}` : ''}</span>
-              <button type="button" disabled={!session || !!session.review.length || session.buffers[session.activeFile]?.truncated || !/\.(tex|ltx)$/i.test(session.activeFile) || !latexCitationInsertions.has(sessionKey)} aria-label={t('latexInsertCitation')}
+              <button type="button" disabled={!session || session.deleting || !!session.review.length || session.buffers[session.activeFile]?.truncated || !/\.(tex|ltx)$/i.test(session.activeFile) || !latexCitationInsertions.has(sessionKey)} aria-label={t('latexInsertCitation')}
                 onClick={() => { const key = stageLatexCitation(sessionKey, candidate); latexCitationInsertions.get(sessionKey)?.(`\\cite{${key}}`) }}><Plus size={14} /></button></div>
           </article>
         ))}

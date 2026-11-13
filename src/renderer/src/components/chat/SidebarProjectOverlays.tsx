@@ -6,6 +6,7 @@ import {
   ClipboardCopy,
   ExternalLink,
   Eye,
+  Folder,
   FolderPlus,
   MoveRight,
   PencilLine,
@@ -18,10 +19,9 @@ import {
   X
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
-import { extraRootsForPrimary } from '../../lib/code-workspace-folder-sets'
-import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
-import { useChatStore } from '../../store/chat-store'
+import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
+import { openCodeProjectManage } from '../../store/code-workspace-project-editor'
 import { threadLooksRunning } from '../../store/chat-store-runtime-helpers'
 import { sendThreadToBot, watchThreadWithBot } from '../rooms/workbench-bridge-actions'
 import type { SidebarThreadWorktreeRecord } from './sidebar-project-selectors'
@@ -419,12 +419,6 @@ export function WorkspaceContextMenu({
   archiveDisabled: boolean
   t: Translate
 }): ReactElement {
-  const extraRoots = extraRootsForPrimary(
-    state.workspacePath,
-    useChatStore((store) => store.codeWorkspaceFolderSets)
-  )
-  const addWorkspaceFolder = useChatStore((store) => store.addWorkspaceFolder)
-  const removeWorkspaceFolder = useChatStore((store) => store.removeWorkspaceFolder)
   const run = (action: () => void): void => {
     onClose()
     action()
@@ -439,22 +433,7 @@ export function WorkspaceContextMenu({
     >
       <MenuItem icon={<Plus className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarWorkspaceNewThread')} disabled={false} onClick={() => run(onNewThread)} />
       <MenuItem icon={<FolderPlus className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarFolderCreate')} disabled={false} onClick={() => run(onNewFolder)} />
-      <MenuItem
-        icon={<FolderPlus className="h-3.5 w-3.5" strokeWidth={1.9} />}
-        label={t('sidebarWorkspaceAddFolder')}
-        disabled={false}
-        onClick={() => run(() => { void addWorkspaceFolder(state.workspacePath) })}
-      />
-      {extraRoots.map((root) => (
-        <MenuItem
-          key={root}
-          icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />}
-          label={t('sidebarWorkspaceRemoveFolder', { name: workspaceLabelFromPath(root) })}
-          disabled={false}
-          title={t('composerWorkspaceExtraHint')}
-          onClick={() => run(() => { void removeWorkspaceFolder(state.workspacePath, root) })}
-        />
-      ))}
+      <MenuItem icon={<Folder className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('codeProjectManageTitle')} disabled={false} onClick={() => run(() => openCodeProjectManage(state.workspacePath))} />
       <MenuItem icon={<ExternalLink className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarWorkspaceOpenInSystem')} disabled={false} onClick={() => run(onOpenInSystem)} />
       <MenuItem icon={<Archive className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarWorkspaceArchiveThreads')} disabled={archiveDisabled} onClick={() => run(onArchiveThreads)} />
       <div className="my-1 h-px bg-ds-border-muted" />

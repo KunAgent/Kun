@@ -11,7 +11,7 @@ export function LatexProblems({ sessionKey, session, onClose, onFix, initialTab 
       <header><button type="button" className={!log ? 'is-active' : ''} onClick={() => setLog(false)}>{t('latexProblems')} · {session.build?.diagnostics.length ?? 0}</button>
         <button type="button" className={log ? 'is-active' : ''} onClick={() => setLog(true)}>{t('latexViewLog')}</button>
         <span />
-        <button type="button" disabled={session.proposing || !!session.review.length} onClick={onFix}><Sparkles size={13} />{t(session.proposing ? 'latexProposing' : 'latexAskFix')}</button>
+        <button type="button" disabled={session.deleting || session.proposing || !!session.review.length} onClick={onFix}><Sparkles size={13} />{t(session.proposing ? 'latexProposing' : 'latexAskFix')}</button>
         <button type="button" onClick={onClose} aria-label={t('latexClose')}><X size={15} /></button></header>
       {log ? <pre tabIndex={0}>{session.log || t('latexNoLog')}</pre> : <div className="latex-diagnostics">
         {!session.build?.diagnostics.length ? <p>{t('latexNoProblems')}</p> : session.build.diagnostics.map((diagnostic, index) => (

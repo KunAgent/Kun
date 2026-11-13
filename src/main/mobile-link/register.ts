@@ -17,6 +17,7 @@ import { MobileLinkService, type LinkDependencies } from './service'
 import { transferFiles } from './files'
 import { MobileLinkRecovery } from './recovery'
 import { createRuntimeOriginWorkspace } from './terminal-origin'
+import { createSimulatorEngine } from '../remote-simulator/engine'
 import { RelayPreference } from './relay-preference'
 import { MobileRelayResume } from './relay-resume'
 import { logInfo, logWarn } from '../logger'
@@ -86,8 +87,13 @@ export function registerMobileLink(
     },
     readWorkspace: createRuntimeOriginWorkspace(options)
   })
+  const simulatorOrigin = createRuntimeOriginWorkspace(options)
+  const simulator = createSimulatorEngine(async (origin, authority) => {
+    if (!await simulatorOrigin(origin, authority)) throw Error('SIMULATOR_ORIGIN_UNAVAILABLE')
+  })
   registerControlPackage(options)
   const serviceDependencies: LinkDependencies = {
+    simulator,
     createClient: deps => controlRuntimeHost().relay(deps),
     account,
     requireMembership: (owner) => requireAccountFeature(account, (input, init) => net.fetch(String(input), init), 'mobileRemote', owner),

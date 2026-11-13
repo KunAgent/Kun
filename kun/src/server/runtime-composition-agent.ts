@@ -166,6 +166,7 @@ export async function createRuntimeAgentComposition(
   // Route-level bridge host for the Kun Tools MCP server:
   // same execution authority as the SDK adapters with main-scope defaults.
   const kunToolBridge = createKunToolBridgeHost({
+    workspaceRootsForTurn: (threadId, turnId) => services.kunToolsMcp.workspaceRootsForTurn(threadId, turnId),
     threadStore,
     sessionStore,
     registry: registryComposition.registry,
@@ -403,6 +404,7 @@ export async function createRuntimeAgentComposition(
 	    }))
 	  }
 	  let loopOptions: AgentLoopOptions = {
+    taskWorkspaces: core.taskWorkspaces,
 	    threadStore,
 	    sessionStore,
 	    approvalGate,

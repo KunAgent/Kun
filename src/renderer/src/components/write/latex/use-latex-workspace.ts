@@ -3,12 +3,14 @@ import { useWriteWorkspaceStore } from '../../../write/write-workspace-store'
 import { projectFocusedDocument, writeDocumentKey } from '../../../write/write-editor-layout'
 import { useWriteEditorBridge } from '../../../write/write-editor-bridge'
 import { buildLatex } from '../../../write/latex/latex-build-controller'
-import { latexDirty, patchLatex, refreshLatexSources, saveLatexSession, selectLatexFile, latexSession, type LatexSession } from '../../../write/latex/latex-project-store'
+import { latexDirty, patchLatex, patchLatexSession, reconcileLatexProject, refreshLatexSources, saveLatexSession, selectLatexFile, latexSession, type LatexSession } from '../../../write/latex/latex-project-store'
 import { resolveLatexRevision } from '../../../write/latex/latex-revision'
+import { observeLatexToolchain } from '../../../write/latex/latex-toolchain-observer'
 
 export function useLatexWorkspace(sessionKey: string, session: LatexSession | undefined, mainPath: string, focused: boolean): void {
   const autoSaveEnabled = useWriteWorkspaceStore((state) => state.autoSaveEnabled)
   const delay = useWriteWorkspaceStore((state) => state.autoSaveDelayMs)
+  useEffect(() => observeLatexToolchain(sessionKey), [sessionKey, session?.instanceId])
   useEffect(() => {
     const session = latexSession(sessionKey)
     if (!session) return
@@ -21,23 +23,23 @@ export function useLatexWorkspace(sessionKey: string, session: LatexSession | un
       const documentsByPath = { ...state.documentsByPath, [key]: { ...current,
         fileContent: buffer?.content ?? '', persistedContent: buffer?.saved ?? '',
         saveStatus: saveStatus as typeof current.saveStatus, fileError: session.error,
-        contentRevision: session.revision, reviewActive: !!session.review.length,
+        contentRevision: session.revision, reviewActive: session.deleting || !!session.review.length,
         latexTitle: session.project.config.title
       } }
       return { documentsByPath, ...projectFocusedDocument(state.editorLayout, documentsByPath) }
     })
-  }, [session?.buffers, session?.activeFile, session?.saving, session?.error, session?.review, session?.revision, session?.project.config.title, mainPath, sessionKey])
+  }, [session?.buffers, session?.activeFile, session?.deleting, session?.saving, session?.error, session?.review, session?.revision, session?.project.config.title, mainPath, sessionKey])
 
   useEffect(() => {
     const session = latexSession(sessionKey)
-    if (!session || !autoSaveEnabled || !latexDirty(session) || session.review.length || session.saving) return
+    if (!session || session.deleting || !autoSaveEnabled || !latexDirty(session) || session.review.length || session.saving) return
     const timer = window.setTimeout(() => {
       void saveLatexSession(session.workspaceRoot, mainPath).then((saved) => {
         if (saved && session.project.config.autoBuild) void buildLatex(sessionKey)
       })
     }, Math.max(600, delay))
     return () => window.clearTimeout(timer)
-  }, [session?.revision, session?.review.length, session?.saving, session?.project.config.autoBuild, autoSaveEnabled, delay, mainPath, sessionKey])
+  }, [session?.revision, session?.review.length, session?.deleting, session?.saving, session?.project.config.autoBuild, autoSaveEnabled, delay, mainPath, sessionKey])
 
   const fileKey = session?.project.files.join('\0') ?? ''
   useEffect(() => {
@@ -65,7 +67,7 @@ export function useLatexWorkspace(sessionKey: string, session: LatexSession | un
         else ids.add(result.watchId)
       }).catch(() => {})
     }
-    const refresh = (): void => { void refreshLatexSources(sessionKey).catch((error) => patchLatex(sessionKey, { error: String(error) })) }
+    const refresh = (): void => { void reconcileLatexProject(sessionKey).catch((error) => patchLatexSession(sessionKey, session.instanceId, { error: String(error) })) }
     window.addEventListener('focus', refresh)
     return () => { disposed = true; if (assetTimer) clearTimeout(assetTimer); unsubscribe(); window.removeEventListener('focus', refresh); for (const id of ids) void window.kunGui.unwatchWorkspaceFile(id) }
   }, [sessionKey, fileKey])

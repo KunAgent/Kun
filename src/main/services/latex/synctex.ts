@@ -9,7 +9,7 @@ export async function syncLatexSource(service: LatexBuildService, project: Latex
   input: Parameters<KunGuiLatexApi['latexSync']>[0]): Promise<LatexSyncPoint | null> {
   const artifact = await service.artifact(project)
   if (!artifact || artifact.buildId !== input.buildId) return null
-  const tools = await detectLatexTools(project.config.engine, project.config.toolDirectory)
+  const tools = await detectLatexTools(project.config.engine, project.config.toolDirectory, service.managedToolRoot)
   if (!tools.synctex) return null
   const forward = input.direction === 'forward'
   const file = input.file ?? project.config.mainFile

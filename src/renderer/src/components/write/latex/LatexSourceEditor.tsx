@@ -37,7 +37,8 @@ export function LatexSourceEditor(props: Props): ReactElement {
     const file = initial.file
     const handleRef = initial.handleRef
     const editorStates = states.current
-    const saved = editorStates.get(file)
+    const cacheKey = `${props.sessionKey}\0${file}`
+    const saved = editorStates.get(cacheKey)
     const notify = (view: EditorView): void => {
       const line = view.state.doc.lineAt(view.state.selection.main.head)
       latest.current.onSelection(selectionState(view), { line: line.number, column: view.state.selection.main.head - line.from + 1 })
@@ -71,7 +72,7 @@ export function LatexSourceEditor(props: Props): ReactElement {
     }
     notify(view)
     return () => {
-      editorStates.set(file, { state: view.state, scrollTop: view.scrollDOM.scrollTop })
+      editorStates.set(cacheKey, { state: view.state, scrollTop: view.scrollDOM.scrollTop })
       view.destroy(); editor.current = null; handleRef.current = null
     }
   }, [props.sessionKey, props.file, props.handleRef])

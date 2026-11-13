@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from 'react'
 import { ChevronLeft, ChevronRight, Loader2, Minus, Plus, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { PDFDocumentProxy } from 'pdfjs-dist/build/pdf.mjs'
 import type {
   WriteEditorSelectionState,
   WriteSelectionPageRect
@@ -18,6 +19,7 @@ type Props = {
   onSourceSync?: (point: { page: number; x: number; y: number }) => void
   fitWidth?: boolean
   compact?: boolean
+  preservePosition?: boolean
 }
 
 import {
@@ -39,13 +41,15 @@ export function WritePdfViewer({
   syncPoint,
   onSourceSync,
   fitWidth = false,
-  compact = false
+  compact = false,
+  preservePosition = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const localViewerRef = useRef<HTMLDivElement | null>(null)
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   const selectionSyncTimerRef = useRef<number | null>(null)
   const [scale, setScale] = useState(1.15)
+  const fitted = useRef({ filePath: '', width: 0, document: null as PDFDocumentProxy | null })
   const [committedSelectionRects, setCommittedSelectionRects] = useState<WriteSelectionPageRect[]>([])
   // Precise fragment rects are shown while dragging and kept after focus moves
   // into the assist popup, while the DOM Selection remains the text source.
@@ -74,18 +78,27 @@ export function WritePdfViewer({
   useEffect(() => {
     const scroller = scrollerRef.current
     if (!fitWidth || !pdfDocument || !scroller) return
+    if (fitted.current.document === pdfDocument && fitted.current.filePath !== filePath) return
     let cancelled = false
     let observer: ResizeObserver | undefined
     void pdfDocument.getPage(1).then((page) => {
       if (cancelled) return
       const width = page.getViewport({ scale: 1 }).width
-      const fit = (): void => { if (scroller.clientWidth > 0) setScale(Math.max(.25, Math.min(2, (scroller.clientWidth - 40) / width))) }
+      const fit = (): void => {
+        if (scroller.clientWidth <= 0) return
+        if (preservePosition && fitted.current.filePath === filePath && fitted.current.width === scroller.clientWidth) {
+          fitted.current.document = pdfDocument
+          return
+        }
+        fitted.current = { filePath, width: scroller.clientWidth, document: pdfDocument }
+        setScale(Math.max(.25, Math.min(2, (scroller.clientWidth - 40) / width)))
+      }
       fit()
       observer = new ResizeObserver(fit)
       observer.observe(scroller)
     }).catch(() => {})
     return () => { cancelled = true; observer?.disconnect() }
-  }, [fitWidth, pdfDocument])
+  }, [fitWidth, pdfDocument, filePath, preservePosition])
 
   const {
     currentPage,
@@ -98,8 +111,9 @@ export function WritePdfViewer({
     pageRefs,
     scrollToPage,
     schedulePageSync,
-    jumpSearch
-  } = useWritePdfNavigation({ filePath, pdfDocument, pageCount, pageTexts, scrollerRef })
+    jumpSearch,
+    onPageViewport
+  } = useWritePdfNavigation({ filePath, pdfDocument, pageCount, pageTexts, scrollerRef, preservePosition, renderScale: scale })
 
   useEffect(() => {
     if (!syncPoint || !pdfDocument) return
@@ -224,7 +238,7 @@ export function WritePdfViewer({
               title={t('writePdfPrevPage')}
               aria-label={t('writePdfPrevPage')}
               onClick={() => scrollToPage(currentPage - 1)}
-              disabled={currentPage <= 1}
+              disabled={!pageCount || currentPage <= 1}
             >
               <ChevronLeft className="h-4 w-4" strokeWidth={1.9} />
             </button>
@@ -238,6 +252,7 @@ export function WritePdfViewer({
               <input
                 className="write-pdf-page-input"
                 value={pageInput}
+                disabled={!pageCount}
                 aria-label={t('writePdfPageInput')}
                 onChange={(event) => setPageInput(event.target.value)}
               />
@@ -337,6 +352,7 @@ export function WritePdfViewer({
                   scale={scale}
                   selectionRects={committedRectsByPage.get(pageNumber) ?? []}
                   onPageText={updatePageText}
+                  onViewport={onPageViewport}
                 />
                 {syncPoint?.page === pageNumber ? (
                   <span data-latex-sync-marker className="pointer-events-none absolute z-10 h-5 w-28 rounded bg-accent/20 ring-1 ring-accent/40"

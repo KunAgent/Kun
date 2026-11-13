@@ -465,6 +465,9 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         providerId: ctx.definition.id,
         credentialIdentity: ctx.credentialIdentity,
         workspace: ctx.workspace,
+        ...(ctx.workspaceRoots.extras.length
+          ? { additionalWorkspaceRoots: ctx.workspaceRoots.extras }
+          : {}),
         model: ctx.model ?? 'default',
         // Codex sends the model with every turn and Pi sets it per session,
         // so a model change keeps the native session (no handoff brief).
@@ -482,6 +485,9 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       threadId: ctx.thread.id,
       turnId: ctx.turn.id,
       workspacePath: ctx.workspace,
+      // Codex derives writableRoots from the canonical set (never from a UI
+      // string), so read-only turns still receive no write grant.
+      workspaceRoots: ctx.workspaceRoots.roots,
       harnessId: ctx.definition.id,
       model: ctx.wireModel ?? ctx.model,
       permissionModeId: ctx.permissionModeId,
@@ -535,6 +541,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
     const provider = this.deps.kunToolsMcp
     if (!provider?.canDeliver()) return {}
     const servers = provider.servers({
+      workspaceRoots: ctx.workspaceRoots,
       threadId: ctx.thread.id,
       turnId: ctx.turn.id,
       harnessId: ctx.definition.id,
@@ -589,6 +596,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       attachmentPaths: userInput.attachmentPaths,
       fileReferences: userInput.fileReferences,
       workspacePath: ctx.workspace,
+      workspaceRoots: ctx.workspaceRoots.roots,
       model: ctx.wireModel ?? ctx.model,
       reasoningEffort: ctx.turn.reasoningEffort,
       ...(handoffBrief ? { handoffBrief } : {}),

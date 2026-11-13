@@ -48,6 +48,7 @@ import workConversations from './common/work-conversations.json'
 import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
+import codeProjects from './common/code-projects.json'
 
 import paper from './common/paper.json'
 import paperWorkspace from './common/paper-workspace.json'
@@ -157,6 +158,7 @@ const common = {
   ...projectBoard,
   ...speak,
   ...remoteAccess,
+  ...codeProjects,
   ...paper,
   ...paperWorkspace,
   ...paperSpace,

@@ -2,6 +2,15 @@ import { ipcRenderer } from 'electron'
 import type { KunGuiLatexApi } from '../shared/latex-project'
 
 export const latexApi: KunGuiLatexApi = {
+  latexToolchainStatus: (input) => ipcRenderer.invoke('latex:toolchain-status', input),
+  latexInstallTools: () => ipcRenderer.invoke('latex:install-tools', {}),
+  latexCancelToolInstall: (input) => ipcRenderer.invoke('latex:cancel-tool-install', input),
+  latexChooseToolDirectory: () => ipcRenderer.invoke('latex:choose-tool-directory', {}),
+  onLatexToolchainState: (handler) => {
+    const wrapped = (_: Electron.IpcRendererEvent, state: Parameters<typeof handler>[0]) => handler(state)
+    ipcRenderer.on('latex:toolchain-state', wrapped)
+    return () => ipcRenderer.removeListener('latex:toolchain-state', wrapped)
+  },
   latexReadProject: (input) => ipcRenderer.invoke('latex:read-project', input),
   latexConfigure: (input) => ipcRenderer.invoke('latex:configure', input),
   latexCreate: (input) => ipcRenderer.invoke('latex:create', input),

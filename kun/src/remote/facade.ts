@@ -1,4 +1,6 @@
 import { DispatchParamSchemas } from './dispatch/contracts.js'
+import { CodeChangesParamSchemas } from './changes/contracts.js'
+import { RemoteCodeChanges } from './changes/service.js'
 import { RemoteDispatch } from './dispatch/service.js'
 import { OPERATION_METHODS, OPERATION_READ_METHODS, READ_METHODS, validateOperationParams } from '@kun/remote-protocol'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
@@ -180,6 +182,8 @@ export class RemoteFacade {
         this.handlers.set(method, handler)
       }
     }
+    const changes = new RemoteCodeChanges(this.runtime)
+    add(CodeChangesParamSchemas, (scope, p) => changes.dispatch(scope.call.method, p))
     add(DispatchParamSchemas, (scope, p) => scope.call.method === 'dispatch.list'
       ? this.dispatches.list(p.threadId) : scope.call.method === 'dispatch.catalog'
         ? this.dispatches.catalog(p.threadId) : this.dispatches.act(scope, p))

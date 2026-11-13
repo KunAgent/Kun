@@ -36,6 +36,7 @@ import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import { SidebarFrame } from '../sidebar/SidebarPrimitives'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 import { openArtifactsPage } from '../../artifacts/artifact-library-store'
+import { openCodeProjectCreate } from '../../store/code-workspace-project-editor'
 
 type Props = {
   threads: NormalizedThread[]
@@ -335,7 +336,7 @@ export function Sidebar({
           scheduledThreadActivities={scheduledThreadActivities}
           awaitingUserInputThreadIds={awaitingUserInputThreadIds}
           locale={i18n.language}
-          onPickWorkspace={() => void chooseWorkspace()}
+          onPickWorkspace={() => openCodeProjectCreate({ selectAfterSave: 'code' })}
           onRemoveWorkspace={removeWorkspace}
           onCreateThreadInWorkspace={onNewChatInWorkspace}
           onSelectThread={onSelectThread}

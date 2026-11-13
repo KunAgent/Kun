@@ -1,4 +1,11 @@
+import { buildAdditionalWorkspacesInstruction } from '../prompt/kun-prompt-context.js'
 import { dispatchGuidanceForTurn } from '../ade/dispatch-guidance.js'
+import {
+  assertAdditionalRootsSupported,
+  assertIsolatedWorkspaceRoots,
+  resolveWorkspaceRoots,
+  type WorkspaceRootSet
+} from '../runtime/workspace-roots.js'
 import { observeHarnessAliasRoute } from '../harness/gateway-alias-route-observer.js'
 import type { HarnessGatewayBinding } from '../contracts/harness-gateway-binding.js'
 /**
@@ -64,6 +71,7 @@ export type SessionTurnContextDeps = {
     commandForTurn: import('../harness/harness-readiness.js').HarnessReadinessService['commandForTurn']
     reuseIdentityForTurn?: import('../harness/harness-readiness.js').HarnessReadinessService['reuseIdentityForTurn']
   }
+  taskWorkspaces?: import('../handoff/turn-handoff.js').TaskWorkspaceLister
   catalog: { get(id: string): HarnessDefinition | undefined }
   harnessDefaults?: (harnessId: HarnessId) => HarnessDefaultsEntry | undefined
   resolveSecretEnv?: HarnessSecretRefResolver
@@ -87,6 +95,8 @@ export type SessionTurnContext = {
   userItem: UserTurnItem
   definition: HarnessDefinition
   workspace: string
+  /** Canonical root set; the launch, tool bridge and resume identity read this. */
+  workspaceRoots: WorkspaceRootSet
   instructionBlocks: readonly string[]
   turnDynamicContext: TurnDynamicContext
   goalContextKeyForHistory: string | null | undefined
@@ -249,13 +259,36 @@ export async function resolveSessionTurnContext(
     items
   })
   items = [...turnDynamicContext.historyItems]
-  const workspace = thread.workspace
+  let workspace = thread.workspace
+  // Resolve the whole root set once: every transport below shares it, and a
+  // transport that cannot honor extra roots is rejected here (not in the UI).
+  let workspaceRoots: WorkspaceRootSet
+  try {
+    workspaceRoots = await resolveWorkspaceRoots({
+      workspace,
+      additionalWorkspaces: thread.additionalWorkspaces
+    })
+    assertAdditionalRootsSupported(input.transport, workspaceRoots.extras)
+    // A host-managed task worktree isolates one checkout. Granting another
+    // source directory would write outside that isolation, so refuse the
+    // combination instead of silently narrowing or widening it.
+    const boundWorkspaceId =
+      thread.executionUnit?.taskWorkspaceId ?? thread.taskWorkspaceId
+    assertIsolatedWorkspaceRoots(boundWorkspaceId, workspaceRoots.extras, deps.taskWorkspaces)
+    workspace = workspaceRoots.primary
+  } catch (error) {
+    return fail(
+      error instanceof Error ? error.message : 'workspace roots are unavailable',
+      'workspace_roots_unavailable'
+    )
+  }
   const instructionBlocks = [
     deps.systemPrompt?.trim(),
     thread.systemPrompt?.trim(),
     ...historyReferenceInstructions(thread),
     ...dispatchGuidanceForTurn(thread, turn, definition),
-    ...turnDynamicContext.instructions
+    ...turnDynamicContext.instructions,
+    buildAdditionalWorkspacesInstruction(workspaceRoots.extras)
   ].filter((value, index, all): value is string =>
     Boolean(value) && all.indexOf(value) === index
   )
@@ -352,6 +385,7 @@ export async function resolveSessionTurnContext(
       userItem,
       definition,
       workspace,
+      workspaceRoots,
       instructionBlocks,
       turnDynamicContext,
       goalContextKeyForHistory,

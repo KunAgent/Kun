@@ -1,3 +1,5 @@
+import type { KunGuiLatexToolchainApi } from './latex-toolchain'
+
 export const LATEX_FILE_EXTENSIONS = new Set(['.tex', '.ltx', '.bib', '.cls', '.sty'])
 export type LatexEngine = 'xelatex' | 'pdflatex' | 'lualatex'
 export type LatexView = 'source' | 'split' | 'pdf'
@@ -67,7 +69,7 @@ export function isLatexFilePath(path: string): boolean {
 }
 
 /** Files and native tool execution stay behind the desktop preload boundary. */
-export type KunGuiLatexApi = {
+export type KunGuiLatexApi = KunGuiLatexToolchainApi & {
   latexReadProject: (input: LatexTarget) => Promise<LatexResult<{ project: LatexProject }>>
   latexConfigure: (input: LatexTarget & { config: LatexConfig }) => Promise<LatexResult<{ project: LatexProject }>>
   latexCreate: (input: { workspaceRoot: string; name: string; template: 'chinese' | 'english' | 'blank'; autoBuild: boolean }) => Promise<LatexResult<{ project: LatexProject }>>
@@ -78,7 +80,7 @@ export type KunGuiLatexApi = {
   latexPickTools: (input: LatexTarget) => Promise<LatexResult<{ project?: LatexProject; canceled?: boolean }>>
   latexBuild: (input: LatexTarget & { buildId: string; sourceRevision: number }) => Promise<LatexResult<{ build: LatexBuild }>>
   latexAbortBuild: (input: LatexTarget & { buildId: string }) => Promise<LatexResult<Record<never, never>>>
-  latexReadPdf: (input: LatexTarget) => Promise<LatexResult<{ pdf: LatexPdf | null; currentSourceHash: string }>>
+  latexReadPdf: (input: LatexTarget & { metadataOnly?: boolean }) => Promise<LatexResult<{ pdf: LatexPdf | null; currentSourceHash: string }>>
   onLatexBuildLog: (handler: (event: { buildId: string; text: string }) => void) => () => void
   latexSync: (input: LatexTarget & { buildId: string; direction: 'forward' | 'inverse'; file?: string; line?: number; page?: number; x?: number; y?: number }) => Promise<LatexResult<{ point: LatexSyncPoint | null }>>
   latexProposeFix: (input: LatexTarget & { providerId?: string; model?: string; instruction: string; diagnostics: LatexDiagnostic[]; files: Array<{ file: string; content: string }> }) => Promise<LatexResult<{ edits: LatexEdit[] }>>
