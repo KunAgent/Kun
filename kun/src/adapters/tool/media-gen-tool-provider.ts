@@ -27,6 +27,7 @@ import {
 } from './media-gen-client-support.js'
 
 export {
+  DeepSeekSpeechClient,
   MiniMaxMusicClient,
   MiniMaxSpeechClient,
   MimoSpeechClient,
@@ -177,7 +178,7 @@ export function buildSpeechGenToolProviders(
   options: MediaGenToolProviderOptions = {}
 ): SpeechGenToolProviderBuildResult {
   if (!config?.enabled) return { providers: [], diagnostics: [], available: false }
-  const missing = missingProviderFields(config, options.resolveCredential)
+  const missing = missingProviderFields(config, options.resolveCredential, config.protocol === 'deepseek-tts')
   if (missing.length > 0) {
     const reason = `speech generation provider is not configured (missing ${missing.join(', ')})`
     return {
@@ -187,7 +188,7 @@ export function buildSpeechGenToolProviders(
     }
   }
 
-  const model = config.model!
+  const model = config.model || 'deepseek-tts'
 
   const tool = LocalToolHost.defineTool({
     name: 'generate_speech',
@@ -501,12 +502,13 @@ export function buildVideoGenToolProviders(
 
 function missingProviderFields(
   config: { baseUrl?: string; apiKey?: string; providerId?: string; model?: string },
-  resolveCredential?: ProviderCredentialResolver
+  resolveCredential?: ProviderCredentialResolver,
+  modelOptional = false
 ): string[] {
   return [
     !config.baseUrl ? 'baseUrl' : undefined,
     !config.apiKey && !(config.providerId && resolveCredential) ? 'apiKey' : undefined,
-    !config.model ? 'model' : undefined
+    !modelOptional && !config.model ? 'model' : undefined
   ].filter((field): field is string => Boolean(field))
 }
 

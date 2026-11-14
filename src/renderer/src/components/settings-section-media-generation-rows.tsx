@@ -266,6 +266,7 @@ export function textToSpeechProtocolLabel(
   t: (key: string) => string,
   protocol: string
 ): string {
+  if (protocol === 'deepseek-tts') return t('textToSpeechProtocolDeepSeek')
   if (protocol === 'minimax-t2a') return t('textToSpeechProtocolMiniMax')
   if (protocol === 'mimo-tts') return t('textToSpeechProtocolMimo')
   return t('textToSpeechProtocolOpenAi')

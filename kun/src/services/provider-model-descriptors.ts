@@ -77,8 +77,24 @@ export function parseProviderModelDescriptor(value: unknown, protocol: ModelReas
     if (parsed.length || value.length === 0) profile[field] = parsed
   }
   if (profile.inputModalities) profile.messageParts = profile.inputModalities.length === 0 ? [] : profile.inputModalities.includes('image') ? ['text', 'image_url'] : ['text']
-  const reasoning = parseNativeReasoning(row.supported_reasoning_levels ?? row.reasoning_efforts,
-    row.default_reasoning_level ?? row.default_reasoning_effort, protocol)
+  const effort = record(row.effort)
+  const hasEffortLevels = Array.isArray(effort.supported_levels)
+  const reasoningProtocol = hasEffortLevels && protocol === 'openai-chat-completions'
+    ? 'deepseek-chat-completions'
+    : protocol
+  const parsedReasoning = parseNativeReasoning(
+    row.supported_reasoning_levels ?? row.reasoning_efforts ?? effort.supported_levels,
+    row.default_reasoning_level ?? row.default_reasoning_effort ?? effort.default_level,
+    reasoningProtocol
+  )
+  const reasoning = parsedReasoning && hasEffortLevels && parsedReasoning.requestProtocol === 'deepseek-chat-completions' &&
+    !parsedReasoning.supportedEfforts.includes('off')
+    ? {
+        ...parsedReasoning,
+        supportedEfforts: ['off', ...parsedReasoning.supportedEfforts] as ModelReasoningEffort[],
+        effortMapping: { ...(parsedReasoning.effortMapping ?? {}), off: 'off' }
+      }
+    : parsedReasoning
   if (reasoning) {
     profile.reasoning = reasoning
     if (profile.supportsReasoning === undefined && reasoning.nativeEfforts?.length) {
@@ -96,9 +112,12 @@ export function parseProviderModelDescriptor(value: unknown, protocol: ModelReas
     fact.sourceId = 'provider-models'; fact.match = 'exact'
     const paths: Record<string, string[]> = { contextWindowTokens: ['context_window', 'context_length', 'contextWindowTokens'],
       maxInputTokens: ['max_input_tokens', 'maxInputTokens'], maxOutputTokens: ['max_output_tokens', 'maxOutputTokens'],
-      reasoning: ['supported_reasoning_levels', 'reasoning_efforts'], supportsReasoning: ['supports_reasoning', 'reasoning'],
+      reasoning: ['supported_reasoning_levels', 'reasoning_efforts', 'effort.supported_levels'],
+      supportsReasoning: ['supports_reasoning', 'reasoning'],
       supportsToolCalling: ['supports_tools', 'supportsToolCalling', 'tool_call'] }
-    fact.fieldPath = paths[field]?.find((path) => field === 'reasoning' ? Array.isArray(row[path]) : row[path] === profile[field]) ??
+    fact.fieldPath = paths[field]?.find((path) => field === 'reasoning'
+      ? (path === 'effort.supported_levels' ? hasEffortLevels : Array.isArray(row[path]))
+      : row[path] === profile[field]) ??
       (field === 'contextWindowTokens' ? 'limit.context' : field === 'maxInputTokens' ? 'limit.input' : field === 'maxOutputTokens' ? 'limit.output' : field)
   }
   return profile

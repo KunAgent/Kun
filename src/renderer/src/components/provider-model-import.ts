@@ -1,10 +1,15 @@
+import { providerPresetScopeMatches } from '@kun/provider-catalog'
 import { migrateModelMetadata, withModelObservation } from '../../../../kun/src/services/model-metadata-resolver.js'
 import { metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import type {
   ModelProviderModelProfileV1,
   ModelProviderProfileV1
 } from '@shared/app-settings'
-import { CURSOR_SDK_ADAPTIVE_REASONING } from '@shared/app-settings'
+import {
+  CURSOR_SDK_ADAPTIVE_REASONING,
+  DEFAULT_DEEPSEEK_BASE_URL,
+  DEFAULT_MODEL_PROVIDER_ID
+} from '@shared/app-settings'
 import type {
   ModelsDevCatalogModel,
   ModelsDevCatalogResult,
@@ -17,6 +22,13 @@ import {
   type ProviderModelIdGroups,
   type ProviderModelKind
 } from './provider-model-editor'
+import {
+  presetImageCapability,
+  presetMusicCapability,
+  presetSpeechCapability,
+  presetTextToSpeechCapability,
+  presetVideoCapability
+} from './settings-section-providers-profile'
 
 export type ProviderModelImportEntry = {
   modelId: string
@@ -52,7 +64,31 @@ export function buildProviderModelImportEntries(
     catalog?: ModelsDevCatalogModel
   }>()
 
-  for (const rawId of providerModelIds) {
+  const candidateModelIds = [...providerModelIds]
+  if (candidateModelIds.length > 0 && providerPresetScopeMatches({
+    id: provider.id,
+    presetSource: provider.presetSource?.presetId,
+    presetMode: provider.presetSource?.mode,
+    baseUrl: provider.baseUrl.trim() || (provider.id === DEFAULT_MODEL_PROVIDER_ID ? DEFAULT_DEEPSEEK_BASE_URL : ''),
+    endpointFormat: provider.endpointFormat,
+    endpoints: provider.endpoints,
+    kind: provider.kind
+  })) {
+    const presetCapabilities = [
+      presetImageCapability(provider),
+      presetSpeechCapability(provider),
+      presetTextToSpeechCapability(provider),
+      presetMusicCapability(provider),
+      presetVideoCapability(provider)
+    ]
+    for (const capability of presetCapabilities) {
+      for (const modelId of capability?.models ?? []) {
+        candidateModelIds.push(modelId)
+      }
+    }
+  }
+
+  for (const rawId of candidateModelIds) {
     const modelId = rawId.trim()
     const key = modelKey(modelId)
     if (!key || rows.has(key)) continue
