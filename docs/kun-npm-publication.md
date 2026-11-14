@@ -117,8 +117,17 @@ would need a separate implementation; this publication job is not the original
 compilation run.
 
 `npm stage publish` is a separate registry-writing feature, not a local dry run.
-It is not used by this flow. Its approval/trust requirements must not be confused
-with assigning a SemVer prerelease to the explicit `next` distribution tag.
+The default publisher job does not stage. An explicitly authorized bootstrap
+can use staged publishing to preserve the exact uploaded candidate when
+interactive authentication expires. Pass the original tarball, `--tag=next`
+and `--ignore-scripts`; verify the staged name/version/tag and recorded
+integrity against the accepted artifact before approval. A staged or registry
+download must verify the actual SHA-256 before registry readiness. The staged
+tag is immutable.
+Resume approval of that same stage instead of repacking or deleting an occupied
+version. Its approval/trust requirements must not be confused with assigning
+a SemVer prerelease to the explicit `next` tag. See
+[npm staged publishing](https://docs.npmjs.com/cli/v11/commands/npm-stage/).
 
 ## Publication order and recovery
 
@@ -158,41 +167,64 @@ digests. This advances artifact acceptance only: `enabled` remains false,
 trusted publishing remains unconfigured and no registry package or tag was
 created by the candidate acceptance.
 
-## Gate B checkpoint: first publication blocked by registry tags
+## Current rc publication and registry acceptance
 
-On 2026-11-14 the explicitly authorized bootstrap uploaded the accepted
-Windows `0.4.5-rc.1` tarball with `--tag=next`, public access and scripts disabled.
-The public tarball SHA-256 and SHA-512 match the original Gate A candidate.
-npm initially acknowledged processing before exposing the version; the executor
-now waits for visibility without retrying publication or accepting changed bytes.
+The accepted original `0.4.5-rc.1` Windows package was published first, then the
+original main package was approved from npm's immutable `next` staging queue.
+Both publicly expose `next: 0.4.5-rc.1`, and their integrity values match the
+Gate A candidates. No candidate was rebuilt, repacked, relabeled or overwritten.
+The main staging response integrity and authoritative staged SHA-1 matched the
+accepted file before the maintainer's WebAuthn approval. Successful native
+registry jobs additionally downloaded both artifacts and verified their actual
+SHA-256/SHA-512 before installing the exact main version.
 
-The public Windows metadata subsequently exposed both `next` and `latest` at
-`0.4.5-rc.1`. The sequence stopped before the main package. An authenticated
-attempt to remove the unexpected `latest` tag returned HTTP 400; it remains
-present. At the 2026-11-15 checkpoint the main package is still unpublished,
-`registryReady` is false and Gate B is incomplete. The local publication and
-registry observations are preserved under `.cache/kun-npm/registry-release/`.
-The accepted candidate, Gate A receipts and disabled checked-in policy retain
-their original identities. This flow did not build or upload a replacement
-candidate. Registry metadata also contains npm's `0.0.0-stage` placeholder;
-this flow did not invoke staged publishing or manually create that version.
+npm created `latest` on initial publication, including its automatic
+`0.0.0-stage` placeholder; an authenticated attempt to delete the unexpected
+Windows `latest` returned HTTP 400. The maintainer explicitly accepted this
+initial registry behavior for these exact names and this rc version. Windows
+retained `latest: 0.4.5-rc.1`; the main package retained
+`latest: 0.0.0-stage`. `registryStableTags` pins those observed values without
+changing them. Install the exact rc or `@next`; no explicit stable-tag promotion
+was performed. New versions do not inherit this rc's bootstrap acknowledgement.
 
-The maintainer subsequently explicitly accepted initial automatic `latest`
-creation for these two `0.4.5-rc.1` packages and requested continuation with the
-original main candidate and registry matrix. That scoped acknowledgement is
-now recorded in policy. Publication still passes only `--tag=next`; it does
-not run a stable-tag promotion command. Registry acceptance checks the
-acknowledged initial tag baseline and records that acknowledgement separately
-from unchanged-tag evidence.
+The [registry matrix](https://github.com/KunAgent/Kun/actions/runs/43617665681)
+uses `registry_only` mode of `kun-npm-artifact.yml`. It removes the source
+checkout and Git history, then installs the exact published version into fresh
+project/global prefixes and caches on five native targets with Node 26.4.0 and
+26.12.0. Receipts include real npm HTTP fetch lines, project lock integrity,
+actual downloaded tarball digests, SQLite, CLI/JSON/config, TUI, HTTP/SSE,
+integrations and shutdown checks. Windows additionally installs the platform
+package in a separate disposable project, checks its payload digests and loads
+the native addon; the two main installations use their own bundled helper for
+native Job and real ConPTY checks. That separate component cannot mask missing
+main-package dependencies.
 
-The read-only `registry_only` mode of `kun-npm-artifact.yml` is prepared for the
-subsequent registry matrix. It selects the accepted original manifest, removes
-the source checkout and Git history, and installs the exact registry version
-into fresh project/global prefixes and caches on five native targets with
-Node 26.4.0 and 26.12.0. Each receipt includes real npm HTTP download evidence,
-project lock integrity, downloaded tarball digests, native SQLite, CLI/TUI,
-HTTP/SSE and shutdown checks. Windows additionally requires the registry helper
-download, native helper failure cases and real ConPTY. The aggregator refuses
-local-install receipts, missing combinations, changed bytes/build identity or
-an unacknowledged `latest` tag. This matrix has not run against the absent main
-package; passing driver tests do not constitute registry acceptance.
+The aggregator rejects local-install receipts, missing combinations, changed
+bytes/build identity, absent real downloads or an unexpected stable-tag value.
+The first attempt passed eight combinations; Node 26.4.0 macOS x64 hit the
+known [Undici socket error](https://github.com/nodejs/undici/issues/5544), and
+Windows x64 did not capture the required Runtime-before-Manager evidence in
+owner-loss injection. Both reruns passed with the identical driver, exact registry bytes and unchanged
+checks. All ten combinations completed 528 passing operation checks; the
+first-attempt failures are preserved.
+
+The original aggregation selected an older same-name artifact because artifact
+IDs are opaque and do not follow creation order. Even the download action's
+ID mode applied its own latest-artifact filter. Receipt collection now verifies
+all ten latest native jobs, selects by creation timestamp, downloads each fixed
+ID directly and strictly checks every original ZIP digest before extracting
+only its receipt JSON. It preserves superseded artifact references and never
+substitutes an older passing result for a newer failure. The
+[final read-only collection](https://github.com/KunAgent/Kun/actions/runs/43621615956)
+passed, and the downloaded evidence ZIP and all ten inner ZIPs were independently
+verified locally. `registryReady` is true for this rc at `next`; stable-release
+promotion remains deferred.
+
+Local publication, acknowledgement, decoded first-attempt logs and registry
+receipts are preserved under `.cache/kun-npm/registry-release/`. The optional
+local staged readback ended with a network ECONNRESET; it is not labeled a
+successful verification. Actual published-byte verification comes from the
+successful native registry receipts. The original Gate A receipt and candidate
+files retain their accepted hashes. The automated publisher stays disabled and
+trusted publishing remains unconfigured; this bootstrap used the maintainer's
+normal interactive authentication, without storing a CI write token.

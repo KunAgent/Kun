@@ -1,4 +1,4 @@
-# Standalone Kun npm candidates
+# Standalone Kun npm distribution
 
 The npm distribution packages the existing `kun/` Runtime, CLI and TUI. It does
 not require the Kun desktop application or Electron. Candidate generation and
@@ -43,7 +43,25 @@ during installation, modify PATH or force replacement of an existing desktop
 command. Check `command -v kun` on POSIX or `where kun` on Windows if multiple
 installations are present. A project's local npm bin avoids global ambiguity.
 
-## Install and run a candidate
+## Install the registry prerelease
+
+With a supported Node version, install the exact accepted prerelease:
+
+```sh
+npm install --global @kunagent/agent@0.4.5-rc.1
+kun --version
+kun --help
+```
+
+`npm install --global @kunagent/agent@next` selects the prerelease channel.
+For a project dependency, use `npm install @kunagent/agent@0.4.5-rc.1` and
+`npx --no-install kun --help`. Only the main package is needed for the CLI.
+The main package's `latest` currently points at npm's `0.0.0-stage` bootstrap
+placeholder; use the exact version or `@next`. No stable-release tag was promoted.
+Publication and registry acceptance are separate; the current matrix is linked
+at the end of this guide.
+
+## Install and run a local candidate
 
 These examples use a candidate tarball path, not a published npm version:
 
@@ -259,8 +277,8 @@ native targets and source-inaccessible execution are covered by the CI matrix
 above. All 23 Gate A criteria passed for the earlier `@kun/agent@0.4.5`
 candidate after strict collection of the ten native receipts, global
 typecheck/build/related tests and the matching signed desktop receipt. The
-selected `@kunagent` prerelease requires its own complete Gate A candidate.
-The earlier candidate remains artifact-ready and unpublished;
+selected `@kunagent` prerelease has its own Gate A and registry receipts linked
+below. The earlier candidate remains artifact-ready and unpublished; its own
 registry readiness is false. Earlier OS/glibc releases remain outside verified
 support. Namespace/publisher checks and registry acceptance belong to Gate B.
 
@@ -300,11 +318,17 @@ and historical-data-preserving uninstall remain mandatory in the native matrix
 and the dedicated desktop data job. Use `--desktop-data-receipt` when collecting
 separate sequential data and production signing evidence.
 
-The selected `@kunagent` 0.4.5-rc.1 set is now artifact-ready and unpublished.
+The selected `@kunagent` 0.4.5-rc.1 set is artifact-ready and published at `next`.
 The [native matrix](https://github.com/KunAgent/Kun/actions/runs/43586928198)
 passed ten combinations and 536 operation checks; the
 [build validation](https://github.com/KunAgent/Kun/actions/runs/43589957579) and
 [sequential desktop data validation](https://github.com/KunAgent/Kun/actions/runs/43593189350)
 also passed. Production signing/CLI regression and synthetic capture/permission
-checks passed locally against the same JS buildId. Registry readiness remains
-false and the publication policy remains disabled.
+checks passed locally against the same JS buildId. The
+[registry matrix](https://github.com/KunAgent/Kun/actions/runs/43617665681) is
+complete on all ten combinations against the original published candidate,
+with 528 passing operation checks. The
+[strict receipt collection](https://github.com/KunAgent/Kun/actions/runs/43621615956)
+also passed, checking the latest receipt by creation time, every original ZIP
+digest and the original source/build identity. The rc is registry-ready at
+`next`; the automated publisher stays disabled and stable promotion is deferred.
