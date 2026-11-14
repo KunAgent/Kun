@@ -2,7 +2,7 @@
   "name": "kun-gui",
   "productName": "Kun",
   "desktopName": "kun-gui.desktop",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Electron workbench for the Kun runtime (HTTP/SSE)",
   "engines": {
     "node": ">=22.19.0"
@@ -133,7 +133,7 @@
     "@kun/control-host": "file:vendor/kun-control/kun-control-host-0.1.6.tgz",
     "@kun/extension-api": "1.5.0",
     "@kun/provider-catalog": "0.1.0",
-    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.33.1.tgz",
+    "@kun/remote-protocol": "file:vendor/kun-remote/kun-remote-protocol-0.34.1.tgz",
     "@larksuiteoapi/node-sdk": "^1.71.1",
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@napi-rs/canvas": "^0.1.100",

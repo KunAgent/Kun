@@ -1,6 +1,6 @@
 {
   "name": "kun",
-  "version": "0.4.5",
+  "version": "0.4.6",
   "description": "Kun local HTTP/SSE agent runtime",
   "engines": {
     "node": ">=22.19.0"
@@ -94,7 +94,7 @@
     "@emnapi/runtime": "^1.10.0",
     "@kun/extension-api": "file:../packages/extension-api",
     "@kun/provider-catalog": "file:../packages/provider-catalog",
-    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.33.1.tgz",
+    "@kun/remote-protocol": "file:../vendor/kun-remote/kun-remote-protocol-0.34.1.tgz",
     "@modelcontextprotocol/client": "^2.3.1",
     "@opentui/core": "0.6.6",
     "@opentui/solid": "0.6.6",

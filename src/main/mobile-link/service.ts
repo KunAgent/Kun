@@ -5,6 +5,7 @@ import { appendHostMetadata } from './catalog-metadata'
 import { MobileShareHosts } from './share-host'
 import { desktopScheduleDescriptors } from './desktop-schedules'
 import { MobileNotifications } from './notifications'
+import { MobileWorkboard } from './workboard'
 import { MobileLinkAuthorities } from './authorities'
 import { mobileLinkScopes, computerDesktopScopes, MOBILE_REMOTE_SCOPES } from '../../shared/mobile-link-scopes'
 import { conditionalCall, conditionalResult } from './read-version'
@@ -50,6 +51,7 @@ export class MobileLinkService {
   private computerPairings = new Set<string>()
   private computerAccessOperation = 0
   private authorities = new MobileLinkAuthorities()
+  private workboard: MobileWorkboard
   private notifications: MobileNotifications
   private shared: MobileShareHosts
   private requestBudget = new RequestBudget()
@@ -91,6 +93,7 @@ export class MobileLinkService {
   private disconnecting: Promise<void> = Promise.resolve()
   private statusRequest?: { generation: number; version: number; task: Promise<MobileLinkStatus> }
   constructor(private deps: LinkDependencies) {
+    this.workboard = new MobileWorkboard(deps)
     this.notifications = new MobileNotifications(deps)
     this.shared = new MobileShareHosts({ ...deps, files: deps.sharedFiles, budget: this.requestBudget, totalBudget: this.totalRequestBudget,
       reserveFile: (peer) => {
@@ -160,6 +163,7 @@ export class MobileLinkService {
     void this.deps.desktop?.configureRemoteAccess?.(false).catch(() => {})
     void this.deps.desktop?.stopAll('host_stopped').catch(() => {})
     void this.deps.terminal?.stopAll('host_stopped').catch(() => {})
+    this.workboard.stop()
     this.notifications.stop()
     this.shared.stop()
     this.grantPeers.clear()
@@ -393,8 +397,11 @@ export class MobileLinkService {
     const api = this.api, generation = this.generation
     const eligible = () => this.phoneAccess && this.enabled && !this.sessionEnding && this.api === api && generation === this.generation &&
       [...this.grantPeers].some(([id, peer]) => !this.deniedGrants.has(id) && !this.deniedPeers.has(peer))
-    if (api && eligible()) this.notifications.start(api, eligible)
-    else this.notifications.stop()
+    if (api && eligible()) { this.notifications.start(api, eligible, value => {
+      if (eligible() && value?.workboard?.available === true) this.workboard.start(api, eligible)
+      else this.workboard.stop()
+    }) }
+    else { this.notifications.stop(); this.workboard.stop() }
   }
   private async setEnabled(value: boolean, keepGrants = false, desktopAccess = false, phoneAccess = true) {
     if (!value) {
@@ -604,7 +611,7 @@ export class MobileLinkService {
       this.authorities.remove(peer)
     }
     this.grantPeers.delete(id)
-    if (!this.grantPeers.size) this.notifications.stop()
+    if (!this.grantPeers.size) { this.notifications.stop(); this.workboard.stop() }
     this.subscriptions.clear()
     await this.api.request('/grants/' + id, 'DELETE')
     return this.status()

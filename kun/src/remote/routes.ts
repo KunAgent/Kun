@@ -1,3 +1,4 @@
+import { registerWorkboardRoutes } from './workboard/routes.js'
 import { registerSharedTaskRoutes } from './sharing/routes.js'
 import { registerRemoteDirectoryRoutes } from './directory/routes.js'
 import { registerCodeSyncRoutes } from './history/routes.js'
@@ -21,6 +22,7 @@ import { RemoteId } from './contracts.js'
 import { remoteAttachmentContent } from './files/access.js'
 import { registerTerminalOriginRoute } from './terminal/origin-workspace.js'
 export function registerRemoteRoutes(router: Router, runtime: ServerRuntime) {
+  registerWorkboardRoutes(router, runtime)
   if (!runtime.rooms) return
   const facade = new RemoteFacade(runtime, router)
   registerTerminalOriginRoute(router, runtime, facade)
