@@ -463,7 +463,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
       route: {
         providerKind: this.deps.providerKind,
         providerId: ctx.definition.id,
-        credentialIdentity: ctx.credentialIdentity,
+        credentialIdentity: ctx.sessionCredentialIdentity ?? ctx.credentialIdentity,
         workspace: ctx.workspace,
         ...(ctx.workspaceRoots.extras.length
           ? { additionalWorkspaceRoots: ctx.workspaceRoots.extras }

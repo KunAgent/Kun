@@ -201,6 +201,6 @@ export type AcpCredentialEnvInput = DelegatedCredentialEnvInput
 export function resolveAcpCredentialContext(
   resolve: ((input: AcpCredentialEnvInput) => Promise<Record<string, string>>) | undefined,
   input: Parameters<typeof resolveDelegatedCredentialContext>[1]
-): Promise<{ credentialIdentity: string; env: Record<string, string> }> {
+): ReturnType<typeof resolveDelegatedCredentialContext> {
   return resolveDelegatedCredentialContext(resolve, input)
 }

@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, test } from 'vitest'
@@ -479,6 +479,131 @@ describe('AcpRuntime.runTurn', () => {
       delete process.env.OPENAI_API_KEY
       delete process.env.OPENCODE_CONFIG
     }
+  })
+
+  test('kun-gateway preserves native session via session/load across same-provider model switch', async () => {
+    const tokens = new HarnessTokenService({ secret: Buffer.alloc(32, 9) })
+    const configDir = mkdtempSync(join(tmpdir(), 'acp-gw-switch-'))
+    const scenarioDir = mkdtempSync(join(tmpdir(), 'acp-gw-scenario-'))
+    tempDirs.push(configDir, scenarioDir)
+    const scenarioPath = join(scenarioDir, 'scenario.json')
+    const modelConfigOption = {
+      id: 'model',
+      name: 'Model',
+      category: 'model',
+      type: 'select',
+      currentValue: 'other-model',
+      options: [
+        { value: 'other-model', name: 'Other model' },
+        { value: 'kun/deepseek/deepseek-chat', name: 'DeepSeek Chat' },
+        { value: 'kun/deepseek/deepseek-reasoner', name: 'DeepSeek Reasoner' }
+      ]
+    }
+    writeFileSync(scenarioPath, JSON.stringify({
+      sessionId: 'gateway-model-session',
+      initialize: {
+        protocolVersion: 1,
+        agentCapabilities: { loadSession: true },
+        authMethods: []
+      },
+      newSession: { configOptions: [modelConfigOption] },
+      loadSession: { configOptions: [modelConfigOption] },
+      turns: [
+        {
+          promptIncludes: 'turn one',
+          steps: [{ update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'First gateway reply' } } }],
+          stopReason: 'end_turn'
+        },
+        {
+          promptIncludes: 'turn two',
+          steps: [{ update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Second gateway reply' } } }],
+          stopReason: 'end_turn'
+        }
+      ]
+    }))
+
+    const spawnedEnvs: Array<Record<string, string | undefined>> = []
+    const h = await makeHarness('gateway-model.json', {
+      turn: {
+        id: 'turn_1',
+        harnessId: 'opencode',
+        credentialMode: 'kun-gateway',
+        model: 'kun/deepseek/deepseek-chat'
+      },
+      thread: { harnessId: 'opencode' },
+      items: [{
+        id: 'item_turn_1_user',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        role: 'user',
+        kind: 'user_message',
+        status: 'completed',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        text: 'turn one'
+      } as TurnItem],
+      definition: {
+        id: 'opencode',
+        gateway: BUILTIN_HARNESSES.find((d) => d.id === 'opencode')!.gateway
+      },
+      deps: {
+        credentialEnv: createAcpCredentialEnv({
+          tokens,
+          endpoint: () => 'http://127.0.0.1:18899',
+          configDir: () => configDir
+        }),
+        spawn: async (command, args, options) => {
+          const env = {
+            ...(options.env as Record<string, string | undefined>),
+            FAKE_ACP_SCENARIO: scenarioPath
+          }
+          spawnedEnvs.push(env)
+          return spawn(command, [...args], {
+            env: env as NodeJS.ProcessEnv,
+            stdio: options.stdio as ['pipe', 'pipe', 'pipe']
+          })
+        }
+      }
+    })
+
+    expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
+
+    h.thread.turns.push({
+      id: 'turn_2',
+      harnessId: 'opencode',
+      credentialMode: 'kun-gateway',
+      model: 'kun/deepseek/deepseek-reasoner',
+      createdAt: '2026-01-01T00:01:00.000Z',
+      status: 'running'
+    })
+    h.items.push({
+      id: 'item_turn_2_user',
+      threadId: 'thread_1',
+      turnId: 'turn_2',
+      role: 'user',
+      kind: 'user_message',
+      status: 'completed',
+      createdAt: '2026-01-01T00:01:00.000Z',
+      text: 'turn two'
+    } as TurnItem)
+
+    expect(await h.runtime.runTurn('thread_1', 'turn_2', new AbortController().signal)).toBe('completed')
+
+    expect(spawnedEnvs).toHaveLength(2)
+    expect(spawnedEnvs[0]!.KUN_GATEWAY_TOKEN).not.toBe(spawnedEnvs[1]!.KUN_GATEWAY_TOKEN)
+    expect(tokens.verifyScope(spawnedEnvs[0]!.KUN_GATEWAY_TOKEN, 'gateway')?.routes).toEqual([
+      { providerId: 'deepseek', model: 'deepseek-chat', role: 'main' }
+    ])
+    expect(tokens.verifyScope(spawnedEnvs[1]!.KUN_GATEWAY_TOKEN, 'gateway')?.routes).toEqual([
+      { providerId: 'deepseek', model: 'deepseek-reasoner', role: 'main' }
+    ])
+
+    expect(h.requests('session/new')).toHaveLength(1)
+    expect(h.requests('session/load')).toHaveLength(1)
+    expect(h.requests('session/load')[0]?.params).toMatchObject({ sessionId: 'gateway-model-session' })
+    expect(h.requests('session/set_config_option').map((r) => r.params?.value)).toEqual(
+      expect.arrayContaining(['kun/deepseek/deepseek-chat', 'kun/deepseek/deepseek-reasoner'])
+    )
+    expect(h.recorded.some((e) => e.kind === 'handoff_injected')).toBe(false)
   })
 
   test('kun-gateway without a credential resolver fails fast', async () => {

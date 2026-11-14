@@ -379,11 +379,12 @@ export function createAgentSdkTurnRuntimeDeps(
               ? { additionalWorkspaceRoots: workspaceRoots.extras }
               : {}),
             model: model ?? 'claude-default',
-            // The SDK applies `model` on every query, including a resumed one,
-            // so an explicit model change continues the same Claude session.
-            // Gateway turns already bind the session to the route through the
-            // credential identity, and no model at all is its own session.
-            ...(model && !gatewayEnv ? { modelScope: 'session' as const } : {}),
+            // The SDK applies `model` (and per-turn `ANTHROPIC_AUTH_TOKEN`
+            // gateway env) on every query, including a resumed one. Provider
+            // changes still rebase via `route.providerId` and
+            // `route.credentialIdentity`, while omitting `model` keeps the
+            // CLI default in its own session.
+            ...(model ? { modelScope: 'session' as const } : {}),
             capabilityFingerprint: delegatedCapabilityFingerprint({
               systemPrompt: deps.prefix.systemPrompt,
               threadPersona: thread.systemPrompt?.trim() || '',

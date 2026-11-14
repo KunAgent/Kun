@@ -117,6 +117,8 @@ export type SessionTurnContext = {
   sandboxMode: SandboxMode | undefined
   approvalReviewer: ApprovalReviewer
   credentialIdentity: string
+  /** Provider/account identity shared across gateway model switches in the same native session. */
+  sessionCredentialIdentity?: string
   credentialEnv: Record<string, string>
   secretEnv: Record<string, string>
   /** `${harnessId}:${credentialIdentity}` — the shared pool key. */
@@ -148,6 +150,7 @@ export type ResolveSessionTurnContextInput = {
     input: DelegatedCredentialContextInput
   ) => Promise<{
     credentialIdentity: string
+    sessionCredentialIdentity?: string
     env: Record<string, string>
     wireModel?: string
   }>
@@ -340,6 +343,7 @@ export async function resolveSessionTurnContext(
 
   const {
     credentialIdentity,
+    sessionCredentialIdentity,
     env: resolvedCredentialEnv,
     wireModel
   } = await input.resolveCredentialContext(deps.credentialEnv, {
@@ -400,6 +404,7 @@ export async function resolveSessionTurnContext(
       sandboxMode,
       approvalReviewer,
       credentialIdentity,
+      ...(sessionCredentialIdentity ? { sessionCredentialIdentity } : {}),
       credentialEnv,
       secretEnv,
       poolKey:

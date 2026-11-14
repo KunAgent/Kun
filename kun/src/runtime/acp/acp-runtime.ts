@@ -215,7 +215,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       command: this.deps.readiness?.commandForTurn(threadId, turnId),
       validateLaunch: () => this.deps.readiness?.validateTurn(threadId, turnId, signal) ?? Promise.resolve(),
       credentialEnv,
-      identity: credentialIdentity,
+      identity: ctx.sessionCredentialIdentity ?? credentialIdentity,
       workspace,
       signal
     }).catch(async (error) => {
@@ -242,7 +242,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       turnId,
       harnessId: definition.id,
       ...(definition.acpPermission?.configOptionId ? { permissionOptionId: definition.acpPermission.configOptionId } : {}),
-      model: model ?? 'default',
+      model: ctx.wireModel ?? model ?? 'default',
       nextId: (prefix) => this.deps.ids.next(prefix),
       nowIso: this.deps.nowIso,
       debug: this.deps.debug
@@ -307,7 +307,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           turnId,
           workspacePath: workspace,
           harnessId: definition.id,
-          model,
+          model: ctx.wireModel ?? model,
           ...acpPermissionSelection(definition, permissionModeId, this.deps.harnessDefaults?.(definition.id)?.permissionMode),
           ...(ctx.nativeAgentId ? { nativeAgentId: ctx.nativeAgentId } : {}),
           acpPermission: definition.acpPermission,
