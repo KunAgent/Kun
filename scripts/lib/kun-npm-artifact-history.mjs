@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { artifactProfile, artifactServer, artifactTurn, jsonFile, treeHashes } from './kun-npm-artifact-runtime.mjs'
+import { artifactProfile, artifactServer, jsonFile, treeHashes } from './kun-npm-artifact-runtime.mjs'
 import { FIXTURE_REPLY } from './kun-npm-smoke-model.mjs'
 import { runProcess } from './kun-npm-smoke-process.mjs'
 
@@ -34,14 +34,14 @@ export async function exerciseArtifactHistory(context) {
   await context.check('DATA-01.historical-artifact-origin', async () => {
     const server = await artifactServer(context, profile, historical.launch)
     try {
-      const turn = await artifactTurn(server, profile, 'Return the historical fixture marker')
-      const completed = await turn.completed()
-      assert.equal(completed.status, 'completed')
-      assert(JSON.stringify(completed).includes(FIXTURE_REPLY))
-      const base = `/v1/threads/${turn.thread.id}`
-      const goal = await server.api(base + '/goal', 'POST', { objective: 'Preserve the historical fixture goal', status: 'paused' })
+      const thread = await server.api('/v1/threads', 'POST', { title: 'Historical fixture corpus',
+        workspace: profile.workspace, model: 'kun-npm-fixture', approvalPolicy: 'auto', sandboxMode: 'danger-full-access' })
+      const base = `/v1/threads/${thread.id}`
+      // Historical compatibility needs genuine old data, not a regression of
+      // the old binary's post-turn lease settlement. Seed definitions while
+      // its thread is idle, then execute the real model turn without retries.
+      await server.api(base + '/goal', 'POST', { objective: 'Preserve the historical fixture goal', status: 'paused' })
       await server.api(base + '/tasks', 'POST', { clientRequestId: 'historical-task', title: 'Historical task definition' })
-      const tasks = await server.api(base + '/tasks')
       const { memory } = await server.api('/v1/memory', 'POST', { content: 'historical-memory-marker',
         scope: 'workspace', workspace: profile.workspace })
       const attachmentData = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aIo0AAAAASUVORK5CYII='
@@ -56,11 +56,22 @@ export async function exerciseArtifactHistory(context) {
         headers: { authorization: `Bearer ${server.manager.managerToken}`, 'content-type': 'application/json' },
         body: JSON.stringify({ expectedRevision: snapshot.revision, value: settingsText }), signal: AbortSignal.timeout(5_000) })
       assert(saved.ok, await saved.text())
-      expected = { threadId: turn.thread.id, goal: goal.goal, tasks: tasks.tasks,
+      const turn = await server.api(base + '/turns', 'POST', {
+        prompt: 'Return the historical fixture marker', mode: 'agent', clientSurface: 'api' })
+      const { waitUntil } = await import('./kun-npm-smoke-process.mjs')
+      const completed = await waitUntil(async () => {
+        const value = await server.api(base + '/turns/' + turn.turnId)
+        return ['queued', 'running'].includes(value.status) ? null : value
+      }, 'historical fixture turn completion', 60_000)
+      assert.equal(completed.status, 'completed')
+      assert(JSON.stringify(completed).includes(FIXTURE_REPLY))
+      const goal = await server.api(base + '/goal')
+      const tasks = await server.api(base + '/tasks')
+      expected = { threadId: thread.id, goal: goal.goal, tasks: tasks.tasks,
         memoryId: memory.id, attachmentId: attachment.id, attachmentData, settingsText,
         configText: await readFile(profile.config, 'utf8') }
       await validate(server)
-      return { source: { ...historical, launch: undefined }, createdByHistoricalBinary: true,
+      return { source: { ...historical, launch: undefined }, createdByHistoricalBinary: true, definitionsCreatedWhileIdle: true,
         categories: ['thread', 'turn', 'configuration', 'settings', 'memory', 'usage', 'goal', 'task', 'attachment'] }
     } finally { await server.stop() }
   })
