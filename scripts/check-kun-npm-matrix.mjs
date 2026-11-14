@@ -66,6 +66,8 @@ export function checkMatrix(receipts, release, { complete = true, supplements = 
     if (receipt.schemaVersion !== 1) errors.push(`Unsupported receipt schema: ${key}`)
     if (!/^[a-f0-9]{64}$/.test(receipt.tarballSha256 ?? '')) errors.push(`Invalid artifact digest: ${key}`)
     if (receipt.success !== true) errors.push(`Smoke did not succeed: ${key}`)
+    if (release.name && receipt.packageName !== release.name) errors.push(`Unexpected package name: ${key}`)
+    if (release.version && receipt.packageVersion !== release.version) errors.push(`Unexpected package version: ${key}`)
     if (!receipt.isolation?.sourceCheckoutRemoved || receipt.isolation.gitHistoryAvailable !== false ||
       !receipt.isolation.exportedDriverVerified) errors.push(`Source isolation was not certified: ${key}`)
     candidates.add(`${receipt.packageName}@${receipt.packageVersion}:${receipt.tarballSha256}`)

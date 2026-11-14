@@ -102,3 +102,13 @@ test('an explicit not-run history criterion cannot become a derived pass', () =>
   }
   assert.match(checkMatrix(values, release).errors.join('\n'), /Incomplete DATA-02/)
 })
+
+test('an old namespace or stable version cannot certify the selected rc candidate', () => {
+  const selected = { ...release, name: '@kunagent/agent', version: '0.4.5-rc.1' }
+  const values = receipts()
+  assert.match(checkMatrix(values, selected).errors.join('\n'), /Unexpected package name/)
+  for (const value of values) value.packageName = selected.name
+  assert.match(checkMatrix(values, selected).errors.join('\n'), /Unexpected package version/)
+  for (const value of values) value.packageVersion = selected.version
+  assert.equal(checkMatrix(values, selected).success, true)
+})

@@ -43,6 +43,11 @@ export async function collectGateEvidence(options) {
   await writeFile(options.output, JSON.stringify(result, null, 2) + '\n')
   try {
     const manifest = JSON.parse(await readFile(resolve(options.candidate, 'manifest.json'), 'utf8'))
+    const release = JSON.parse(await readFile(new URL('../kun/npm/release.json', import.meta.url), 'utf8'))
+    assert.equal(manifest.artifact.name, release.name, 'Gate A must verify the selected namespace')
+    if (release.version) assert.equal(manifest.artifact.version, release.version, 'Gate A must verify the selected rc version')
+    assert.equal(manifest.platformArtifacts[0].name, release.windowsPackage)
+    assert.equal(manifest.platformArtifacts[0].version, manifest.artifact.version)
     assert.equal(manifest.kind, 'kun-npm-local-candidate')
     assert.equal(manifest.sourceDirty, false)
     assert.equal(manifest.published, false)
@@ -84,7 +89,6 @@ export async function collectGateEvidence(options) {
       assert.equal(receipt.checks.find(check => check.id === 'DATA-02.uninstall-preserves-history')
         ?.detail?.includesAuthenticHistoricalProfile, true)
     }
-    const release = JSON.parse(await readFile(new URL('../kun/npm/release.json', import.meta.url), 'utf8'))
     const gate = checkMatrix(receipts, release, { supplements: [global, desktop] })
     result.gate = gate
     result.errors = gate.errors
