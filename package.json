@@ -131,7 +131,10 @@
     "smoke:control-package": "node scripts/smoke-control-package.cjs",
     "test:control-package": "vitest run src/main/control-host/",
     "check:kun:npm-gate-a-global": "node ./scripts/run-kun-npm-gate-a-global.mjs",
-    "check:kun:npm-gate-a": "node ./scripts/collect-kun-npm-gate-a.mjs"
+    "check:kun:npm-gate-a": "node ./scripts/collect-kun-npm-gate-a.mjs",
+    "check:kun:npm-namespace": "node --use-env-proxy ./scripts/check-kun-npm-namespace.mjs",
+    "prepare:kun:npm-publish": "node --use-env-proxy ./scripts/prepare-kun-npm-publish.mjs",
+    "test:kun:npm-publish": "node --test ./scripts/kun-npm-publish.test.mjs ./scripts/kun-npm-publish-workflow.test.mjs"
   },
   "dependencies": {
     "@computer-use/nut-js": "^4.2.0",

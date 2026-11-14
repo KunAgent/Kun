@@ -1,0 +1,157 @@
+name: Kun npm publication preparation
+
+on:
+  push:
+    branches: [kun/publish-kun-standalone-npm-ci]
+  workflow_dispatch:
+    inputs:
+      gate_a_receipt:
+        description: Exact approved complete Gate A receipt JSON; no credentials
+        type: string
+        default: ''
+      namespace_audit:
+        description: Fresh authenticated namespace audit JSON; no credentials
+        type: string
+        default: ''
+      prepared_run_id:
+        description: Reuse archived inputs from a prior preparation run
+        type: string
+        default: ''
+      execute_publish:
+        description: Publish only after a separate explicit release authorization
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: kun-npm-publication
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    outputs:
+      publishable: ${{ steps.plan.outputs.publishable }}
+      plan_id: ${{ steps.plan.outputs.plan_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - name: Publication contract tests without registry writes
+        run: node --test scripts/kun-npm-publish.test.mjs
+      - name: Read the approved original candidate run
+        id: source
+        run: |
+          node --input-type=module - <<'JS'
+          import {readFile,appendFile} from 'node:fs/promises'
+          const p=JSON.parse(await readFile('kun/npm/publish.json','utf8'))
+          if(!/^\d+$/.test(p.acceptedCandidate.runId)) throw Error('Invalid candidate run')
+          await appendFile(process.env.GITHUB_OUTPUT,'run_id='+p.acceptedCandidate.runId+'\n')
+          JS
+      - uses: actions/download-artifact@v4
+        if: ${{ inputs.prepared_run_id == '' }}
+        with:
+          name: kun-npm-candidate
+          path: release-inputs/candidate
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        if: ${{ inputs.prepared_run_id == '' }}
+        with:
+          name: kun-npm-matrix-evidence
+          path: release-inputs/native
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        if: ${{ inputs.prepared_run_id != '' }}
+        with:
+          name: kun-npm-release-inputs
+          path: release-inputs
+          run-id: ${{ inputs.prepared_run_id }}
+          github-token: ${{ github.token }}
+      - name: Materialize the approved evidence without shell interpolation
+        env:
+          GATE_A_RECEIPT: ${{ inputs.gate_a_receipt }}
+          NAMESPACE_AUDIT: ${{ inputs.namespace_audit }}
+        run: |
+          node --input-type=module - <<'JS'
+          import {writeFile,mkdir,readFile} from 'node:fs/promises'
+          await mkdir('release-inputs',{recursive:true})
+          for(const [key,name] of [['GATE_A_RECEIPT','gate-a.json'],['NAMESPACE_AUDIT','namespace.json']]) {
+            const text=process.env[key]
+            if(text) { JSON.parse(text); await writeFile('release-inputs/'+name,text) }
+          }
+          await readFile('release-inputs/gate-a.json')
+          try { await readFile('release-inputs/namespace.json') } catch {
+            await writeFile('release-inputs/namespace.json',JSON.stringify({kind:'kun-npm-namespace-audit',
+              registry:'https://registry.npmjs.org/',readOnly:true,registryWrites:false,rightsVerified:false,
+              checkedAt:new Date().toISOString(),identity:{authenticated:false,username:null},packages:[]}))
+          }
+          JS
+      - name: Generate a read-only publication plan
+        id: plan
+        run: >-
+          node --use-env-proxy scripts/prepare-kun-npm-publish.mjs
+          --candidate release-inputs/candidate --gate-a release-inputs/gate-a.json
+          --receipts release-inputs/native --audit release-inputs/namespace.json
+          --output release-inputs/publish-plan.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-release-inputs
+          path: release-inputs/
+          if-no-files-found: error
+          retention-days: 90
+
+  publisher:
+    if: ${{ inputs.execute_publish && vars.KUN_NPM_PUBLISH_ENABLED == 'true' && needs.prepare.outputs.publishable == 'true' && github.repository == 'KunAgent/Kun' && github.ref == 'refs/heads/master' }}
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: npm-prerelease
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/prepare-kun-npm-publish.mjs
+            /scripts/lib/kun-npm-release-artifacts.mjs
+            /scripts/lib/kun-npm-registry.mjs
+            /scripts/lib/kun-npm-publish-plan.mjs
+            /scripts/lib/kun-npm-publisher.mjs
+            /scripts/lib/kun-npm-smoke-process.mjs
+            /kun/npm/release.json
+            /kun/npm/publish.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-release-inputs
+          path: release-inputs
+      - name: Publish exact accepted tarballs, platform before main
+        env:
+          CONFIRMED_PLAN_ID: ${{ needs.prepare.outputs.plan_id }}
+        run: >-
+          node --use-env-proxy scripts/prepare-kun-npm-publish.mjs
+          --candidate release-inputs/candidate --gate-a release-inputs/gate-a.json
+          --receipts release-inputs/native --audit release-inputs/namespace.json
+          --output publication-receipt.json --execute --auth-mode oidc
+          --confirm "$CONFIRMED_PLAN_ID"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-publication-receipt
+          path: publication-receipt.json
+          if-no-files-found: error
+          retention-days: 90

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "enabled": false,
+  "registry": "https://registry.npmjs.org/",
+  "repository": "KunAgent/Kun",
+  "releaseRef": "refs/heads/master",
+  "workflow": "kun-npm-publish.yml",
+  "environment": "npm-prerelease",
+  "prereleaseTag": "next",
+  "expectedMaintainer": "kunagent",
+  "namespaceConfirmed": true,
+  "trustedPublisherConfigured": false,
+  "acceptedCandidate": {
+    "runId": "43575785241",
+    "gateAReceiptSha256": "13782367b65e34e3ff2df1ef4138b9c40137a3ff9cc407b8891643e59517c587",
+    "name": "@kun/agent",
+    "version": "0.4.5",
+    "sha256": "f1bf1db01806c90d454a6f5b033fcfc9c11f97b6c02b22761a847e757a646b5a",
+    "windowsPackage": "@kun/agent-win32-x64",
+    "windowsSha256": "9e708806361b5e84d7f9d04c9641c1873d1bc016027158cf2faeb6bdb246b5f3",
+    "sourceCommit": "d0dd66e1252db133cccb74ef02419f0ccad31298",
+    "buildId": "8a84ae1fe486e1a0d0fa367179864e3a19eadef635314206be33423d5dca306e"
+  }
+}

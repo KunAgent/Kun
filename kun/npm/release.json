@@ -1,9 +1,27 @@
 {
-  "name": "@kun/agent",
-  "windowsPackage": "@kun/agent-win32-x64",
+  "name": "@kunagent/agent",
+  "windowsPackage": "@kunagent/agent-win32-x64",
   "node": ">=26.4.0 <27",
-  "testNodeVersions": ["26.4.0", "26.12.0"],
-  "targets": ["darwin-arm64", "darwin-x64", "win32-x64", "linux-arm64", "linux-x64"],
-  "localDependencies": ["@kun/extension-api", "@kun/provider-catalog", "@kun/remote-protocol", "create-kun-extension"],
-  "excludedDependencies": ["@computer-use/nut-js", "@anthropic-ai/claude-agent-sdk", "@cursor/sdk"]
+  "testNodeVersions": [
+    "26.4.0",
+    "26.12.0"
+  ],
+  "targets": [
+    "darwin-arm64",
+    "darwin-x64",
+    "win32-x64",
+    "linux-arm64",
+    "linux-x64"
+  ],
+  "localDependencies": [
+    "@kun/extension-api",
+    "@kun/provider-catalog",
+    "@kun/remote-protocol",
+    "create-kun-extension"
+  ],
+  "excludedDependencies": [
+    "@computer-use/nut-js",
+    "@anthropic-ai/claude-agent-sdk",
+    "@cursor/sdk"
+  ]
 }

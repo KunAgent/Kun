@@ -10,8 +10,11 @@ acceptance never publish packages or change npm tags.
 - Intended native targets: macOS arm64/x64, Windows x64, Linux glibc arm64/x64.
   A target is verified only when its real installation receipt passes; preparing
   a workflow is not evidence that the platform passed.
-- The package name defaults to `@kun/agent` in `kun/npm/release.json`. This is a
-  candidate identifier, not a claim of registry availability or namespace rights.
+- The selected package names are `@kunagent/agent` and
+  `@kunagent/agent-win32-x64` in `kun/npm/release.json`. Authenticated npm account
+  `kunagent` owns this namespace. The earlier accepted `@kun/agent@0.4.5`
+  candidate retains its original identity; it must be replaced by a newly named
+  prerelease candidate with its own complete Gate A evidence before publication.
 - Core file/shell tools, model connections, HTTP/SSE, user Skills, MCP,
   attachments and subagents use the existing Runtime configuration and policies.
 - Desktop canvas/Computer Use bridges, desktop bundled Skills/extensions and
@@ -270,3 +273,6 @@ incompatible older versions must reject the store according to existing rules.
 Desktop releases remain independently packaged and signed, using their bundled
 fixed Runtime. This npm channel does not restore the old standalone TUI archive
 feed, publish a Node archive, or migrate the desktop app to a global npm package.
+
+Namespace registration, the disabled publisher workflow and the separate
+prerelease/bootstrap steps are described in [npm publication](./kun-npm-publication.md).

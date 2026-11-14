@@ -13,7 +13,7 @@ The package name is recorded in `package.json`. Local candidate archives can
 be installed without publishing:
 
 ```sh
-npm install -g /absolute/path/to/kun-agent-VERSION.tgz
+npm install -g /absolute/path/to/candidate.tgz
 kun --version
 kun --help
 ```
