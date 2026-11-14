@@ -251,9 +251,11 @@ then runs the existing packaged CLI smoke and a real turn/tool/shutdown check.
 The synthetic capture/permission smokes remain separate repository requirements.
 TUI cancellation and actual SQLite indexing also have local receipts. Other
 native targets and source-inaccessible execution are covered by the CI matrix
-above. All 23 Gate A criteria now pass after strict collection of the ten
-native receipts, global typecheck/build/related tests and the matching signed
-desktop receipt. This candidate is artifact-ready and remains unpublished;
+above. All 23 Gate A criteria passed for the earlier `@kun/agent@0.4.5`
+candidate after strict collection of the ten native receipts, global
+typecheck/build/related tests and the matching signed desktop receipt. The
+selected `@kunagent` prerelease requires its own complete Gate A candidate.
+The earlier candidate remains artifact-ready and unpublished;
 registry readiness is false. Earlier OS/glibc releases remain outside verified
 support. Namespace/publisher checks and registry acceptance belong to Gate B.
 
