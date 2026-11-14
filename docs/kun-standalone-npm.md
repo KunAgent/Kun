@@ -199,12 +199,13 @@ matrix. It writes `artifactReady: true` only when every Gate A criterion passes.
 A missing, stale or failed input replaces any previous successful result with
 an incomplete result. Registry readiness and publication remain false.
 
-The [native matrix run](https://github.com/KunAgent/Kun/actions/runs/43568571565)
-passed all ten combinations against source commit
+The [complete artifact matrix](https://github.com/KunAgent/Kun/actions/runs/43575785241)
+passed all ten combinations against candidate source commit
 `d0dd66e1252db133cccb74ef02419f0ccad31298`. All jobs consumed the same main
 tarball, SHA-256
 `f1bf1db01806c90d454a6f5b033fcfc9c11f97b6c02b22761a847e757a646b5a`.
-The receipts contain 426 passing operation checks. These are the environments
+The receipts contain 536 passing operation checks. The checksummed test-driver
+commit is `fa6a5969f3cf899cdc3893aaad9549859ab6bdfb`. These are the environments
 actually tested, not certified minimum OS or glibc versions:
 
 | Native target | Runner environment | Node 26.4.0 | Node 26.12.0 |
@@ -215,10 +216,10 @@ actually tested, not certified minimum OS or glibc versions:
 | linux-arm64 | Ubuntu 24.04, glibc 2.39 | pass | pass |
 | linux-x64 | Ubuntu 24.04, glibc 2.39 | pass | pass |
 
-Node 26.4.0 used npm 11.17.0; Node 26.12.0 used npm 11.20.0. The Intel
-26.4.0 job needed an infrastructure retry after its passing smoke could not
-upload to GitHub's Artifact service; the candidate bytes were unchanged.
-Earlier local macOS npm 11/12 receipts retain their own candidate identities.
+Node 26.4.0 used npm 11.17.0; Node 26.12.0 used npm 11.20.0. Every target
+also used its own pinned official 0.4.4 desktop release to create and reopen real
+historical state. Earlier native/local npm 11/12 receipts retain their original
+run and candidate identities; they are not relabeled as this complete run.
 Supplementary acceptance uses this entry:
 
 ```sh
@@ -247,10 +248,11 @@ then runs the existing packaged CLI smoke and a real turn/tool/shutdown check.
 The synthetic capture/permission smokes remain separate repository requirements.
 TUI cancellation and actual SQLite indexing also have local receipts. Other
 native targets and source-inaccessible execution are covered by the CI matrix
-above. Full Gate A still requires installed `run --json` evidence, configuration
-boundary cases, historical compatibility across OS families and aggregation of
-global launcher/desktop/documentation evidence. Namespace rights, minimum OS
-certification and registry installation remain separate requirements.
+above. All 23 Gate A criteria now pass after strict collection of the ten
+native receipts, global typecheck/build/related tests and the matching signed
+desktop receipt. This candidate is artifact-ready and remains unpublished;
+registry readiness is false. Earlier OS/glibc releases remain outside verified
+support. Namespace/publisher checks and registry acceptance belong to Gate B.
 
 ## Update and uninstall
 

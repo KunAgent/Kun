@@ -90,7 +90,7 @@ export function processBirth(pid) {
   if (process.platform === 'win32') return JSON.parse(execFileSync('python', [
     fileURLToPath(new URL('../fixtures/kun-npm/windows_processes.py', import.meta.url)), '--birth', String(pid)
   ], { encoding: 'utf8' }))
-  try { return execFileSync('/bin/ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8' }).trim() || null }
+  try { return execFileSync('/bin/ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8' }).trim().replace(/\s+/g, ' ') || null }
   catch { return null }
 }
 
