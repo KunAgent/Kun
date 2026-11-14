@@ -7,9 +7,11 @@ import { pathToFileURL } from 'node:url'
 
 export const DRIVER_FILES = [
   'scripts/smoke-kun-npm.mjs', 'scripts/run-kun-npm-artifact-smoke.mjs',
+  'scripts/lib/kun-npm-artifact-runtime.mjs', 'scripts/lib/kun-npm-artifact-lifecycle.mjs',
   ...['process', 'model', 'server', 'integrations', 'windows'].map(name => `scripts/lib/kun-npm-smoke-${name}.mjs`),
   ...['tui-pty.py', 'posix_terminal.py', 'windows_conpty.py', 'mcp-server.mjs',
-    'lifecycle-process.mjs', 'windows-helper-probe.mjs'].map(name => `scripts/fixtures/kun-npm/${name}`)
+    'lifecycle-process.mjs', 'observe-listeners.mjs', 'windows_processes.py',
+    'windows-helper-probe.mjs'].map(name => `scripts/fixtures/kun-npm/${name}`)
 ]
 
 export async function exportDriver(checkout, output, sourceCommit) {

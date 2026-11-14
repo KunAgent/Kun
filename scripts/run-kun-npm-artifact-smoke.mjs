@@ -33,7 +33,7 @@ assert.equal(manifest.sourceDirty, false, 'CI must build a committed immutable s
 assert.equal(manifest.artifact.filename, basename(manifest.artifact.filename), 'Artifact must be a basename')
 const tarball = resolve(artifactRoot, manifest.artifact.filename)
 assert.equal(createHash('sha256').update(await readFile(tarball)).digest('hex'), manifest.artifact.sha256)
-const receipt = await runSmoke({ tarball, output: resolve(output), integrations: true })
+const receipt = await runSmoke({ tarball, output: resolve(output), integrations: true, lifecycle: true })
 receipt.isolation = { ...receipt.isolation, sourceCheckoutRemoved: true, gitHistoryAvailable: false,
   exportedDriverVerified: true, sourceCommit: driver.sourceCommit, provider: 'github-actions' }
 const { writeFile } = await import('node:fs/promises')

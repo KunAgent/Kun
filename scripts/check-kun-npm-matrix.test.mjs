@@ -13,7 +13,9 @@ function receipts() {
         'NPM-01.project-install', 'NPM-01.global-install', 'NPM-02.payload',
         'NPM-03.locked-bundle', 'NPM-04.sqlite-native', 'NPM-05.help-version-update',
         'RUN-01.run-jsonl', 'RUN-05.http-thread-lifecycle', 'LIFE-01.owned-serve-exit',
-        'NPM-04.runtime-index', 'RUN-04.pty-tui', 'RUN-04.pty-bare', 'RUN-04.pty-cancel'
+        'NPM-04.runtime-index', 'RUN-04.pty-tui', 'RUN-04.pty-bare', 'RUN-04.pty-cancel',
+        'LIFE-01.serve-shutdown-order', 'LIFE-01.tui-shutdown-order', 'LIFE-01.attached-shutdown-order',
+        'LIFE-02.owner-loss-shutdown-order', 'LIFE-02.manager-readiness-failure'
       ].map(id => ({ id, status: 'pass' })) }
   }))
 }

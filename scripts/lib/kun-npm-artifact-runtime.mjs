@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { processAlive, smokeEnvironment, startProcess, waitUntil } from './kun-npm-smoke-process.mjs'
 
 export const jsonFile = async path => JSON.parse(await readFile(path, 'utf8'))
@@ -80,11 +81,17 @@ export async function artifactTurn(server, profile, prompt) {
 
 export function processBirth(pid) {
   if (!processAlive(pid)) return null
+  if (process.platform === 'win32') return JSON.parse(execFileSync('python', [
+    fileURLToPath(new URL('../fixtures/kun-npm/windows_processes.py', import.meta.url)), '--birth', String(pid)
+  ], { encoding: 'utf8' }))
   try { return execFileSync('/bin/ps', ['-p', String(pid), '-o', 'lstart='], { encoding: 'utf8' }).trim() || null }
   catch { return null }
 }
 
 export function processTree(roots) {
+  if (process.platform === 'win32') return JSON.parse(execFileSync('python', [
+    fileURLToPath(new URL('../fixtures/kun-npm/windows_processes.py', import.meta.url)), ...roots.map(String)
+  ], { encoding: 'utf8' }))
   const rows = execFileSync('/bin/ps', ['-axo', 'pid=,ppid=,lstart='], { encoding: 'utf8' }).trim().split('\n')
     .map(line => { const [pid, parent, ...birth] = line.trim().split(/\s+/); return {
       pid: Number(pid), parent: Number(parent), birth: birth.join(' ')

@@ -17,7 +17,9 @@ const SMOKE_CHECKS = [
   'NPM-01.project-install', 'NPM-01.global-install', 'NPM-02.payload',
   'NPM-03.locked-bundle', 'NPM-04.sqlite-native', 'NPM-05.help-version-update',
   'RUN-01.run-jsonl', 'RUN-05.http-thread-lifecycle', 'LIFE-01.owned-serve-exit',
-  'NPM-04.runtime-index', 'RUN-04.pty-tui', 'RUN-04.pty-bare', 'RUN-04.pty-cancel'
+  'NPM-04.runtime-index', 'RUN-04.pty-tui', 'RUN-04.pty-bare', 'RUN-04.pty-cancel',
+  'LIFE-01.serve-shutdown-order', 'LIFE-01.tui-shutdown-order', 'LIFE-01.attached-shutdown-order',
+  'LIFE-02.owner-loss-shutdown-order', 'LIFE-02.manager-readiness-failure'
 ]
 
 export function checkMatrix(receipts, release, { complete = true } = {}) {
@@ -86,7 +88,8 @@ async function readReceipts(directory) {
     if (entry.isDirectory()) result.push(...await readReceipts(path))
     else if (entry.name.endsWith('.json')) {
       const value = JSON.parse(await readFile(path, 'utf8'))
-      if (value.schemaVersion === 1 && Array.isArray(value.checks)) result.push(value)
+      if (value.schemaVersion === 1 && Array.isArray(value.checks) &&
+        (!value.kind || value.kind === 'kun-npm-native-install-receipt')) result.push(value)
     }
   }
   return result

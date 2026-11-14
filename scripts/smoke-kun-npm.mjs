@@ -12,6 +12,7 @@ import { guardCompilers, locateNpm, removeSmokeFixture, runProcess, smokeEnviron
 import { exerciseInstalledServer } from './lib/kun-npm-smoke-server.mjs'
 import { exerciseInstalledIntegrations } from './lib/kun-npm-smoke-integrations.mjs'
 import { exerciseInstalledWindows } from './lib/kun-npm-smoke-windows.mjs'
+import { exerciseArtifactLifecycle } from './lib/kun-npm-artifact-lifecycle.mjs'
 
 export function parseArguments(argv) {
   const options = {}
@@ -19,6 +20,7 @@ export function parseArguments(argv) {
     const key = argv[index]
     if (key === '--keep-work') { options.keepWork = true; continue }
     if (key === '--integrations') { options.integrations = true; continue }
+    if (key === '--lifecycle') { options.lifecycle = true; continue }
     if (!['--tarball', '--output', '--node', '--npm-cli', '--platform-tarball'].includes(key)) throw new Error(`Unknown argument: ${key}`)
     const value = argv[++index]
     if (!value || value.startsWith('--')) throw new Error(`Missing value for ${key}`)
@@ -100,13 +102,16 @@ async function runCoreSmoke(options) {
   const manifestEntry = entries.find((entry) => entry.name === 'package/package.json')
   assert(manifestEntry, 'Tarball package.json is missing')
   const manifest = JSON.parse(manifestEntry.content.toString())
-  const root = await mkdtemp(join(tmpdir(), 'kun npm smoke 中文 '))
+  const workBase = process.env.KUN_NPM_SMOKE_ROOT?.trim() || tmpdir()
+  await mkdir(workBase, { recursive: true })
+  const root = await mkdtemp(join(workBase, 'kun npm smoke 中文 '))
   // Keep both installs on the exact bytes whose digest the receipt records,
   // even when a developer rebuilds the candidate path during this smoke.
   const candidate = join(root, 'candidate.tgz')
   await writeFile(candidate, archive)
   const receipt = {
-    schemaVersion: 1, runId: options.runId, platform: process.platform, arch: process.arch, nodeVersion: version,
+    schemaVersion: 1, kind: 'kun-npm-native-install-receipt', runId: options.runId,
+    platform: process.platform, arch: process.arch, nodeVersion: version,
     os: { release: release(), version: osVersion(),
       glibc: process.platform === 'linux' ? process.report?.getReport()?.header?.glibcVersionRuntime ?? null : null },
     packageName: manifest.name, packageVersion: manifest.version,
@@ -129,6 +134,7 @@ async function runCoreSmoke(options) {
     }
   }
   let model
+  const modelOptions = {}
   try {
     const env = smokeEnvironment(node, root)
     env.KUN_NPM_COMPILER_AUDIT = await guardCompilers(root)
@@ -202,7 +208,7 @@ async function runCoreSmoke(options) {
         assert(result.stdout.includes(manifest.version), 'Installed global Windows shim did not run')
       }
     })
-    model = await startFixtureModel()
+    model = await startFixtureModel(modelOptions)
     const workspace = join(root, 'workspace space 中文')
     await mkdir(workspace, { recursive: true })
     await writeFile(join(workspace, 'input.txt'), 'installed-file-read-ok')
@@ -284,6 +290,8 @@ async function runCoreSmoke(options) {
     await exerciseInstalledServer({ node, installed, root, env, config, workspace, check })
     if (options.integrations) await exerciseInstalledIntegrations({ node, installed, root, env,
       configValue, workspace, check })
+    if (options.lifecycle) await exerciseArtifactLifecycle({ node, installed, root, model, modelOptions,
+      launch: { command: node, args: [installed.entry] }, check })
     await check('DATA-02.uninstall-preserves-history', async () => {
       const pending = [env.KUN_DATA_DIR]
       const before = new Map()

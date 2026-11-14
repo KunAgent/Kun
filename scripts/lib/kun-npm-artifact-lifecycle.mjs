@@ -28,16 +28,22 @@ function portOpen(port) {
 }
 
 export async function exerciseArtifactLifecycle(context) {
-  assert(process.platform !== 'win32', 'This lifecycle driver requires real POSIX PTYs; Windows needs its own runner')
   for (const mode of ['serve', 'tui', 'attached', 'owner-loss']) {
     await context.check(`${mode === 'owner-loss' ? 'LIFE-02' : 'LIFE-01'}.${mode}-shutdown-order`, async () => {
       const profile = await artifactProfile(context, `lifecycle-${mode}`)
       const listenersTrace = join(profile.root, 'listener-events.jsonl')
       profile.env.NODE_OPTIONS = `--import=${pathToFileURL(fixture('observe-listeners.mjs')).href}`
       profile.env.KUN_NPM_LIFECYCLE_TRACE = listenersTrace
+      profile.env.KUN_NPM_WORK_PROCESS_SNAPSHOT = join(profile.root, 'work-processes.json')
       const participantsRoot = join(profile.root, 'participants')
       context.modelOptions.lifecycleCommand = [context.node, fixture('lifecycle-process.mjs'), participantsRoot, 'shell']
         .map(shellQuote).join(' ')
+      if (process.platform === 'win32') {
+        const command = '& ' + [context.node, fixture('lifecycle-process.mjs'), participantsRoot, 'shell']
+          .map(value => `'${value.replaceAll("'", "''")}'`).join(' ')
+        context.modelOptions.lifecycleCommand = 'powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ' +
+          Buffer.from(command, 'utf16le').toString('base64')
+      }
       profile.value.capabilities = { mcp: { enabled: true, servers: { artifact: {
         enabled: true, transport: 'stdio', command: context.node,
         args: [fixture('mcp-server.mjs'), '--lifecycle-root', participantsRoot], trustScope: 'user', timeoutMs: 10_000
@@ -49,7 +55,7 @@ export async function exerciseArtifactLifecycle(context) {
       try {
         if (mode !== 'tui') server = await artifactServer(context, profile)
         if (mode === 'tui' || mode === 'attached') {
-          driver = startProcess('python3', [fixture('tui-pty.py'), context.node, context.installed.entry,
+          driver = startProcess(process.platform === 'win32' ? 'python' : 'python3', [fixture('tui-pty.py'), context.node, context.installed.entry,
             profile.env.KUN_DATA_DIR, profile.workspace, mode === 'tui' ? 'controlled' : 'attach-controlled'],
           { cwd: profile.root, env: { ...profile.env, KUN_CONFIG: profile.config,
             KUN_TUI_SMOKE_CONTROL_FILE: control, ...(server ? { KUN_TUI_URL: server.url } : {}) }, timeout: 90_000 })
@@ -73,6 +79,7 @@ export async function exerciseArtifactLifecycle(context) {
           assert(await portOpen(participant.port), 'Participant listener must actually be open')
         }
         assert.equal((await server.api(run.path)).status, 'running')
+        await writeFile(profile.env.KUN_NPM_WORK_PROCESS_SNAPSHOT, JSON.stringify(participants.map(value => value.pid)))
         const stack = processTree([server.ready.pid, server.manager.pid, ...(terminal ? [terminal.pid] : [])])
         const managerBirth = processBirth(server.manager.pid)
         const runtimeBirth = processBirth(server.ready.pid)
@@ -121,6 +128,7 @@ export async function exerciseArtifactLifecycle(context) {
         }
         const rows = await traceRows(participantsRoot)
         for (const participant of participants) {
+          if (process.platform === 'win32') continue // Job termination is verified by PID/listener state at Manager close, not POSIX callbacks.
           const stopping = rows.find(row => row.event === 'stopping' && row.pid === participant.pid)
           assert(stopping, `Missing cleanup evidence for ${participant.role}`)
           if (mode !== 'owner-loss') assert(stopping.managerAvailable,
@@ -135,6 +143,7 @@ export async function exerciseArtifactLifecycle(context) {
           'Crashed Runtime must exit before Manager; work descendants use the existing independent guard budget')
         else {
           assert(runtimeClosed >= 0 && managerClosed > runtimeClosed, 'Runtime listener must close before Manager listener')
+          assert.equal(listenerEvents[managerClosed].liveWorkPids.length, 0, 'Manager closed before live work descendants')
           evidence.runtimeListenerClosedBeforeManager = true
         }
         if (mode === 'tui') assert(runtimeExit >= 0 && managerClosed > runtimeExit,
@@ -166,9 +175,9 @@ export async function exerciseArtifactLifecycle(context) {
   await context.check('LIFE-02.manager-readiness-failure', async () => {
     const profile = await artifactProfile(context, 'manager-startup-failure')
     const preload = join(profile.root, 'fail-manager.mjs')
-    await writeFile(preload, `if (process.argv[1]?.endsWith('/manager-entry.js')) { await new Promise(done => setTimeout(done, 300)); process.stderr.write('Fixture Manager readiness failure\\n'); process.exit(78) }\n`)
+    await writeFile(preload, `import {basename} from 'node:path'; if (basename(process.argv[1]??'')==='manager-entry.js') { await new Promise(done => setTimeout(done, 500)); process.stderr.write('Fixture Manager readiness failure\\n'); process.exit(78) }\n`)
     const service = startProcess(context.launch.command, [...context.launch.args, 'serve', '--config', profile.config, '--port', '0'],
-      { cwd: profile.root, env: { ...profile.env, NODE_OPTIONS: `--import=${preload}` }, timeout: 45_000 })
+      { cwd: profile.root, env: { ...profile.env, NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` }, timeout: 45_000 })
     const observed = new Map()
     let sampling = true
     const sample = (async () => {

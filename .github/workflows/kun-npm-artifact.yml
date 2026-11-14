@@ -62,7 +62,7 @@ jobs:
 
   install:
     needs: candidate
-    timeout-minutes: 35
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -77,6 +77,7 @@ jobs:
     env:
       KUN_NPM_EXPECTED_TARGET: ${{ matrix.target.id }}
       KUN_NPM_EXPECTED_NODE: ${{ matrix.node }}
+      KUN_NPM_SMOKE_ROOT: ${{ runner.temp }}/kun-npm-consumer
     steps:
       - uses: actions/checkout@v4
         with:
