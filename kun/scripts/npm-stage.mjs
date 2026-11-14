@@ -6,6 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { copyTree, ensureSafeOutput, json, portableManifest, runtimeFile, writeJson } from './npm-files.mjs'
 import { productionLock } from './npm-lock.mjs'
+import { npmBuildSettings } from './npm-version.mjs'
 import { runtimeClosure } from './npm-runtime-files.mjs'
 import { bundleProduction, bundledManifest, bundleSqlite } from './npm-bundle.mjs'
 
@@ -79,7 +80,8 @@ export async function stageNpm(options = {}) {
   const source = await json(join(kun, 'package.json'))
   const sourceLock = await json(join(kun, 'package-lock.json'))
   const build = await json(join(kun, 'dist/runtime-build.json'))
-  assert.equal(build.serviceVersion, source.version, 'Build Kun without desktop version overrides before npm staging')
+  const { version, runtimeSourceVersion } = npmBuildSettings(descriptor, source.version)
+  assert.equal(build.serviceVersion, version, 'Build with pack:kun:npm so Runtime and candidate versions match')
   await access(join(kun, 'dist/tui/app/main.js'))
   await access(join(kun, 'npm/bin/kun.mjs'))
   try {
@@ -110,18 +112,19 @@ export async function stageNpm(options = {}) {
       (spec.startsWith('https:') ? spec : sourceLock.packages[`node_modules/${name}`]?.version ?? spec)]))
   const nativeDirectory = options.windowsPayload ?? (process.platform === 'win32'
     ? join(kun, 'dist/native/win32-x64') : undefined)
-  const windows = await windowsPayload(output, nativeDirectory, descriptor, source.version, sourceCommit)
+  const windows = await windowsPayload(output, nativeDirectory, descriptor, version, sourceCommit)
   let manifest = {
-    name: options.name ?? descriptor.name, version: source.version,
+    name: options.name ?? descriptor.name, version,
     description: 'Standalone Kun agent, terminal UI and HTTP/SSE runtime',
     license: source.license, type: 'module', bin: { kun: './bin/kun.mjs' },
     files: ['bin', 'dist', 'README.md', 'LICENSE', 'THIRD-PARTY-NOTICES.txt', 'npm-shrinkwrap.json'],
     engines: { node: descriptor.node }, os: ['darwin', 'linux', 'win32'], cpu: ['arm64', 'x64'],
     repository: { type: 'git', url: 'https://github.com/KunAgent/Kun.git' },
     dependencies,
-    optionalDependencies: windows ? { [descriptor.windowsPackage]: source.version } : {},
+    optionalDependencies: windows ? { [descriptor.windowsPackage]: version } : {},
     bundleDependencies: [...descriptor.localDependencies, ...(windows ? [windows.name] : [])],
     kunNpm: { kind: 'npm', schemaVersion: 1, sourceCommit, sourceDirty, buildId: build.buildId,
+      runtimeSourceVersion,
       windowsPackage: descriptor.windowsPackage,
       targets: descriptor.targets.filter(target => target !== 'win32-x64' || windows) }
   }
@@ -130,7 +133,7 @@ export async function stageNpm(options = {}) {
   await bundleProduction(output, lock, descriptor.localDependencies, cache)
   const sqlite = await bundleSqlite(output, await json(join(kun, 'npm/sqlite-prebuilds.json')), cache)
   if (windows) lock.packages[`node_modules/${descriptor.windowsPackage}`] = {
-    version: source.version, os: ['win32'], cpu: ['x64'], optional: true,
+    version, os: ['win32'], cpu: ['x64'], optional: true,
     inBundle: true, license: source.license, engines: { node: descriptor.node }
   }
   manifest = bundledManifest(manifest, lock)

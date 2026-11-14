@@ -23,5 +23,7 @@
     "@computer-use/nut-js",
     "@anthropic-ai/claude-agent-sdk",
     "@cursor/sdk"
-  ]
+  ],
+  "version": "0.4.5-rc.1",
+  "channel": "frontier"
 }

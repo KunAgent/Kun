@@ -38,7 +38,7 @@ jobs:
       - name: Install only the locked helper build tools and dependencies
         run: npm --prefix kun ci --ignore-scripts --no-audit --no-fund
       - name: Build ownership helpers on their native target
-        run: npm --prefix kun run build:windows-startup
+        run: npm run build:kun:npm-windows
       - uses: actions/upload-artifact@v4
         with:
           name: kun-npm-windows-payload

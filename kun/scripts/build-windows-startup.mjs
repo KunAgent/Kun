@@ -43,7 +43,10 @@ if (process.platform === 'win32') {
     for (const name of ['kun_windows_startup.node', 'kun-owned-launcher.exe']) {
       files[name] = createHash('sha256').update(await readFile(join(output, name))).digest('hex')
     }
-    const serviceVersion = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version
+    const serviceVersion = (process.env.KUN_APP_VERSION || process.env.KUN_RELEASE_VERSION ||
+      JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version).trim()
+    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(serviceVersion))
+      throw Error('Invalid Windows helper service version')
     let sourceCommit
     try { sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim() }
     catch { /* Source archives can still build; CI candidates require provenance. */ }

@@ -24,7 +24,7 @@
     "build:canvas-app": "node ./scripts/build-canvas-app.mjs",
     "build:kun:runtime": "node ./scripts/ensure-kun-install.cjs && npm --prefix kun run build",
     "build:kun": "npm run build --workspace @kun/provider-catalog && npm run build --workspace @kun/extension-api && node ./scripts/ensure-kun-install.cjs && npm --prefix kun run build",
-    "pack:kun:npm": "npm run build:kun && node ./kun/scripts/npm-pack.mjs",
+    "pack:kun:npm": "node ./scripts/build-kun-npm-candidate.mjs",
     "smoke:kun:npm": "node ./scripts/smoke-kun-npm.mjs",
     "smoke:kun:npm-compatibility": "node ./scripts/smoke-kun-npm-compatibility.mjs",
     "check:kun:npm-matrix": "node ./scripts/check-kun-npm-matrix.mjs",
@@ -134,7 +134,8 @@
     "check:kun:npm-gate-a": "node ./scripts/collect-kun-npm-gate-a.mjs",
     "check:kun:npm-namespace": "node --use-env-proxy ./scripts/check-kun-npm-namespace.mjs",
     "prepare:kun:npm-publish": "node --use-env-proxy ./scripts/prepare-kun-npm-publish.mjs",
-    "test:kun:npm-publish": "node --test ./scripts/kun-npm-publish.test.mjs ./scripts/kun-npm-publish-workflow.test.mjs"
+    "test:kun:npm-publish": "node --test ./scripts/kun-npm-publish.test.mjs ./scripts/kun-npm-publish-workflow.test.mjs",
+    "build:kun:npm-windows": "node ./scripts/build-kun-npm-candidate.mjs --windows-payload-only"
   },
   "dependencies": {
     "@computer-use/nut-js": "^4.2.0",

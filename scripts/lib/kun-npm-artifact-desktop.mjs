@@ -36,8 +36,9 @@ export async function exerciseArtifactDesktop(context) {
   await context.check('GUI-01.signed-packaged-cli-and-runtime', async () => {
     const desktop = await describeDesktop(resources)
     assert.equal(desktop.build.buildId, context.manifest.kunNpm.buildId, 'Desktop must contain this exact Runtime build')
-    assert.equal(desktop.build.serviceVersion, context.manifest.version)
-    runPackagedCliSmoke(desktop.resources, { expectedVersion: context.manifest.version })
+    const desktopRuntimeVersion = context.manifest.kunNpm.runtimeSourceVersion ?? context.manifest.version
+    assert.equal(desktop.build.serviceVersion, desktopRuntimeVersion)
+    runPackagedCliSmoke(desktop.resources, { expectedVersion: desktopRuntimeVersion })
     const profile = await artifactProfile(context, 'matching-desktop')
     const server = await artifactServer(context, profile, desktop.launch)
     try {
@@ -55,6 +56,7 @@ export async function exerciseArtifactDesktop(context) {
     assert(JSON.parse(cli.stdout).tools.some(tool => tool.name === 'read'))
     return { ...desktop, launch: undefined, source: 'Fresh local electron-builder --publish never --mac dir --arm64',
       help: true, version: true, tuiDependencyGraph: true, actualTurn: true, tools: true, shutdown: true,
+      npmRuntimeVersion: context.manifest.version, desktopRuntimeVersion,
       installedApplicationReplaced: false, notarization: 'Not submitted for local acceptance' }
   })
 }
