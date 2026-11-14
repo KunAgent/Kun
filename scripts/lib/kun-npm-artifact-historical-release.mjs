@@ -75,10 +75,11 @@ export async function describeHistoricalRelease(context) {
     command = join(resources, 'bin/kun'); args = []
     env = { KUN_PACKAGED_RUNTIME_EXECUTABLE: join(dirname(resources), 'MacOS/Kun') }
   } else {
-    command = join(dirname(resources), process.platform === 'win32' ? 'Kun.exe' : 'kun-gui')
-    args = process.platform === 'win32' ? [entry] : []
-    env = { ELECTRON_RUN_AS_NODE: '1', KUN_PACKAGED_RUNTIME_EXECUTABLE: command,
-      ...(process.platform === 'linux' ? { KUN_CLI_ENTRY: '1' } : {}) }
+    // Managed child entrypoints need the actual interpreter, not the Linux
+    // product shell wrapper that always dispatches KUN_CLI_ENTRY to serve-entry.
+    command = join(dirname(resources), process.platform === 'win32' ? 'Kun.exe' : 'kun-gui.electron-bin')
+    args = [entry]
+    env = { ELECTRON_RUN_AS_NODE: '1', KUN_PACKAGED_RUNTIME_EXECUTABLE: command }
   }
   const launch = { command, args, env, packaged: true }
   const version = await runProcess(command, [...args, '--version'],

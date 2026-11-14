@@ -38,6 +38,12 @@ export async function artifactServer(context, profile, launch = context.launch) 
   } catch (error) {
     service.child.kill('SIGTERM')
     await service.done
+    try {
+      const log = (await readFile(join(profile.env.KUN_MANAGER_CONTROL_DIR, 'manager.log'), 'utf8')).slice(-5000)
+        .replace(/("[^"]*(?:token|key)[^"]*"\s*:\s*)"[^"]*"/gi, '$1"[redacted]"')
+        .replace(/Bearer\s+[^\s"]+/g, 'Bearer [redacted]')
+      error.message += '\nHistorical/fixture Manager diagnostics:\n' + log
+    } catch { /* Startup can fail before a Manager log exists. */ }
     throw error
   }
 }

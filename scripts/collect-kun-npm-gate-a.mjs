@@ -88,8 +88,9 @@ export async function collectGateEvidence(options) {
     const gate = checkMatrix(receipts, release, { supplements: [global, desktop] })
     result.gate = gate
     result.errors = gate.errors
-    result.candidate = manifest.artifact
-    result.platformArtifacts = manifest.platformArtifacts
+    result.candidate = { ...manifest.artifact, localPath: resolve(options.candidate, manifest.artifact.filename) }
+    result.platformArtifacts = manifest.platformArtifacts.map(artifact => ({ ...artifact,
+      localPath: resolve(options.candidate, artifact.filename) }))
     result.sourceCommit = manifest.sourceCommit
     result.buildId = packed.kunNpm.buildId
     result.combinations = receipts.map(receipt => ({ platform: receipt.platform, arch: receipt.arch,

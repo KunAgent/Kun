@@ -16,6 +16,9 @@ for (let i = 2; i < process.argv.length; i += 2) {
   options[key.slice(2)] = resolve(value)
 }
 assert(options.candidate && options['desktop-receipt'] && options.output)
+await mkdir(dirname(options.output), { recursive: true })
+await writeFile(options.output, JSON.stringify({ schemaVersion: 1, kind: 'kun-npm-global-artifact-evidence',
+  state: 'preflight', success: false, published: false, checks: [] }, null, 2) + '\n')
 const manifest = JSON.parse(await readFile(resolve(options.candidate, 'manifest.json'), 'utf8'))
 const packed = JSON.parse(tarEntries(await readFile(resolve(options.candidate, manifest.artifact.filename)))
   .find(entry => entry.name === 'package/package.json').content)

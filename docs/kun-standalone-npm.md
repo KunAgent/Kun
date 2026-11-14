@@ -129,6 +129,24 @@ uninstall preserving data. Noninteractive `kun run` returns nonzero when require
 approval/input cannot be answered; the persisted engine status remains intact
 and the client explains how to continue through TUI or API.
 
+Every core run also verifies that installed `run --json` emits one parseable
+document with completed status and persisted public items. JSONL, text, stdin,
+an actual UTF-8 prompt file and terminal chat have separate checks. Config tests
+use independent profiles for file-only, environment and CLI precedence, including
+a conflicting GUI projection. They verify the actual request URL, model and a
+digest of the fixture credential; receipts never include credential contents.
+Absent GUI settings, missing credentials and malformed config are tested separately.
+
+Add `--history` to exercise the pinned official 0.4.4 desktop release for the
+current native target. This happens after the desktop-independent core tests:
+the driver verifies the historical release's SHA-256, extracts it without
+installing it, and runs its own bundled interpreter and dependencies. The actual
+older binary creates history, which the npm candidate reopens in place and from
+a replacement package path. The old reader must reject an unsupported registry
+schema injected only into a copy; uninstall must preserve the historical data,
+settings and configuration. This establishes per-OS upgrade compatibility,
+not automatic path migration between operating systems.
+
 The read-only `kun-npm-artifact` workflow builds Windows ownership components
 first, then packs one canonical main tarball on Linux for all five targets and
 both Node versions. The helper manifest records its version, source commit and
@@ -144,6 +162,12 @@ runner's temporary disk; compiler command guards audit installation. This is
 filesystem source isolation, not a claim of an OS security sandbox or an image
 without preinstalled developer tools.
 
+`reuse_candidate_run_id` can select the original immutable candidate artifact
+from an earlier run. The producer verifies all tarball digests before forwarding
+them; consumers require that exact digest and candidate source commit. The
+checksummed test-driver commit is recorded separately. Acceptance improvements
+therefore do not require rebuilding an already verified Runtime candidate.
+
 Windows uses the real `CreatePseudoConsole` API through Python's standard library.
 The global `.cmd` shim, new terminal prompt, fixture response, advertised interrupt
 key and `/quit` are exercised. Native tests load the installed addon, acquire a
@@ -158,6 +182,22 @@ source-isolation evidence, absent lifecycle checks and simulated/forced ConPTY
 results. `--smoke-only` requires all ten native combinations; it does not mark
 the broader artifact gate complete. `--report-only` writes the remaining full
 Gate A requirements to `artifact-readiness.json` without granting release authority.
+
+Complete Gate A collection also requires the matching packaged-desktop receipt
+and global validation. Run these from the development checkout, after collecting
+all native receipts. Arguments below are artifact/evidence paths, not registry
+versions:
+
+```sh
+npm run check:kun:npm-gate-a-global -- --candidate /candidate/directory --desktop-receipt /evidence/desktop.json --output /evidence/global.json
+npm run check:kun:npm-gate-a -- --candidate /candidate/directory --receipts /evidence/native --global-evidence /evidence/global.json --desktop-receipt /evidence/desktop.json --output /evidence/readiness.json
+```
+
+The collector verifies candidate identity, command exit codes and log digests,
+genuine historical producers, the matching desktop build and the complete
+matrix. It writes `artifactReady: true` only when every Gate A criterion passes.
+A missing, stale or failed input replaces any previous successful result with
+an incomplete result. Registry readiness and publication remain false.
 
 The [native matrix run](https://github.com/KunAgent/Kun/actions/runs/43568571565)
 passed all ten combinations against source commit
