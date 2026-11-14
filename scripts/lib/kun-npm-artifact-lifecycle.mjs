@@ -149,10 +149,12 @@ export async function exerciseArtifactLifecycle(context) {
         if (mode === 'tui') assert(runtimeExit >= 0 && managerClosed > runtimeExit,
           'TUI must await its Runtime process before stopping Manager')
         await waitUntil(() => !processAlive(server.ready.pid), 'Runtime process exit')
-        for (const process of stack) await waitUntil(() => !processAlive(process.pid), `stack process ${process.pid} exit`, mode === 'owner-loss' ? 30_000 : 15_000)
+        for (const process of stack) await waitUntil(() => processBirth(process.pid) !== process.birth,
+          `stack process ${process.pid} (${process.birth}) exit`, mode === 'owner-loss' ? 30_000 : 15_000)
         return { ...evidence, runtime: { pid: server.ready.pid, birth: runtimeBirth },
           manager: { pid: server.manager.pid, birth: managerBirth },
           ownerSharesRuntimeProcess: mode !== 'tui', verifiedStack: stack,
+          processExitVerification: 'Captured PID and birth identity; a reused PID is a different process',
           listenerEvents,
           shutdownContract: mode === 'owner-loss'
             ? 'Runtime exited before Manager; work descendants were reclaimed by the independent owner-loss guard'
@@ -193,7 +195,8 @@ export async function exerciseArtifactLifecycle(context) {
       assert((await readFile(join(profile.env.KUN_MANAGER_CONTROL_DIR, 'manager.log'), 'utf8'))
         .includes('Fixture Manager readiness failure'), 'Fault must run inside the actual Manager process')
       assert(observed.size > 0, 'Fault must exercise an actually launched Manager/guard')
-      for (const row of observed.values()) await waitUntil(() => !processAlive(row.pid), `failed startup child ${row.pid} cleanup`, 15_000)
+      for (const row of observed.values()) await waitUntil(() => processBirth(row.pid) !== row.birth,
+        `failed startup child ${row.pid} (${row.birth}) cleanup`, 15_000)
       return { exitCode: result.code, observedProcesses: [...observed.values()] }
     } finally { sampling = false; await sample }
   })

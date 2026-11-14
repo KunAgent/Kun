@@ -26,14 +26,19 @@ kernel.CloseHandle.argtypes = [w.HANDLE]
 def birth(pid):
     handle = kernel.OpenProcess(0x1000, False, pid)
     if not handle:
-        return None
+        error = c.get_last_error()
+        if error in (87, 1168):
+            return None
+        raise c.WinError(error)
     try:
         values = [w.FILETIME() for _ in range(4)]
         code = w.DWORD()
-        if not kernel.GetExitCodeProcess(handle, c.byref(code)) or code.value != 259:
+        if not kernel.GetExitCodeProcess(handle, c.byref(code)):
+            raise c.WinError(c.get_last_error())
+        if code.value != 259:
             return None
         if not kernel.GetProcessTimes(handle, *(c.byref(value) for value in values)):
-            return None
+            raise c.WinError(c.get_last_error())
         return str((values[0].dwHighDateTime << 32) | values[0].dwLowDateTime)
     finally:
         kernel.CloseHandle(handle)
