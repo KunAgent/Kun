@@ -50,3 +50,11 @@ class Terminal:
 
     def close(self):
         os.close(self.master)
+
+    def finish_output(self):
+        result = bytearray()
+        while True:
+            part = self.read(0.05)
+            if not part:
+                return bytes(result)
+            result.extend(part)

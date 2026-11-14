@@ -25,6 +25,11 @@ try {
   execFileSync('tar', ['-xzf', resolve(tarball), '-C', root])
   model = await startFixtureModel()
   const context = { root, node: process.execPath, model }
+  if (process.platform === 'win32') {
+    const probe = await runProcess('python', [fileURLToPath(new URL('./fixtures/kun-npm/windows_conpty.py', import.meta.url)), process.execPath])
+    console.log(probe.stdout)
+    receipt.ttyHandles = JSON.parse(probe.stdout)
+  }
   for (const mode of ['tui', 'bare', 'cancel']) {
     const profile = await artifactProfile(context, mode)
     const runner = fileURLToPath(new URL('./fixtures/kun-npm/tui-pty.py', import.meta.url))

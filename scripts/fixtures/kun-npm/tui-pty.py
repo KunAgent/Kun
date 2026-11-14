@@ -102,6 +102,7 @@ def main():
         if code is None:
             forced_exit = True
             code = terminal.terminate()
+        output.extend(terminal.finish_output())
         result = {"exitCode": code, "renderedBytes": len(output),
                   "terminalKind": terminal.kind,
                   "sentPrompt": sent,

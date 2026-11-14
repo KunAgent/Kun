@@ -4,6 +4,9 @@ from ctypes import wintypes as w
 import queue
 import subprocess
 import threading
+import json
+import sys
+import time
 
 
 class COORD(c.Structure):
@@ -86,7 +89,8 @@ class Terminal:
         close_handle(output_write)
         self.pid = self.process.pid
         self.output = queue.Queue()
-        threading.Thread(target=self._read, daemon=True).start()
+        self.reader = threading.Thread(target=self._read, daemon=True)
+        self.reader.start()
 
     def _read(self):
         buffer, count = c.create_string_buffer(65536), w.DWORD()
@@ -116,8 +120,33 @@ class Terminal:
         return self.poll()
 
     def close(self):
-        close_console(self.console)
+        if self.console:
+            close_console(self.console)
+            self.console = None
         close_handle(self.input_write)
         close_handle(self.output_read)
         close_handle(self.process.process)
         delete_attributes(self.attributes)
+
+    def finish_output(self):
+        close_console(self.console)
+        self.console = None
+        self.reader.join(timeout=5)
+        result = bytearray()
+        while not self.output.empty():
+            result.extend(self.output.get_nowait())
+        return bytes(result)
+
+
+if __name__ == "__main__":
+    code = 'console.log(JSON.stringify({role:"parent",input:process.stdin.isTTY,output:process.stdout.isTTY}));'
+    code += 'const child=require("node:child_process").spawn(process.execPath,["-e",\'console.log(JSON.stringify({role:"child",input:process.stdin.isTTY,output:process.stdout.isTTY}))\'],{stdio:"inherit"});child.on("exit",code=>process.exitCode=code);'
+    terminal = Terminal(sys.argv[1], ["--eval", code])
+    data = bytearray()
+    try:
+        while terminal.poll() is None:
+            data.extend(terminal.read(0.1))
+        data.extend(terminal.finish_output())
+        print(json.dumps({"code": terminal.poll(), "output": data.decode("utf-8", errors="replace")}))
+    finally:
+        terminal.close()
