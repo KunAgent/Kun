@@ -310,7 +310,7 @@ jobs:
       source_commit: ${{ steps.accepted.outputs.source_commit }}
       sha256: ${{ steps.accepted.outputs.sha256 }}
       windows_sha256: ${{ steps.accepted.outputs.windows_sha256 }}
-      latest_version: ${{ steps.accepted.outputs.latest_version }}
+      stable_tags: ${{ steps.accepted.outputs.stable_tags }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -327,13 +327,13 @@ jobs:
           node --input-type=module - <<'JS'
           import assert from 'node:assert/strict'
           import {readFile,appendFile} from 'node:fs/promises'
-          const {acceptedCandidate:c,initialLatestAcknowledgement:a}=JSON.parse(await readFile('kun/npm/publish.json','utf8'))
+          const {acceptedCandidate:c,initialLatestAcknowledgement:a,registryStableTags:s={}}=JSON.parse(await readFile('kun/npm/publish.json','utf8'))
           const r=JSON.parse(await readFile('kun/npm/release.json','utf8'))
           assert.equal(c.name,r.name);assert.equal(c.version,r.version);assert.equal(c.windowsPackage,r.windowsPackage)
           assert(/^\d+$/.test(c.runId));assert(/^[a-f0-9]{40}$/.test(c.sourceCommit))
           for(const digest of [c.sha256,c.windowsSha256])assert(/^[a-f0-9]{64}$/.test(digest))
-          const latest=a?.version===c.version&&[c.name,c.windowsPackage].every(name=>a.packages?.includes(name))?c.version:''
-          await appendFile(process.env.GITHUB_OUTPUT,'run_id='+c.runId+'\nsource_commit='+c.sourceCommit+'\nsha256='+c.sha256+'\nwindows_sha256='+c.windowsSha256+'\nlatest_version='+latest+'\n')
+          const tags=Object.fromEntries([c.name,c.windowsPackage].map(name=>[name,Object.hasOwn(s,name)?s[name]:a?.version===c.version&&a.packages?.includes(name)?c.version:null]))
+          await appendFile(process.env.GITHUB_OUTPUT,'run_id='+c.runId+'\nsource_commit='+c.sourceCommit+'\nsha256='+c.sha256+'\nwindows_sha256='+c.windowsSha256+'\nstable_tags='+JSON.stringify(tags)+'\n')
           JS
 
   registry-install:
@@ -358,7 +358,7 @@ jobs:
       KUN_NPM_CANDIDATE_SHA256: ${{ needs.registry-selection.outputs.sha256 }}
       KUN_NPM_CANDIDATE_WINDOWS_SHA256: ${{ needs.registry-selection.outputs.windows_sha256 }}
       KUN_NPM_REGISTRY_ACCEPTANCE: 'true'
-      KUN_NPM_EXPECTED_LATEST: ${{ needs.registry-selection.outputs.latest_version }}
+      KUN_NPM_REGISTRY_STABLE_TAGS: ${{ needs.registry-selection.outputs.stable_tags }}
     steps:
       - uses: actions/checkout@v4
         with:

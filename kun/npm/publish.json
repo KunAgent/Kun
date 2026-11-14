@@ -27,5 +27,9 @@
       "@kunagent/agent-win32-x64",
       "@kunagent/agent"
     ]
+  },
+  "registryStableTags": {
+    "@kunagent/agent-win32-x64": "0.4.5-rc.1",
+    "@kunagent/agent": "0.0.0-stage"
   }
 }

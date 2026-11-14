@@ -40,8 +40,7 @@ if (registryMode) {
   assert.equal(manifest.platformArtifacts.length, 1)
   assert.equal(manifest.platformArtifacts[0].sha256, process.env.KUN_NPM_CANDIDATE_WINDOWS_SHA256)
 }
-const stableTags = Object.fromEntries([...manifest.platformArtifacts, manifest.artifact]
-  .map(artifact => [artifact.name, process.env.KUN_NPM_EXPECTED_LATEST || null]))
+const stableTags = JSON.parse(process.env.KUN_NPM_REGISTRY_STABLE_TAGS || '{}')
 const registryProof = registryMode ? await verifyRegistryArtifacts(manifest, fetch, stableTags) : undefined
 const receipt = await runSmoke({ tarball, output: resolve(output), integrations: true, lifecycle: true,
   history: !registryMode, ...(registryMode ? { registryPackage: manifest.artifact.name + '@' + manifest.artifact.version, registryProof } : {}) })

@@ -5,7 +5,8 @@ import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { checkMatrix } from './check-kun-npm-matrix.mjs'
 
-export function checkRegistryMatrix(receipts, release, manifest, accepted, initialLatestAcknowledgement = null) {
+export function checkRegistryMatrix(receipts, release, manifest, accepted,
+  { initialLatestAcknowledgement = null, registryStableTags = {} } = {}) {
   const result = checkMatrix(receipts, release, { complete: false })
   const errors = [...result.errors]
   const fail = (condition, message) => { if (!condition) errors.push(message) }
@@ -16,8 +17,10 @@ export function checkRegistryMatrix(receipts, release, manifest, accepted, initi
   fail(manifest.platformArtifacts.length === 1 && manifest.platformArtifacts[0].name === accepted.windowsPackage &&
     manifest.platformArtifacts[0].sha256 === accepted.windowsSha256, 'Windows candidate identity differs from Gate A')
   const artifacts = [...manifest.platformArtifacts, manifest.artifact]
-  const expectedLatest = artifact => initialLatestAcknowledgement?.version === artifact.version &&
-    initialLatestAcknowledgement.packages?.includes(artifact.name) ? artifact.version : null
+  const acknowledged = artifact => initialLatestAcknowledgement?.version === artifact.version &&
+    initialLatestAcknowledgement.packages?.includes(artifact.name)
+  const expectedLatest = artifact => Object.hasOwn(registryStableTags, artifact.name) ? registryStableTags[artifact.name]
+    : acknowledged(artifact) ? artifact.version : null
   for (const receipt of receipts) {
     const slot = `${receipt.platform}-${receipt.arch}/${receipt.nodeVersion}`
     const registry = receipt.registry
@@ -61,7 +64,7 @@ export function checkRegistryMatrix(receipts, release, manifest, accepted, initi
     success: errors.length === 0, receipts: receipts.length, packageName: accepted.name, version: accepted.version,
     sourceCommit: accepted.sourceCommit, buildId: accepted.buildId, tarballSha256: accepted.sha256,
     tag: 'next', stableTagsVerified: errors.length === 0,
-    initialLatestAcknowledged: artifacts.every(artifact => expectedLatest(artifact) === artifact.version),
+    initialLatestAcknowledged: artifacts.every(acknowledged), registryStableTags,
     explicitLatestPromotion: false, errors }
 }
 
@@ -81,9 +84,9 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
     'Usage: check-kun-npm-registry.mjs RECEIPTS CANDIDATE_MANIFEST OUTPUT')
   const read = async path => JSON.parse(await readFile(path, 'utf8'))
   const release = await read(new URL('../kun/npm/release.json', import.meta.url))
-  const { acceptedCandidate, initialLatestAcknowledgement } = await read(new URL('../kun/npm/publish.json', import.meta.url))
+  const { acceptedCandidate, ...policy } = await read(new URL('../kun/npm/publish.json', import.meta.url))
   const result = checkRegistryMatrix(await readReceipts(resolve(directory)), release,
-    await read(candidateManifest), acceptedCandidate, initialLatestAcknowledgement)
+    await read(candidateManifest), acceptedCandidate, policy)
   await writeFile(output, JSON.stringify(result, null, 2) + '\n')
   console.log(JSON.stringify(result, null, 2))
   if (!result.success) process.exitCode = 1

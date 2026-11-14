@@ -72,6 +72,17 @@ test('an explicitly acknowledged initial latest is verified as a baseline, not r
   }
   await assert.rejects(verifyRegistryArtifacts(candidate, fetchWithInitialLatest), /Stable tag changed/)
   assert.equal((await verifyRegistryArtifacts(candidate, fetchWithInitialLatest, stableTags)).length, 2)
+  const placeholderTags = { ...stableTags, [main.name]: '0.0.0-stage' }
+  const fetchWithPlaceholder = async url => {
+    const response = await fetchWithInitialLatest(url)
+    if (response.json && url.endsWith(encodeURIComponent(main.name))) {
+      const value = await response.json(); value['dist-tags'].latest = '0.0.0-stage'
+      response.json = async () => value
+    }
+    return response
+  }
+  assert.equal((await verifyRegistryArtifacts(candidate, fetchWithPlaceholder, placeholderTags)).length, 2)
+  await assert.rejects(verifyRegistryArtifacts(candidate, fetchWithPlaceholder, stableTags), /Stable tag changed/)
 })
 
 test('registry matrix refuses local-install receipts, missing combinations, changed builds and absent helper fetches', async () => {
