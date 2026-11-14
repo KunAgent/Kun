@@ -1,8 +1,6 @@
 name: Kun npm publication preparation
 
 on:
-  push:
-    branches: [kun/publish-kun-standalone-npm-ci]
   workflow_dispatch:
     inputs:
       gate_a_receipt:
@@ -32,7 +30,6 @@ concurrency:
 
 jobs:
   prepare:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
