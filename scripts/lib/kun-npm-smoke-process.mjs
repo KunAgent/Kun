@@ -20,10 +20,13 @@ export async function removeSmokeFixture(root) {
   await rm(root, { recursive: true, force: true })
 }
 
-export function smokeEnvironment(node, root) {
+export function smokeEnvironment(node, root, inherited = process.env) {
   const systemKeys = /^(?:PATH|PATHEXT|HOME|USER|LOGNAME|USERPROFILE|HOMEDRIVE|HOMEPATH|APPDATA|LOCALAPPDATA|SYSTEMROOT|SYSTEMDRIVE|WINDIR|COMSPEC|PROGRAMFILES(?:\(X86\))?|TEMP|TMP|TMPDIR|LANG|LC_.*|TERM|COLORTERM|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|SSL_CERT_FILE|SSL_CERT_DIR|CI)$/i
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => systemKeys.test(key)))
-  env.PATH = [join(root, 'compiler-guards'), dirname(node), env.PATH].filter(Boolean).join(delimiter)
+  const env = Object.fromEntries(Object.entries(inherited).filter(([key]) => systemKeys.test(key)))
+  const pathKey = Object.keys(env).find(key => key.toUpperCase() === 'PATH')
+  const originalPath = pathKey ? env[pathKey] : ''
+  for (const key of Object.keys(env)) if (key.toUpperCase() === 'PATH') delete env[key]
+  env.PATH = [join(root, 'compiler-guards'), dirname(node), originalPath].filter(Boolean).join(delimiter)
   Object.assign(env, {
     KUN_HOME: join(root, 'kun-home'), KUN_DATA_DIR: join(root, 'data'),
     KUN_MANAGER_CONTROL_DIR: join(root, 'control'), KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json'),

@@ -65,6 +65,12 @@ test('fixture environment isolates Kun paths and removes inherited provider cont
   assert.equal(env.HOME, process.env.HOME)
 })
 
+test('Windows Path casing is preserved when building the isolated compiler-guard environment', () => {
+  const env = smokeEnvironment(process.execPath, join(tmpdir(), 'kun-path-case'), { Path: 'C:\\tools\\python;C:\\Windows\\System32' })
+  assert(env.PATH.includes('C:\\tools\\python'))
+  assert.equal(env.Path, undefined)
+})
+
 test('preflight failure replaces a stale passing receipt', async () => {
   const root = await mkdtemp(join(tmpdir(), 'kun-smoke-receipt-'))
   const output = join(root, 'receipt.json')

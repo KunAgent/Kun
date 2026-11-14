@@ -43,7 +43,7 @@ try {
     assert(mode === 'cancel' ? value.cancellationVerified : value.matchedReply, JSON.stringify(value))
   }
   receipt.success = true
-} catch (error) { receipt.error = String(error.stack ?? error); process.exitCode = 1 }
+} catch (error) { receipt.error = String(error.stack ?? error); console.error(receipt.error); process.exitCode = 1 }
 finally {
   await model?.close()
   await removeSmokeFixture(root)
