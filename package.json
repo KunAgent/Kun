@@ -28,7 +28,7 @@
     "smoke:kun:npm": "node ./scripts/smoke-kun-npm.mjs",
     "smoke:kun:npm-compatibility": "node ./scripts/smoke-kun-npm-compatibility.mjs",
     "check:kun:npm-matrix": "node ./scripts/check-kun-npm-matrix.mjs",
-    "test:kun:npm": "node --test ./kun/scripts/npm-*.test.mjs ./kun/npm/launcher.test.mjs ./scripts/check-kun-npm-matrix.test.mjs ./scripts/smoke-kun-npm.test.mjs ./scripts/smoke-kun-npm-compatibility.test.mjs ./scripts/export-kun-npm-test-driver.test.mjs",
+    "test:kun:npm": "node --test ./kun/scripts/npm-*.test.mjs ./kun/npm/launcher.test.mjs ./scripts/check-kun-npm-matrix.test.mjs ./scripts/smoke-kun-npm.test.mjs ./scripts/smoke-kun-npm-compatibility.test.mjs ./scripts/export-kun-npm-test-driver.test.mjs ./scripts/collect-kun-npm-gate-a.test.mjs",
     "smoke:dual-runtime": "npm run build:kun && node ./scripts/smoke-dual-runtime.mjs",
     "smoke:agent-wiring": "node ./scripts/smoke-agent-wiring-clients.mjs",
     "test:packaging": "node --test ./scripts/mac-signing-policy.test.cjs ./scripts/bundled-pets.test.cjs ./scripts/ensure-kun-install.test.cjs ./scripts/smoke-isolated-paths.test.cjs ./scripts/check-built-preload.test.cjs ./scripts/packaged-office-dependencies.test.cjs ./scripts/after-pack.test.cjs ./scripts/packaged-runtime-integrity.test.cjs ./scripts/check-packaged-runtime-dependencies.test.cjs ./scripts/packaged-kun-dependencies.test.cjs ./scripts/after-pack-thin-macho.test.cjs ./scripts/after-pack-scope-dedupe.test.cjs ./scripts/packaged-file-filters.test.cjs ./scripts/linux-desktop-identity.test.cjs ./scripts/electron-install-contract.test.cjs ./scripts/publish-r2.test.mjs ./scripts/publish-r2-prune.test.mjs ./scripts/smoke-packaged-cli.test.cjs ./scripts/installer-character-cutout.test.mjs ./scripts/smoke-agent-wiring-clients.test.mjs",
@@ -129,7 +129,9 @@
     "smoke:avatar": "node scripts/smoke-kun-avatar.mjs",
     "check:avatar-art-v2": "node scripts/kun-avatar-compose-check.mjs --check-only --v2-strict",
     "smoke:control-package": "node scripts/smoke-control-package.cjs",
-    "test:control-package": "vitest run src/main/control-host/"
+    "test:control-package": "vitest run src/main/control-host/",
+    "check:kun:npm-gate-a-global": "node ./scripts/run-kun-npm-gate-a-global.mjs",
+    "check:kun:npm-gate-a": "node ./scripts/collect-kun-npm-gate-a.mjs"
   },
   "dependencies": {
     "@computer-use/nut-js": "^4.2.0",

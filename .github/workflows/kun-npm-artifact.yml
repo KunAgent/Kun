@@ -90,7 +90,7 @@ jobs:
           retention-days: 7
 
   install:
-    if: ${{ !inputs.windows_probe_only }}
+    if: ${{ always() && !inputs.windows_probe_only && needs.candidate.result == 'success' }}
     needs: candidate
     timeout-minutes: 60
     strategy:

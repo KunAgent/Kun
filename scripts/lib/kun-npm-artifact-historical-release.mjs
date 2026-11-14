@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { createReadStream, createWriteStream, existsSync } from 'node:fs'
+import { createReadStream, existsSync } from 'node:fs'
 import { mkdir, readFile, readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { Readable } from 'node:stream'
-import { pipeline } from 'node:stream/promises'
 import { runProcess } from './kun-npm-smoke-process.mjs'
 
 async function resourcesUnder(root) {
@@ -39,9 +37,13 @@ export async function describeHistoricalRelease(context) {
   const root = join(context.root, 'historical-release')
   await mkdir(root)
   const archive = join(root, asset.name)
-  const response = await fetch(asset.url, { signal: AbortSignal.timeout(180_000) })
-  assert(response.ok, 'Historical release download failed: ' + response.status)
-  await pipeline(Readable.fromWeb(response.body), createWriteStream(archive, { flags: 'wx' }))
+  // urllib honors the same proxy/certificate environment as the PTY fixtures.
+  // Node fetch does not automatically use an inherited HTTPS_PROXY.
+  const download = "import sys,urllib.request,shutil\n" +
+    "with urllib.request.urlopen(sys.argv[1],timeout=120) as response,open(sys.argv[2],'xb') as output:\n" +
+    " shutil.copyfileobj(response,output,1024*1024)\n"
+  await runProcess(process.platform === 'win32' ? 'python' : 'python3',
+    ['-c', download, asset.url, archive], { env: context.env, timeout: 180_000 })
   const sha256 = await hashFile(archive)
   assert.equal('sha256:' + sha256, asset.digest, 'Historical published bytes changed')
   const extracted = join(root, 'unpacked')

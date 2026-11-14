@@ -20,6 +20,10 @@ const EVIDENCE_GROUPS = {
   'NPM-02': ['NPM-02.payload'], 'NPM-03': ['NPM-03.locked-bundle'],
   'NPM-04': ['NPM-04.sqlite-native', 'NPM-04.runtime-index', 'RUN-04.pty-tui', 'RUN-04.pty-bare'],
   'NPM-05': ['NPM-05.help-version-update', 'NPM-05.exec-file'],
+  'NPM-06': ['NPM-06.installed-entry-boundaries'],
+  'RUN-01': ['RUN-01.run-jsonl', 'RUN-01.run-json', 'RUN-01.prompt-file', 'RUN-01.stdin-chat'],
+  'RUN-02': ['RUN-02.config-env-cli-precedence', 'RUN-02.no-gui-config',
+    'RUN-02.missing-credentials', 'RUN-02.invalid-config'],
   'RUN-03': ['RUN-03.endpoint-families'],
   'RUN-04': ['RUN-04.pty-tui', 'RUN-04.pty-bare', 'RUN-04.pty-cancel'],
   'RUN-05': ['RUN-05.http-thread-lifecycle', 'DATA-01.reopen'],
@@ -29,7 +33,10 @@ const EVIDENCE_GROUPS = {
     'LIFE-01.attached-shutdown-order', 'RUN-07.skills-mcp'],
   'LIFE-02': ['LIFE-02.startup-failure', 'LIFE-02.owner-loss-shutdown-order', 'LIFE-02.manager-readiness-failure'],
   'LIFE-03': ['LIFE-03.owner-conflict', 'LIFE-03.isolated-profiles'],
-  'LIFE-04': ['LIFE-04.attached-tui', 'LIFE-01.attached-shutdown-order']
+  'LIFE-04': ['LIFE-04.attached-tui', 'LIFE-01.attached-shutdown-order'],
+  'DATA-01': ['DATA-01.historical-artifact-origin', 'DATA-01.reopen-npm', 'DATA-01.reopen-replacement-path'],
+  'DATA-02': ['DATA-02.old-reader-refuses-unsupported-schema', 'DATA-02.uninstall-preserves-history',
+    'NPM-05.help-version-update']
 }
 
 function criterionStatus(receipt, id) {
@@ -48,7 +55,7 @@ const SMOKE_CHECKS = [
   'LIFE-02.owner-loss-shutdown-order', 'LIFE-02.manager-readiness-failure'
 ]
 
-export function checkMatrix(receipts, release, { complete = true } = {}) {
+export function checkMatrix(receipts, release, { complete = true, supplements = [] } = {}) {
   const errors = []
   const slots = new Map()
   const candidates = new Set()
@@ -87,6 +94,16 @@ export function checkMatrix(receipts, release, { complete = true } = {}) {
     }
   }
   if (candidates.size !== 1) errors.push('Receipts must verify one identical main tarball and package version')
+  for (const receipt of supplements) {
+    const identity = receipt.packageName + '@' + receipt.packageVersion + ':' + receipt.tarballSha256
+    if (!['kun-npm-global-artifact-evidence', 'kun-npm-supplementary-artifact-acceptance'].includes(receipt.kind) ||
+      receipt.schemaVersion !== 1 || receipt.success !== true || !candidates.has(identity) ||
+      !receipts.some(native => native.buildId === receipt.buildId))
+      errors.push('Supplementary evidence does not verify this candidate: ' + (receipt.kind ?? 'unknown'))
+    for (const check of receipt.checks ?? []) {
+      if (check.status === 'fail') errors.push('Failed supplementary ' + check.id)
+    }
+  }
   for (const target of release.targets) {
     for (const version of release.testNodeVersions) {
       if (!slots.has(`${target}/${version}`)) errors.push(`Missing target: ${target}/${version}`)
@@ -96,7 +113,7 @@ export function checkMatrix(receipts, release, { complete = true } = {}) {
   for (const key of slots.keys()) if (!expected.has(key)) errors.push(`Unexpected target: ${key}`)
   if (complete) {
     const passed = (values, id) => values.some(value => criterionStatus(value, id) === 'pass')
-    for (const id of GLOBAL_CHECKS) if (!passed(receipts, id)) errors.push(`Incomplete ${id}: matrix`)
+    for (const id of GLOBAL_CHECKS) if (!passed([...receipts, ...supplements], id)) errors.push(`Incomplete ${id}: matrix`)
     for (const platform of new Set(release.targets.map(t => t.split('-')[0]))) {
       const family = receipts.filter(r => r.platform === platform)
       for (const id of ARTIFACT_CHECKS.filter(id => !NATIVE_CHECKS.includes(id) && !GLOBAL_CHECKS.includes(id))) {

@@ -8,6 +8,7 @@ function receipts() {
     const [platform, arch] = target.split('-')
     return { schemaVersion: 1, platform, arch, nodeVersion, success: true,
       packageName: '@kun/agent', packageVersion: '0.4.5', tarballSha256: 'a'.repeat(64),
+      buildId: 'b'.repeat(64), sourceCommit: 'c'.repeat(40),
       isolation: { sourceCheckoutRemoved: true, gitHistoryAvailable: false, exportedDriverVerified: true },
       checks: [...ARTIFACT_CHECKS,
         'NPM-01.project-install', 'NPM-01.global-install', 'NPM-02.payload',
@@ -66,4 +67,38 @@ test('Windows receipts require native corruption tests and actual ConPTY results
   values[0].platform = 'win32'; values[0].arch = 'x64'
   const windows = { targets: ['win32-x64'], testNodeVersions: ['26.4.0'] }
   assert.match(checkMatrix(values, windows, { complete: false }).errors.join('\n'), /windows-native-job|ConPTY/)
+})
+
+test('JSON proof must come from the installed run mode and cannot borrow exec or JSONL', () => {
+  const values = receipts()
+  values[0].checks = values[0].checks.filter(check => check.id !== 'RUN-01')
+  for (const id of ['RUN-01.run-json', 'RUN-01.prompt-file', 'RUN-01.stdin-chat'])
+    values[0].checks.push({ id, status: 'pass' })
+  assert.equal(checkMatrix(values, release).success, true)
+  values[0].checks.find(check => check.id === 'RUN-01.run-json').status = 'not-run'
+  assert.match(checkMatrix(values, release).errors.join('\n'), /Incomplete RUN-01/)
+})
+
+test('global evidence can complete the gate only for the same candidate and Runtime', () => {
+  const values = receipts()
+  for (const value of values) value.checks = value.checks.filter(check => !['GUI-01', 'DOC-01'].includes(check.id))
+  assert.equal(checkMatrix(values, release).success, false)
+  const supplement = { ...values[0], kind: 'kun-npm-global-artifact-evidence',
+    checks: ['GUI-01', 'DOC-01'].map(id => ({ id, status: 'pass' })) }
+  assert.equal(checkMatrix(values, release, { supplements: [supplement] }).success, true)
+  supplement.tarballSha256 = 'd'.repeat(64)
+  assert.match(checkMatrix(values, release, { supplements: [supplement] }).errors.join('\n'), /Supplementary evidence/)
+  supplement.tarballSha256 = values[0].tarballSha256
+  supplement.buildId = 'e'.repeat(64)
+  assert.match(checkMatrix(values, release, { supplements: [supplement] }).errors.join('\n'), /Supplementary evidence/)
+})
+
+test('an explicit not-run history criterion cannot become a derived pass', () => {
+  const values = receipts()
+  for (const value of values) {
+    value.checks.find(check => check.id === 'DATA-02').status = 'not-run'
+    value.checks.push({ id: 'DATA-02.old-reader-refuses-unsupported-schema', status: 'pass' },
+      { id: 'DATA-02.uninstall-preserves-history', status: 'pass' })
+  }
+  assert.match(checkMatrix(values, release).errors.join('\n'), /Incomplete DATA-02/)
 })
