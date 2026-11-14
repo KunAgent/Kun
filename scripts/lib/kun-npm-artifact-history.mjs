@@ -2,13 +2,14 @@ import assert from 'node:assert/strict'
 import { cp, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { artifactProfile, artifactServer, artifactTurn, jsonFile, treeHashes } from './kun-npm-artifact-runtime.mjs'
-import { describeDesktop } from './kun-npm-artifact-desktop.mjs'
 import { FIXTURE_REPLY } from './kun-npm-smoke-model.mjs'
 import { runProcess } from './kun-npm-smoke-process.mjs'
 
 export async function exerciseArtifactHistory(context) {
-  assert(context.options['historical-resources'], 'Provide a real historical desktop artifact with --historical-resources')
-  const historical = await describeDesktop(context.options['historical-resources'])
+  assert(context.options['historical-resources'] || context.options.history, 'Provide a real historical desktop artifact')
+  const historical = context.options.history
+    ? await (await import('./kun-npm-artifact-historical-release.mjs')).describeHistoricalRelease(context)
+    : await (await import('./kun-npm-artifact-desktop.mjs')).describeDesktop(context.options['historical-resources'])
   assert.notEqual(historical.build.serviceVersion, context.manifest.version, 'History needs a genuinely different version')
   const profile = await artifactProfile(context, 'historical-data', {
     memory: { enabled: true }, attachments: { enabled: true }
@@ -63,7 +64,8 @@ export async function exerciseArtifactHistory(context) {
         categories: ['thread', 'turn', 'configuration', 'settings', 'memory', 'usage', 'goal', 'task', 'attachment'] }
     } finally { await server.stop() }
   })
-  for (const kind of ['npm', 'replacement-path', 'desktop']) {
+  const ownerInstances = new Set()
+  for (const kind of ['npm', 'replacement-path', ...(context.options.history ? [] : ['desktop'])]) {
     await context.check(`DATA-01.reopen-${kind}`, async () => {
       let launch = context.launch
       const replacement = join(context.root, 'replacement package')
@@ -74,10 +76,12 @@ export async function exerciseArtifactHistory(context) {
       try {
         if (kind === 'desktop') {
           assert(context.options['desktop-resources'], 'A matching desktop artifact is required for sequential npm/desktop reuse')
-          launch = (await describeDesktop(context.options['desktop-resources'])).launch
+          launch = (await (await import('./kun-npm-artifact-desktop.mjs')).describeDesktop(context.options['desktop-resources'])).launch
         }
         const server = await artifactServer(context, profile, launch)
         try {
+          assert(!ownerInstances.has(server.ready.instanceId), 'Reopening must acquire a new Runtime identity')
+          ownerInstances.add(server.ready.instanceId)
           await validate(server)
           const turn = await server.api(`/v1/threads/${expected.threadId}/turns`, 'POST', {
             prompt: 'Return another fixture marker after reopening', mode: 'agent', clientSurface: 'api' })
@@ -117,7 +121,7 @@ export async function exerciseArtifactHistory(context) {
     const before = await treeHashes(incompatible.env.KUN_DATA_DIR)
     const env = { ...incompatible.env, ...historical.launch.env }
     delete env.KUN_HOST_NODE_EXECUTABLE
-    const result = await runProcess(historical.launch.command, ['extension', 'list',
+    const result = await runProcess(historical.launch.command, [...historical.launch.args, 'extension', 'list',
       '--data-dir', incompatible.env.KUN_DATA_DIR,
       '--extension-root', join(incompatible.env.KUN_DATA_DIR, 'extensions'),
       '--extension-data-root', join(incompatible.env.KUN_DATA_DIR, 'extension-data'), '--json'],

@@ -7,6 +7,10 @@ on:
         description: Diagnose terminal behavior from an existing immutable candidate
         type: boolean
         default: false
+      reuse_candidate_run_id:
+        description: Reuse immutable candidate bytes from a previous accepted run
+        type: string
+        default: ''
       candidate_run_id:
         description: Original candidate run id for terminal diagnostics
         type: string
@@ -23,7 +27,7 @@ concurrency:
 
 jobs:
   windows-payload:
-    if: ${{ !inputs.windows_probe_only }}
+    if: ${{ !inputs.windows_probe_only && inputs.reuse_candidate_run_id == '' }}
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -43,8 +47,11 @@ jobs:
           retention-days: 7
 
   candidate:
-    if: ${{ !inputs.windows_probe_only }}
+    if: ${{ always() && !inputs.windows_probe_only && (inputs.reuse_candidate_run_id != '' || needs.windows-payload.result == 'success') }}
     needs: windows-payload
+    outputs:
+      source_commit: ${{ steps.identity.outputs.source_commit }}
+      sha256: ${{ steps.identity.outputs.sha256 }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     env:
@@ -59,8 +66,20 @@ jobs:
         with:
           name: kun-npm-windows-payload
           path: .cache/kun-npm-windows-payload
+        if: ${{ inputs.reuse_candidate_run_id == '' }}
+      - uses: actions/download-artifact@v4
+        if: ${{ inputs.reuse_candidate_run_id != '' }}
+        with:
+          name: kun-npm-candidate
+          path: .cache/kun-npm/artifacts
+          run-id: ${{ inputs.reuse_candidate_run_id }}
+          github-token: ${{ github.token }}
       - name: Build one canonical candidate for every installation target
+        if: ${{ inputs.reuse_candidate_run_id == '' }}
         run: npm run pack:kun:npm -- --windows-payload .cache/kun-npm-windows-payload
+      - name: Verify and export immutable candidate identity
+        id: identity
+        run: node scripts/verify-kun-npm-candidate.mjs .cache/kun-npm/artifacts
       - name: Packaging contract tests
         run: npm run test:kun:npm
       - uses: actions/upload-artifact@v4
@@ -88,6 +107,8 @@ jobs:
     env:
       KUN_NPM_EXPECTED_TARGET: ${{ matrix.target.id }}
       KUN_NPM_EXPECTED_NODE: ${{ matrix.node }}
+      KUN_NPM_CANDIDATE_SOURCE: ${{ needs.candidate.outputs.source_commit }}
+      KUN_NPM_CANDIDATE_SHA256: ${{ needs.candidate.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v4
         with:

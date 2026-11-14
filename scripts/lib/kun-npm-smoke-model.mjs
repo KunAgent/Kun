@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 
 export const FIXTURE_REPLY = 'kun-npm-fixture-ok'
 
@@ -93,7 +94,9 @@ export async function startFixtureModel(options = {}) {
       let text = ''
       for await (const part of request) text += part
       const body = text ? JSON.parse(text) : {}
-      requests.push({ path: request.url, body })
+      const credential = String(request.headers['x-api-key'] ?? request.headers.authorization?.replace(/^Bearer /, '') ?? '')
+      requests.push({ path: request.url, body,
+        credentialSha256: createHash('sha256').update(credential).digest('hex') })
       if (request.method === 'GET' && request.url.endsWith('/models')) {
         response.writeHead(200, { 'content-type': 'application/json' })
         response.end(JSON.stringify({ data: [{ id: 'kun-npm-fixture', object: 'model' }] }))

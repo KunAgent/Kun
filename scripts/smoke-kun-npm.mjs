@@ -13,6 +13,7 @@ import { exerciseInstalledServer } from './lib/kun-npm-smoke-server.mjs'
 import { exerciseInstalledIntegrations } from './lib/kun-npm-smoke-integrations.mjs'
 import { exerciseInstalledWindows } from './lib/kun-npm-smoke-windows.mjs'
 import { exerciseArtifactLifecycle } from './lib/kun-npm-artifact-lifecycle.mjs'
+import { exerciseInstalledConfig, exerciseInstalledJson } from './lib/kun-npm-artifact-config.mjs'
 
 export function parseArguments(argv) {
   const options = {}
@@ -21,6 +22,7 @@ export function parseArguments(argv) {
     if (key === '--keep-work') { options.keepWork = true; continue }
     if (key === '--integrations') { options.integrations = true; continue }
     if (key === '--lifecycle') { options.lifecycle = true; continue }
+    if (key === '--history') { options.history = true; continue }
     if (!['--tarball', '--output', '--node', '--npm-cli', '--platform-tarball'].includes(key)) throw new Error(`Unknown argument: ${key}`)
     const value = argv[++index]
     if (!value || value.startsWith('--')) throw new Error(`Missing value for ${key}`)
@@ -134,6 +136,7 @@ async function runCoreSmoke(options) {
     }
   }
   let model
+  let historyProfile
   const modelOptions = {}
   try {
     const env = smokeEnvironment(node, root)
@@ -233,6 +236,8 @@ async function runCoreSmoke(options) {
       assert(result.stdout.includes(FIXTURE_REPLY))
       assert(model.requests.some((request) => request.path === '/v1/chat/completions'))
     })
+    await exerciseInstalledJson({ invoke, common, root, check, model })
+    await exerciseInstalledConfig({ node, installed, root, env, model, check })
     await check('NPM-04.runtime-index', async () => {
       const script = `const {createRequire}=require('node:module');const r=createRequire(${JSON.stringify(join(installed.root, 'package.json'))});const D=r('better-sqlite3');const db=new D(${JSON.stringify(join(env.KUN_DATA_DIR, 'index.sqlite3'))},{readonly:true,fileMustExist:true});const {total}=db.prepare('SELECT COUNT(*) AS total FROM threads').get();db.close();if(!(total>0))throw Error('Runtime SQLite index has no records');console.log(JSON.stringify({indexedThreads:total}));`
       const result = await runProcess(node, ['--eval', script], { cwd: root, env })
@@ -292,8 +297,14 @@ async function runCoreSmoke(options) {
       configValue, workspace, check })
     if (options.lifecycle) await exerciseArtifactLifecycle({ node, installed, root, model, modelOptions,
       launch: { command: node, args: [installed.entry] }, check })
+    if (options.history) {
+      const context = { node, installed, root, env, model, manifest, options, check,
+        launch: { command: node, args: [installed.entry] } }
+      await (await import('./lib/kun-npm-artifact-history.mjs')).exerciseArtifactHistory(context)
+      historyProfile = context.historyProfile
+    }
     await check('DATA-02.uninstall-preserves-history', async () => {
-      const pending = [env.KUN_DATA_DIR]
+      const pending = [env.KUN_DATA_DIR, ...(historyProfile ? [historyProfile.env.KUN_DATA_DIR] : [])]
       const before = new Map()
       while (pending.length) {
         const directory = pending.pop()
@@ -304,19 +315,23 @@ async function runCoreSmoke(options) {
         }
       }
       assert(before.size > 0)
+      if (historyProfile) {
+        for (const file of [historyProfile.config, historyProfile.env.KUN_MANAGER_SETTINGS_PATH])
+          before.set(file, createHash('sha256').update(await readFile(file)).digest('hex'))
+      }
       await runProcess(node, [npm, 'uninstall', '--global', '--prefix', globalPrefix, '--offline',
         '--cache', join(root, 'global-cache'), '--no-audit', '--no-fund', manifest.name], { cwd: root, env, timeout: 90_000 })
       assert(!existsSync(installed.entry))
       for (const [file, hash] of before) {
         assert.equal(createHash('sha256').update(await readFile(file)).digest('hex'), hash, `Uninstall changed user data: ${file}`)
       }
-      return { verifiedDataFiles: before.size }
+      return { verifiedDataFiles: before.size, includesAuthenticHistoricalProfile: Boolean(historyProfile) }
     })
     if (options.integrations) receipt.checks.push({ id: 'RUN-07', status: 'pass',
       detail: 'Installed file/shell, goal/task/plan, Skill, stdio MCP, image attachment and native subagent were exercised.' },
     { id: 'RUN-08', status: 'pass', detail: 'Allowed/denied API approvals, structured answers and bounded noninteractive rejection were exercised.' })
     for (const id of [...(!options.integrations ? ['RUN-07', 'RUN-08'] : []),
-      'DATA-02', 'GUI-01', 'REG-01', 'REG-02', 'REG-03', 'REG-04']) {
+      ...(!options.history ? ['DATA-02'] : []), 'GUI-01', 'REG-01', 'REG-02', 'REG-03', 'REG-04']) {
       receipt.checks.push({ id, status: 'not-run', detail: 'Outside this local core artifact smoke; requires the corresponding acceptance suite or release stage.' })
     }
     receipt.success = true

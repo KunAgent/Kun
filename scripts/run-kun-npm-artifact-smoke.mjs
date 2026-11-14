@@ -28,14 +28,15 @@ for (const [name, digest] of Object.entries(driver.files))
 const manifest = JSON.parse(await readFile(resolve(artifactRoot, 'manifest.json'), 'utf8'))
 assert.equal(manifest.kind, 'kun-npm-local-candidate')
 assert.equal(manifest.published, false)
-assert.equal(manifest.sourceCommit, driver.sourceCommit)
+assert.equal(manifest.sourceCommit, process.env.KUN_NPM_CANDIDATE_SOURCE)
+assert.equal(manifest.artifact.sha256, process.env.KUN_NPM_CANDIDATE_SHA256)
 assert.equal(manifest.sourceDirty, false, 'CI must build a committed immutable source snapshot')
 assert.equal(manifest.artifact.filename, basename(manifest.artifact.filename), 'Artifact must be a basename')
 const tarball = resolve(artifactRoot, manifest.artifact.filename)
 assert.equal(createHash('sha256').update(await readFile(tarball)).digest('hex'), manifest.artifact.sha256)
-const receipt = await runSmoke({ tarball, output: resolve(output), integrations: true, lifecycle: true })
+const receipt = await runSmoke({ tarball, output: resolve(output), integrations: true, lifecycle: true, history: true })
 receipt.isolation = { ...receipt.isolation, sourceCheckoutRemoved: true, gitHistoryAvailable: false,
-  exportedDriverVerified: true, sourceCommit: driver.sourceCommit, provider: 'github-actions' }
+  exportedDriverVerified: true, sourceCommit: manifest.sourceCommit, testDriverSourceCommit: driver.sourceCommit, provider: 'github-actions' }
 const { writeFile } = await import('node:fs/promises')
 await writeFile(resolve(output), JSON.stringify(receipt, null, 2) + '\n')
 if (!receipt.success) process.exitCode = 1
