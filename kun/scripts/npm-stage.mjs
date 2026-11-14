@@ -64,6 +64,7 @@ async function windowsPayload(stage, directory, descriptor, version, sourceCommi
   await copyFile(join(repository, 'LICENSE'), join(target, 'LICENSE'))
   const manifest = {
     name: descriptor.windowsPackage, version, description: 'Kun Windows process ownership components',
+    repository: { type: 'git', url: 'https://github.com/KunAgent/Kun.git' },
     license: 'PolyForm-Noncommercial-1.0.0', os: ['win32'], cpu: ['x64'],
     files: ['manifest.json', '*.node', '*.exe', 'LICENSE'], engines: { node: descriptor.node }
   }

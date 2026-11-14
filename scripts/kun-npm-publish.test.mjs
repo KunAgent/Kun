@@ -20,6 +20,7 @@ function simulate(context, calls, failMain = false) {
   return async args => {
     assert.equal(args[0], 'publish')
     assert(args.includes('--tag=next') && args.includes('--ignore-scripts') && args.includes('--access=public'))
+    assert(args.includes('--provenance=false'), 'Cross-run tarballs must retain their original build identity')
     assert(!args.some(arg => arg.includes('latest') || arg === 'dist-tag'))
     const name = args[1].endsWith('windows.tgz') ? context.release.windowsPackage : context.release.name
     calls.push(name)

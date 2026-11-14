@@ -39,7 +39,7 @@ export async function executePublication(context, { confirm, authMode = 'oidc', 
         // Preserve uncertainty instead of claiming that a failed request wrote nothing.
         report.published = report.published || null
         report.distTagsChanged = report.distTagsChanged || null
-        await execute([...operation.arguments, ...(authMode === 'oidc' ? ['--provenance'] : [])])
+        await execute(operation.arguments)
         report.published = true
         report.distTagsChanged = true // A successful publish changes the explicit prerelease tag.
       }

@@ -109,6 +109,13 @@ the workflow. Configure trust close to the first authorized use: npm documents
 expiry for a new trust configuration that has not completed its first publish
 within two days. See [trusted publishing](https://docs.npmjs.com/trusted-publishers/).
 
+OIDC authenticates the publishing workflow. This job reuses tarballs from a
+different build run, so it explicitly disables automatic npm build-provenance
+generation for the publisher revision. The original build source/run and
+digests remain pinned in Gate A evidence. Producer-signed build attestations
+would need a separate implementation; this publication job is not the original
+compilation run.
+
 `npm stage publish` is a separate registry-writing feature, not a local dry run.
 It is not used by this flow. Its approval/trust requirements must not be confused
 with assigning a SemVer prerelease to the explicit `next` distribution tag.

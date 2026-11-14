@@ -62,7 +62,7 @@ export async function preparePublishPlan({ directory, gateA, receipts, audit, po
       sha256: artifact.sha256, integrity: artifact.integrity, action: existing ? 'skip-identical' : 'publish-prerelease',
       observedStableTag: remote.distTags.latest ?? null,
       arguments: ['publish', artifact.path, '--registry=' + NPM_REGISTRY,
-        '--access=public', '--tag=' + policy.prereleaseTag, '--ignore-scripts', '--json'] })
+        '--access=public', '--tag=' + policy.prereleaseTag, '--ignore-scripts', '--provenance=false', '--json'] })
   }
   const identity = { registry: policy.registry, tag: policy.prereleaseTag, sourceCommit: candidate.manifest.sourceCommit,
     gateAReceiptSha256: policy.acceptedCandidate.gateAReceiptSha256,
