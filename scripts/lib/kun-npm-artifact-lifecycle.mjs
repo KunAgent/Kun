@@ -102,7 +102,7 @@ export async function exerciseArtifactLifecycle(context) {
           const result = await driver.done
           assert.equal(result.code, 0, result.stderr)
           const tui = JSON.parse(result.stdout)
-          assert.equal(tui.exitCode, 0, tui)
+          assert.equal(tui.exitCode, 0, JSON.stringify(tui))
           assert(!tui.forcedExit, 'Owned TUI must exit through its normal /quit path')
           await waitUntil(() => !processAlive(server.manager.pid), 'TUI Manager exit', 20_000)
         } else if (mode === 'owner-loss') {

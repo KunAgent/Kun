@@ -13,6 +13,7 @@ export async function lifecycleParticipant(root, role, withChild = false) {
   await new Promise(done => server.listen(0, '127.0.0.1', done))
   const child = withChild ? spawn(process.execPath, [fileURLToPath(import.meta.url), root, role + '-child'],
     { stdio: 'ignore' }) : undefined
+  const childExited = child ? new Promise(done => child.once('exit', done)) : Promise.resolve()
   const ready = { role, pid: process.pid, port: server.address().port, child: child?.pid }
   record('ready', ready)
   await writeFile(join(root, `${role}-${process.pid}.json`), JSON.stringify(ready))
@@ -28,6 +29,7 @@ export async function lifecycleParticipant(root, role, withChild = false) {
       } catch { /* Keep the actual failure in the trace. */ }
       record('stopping', { reason, managerAvailable })
       child?.kill('SIGTERM')
+      await childExited
       await new Promise(done => server.close(done))
       record('listener-closed')
       process.exit(0)

@@ -129,11 +129,35 @@ uninstall preserving data. Noninteractive `kun run` returns nonzero when require
 approval/input cannot be answered; the persisted engine status remains intact
 and the client explains how to continue through TUI or API.
 
-The read-only `kun-npm-artifact` workflow prepares an identical candidate for
-the native target/Node matrix. It has no publisher job, npm credentials or
-write permission. `check-kun-npm-matrix.mjs` rejects missing targets, mixed
-tarball digests and incomplete checks; `--smoke-only` reports the narrower matrix
-smoke and does not mark the full artifact gate complete.
+The read-only `kun-npm-artifact` workflow builds Windows ownership components
+first, then packs one canonical main tarball on Linux for all five targets and
+both Node versions. The helper manifest records its version, source commit and
+binary digests; staging rejects mismatched provenance. There is no publisher
+job, npm credential or write permission.
+
+Install jobs export a checksummed allowlist of independent test drivers, then
+delete the entire checkout including its Git object database. The runner verifies
+the actual CPU/OS and exact Node version before using the artifact. Runtime source,
+workspace packages, repository dependencies and Git history are absent. The
+consumer uses a fresh prefix/cache and ordinary project installation on the
+runner's temporary disk; compiler command guards audit installation. This is
+filesystem source isolation, not a claim of an OS security sandbox or an image
+without preinstalled developer tools.
+
+Windows uses the real `CreatePseudoConsole` API through Python's standard library.
+The global `.cmd` shim, new terminal prompt, fixture response, advertised interrupt
+key and `/quit` are exercised. Native tests load the installed addon, acquire a
+Unicode-path lock, execute actual Job-owned children/grandchildren, verify owner
+loss cleanup, and reject missing or corrupt helpers without starting a stack.
+The same install also exercises live-work lifecycle checks before uninstall;
+Windows uses actual PID/listener state at Manager close rather than POSIX signal
+callbacks as its evidence.
+
+`check-kun-npm-matrix.mjs` rejects missing targets, mixed tarball digests, missing
+source-isolation evidence, absent lifecycle checks and simulated/forced ConPTY
+results. `--smoke-only` requires all ten native combinations; it does not mark
+the broader artifact gate complete. `--report-only` writes the remaining full
+Gate A requirements to `artifact-readiness.json` without granting release authority.
 
 The local candidate has macOS arm64 receipts for both required Node versions,
 including npm 11 and npm 12 consumers. Supplementary acceptance uses this entry:

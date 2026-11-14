@@ -2,12 +2,20 @@ name: Kun npm native artifact matrix
 
 on:
   workflow_dispatch:
-  push:
-    branches: ['kun/publish-kun-standalone-npm-ci']
+    inputs:
+      windows_probe_only:
+        description: Diagnose terminal behavior from an existing immutable candidate
+        type: boolean
+        default: false
+      candidate_run_id:
+        description: Original candidate run id for terminal diagnostics
+        type: string
+        default: ''
 
 # This workflow only builds local tarballs and tests them. It cannot publish.
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: kun-npm-native-${{ github.ref }}
@@ -15,6 +23,7 @@ concurrency:
 
 jobs:
   windows-payload:
+    if: ${{ !inputs.windows_probe_only }}
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -34,6 +43,7 @@ jobs:
           retention-days: 7
 
   candidate:
+    if: ${{ !inputs.windows_probe_only }}
     needs: windows-payload
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -61,6 +71,7 @@ jobs:
           retention-days: 7
 
   install:
+    if: ${{ !inputs.windows_probe_only }}
     needs: candidate
     timeout-minutes: 60
     strategy:
@@ -85,6 +96,7 @@ jobs:
           sparse-checkout-cone-mode: false
           sparse-checkout: |
             /scripts/smoke-kun-npm.mjs
+            /scripts/probe-kun-npm-terminal.mjs
             /scripts/run-kun-npm-artifact-smoke.mjs
             /scripts/export-kun-npm-test-driver.mjs
             /scripts/lib/kun-npm-smoke-*
@@ -120,7 +132,7 @@ jobs:
 
   evidence:
     needs: install
-    if: always()
+    if: ${{ always() && !inputs.windows_probe_only }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -148,3 +160,31 @@ jobs:
             receipts/
             artifact-readiness.json
           retention-days: 7
+
+  windows-terminal-probe:
+    if: ${{ inputs.windows_probe_only }}
+    runs-on: windows-2025
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['26.4.0', '26.12.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Diagnose the real terminal against frozen candidate bytes
+        run: node scripts/probe-kun-npm-terminal.mjs candidate terminal-probe.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-terminal-probe-${{ matrix.node }}
+          path: terminal-probe.json
+          if-no-files-found: error

@@ -152,7 +152,7 @@ export async function exerciseInstalledServer(context) {
       const output = await runProcess(process.platform === 'win32' ? 'python' : 'python3', [runner, node, installed.entry, env.KUN_DATA_DIR, workspace, 'attach'], {
         cwd: root, env: { ...env, KUN_CONFIG: config, KUN_TUI_URL: endpoint }, timeout: 90_000 })
       const result = JSON.parse(output.stdout)
-      assert.equal(result.exitCode, 0, result)
+      assert.equal(result.exitCode, 0, JSON.stringify(result))
       assert(!result.forcedExit, `Attached TUI did not exit through /quit: ${JSON.stringify(result)}`)
       assert(result.matchedReply, 'Attached TUI did not finish the fixture turn')
       assert(result.sentPrompt, 'Attached TUI must submit a new prompt')
@@ -178,7 +178,7 @@ export async function exerciseInstalledServer(context) {
         const output = await runProcess(process.platform === 'win32' ? 'python' : 'python3', [runner, node, installed.entry, env.KUN_DATA_DIR, workspace, mode], {
           cwd: root, env: { ...env, KUN_CONFIG: config }, timeout: 90_000 })
         const result = JSON.parse(output.stdout)
-        assert.equal(result.exitCode, 0, result)
+        assert.equal(result.exitCode, 0, JSON.stringify(result))
         assert(!result.forcedExit, `Owned TUI did not exit through /quit: ${JSON.stringify(result)}`)
         assert(result.matchedReply, 'TUI did not render the fixture response')
         assert(result.sentPrompt, 'TUI must submit a new prompt')
@@ -245,7 +245,7 @@ export async function exerciseInstalledTuiCancellation(context) {
     const output = await runProcess(process.platform === 'win32' ? 'python' : 'python3', [runner, node, installed.entry, isolated.KUN_DATA_DIR, workspace, 'cancel'],
       { cwd: root, env: { ...isolated, KUN_CONFIG: path }, timeout: 90_000 })
     const result = JSON.parse(output.stdout)
-    assert.equal(result.exitCode, 0, result)
+    assert.equal(result.exitCode, 0, JSON.stringify(result))
     assert(!result.forcedExit, `Cancellation TUI did not exit through /quit: ${JSON.stringify(result)}`)
     assert(result.cancellationVerified, 'Terminal input did not interrupt the active turn through the real TUI')
     return result
