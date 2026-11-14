@@ -88,6 +88,7 @@ jobs:
             /scripts/run-kun-npm-artifact-smoke.mjs
             /scripts/export-kun-npm-test-driver.mjs
             /scripts/lib/kun-npm-smoke-*
+            /scripts/lib/kun-npm-artifact-*
             /scripts/fixtures/kun-npm/**
       - uses: actions/setup-node@v4
         with:
