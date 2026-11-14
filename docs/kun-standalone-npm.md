@@ -12,9 +12,8 @@ acceptance never publish packages or change npm tags.
   a workflow is not evidence that the platform passed.
 - The selected package names are `@kunagent/agent` and
   `@kunagent/agent-win32-x64` in `kun/npm/release.json`. Authenticated npm account
-  `kunagent` owns this namespace. The earlier accepted `@kun/agent@0.4.5`
-  candidate retains its original identity; it must be replaced by a newly named
-  prerelease candidate with its own complete Gate A evidence before publication.
+  `kunagent` owns this namespace. The `0.4.5-rc.1` pair has its own complete Gate A evidence. The earlier
+  `@kun/agent@0.4.5` candidate retains its original identity.
 - Core file/shell tools, model connections, HTTP/SSE, user Skills, MCP,
   attachments and subagents use the existing Runtime configuration and policies.
 - Desktop canvas/Computer Use bridges, desktop bundled Skills/extensions and
@@ -300,3 +299,12 @@ of that materialized directory is not labeled npm uninstall; actual npm install
 and historical-data-preserving uninstall remain mandatory in the native matrix
 and the dedicated desktop data job. Use `--desktop-data-receipt` when collecting
 separate sequential data and production signing evidence.
+
+The selected `@kunagent` 0.4.5-rc.1 set is now artifact-ready and unpublished.
+The [native matrix](https://github.com/KunAgent/Kun/actions/runs/43586928198)
+passed ten combinations and 536 operation checks; the
+[build validation](https://github.com/KunAgent/Kun/actions/runs/43589957579) and
+[sequential desktop data validation](https://github.com/KunAgent/Kun/actions/runs/43593189350)
+also passed. Production signing/CLI regression and synthetic capture/permission
+checks passed locally against the same JS buildId. Registry readiness remains
+false and the publication policy remains disabled.

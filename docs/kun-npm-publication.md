@@ -33,7 +33,7 @@ is separate from credential restrictions and trusted-publisher configuration.
 
 ## Preserve accepted candidates
 
-The completed Gate A run
+The earlier completed Gate A run
 [43575785241](https://github.com/KunAgent/Kun/actions/runs/43575785241) accepted
 the earlier `@kun/agent@0.4.5` candidate. Its bytes, source commit and receipts
 remain unchanged. That ordinary version and old namespace are not the selected
@@ -140,3 +140,9 @@ install the exact registry versions on all five targets and both required Node
 versions, verify digests and run the registry acceptance cases. Stable-tag
 promotion remains a later explicitly authorized step. Creating an account,
 preparing a workflow or publishing only one package does not complete Gate B.
+
+The selected `@kunagent` 0.4.5-rc.1 pair has now completed its independent
+Gate A. `publish.json` pins its exact native-matrix run, receipt and tarball
+digests. This advances artifact acceptance only: `enabled` remains false,
+trusted publishing remains unconfigured and no registry package or tag was
+created by the candidate acceptance.

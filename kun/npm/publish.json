@@ -11,14 +11,14 @@
   "namespaceConfirmed": true,
   "trustedPublisherConfigured": false,
   "acceptedCandidate": {
-    "runId": "43575785241",
-    "gateAReceiptSha256": "13782367b65e34e3ff2df1ef4138b9c40137a3ff9cc407b8891643e59517c587",
-    "name": "@kun/agent",
-    "version": "0.4.5",
-    "sha256": "f1bf1db01806c90d454a6f5b033fcfc9c11f97b6c02b22761a847e757a646b5a",
-    "windowsPackage": "@kun/agent-win32-x64",
-    "windowsSha256": "9e708806361b5e84d7f9d04c9641c1873d1bc016027158cf2faeb6bdb246b5f3",
-    "sourceCommit": "d0dd66e1252db133cccb74ef02419f0ccad31298",
+    "runId": "43586928198",
+    "gateAReceiptSha256": "cad2d2bcb69d7044defc9fb324febc626789b6099c847ffd55bac3be0d6592f0",
+    "name": "@kunagent/agent",
+    "version": "0.4.5-rc.1",
+    "sha256": "c8266920c31666f9d36168dd1a91dffe8ad7a51de574172300243cb60d6c7bdb",
+    "windowsPackage": "@kunagent/agent-win32-x64",
+    "windowsSha256": "31471ba89b750eef2796ec1575b876c22a603cea3d7965fbe3a2f37628dd0a93",
+    "sourceCommit": "cf82f7892a6d0aaa68090f6ee93ab3fb111cfc24",
     "buildId": "8a84ae1fe486e1a0d0fa367179864e3a19eadef635314206be33423d5dca306e"
   }
 }
