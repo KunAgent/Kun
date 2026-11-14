@@ -28,7 +28,7 @@ try {
   if (process.platform === 'win32') {
     const probe = await runProcess('python', [fileURLToPath(new URL('./fixtures/kun-npm/windows_conpty.py', import.meta.url)), process.execPath])
     console.log(probe.stdout)
-    receipt.ttyHandles = JSON.parse(probe.stdout)
+    receipt.ttyHandles = JSON.parse(probe.stdout.trim().split('\n').findLast(line => line.startsWith('{')))
   }
   for (const mode of ['tui', 'bare', 'cancel']) {
     const profile = await artifactProfile(context, mode)

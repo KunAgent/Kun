@@ -52,6 +52,8 @@ write_file = bind("WriteFile", [w.HANDLE, c.c_void_p, w.DWORD, c.POINTER(w.DWORD
 exit_code = bind("GetExitCodeProcess", [w.HANDLE, c.POINTER(w.DWORD)], w.BOOL)
 terminate = bind("TerminateProcess", [w.HANDLE, w.UINT], w.BOOL)
 wait = bind("WaitForSingleObject", [w.HANDLE, w.DWORD], w.DWORD)
+get_std = bind("GetStdHandle", [w.DWORD], w.HANDLE)
+set_std = bind("SetStdHandle", [w.DWORD, w.HANDLE], w.BOOL)
 
 
 def checked(value):
@@ -82,8 +84,18 @@ class Terminal:
         startup.attributes = c.cast(self.attributes, c.c_void_p)
         self.process = PROCESSINFO()
         command = c.create_unicode_buffer(subprocess.list2cmdline([node, *argv]))
-        checked(create_process(node, command, None, None, False, 0x80000 | 0x400, None, None,
-                               c.byref(startup), c.byref(self.process)))
+        # Redirected handles inherited from the Python test runner would make
+        # Node see pipes even though it is attached to the pseudoconsole.
+        # Let Windows initialize the child's actual console handles instead.
+        handles = [(key, get_std(key)) for key in [0xfffffff6, 0xfffffff5, 0xfffffff4]]
+        try:
+            for key, _ in handles:
+                checked(set_std(key, None))
+            checked(create_process(node, command, None, None, False, 0x80000 | 0x400, None, None,
+                                   c.byref(startup), c.byref(self.process)))
+        finally:
+            for key, handle in handles:
+                checked(set_std(key, handle))
         close_handle(self.process.thread)
         close_handle(input_read)
         close_handle(output_write)
