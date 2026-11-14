@@ -12,8 +12,18 @@ function npmPublish(args) {
   })
 }
 
+export async function waitForPublishedVersion(operation, metadata, { attempts = 121, intervalMs = 5_000,
+  sleep = ms => new Promise(done => setTimeout(done, ms)) } = {}) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const remote = await metadata(operation.name)
+    if (remote.versions[operation.version]) return remote
+    if (attempt + 1 < attempts) await sleep(intervalMs)
+  }
+  throw Error('Publication accepted but version is not publicly visible yet; inspect registry before retrying: ' + operation.name)
+}
+
 export async function executePublication(context, { confirm, authMode = 'oidc', environment = process.env,
-  execute = npmPublish } = {}) {
+  execute = npmPublish, visibility } = {}) {
   assert.equal(context.policy.enabled, true, 'Publication is disabled in the checked-in policy')
   const plan = await preparePublishPlan(context)
   assert.equal(plan.publishable, true, plan.blockers.join('; '))
@@ -43,12 +53,17 @@ export async function executePublication(context, { confirm, authMode = 'oidc', 
         report.published = true
         report.distTagsChanged = true // A successful publish changes the explicit prerelease tag.
       }
-      const remote = await metadata(operation.name)
+      // npm can acknowledge a new package while registry processing still returns 404.
+      // Wait only for visibility; integrity or tag drift must still stop the sequence.
+      const remote = await waitForPublishedVersion(operation, metadata, visibility)
       assert.equal(remote.versions[operation.version]?.dist?.integrity, operation.integrity, 'Registry bytes do not match the original candidate')
-      assert.equal(remote.distTags.latest ?? null, operation.observedStableTag, 'Stable tag changed; stop without automatic repair')
+      const stableTagUnchanged = (remote.distTags.latest ?? null) === operation.observedStableTag
+      const initialLatestAutomaticallyCreated = !stableTagUnchanged && operation.allowInitialLatest && remote.distTags.latest === operation.version
+      assert(stableTagUnchanged || initialLatestAutomaticallyCreated, 'Stable tag changed; stop without automatic repair')
       assert.equal(remote.distTags[plan.tag], operation.version)
       report.operations.push({ name: operation.name, version: operation.version,
-        action: operation.action, integrity: operation.integrity, stableTagUnchanged: true })
+        action: operation.action, integrity: operation.integrity, stableTagUnchanged,
+        initialLatestAutomaticallyCreated: Boolean(initialLatestAutomaticallyCreated) })
     }
     report.state = 'prerelease-present-awaiting-registry-matrix'
     report.success = true

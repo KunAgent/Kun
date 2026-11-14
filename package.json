@@ -135,7 +135,8 @@
     "check:kun:npm-namespace": "node --use-env-proxy ./scripts/check-kun-npm-namespace.mjs",
     "prepare:kun:npm-publish": "node --use-env-proxy ./scripts/prepare-kun-npm-publish.mjs",
     "test:kun:npm-publish": "node --test ./scripts/kun-npm-publish.test.mjs ./scripts/kun-npm-publish-workflow.test.mjs",
-    "build:kun:npm-windows": "node ./scripts/build-kun-npm-candidate.mjs --windows-payload-only"
+    "build:kun:npm-windows": "node ./scripts/build-kun-npm-candidate.mjs --windows-payload-only",
+    "test:kun:npm-registry": "node --test ./scripts/kun-npm-registry.test.mjs"
   },
   "dependencies": {
     "@computer-use/nut-js": "^4.2.0",

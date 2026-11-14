@@ -135,6 +135,17 @@ failed client request may already have changed registry state. Re-query rather
 than rolling back tags or deleting packages. The executor checks that `latest`
 stays unchanged after each operation. See [npm publish semantics](https://docs.npmjs.com/cli/v11/commands/npm-publish/).
 
+New-package bootstrap has an additional registry constraint: npm assigns
+`latest` on the first publication even when another tag is requested, and
+rejects deleting `latest` with HTTP 400. This behavior is documented in
+[npm/cli issue 8490](https://github.com/npm/cli/issues/8490). A strict next-only
+plan now blocks a missing package before uploading it. An explicit
+`initialLatestAcknowledgement` must name the exact version and both package
+names before bootstrap may accept this registry behavior. The acknowledgement
+is part of the confirmed plan identity and does not authorize stable-tag
+promotion for later versions. Do not publish another placeholder or claim that
+an automatically created stable tag stayed unchanged.
+
 Successful publication still leaves `registryReady: false`. Gate B must then
 install the exact registry versions on all five targets and both required Node
 versions, verify digests and run the registry acceptance cases. Stable-tag
@@ -146,3 +157,42 @@ Gate A. `publish.json` pins its exact native-matrix run, receipt and tarball
 digests. This advances artifact acceptance only: `enabled` remains false,
 trusted publishing remains unconfigured and no registry package or tag was
 created by the candidate acceptance.
+
+## Gate B checkpoint: first publication blocked by registry tags
+
+On 2026-11-14 the explicitly authorized bootstrap uploaded the accepted
+Windows `0.4.5-rc.1` tarball with `--tag=next`, public access and scripts disabled.
+The public tarball SHA-256 and SHA-512 match the original Gate A candidate.
+npm initially acknowledged processing before exposing the version; the executor
+now waits for visibility without retrying publication or accepting changed bytes.
+
+The public Windows metadata subsequently exposed both `next` and `latest` at
+`0.4.5-rc.1`. The sequence stopped before the main package. An authenticated
+attempt to remove the unexpected `latest` tag returned HTTP 400; it remains
+present. At the 2026-11-15 checkpoint the main package is still unpublished,
+`registryReady` is false and Gate B is incomplete. The local publication and
+registry observations are preserved under `.cache/kun-npm/registry-release/`.
+The accepted candidate, Gate A receipts and disabled checked-in policy retain
+their original identities. This flow did not build or upload a replacement
+candidate. Registry metadata also contains npm's `0.0.0-stage` placeholder;
+this flow did not invoke staged publishing or manually create that version.
+
+The maintainer subsequently explicitly accepted initial automatic `latest`
+creation for these two `0.4.5-rc.1` packages and requested continuation with the
+original main candidate and registry matrix. That scoped acknowledgement is
+now recorded in policy. Publication still passes only `--tag=next`; it does
+not run a stable-tag promotion command. Registry acceptance checks the
+acknowledged initial tag baseline and records that acknowledgement separately
+from unchanged-tag evidence.
+
+The read-only `registry_only` mode of `kun-npm-artifact.yml` is prepared for the
+subsequent registry matrix. It selects the accepted original manifest, removes
+the source checkout and Git history, and installs the exact registry version
+into fresh project/global prefixes and caches on five native targets with
+Node 26.4.0 and 26.12.0. Each receipt includes real npm HTTP download evidence,
+project lock integrity, downloaded tarball digests, native SQLite, CLI/TUI,
+HTTP/SSE and shutdown checks. Windows additionally requires the registry helper
+download, native helper failure cases and real ConPTY. The aggregator refuses
+local-install receipts, missing combinations, changed bytes/build identity or
+an unacknowledged `latest` tag. This matrix has not run against the absent main
+package; passing driver tests do not constitute registry acceptance.
