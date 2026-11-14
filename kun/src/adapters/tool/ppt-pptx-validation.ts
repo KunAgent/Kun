@@ -3,6 +3,7 @@ import { isAbsolute, relative, resolve } from 'node:path'
 import { DOMParser, type Document, type Element, type Node } from '@xmldom/xmldom'
 import { readPptxGeometryParts } from '../../ppt/ppt-geometry-qa-archive.js'
 import type { PptxGeometryParts } from '../../ppt/ppt-geometry-qa-ooxml.js'
+import { isNpmDistribution } from '../../cli/npm-distribution.js'
 
 /**
  * Structural checks for exported PPTX packages plus small shared helpers for
@@ -378,11 +379,12 @@ export async function validatePptx(
 }
 
 export async function requireToolchainDirectory(options: PptToolchainOptions): Promise<string> {
+  const npm = isNpmDistribution()
   const candidates = [
     options.toolchainDirectory?.()?.trim(),
     process.env.KUN_PPT_TOOLCHAIN_DIR?.trim(),
-    resolve(process.cwd(), 'resources', 'ppt-toolchain'),
-    resolve(process.cwd(), '..', 'resources', 'ppt-toolchain')
+    ...(!npm ? [resolve(process.cwd(), 'resources', 'ppt-toolchain'),
+      resolve(process.cwd(), '..', 'resources', 'ppt-toolchain')] : [])
   ].filter((candidate): candidate is string => Boolean(candidate))
   for (const candidate of candidates) {
     try {
@@ -392,7 +394,9 @@ export async function requireToolchainDirectory(options: PptToolchainOptions): P
       // Try the next trusted runtime location.
     }
   }
-  throw new Error('Kun PPT toolchain is unavailable; reinstall or repair the Kun application')
+  throw new Error(npm
+    ? 'Kun PPT toolchain is not bundled with the npm distribution; configure KUN_PPT_TOOLCHAIN_DIR or a compatible provider'
+    : 'Kun PPT toolchain is unavailable; reinstall or repair the Kun application')
 }
 
 export function isInside(root: string, target: string): boolean {

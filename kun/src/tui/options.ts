@@ -7,6 +7,7 @@ import type {
 } from '../contracts/policy.js'
 import type { RuntimeFlavor } from '../contracts/runtime-flavor.js'
 import { resolveCliRuntimeFlavor } from '../cli/runtime-flavor.js'
+import { readKunConfigFile } from '../config/kun-config.js'
 
 export const DEFAULT_TUI_DATA_DIR = join(homedir(), '.kun', 'data')
 
@@ -20,6 +21,7 @@ For an independent Runtime, isolate KUN_MANAGER_CONTROL_DIR,
 KUN_MANAGER_SETTINGS_PATH, and KUN_DATA_DIR.
 
 Options:
+  --config <path>            Explicit runtime configuration (or KUN_CONFIG)
   --url <url>               Explicit runtime URL (default: discover from data dir)
   --runtime-token <token>   Bearer token (prefer KUN_RUNTIME_TOKEN to shell history)
   --data-dir <path>         Discovery directory (default GUI setting, then ~/.kun/data)
@@ -48,7 +50,8 @@ export type TuiOptions = {
   url?: string
   runtimeToken: string
   dataDir: string
-  dataDirSource?: 'argument' | 'environment' | 'default'
+  dataDirSource?: 'argument' | 'environment' | 'configuration' | 'default'
+  configPath?: string
   workspace: string
   threadId?: string
   continueLatest: boolean
@@ -69,6 +72,7 @@ export type TuiOptionsResult =
   | { ok: false; message: string }
 
 const VALUE_OPTIONS = new Set([
+  'config',
   'url',
   'runtime-token',
   'data-dir',
@@ -170,7 +174,15 @@ export function parseTuiOptions(
 
   const argumentDataDir = nonEmpty(values.get('data-dir'))
   const environmentDataDir = nonEmpty(env.KUN_DATA_DIR)
-  const dataDir = expandHome(argumentDataDir ?? environmentDataDir ?? DEFAULT_TUI_DATA_DIR)
+  const configuredPath = nonEmpty(values.get('config')) ?? nonEmpty(env.KUN_CONFIG)
+  const configPath = configuredPath ? resolve(cwd(), expandHome(configuredPath)) : undefined
+  let configurationDataDir: string | undefined
+  if (configPath && !help) {
+    try { configurationDataDir = readKunConfigFile(configPath).config.serve?.dataDir } catch (error) {
+      return { ok: false, message: `invalid configuration: ${error instanceof Error ? error.message : String(error)}` }
+    }
+  }
+  const dataDir = expandHome(argumentDataDir ?? environmentDataDir ?? configurationDataDir ?? DEFAULT_TUI_DATA_DIR)
   const workspace = resolve(expandHome(nonEmpty(values.get('workspace')) ?? nonEmpty(env.KUN_WORKSPACE) ?? cwd()))
   const url = nonEmpty(values.get('url')) ?? nonEmpty(env.KUN_TUI_URL)
   return {
@@ -179,11 +191,12 @@ export function parseTuiOptions(
       ...(url ? { url: normalizeBaseUrl(url) } : {}),
       runtimeToken: nonEmpty(values.get('runtime-token')) ?? nonEmpty(env.KUN_RUNTIME_TOKEN) ?? '',
       dataDir,
+      ...(configPath ? { configPath } : {}),
       dataDirSource: argumentDataDir
         ? 'argument'
         : environmentDataDir
           ? 'environment'
-          : 'default',
+          : configurationDataDir ? 'configuration' : 'default',
       workspace,
       ...(nonEmpty(values.get('thread')) ? { threadId: nonEmpty(values.get('thread')) } : {}),
       continueLatest,

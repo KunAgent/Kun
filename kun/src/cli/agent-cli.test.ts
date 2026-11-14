@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeEvent } from '../contracts/events.js'
+import type { TurnItem } from '../contracts/items.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import { KUN_CLI_USAGE, MAX_RUN_PROMPT_BYTES, runAgentCommand, splitKunCliCommand } from './agent-cli.js'
 
@@ -36,6 +37,41 @@ describe('Kun CLI TUI dispatch', () => {
 })
 
 describe('Kun one-shot CLI', () => {
+  it('returns failure when a completed model response could not obtain required interactive input', async () => {
+    const harness = fakeRuntime()
+    vi.mocked(harness.runtime.sessionStore.loadItems).mockResolvedValue([
+      { kind: 'tool_result', toolName: 'user_input', isError: true } as TurnItem
+    ])
+    const stderr = writable()
+    expect(await runAgentCommand('run', ['--data-dir', '/fixture', 'Ask a question'], {
+      stdout: writable(), stderr, createRuntime: async () => harness.runtime
+    })).toBe(70)
+    expect(stderr.text()).toContain('interactive approval or input is unavailable')
+    expect(harness.shutdown).toHaveBeenCalledOnce()
+  })
+
+  it('expires an unattended approval after recording its outcome', async () => {
+    const harness = fakeRuntime()
+    let listener: ((event: RuntimeEvent) => void) | undefined
+    const order: string[] = []
+    vi.mocked(harness.runtime.eventBus.subscribe).mockImplementation((_id, callback) => {
+      listener = callback; return () => { listener = undefined }
+    })
+    harness.runtime.events = { record: vi.fn(async () => { order.push('record') }) } as unknown as ServerRuntime['events']
+    harness.runtime.approvalGate = { expire: vi.fn(() => { order.push('expire'); return true }) } as unknown as ServerRuntime['approvalGate']
+    vi.mocked(harness.runtime.runTurn).mockImplementation(async () => {
+      listener?.({ kind: 'approval_requested', threadId: 'thr_cli', turnId: 'turn_cli',
+        approvalId: 'fixture-approval', toolName: 'write', summary: 'Fixture write', status: 'pending'
+      } as RuntimeEvent)
+      return 'completed' as const
+    })
+    expect(await runAgentCommand('run', ['--data-dir', '/fixture', 'Write a file'], {
+      stdout: writable(), stderr: writable(), createRuntime: async () => harness.runtime
+    })).toBe(70)
+    expect(order).toEqual(['record', 'expire'])
+    expect(harness.shutdown).toHaveBeenCalledOnce()
+  })
+
   it('reads a UTF-8 prompt file and forwards benchmark controls', async () => {
     const root = await temporaryDirectory()
     const promptPath = join(root, 'prompt.txt')

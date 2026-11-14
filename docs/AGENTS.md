@@ -113,6 +113,15 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   connectivity and scheduled execution stop with the application. Reopening
   reads existing history; it does not delete or recreate business data.
 
+## Standalone npm Candidates
+
+The npm candidate build reuses `kun/` through a dedicated staging manifest.
+It must not require the desktop application, source checkout or Electron at
+installation/runtime. Desktop still uses its own bundled fixed build. Candidate
+pack/install/acceptance are read-only with respect to registries; do not add an
+implicit publish or tag-promotion step. Real target receipts, not mocked native
+bindings, establish platform support. See [npm distribution](./kun-standalone-npm.md).
+
 ## Allowed Extension Path
 
 1. Add protocol fields in `kun/src/contracts/`.

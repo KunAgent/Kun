@@ -75,6 +75,7 @@ import { TuiClientError, type TuiConnection } from './client-types.js'
 import { KunTuiClient } from './kun-tui-client.js'
 import { createOwnedServiceManagerSession } from '../manager/owned-service-manager-session.js'
 import { shutdownOwnedProcesses } from '../process/owned-process.js'
+import { isNpmDistribution } from '../cli/npm-distribution.js'
 
 export async function resolveTuiConnection(
   options: TuiOptions,
@@ -123,6 +124,7 @@ export async function resolveTuiConnection(
         fetch: fetchImpl,
         runtimeFlavor,
         controlDir,
+        ...(options.configPath ? { env: { KUN_CONFIG: options.configPath } } : {}),
         ...(manager ? { manager } : {}),
         ...(sourceBuildId ? { expectedBuildId: sourceBuildId } : {})
       })
@@ -172,6 +174,7 @@ export async function resolveTuiConnection(
   const discovery = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
   if (discovery) {
     assertSafeDiscovery(discovery)
+    if (!options.noStart && isNpmDistribution()) return startExpectedRuntime()
     if (!options.noStart) return startOrAttachToOwner(startExpectedRuntime, async () => {
       const current = await readRuntimeDiscovery(discoveryDir, runtimeFlavor).catch(() => null)
       if (!current) return undefined
@@ -205,7 +208,7 @@ export async function resolveTuiConnection(
       'runtime_unavailable'
     )
   }
-  return startOrAttachToOwner(startExpectedRuntime, async () => undefined)
+  return isNpmDistribution() ? startExpectedRuntime() : startOrAttachToOwner(startExpectedRuntime, async () => undefined)
 }
 
 const OWNER_BUSY_CODES = new Set(['app_session_owner_busy', 'client_runtime_owner_busy'])

@@ -27,6 +27,7 @@ import { checkStandaloneTuiUpdateOnce, readStandaloneTuiRelease } from '../cli/s
 import { reconcilePendingTuiUpdate } from '../cli/self-update-reconcile.js'
 import type { ClientOwnedRuntimeHandle } from '../cli/client-owned-runtime.js'
 import type { TuiOptions } from './options.js'
+import { isNpmDistribution } from '../cli/npm-distribution.js'
 
 type WritableLike = { write(chunk: string): unknown }
 
@@ -63,6 +64,9 @@ export const defaultTuiRendererHost: TuiRendererHost = {
         `this process runs Node.js ${process.versions.node}.\n`
       )
       return 69
+    }
+    if (isNpmDistribution()) {
+      return handoffToTuiNode({ path: process.execPath, source: 'system', version: process.versions.node }, argv, env)
     }
     let node = findTuiNode(env)
     if (!node) {
@@ -136,7 +140,7 @@ export async function runTuiCommand(argv: readonly string[], io: TuiCommandIo): 
   let restoreConsole: (() => void) | undefined
   let ownedRuntime: ClientOwnedRuntimeHandle | undefined
   try {
-    const guiSettings = parsed.options.url
+    const guiSettings = parsed.options.url || parsed.options.configPath || isNpmDistribution()
       ? null
       : await readGuiSharedSettings({ env: io.env ?? process.env })
     if (parsed.options.dataDirSource === 'default' && guiSettings) {

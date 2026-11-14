@@ -97,7 +97,21 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
       }
     })
     let streamed = false
+    let interactiveBlocked = false
+    const pendingDecisions: Array<Promise<unknown>> = []
     const unsubscribe = runtime.eventBus.subscribe(thread.id, (event) => {
+      if (event.kind === 'approval_requested' && event.turnId === turn.turnId && event.status === 'pending') {
+        interactiveBlocked = true
+        const reason = 'Noninteractive kun run cannot answer approval requests; use kun tui or the API.'
+        // Persist the unavailable-channel outcome before releasing the waiter.
+        // This only reduces authority and never approves an unattended action.
+        pendingDecisions.push(runtime!.events.record({
+          kind: 'approval_resolved', threadId: thread.id, turnId: turn.turnId,
+          approvalId: event.approvalId, toolName: event.toolName, summary: event.summary,
+          status: 'expired', approvalReviewer: 'user', reason
+        }).catch(() => { io.stderr.write('kun run: could not persist the unavailable approval outcome\n') })
+          .finally(() => runtime!.approvalGate.expire(event.approvalId, reason)))
+      }
       if (jsonl && isPublicRuntimeEvent(event)) {
         writeJsonLine(io.stdout, { type: 'runtime_event', event })
       } else if (!parsed.json && event.kind === 'assistant_text_delta' && event.item.kind === 'assistant_text') {
@@ -105,9 +119,12 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
         io.stdout.write(event.item.text)
       }
     })
-    const status = await runtime.runTurn(thread.id, turn.turnId)
-    unsubscribe?.()
+    let status: Awaited<ReturnType<ServerRuntime['runTurn']>>
+    try { status = await runtime.runTurn(thread.id, turn.turnId) }
+    finally { unsubscribe?.(); await Promise.all(pendingDecisions) }
     const items = await runtime.sessionStore.loadItems(thread.id)
+    interactiveBlocked ||= items.some(item => (item.kind === 'tool_call' || item.kind === 'tool_result') &&
+      (item.toolName === 'user_input' || item.toolName === 'request_user_input'))
     if (jsonl) {
       writeJsonLine(io.stdout, { type: 'run_finished', threadId: thread.id, turnId: turn.turnId, status })
     } else if (parsed.json) {
@@ -124,7 +141,10 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
       }
       io.stdout.write('\n')
     }
-    return status === 'completed' ? ServeExitCode.ok : ServeExitCode.runtime
+    if (interactiveBlocked) {
+      io.stderr.write('kun run: interactive approval or input is unavailable; use kun tui or the API.\n')
+    }
+    return status === 'completed' && !interactiveBlocked ? ServeExitCode.ok : ServeExitCode.runtime
   } catch (error) {
     io.stderr.write(`kun run: ${errorMessage(error)}\n`)
     return ServeExitCode.runtime

@@ -21,6 +21,13 @@ spent on user requirements, code, decisions, and results, not repeated
 tool schemas, runaway tool output, malformed history, useless retries,
 or stable prefixes that could have been reused from cache.
 
+## Standalone npm candidates
+
+Kun can also be packaged for a Node-only npm installation. See
+[standalone npm candidates](../docs/kun-standalone-npm.md) for local tarball
+builds, installation, supported Node/platforms and artifact acceptance. Candidate
+preparation does not publish to npm or change the desktop distribution.
+
 ## Layout
 
 ```

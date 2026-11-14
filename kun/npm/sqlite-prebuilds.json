@@ -1,0 +1,27 @@
+{
+  "version": "12.10.0",
+  "nodeAbi": "147",
+  "source": "https://github.com/WiseLibs/better-sqlite3/releases/tag/v12.10.0",
+  "targets": {
+    "darwin-arm64": {
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/download/v12.10.0/better-sqlite3-v12.10.0-node-v147-darwin-arm64.tar.gz",
+      "sha256": "a36c5500c5c9443aa5a56b0e10562e06fd5899c6815a400f6245c3bbabf84710"
+    },
+    "darwin-x64": {
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/download/v12.10.0/better-sqlite3-v12.10.0-node-v147-darwin-x64.tar.gz",
+      "sha256": "2680ad207f76d6b4591e1f197f5b9deebb344175034ba7996d142259bad21b63"
+    },
+    "linux-arm64": {
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/download/v12.10.0/better-sqlite3-v12.10.0-node-v147-linux-arm64.tar.gz",
+      "sha256": "2a76bef5586c21c1ba9e4f21c7a0adf4727cae061a1ed7b8872f5aec9fd191ff"
+    },
+    "linux-x64": {
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/download/v12.10.0/better-sqlite3-v12.10.0-node-v147-linux-x64.tar.gz",
+      "sha256": "3005b18ca30b10edf26e6b226dc0645ee85d0a00f5eea0a89960bf1570abf0bf"
+    },
+    "win32-x64": {
+      "url": "https://github.com/WiseLibs/better-sqlite3/releases/download/v12.10.0/better-sqlite3-v12.10.0-node-v147-win32-x64.tar.gz",
+      "sha256": "edfd78cba97618d25b0af9f7d5593f86de2fdf8342985f5ffa5f61274afac901"
+    }
+  }
+}

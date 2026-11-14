@@ -1,0 +1,145 @@
+name: Kun npm native artifact matrix
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['kun/publish-kun-standalone-npm-ci']
+
+# This workflow only builds local tarballs and tests them. It cannot publish.
+permissions:
+  contents: read
+
+concurrency:
+  group: kun-npm-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-payload:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - run: npm ci
+      - name: Build ownership helpers on their native target
+        run: npm --prefix kun run build:windows-startup
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kun-npm-windows-payload
+          path: kun/dist/native/win32-x64/
+          if-no-files-found: error
+          retention-days: 7
+
+  candidate:
+    needs: windows-payload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-windows-payload
+          path: .cache/kun-npm-windows-payload
+      - name: Build one canonical candidate for every installation target
+        run: npm run pack:kun:npm -- --windows-payload .cache/kun-npm-windows-payload
+      - name: Packaging contract tests
+        run: npm run test:kun:npm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: .cache/kun-npm/artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  install:
+    needs: candidate
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['26.4.0', '26.12.0']
+        target:
+          - {id: darwin-arm64, runner: macos-15}
+          - {id: darwin-x64, runner: macos-15-intel}
+          - {id: win32-x64, runner: windows-2025}
+          - {id: linux-arm64, runner: ubuntu-24.04-arm}
+          - {id: linux-x64, runner: ubuntu-24.04}
+    runs-on: ${{ matrix.target.runner }}
+    env:
+      KUN_NPM_EXPECTED_TARGET: ${{ matrix.target.id }}
+      KUN_NPM_EXPECTED_NODE: ${{ matrix.node }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: drivers-checkout
+          # Only independent test drivers are available, never Runtime sources.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/smoke-kun-npm.mjs
+            /scripts/run-kun-npm-artifact-smoke.mjs
+            /scripts/export-kun-npm-test-driver.mjs
+            /scripts/lib/kun-npm-smoke-*
+            /scripts/fixtures/kun-npm/**
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Export test-only files and remove checkout including Git history
+        shell: bash
+        working-directory: drivers-checkout
+        run: |
+          node scripts/export-kun-npm-test-driver.mjs "$RUNNER_TEMP/kun-npm-driver"
+          cd "$GITHUB_WORKSPACE"
+          rm -rf drivers-checkout
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: candidate
+      - name: Install and exercise the actual candidate
+        shell: bash
+        run: node "$RUNNER_TEMP/kun-npm-driver/scripts/run-kun-npm-artifact-smoke.mjs" candidate receipt.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-receipt-${{ matrix.target.id }}-${{ matrix.node }}
+          path: receipt.json
+          if-no-files-found: error
+          retention-days: 7
+
+  evidence:
+    needs: install
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/check-kun-npm-matrix.mjs
+            /kun/npm/release.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kun-npm-receipt-*
+          path: receipts
+      - name: Check matrix smoke coverage
+        run: node scripts/check-kun-npm-matrix.mjs receipts --smoke-only
+      - name: Record remaining complete Gate A requirements
+        run: node scripts/check-kun-npm-matrix.mjs receipts --report-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-matrix-evidence
+          path: |
+            receipts/
+            artifact-readiness.json
+          retention-days: 7
