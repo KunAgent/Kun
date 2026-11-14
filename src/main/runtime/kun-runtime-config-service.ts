@@ -287,7 +287,7 @@ async function writeGuiManagedKunConfig(
       attachments: enabledByDefault(objectValue(capabilities.attachments)),
       web: {
         ...enabledByDefault(objectValue(capabilities.web)),
-        fetchEnabled: objectValue(capabilities.web).fetchEnabled === false ? false : true
+        fetchEnabled: objectValue(capabilities.web).fetchEnabled === false ? false : true, searchEnabled: objectValue(capabilities.web).searchEnabled === false ? false : true
       },
       skills,
       imageGen: imageGenConfigForRuntime(runtime.imageGeneration, objectValue(capabilities.imageGen)),

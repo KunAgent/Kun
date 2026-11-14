@@ -324,7 +324,7 @@ export function createRuntimeConfigController(
 	    await pruneUnsentAttachments(nextAttachmentStore)
 	    const nextMemoryStore = createPersistentMemoryStore(nextOptions, nowIso)
             const nextMemoryFeedback = await createReadyPersistentMemoryFeedback(nextOptions, nextMemoryStore)
-	    const nextWebProviders = buildWebToolProviders(nextOptions.capabilities?.web)
+	    const nextWebProviders = buildWebToolProviders(nextOptions.capabilities?.web, { runtimeOptions: () => nextOptions, resolveCredential: resolveCapabilityProviderCredential, nowIso })
 	    const nextImageGenProviders = buildImageGenToolProviders(nextOptions.capabilities?.imageGen, {
 	      attachmentStore: nextAttachmentStore,
 	      nowIso,
