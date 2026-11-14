@@ -12,7 +12,7 @@ import { guardCompilers, locateNpm, removeSmokeFixture, runProcess, smokeEnviron
 import { exerciseInstalledServer } from './lib/kun-npm-smoke-server.mjs'
 import { exerciseInstalledIntegrations } from './lib/kun-npm-smoke-integrations.mjs'
 import { exerciseInstalledWindows } from './lib/kun-npm-smoke-windows.mjs'
-import { registryInstallArguments, verifyProjectResolution } from './lib/kun-npm-registry-install.mjs'
+import { exerciseWindowsRegistryPackage, registryInstallArguments, verifyProjectResolution } from './lib/kun-npm-registry-install.mjs'
 import { exerciseArtifactLifecycle } from './lib/kun-npm-artifact-lifecycle.mjs'
 import { exerciseInstalledConfig, exerciseInstalledJson } from './lib/kun-npm-artifact-config.mjs'
 
@@ -156,7 +156,7 @@ async function runCoreSmoke(options) {
       const result = await runProcess(node, [npm, ...installArgs], { cwd: prefix, env, timeout: 600_000 })
       if (options.registryPackage) {
         const log = result.stdout + result.stderr
-        const downloads = options.registryProof.filter(item => item.name === manifest.name || process.platform === 'win32')
+        const downloads = options.registryProof.filter(item => item.name === manifest.name)
         const lock = global ? null : JSON.parse(await readFile(join(prefix, 'package-lock.json'), 'utf8'))
         for (const published of downloads) {
           assert(log.includes(published.tarball), 'npm HTTP log must record the real registry tarball fetch: ' + published.name)
@@ -164,12 +164,17 @@ async function runCoreSmoke(options) {
         }
         await check(global ? 'REG-03.global-registry-install' : 'REG-03.project-registry-install', async () => ({
           command: [node, npm, ...installArgs], exitCode: result.code, freshCache: true,
-          resolvedFromRegistry: true, downloads: downloads.map(({ name, tarball, integrity }) => ({ name, tarball, integrity })) }))
+          resolvedFromRegistry: true, downloads: downloads.map(({ name, tarball, integrity }) => ({ name, tarball, integrity })),
+          httpFetches: log.split(/\r?\n/).filter(line => downloads.some(item => line.includes(item.tarball))) }))
       }
       assert(!existsSync(env.KUN_NPM_COMPILER_AUDIT), 'A native compiler was invoked during installation')
       await writeFile(join(root, global ? 'global-install.log' : 'project-install.log'), result.stdout + result.stderr)
       return installedPackage(prefix, manifest.name, global)
     }
+    // The main candidate already bundles its Windows helper. Test the published
+    // component separately so it cannot mask a missing dependency in either main install.
+    if (options.registryPackage && process.platform === 'win32')
+      await exerciseWindowsRegistryPackage({ node, npm, root, env, manifest, proof: options.registryProof, check })
     let installed
     await check('NPM-01.project-install', async () => {
       const project = join(root, 'ordinary project')

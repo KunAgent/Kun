@@ -32,22 +32,29 @@ export function checkRegistryMatrix(receipts, release, manifest, accepted, initi
         proof.integrity === artifact.integrity && proof.observedTags?.next === artifact.version &&
         (proof.observedTags?.latest ?? null) === expectedLatest(artifact), 'Registry bytes or tags differ: ' + artifact.name + ' ' + slot)
     }
-    for (const id of ['REG-03.project-registry-install', 'REG-03.global-registry-install']) {
+    const installations = ['REG-03.project-registry-install', 'REG-03.global-registry-install'].map(id => ({ id, name: accepted.name }))
+    if (receipt.platform === 'win32') installations.push({ id: 'REG-03.windows-platform-registry-install', name: accepted.windowsPackage })
+    for (const { id, name } of installations) {
       const check = receipt.checks?.find(item => item.id === id)
       const detail = check?.detail
       fail(check?.status === 'pass' && detail?.exitCode === 0 && detail.freshCache === true &&
         detail.resolvedFromRegistry === true, 'Missing fresh registry install: ' + id + ' ' + slot)
       const args = detail?.command ?? []
-      fail(args.includes(accepted.name + '@' + accepted.version) && !args.includes('--offline') &&
+      fail(args.includes(name + '@' + accepted.version) && !args.includes('--offline') &&
         !args.some(arg => arg.endsWith('.tgz')) && args.includes('https://registry.npmjs.org/'),
       'Installation did not use the public exact-version reference: ' + id + ' ' + slot)
-      for (const artifact of artifacts.filter(item => item.name === accepted.name || receipt.platform === 'win32')) {
+      for (const artifact of artifacts.filter(item => item.name === name)) {
         const download = detail?.downloads?.find(item => item.name === artifact.name)
         const proof = registry?.artifacts?.find(item => item.name === artifact.name)
         fail(Boolean(download?.tarball?.startsWith('https://registry.npmjs.org/')) &&
           download?.tarball === proof?.tarball && download?.integrity === artifact.integrity,
         'npm did not fetch the published tarball: ' + artifact.name + ' ' + id + ' ' + slot)
+        fail(detail?.httpFetches?.some(line => line.includes(download?.tarball) && line.includes('cache miss')),
+          'Missing actual npm HTTP fetch: ' + id + ' ' + slot)
       }
+      if (name === accepted.windowsPackage) fail(detail?.nativeAddonLoaded === true &&
+        detail.payloadDigestsVerified === 2 && detail.sourceCommit === accepted.sourceCommit,
+      'Published Windows component was not verified and loaded: ' + slot)
     }
   }
   return { schemaVersion: 1, kind: 'kun-npm-registry-readiness', registryReady: errors.length === 0,

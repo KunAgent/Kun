@@ -85,7 +85,8 @@ test('registry matrix refuses local-install receipts, missing combinations, chan
     checks: ['project', 'global'].map(kind => ({ id: `REG-03.${kind}-registry-install`, status: 'pass', detail: {
       exitCode: 0, freshCache: true, resolvedFromRegistry: true, command: registryInstallArguments({
         reference: main.name + '@' + main.version, expectedName: main.name, expectedVersion: main.version, cache: '/fresh' }),
-      downloads: proof.filter(item => item.name === main.name) } })) }
+      downloads: proof.filter(item => item.name === main.name),
+      httpFetches: ['npm http fetch GET 200 ' + tarballUrl(main.name) + ' 100ms (cache miss)'] } })) }
   const check = receipt => checkRegistryMatrix([receipt], release, candidate, accepted).errors
   assert(!check(base).some(error => /registry|installed build|Registry|npm did/.test(error)))
   assert(check({ ...base, kind: 'kun-npm-native-install-receipt' }).some(error => /Not an exact registry/.test(error)))
