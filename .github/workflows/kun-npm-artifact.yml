@@ -77,7 +77,6 @@ jobs:
     env:
       KUN_NPM_EXPECTED_TARGET: ${{ matrix.target.id }}
       KUN_NPM_EXPECTED_NODE: ${{ matrix.node }}
-      KUN_NPM_SMOKE_ROOT: ${{ runner.temp }}/kun-npm-consumer
     steps:
       - uses: actions/checkout@v4
         with:
@@ -107,6 +106,8 @@ jobs:
           path: candidate
       - name: Install and exercise the actual candidate
         shell: bash
+        env:
+          KUN_NPM_SMOKE_ROOT: ${{ runner.temp }}/kun-npm-consumer
         run: node "$RUNNER_TEMP/kun-npm-driver/scripts/run-kun-npm-artifact-smoke.mjs" candidate receipt.json
       - uses: actions/upload-artifact@v4
         if: always()
