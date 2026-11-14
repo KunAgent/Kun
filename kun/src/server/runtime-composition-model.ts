@@ -66,6 +66,7 @@ import { createRuntimeGmailComposition } from './runtime-gmail-composition.js'
 import { GoogleWorkspaceModelClient } from '../gmail/model-data-policy.js'
 import { bindGmailThreadDataProtection } from '../gmail/thread-data-state.js'
 import { createRuntimeGmailModelPolicy } from './runtime-gmail-model-composition.js'
+import { appendNativeAntigravityQuotaProfile } from '../services/antigravity-native-quota-profile.js'
 
 export async function createRuntimeModelComposition(
   core: Awaited<ReturnType<typeof createRuntimeCore>>,
@@ -491,7 +492,7 @@ export async function createRuntimeModelComposition(
         }
       }))
       return {
-        profiles,
+        profiles: await appendNativeAntigravityQuotaProfile(profiles, core.activeOptions),
         defaultProviderId: snapshot.defaultProviderId
       }
     },

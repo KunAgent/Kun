@@ -12,6 +12,10 @@ import type { ProviderQuotaProbeProfile } from './provider-subscription-quota-se
 import { claudeAccessToken, validClaudeToken } from './provider-subscription-quota-metrics.js'
 import { codexUsesOfficialSubscriptionConfig } from './codex-subscription-config.js'
 import { claudeSubscriptionKeychainAccount, readClaudeSubscriptionKeychain } from './claude-subscription-keychain.js'
+import {
+  detectAntigravityLocalLogin,
+  type AntigravityLocalLoginEvidence
+} from './antigravity-native-quota-profile.js'
 
 type Env = Record<string, string | undefined>
 export type NativeComposerQuotaDependencies = {
@@ -21,13 +25,14 @@ export type NativeComposerQuotaDependencies = {
   baseEnv?: Env
   readText?: (path: string) => Promise<string>
   readClaudeKeychain?: (account: string) => Promise<string>
+  detectAntigravityLogin?: () => Promise<AntigravityLocalLoginEvidence>
   platform?: NodeJS.Platform
 }
 
 /** No CLI spawn, login, helper execution or credential mutation is performed. */
 export async function nativeComposerSubscriptionProfile(options: NativeComposerQuotaDependencies): Promise<ProviderQuotaProbeProfile | undefined> {
   const { definition } = options
-  if (!['codex', 'claude-code'].includes(definition.id)) return undefined
+  if (!['codex', 'claude-code', 'antigravity'].includes(definition.id)) return undefined
   const base = options.baseEnv ?? process.env
   const read = options.readText ?? readBoundedText
   let env: Env
@@ -48,6 +53,24 @@ export async function nativeComposerSubscriptionProfile(options: NativeComposerQ
   const proxyUrl = env.HTTPS_PROXY ?? env.https_proxy ?? env.ALL_PROXY ?? env.all_proxy ?? ''
   const workspace = options.workspaceRoot && isAbsolute(options.workspaceRoot) ? options.workspaceRoot : undefined
   if (options.workspaceRoot && !workspace) return undefined
+  if (definition.id === 'antigravity') {
+    if (nonempty(env.GEMINI_API_KEY) || nonempty(env.GOOGLE_API_KEY)) return undefined
+    const evidence = await (options.detectAntigravityLogin
+      ? options.detectAntigravityLogin()
+      : detectAntigravityLocalLogin({ env, home, platform: options.platform }))
+    if (!evidence.configured) return undefined
+    return {
+      id: 'native:antigravity',
+      name: 'Antigravity',
+      ...(evidence.fingerprint ? { accountId: `native:${evidence.fingerprint.slice(0, 16)}` } : {}),
+      presetId: 'gemini-subscription',
+      kind: 'antigravity-cli',
+      authType: 'subscription',
+      apiKey: '',
+      proxyUrl,
+      configured: true
+    }
+  }
   if (definition.id === 'codex') {
     if (nonempty(env.OPENAI_API_KEY) || nonempty(env.CODEX_API_KEY) ||
       (nonempty(env.OPENAI_BASE_URL) && !officialUrl(env.OPENAI_BASE_URL, 'api.openai.com'))) return undefined

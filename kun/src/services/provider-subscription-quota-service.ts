@@ -129,7 +129,10 @@ export type SubscriptionQuotaRuntime = {
     context?: ProbeContext
   ): Promise<GrokCredential | undefined>
   resolveCursorSession(): Promise<CursorSession | undefined>
-  resolveAntigravityCredential(context: ProbeContext): Promise<GoogleCredential | undefined>
+  resolveAntigravityCredential(
+    context: ProbeContext,
+    rejectedAccessToken?: string
+  ): Promise<GoogleCredential | undefined>
   resolveGeminiCliToken(context: ProbeContext): Promise<string | undefined>
   resolveOpenCodeGoQuota(): Promise<OpenCodeGoLocalQuotaResult | undefined>
   resolveOpenCodeGoCookie(): Promise<string | undefined>
@@ -255,10 +258,24 @@ export async function runSubscriptionQuotaProbe(
     const credential = await runtime.resolveAntigravityCredential(context)
     if (!credential) {
       throw new ProviderQuotaMissingCredentialError(
-        'Sign in to the official Antigravity app before refreshing quota.'
+        'Sign in with agy login or the official Antigravity app before refreshing quota.'
       )
     }
-    return probeGoogleCodeAssistQuota(credential, context, 'antigravity')
+    try {
+      return await probeGoogleCodeAssistQuota(credential, context, 'antigravity')
+    } catch (error) {
+      if (!(error instanceof ProviderQuotaAuthorizationError)) throw error
+      const refreshed = await runtime.resolveAntigravityCredential(
+        context,
+        credential.accessToken
+      )
+      if (!refreshed || refreshed.accessToken === credential.accessToken) {
+        throw new ProviderQuotaMissingCredentialError(
+          'The Antigravity login expired. Run agy login or sign in to Antigravity again.'
+        )
+      }
+      return probeGoogleCodeAssistQuota(refreshed, context, 'antigravity')
+    }
   }
   if (kind === 'opencode-go-local') {
     return probeOpenCodeGoLocalQuota(runtime, context)

@@ -259,20 +259,24 @@ export function relativeTime(deltaMs: number, locale?: string): string {
   return format.format(Math.round(deltaMs / 86_400_000), 'day')
 }
 
+function summaryParts(summary: string | undefined): string[] {
+  return summary?.split(' · ').map((part) => part.trim()).filter(Boolean) ?? []
+}
+
 /** A provider's plan as its card shows it: "max" reads "Max". */
 export function quotaPlanLabel(summary: string | undefined): string | undefined {
-  const text = summary?.trim()
-  if (!text || text.length > 32 || text.includes('@')) return undefined
+  const text = summaryParts(summary).find((part) => !part.includes('@'))
+  if (!text || text.length > 32) return undefined
   if (/^[a-z][a-z0-9_ -]*$/.test(text)) {
     return text.split(/[_\s-]+/).filter(Boolean).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')
   }
   return text
 }
 
-/** The account a summary names, when it is an address rather than a plan. */
+/** The account a summary names, when it includes an address alongside or instead of a plan. */
 export function quotaAccountLabel(summary: string | undefined): string | undefined {
-  const text = summary?.trim()
-  return text && text.includes('@') && text.length <= 120 ? text : undefined
+  const text = summaryParts(summary).find((part) => part.includes('@'))
+  return text && text.length <= 120 ? text : undefined
 }
 
 export function clampPercent(value: number): number {

@@ -36,6 +36,8 @@ describe('composer subscription evidence', () => {
       { providerId: 'http-account', label: 'API key', accountId: 'api-account', modelIds: ['gpt'] }
     ] }
     expect(composerSubscriptionSelection(input)).toEqual({ harnessId: 'codex', credentialMode: 'native-login', providerId: 'default' })
+    expect(composerSubscriptionSelection({ ...input, harnessId: 'antigravity' })).toEqual({ harnessId: 'antigravity', credentialMode: 'native-login', providerId: 'default' })
+    expect(composerSubscriptionSelection({ ...input, harnessId: 'antigravity', credentialMode: 'provider', providerId: 'gemini-subscription' })).toEqual({ harnessId: 'antigravity', credentialMode: 'provider', providerId: 'gemini-subscription' })
     expect(composerSubscriptionSelection({ ...input, providerId: 'personal-native' })?.providerId).toBe('personal-native')
     expect(composerSubscriptionSelection({ ...input, credentialMode: 'provider', providerId: 'http-account' })?.accountId).toBe('api-account')
     expect(composerSubscriptionSelection({ ...input, enabled: false })).toBeUndefined()

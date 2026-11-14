@@ -3,6 +3,7 @@ import type { ProviderQuotaEntry, ProviderQuotaMetric } from '@shared/provider-q
 import {
   classifyQuotaEntries,
   formatQuotaAmount,
+  quotaAccountLabel,
   quotaCountText,
   quotaFillPercent,
   quotaPace,
@@ -87,10 +88,15 @@ describe('quota view model', () => {
     expect(quotaCountText(metric({ usedPercent: 10 }), 'used', 'en')).toBeUndefined()
   })
 
-  it('reads plan names and leaves account addresses alone', () => {
+  it('reads plan names and extracts account addresses even when combined', () => {
     expect(quotaPlanLabel('max')).toBe('Max')
     expect(quotaPlanLabel('team_plus')).toBe('Team Plus')
     expect(quotaPlanLabel('Pro+')).toBe('Pro+')
     expect(quotaPlanLabel('me@example.com')).toBeUndefined()
+    expect(quotaAccountLabel('me@example.com')).toBe('me@example.com')
+    expect(quotaPlanLabel('Google AI Pro · user@gmail.com')).toBe('Google AI Pro')
+    expect(quotaAccountLabel('Google AI Pro · user@gmail.com')).toBe('user@gmail.com')
+    expect(quotaPlanLabel('standard-tier · user@gmail.com')).toBe('Standard Tier')
+    expect(quotaAccountLabel('standard-tier · user@gmail.com')).toBe('user@gmail.com')
   })
 })

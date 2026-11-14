@@ -1,7 +1,9 @@
 import { Loader2, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { harnessDisplayNames } from '../../lib/harness-display-name'
+import { harnessDisplayName, harnessDisplayNames } from '../../lib/harness-display-name'
+import { useHarnessStore } from '../../store/harness-store'
+import { AgentIcon } from '../agent-icon'
 import { usageTotalsFromBuckets } from '../chat/initial-session-usage-support'
 import {
   formatCompactNumber,
@@ -19,15 +21,18 @@ import { useActiveThreadMayHaveUsage } from '../../store/chat-store'
 import { formatUsageDay, UsageTrendChart, type UsageTrendMetric } from '../usage/UsageTrendChart'
 
 export type UsagePeriod = 'today' | '7d' | '30d' | '90d'
+type RankingView = 'model' | 'agent'
 
 const PERIODS: UsagePeriod[] = ['today', '7d', '30d', '90d']
 const PERIOD_DAYS: Record<UsagePeriod, number> = { today: 1, '7d': 7, '30d': 30, '90d': 90 }
 const MODEL_SCOPES: ModelUsageScope[] = ['primary', 'side', 'all']
+const RANKING_VIEWS: readonly RankingView[] = ['model', 'agent']
 const HISTORY_DAYS = 90
 const MODELS_COLLAPSED = 5
 const EMPTY_BUCKETS: DailyUsageBucket[] = []
 const PERIOD_KEY = 'kun.usage.period'
 const METRIC_KEY = 'kun.usage.trendMetric'
+const RANKING_VIEW_KEY = 'kun.usage.rankingView'
 
 export type SidebarUsagePanelStatus = {
   loading: boolean
@@ -68,6 +73,7 @@ export function SidebarUsagePanel({
   const locale = i18n.language
   const [period, setPeriodState] = useState<UsagePeriod>(() => readStored(PERIOD_KEY, PERIODS, '7d'))
   const [metric, setMetricState] = useState<UsageTrendMetric>(() => readStored(METRIC_KEY, ['tokens', 'cost'] as const, 'tokens'))
+  const [rankingView, setRankingViewState] = useState<RankingView>(() => readStored(RANKING_VIEW_KEY, RANKING_VIEWS, 'model'))
   const [selectedDay, setSelectedDay] = useState<string | null>(null)
   const [modelScope, setModelScope] = useState<ModelUsageScope>('primary')
   const [modelsExpanded, setModelsExpanded] = useState(false)
@@ -108,6 +114,11 @@ export function SidebarUsagePanel({
   const setMetric = (next: UsageTrendMetric): void => {
     setMetricState(next)
     store(METRIC_KEY, next)
+  }
+  const setRankingView = (next: RankingView): void => {
+    setRankingViewState(next)
+    setModelsExpanded(false)
+    store(RANKING_VIEW_KEY, next)
   }
   const selectDay = (day: string | null): void => {
     setSelectedDay(period === 'today' && day === today ? null : day)
@@ -215,6 +226,9 @@ export function SidebarUsagePanel({
 
         <ModelRanking
           period={period}
+          locale={locale}
+          view={rankingView}
+          onViewChange={setRankingView}
           scope={modelScope}
           onScopeChange={(scope) => { setModelScope(scope); setModelsExpanded(false) }}
           expanded={modelsExpanded}
@@ -272,8 +286,11 @@ function CurrentSessionStrip({ activeThreadId, loading, usage, locale }: {
   )
 }
 
-function ModelRanking({ period, scope, onScopeChange, expanded, onToggleExpanded, state }: {
+function ModelRanking({ period, locale, view, onViewChange, scope, onScopeChange, expanded, onToggleExpanded, state }: {
   period: UsagePeriod
+  locale: string
+  view: RankingView
+  onViewChange: (view: RankingView) => void
   scope: ModelUsageScope
   onScopeChange: (scope: ModelUsageScope) => void
   expanded: boolean
@@ -281,18 +298,41 @@ function ModelRanking({ period, scope, onScopeChange, expanded, onToggleExpanded
   state: ReturnType<typeof useModelUsageState>
 }): ReactElement {
   const { t } = useTranslation('common')
+  const harnessRows = useHarnessStore((storeState) => storeState.rows)
   // Zero-token buckets stay in the response; only models used in the range rank.
   const models = (state.usage?.buckets ?? [])
     .filter((bucket) => bucket.totalTokens > 0)
     .sort((left, right) => right.totalTokens - left.totalTokens)
+  const agents = (state.usage?.agents ?? [])
+    .filter((bucket) => bucket.totalTokens > 0 || bucket.turns > 0)
+    .sort((left, right) => right.totalTokens - left.totalTokens || right.turns - left.turns)
   const total = Math.max(1, models.reduce((sum, bucket) => sum + bucket.totalTokens, 0))
-  const shown = expanded ? models : models.slice(0, MODELS_COLLAPSED)
+  const agentTotal = Math.max(1, agents.reduce((sum, bucket) => sum + bucket.totalTokens, 0))
+  const shownModels = expanded ? models : models.slice(0, MODELS_COLLAPSED)
+  const shownAgents = expanded ? agents : agents.slice(0, MODELS_COLLAPSED)
+  const activeCount = view === 'agent' ? agents.length : models.length
+  const titleKey = view === 'agent' ? 'usagePanelAgentUsage' : 'usageQuotaModels'
   return (
-    <section className="usage-card" aria-label={t('usageQuotaModels')} data-usage-models>
+    <section className="usage-card" aria-label={t(titleKey)} data-usage-models>
       <div className="usage-card-head">
-        <h3>{t('usageQuotaModels')}</h3>
+        <h3>{t(titleKey)}</h3>
         <span className="usage-card-sub">{t(`usagePanelPeriodLabel.${period}`)}</span>
         <span className="kq-grow" />
+        <div className="kq-seg is-small" role="radiogroup" aria-label={t('usagePanelBreakdownLabel')}>
+          {RANKING_VIEWS.map((key) => (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={view === key}
+              data-active={view === key ? 'true' : 'false'}
+              data-usage-breakdown={key}
+              onClick={() => onViewChange(key)}
+            >
+              {t(key === 'model' ? 'usagePanelByModel' : 'usagePanelByAgent')}
+            </button>
+          ))}
+        </div>
         <label className="usage-select">
           <span className="sr-only">{t('usageModelScopeLabel')}</span>
           <select value={scope} onChange={(event) => onScopeChange(event.target.value as ModelUsageScope)}
@@ -311,9 +351,37 @@ function ModelRanking({ period, scope, onScopeChange, expanded, onToggleExpanded
           <Loader2 className="animate-spin" aria-hidden="true" strokeWidth={1.8} />
           <p>{t('usageHeatmapLoading')}</p>
         </div>
+      ) : view === 'agent' ? (
+        agents.length > 0 ? (
+          <ol className="usage-models" data-usage-agent-list>
+            {shownAgents.map((bucket) => {
+              const share = (bucket.totalTokens / agentTotal) * 100
+              const displayName = harnessDisplayName(bucket.harnessId, harnessRows)
+              const turnsText = t('usagePanelKpiTurnsDetail', {
+                turns: new Intl.NumberFormat(locale).format(bucket.turns)
+              })
+              return (
+                <li key={bucket.harnessId} className="usage-model" data-usage-agent={bucket.harnessId}>
+                  <div className="usage-model-row">
+                    <span className="usage-model-name usage-agent-name" title={`${displayName} · ${turnsText}`}>
+                      <AgentIcon harnessId={bucket.harnessId} size={14} className="usage-agent-icon" />
+                      <span className="usage-agent-label">{displayName}</span>
+                      <small>{turnsText}</small>
+                    </span>
+                    <span className="usage-model-figure">{formatCompactNumber(bucket.totalTokens)}</span>
+                    <span className="usage-model-share">{share.toFixed(share >= 10 ? 0 : 1)}%</span>
+                  </div>
+                  <div className="usage-model-track"><span style={{ width: `${Math.min(100, share)}%` }} /></div>
+                </li>
+              )
+            })}
+          </ol>
+        ) : (
+          <p className="usage-chart-empty" data-usage-agent-empty>{t('usagePanelAgentsEmpty')}</p>
+        )
       ) : models.length > 0 ? (
         <ol className="usage-models">
-          {shown.map((bucket) => {
+          {shownModels.map((bucket) => {
             const share = (bucket.totalTokens / total) * 100
             return (
               <li key={bucket.model} className="usage-model" data-usage-model={bucket.model}>
@@ -321,7 +389,7 @@ function ModelRanking({ period, scope, onScopeChange, expanded, onToggleExpanded
                   <span className="usage-model-name" title={bucket.model}>
                     {bucket.model}
                     {bucket.harnessIds?.length ? (
-                      <small data-model-usage-agent>{harnessDisplayNames(bucket.harnessIds)}</small>
+                      <small data-model-usage-agent>{harnessDisplayNames(bucket.harnessIds, harnessRows)}</small>
                     ) : null}
                   </span>
                   <span className="usage-model-figure">{formatCompactNumber(bucket.totalTokens)}</span>
@@ -335,9 +403,9 @@ function ModelRanking({ period, scope, onScopeChange, expanded, onToggleExpanded
       ) : (
         <p className="usage-chart-empty">{t('usagePanelModelsEmpty')}</p>
       )}
-      {models.length > MODELS_COLLAPSED ? (
+      {activeCount > MODELS_COLLAPSED ? (
         <button type="button" className="kq-text-button usage-models-more" aria-expanded={expanded} onClick={onToggleExpanded}>
-          {expanded ? t('usagePanelShowFewerModels') : t('usagePanelShowAllModels', { count: models.length })}
+          {expanded ? t('usagePanelShowFewerModels') : t('usagePanelShowAllModels', { count: activeCount })}
         </button>
       ) : null}
     </section>

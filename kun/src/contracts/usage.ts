@@ -235,6 +235,11 @@ export const ModelUsageBucketSchema = DailyUsageCountersSchema.extend({
 })
 export type ModelUsageBucket = z.infer<typeof ModelUsageBucketSchema>
 
+export const AgentUsageBucketSchema = DailyUsageCountersSchema.extend({
+  harness_id: z.string().min(1)
+})
+export type AgentUsageBucket = z.infer<typeof AgentUsageBucketSchema>
+
 export const ModelUsageDayBucketSchema = DailyUsageBucketSchema
 export type ModelUsageDayBucket = z.infer<typeof ModelUsageDayBucketSchema>
 
@@ -245,6 +250,7 @@ export const ModelUsageResponseSchema = UsageResponseSchema.extend({
   to: DateStringSchema,
   timezone: z.string().min(1),
   buckets: z.array(ModelUsageBucketSchema),
+  agents: z.array(AgentUsageBucketSchema).optional(),
   days: z.array(ModelUsageDayBucketSchema),
   totals: DailyUsageTotalsSchema
 })
