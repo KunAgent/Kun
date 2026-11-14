@@ -153,8 +153,9 @@ export async function exerciseInstalledServer(context) {
         cwd: root, env: { ...env, KUN_CONFIG: config, KUN_TUI_URL: endpoint }, timeout: 90_000 })
       const result = JSON.parse(output.stdout)
       assert.equal(result.exitCode, 0, result)
-      assert(!result.forcedExit, 'Attached TUI did not exit through /quit')
+      assert(!result.forcedExit, `Attached TUI did not exit through /quit: ${JSON.stringify(result)}`)
       assert(result.matchedReply, 'Attached TUI did not finish the fixture turn')
+      assert(result.sentPrompt, 'Attached TUI must submit a new prompt')
       assert.equal((await request('/v1/runtime/info')).instanceId, identity,
         'Disconnecting a non-owning TUI must not stop or replace its owner')
     })
@@ -178,8 +179,9 @@ export async function exerciseInstalledServer(context) {
           cwd: root, env: { ...env, KUN_CONFIG: config }, timeout: 90_000 })
         const result = JSON.parse(output.stdout)
         assert.equal(result.exitCode, 0, result)
-        assert(!result.forcedExit, 'Owned TUI did not exit through /quit')
+        assert(!result.forcedExit, `Owned TUI did not exit through /quit: ${JSON.stringify(result)}`)
         assert(result.matchedReply, 'TUI did not render the fixture response')
+        assert(result.sentPrompt, 'TUI must submit a new prompt')
         assert.equal(result.terminalKind, process.platform === 'win32' ? 'windows-conpty' : 'posix-pty')
         return result
       })
@@ -244,8 +246,8 @@ export async function exerciseInstalledTuiCancellation(context) {
       { cwd: root, env: { ...isolated, KUN_CONFIG: path }, timeout: 90_000 })
     const result = JSON.parse(output.stdout)
     assert.equal(result.exitCode, 0, result)
-    assert(!result.forcedExit, 'Cancellation TUI did not exit through /quit')
-    assert(result.cancellationVerified, 'Ctrl+C did not interrupt the active turn through the real TUI')
+    assert(!result.forcedExit, `Cancellation TUI did not exit through /quit: ${JSON.stringify(result)}`)
+    assert(result.cancellationVerified, 'Terminal input did not interrupt the active turn through the real TUI')
     return result
   })
 }

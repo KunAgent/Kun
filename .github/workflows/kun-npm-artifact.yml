@@ -22,7 +22,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '26.12.0'
-      - run: npm ci
+      - name: Install only the locked helper build tools and dependencies
+        run: npm --prefix kun ci --ignore-scripts --no-audit --no-fund
       - name: Build ownership helpers on their native target
         run: npm --prefix kun run build:windows-startup
       - uses: actions/upload-artifact@v4
@@ -91,13 +92,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
-      - name: Export test-only files and remove checkout including Git history
+      - name: Export test-only files
         shell: bash
         working-directory: drivers-checkout
         run: |
           node scripts/export-kun-npm-test-driver.mjs "$RUNNER_TEMP/kun-npm-driver"
-          cd "$GITHUB_WORKSPACE"
-          rm -rf drivers-checkout
+      - name: Remove checkout and Git history after the exporter has exited
+        shell: bash
+        run: node -e 'require("node:fs").rmSync("drivers-checkout",{recursive:true,force:true,maxRetries:10,retryDelay:100})'
       - uses: actions/download-artifact@v4
         with:
           name: kun-npm-candidate

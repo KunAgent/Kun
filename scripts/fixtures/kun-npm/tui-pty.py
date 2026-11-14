@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Drive the installed CLI in a real POSIX PTY without importing application code."""
+"""Drive the installed CLI through a real PTY or ConPTY."""
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -33,8 +34,14 @@ def main():
     output = bytearray()
     started = time.monotonic()
     sent = False
+    draft_sent = False
+    prompt_offset = 0
+    submit_offset = 0
+    prompt = b"KUN_ARTIFACT_VERIFY_WAIT" if mode == ["cancel"] else b"Return the fixture marker"
     first_exit = None
     quit_sent = False
+    quit_submitted = False
+    quit_offset = 0
     forced_exit = False
     cancelling = mode == ["cancel"]
     cancel_thread = None
@@ -44,6 +51,8 @@ def main():
     control_file = os.environ.get("KUN_TUI_SMOKE_CONTROL_FILE")
     readiness_written = False
     code = None
+    last_poll_error = None
+    plain = lambda data: re.sub(rb"\x1b\[[0-?]*[ -/]*[@-~]", b"", data)
     try:
         while time.monotonic() - started < 65:
             output.extend(terminal.read(0.1))
@@ -51,11 +60,16 @@ def main():
             code = terminal.poll()
             if code is not None:
                 break
-            if elapsed > 5 and not sent:
-                prompt = b"KUN_ARTIFACT_VERIFY_WAIT\r" if cancelling else b"Return the fixture marker\r"
+            screen = plain(output)
+            if elapsed > 5 and not draft_sent and b"Ask anything" in screen:
+                prompt_offset = len(output)
                 terminal.write(prompt)
+                draft_sent = True
+            if draft_sent and not sent and prompt in plain(output[prompt_offset:]):
+                submit_offset = len(output)
+                terminal.write(b"\r")
                 sent = True
-            matched = b"kun-npm-fixture-ok" in output
+            matched = sent and b"kun-npm-fixture-ok" in output[submit_offset:]
             if controlled and matched and not readiness_written:
                 with open(control_file + ".ready.json", "w", encoding="utf-8") as file:
                     json.dump({"pid": pid, "matchedReply": True}, file)
@@ -63,32 +77,41 @@ def main():
             if cancelling and sent and elapsed > next_poll and not cancelled:
                 next_poll = elapsed + 0.5
                 try:
-                    if cancel_thread is None:
+                    if cancel_thread is None and b"interrupt" in plain(output[submit_offset:]):
                         for thread in runtime_state(data_dir)["threads"]:
                             state = runtime_state(data_dir, thread["id"])
                             if (state.get("activeTurn") or {}).get("status") == "running":
                                 cancel_thread = thread["id"]
-                                terminal.write(b"\x03")
+                                terminal.write(b"\x1b")
                                 break
                     else:
                         turn = runtime_state(data_dir, cancel_thread).get("latestTurn") or {}
                         cancelled = turn.get("status") in ["interrupted", "cancelled", "aborted"]
-                except (OSError, ValueError, KeyError):
-                    pass
+                except (OSError, ValueError, KeyError) as error:
+                    last_poll_error = str(error)
             ready_to_exit = os.path.exists(control_file) if controlled else (cancelled if cancelling else matched)
             if ready_to_exit and first_exit is None:
                 first_exit = time.monotonic()
             if first_exit is not None and time.monotonic() - first_exit > 0.75 and not quit_sent:
-                terminal.write(b"/quit\r")
+                quit_offset = len(output)
+                terminal.write(b"/quit")
                 quit_sent = True
+            if quit_sent and not quit_submitted and b"/quit" in plain(output[quit_offset:]):
+                terminal.write(b"\r")
+                quit_submitted = True
         if code is None:
             forced_exit = True
             code = terminal.terminate()
         result = {"exitCode": code, "renderedBytes": len(output),
                   "terminalKind": terminal.kind,
+                  "sentPrompt": sent,
+                  "draftSent": draft_sent,
+                  "quitSubmitted": quit_submitted,
                   "forcedExit": forced_exit,
                   "cancellationVerified": cancelled,
-                  "matchedReply": b"kun-npm-fixture-ok" in output,
+                  "cancellationKey": "escape" if cancelling else None,
+                  "lastPollError": last_poll_error,
+                  "matchedReply": sent and b"kun-npm-fixture-ok" in output[submit_offset:],
                   "transcriptTail": output[-6000:].decode("utf-8", errors="replace")}
         print(json.dumps(result))
     finally:

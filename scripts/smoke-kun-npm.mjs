@@ -100,7 +100,7 @@ async function runCoreSmoke(options) {
   const manifestEntry = entries.find((entry) => entry.name === 'package/package.json')
   assert(manifestEntry, 'Tarball package.json is missing')
   const manifest = JSON.parse(manifestEntry.content.toString())
-  const root = await mkdtemp(join(tmpdir(), 'kun npm smoke '))
+  const root = await mkdtemp(join(tmpdir(), 'kun npm smoke 中文 '))
   // Keep both installs on the exact bytes whose digest the receipt records,
   // even when a developer rebuilds the candidate path during this smoke.
   const candidate = join(root, 'candidate.tgz')
@@ -194,6 +194,12 @@ async function runCoreSmoke(options) {
       if (process.platform !== 'win32') {
         const shim = join(globalPrefix, 'bin', 'kun')
         assert((await runProcess(shim, ['--version'], { cwd: root, env })).stdout.includes(manifest.version))
+      } else {
+        const shim = join(globalPrefix, 'kun.cmd')
+        const command = process.env.ComSpec ?? join(process.env.SystemRoot, 'System32/cmd.exe')
+        const result = await runProcess(command, ['/d', '/s', '/c', `""${shim}" --version"`],
+          { cwd: root, env, windowsVerbatimArguments: true })
+        assert(result.stdout.includes(manifest.version), 'Installed global Windows shim did not run')
       }
     })
     model = await startFixtureModel()
