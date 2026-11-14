@@ -24,6 +24,14 @@ test('requires every native target and both Node versions', () => {
   assert.equal(checkMatrix(receipts(), release).success, true)
   assert.match(checkMatrix(receipts().slice(1), release).errors.join('\n'), /Missing target/)
 })
+
+test('complete gate can consume granular proof without inventing a passing summary id', () => {
+  const values = receipts()
+  for (const value of values) value.checks = value.checks.filter(check => check.id !== 'NPM-01')
+  assert.equal(checkMatrix(values, release).success, true)
+  values[0].checks.find(check => check.id === 'NPM-01.global-install').status = 'not-run'
+  assert.match(checkMatrix(values, release).errors.join('\n'), /Incomplete NPM-01/)
+})
 test('cannot treat not-run checks, duplicate receipts or different artifacts as complete', () => {
   const values = receipts()
   values[0].checks[0].status = 'not-run'

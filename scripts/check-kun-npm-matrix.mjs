@@ -13,6 +13,32 @@ export const ARTIFACT_CHECKS = [
 const NATIVE_CHECKS = ['NPM-01', 'NPM-02', 'NPM-03', 'NPM-04', 'NPM-05',
   'RUN-01', 'RUN-04', 'RUN-05', 'LIFE-01']
 const GLOBAL_CHECKS = ['NPM-06', 'GUI-01', 'DOC-01']
+// Native receipts keep granular proof. Derive only criteria actually covered
+// by those operations; an explicit not-run remains authoritative.
+const EVIDENCE_GROUPS = {
+  'NPM-01': ['NPM-01.project-install', 'NPM-01.global-install'],
+  'NPM-02': ['NPM-02.payload'], 'NPM-03': ['NPM-03.locked-bundle'],
+  'NPM-04': ['NPM-04.sqlite-native', 'NPM-04.runtime-index', 'RUN-04.pty-tui', 'RUN-04.pty-bare'],
+  'NPM-05': ['NPM-05.help-version-update', 'NPM-05.exec-file'],
+  'RUN-03': ['RUN-03.endpoint-families'],
+  'RUN-04': ['RUN-04.pty-tui', 'RUN-04.pty-bare', 'RUN-04.pty-cancel'],
+  'RUN-05': ['RUN-05.http-thread-lifecycle', 'DATA-01.reopen'],
+  'RUN-06': ['RUN-06.sse-replay', 'RUN-06.interrupt'],
+  'RUN-09': ['RUN-09.non-gui-extension', 'RUN-07.skills-mcp'],
+  'LIFE-01': ['LIFE-01.owned-serve-exit', 'LIFE-01.serve-shutdown-order', 'LIFE-01.tui-shutdown-order',
+    'LIFE-01.attached-shutdown-order', 'RUN-07.skills-mcp'],
+  'LIFE-02': ['LIFE-02.startup-failure', 'LIFE-02.owner-loss-shutdown-order', 'LIFE-02.manager-readiness-failure'],
+  'LIFE-03': ['LIFE-03.owner-conflict', 'LIFE-03.isolated-profiles'],
+  'LIFE-04': ['LIFE-04.attached-tui', 'LIFE-01.attached-shutdown-order']
+}
+
+function criterionStatus(receipt, id) {
+  const explicit = receipt.checks?.find(check => check.id === id)
+  if (explicit) return explicit.status
+  const group = EVIDENCE_GROUPS[id]
+  return group?.every(required => receipt.checks?.some(check => check.id === required && check.status === 'pass'))
+    ? 'pass' : undefined
+}
 const SMOKE_CHECKS = [
   'NPM-01.project-install', 'NPM-01.global-install', 'NPM-02.payload',
   'NPM-03.locked-bundle', 'NPM-04.sqlite-native', 'NPM-05.help-version-update',
@@ -47,7 +73,7 @@ export function checkMatrix(receipts, release, { complete = true } = {}) {
     }
     if (receipt.platform === 'win32') {
       for (const id of ['NPM-04.windows-native-job', 'NPM-04.windows-helper-missing', 'NPM-04.windows-helper-corrupt'])
-        if (checks.get(id) !== 'pass') errors.push(`Incomplete ${id}: ${key}`)
+        if (criterionStatus(receipt, id) !== 'pass') errors.push(`Incomplete ${id}: ${key}`)
       for (const id of ['RUN-04.pty-tui', 'RUN-04.pty-bare']) {
         const check = receipt.checks?.find(value => value.id === id)
         if (check?.detail?.terminalKind !== 'windows-conpty' || check.detail.forcedExit !== false)
@@ -56,7 +82,7 @@ export function checkMatrix(receipts, release, { complete = true } = {}) {
     }
     if (complete) {
       for (const id of NATIVE_CHECKS) {
-        if (checks.get(id) !== 'pass') errors.push(`Incomplete ${id}: ${key}`)
+        if (criterionStatus(receipt, id) !== 'pass') errors.push(`Incomplete ${id}: ${key}`)
       }
     }
   }
@@ -69,7 +95,7 @@ export function checkMatrix(receipts, release, { complete = true } = {}) {
   const expected = new Set(release.targets.flatMap(t => release.testNodeVersions.map(v => `${t}/${v}`)))
   for (const key of slots.keys()) if (!expected.has(key)) errors.push(`Unexpected target: ${key}`)
   if (complete) {
-    const passed = (values, id) => values.some(value => value.checks?.some(c => c.id === id && c.status === 'pass'))
+    const passed = (values, id) => values.some(value => criterionStatus(value, id) === 'pass')
     for (const id of GLOBAL_CHECKS) if (!passed(receipts, id)) errors.push(`Incomplete ${id}: matrix`)
     for (const platform of new Set(release.targets.map(t => t.split('-')[0]))) {
       const family = receipts.filter(r => r.platform === platform)

@@ -159,8 +159,27 @@ results. `--smoke-only` requires all ten native combinations; it does not mark
 the broader artifact gate complete. `--report-only` writes the remaining full
 Gate A requirements to `artifact-readiness.json` without granting release authority.
 
-The local candidate has macOS arm64 receipts for both required Node versions,
-including npm 11 and npm 12 consumers. Supplementary acceptance uses this entry:
+The [native matrix run](https://github.com/KunAgent/Kun/actions/runs/43568571565)
+passed all ten combinations against source commit
+`d0dd66e1252db133cccb74ef02419f0ccad31298`. All jobs consumed the same main
+tarball, SHA-256
+`f1bf1db01806c90d454a6f5b033fcfc9c11f97b6c02b22761a847e757a646b5a`.
+The receipts contain 426 passing operation checks. These are the environments
+actually tested, not certified minimum OS or glibc versions:
+
+| Native target | Runner environment | Node 26.4.0 | Node 26.12.0 |
+| --- | --- | --- | --- |
+| darwin-arm64 | macOS 15, Darwin 24.6.0 | pass | pass |
+| darwin-x64 | macOS 15 Intel, Darwin 24.6.0 | pass | pass |
+| win32-x64 | Windows Server 2025, build 26100 | pass | pass |
+| linux-arm64 | Ubuntu 24.04, glibc 2.39 | pass | pass |
+| linux-x64 | Ubuntu 24.04, glibc 2.39 | pass | pass |
+
+Node 26.4.0 used npm 11.17.0; Node 26.12.0 used npm 11.20.0. The Intel
+26.4.0 job needed an infrastructure retry after its passing smoke could not
+upload to GitHub's Artifact service; the candidate bytes were unchanged.
+Earlier local macOS npm 11/12 receipts retain their own candidate identities.
+Supplementary acceptance uses this entry:
 
 ```sh
 npm run smoke:kun:npm-compatibility -- --tarball /absolute/path/to/candidate.tgz --output /absolute/path/to/compatibility.json --node /absolute/path/to/node-26 --historical-resources /path/to/historical/Kun.app/Contents/Resources --desktop-resources /path/to/current/Kun.app/Contents/Resources
@@ -187,8 +206,11 @@ Desktop acceptance verifies Developer ID signing and an identical Runtime buildI
 then runs the existing packaged CLI smoke and a real turn/tool/shutdown check.
 The synthetic capture/permission smokes remain separate repository requirements.
 TUI cancellation and actual SQLite indexing also have local receipts. Other
-native targets and source-inaccessible CI execution remain unverified locally;
-namespace rights and registry installation await a separate publication task.
+native targets and source-inaccessible execution are covered by the CI matrix
+above. Full Gate A still requires installed `run --json` evidence, configuration
+boundary cases, historical compatibility across OS families and aggregation of
+global launcher/desktop/documentation evidence. Namespace rights, minimum OS
+certification and registry installation remain separate requirements.
 
 ## Update and uninstall
 
