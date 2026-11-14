@@ -77,7 +77,12 @@ export async function collectGateEvidence(options) {
     assert.equal(gui?.detail?.packagedReceiptSha256, createHash('sha256').update(desktopText).digest('hex'))
     assert.equal(desktop.checks.find(check => check.id === 'GUI-01.signed-packaged-cli-and-runtime')?.status, 'pass')
     assert.equal(data.success, true, 'Desktop/npm sequential data reuse must complete')
-    assert.equal(data.checks.find(check => check.id === 'DATA-01.reopen-desktop')?.status, 'pass')
+    const desktopReuse = data.checks.find(check => check.id === 'DATA-01.reopen-desktop')
+    assert.equal(desktopReuse?.status, 'pass')
+    assert.equal(desktopReuse.detail.desktopArtifact.build.buildId, packed.kunNpm.buildId)
+    assert.equal(desktopReuse.detail.desktopArtifact.build.serviceVersion, packed.kunNpm.runtimeSourceVersion ?? packed.version)
+    if (options['desktop-data-receipt'])
+      assert.equal(data.checks.find(check => check.id === 'DATA-02.uninstall-after-history-upgrade')?.status, 'pass')
     for (const receipt of receipts) {
       const origin = receipt.checks.find(check => check.id === 'DATA-01.historical-artifact-origin')
       assert.equal(origin?.status, 'pass', 'Missing genuine historical producer')

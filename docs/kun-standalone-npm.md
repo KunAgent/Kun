@@ -118,6 +118,12 @@ npm run smoke:kun:npm -- --tarball /absolute/path/to/candidate.tgz --output /abs
 npm run test:kun:npm
 ```
 
+The rc build version is `0.4.5-rc.1`, recorded with channel `frontier` in
+`kun/npm/release.json`. The npm build wrapper supplies this identity consistently
+to both native-helper and Runtime builds. The private Runtime source and desktop
+remain at `0.4.5`; npm records `runtimeSourceVersion` separately, and desktop
+regression requires the identical emitted JavaScript buildId.
+
 The smoke installs into new prefix/cache and project directories, then drives
 the installed commands against local fixtures. It never imports the source
 Runtime or uses a real model account. Receipts distinguish passed, failed and
@@ -278,3 +284,19 @@ feed, publish a Node archive, or migrate the desktop app to a global npm package
 
 Namespace registration, the disabled publisher workflow and the separate
 prerelease/bootstrap steps are described in [npm publication](./kun-npm-publication.md).
+
+Complete validation can run source typechecks/build/tests on an isolated CI
+worker with `global_checks_only`, binding its receipt and hashed logs to the
+same candidate digest/buildId. A separate `desktop_data_only` Mac CI job checks
+old producer -> actual npm installation -> desktop -> npm uninstall in one
+profile. Its disposable ad-hoc desktop is a data fixture only. Developer ID
+signing and packaged CLI/turn/tool/shutdown evidence come from the separate
+production-signed desktop receipt; both are required by the complete collector.
+
+For an additional local desktop regression, `--materialize-archive` requires
+`--native-receipts` containing the already-passing actual npm matrix. It verifies
+and extracts the original tarball, and records that method explicitly. Removal
+of that materialized directory is not labeled npm uninstall; actual npm install
+and historical-data-preserving uninstall remain mandatory in the native matrix
+and the dedicated desktop data job. Use `--desktop-data-receipt` when collecting
+separate sequential data and production signing evidence.
