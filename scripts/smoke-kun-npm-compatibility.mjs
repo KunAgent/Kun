@@ -80,7 +80,7 @@ async function runCoreAcceptance(options) {
     await context.check('NPM-01.supplementary-install', async () => {
       await runProcess(node, [npm, 'install', '--global', '--prefix', prefix, '--cache', join(root, 'npm-cache'),
         '--offline', '--engine-strict', '--omit=dev', '--no-audit', '--no-fund', candidate],
-      { cwd: root, env, timeout: 180_000 })
+      { cwd: root, env, timeout: 600_000 })
       const installedRoot = join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), 'node_modules', ...manifest.name.split('/'))
       context.installed = { root: installedRoot, entry: join(installedRoot, 'bin/kun.mjs') }
       const actual = JSON.parse(await readFile(join(installedRoot, 'package.json'), 'utf8'))

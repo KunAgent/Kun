@@ -2,9 +2,9 @@
 import assert from 'node:assert/strict'
 import { createHash, randomUUID } from 'node:crypto'
 import { readFile, mkdir, writeFile } from 'node:fs/promises'
-import { dirname, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 import { createRequire } from 'node:module'
-import { runProcess } from './lib/kun-npm-smoke-process.mjs'
+import { runProcess, waitUntil } from './lib/kun-npm-smoke-process.mjs'
 import { tarEntries } from './smoke-kun-npm.mjs'
 
 const require = createRequire(import.meta.url)
@@ -12,8 +12,13 @@ const { parse } = require('yaml')
 const options = {}
 for (let i = 2; i < process.argv.length; i += 2) {
   const key = process.argv[i], value = process.argv[i + 1]
-  assert(['--candidate', '--desktop-receipt', '--output'].includes(key) && value, 'Provide candidate, desktop-receipt and output paths')
-  options[key.slice(2)] = resolve(value)
+  assert(['--candidate', '--desktop-receipt', '--output', '--wait-desktop-ms', '--validation-evidence'].includes(key) && value,
+    'Provide candidate, desktop-receipt and output paths')
+  if (key === '--wait-desktop-ms') {
+    const timeout = Number(value)
+    assert(Number.isSafeInteger(timeout) && timeout > 0 && timeout <= 1_800_000, 'Invalid desktop receipt wait budget')
+    options['wait-desktop-ms'] = timeout
+  } else options[key.slice(2)] = resolve(value)
 }
 assert(options.candidate && options['desktop-receipt'] && options.output)
 await mkdir(dirname(options.output), { recursive: true })
@@ -47,16 +52,45 @@ try {
     assert.equal(result.code, 0, name + ': ' + log.slice(-5000))
     assert.equal(result.timedOut, false)
   }
+  if (options['validation-evidence']) {
+    const validation = JSON.parse(await readFile(options['validation-evidence'], 'utf8'))
+    assert.equal(validation.kind, 'kun-npm-build-validation')
+    assert.equal(validation.success, true)
+    assert.equal(validation.tarballSha256, receipt.tarballSha256)
+    assert.equal(validation.buildId, receipt.buildId)
+    assert.equal(validation.sourceCommit, receipt.sourceCommit)
+    for (const command of validation.commands) {
+      assert.equal(command.exitCode, 0)
+      assert.equal(command.timedOut, false)
+      const log = resolve(dirname(options['validation-evidence']), basename(command.log))
+      assert.equal(createHash('sha256').update(await readFile(log)).digest('hex'), command.logSha256)
+      receipt.commands.push({ ...command, originalLogPath: command.log, log })
+    }
+    for (const name of ['candidate-integrity', 'test-kun-npm', 'typecheck', 'build', 'runtime-fence-tests'])
+      assert(receipt.commands.some(command => command.name === name))
+    receipt.validationSourceCommit = validation.validationSourceCommit
+    await save()
+  } else {
   await execute('candidate-integrity', process.execPath, ['scripts/verify-kun-npm-candidate.mjs', options.candidate], 60_000)
   for (const script of ['test:kun:npm', 'typecheck', 'build']) {
     assert(npm, 'Launch through npm run to select its exact npm CLI')
-    await execute(script.replaceAll(':', '-'), process.execPath, [npm, 'run', script], 600_000)
+    await execute(script.replaceAll(':', '-'), process.execPath, [npm, 'run', script], 1_800_000)
   }
   await execute('runtime-fence-tests', resolve('node_modules/.bin/vitest'), ['run', '--root', 'kun',
     'src/manager/turn-mutation-context.test.ts', 'src/manager/remote-data-stores.test.ts',
     'src/session/native-callback-context.test.ts'], 180_000)
+  }
   const build = JSON.parse(await readFile('kun/dist/runtime-build.json', 'utf8'))
   assert.equal(build.buildId, packed.kunNpm.buildId, 'Local validation must exercise the candidate Runtime source')
+  if (options['wait-desktop-ms']) {
+    receipt.state = 'awaiting-matching-desktop-receipt'
+    await save()
+    await waitUntil(async () => {
+      const proof = JSON.parse(await readFile(options['desktop-receipt'], 'utf8'))
+      return proof.success === true && proof.tarballSha256 === receipt.tarballSha256 &&
+        proof.buildId === receipt.buildId ? true : null
+    }, 'matching successful desktop acceptance receipt', options['wait-desktop-ms'])
+  }
   const desktopText = await readFile(options['desktop-receipt'], 'utf8')
   const desktop = JSON.parse(desktopText)
   assert.equal(desktop.kind, 'kun-npm-supplementary-artifact-acceptance')

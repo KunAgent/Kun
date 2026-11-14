@@ -3,6 +3,10 @@ name: Kun npm native artifact matrix
 on:
   workflow_dispatch:
     inputs:
+      global_checks_only:
+        description: Validate source typechecks, build and related tests against an immutable candidate
+        type: boolean
+        default: false
       windows_probe_only:
         description: Diagnose terminal behavior from an existing immutable candidate
         type: boolean
@@ -27,7 +31,7 @@ concurrency:
 
 jobs:
   windows-payload:
-    if: ${{ !inputs.windows_probe_only && inputs.reuse_candidate_run_id == '' }}
+    if: ${{ !inputs.windows_probe_only && !inputs.global_checks_only && inputs.reuse_candidate_run_id == '' }}
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -47,7 +51,7 @@ jobs:
           retention-days: 7
 
   candidate:
-    if: ${{ always() && !inputs.windows_probe_only && (inputs.reuse_candidate_run_id != '' || needs.windows-payload.result == 'success') }}
+    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only && (inputs.reuse_candidate_run_id != '' || needs.windows-payload.result == 'success') }}
     needs: windows-payload
     outputs:
       source_commit: ${{ steps.identity.outputs.source_commit }}
@@ -90,7 +94,7 @@ jobs:
           retention-days: 7
 
   install:
-    if: ${{ always() && !inputs.windows_probe_only && needs.candidate.result == 'success' }}
+    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only && needs.candidate.result == 'success' }}
     needs: candidate
     timeout-minutes: 60
     strategy:
@@ -153,7 +157,7 @@ jobs:
 
   evidence:
     needs: install
-    if: ${{ always() && !inputs.windows_probe_only }}
+    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -183,7 +187,7 @@ jobs:
           retention-days: 7
 
   windows-terminal-probe:
-    if: ${{ inputs.windows_probe_only }}
+    if: ${{ inputs.windows_probe_only && !inputs.global_checks_only }}
     runs-on: windows-2025
     timeout-minutes: 15
     strategy:
@@ -209,3 +213,33 @@ jobs:
           name: kun-npm-terminal-probe-${{ matrix.node }}
           path: terminal-probe.json
           if-no-files-found: error
+
+  build-validation:
+    if: ${{ inputs.global_checks_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: validation/candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Record typecheck, build and related test evidence for the exact candidate
+        run: node scripts/run-kun-npm-build-validation.mjs validation/candidate validation/build-validation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-build-validation
+          path: |
+            validation/*.json
+            validation/*.log
+          if-no-files-found: error
+          retention-days: 90
