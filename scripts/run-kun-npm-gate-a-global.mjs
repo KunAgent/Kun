@@ -80,7 +80,9 @@ try {
     'src/manager/turn-mutation-context.test.ts', 'src/manager/remote-data-stores.test.ts',
     'src/session/native-callback-context.test.ts'], 180_000)
   }
-  const build = JSON.parse(await readFile('kun/dist/runtime-build.json', 'utf8'))
+  const build = options['validation-evidence']
+    ? { buildId: receipt.buildId }
+    : JSON.parse(await readFile('kun/dist/runtime-build.json', 'utf8'))
   assert.equal(build.buildId, packed.kunNpm.buildId, 'Local validation must exercise the candidate Runtime source')
   if (options['wait-desktop-ms']) {
     receipt.state = 'awaiting-matching-desktop-receipt'

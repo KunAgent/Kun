@@ -12,11 +12,15 @@ const require = createRequire(import.meta.url)
 const { verifyMacAppSigning } = require('../mac-signing-policy.cjs')
 const { runPackagedCliSmoke } = require('../smoke-packaged-cli.cjs')
 
-export async function describeDesktop(resources) {
+export async function describeDesktop(resources, { ciDataFixture = false } = {}) {
   assert.equal(process.platform, 'darwin', 'Use the corresponding native packaged-app driver on other operating systems')
   const canonical = await realpath(resources)
   const app = dirname(dirname(canonical))
-  const signature = verifyMacAppSigning(app, { bundleId: 'com.xingyuzhong.deepseekgui', flavor: 'production' })
+  if (ciDataFixture) assert.equal(process.env.GITHUB_ACTIONS, 'true', 'Ad-hoc data fixtures are allowed only in disposable CI')
+  const signature = ciDataFixture
+    ? (execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', app]), { kind: 'ad-hoc-ci-data-fixture' })
+    : verifyMacAppSigning(app, { bundleId: 'com.xingyuzhong.deepseekgui', flavor: 'production',
+      env: { ...process.env, KUN_MAC_ALLOW_ADHOC: undefined, MAC_SIGN: '1' } })
   assert(signature, 'Use an actual Developer ID signed desktop artifact')
   const root = join(canonical, 'app.asar.unpacked/kun')
   const build = await jsonFile(join(root, 'dist/runtime-build.json'))

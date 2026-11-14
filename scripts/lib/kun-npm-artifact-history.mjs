@@ -79,6 +79,7 @@ export async function exerciseArtifactHistory(context) {
   for (const kind of ['npm', 'replacement-path', ...(context.options.history ? [] : ['desktop'])]) {
     await context.check(`DATA-01.reopen-${kind}`, async () => {
       let launch = context.launch
+      let desktopArtifact
       const replacement = join(context.root, 'replacement package')
       if (kind === 'replacement-path') {
         await rename(context.installed.root, replacement)
@@ -87,7 +88,11 @@ export async function exerciseArtifactHistory(context) {
       try {
         if (kind === 'desktop') {
           assert(context.options['desktop-resources'], 'A matching desktop artifact is required for sequential npm/desktop reuse')
-          launch = (await (await import('./kun-npm-artifact-desktop.mjs')).describeDesktop(context.options['desktop-resources'])).launch
+          desktopArtifact = await (await import('./kun-npm-artifact-desktop.mjs')).describeDesktop(
+            context.options['desktop-resources'], { ciDataFixture: Boolean(context.options.ciDataDesktop) })
+          assert.equal(desktopArtifact.build.buildId, context.manifest.kunNpm.buildId)
+          assert.equal(desktopArtifact.build.serviceVersion, context.manifest.kunNpm.runtimeSourceVersion ?? context.manifest.version)
+          launch = desktopArtifact.launch
         }
         const server = await artifactServer(context, profile, launch)
         try {
@@ -104,6 +109,7 @@ export async function exerciseArtifactHistory(context) {
           assert.equal(completed.status, 'completed')
           await validate(server)
           return { sameDataDirectory: true, independentOwnerInstanceId: server.ready.instanceId,
+            ...(desktopArtifact ? { desktopArtifact: { ...desktopArtifact, launch: undefined } } : {}),
             preservedCategories: ['thread', 'configuration', 'settings', 'memory', 'usage', 'goal', 'task', 'attachment'] }
         } finally { await server.stop() }
       } finally {

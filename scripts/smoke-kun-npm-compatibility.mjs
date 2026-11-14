@@ -10,19 +10,24 @@ import { guardCompilers, locateNpm, removeSmokeFixture, runProcess, smokeEnviron
 import { startFixtureModel } from './lib/kun-npm-smoke-model.mjs'
 import { exerciseArtifactLifecycle } from './lib/kun-npm-artifact-lifecycle.mjs'
 import { treeHashes } from './lib/kun-npm-artifact-runtime.mjs'
+import { nativeReceipts } from './lib/kun-npm-release-artifacts.mjs'
+import { checkMatrix } from './check-kun-npm-matrix.mjs'
 
 export function parseGateArguments(argv) {
   const options = { only: ['lifecycle', 'history', 'desktop'] }
   for (let index = 0; index < argv.length; index++) {
     const key = argv[index]
     if (key === '--keep-work') { options.keepWork = true; continue }
-    assert(['--tarball', '--output', '--node', '--historical-resources', '--desktop-resources', '--only'].includes(key), `Unknown argument: ${key}`)
+    if (key === '--materialize-archive') { options.materializeArchive = true; continue }
+    if (key === '--ci-data-desktop') { options.ciDataDesktop = true; continue }
+    assert(['--tarball', '--output', '--node', '--historical-resources', '--desktop-resources', '--only', '--native-receipts'].includes(key), `Unknown argument: ${key}`)
     const value = argv[++index]
     assert(value && !value.startsWith('--'), `Missing value for ${key}`)
     options[key.slice(2)] = key === '--only' ? value.split(',') : resolve(value)
   }
   assert(options.tarball && options.output, 'Usage: smoke-kun-npm-compatibility.mjs --tarball FILE --output RECEIPT [--only lifecycle,history,desktop]')
   assert(options.only.length && options.only.every(value => ['lifecycle', 'history', 'desktop'].includes(value)), 'Invalid acceptance stage')
+  if (options.materializeArchive) assert(options['native-receipts'], 'Archive materialization requires actual native npm installation receipts')
   return options
 }
 
@@ -44,7 +49,9 @@ async function runCoreAcceptance(options) {
   assert(/^26\./.test(nodeVersion) && Number(nodeVersion.split('.')[1]) >= 4, 'Use Node >=26.4 <27')
   const archive = await readFile(options.tarball)
   const manifest = JSON.parse(tarEntries(archive).find(entry => entry.name === 'package/package.json').content)
-  const root = await mkdtemp(join(tmpdir(), 'kun-npm-gate-a-'))
+  const workBase = process.env.KUN_NPM_SMOKE_ROOT?.trim() || tmpdir()
+  await mkdir(workBase, { recursive: true })
+  const root = await mkdtemp(join(workBase, 'kun-npm-gate-a-'))
   const receipt = { schemaVersion: 1, runId: options.runId, kind: 'kun-npm-supplementary-artifact-acceptance',
     platform: process.platform, arch: process.arch, os: release(), nodeVersion,
     packageName: manifest.name, packageVersion: manifest.version, buildId: manifest.kunNpm.buildId,
@@ -77,11 +84,20 @@ async function runCoreAcceptance(options) {
     const env = smokeEnvironment(node, root)
     env.KUN_NPM_COMPILER_AUDIT = await guardCompilers(root)
     const npm = locateNpm(node)
-    await context.check('NPM-01.supplementary-install', async () => {
-      await runProcess(node, [npm, 'install', '--global', '--prefix', prefix, '--cache', join(root, 'npm-cache'),
+    await context.check(options.materializeArchive ? 'ARTIFACT-01.verified-archive-materialization' : 'NPM-01.supplementary-install', async () => {
+      if (options.materializeArchive) {
+        const values = (await nativeReceipts(options['native-receipts'])).map(item => item.value)
+        const release = JSON.parse(await readFile('kun/npm/release.json', 'utf8'))
+        assert(values.every(value => value.tarballSha256 === receipt.tarballSha256))
+        assert(checkMatrix(values, release, { complete: false }).success, 'Actual native installation matrix must pass before local archive regression')
+        await runProcess('tar', ['-xzf', candidate, '-C', prefix], { cwd: root, env, timeout: 600_000 })
+        receipt.materialization = { method: 'verified-original-tarball', nativeNpmInstallReceipts: values.length,
+          note: 'Local desktop/data supplement; actual npm install and uninstall remain verified by the complete native matrix.' }
+      } else await runProcess(node, [npm, 'install', '--global', '--prefix', prefix, '--cache', join(root, 'npm-cache'),
         '--offline', '--engine-strict', '--omit=dev', '--no-audit', '--no-fund', candidate],
       { cwd: root, env, timeout: 600_000 })
-      const installedRoot = join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), 'node_modules', ...manifest.name.split('/'))
+      const installedRoot = options.materializeArchive ? join(prefix, 'package') :
+        join(prefix, ...(process.platform === 'win32' ? [] : ['lib']), 'node_modules', ...manifest.name.split('/'))
       context.installed = { root: installedRoot, entry: join(installedRoot, 'bin/kun.mjs') }
       const actual = JSON.parse(await readFile(join(installedRoot, 'package.json'), 'utf8'))
       assert.equal(actual.kunNpm.buildId, manifest.kunNpm.buildId)
@@ -100,11 +116,13 @@ async function runCoreAcceptance(options) {
         process.stderr.write(`[gate-a] ${stage}: ${error.message}\n`)
       }
     }
-    if (context.historyProfile && !receipt.stageErrors) await context.check('DATA-02.uninstall-after-history-upgrade', async () => {
+    if (context.historyProfile && !receipt.stageErrors) await context.check(options.materializeArchive
+      ? 'DATA-02.remove-materialized-package-preserves-history' : 'DATA-02.uninstall-after-history-upgrade', async () => {
       const profile = context.historyProfile
       const before = await treeHashes(profile.env.KUN_DATA_DIR)
       const settings = await readFile(profile.env.KUN_MANAGER_SETTINGS_PATH, 'utf8')
-      await runProcess(node, [npm, 'uninstall', '--global', '--prefix', prefix, '--cache', join(root, 'npm-cache'),
+      if (options.materializeArchive) await removeSmokeFixture(context.installed.root)
+      else await runProcess(node, [npm, 'uninstall', '--global', '--prefix', prefix, '--cache', join(root, 'npm-cache'),
         '--offline', '--no-audit', '--no-fund', manifest.name], { cwd: root, env, timeout: 90_000 })
       assert.deepEqual(await treeHashes(profile.env.KUN_DATA_DIR), before)
       assert.equal(await readFile(profile.env.KUN_MANAGER_SETTINGS_PATH, 'utf8'), settings)

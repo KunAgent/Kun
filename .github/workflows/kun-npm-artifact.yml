@@ -3,6 +3,10 @@ name: Kun npm native artifact matrix
 on:
   workflow_dispatch:
     inputs:
+      desktop_data_only:
+        description: Verify sequential data reuse with a disposable ad-hoc CI desktop
+        type: boolean
+        default: false
       global_checks_only:
         description: Validate source typechecks, build and related tests against an immutable candidate
         type: boolean
@@ -31,7 +35,7 @@ concurrency:
 
 jobs:
   windows-payload:
-    if: ${{ !inputs.windows_probe_only && !inputs.global_checks_only && inputs.reuse_candidate_run_id == '' }}
+    if: ${{ !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only && inputs.reuse_candidate_run_id == '' }}
     runs-on: windows-2025
     timeout-minutes: 30
     steps:
@@ -51,7 +55,7 @@ jobs:
           retention-days: 7
 
   candidate:
-    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only && (inputs.reuse_candidate_run_id != '' || needs.windows-payload.result == 'success') }}
+    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only && (inputs.reuse_candidate_run_id != '' || needs.windows-payload.result == 'success') }}
     needs: windows-payload
     outputs:
       source_commit: ${{ steps.identity.outputs.source_commit }}
@@ -94,7 +98,7 @@ jobs:
           retention-days: 7
 
   install:
-    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only && needs.candidate.result == 'success' }}
+    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only && needs.candidate.result == 'success' }}
     needs: candidate
     timeout-minutes: 60
     strategy:
@@ -157,7 +161,7 @@ jobs:
 
   evidence:
     needs: install
-    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only }}
+    if: ${{ always() && !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -187,7 +191,7 @@ jobs:
           retention-days: 7
 
   windows-terminal-probe:
-    if: ${{ inputs.windows_probe_only && !inputs.global_checks_only }}
+    if: ${{ inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only }}
     runs-on: windows-2025
     timeout-minutes: 15
     strategy:
@@ -215,7 +219,7 @@ jobs:
           if-no-files-found: error
 
   build-validation:
-    if: ${{ inputs.global_checks_only }}
+    if: ${{ inputs.global_checks_only && !inputs.desktop_data_only }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -241,5 +245,54 @@ jobs:
           path: |
             validation/*.json
             validation/*.log
+          if-no-files-found: error
+          retention-days: 90
+
+  desktop-data:
+    if: ${{ inputs.desktop_data_only }}
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      KUN_MAC_ALLOW_ADHOC: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - run: npm ci
+      - name: Build a disposable CI desktop, without installing or publishing
+        run: npm run dist -- --mac dir --arm64 --config.directories.output=.cache/kun-npm-ci-data/desktop
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: validation/candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Fetch the pinned genuine historical producer
+        run: |
+          node --input-type=module - <<'JS'
+          import {readFile,mkdir,appendFile} from 'node:fs/promises'
+          import {resolve} from 'node:path'
+          import {tarEntries} from './scripts/smoke-kun-npm.mjs'
+          import {describeHistoricalRelease} from './scripts/lib/kun-npm-artifact-historical-release.mjs'
+          import {smokeEnvironment} from './scripts/lib/kun-npm-smoke-process.mjs'
+          const root=resolve('validation/historical');await mkdir(root,{recursive:true})
+          const m=JSON.parse(await readFile('validation/candidate/manifest.json','utf8'))
+          const p=JSON.parse(tarEntries(await readFile('validation/candidate/'+m.artifact.filename)).find(e=>e.name==='package/package.json').content)
+          const historical=await describeHistoricalRelease({root,manifest:p,env:smokeEnvironment(process.execPath,root)})
+          await appendFile(process.env.GITHUB_ENV,'HISTORICAL_RESOURCES='+historical.resources+'\nCANDIDATE_TARBALL='+resolve('validation/candidate',m.artifact.filename)+'\n')
+          JS
+      - name: Verify genuine historical to npm to desktop data reuse and npm uninstall
+        run: >-
+          node scripts/smoke-kun-npm-compatibility.mjs --tarball "$CANDIDATE_TARBALL"
+          --output validation/desktop-data.json --only history --ci-data-desktop
+          --historical-resources "$HISTORICAL_RESOURCES"
+          --desktop-resources .cache/kun-npm-ci-data/desktop/mac-arm64/Kun.app/Contents/Resources
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-desktop-data
+          path: validation/desktop-data.json
           if-no-files-found: error
           retention-days: 90

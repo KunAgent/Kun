@@ -11,7 +11,7 @@ export function parseGateEvidenceArguments(argv) {
   const options = {}
   for (let i = 0; i < argv.length; i += 2) {
     const key = argv[i], value = argv[i + 1]
-    assert(['--candidate', '--receipts', '--global-evidence', '--desktop-receipt', '--output'].includes(key) &&
+    assert(['--candidate', '--receipts', '--global-evidence', '--desktop-receipt', '--desktop-data-receipt', '--output'].includes(key) &&
       value && !value.startsWith('--'), 'Provide candidate, receipts, global-evidence, desktop-receipt and output paths')
     assert(!options[key.slice(2)], 'Duplicate argument: ' + key)
     options[key.slice(2)] = resolve(value)
@@ -59,7 +59,8 @@ export async function collectGateEvidence(options) {
     const global = JSON.parse(await readFile(options['global-evidence'], 'utf8'))
     const desktopText = await readFile(options['desktop-receipt'], 'utf8')
     const desktop = JSON.parse(desktopText)
-    for (const proof of [global, desktop, ...receipts]) {
+    const data = options['desktop-data-receipt'] ? JSON.parse(await readFile(options['desktop-data-receipt'], 'utf8')) : desktop
+    for (const proof of [global, desktop, data, ...receipts]) {
       assert.equal(proof.tarballSha256, manifest.artifact.sha256, 'Mixed candidate evidence')
       assert.equal(proof.buildId, packed.kunNpm.buildId, 'Mixed Runtime build evidence')
       assert.equal(proof.sourceCommit, manifest.sourceCommit, 'Mixed source provenance')
@@ -75,6 +76,8 @@ export async function collectGateEvidence(options) {
     const gui = global.checks.find(check => check.id === 'GUI-01')
     assert.equal(gui?.detail?.packagedReceiptSha256, createHash('sha256').update(desktopText).digest('hex'))
     assert.equal(desktop.checks.find(check => check.id === 'GUI-01.signed-packaged-cli-and-runtime')?.status, 'pass')
+    assert.equal(data.success, true, 'Desktop/npm sequential data reuse must complete')
+    assert.equal(data.checks.find(check => check.id === 'DATA-01.reopen-desktop')?.status, 'pass')
     for (const receipt of receipts) {
       const origin = receipt.checks.find(check => check.id === 'DATA-01.historical-artifact-origin')
       assert.equal(origin?.status, 'pass', 'Missing genuine historical producer')
@@ -89,7 +92,7 @@ export async function collectGateEvidence(options) {
       assert.equal(receipt.checks.find(check => check.id === 'DATA-02.uninstall-preserves-history')
         ?.detail?.includesAuthenticHistoricalProfile, true)
     }
-    const gate = checkMatrix(receipts, release, { supplements: [global, desktop] })
+    const gate = checkMatrix(receipts, release, { supplements: [global, desktop, ...(data === desktop ? [] : [data])] })
     result.gate = gate
     result.errors = gate.errors
     result.candidate = { ...manifest.artifact, localPath: resolve(options.candidate, manifest.artifact.filename) }
@@ -102,7 +105,7 @@ export async function collectGateEvidence(options) {
       checksPassed: receipt.checks.filter(check => check.status === 'pass').length,
       testDriverSourceCommit: receipt.isolation.testDriverSourceCommit,
       receipt: receipt.evidenceFile, sha256: receipt.evidenceSha256 }))
-    result.supplementaryEvidence = [options['global-evidence'], options['desktop-receipt']]
+    result.supplementaryEvidence = [options['global-evidence'], options['desktop-receipt'], ...(options['desktop-data-receipt'] ? [options['desktop-data-receipt']] : [])]
     result.artifactReady = gate.complete && gate.success
     result.state = result.artifactReady ? 'artifact-ready-awaiting-publication' : 'incomplete'
     result.deferred = ['Namespace/publisher verification', 'Registry publication and installation acceptance', 'dist-tag promotion']

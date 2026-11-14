@@ -10,6 +10,8 @@ test('supplementary acceptance selects explicit stages and has no publication op
   assert.throws(() => parseGateArguments(['--tarball', 'candidate.tgz', '--output', 'receipt.json', '--only', 'registry']), /Invalid acceptance stage/)
   const options = parseGateArguments(['--tarball', 'candidate.tgz', '--output', 'receipt.json', '--only', 'lifecycle,history'])
   assert.deepEqual(options.only, ['lifecycle', 'history'])
+  assert.throws(() => parseGateArguments(['--tarball', 'candidate.tgz', '--output', 'receipt.json',
+    '--materialize-archive']), /requires actual native npm installation receipts/)
 })
 
 test('a failed supplementary preflight cannot leave a stale successful receipt', async () => {
