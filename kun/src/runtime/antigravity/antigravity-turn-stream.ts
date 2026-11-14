@@ -39,6 +39,8 @@ export class AntigravityTurnStream {
   private text = ''
   private queue: Promise<void> = Promise.resolve()
   private failure: unknown
+  private lastStepInputTokens: number | undefined
+  private toolSteps = 0
 
   constructor(
     private readonly deps: StreamDeps,
@@ -48,19 +50,48 @@ export class AntigravityTurnStream {
     this.timing = harnessTurnTiming(threadId, turnId)
   }
 
+  /** Whether any streamed assistant delta has already been published to the timeline. */
+  get hasEmittedOutput(): boolean {
+    return Boolean(this.item)
+  }
+
+  get toolStepCount(): number {
+    return this.toolSteps
+  }
+
   /** Every complete stdout line, handed over the moment it arrives. */
   readonly onLine = (line: string): void => {
     const signal = antigravityStreamSignal(line)
     if (!signal) return
     switch (signal.kind) {
       case 'prompt-accepted': this.timing.requestStarted(); break
-      case 'tool-started': this.timing.toolStarted(); break
+      case 'tool-started':
+        this.toolSteps += 1
+        this.timing.toolStarted()
+        break
       case 'tool-finished': this.timing.toolFinished(); break
       case 'text':
+        if (signal.inputTokens !== undefined) this.lastStepInputTokens = signal.inputTokens
         this.timing.text(signal.text)
         this.publish(signal.text)
         break
+      case 'response-usage':
+        this.lastStepInputTokens = signal.inputTokens
+        break
     }
+  }
+
+  /**
+   * Latest-request context occupancy (`input_tokens`, which in `agy` already
+   * includes `cache_read_tokens`). Multi-step tool turns sum `result.usage`, so
+   * only fall back to `finalUsage` when no stream steps or tool calls ran.
+   */
+  contextOccupancyTokens(finalUsage: AntigravityUsage | undefined): number | undefined {
+    if (this.lastStepInputTokens !== undefined) return this.lastStepInputTokens
+    if (this.toolSteps === 0 && finalUsage && finalUsage.inputTokens > 0) {
+      return finalUsage.inputTokens
+    }
+    return undefined
   }
 
   private publish(delta: string): void {

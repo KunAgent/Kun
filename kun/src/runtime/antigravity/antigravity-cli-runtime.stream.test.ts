@@ -42,12 +42,33 @@ function replaySpawn(lines: Capture, clock: { value: number }, args?: (value: re
   }) as typeof spawn
 }
 
-async function run(spawnFn: typeof spawn, id: string, controller = new AbortController()) {
+async function run(
+  spawnFn: typeof spawn,
+  id: string,
+  controller = new AbortController(),
+  options: {
+    contextProfile?: {
+      contextWindowTokens: number
+      contextWindowKnown?: boolean
+      softThresholdTokens: number
+      hardThresholdTokens: number
+    }
+    nativeLogin?: boolean
+  } = {}
+) {
   const threadStore = new InMemoryThreadStore()
   const sessionStore = new InMemorySessionStore()
+  const providerId = options.nativeLogin ? undefined : 'gemini-subscription'
   const turn = TurnSchema.parse({ id: `turn-${id}`, threadId: `thread-${id}`, status: 'running', prompt: 'hi', model: 'gemini-3.6-flash', createdAt: '2026-10-09T00:00:00.000Z' })
   await threadStore.upsert({
-    ...createThreadRecord({ id: turn.threadId, title: 'Antigravity stream', workspace: '/tmp', model: turn.model!, providerId: 'gemini-subscription', status: 'running' }),
+    ...createThreadRecord({
+      id: turn.threadId,
+      title: 'Antigravity stream',
+      workspace: '/tmp',
+      model: turn.model!,
+      ...(providerId ? { providerId } : {}),
+      status: 'running'
+    }),
     turns: [turn]
   })
   await sessionStore.appendItem(turn.threadId, makeUserItem({ id: `user-${id}`, threadId: turn.threadId, turnId: turn.id, text: 'hi' }))
@@ -58,8 +79,9 @@ async function run(spawnFn: typeof spawn, id: string, controller = new AbortCont
   let n = 0
   const runtime = new AntigravityCliRuntime({
     providerConfigs: {},
-    providerIds: new Set(['gemini-subscription']),
-    defaultIsAntigravity: false,
+    providerIds: providerId ? new Set([providerId]) : new Set(),
+    defaultIsAntigravity: Boolean(options.nativeLogin),
+    ...(options.contextProfile ? { contextProfile: () => options.contextProfile! } : {}),
     threadStore,
     sessionStore,
     turns: {
@@ -81,9 +103,12 @@ async function run(spawnFn: typeof spawn, id: string, controller = new AbortCont
     ids: { next: (prefix: string) => `${prefix}_${++n}` },
     spawnFn
   })
-  const outcome = await runtime.runTurn(turn.threadId, turn.id, controller.signal, 'gemini-subscription')
+  const outcome = await runtime.runTurn(turn.threadId, turn.id, controller.signal, providerId)
   const usage = recorded.find((draft) => draft.kind === 'usage')
-  return { outcome, deltas, items, order, usage: usage && usage.kind === 'usage' ? usage : undefined }
+  const snapshots = recorded.filter(
+    (draft): draft is Extract<RuntimeEventDraft, { kind: 'context_snapshot' }> => draft.kind === 'context_snapshot'
+  )
+  return { outcome, deltas, items, order, usage: usage && usage.kind === 'usage' ? usage : undefined, snapshots }
 }
 
 describe('AntigravityCliRuntime stream-json turn', () => {
@@ -186,5 +211,72 @@ describe('AntigravityCliRuntime stream-json turn', () => {
     // 6 of the 8 lines are text; every one is persisted before the turn is finished.
     expect(deltas).toHaveLength(6)
     expect(order).toEqual([...Array(6).fill('delta'), 'finish:aborted'])
+  })
+
+  it('replaces the start-of-turn estimate with live step occupancy and emits default providerId for native-login', async () => {
+    const contextProfile = {
+      contextWindowTokens: 1_000_000,
+      contextWindowKnown: false,
+      softThresholdTokens: 750_000,
+      hardThresholdTokens: 850_000
+    }
+    const clock = { value: 0 }
+    const bicycle = await run(
+      replaySpawn(capture('agy-stream-bicycle'), clock),
+      'snapshot-bicycle',
+      new AbortController(),
+      { contextProfile, nativeLogin: true }
+    )
+    expect(bicycle.snapshots).toHaveLength(2)
+    expect(bicycle.snapshots[0]).toMatchObject({
+      providerId: 'default',
+      occupancySource: 'estimate',
+      nativeHistory: 'none',
+      contextWindowKnown: false
+    })
+    expect(bicycle.snapshots[1]).toMatchObject({
+      providerId: 'default',
+      estimatedInputTokens: 12_010,
+      breakdown: { tools: 0, system: 0, skills: 0, messages: 12_010, other: 0 },
+      toolCount: 0,
+      occupancySource: 'agent',
+      nativeHistory: 'known',
+      contextWindowKnown: false
+    })
+
+    const tool = await run(
+      replaySpawn(capture('agy-stream-tool'), clock),
+      'snapshot-tool',
+      new AbortController(),
+      { contextProfile }
+    )
+    expect(tool.snapshots).toHaveLength(2)
+    expect(tool.snapshots[1]).toMatchObject({
+      providerId: 'gemini-subscription',
+      estimatedInputTokens: 12_374,
+      toolCount: 1,
+      occupancySource: 'agent',
+      nativeHistory: 'known'
+    })
+
+    const singleJson = JSON.stringify({
+      conversation_id: 'native-json',
+      status: 'SUCCESS',
+      response: 'ok',
+      usage: { input_tokens: 800, output_tokens: 20, thinking_tokens: 5, cache_read_tokens: 200, total_tokens: 820 }
+    })
+    const fallback = await run(
+      replaySpawn([[0, singleJson]], clock),
+      'snapshot-json',
+      new AbortController(),
+      { contextProfile, nativeLogin: true }
+    )
+    expect(fallback.snapshots).toHaveLength(2)
+    expect(fallback.snapshots[1]).toMatchObject({
+      providerId: 'default',
+      estimatedInputTokens: 800,
+      occupancySource: 'agent',
+      nativeHistory: 'known'
+    })
   })
 })

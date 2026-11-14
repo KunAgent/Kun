@@ -1,9 +1,18 @@
 /** What one line of `agy --print --output-format stream-json` means for a Kun turn. */
 export type AntigravityStreamSignal =
   | { kind: 'prompt-accepted' }
-  | { kind: 'text'; text: string }
+  | { kind: 'text'; text: string; inputTokens?: number }
+  | { kind: 'response-usage'; inputTokens: number }
   | { kind: 'tool-started' }
   | { kind: 'tool-finished' }
+
+function stepInputTokens(usage: unknown): number | undefined {
+  if (!usage || typeof usage !== 'object') return undefined
+  const value = (usage as Record<string, unknown>).input_tokens
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : undefined
+}
 
 /**
  * The CLI prints newline-delimited events: `init` once the conversation exists,
@@ -22,10 +31,15 @@ export function antigravityStreamSignal(line: string): AntigravityStreamSignal |
   switch (step.step_type) {
     case 'user_input':
       return step.state === 'DONE' ? { kind: 'prompt-accepted' } : undefined
-    case 'agent_response':
-      return typeof step.text_delta === 'string' && step.text_delta
-        ? { kind: 'text', text: step.text_delta }
-        : undefined
+    case 'agent_response': {
+      const inputTokens = stepInputTokens(step.usage)
+      if (typeof step.text_delta === 'string' && step.text_delta) {
+        return inputTokens !== undefined
+          ? { kind: 'text', text: step.text_delta, inputTokens }
+          : { kind: 'text', text: step.text_delta }
+      }
+      return inputTokens !== undefined ? { kind: 'response-usage', inputTokens } : undefined
+    }
     case 'tool':
       return step.state === 'ACTIVE'
         ? { kind: 'tool-started' }
