@@ -123,9 +123,9 @@ test('registry workflow runs ten read-only native jobs with every exported drive
   assert.equal(job.env.KUN_NPM_REGISTRY_ACCEPTANCE, 'true')
   assert(job.if.includes("inputs.registry_receipts_run_id == ''"))
   const evidence = workflow.jobs['registry-evidence']
-  const download = evidence.steps.find(step => step.with?.['artifact-ids'])
-  assert(download && !download.with.pattern)
-  assert(evidence.steps.some(step => step.uses === 'actions/github-script@v7'))
+  const collect = evidence.steps.find(step => step.uses === 'actions/github-script@v7')
+  assert(collect.with.script.includes('github.rest.actions.downloadArtifact'))
+  assert(collect.with.script.includes('materializeRegistryReceipt'))
   for (const name of ['windows-payload', 'candidate', 'install', 'evidence', 'windows-terminal-probe', 'build-validation', 'desktop-data'])
     assert(workflow.jobs[name].if.includes('!inputs.registry_only'), name)
 })

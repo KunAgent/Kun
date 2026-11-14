@@ -434,7 +434,7 @@ jobs:
             const {readFile,writeFile} = require('node:fs/promises')
             const {pathToFileURL} = require('node:url')
             const {resolve} = require('node:path')
-            const {selectRegistryReceiptArtifacts,verifyRegistryJobs} = await import(pathToFileURL(resolve('scripts/lib/kun-npm-registry-receipts.mjs')).href)
+            const {selectRegistryReceiptArtifacts,verifyRegistryJobs,materializeRegistryReceipt} = await import(pathToFileURL(resolve('scripts/lib/kun-npm-registry-receipts.mjs')).href)
             const id=process.env.RECEIPT_RUN_ID || String(context.runId)
             assert(/^\d+$/.test(id))
             const params={...context.repo,run_id:Number(id),per_page:100}
@@ -447,15 +447,14 @@ jobs:
             const artifacts=await github.paginate(github.rest.actions.listWorkflowRunArtifacts,params)
             const selection={...selectRegistryReceiptArtifacts(artifacts,release,id,run.head_sha),runAttempt:run.run_attempt,jobs:verifiedJobs}
             await writeFile('registry-receipt-selection.json',JSON.stringify(selection,null,2)+'\n')
+            for(const artifact of selection.selected) {
+              const archive=await github.rest.actions.downloadArtifact({...context.repo,artifact_id:artifact.id,archive_format:'zip'})
+              await materializeRegistryReceipt(Buffer.from(archive.data),artifact,'receipts')
+              core.info('Verified receipt '+artifact.name+' ID '+artifact.id+' '+artifact.digest)
+            }
             core.setOutput('artifact_ids',selection.selected.map(item=>item.id).join(','))
             core.setOutput('run_id',id)
             core.setOutput('driver_commit',run.head_sha)
-      - uses: actions/download-artifact@v4
-        with:
-          artifact-ids: ${{ steps.receipt-selection.outputs.artifact_ids }}
-          path: receipts
-          run-id: ${{ steps.receipt-selection.outputs.run_id }}
-          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           name: kun-npm-candidate

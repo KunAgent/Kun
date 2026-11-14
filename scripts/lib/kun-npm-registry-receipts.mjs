@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { createHash } from 'node:crypto'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 
 const slots = release => release.targets.flatMap(target => release.testNodeVersions.map(node => ({
   target, node, key: target + '/' + node, name: `kun-npm-registry-receipt-${target}-${node}`
@@ -49,4 +53,28 @@ export function selectRegistryReceiptArtifacts(artifacts, release, runId, source
   }
   assert.equal(new Set(selected.map(item => item.id)).size, expected.length)
   return { sourceRunId: String(runId), testDriverSourceCommit: sourceCommit, selected, superseded }
+}
+
+export async function materializeRegistryReceipt(bytes, artifact, directory) {
+  assert.equal('sha256:' + createHash('sha256').update(bytes).digest('hex'), artifact.digest,
+    'Receipt ZIP bytes differ from the selected immutable artifact')
+  assert(Number.isSafeInteger(artifact.id) && artifact.id > 0)
+  assert(/^kun-npm-registry-receipt-[a-z0-9.-]+$/.test(artifact.name))
+  const archives = join(directory, '__archives__')
+  await mkdir(archives, { recursive: true })
+  const zip = join(archives, artifact.id + '.zip')
+  await writeFile(zip, bytes, { flag: 'wx' })
+  // Never extract arbitrary paths or run code from a receipt ZIP.
+  const script = [
+    'import pathlib, sys, zipfile',
+    'with zipfile.ZipFile(sys.argv[1]) as z:',
+    " assert z.namelist() == ['receipt.json'], 'Unexpected receipt ZIP entries'",
+    " info = z.getinfo('receipt.json')",
+    " assert info.file_size <= 2 * 1024 * 1024, 'Oversized receipt JSON'",
+    " data = z.read('receipt.json')",
+    ' target = pathlib.Path(sys.argv[2])',
+    ' target.mkdir(parents=True, exist_ok=True)',
+    " with (target / 'receipt.json').open('xb') as f: f.write(data)"
+  ].join('\n')
+  execFileSync('python3', ['-c', script, zip, join(directory, artifact.name)], { stdio: ['ignore', 'pipe', 'pipe'] })
 }
