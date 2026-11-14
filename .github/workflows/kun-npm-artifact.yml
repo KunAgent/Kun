@@ -7,6 +7,10 @@ on:
         description: Install the accepted exact prerelease from npm without publishing or changing tags
         type: boolean
         default: false
+      registry_receipts_run_id:
+        description: Collect a completed registry matrix without repeating its installations (use with registry_only)
+        type: string
+        default: ''
       desktop_data_only:
         description: Verify sequential data reuse with a disposable ad-hoc CI desktop
         type: boolean
@@ -338,7 +342,7 @@ jobs:
 
   registry-install:
     needs: registry-selection
-    if: ${{ inputs.registry_only }}
+    if: ${{ inputs.registry_only && inputs.registry_receipts_run_id == '' }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -413,15 +417,45 @@ jobs:
           sparse-checkout: |
             /scripts/check-kun-npm-matrix.mjs
             /scripts/check-kun-npm-registry.mjs
+            /scripts/lib/kun-npm-registry-receipts.mjs
             /kun/npm/release.json
             /kun/npm/publish.json
       - uses: actions/setup-node@v4
         with:
           node-version: '26.12.0'
+      - name: Select each receipt from its latest creation time, preserving prior attempts
+        id: receipt-selection
+        uses: actions/github-script@v7
+        env:
+          RECEIPT_RUN_ID: ${{ inputs.registry_receipts_run_id }}
+        with:
+          script: |
+            const assert = require('node:assert/strict')
+            const {readFile,writeFile} = require('node:fs/promises')
+            const {pathToFileURL} = require('node:url')
+            const {resolve} = require('node:path')
+            const {selectRegistryReceiptArtifacts,verifyRegistryJobs} = await import(pathToFileURL(resolve('scripts/lib/kun-npm-registry-receipts.mjs')).href)
+            const id=process.env.RECEIPT_RUN_ID || String(context.runId)
+            assert(/^\d+$/.test(id))
+            const params={...context.repo,run_id:Number(id),per_page:100}
+            const {data:run}=await github.rest.actions.getWorkflowRun(params)
+            assert.equal(run.head_repository.full_name,process.env.GITHUB_REPOSITORY)
+            assert.equal(run.path,'.github/workflows/kun-npm-artifact.yml')
+            const release=JSON.parse(await readFile('kun/npm/release.json','utf8'))
+            const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRun,{...params,filter:'latest'})
+            const verifiedJobs=verifyRegistryJobs(jobs,release)
+            const artifacts=await github.paginate(github.rest.actions.listWorkflowRunArtifacts,params)
+            const selection={...selectRegistryReceiptArtifacts(artifacts,release,id,run.head_sha),runAttempt:run.run_attempt,jobs:verifiedJobs}
+            await writeFile('registry-receipt-selection.json',JSON.stringify(selection,null,2)+'\n')
+            core.setOutput('artifact_ids',selection.selected.map(item=>item.id).join(','))
+            core.setOutput('run_id',id)
+            core.setOutput('driver_commit',run.head_sha)
       - uses: actions/download-artifact@v4
         with:
-          pattern: kun-npm-registry-receipt-*
+          artifact-ids: ${{ steps.receipt-selection.outputs.artifact_ids }}
           path: receipts
+          run-id: ${{ steps.receipt-selection.outputs.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           name: kun-npm-candidate
@@ -429,6 +463,8 @@ jobs:
           run-id: ${{ needs.registry-selection.outputs.run_id }}
           github-token: ${{ github.token }}
       - name: Require all ten registry installations and unchanged stable tags
+        env:
+          KUN_NPM_EXPECTED_DRIVER_COMMIT: ${{ steps.receipt-selection.outputs.driver_commit }}
         run: node scripts/check-kun-npm-registry.mjs receipts candidate/manifest.json registry-readiness.json
       - uses: actions/upload-artifact@v4
         if: always()
@@ -437,5 +473,6 @@ jobs:
           path: |
             receipts/
             registry-readiness.json
+            registry-receipt-selection.json
           if-no-files-found: error
           retention-days: 90

@@ -102,6 +102,8 @@ test('registry matrix refuses local-install receipts, missing combinations, chan
   assert(!check(base).some(error => /registry|installed build|Registry|npm did/.test(error)))
   assert(check({ ...base, kind: 'kun-npm-native-install-receipt' }).some(error => /Not an exact registry/.test(error)))
   assert(check({ ...base, buildId: 'changed' }).some(error => /Wrong installed build/.test(error)))
+  assert(checkRegistryMatrix([base], release, candidate, accepted, { expectedDriverCommit: accepted.sourceCommit }).errors
+    .some(error => /selected matrix test driver/.test(error)))
   assert(check({ ...base, platform: 'win32' }).some(error => /npm did not fetch.*win32/.test(error)))
   assert(checkRegistryMatrix([], release, candidate, accepted).errors.some(error => /Missing target/.test(error)))
 })
@@ -119,6 +121,11 @@ test('registry workflow runs ten read-only native jobs with every exported drive
   assert(runs.includes('rmSync("drivers-checkout"'))
   assert(!/npm (?:publish|dist-tag|ci|install|pack)|npm run build/.test(runs))
   assert.equal(job.env.KUN_NPM_REGISTRY_ACCEPTANCE, 'true')
+  assert(job.if.includes("inputs.registry_receipts_run_id == ''"))
+  const evidence = workflow.jobs['registry-evidence']
+  const download = evidence.steps.find(step => step.with?.['artifact-ids'])
+  assert(download && !download.with.pattern)
+  assert(evidence.steps.some(step => step.uses === 'actions/github-script@v7'))
   for (const name of ['windows-payload', 'candidate', 'install', 'evidence', 'windows-terminal-probe', 'build-validation', 'desktop-data'])
     assert(workflow.jobs[name].if.includes('!inputs.registry_only'), name)
 })

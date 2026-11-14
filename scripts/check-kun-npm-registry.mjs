@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { checkMatrix } from './check-kun-npm-matrix.mjs'
 
 export function checkRegistryMatrix(receipts, release, manifest, accepted,
-  { initialLatestAcknowledgement = null, registryStableTags = {} } = {}) {
+  { initialLatestAcknowledgement = null, registryStableTags = {}, expectedDriverCommit = null } = {}) {
   const result = checkMatrix(receipts, release, { complete: false })
   const errors = [...result.errors]
   const fail = (condition, message) => { if (!condition) errors.push(message) }
@@ -24,6 +24,8 @@ export function checkRegistryMatrix(receipts, release, manifest, accepted,
   for (const receipt of receipts) {
     const slot = `${receipt.platform}-${receipt.arch}/${receipt.nodeVersion}`
     const registry = receipt.registry
+    if (expectedDriverCommit) fail(receipt.isolation?.testDriverSourceCommit === expectedDriverCommit,
+      'Receipt does not use the selected matrix test driver: ' + slot)
     fail(receipt.kind === 'kun-npm-registry-install-receipt' && registry?.installSource === 'registry-exact-version' &&
       registry.reference === accepted.name + '@' + accepted.version, 'Not an exact registry installation: ' + slot)
     fail(receipt.sourceCommit === accepted.sourceCommit && receipt.buildId === accepted.buildId &&
@@ -63,6 +65,7 @@ export function checkRegistryMatrix(receipts, release, manifest, accepted,
   return { schemaVersion: 1, kind: 'kun-npm-registry-readiness', registryReady: errors.length === 0,
     success: errors.length === 0, receipts: receipts.length, packageName: accepted.name, version: accepted.version,
     sourceCommit: accepted.sourceCommit, buildId: accepted.buildId, tarballSha256: accepted.sha256,
+    testDriverSourceCommit: expectedDriverCommit,
     tag: 'next', stableTagsVerified: errors.length === 0,
     initialLatestAcknowledged: artifacts.every(acknowledged), registryStableTags,
     explicitLatestPromotion: false, errors }
@@ -86,7 +89,7 @@ if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.m
   const release = await read(new URL('../kun/npm/release.json', import.meta.url))
   const { acceptedCandidate, ...policy } = await read(new URL('../kun/npm/publish.json', import.meta.url))
   const result = checkRegistryMatrix(await readReceipts(resolve(directory)), release,
-    await read(candidateManifest), acceptedCandidate, policy)
+    await read(candidateManifest), acceptedCandidate, { ...policy, expectedDriverCommit: process.env.KUN_NPM_EXPECTED_DRIVER_COMMIT || null })
   await writeFile(output, JSON.stringify(result, null, 2) + '\n')
   console.log(JSON.stringify(result, null, 2))
   if (!result.success) process.exitCode = 1
