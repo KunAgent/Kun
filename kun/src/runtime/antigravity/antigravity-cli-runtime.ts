@@ -1,6 +1,7 @@
 import { sessionInstructions } from '../../session/session-instructions.js'
 import {
   buildAntigravityContextSnapshot,
+  loadCarriedAntigravityOccupancy,
   type AntigravityContextProfile
 } from './antigravity-context-snapshot.js'
 import { parseAntigravityResult } from './antigravity-result.js'
@@ -390,6 +391,10 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       sandboxMode
     })
     const contextProfile = this.deps.contextProfile?.(model, snapshotProviderId ?? resolvedProviderId)
+    let activePromptText = ''
+    let activeSentInstructionsText = ''
+    let activeCarriedOccupancy: { inputTokens: number; toolCount: number } | undefined
+    let attemptWindowKnown = false
     const recordAttemptEvents = async (
       prep: typeof preparation,
       handoff: ReturnType<typeof resolveHandoffFor>,
@@ -419,7 +424,12 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
           false,
           turnDynamicContext.instructions
         ).join('\n')
-        await this.deps.events.record(buildAntigravityContextSnapshot({
+        activePromptText = promptText
+        activeSentInstructionsText = sentInstructionsText
+        activeCarriedOccupancy = prep?.resumed
+          ? await loadCarriedAntigravityOccupancy(this.deps.sessionStore, threadId)
+          : undefined
+        const initialSnapshot = buildAntigravityContextSnapshot({
           threadId,
           turnId,
           model,
@@ -427,8 +437,16 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
           contextProfile,
           resumed: Boolean(prep?.resumed),
           sentInstructionsText,
-          promptText
-        }))
+          promptText,
+          ...(activeCarriedOccupancy
+            ? {
+                liveInputTokens: activeCarriedOccupancy.inputTokens,
+                toolCount: activeCarriedOccupancy.toolCount
+              }
+            : {})
+        })
+        attemptWindowKnown = Boolean(initialSnapshot.contextWindowKnown)
+        await this.deps.events.record(initialSnapshot)
       }
     }
 
@@ -437,8 +455,52 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     let args = buildArgsFor(preparation, prompt)
     await recordAttemptEvents(preparation, turnHandoff, prompt)
 
+    const createTurnStream = (): AntigravityTurnStream =>
+      new AntigravityTurnStream(this.deps, threadId, turnId, {
+        onInitModel: async (resolvedModel) => {
+          if (!contextProfile || attemptWindowKnown) return
+          const nextSnapshot = buildAntigravityContextSnapshot({
+            threadId,
+            turnId,
+            model,
+            resolvedModel,
+            explicitProviderId: snapshotProviderId,
+            contextProfile,
+            resumed: Boolean(preparation?.resumed),
+            sentInstructionsText: activeSentInstructionsText,
+            promptText: activePromptText,
+            ...(activeCarriedOccupancy
+              ? {
+                  liveInputTokens: activeCarriedOccupancy.inputTokens,
+                  toolCount: activeCarriedOccupancy.toolCount
+                }
+              : {})
+          })
+          if (nextSnapshot.contextWindowKnown) {
+            attemptWindowKnown = true
+            await this.deps.events.record(nextSnapshot)
+          }
+        },
+        onContextOccupancy: async ({ inputTokens, toolCount, resolvedModel }) => {
+          if (!contextProfile) return
+          await this.deps.events.record(buildAntigravityContextSnapshot({
+            threadId,
+            turnId,
+            model,
+            ...(resolvedModel ? { resolvedModel } : {}),
+            explicitProviderId: snapshotProviderId,
+            contextProfile,
+            resumed: Boolean(preparation?.resumed),
+            sentInstructionsText: '',
+            promptText: '',
+            liveInputTokens: inputTokens,
+            toolCount
+          }))
+        }
+      })
+
     let trace: AntigravityTrace | undefined
-    let stream = new AntigravityTurnStream(this.deps, threadId, turnId)
+    let stream = createTurnStream()
     try {
       const credential = provider?.credentialSourceId
         ? await this.deps.resolveCredentialSource?.(provider.credentialSourceId)
@@ -520,7 +582,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
             prompt = buildPromptFor(preparation, turnHandoff)
             args = buildArgsFor(preparation, prompt)
             await recordAttemptEvents(preparation, turnHandoff, prompt)
-            stream = new AntigravityTurnStream(this.deps, threadId, turnId)
+            stream = createTurnStream()
             continue
           }
           throw error
@@ -532,12 +594,17 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       await stream.finish(text)
       const usageDraft = stream.usageDraft(usage, model, resolvedProviderId)
       if (usageDraft) await this.deps.events.record(usageDraft)
-      const liveInputTokens = stream.contextOccupancyTokens(usage)
-      if (contextProfile && liveInputTokens !== undefined) {
+      const liveInputTokens = stream.contextOccupancyTokens(usage, Boolean(preparation?.resumed))
+      if (
+        contextProfile &&
+        liveInputTokens !== undefined &&
+        !stream.hasPublishedOccupancy(liveInputTokens, stream.toolStepCount)
+      ) {
         await this.deps.events.record(buildAntigravityContextSnapshot({
           threadId,
           turnId,
           model,
+          ...(stream.resolvedModel ? { resolvedModel: stream.resolvedModel } : {}),
           explicitProviderId: snapshotProviderId,
           contextProfile,
           resumed: Boolean(preparation?.resumed),

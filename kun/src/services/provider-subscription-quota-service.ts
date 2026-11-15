@@ -41,6 +41,7 @@ import { defaultRuntime, probeGoogleCodeAssistQuota, probeGrokSubscriptionQuota,
 import { grpcWebDataFrames, looksLikeProtobufPayload, mergeProtobufScan, type ProtobufScan, requestCodexSubscriptionQuota, requestJson, sameNumberPath, scanProtobuf, startsWithNumberPath } from './provider-subscription-quota-transport.js'
 import { codexAdditionalLimitLabel, codexWindowMetric, cursorMoneyMetric, firstUsageRecord, googleQuotaMetric, percentageMetric, percentageWindowMetric } from './provider-subscription-quota-metrics.js'
 import { clearOpenCodeGoCookieCache, getOpenCodeGoCookieFailureReason, OPENCODE_GO_KEYCHAIN_MESSAGE, OPENCODE_GO_SIGN_IN_MESSAGE, resolveOpenCodeGoCookie } from './provider-subscription-quota-opencode-cookie.js'
+import { parseAntigravityQuotaSummary } from './antigravity-quota-pools.js'
 import { clampPercentage, isoDateValue, numberValue, optionalRecord, requireRecord, stringValue } from './provider-subscription-quota-support.js'
 
 export const execFileAsync = promisify(execFile)
@@ -545,6 +546,10 @@ export function parseGoogleCodeAssistQuota(payload: unknown): ProviderQuotaMetri
       ))
     })
   }
-  if (!metrics.length) throw new Error('Google Code Assist did not return a recognized model quota.')
+  if (!metrics.length) {
+    const summary = parseAntigravityQuotaSummary(root)
+    if (summary.length > 0) return summary
+    throw new Error('Google Code Assist did not return a recognized model quota.')
+  }
   return metrics
 }

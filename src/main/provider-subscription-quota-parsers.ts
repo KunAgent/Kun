@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { validateClaudeSubscriptionToken } from '../shared/claude-subscription-auth'
 import type { ModelProviderProfileV1 } from '../shared/app-settings'
 import type { ProviderQuotaMetric } from '../shared/provider-quota'
+import { parseAntigravityQuotaSummary } from '../../kun/src/services/antigravity-quota-pools.js'
 import {
   GeminiCliOAuthSource
 } from '../../kun/src/adapters/model/gemini-cli-oauth.js'
@@ -317,6 +318,8 @@ export function parseGoogleCodeAssistQuota(payload: unknown): ProviderQuotaMetri
     })
   }
   if (metrics.length === 0) {
+    const summary = parseAntigravityQuotaSummary(root)
+    if (summary.length > 0) return summary
     throw new Error('Google Code Assist did not return a recognized model quota.')
   }
   return metrics

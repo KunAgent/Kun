@@ -5,11 +5,15 @@ const MODE_KEY = 'kun.quota.displayMode'
 const EXPANDED_KEY = 'kun.quota.expandedProviders'
 const MODE_EVENT = 'kun-quota-display-mode'
 
-function readMode(): QuotaDisplayMode {
+function readModeState(): { mode: QuotaDisplayMode; explicit: boolean } {
   try {
-    return window.localStorage.getItem(MODE_KEY) === 'left' ? 'left' : 'used'
+    const stored = window.localStorage.getItem(MODE_KEY)
+    return {
+      mode: stored === 'left' ? 'left' : 'used',
+      explicit: stored === 'left' || stored === 'used'
+    }
   } catch {
-    return 'used'
+    return { mode: 'used', explicit: false }
   }
 }
 
@@ -29,10 +33,15 @@ function readExpanded(): string[] {
  * through a local event, since storage events skip the window that wrote.
  */
 export function useQuotaDisplayMode(): [QuotaDisplayMode, (mode: QuotaDisplayMode) => void] {
-  const [mode, setModeState] = useState<QuotaDisplayMode>(readMode)
+  const [state, setModeState] = useState(readModeState)
 
   useEffect(() => {
-    const sync = (): void => setModeState(readMode())
+    const sync = (): void => {
+      const next = readModeState()
+      setModeState((prev) =>
+        prev.mode === next.mode && prev.explicit === next.explicit ? prev : next
+      )
+    }
     const onStorage = (event: StorageEvent): void => {
       if (event.key === MODE_KEY) sync()
     }
@@ -45,7 +54,7 @@ export function useQuotaDisplayMode(): [QuotaDisplayMode, (mode: QuotaDisplayMod
   }, [])
 
   const setMode = useCallback((next: QuotaDisplayMode): void => {
-    setModeState(next)
+    setModeState({ mode: next, explicit: true })
     try {
       window.localStorage.setItem(MODE_KEY, next)
     } catch {
@@ -54,7 +63,7 @@ export function useQuotaDisplayMode(): [QuotaDisplayMode, (mode: QuotaDisplayMod
     window.dispatchEvent(new Event(MODE_EVENT))
   }, [])
 
-  return [mode, setMode]
+  return [state.mode, setMode]
 }
 
 /** Which providers' cards list every window rather than the first few. */

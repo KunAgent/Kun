@@ -24,8 +24,18 @@ export async function antigravityCredentialEvidence(env: NodeJS.ProcessEnv = pro
       const { bytesRead } = await file.read(buffer, 0, buffer.length, 0)
       const content = bytesRead <= 65536 ? buffer.subarray(0, bytesRead).toString('utf8') : ''
       const value: unknown = JSON.parse(content)
-      if (value && typeof value === 'object' && 'refresh_token' in value &&
-        typeof value.refresh_token === 'string' && value.refresh_token.trim()) return evidence(true, content)
+      if (value && typeof value === 'object') {
+        const record = value as Record<string, unknown>
+        const nested = record.token && typeof record.token === 'object'
+          ? (record.token as Record<string, unknown>)
+          : undefined
+        const refreshToken = typeof record.refresh_token === 'string'
+          ? record.refresh_token.trim()
+          : typeof nested?.refresh_token === 'string'
+            ? nested.refresh_token.trim()
+            : ''
+        if (refreshToken) return evidence(true, content)
+      }
     }
   } catch { /* Native keyring profiles do not have a token file. */ }
   finally { await file?.close() }

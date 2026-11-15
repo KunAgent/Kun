@@ -12,6 +12,7 @@ import { guardCompilers, locateNpm, removeSmokeFixture, runProcess, smokeEnviron
 import { exerciseInstalledServer } from './lib/kun-npm-smoke-server.mjs'
 import { exerciseInstalledIntegrations } from './lib/kun-npm-smoke-integrations.mjs'
 import { exerciseInstalledWindows } from './lib/kun-npm-smoke-windows.mjs'
+import { exerciseWindowsRegistryPackage, registryInstallArguments, verifyProjectResolution } from './lib/kun-npm-registry-install.mjs'
 import { exerciseArtifactLifecycle } from './lib/kun-npm-artifact-lifecycle.mjs'
 import { exerciseInstalledConfig, exerciseInstalledJson } from './lib/kun-npm-artifact-config.mjs'
 
@@ -112,7 +113,7 @@ async function runCoreSmoke(options) {
   const candidate = join(root, 'candidate.tgz')
   await writeFile(candidate, archive)
   const receipt = {
-    schemaVersion: 1, kind: 'kun-npm-native-install-receipt', runId: options.runId,
+    schemaVersion: 1, kind: options.registryPackage ? 'kun-npm-registry-install-receipt' : 'kun-npm-native-install-receipt', runId: options.runId,
     platform: process.platform, arch: process.arch, nodeVersion: version,
     os: { release: release(), version: osVersion(),
       glibc: process.platform === 'linux' ? process.report?.getReport()?.header?.glibcVersionRuntime ?? null : null },
@@ -121,6 +122,7 @@ async function runCoreSmoke(options) {
     buildId: manifest.kunNpm?.buildId,
     tarballSha256: createHash('sha256').update(archive).digest('hex'), workDirectory: root,
     isolation: { sourceImports: false, homeChanged: false, unrestrictedHostFilesystem: true, compilerGuards: 'PATH' },
+    ...(options.registryPackage ? { registry: { reference: options.registryPackage, artifacts: options.registryProof, installSource: 'registry-exact-version' } } : {}),
     checks: [], success: false, gateAComplete: false,
     limitations: ['Local harness does not sandbox host filesystem or certify absence of installed desktop applications.', 'Only the current OS/CPU/Node combination is exercised.']
   }
@@ -148,11 +150,31 @@ async function runCoreSmoke(options) {
       const command = ['install', ...(global ? ['--global', '--prefix', prefix] : []), '--cache', join(root, global ? 'global-cache' : 'project-cache'),
         '--offline', '--omit=dev', '--engine-strict', '--no-audit', '--no-fund', '--registry', 'https://registry.npmjs.org',
         ...(options['platform-tarball'] ? [options['platform-tarball']] : []), candidate]
-      const result = await runProcess(node, [npm, ...command], { cwd: prefix, env, timeout: 600_000 })
+      const installArgs = options.registryPackage ? registryInstallArguments({ reference: options.registryPackage,
+        expectedName: manifest.name, expectedVersion: manifest.version, prefix, global,
+        cache: join(root, global ? 'global-cache' : 'project-cache') }) : command
+      const result = await runProcess(node, [npm, ...installArgs], { cwd: prefix, env, timeout: 600_000 })
+      if (options.registryPackage) {
+        const log = result.stdout + result.stderr
+        const downloads = options.registryProof.filter(item => item.name === manifest.name)
+        const lock = global ? null : JSON.parse(await readFile(join(prefix, 'package-lock.json'), 'utf8'))
+        for (const published of downloads) {
+          assert(log.includes(published.tarball), 'npm HTTP log must record the real registry tarball fetch: ' + published.name)
+          if (lock) verifyProjectResolution(lock, published.name, published.integrity, published.tarball)
+        }
+        await check(global ? 'REG-03.global-registry-install' : 'REG-03.project-registry-install', async () => ({
+          command: [node, npm, ...installArgs], exitCode: result.code, freshCache: true,
+          resolvedFromRegistry: true, downloads: downloads.map(({ name, tarball, integrity }) => ({ name, tarball, integrity })),
+          httpFetches: log.split(/\r?\n/).filter(line => downloads.some(item => line.includes(item.tarball))) }))
+      }
       assert(!existsSync(env.KUN_NPM_COMPILER_AUDIT), 'A native compiler was invoked during installation')
       await writeFile(join(root, global ? 'global-install.log' : 'project-install.log'), result.stdout + result.stderr)
       return installedPackage(prefix, manifest.name, global)
     }
+    // The main candidate already bundles its Windows helper. Test the published
+    // component separately so it cannot mask a missing dependency in either main install.
+    if (options.registryPackage && process.platform === 'win32')
+      await exerciseWindowsRegistryPackage({ node, npm, root, env, manifest, proof: options.registryProof, check })
     let installed
     await check('NPM-01.project-install', async () => {
       const project = join(root, 'ordinary project')
@@ -168,6 +190,8 @@ async function runCoreSmoke(options) {
     await check('NPM-01.global-install', async () => {
       installed = await npmInstall(globalPrefix, true)
       assert.equal(installed.manifest.version, manifest.version)
+      assert.equal(installed.manifest.kunNpm.buildId, manifest.kunNpm.buildId)
+      assert.equal(installed.manifest.kunNpm.sourceCommit, manifest.kunNpm.sourceCommit)
       await assertContainedLinks(installed.root)
     })
     await check('NPM-02.payload', async () => {
@@ -330,8 +354,11 @@ async function runCoreSmoke(options) {
     if (options.integrations) receipt.checks.push({ id: 'RUN-07', status: 'pass',
       detail: 'Installed file/shell, goal/task/plan, Skill, stdio MCP, image attachment and native subagent were exercised.' },
     { id: 'RUN-08', status: 'pass', detail: 'Allowed/denied API approvals, structured answers and bounded noninteractive rejection were exercised.' })
+    if (options.registryPackage) receipt.checks.push({ id: 'REG-03', status: 'pass',
+      detail: 'Exact registry version installed into fresh project/global prefixes and caches; original bytes verified.' })
     for (const id of [...(!options.integrations ? ['RUN-07', 'RUN-08'] : []),
-      ...(!options.history ? ['DATA-02'] : []), 'GUI-01', 'REG-01', 'REG-02', 'REG-03', 'REG-04']) {
+      ...(!options.history ? ['DATA-02'] : []), 'GUI-01', 'REG-01', 'REG-02',
+      ...(!options.registryPackage ? ['REG-03'] : []), 'REG-04']) {
       receipt.checks.push({ id, status: 'not-run', detail: 'Outside this local core artifact smoke; requires the corresponding acceptance suite or release stage.' })
     }
     receipt.success = true

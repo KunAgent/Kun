@@ -423,7 +423,7 @@ const AGENT_DEFAULT_PROVIDERS = new Set(['', 'default', 'antigravity-cli', 'curs
 
 function normalizeSdkModelSelection(value: string, stripEffortSuffix: boolean): string {
   let normalized = value.replace(/^kun\/[^/]+\//u, '').replace(/^models\//u, '')
-  if (stripEffortSuffix) normalized = normalized.replace(/-(?:low|medium|high)$/u, '')
+  if (stripEffortSuffix) normalized = normalized.replace(/-(?:low|medium|high|xhigh|max)$/u, '')
   return normalized
 }
 

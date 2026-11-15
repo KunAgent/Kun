@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { verifyRegistryArtifacts } from './lib/kun-npm-registry-install.mjs'
 import { runSmoke } from './smoke-kun-npm.mjs'
 
 const [directory, output, ...extra] = process.argv.slice(2)
@@ -34,7 +35,15 @@ assert.equal(manifest.sourceDirty, false, 'CI must build a committed immutable s
 assert.equal(manifest.artifact.filename, basename(manifest.artifact.filename), 'Artifact must be a basename')
 const tarball = resolve(artifactRoot, manifest.artifact.filename)
 assert.equal(createHash('sha256').update(await readFile(tarball)).digest('hex'), manifest.artifact.sha256)
-const receipt = await runSmoke({ tarball, output: resolve(output), integrations: true, lifecycle: true, history: true })
+const registryMode = process.env.KUN_NPM_REGISTRY_ACCEPTANCE === 'true'
+if (registryMode) {
+  assert.equal(manifest.platformArtifacts.length, 1)
+  assert.equal(manifest.platformArtifacts[0].sha256, process.env.KUN_NPM_CANDIDATE_WINDOWS_SHA256)
+}
+const stableTags = JSON.parse(process.env.KUN_NPM_REGISTRY_STABLE_TAGS || '{}')
+const registryProof = registryMode ? await verifyRegistryArtifacts(manifest, fetch, stableTags) : undefined
+const receipt = await runSmoke({ tarball, output: resolve(output), integrations: true, lifecycle: true,
+  history: !registryMode, ...(registryMode ? { registryPackage: manifest.artifact.name + '@' + manifest.artifact.version, registryProof } : {}) })
 receipt.isolation = { ...receipt.isolation, sourceCheckoutRemoved: true, gitHistoryAvailable: false,
   exportedDriverVerified: true, sourceCommit: manifest.sourceCommit, testDriverSourceCommit: driver.sourceCommit, provider: 'github-actions' }
 const { writeFile } = await import('node:fs/promises')

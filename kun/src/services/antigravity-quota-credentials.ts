@@ -83,16 +83,41 @@ export function parseStoredAntigravityToken(raw: string): StoredAntigravityOAuth
   }
   const obj = optionalRecord(parsed)
   if (!obj) return undefined
-  const accessToken = stringValue(obj.access_token) || stringValue(obj.accessToken)
-  const refreshToken = stringValue(obj.refresh_token) || stringValue(obj.refreshToken)
+  const nested = optionalRecord(obj.token)
+  const accessToken =
+    stringValue(obj.access_token) ||
+    stringValue(obj.accessToken) ||
+    stringValue(nested?.access_token) ||
+    stringValue(nested?.accessToken)
+  const refreshToken =
+    stringValue(obj.refresh_token) ||
+    stringValue(obj.refreshToken) ||
+    stringValue(nested?.refresh_token) ||
+    stringValue(nested?.refreshToken)
   if (!accessToken && !refreshToken) return undefined
-  const expiresAt = parseTokenExpiry(obj.expiry ?? obj.expires_at ?? obj.expiry_date)
-  const idToken = stringValue(obj.id_token) || stringValue(obj.idToken)
+  const expiresAt = parseTokenExpiry(
+    obj.expiry ?? obj.expires_at ?? obj.expiry_date ??
+    nested?.expiry ?? nested?.expires_at ?? nested?.expiry_date
+  )
+  const idToken =
+    stringValue(obj.id_token) ||
+    stringValue(obj.idToken) ||
+    stringValue(nested?.id_token) ||
+    stringValue(nested?.idToken)
   const accountEmail =
     stringValue(obj.id_token_email) ||
     stringValue(obj.email) ||
+    stringValue(nested?.id_token_email) ||
+    stringValue(nested?.email) ||
     (idToken ? stringValue(jwtClaims(idToken)?.email) : '')
-  const isBusiness = Boolean(obj.is_business || obj.enable_business_login)
+  const authMethod = stringValue(obj.auth_method) || stringValue(nested?.auth_method)
+  const isBusiness = Boolean(
+    obj.is_business ||
+    obj.enable_business_login ||
+    nested?.is_business ||
+    nested?.enable_business_login ||
+    /business/i.test(authMethod)
+  )
   return {
     accessToken,
     refreshToken,
@@ -193,7 +218,7 @@ async function readNativeKeychainToken(
       ? await deps.readKeychain()
       : (await execFileAsync('/usr/bin/security', [
           'find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w'
-        ], { encoding: 'utf8', timeout: 3_000, maxBuffer: 256 * 1024, env: deps.env })).stdout
+        ], { encoding: 'utf8', timeout: 8_000, maxBuffer: 256 * 1024, env: deps.env })).stdout
     return raw ? parseStoredAntigravityToken(raw) : undefined
   } catch {
     return undefined

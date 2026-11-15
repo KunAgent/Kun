@@ -233,8 +233,33 @@ describe('composer context and subscription popup', () => {
       { threadId: 'thread', model: 'claude-sonnet-4-6', providerId: 'claude-personal', harnessId: 'claude-code' }
     )).toBe(false)
     expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'gemini-4-hydrogen', providerId: 'default' },
+      { threadId: 'thread', model: 'gemini-4-hydrogen-xhigh', providerId: '', harnessId: 'antigravity' }
+    )).toBe(true)
+    expect(requestContextSnapshotMatchesSelection(
       { ...snapshot, model: 'gemini-3.6-flash', providerId: 'default' },
       { threadId: 'thread', model: 'claude-sonnet-4-6', providerId: '', harnessId: 'antigravity' }
     )).toBe(false)
+  })
+
+  it('deduplicates providerName prefix from Antigravity subscription summary', async () => {
+    state.chat.lastContextSnapshot = snapshot
+    state.quota.result = {
+      refreshedAt: '2026-10-11T08:00:00Z',
+      entry: {
+        providerId: 'native:antigravity',
+        providerName: 'Antigravity',
+        status: 'available',
+        summary: 'Antigravity · user@example.com',
+        metrics: [
+          { id: 'pool_gemini_5h', label: 'Gemini Models · 5h limit', unit: 'percent', usedPercent: 0, windowSeconds: 18_000 }
+        ]
+      }
+    }
+    await render()
+    await open()
+    const popup = document.querySelector('[data-context-capacity-popover]')!
+    expect(popup.querySelector('.ds-composer-subscription-account')?.textContent).toBe('Antigravity')
+    expect(popup.querySelector('.ds-composer-subscription-plan')?.textContent).toBe('user@example.com')
   })
 })

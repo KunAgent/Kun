@@ -184,7 +184,7 @@ function spanFromLabel(text: string): number | undefined {
 }
 
 const SPAN_WORDS = /\b(?:\d+\s*-?\s*(?:h|hr|hrs|hour|hours|d|day|days)|five[-\s]?hour|seven[-\s]?day|weekly|week|daily|monthly|interval)\b/gi
-const FILLER_WORDS = /\b(?:usage|quota|window|limit|primary|secondary|rate)\b/gi
+const FILLER_WORDS = /\b(?:usage|quota|window|limit|primary|secondary|rate|remaining)\b/gi
 
 function scopeFromLabel(label: string): string | undefined {
   const scope = label
@@ -264,8 +264,14 @@ function summaryParts(summary: string | undefined): string[] {
 }
 
 /** A provider's plan as its card shows it: "max" reads "Max". */
-export function quotaPlanLabel(summary: string | undefined): string | undefined {
-  const text = summaryParts(summary).find((part) => !part.includes('@'))
+export function quotaPlanLabel(
+  summary: string | undefined,
+  providerName?: string
+): string | undefined {
+  const lowerProvider = providerName?.trim().toLowerCase()
+  const text = summaryParts(summary).find(
+    (part) => !part.includes('@') && (!lowerProvider || part.toLowerCase() !== lowerProvider)
+  )
   if (!text || text.length > 32) return undefined
   if (/^[a-z][a-z0-9_ -]*$/.test(text)) {
     return text.split(/[_\s-]+/).filter(Boolean).map((word) => word[0].toUpperCase() + word.slice(1)).join(' ')
@@ -282,4 +288,80 @@ export function quotaAccountLabel(summary: string | undefined): string | undefin
 export function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0
   return Math.min(100, Math.max(0, value))
+}
+
+export type QuotaMetricGroupItem = {
+  metric: ProviderQuotaMetric
+  windowTitle: string
+}
+
+export type QuotaMetricGroup = {
+  title: string
+  items: QuotaMetricGroupItem[]
+}
+
+const GROUPED_WINDOW_TITLE_RE = /^(?:weekly|5h|\d+\s*[hdw]|five[-\s]?hour|seven[-\s]?day)\s+limit$/i
+
+export function parseGroupedMetricLabel(
+  label: string
+): { groupTitle: string; windowTitle: string } | undefined {
+  const separatorIndex = label.indexOf(' · ')
+  if (separatorIndex <= 0) return undefined
+  const groupTitle = label.slice(0, separatorIndex).trim()
+  const windowTitle = label.slice(separatorIndex + 3).trim()
+  if (!groupTitle || !GROUPED_WINDOW_TITLE_RE.test(windowTitle)) return undefined
+  return { groupTitle, windowTitle }
+}
+
+/**
+ * Splits grouped quota metrics (`Gemini Models · Weekly limit`, `Gemini Models · 5h limit`,
+ * `Claude and GPT models · Weekly limit`, `Claude and GPT models · 5h limit`) into titled
+ * model-group sections while keeping single-pool providers in their flat meter list.
+ */
+export function groupQuotaMetrics(
+  metrics: readonly ProviderQuotaMetric[]
+): QuotaMetricGroup[] | undefined {
+  if (metrics.length === 0) return undefined
+  const parsed = metrics.map((metric) => ({
+    metric,
+    parts: parseGroupedMetricLabel(metric.label)
+  }))
+  if (!parsed.every((entry) => entry.parts !== undefined)) {
+    return undefined
+  }
+  const groups: QuotaMetricGroup[] = []
+  const byTitle = new Map<string, QuotaMetricGroup>()
+  for (const entry of parsed) {
+    const { groupTitle, windowTitle } = entry.parts!
+    let group = byTitle.get(groupTitle)
+    if (!group) {
+      group = { title: groupTitle, items: [] }
+      byTitle.set(groupTitle, group)
+      groups.push(group)
+    }
+    group.items.push({ metric: entry.metric, windowTitle })
+  }
+  return groups
+}
+
+export function formatCompoundResetDuration(deltaMs: number): string | undefined {
+  if (!Number.isFinite(deltaMs) || deltaMs <= 0) return undefined
+  const totalMinutes = Math.max(1, Math.round(deltaMs / 60_000))
+  const days = Math.floor(totalMinutes / (24 * 60))
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60)
+  const minutes = totalMinutes % 60
+  if (days > 0) {
+    return hours > 0 ? `${days}d ${hours}h` : `${days}d`
+  }
+  if (hours > 0) {
+    return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`
+  }
+  return `${minutes}m`
+}
+
+export function formatCompoundResetIn(resetsAt: string, now: number): string | undefined {
+  const at = Date.parse(resetsAt)
+  if (!Number.isFinite(at)) return undefined
+  const duration = formatCompoundResetDuration(at - now)
+  return duration ? `Resets in ${duration}` : undefined
 }

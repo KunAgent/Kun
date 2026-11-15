@@ -13,6 +13,7 @@ function fixture(tier = 'max', initiallyPaired = true) {
   let online: Socket | undefined, denyStop = false, currentSession: any
   let paired = initiallyPaired, approvePair = true, preflightDenials = 0, preflightCode = 'REMOTE_SCOPE_REQUIRED'
   let pairingDelay: Promise<void> | undefined
+  let requireGrantForTicket = false, helloDelayMs = 0
   const frame = (value: Frame) => online?.onmessage?.({data:JSON.stringify({v:1,...value})})
   const service = new ComputerAccessService({ supported:true, name:'Local Mac', origin:'https://api.example.test', gate,
     account: { getState:async()=>({status:'authenticated',user:{id:owner}}),accessToken:async()=>'token',onState:()=>()=>{},onSessionEnding:()=>()=>{} } as any,
@@ -24,6 +25,9 @@ function fixture(tier = 'max', initiallyPaired = true) {
         await pairingDelay
         if (approvePair) paired = true
         frame({kind:'resync_required',src:target,payload:{reason:'permissions_changed'}})
+      }
+      if (path.endsWith('/relay-tickets') && requireGrantForTicket && !paired) {
+        return Response.json({ error: { code: 'FORBIDDEN' } }, { status: 403 })
       }
       const payload = path.endsWith('/entitlements') ? {version:1,userId:owner,tier,effectiveTier:tier,status:tier==='free'?'free':'active',expiresAt:null,checkedAt:new Date().toISOString(),revision:1,features:{mobileRemote:tier!=='free',personalAssistant:['pro','max'].includes(tier)}}
         : path.endsWith('/capabilities') ? {desktop:{computerAccess:true}}
@@ -51,13 +55,16 @@ function fixture(tier = 'max', initiallyPaired = true) {
         queueMicrotask(()=>frame({kind:'result',src:target,id:value.id,payload}))
       }}
       online=socket
-      queueMicrotask(()=>frame({kind:'hello',payload:{leaseExpiresAt:Date.now()+60000}}))
+      if (helloDelayMs > 0) setTimeout(()=>frame({kind:'hello',payload:{leaseExpiresAt:Date.now()+60000}}), helloDelayMs)
+      else queueMicrotask(()=>frame({kind:'hello',payload:{leaseExpiresAt:Date.now()+60000}}))
       return socket
     }
   })
   alive.push(service)
   return {service,gate,calls,invokes,frame,denyStop:(value:boolean)=>{denyStop=value},setTier:(value:string)=>{tier=value},
-    delayPair:(value:Promise<void>)=>{pairingDelay=value},approvePair:(value:boolean)=>{approvePair=value},denyPreflight:(count:number,code:string)=>{preflightDenials=count;preflightCode=code}}
+    delayPair:(value:Promise<void>)=>{pairingDelay=value},approvePair:(value:boolean)=>{approvePair=value},
+    requireGrantForTicket:(value:boolean)=>{requireGrantForTicket=value},delayHello:(ms:number)=>{helloDelayMs=ms},
+    denyPreflight:(count:number,code:string)=>{preflightDenials=count;preflightCode=code}}
 }
 describe('trusted computer controller',()=>{
   for (const tier of ['free','plus','pro']) it(`blocks ${tier} before creating or registering controller credentials`,async()=>{
@@ -97,6 +104,21 @@ describe('trusted computer controller',()=>{
     expect(f.calls.filter(call=>call.path.endsWith('/desktop/pairings'))).toEqual([expect.objectContaining({device:controller,body:{hostId:target}})])
     expect(f.gate.outgoing()).toBe(true)
     expect(f.invokes.every(call=>call.method==='desktop.access.get')).toBe(true)
+  })
+  it('connects an unpaired computer directly when relay tickets require an active grant first', async()=>{
+    const f=fixture('max',false)
+    f.requireGrantForTicket(true)
+    await f.service.refresh();await new Promise(resolve=>setTimeout(resolve,10))
+    expect(f.service.status().online).toBe(false)
+    await expect(f.service.open(target)).resolves.toEqual({hostId:target,name:'Remote Mac'})
+    expect(f.service.status().online).toBe(true)
+    expect(f.calls.filter(call=>call.path.endsWith('/desktop/pairings'))).toHaveLength(1)
+  })
+  it('waits for an in-flight controller relay handshake instead of throwing DEVICE_OFFLINE', async()=>{
+    const f=fixture('max',true)
+    f.delayHello(40)
+    await expect(f.service.open(target)).resolves.toEqual({hostId:target,name:'Remote Mac'})
+    expect(f.service.status().online).toBe(true)
   })
   it('does not complete an automatic connection after cancellation during pairing', async()=>{
     const f=fixture('max',false)

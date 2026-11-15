@@ -1,4 +1,5 @@
 import type { RemoteApi } from '@kun/remote-protocol'
+import { COMPUTER_MAX_REQUIRED } from '../../shared/computer-membership'
 import type { MobileLinkStatus } from '../../shared/mobile-link'
 import { ComputerMembershipLease, computerMembershipError } from '../computer-access/membership'
 
@@ -8,43 +9,66 @@ export const COMPUTER_DESKTOP_SCOPES = ['desktop.view', 'desktop.control'] as co
 /** Optional server extension. Legacy deployments and phone grants keep their original routes. */
 export class ComputerHostAccess {
   active = false
+  downgraded = false
   private membership?: ComputerMembershipLease
   private generation = 0
   private timer?: ReturnType<typeof setInterval>
+  private trigger?: () => void
   reset() {
     ++this.generation
-    clearInterval(this.timer); this.timer = undefined
-    this.active = false; this.membership?.invalidate(); this.membership = undefined
+    clearInterval(this.timer); this.timer = undefined; this.trigger = undefined
+    this.active = false; this.downgraded = false
+    this.membership?.invalidate(); this.membership = undefined
   }
+  poke() { this.trigger?.() }
   /** Only the explicit local host switch starts this, never the renderer's presence poll. */
-  watch(api: RemoteApi, canPair: (peer: string) => boolean, changed: () => Promise<unknown>) {
+  watch(api: RemoteApi, canPair: (peer: string) => boolean, changed: () => Promise<unknown>, lost?: (downgraded: boolean) => void) {
     clearInterval(this.timer)
     const generation = ++this.generation
-    let pending = false
+    let pending = false, queued = false
+    const alive = () => generation === this.generation && this.active && Boolean(this.membership)
     const current = () => generation === this.generation && this.current()
     const poll = async () => {
-      if (pending || !current()) return
+      if (!alive()) return
+      if (pending) { queued = true; return }
       pending = true
       try {
+        const hadLease = this.current()
+        if (this.membership!.remaining() < 10000) {
+          if (!(await this.renew())) { if (generation === this.generation) lost?.(this.downgraded); return }
+          if (!hadLease && current()) await changed()
+        }
+        if (!current()) return
         const { pairings } = await api.request<{ pairings: MobileLinkStatus['pairings'] }>('/desktop/pairings')
-        if (!current() || !pairings.length) return
-        await this.requireMax()
-        for (const pairing of pairings.slice(0, 16)) {
+        if (!current()) return
+        const eligible = pairings.slice(0, 16).filter(
+          pairing => pairing.purpose === 'desktop' && /^[a-f0-9-]{36}$/.test(pairing.id) && canPair(pairing.controllerId)
+        )
+        if (!eligible.length) return
+        if (!(await this.renew())) { if (generation === this.generation) lost?.(this.downgraded); return }
+        for (const pairing of eligible) {
           if (!current()) return
-          if (pairing.purpose !== 'desktop' || !/^[a-f0-9-]{36}$/.test(pairing.id) || !canPair(pairing.controllerId)) continue
           await api.request('/desktop/pairings/' + pairing.id + '/confirm', 'POST')
           if (!current()) return
           await changed()
         }
       } catch { /* Transient failures retry on the next poll; membership remains fail-closed. */ }
-      finally { pending = false }
+      finally {
+        pending = false
+        if (queued && alive()) { queued = false; void poll() }
+      }
     }
+    this.trigger = () => void poll()
     this.timer = setInterval(() => void poll(), COMPUTER_PAIRING_INTERVAL_MS)
     this.timer.unref?.()
     void poll()
   }
   current() { return this.active && this.membership?.current() === true }
-  async requireMax() { if (!this.membership) throw computerMembershipError(); await this.membership.require(true) }
+  async requireMax() {
+    if (!this.membership) { this.downgraded = true; throw computerMembershipError() }
+    try { await this.membership.require(true); this.downgraded = false }
+    catch (error) { this.downgraded = (error as { code?: string })?.code === COMPUTER_MAX_REQUIRED; throw error }
+  }
   async renew() { try { await this.requireMax(); return this.current() } catch { return false } }
   async advertise(api: RemoteApi, enabled: boolean, required = false, owner?: string) {
     this.reset()

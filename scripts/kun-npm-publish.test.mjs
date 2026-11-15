@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { auditNamespace } from './lib/kun-npm-registry.mjs'
 import { preparePublishPlan, isPrerelease } from './lib/kun-npm-publish-plan.mjs'
-import { executePublication } from './lib/kun-npm-publisher.mjs'
+import { executePublication, waitForPublishedVersion } from './lib/kun-npm-publisher.mjs'
 import { parsePublishArguments } from './prepare-kun-npm-publish.mjs'
 import { publishFixture } from './fixtures/kun-npm/publish-candidate.mjs'
 
@@ -96,6 +96,42 @@ test('stale or mismatched maintainer evidence blocks publication', async () => {
   })
 })
 
+test('a new npm package cannot satisfy next-only publication and is blocked before any write', async () => {
+  await fixture(async context => {
+    context.metadata = async name => ({ name, status: 'not-publicly-visible', versions: {}, distTags: {} })
+    const plan = await preparePublishPlan(context)
+    assert.equal(plan.publishable, false)
+    assert(plan.blockers.some(message => /undeletable latest/.test(message)))
+    let writes = 0
+    await assert.rejects(executePublication(context, { confirm: plan.planId, environment: oidc,
+      execute: async () => { writes++ } }), /next-only publication is blocked/)
+    assert.equal(writes, 0)
+  })
+})
+
+test('initial latest creation requires acknowledgement of these exact package names and version', async () => {
+  await fixture(async context => {
+    for (const state of context.state.values()) { state.status = 'not-publicly-visible'; state.distTags = {} }
+    const acknowledgement = { version: context.policy.acceptedCandidate.version,
+      packages: [context.release.windowsPackage, context.release.name] }
+    context.policy.initialLatestAcknowledgement = { ...acknowledgement, version: '0.4.0' }
+    assert.equal((await preparePublishPlan(context)).publishable, false)
+    context.policy.initialLatestAcknowledgement = { ...acknowledgement, packages: [context.release.name] }
+    assert.equal((await preparePublishPlan(context)).publishable, false)
+    context.policy.initialLatestAcknowledgement = acknowledgement
+    const calls = [], plan = await preparePublishPlan(context), execute = simulate(context, calls)
+    assert.equal(plan.publishable, true)
+    const report = await executePublication(context, { confirm: plan.planId, environment: oidc, execute: async args => {
+      await execute(args)
+      const state = context.state.get(calls.at(-1))
+      state.status = 'public'; state.distTags.latest = acknowledgement.version
+    } })
+    assert.equal(report.success, true)
+    assert(report.operations.every(operation => operation.initialLatestAutomaticallyCreated === true && !operation.stableTagUnchanged))
+    assert.deepEqual(calls, acknowledgement.packages)
+  })
+})
+
 test('confirming a new namespace cannot relabel or publish an old accepted candidate', async () => {
   await fixture(async context => {
     context.release.name = '@new-scope/agent'
@@ -167,6 +203,26 @@ test('an ambiguous first publish failure never claims no registry changes occurr
     assert.equal(report.published, null)
     assert.equal(report.distTagsChanged, null)
     assert.equal(report.state, 'publication-outcome-unknown')
+  })
+})
+
+test('registry processing delay is read-only and bounded; tag drift stops before publishing main', async () => {
+  let reads = 0, sleeps = 0
+  const operation = { name: '@fixture/agent', version: '0.4.6-rc.1' }
+  const remote = await waitForPublishedVersion(operation, async () => ({ versions: ++reads < 3 ? {} : { [operation.version]: {} } }),
+    { attempts: 3, sleep: async () => { sleeps++ } })
+  assert(remote.versions[operation.version])
+  assert.equal(sleeps, 2)
+  await assert.rejects(waitForPublishedVersion(operation, async () => ({ versions: {} }), { attempts: 1 }), /not publicly visible/)
+  await fixture(async context => {
+    const calls = [], plan = await preparePublishPlan(context), execute = simulate(context, calls)
+    const report = await executePublication(context, { confirm: plan.planId, environment: oidc, execute: async args => {
+      await execute(args)
+      context.state.get(context.release.windowsPackage).distTags.latest = context.policy.acceptedCandidate.version
+    } })
+    assert.equal(report.success, false)
+    assert.match(report.error, /Stable tag changed/)
+    assert.deepEqual(calls, [context.release.windowsPackage])
   })
 })
 

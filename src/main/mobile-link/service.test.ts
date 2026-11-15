@@ -47,7 +47,8 @@ function fixture() {
     platform: 'macos',
     fetch: vi.fn(async (input, init) => {
       const path = new URL(String(input)).pathname
-      if (path.endsWith('/confirm')) grants = [{ id: grantId, controllerId: controller }]
+      if (path.endsWith('/confirm')) grants = [...grants.filter((item) => item.controllerId !== controller),
+        { id: grantId, controllerId: controller }]
       if (path.endsWith('/grants/' + grantId) && init?.method === 'DELETE') grants = []
       return Response.json(
         path.endsWith('/grants')
@@ -349,7 +350,7 @@ describe('desktop phone boundary', () => {
       expect((await service.status()).enabled).toBe(false)
     } finally { service.dispose() }
   })
-  it('admits a newly confirmed phone immediately and fences it as soon as revoke starts', async () => {
+  it('admits an auto-approved phone immediately and fences it as soon as revoke starts', async () => {
     const f = fixture(), service = new MobileLinkService(f.deps)
     f.setGrants([])
     const invoke = () => f.socket.onmessage?.({ data: JSON.stringify({ v: 1,
@@ -359,13 +360,10 @@ describe('desktop phone boundary', () => {
       await service.enable(true)
       await tick()
       f.socket.onmessage?.({ data: JSON.stringify({ v: 1, kind: 'hello' }) })
+      // The local phone switch is this computer's consent, so no dialog gates the pairing.
+      await vi.waitFor(async () => expect((await service.status()).grants).toHaveLength(1))
       invoke()
-      await tick()
-      expect(f.request).not.toHaveBeenCalled()
-      await service.confirm('44444444-4444-4444-8444-444444444444')
-      invoke()
-      await tick()
-      expect(f.request).toHaveBeenCalledOnce()
+      await vi.waitFor(() => expect(f.request).toHaveBeenCalledOnce())
       const revoking = service.revoke(grantId)
       invoke()
       await revoking

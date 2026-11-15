@@ -16,7 +16,7 @@ import {
   clearAntigravityLocalLoginCache
 } from './antigravity-native-quota-profile.js'
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
-import { mergeAntigravityQuotaPools } from './antigravity-quota-pools.js'
+import { mergeAntigravityQuotaPools, parseAntigravityQuotaSummary } from './antigravity-quota-pools.js'
 import { defaultRuntime } from './provider-subscription-quota-credentials.js'
 import { type ProviderQuotaFetch, runSubscriptionQuotaProbe } from './provider-subscription-quota-service.js'
 
@@ -77,6 +77,24 @@ describe('antigravity quota support', () => {
       expiresAt: 1_800_000_000_000,
       accountEmail: 'jwt@example.com',
       isBusiness: true
+    })
+
+    const nestedAgyKeyring = `go-keyring-base64:${Buffer.from(JSON.stringify({
+      token: {
+        access_token: 'ya29.nested-token',
+        refresh_token: '1//nested-refresh',
+        expiry: '2026-11-15T12:33:58.147031+08:00',
+        expires_in: 3599
+      },
+      auth_method: 'oauth-personal',
+      id_token_email: 'nested@gmail.com'
+    }), 'utf8').toString('base64')}`
+
+    expect(parseStoredAntigravityToken(nestedAgyKeyring)).toEqual({
+      accessToken: 'ya29.nested-token',
+      refreshToken: '1//nested-refresh',
+      expiresAt: Date.parse('2026-11-15T12:33:58.147031+08:00'),
+      accountEmail: 'nested@gmail.com'
     })
   })
 
@@ -242,6 +260,132 @@ describe('antigravity quota support', () => {
     expect(result.metrics).toEqual([
       { id: 'pool-claude', label: 'Claude', unit: 'percent', usedPercent: 80, resetsAt: '2026-11-14T14:00:00.000Z' },
       { id: 'pool-gemini-pro', label: 'Gemini Pro', unit: 'percent', usedPercent: 30, resetsAt: '2026-11-14T15:00:00.000Z' }
+    ])
+  })
+
+  it('parses Antigravity 5h and Weekly quota summary groups from fetchQuotaStatus and omits resetsAt on untouched 100% windows', async () => {
+    const aicodePayload = {
+      quotaSummary: {
+        groups: [
+          {
+            displayName: 'Gemini Models',
+            buckets: [
+              {
+                bucketId: 'gemini-weekly',
+                displayName: 'Weekly Limit Remaining',
+                description: 'You have used some of your weekly limit, it will fully refresh in 6 days, 6 hours.',
+                refreshWindowLabel: 'weekly',
+                remainingFraction: 0.9,
+                resetTime: '2026-11-21T10:06:51Z'
+              },
+              {
+                bucketId: 'gemini-5h',
+                displayName: 'Five Hour Limit Remaining',
+                description: 'You have used some of your 5-hour limit, it will fully refresh in 4 hours, 25 minutes.',
+                refreshWindowLabel: '5h',
+                remainingFraction: 0.98,
+                resetTime: '2026-11-15T08:01:44Z'
+              }
+            ]
+          },
+          {
+            displayName: 'Claude and GPT models',
+            buckets: [
+              {
+                bucketId: '3p-weekly',
+                displayName: 'Weekly Limit Remaining',
+                refreshWindowLabel: 'weekly',
+                remainingFraction: 1,
+                resetTime: '2026-11-22T03:46:58Z'
+              },
+              {
+                bucketId: '3p-5h',
+                displayName: 'Five Hour Limit Remaining',
+                refreshWindowLabel: '5h',
+                remainingFraction: 1,
+                resetTime: '2026-11-15T08:46:58Z'
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+    expect(parseAntigravityQuotaSummary(aicodePayload)).toEqual([
+      {
+        id: 'gemini-weekly',
+        label: 'Gemini Models · Weekly limit',
+        unit: 'percent',
+        usedPercent: 10,
+        windowSeconds: 604_800,
+        resetsAt: '2026-11-21T10:06:51.000Z'
+      },
+      {
+        id: 'gemini-5h',
+        label: 'Gemini Models · 5h limit',
+        unit: 'percent',
+        usedPercent: 2,
+        windowSeconds: 18_000,
+        resetsAt: '2026-11-15T08:01:44.000Z'
+      },
+      {
+        id: '3p-weekly',
+        label: 'Claude and GPT models · Weekly limit',
+        unit: 'percent',
+        usedPercent: 0,
+        windowSeconds: 604_800
+      },
+      {
+        id: '3p-5h',
+        label: 'Claude and GPT models · 5h limit',
+        unit: 'percent',
+        usedPercent: 0,
+        windowSeconds: 18_000
+      }
+    ])
+
+    const fetcher = vi.fn<ProviderQuotaFetch>(async (input) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes(':loadCodeAssist')) {
+        return new Response(JSON.stringify({
+          cloudaicompanionProject: 'proj-1',
+          currentTier: { name: 'Google AI Pro' }
+        }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      if (url.includes(':fetchQuotaStatus')) {
+        return new Response(JSON.stringify(aicodePayload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      }
+      return new Response('unexpected', { status: 500 })
+    })
+
+    const result = await runSubscriptionQuotaProbe(
+      'antigravity-subscription',
+      {
+        id: 'native:antigravity',
+        name: 'Antigravity',
+        presetId: 'gemini-subscription',
+        kind: 'antigravity-cli',
+        authType: 'subscription',
+        configured: true,
+        apiKey: '',
+        proxyUrl: ''
+      },
+      { fetcher, proxyUrl: '' },
+      {
+        ...defaultRuntime,
+        resolveAntigravityCredential: async () => ({ accessToken: 'valid-token', accountEmail: 'user@gmail.com' })
+      }
+    )
+
+    expect(result.metrics).toHaveLength(4)
+    expect(result.metrics.map((m) => m.label)).toEqual([
+      'Gemini Models · Weekly limit',
+      'Gemini Models · 5h limit',
+      'Claude and GPT models · Weekly limit',
+      'Claude and GPT models · 5h limit'
     ])
   })
 

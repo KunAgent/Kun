@@ -79,4 +79,22 @@ describe('unattended same-account desktop pairing', () => {
     expect(f.access.current()).toBe(false)
     expect(f.request.mock.calls.some(([path]) => path === '/desktop/host')).toBe(false)
   })
+  it('renews the 30s Max lease while idle and confirms immediately when poked', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    let pending = false
+    f.request.mockImplementation(async path => path === '/capabilities'
+      ? { desktop: { computerAccess: true } }
+      : path === '/desktop/pairings' ? { pairings: pending ? [pairing] : [] } : { ok: true } as any)
+    await f.access.advertise(f.api, true, true, owner)
+    f.access.watch(f.api, () => true, f.changed)
+    await vi.advanceTimersByTimeAsync(65000)
+    expect(f.access.current()).toBe(true)
+    expect(f.confirms()).toEqual([])
+    pending = true
+    f.access.poke()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.confirms()).toEqual([['/desktop/pairings/' + pairing.id + '/confirm', 'POST']])
+    expect(f.changed).toHaveBeenCalledOnce()
+  })
 })

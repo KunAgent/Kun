@@ -11,6 +11,10 @@ import { createThreadRecord } from '../../domain/thread.js'
 import type { RuntimeEventDraft, RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
 import type { TurnService } from '../../services/turn-service.js'
 import { setHarnessTimingClock } from '../harness-turn-timing.js'
+import {
+  antigravityModelContextWindow,
+  loadCarriedAntigravityOccupancy
+} from './antigravity-context-snapshot.js'
 import { AntigravityCliRuntime } from './antigravity-cli-runtime.js'
 
 afterEach(() => setHarnessTimingClock(undefined))
@@ -47,6 +51,7 @@ async function run(
   id: string,
   controller = new AbortController(),
   options: {
+    model?: string
     contextProfile?: {
       contextWindowTokens: number
       contextWindowKnown?: boolean
@@ -59,7 +64,7 @@ async function run(
   const threadStore = new InMemoryThreadStore()
   const sessionStore = new InMemorySessionStore()
   const providerId = options.nativeLogin ? undefined : 'gemini-subscription'
-  const turn = TurnSchema.parse({ id: `turn-${id}`, threadId: `thread-${id}`, status: 'running', prompt: 'hi', model: 'gemini-3.6-flash', createdAt: '2026-10-09T00:00:00.000Z' })
+  const turn = TurnSchema.parse({ id: `turn-${id}`, threadId: `thread-${id}`, status: 'running', prompt: 'hi', model: options.model ?? 'gemini-3.6-flash', createdAt: '2026-10-09T00:00:00.000Z' })
   await threadStore.upsert({
     ...createThreadRecord({
       id: turn.threadId,
@@ -213,7 +218,14 @@ describe('AntigravityCliRuntime stream-json turn', () => {
     expect(order).toEqual([...Array(6).fill('delta'), 'finish:aborted'])
   })
 
-  it('replaces the start-of-turn estimate with live step occupancy and emits default providerId for native-login', async () => {
+  it('resolves known Antigravity windows, streams per-step occupancy with cache_read_tokens, and keeps default providerId for native-login', async () => {
+    expect(antigravityModelContextWindow('gemini-4-carbon-high')).toBe(1_000_000)
+    expect(antigravityModelContextWindow('claude-opus-5-5-high')).toBe(1_000_000)
+    expect(antigravityModelContextWindow('claude-haiku-4-5')).toBe(200_000)
+    expect(antigravityModelContextWindow('gpt-oss-120b-medium')).toBe(128_000)
+    expect(antigravityModelContextWindow('default')).toBeUndefined()
+    expect(antigravityModelContextWindow('custom-experimental')).toBeUndefined()
+
     const contextProfile = {
       contextWindowTokens: 1_000_000,
       contextWindowKnown: false,
@@ -232,7 +244,10 @@ describe('AntigravityCliRuntime stream-json turn', () => {
       providerId: 'default',
       occupancySource: 'estimate',
       nativeHistory: 'none',
-      contextWindowKnown: false
+      contextWindowKnown: true,
+      contextWindowTokens: 1_000_000,
+      softThresholdTokens: 1_000_000,
+      hardThresholdTokens: 1_000_000
     })
     expect(bicycle.snapshots[1]).toMatchObject({
       providerId: 'default',
@@ -241,7 +256,7 @@ describe('AntigravityCliRuntime stream-json turn', () => {
       toolCount: 0,
       occupancySource: 'agent',
       nativeHistory: 'known',
-      contextWindowKnown: false
+      contextWindowKnown: true
     })
 
     const tool = await run(
@@ -250,11 +265,68 @@ describe('AntigravityCliRuntime stream-json turn', () => {
       new AbortController(),
       { contextProfile }
     )
-    expect(tool.snapshots).toHaveLength(2)
+    // Emits start-of-turn estimate, step 1 before tool (11,996), and step 3 after tool (12,374) without post-turn duplication.
+    expect(tool.snapshots).toHaveLength(3)
     expect(tool.snapshots[1]).toMatchObject({
+      providerId: 'gemini-subscription',
+      estimatedInputTokens: 11_996,
+      toolCount: 0,
+      occupancySource: 'agent',
+      nativeHistory: 'known'
+    })
+    expect(tool.snapshots[2]).toMatchObject({
       providerId: 'gemini-subscription',
       estimatedInputTokens: 12_374,
       toolCount: 1,
+      occupancySource: 'agent',
+      nativeHistory: 'known'
+    })
+
+    const cachedStream: Capture = [
+      [0, JSON.stringify({ event: 'init', conversation_id: 'conv-cached', init: { model: 'gpt-oss-120b' } })],
+      [10, JSON.stringify({
+        event: 'step_update',
+        step_update: {
+          conversation_id: 'conv-cached',
+          step_index: 1,
+          state: 'DONE',
+          step_type: 'agent_response',
+          text_delta: 'Cached reply',
+          usage: { input_tokens: 3_166, output_tokens: 10, thinking_tokens: 0, cache_read_tokens: 12_206, total_tokens: 3_176 }
+        }
+      })],
+      [20, JSON.stringify({
+        event: 'result',
+        result: {
+          conversation_id: 'conv-cached',
+          status: 'SUCCESS',
+          response: 'Cached reply',
+          usage: { input_tokens: 17_538, output_tokens: 12, thinking_tokens: 0, cache_read_tokens: 12_206, total_tokens: 17_550 }
+        }
+      })]
+    ]
+    const cached = await run(
+      replaySpawn(cachedStream, clock),
+      'snapshot-cached',
+      new AbortController(),
+      { model: 'default', contextProfile, nativeLogin: true }
+    )
+    expect(cached.snapshots[0]).toMatchObject({
+      model: 'default',
+      contextWindowKnown: false,
+      occupancySource: 'estimate'
+    })
+    expect(cached.snapshots[1]).toMatchObject({
+      model: 'default',
+      contextWindowKnown: true,
+      contextWindowTokens: 128_000,
+      occupancySource: 'estimate'
+    })
+    expect(cached.snapshots[2]).toMatchObject({
+      model: 'default',
+      contextWindowKnown: true,
+      contextWindowTokens: 128_000,
+      estimatedInputTokens: 15_372,
       occupancySource: 'agent',
       nativeHistory: 'known'
     })
@@ -269,14 +341,42 @@ describe('AntigravityCliRuntime stream-json turn', () => {
       replaySpawn([[0, singleJson]], clock),
       'snapshot-json',
       new AbortController(),
-      { contextProfile, nativeLogin: true }
+      { model: 'custom-experimental', contextProfile, nativeLogin: true }
     )
     expect(fallback.snapshots).toHaveLength(2)
     expect(fallback.snapshots[1]).toMatchObject({
       providerId: 'default',
-      estimatedInputTokens: 800,
+      estimatedInputTokens: 1_000,
+      contextWindowKnown: false,
       occupancySource: 'agent',
       nativeHistory: 'known'
+    })
+
+    const store = new InMemorySessionStore()
+    await store.appendEvent('thread-carry', {
+      seq: 1,
+      timestamp: '2026-10-09T00:00:00.000Z',
+      kind: 'context_snapshot',
+      threadId: 'thread-carry',
+      turnId: 'turn-1',
+      model: 'gemini-4-argon',
+      providerId: 'default',
+      stepIndex: 0,
+      contextWindowTokens: 1_000_000,
+      softThresholdTokens: 1_000_000,
+      hardThresholdTokens: 1_000_000,
+      contextWindowKnown: true,
+      estimatedInputTokens: 135_098,
+      breakdown: { tools: 0, system: 0, skills: 0, messages: 135_098, other: 0 },
+      toolCount: 3,
+      activeSkillIds: [],
+      contextManagement: 'sdk-managed',
+      occupancySource: 'agent',
+      nativeHistory: 'known'
+    })
+    await expect(loadCarriedAntigravityOccupancy(store, 'thread-carry')).resolves.toEqual({
+      inputTokens: 135_098,
+      toolCount: 3
     })
   })
 })

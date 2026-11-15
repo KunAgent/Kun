@@ -20,5 +20,16 @@
     "windowsSha256": "31471ba89b750eef2796ec1575b876c22a603cea3d7965fbe3a2f37628dd0a93",
     "sourceCommit": "cf82f7892a6d0aaa68090f6ee93ab3fb111cfc24",
     "buildId": "8a84ae1fe486e1a0d0fa367179864e3a19eadef635314206be33423d5dca306e"
+  },
+  "initialLatestAcknowledgement": {
+    "version": "0.4.5-rc.1",
+    "packages": [
+      "@kunagent/agent-win32-x64",
+      "@kunagent/agent"
+    ]
+  },
+  "registryStableTags": {
+    "@kunagent/agent-win32-x64": "0.4.5-rc.1",
+    "@kunagent/agent": "0.0.0-stage"
   }
 }

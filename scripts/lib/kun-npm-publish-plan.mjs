@@ -7,6 +7,11 @@ export function isPrerelease(version) {
   return Boolean(match && match[4].split('.').every(part => !/^\d+$/.test(part) || part === '0' || !part.startsWith('0')))
 }
 
+export function initialLatestAcknowledged(policy, name, version) {
+  const acknowledgement = policy.initialLatestAcknowledgement
+  return acknowledgement?.version === version && acknowledgement.packages?.includes(name) === true
+}
+
 export function namespaceBlockers(audit, policy, release, now = Date.now()) {
   if (!audit) return ['Authenticated npm namespace audit is missing']
   const errors = []
@@ -52,6 +57,11 @@ export async function preparePublishPlan({ directory, gateA, receipts, audit, po
       continue
     }
     const remote = await metadata(artifact.name)
+    const initialPublication = remote.status === 'not-publicly-visible' ||
+      (remote.distTags.latest === '0.0.0-stage' && Object.keys(remote.versions).every(version => version === '0.0.0-stage'))
+    const allowInitialLatest = initialPublication && initialLatestAcknowledged(policy, artifact.name, artifact.version)
+    if (initialPublication && !allowInitialLatest)
+      blockers.push('A new npm package receives an undeletable latest tag on first publication; next-only publication is blocked: ' + artifact.name)
     const existing = remote.versions[artifact.version]
     if (existing) {
       assert.equal(existing.dist?.integrity, artifact.integrity, 'Published version has different bytes; never overwrite or retag it')
@@ -60,12 +70,13 @@ export async function preparePublishPlan({ directory, gateA, receipts, audit, po
     }
     operations.push({ name: artifact.name, version: artifact.version, filename: artifact.filename,
       sha256: artifact.sha256, integrity: artifact.integrity, action: existing ? 'skip-identical' : 'publish-prerelease',
-      observedStableTag: remote.distTags.latest ?? null,
+      observedStableTag: remote.distTags.latest ?? null, allowInitialLatest,
       arguments: ['publish', artifact.path, '--registry=' + NPM_REGISTRY,
         '--access=public', '--tag=' + policy.prereleaseTag, '--ignore-scripts', '--provenance=false', '--json'] })
   }
   const identity = { registry: policy.registry, tag: policy.prereleaseTag, sourceCommit: candidate.manifest.sourceCommit,
     gateAReceiptSha256: policy.acceptedCandidate.gateAReceiptSha256,
+    initialLatestAcknowledgement: policy.initialLatestAcknowledgement ?? null,
     artifacts: operations.map(({ name, version, sha256 }) => ({ name, version, sha256 })) }
   return { schemaVersion: 1, kind: 'kun-npm-publish-plan', planId: sha256(JSON.stringify(identity)),
     prepared: true, publishable: blockers.length === 0, state: blockers.length ? 'blocked-before-publication' : 'prepared-awaiting-explicit-publication',

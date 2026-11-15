@@ -43,7 +43,11 @@ import {
   discoverAntigravityOAuthClients,
   resolveAntigravityQuotaCredential
 } from './antigravity-quota-credentials.js'
-import { mergeAntigravityQuotaPools } from './antigravity-quota-pools.js'
+import {
+  mergeAntigravityQuotaPools,
+  mergeAntigravitySummaryWithBuckets,
+  parseAntigravityQuotaSummary
+} from './antigravity-quota-pools.js'
 
 export { decodeAntigravityUnifiedOAuth }
 
@@ -155,6 +159,57 @@ export async function probeGoogleCodeAssistQuota(
     )
   }
   const body = JSON.stringify(project ? { project } : {})
+  let summaryMetrics: ProviderQuotaMetric[] = []
+  let prefetchedQuotaPayload: unknown
+  if (client === 'antigravity') {
+    try {
+      const aicodePayload = await requestJson(
+        'https://aicode.googleapis.com/v1alpha:fetchQuotaStatus',
+        { method: 'GET', headers },
+        context
+      )
+      summaryMetrics = parseAntigravityQuotaSummary(aicodePayload)
+      const hasGeminiGroup = summaryMetrics.some((metric) => /\bgemini\b/i.test(metric.label))
+      const hasThirdPartyGroup = summaryMetrics.some((metric) => /\b(?:claude|gpt|3p)\b/i.test(metric.label))
+      if (summaryMetrics.length > 0 && hasGeminiGroup && hasThirdPartyGroup) {
+        return {
+          metrics: summaryMetrics,
+          ...googleSetupSummary(setup, credential.accountEmail)
+        }
+      }
+      if (summaryMetrics.length === 0) {
+        prefetchedQuotaPayload = aicodePayload
+      }
+    } catch (error) {
+      if (error instanceof ProviderQuotaAuthorizationError && error.status === 401) throw error
+    }
+    if (summaryMetrics.length === 0) {
+      try {
+        const summaryPayload = await requestJson(
+          'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary',
+          { method: 'POST', headers, body },
+          context
+        )
+        summaryMetrics = parseAntigravityQuotaSummary(summaryPayload)
+        if (summaryMetrics.length === 0 && !prefetchedQuotaPayload) {
+          prefetchedQuotaPayload = summaryPayload
+        }
+      } catch (error) {
+        if (error instanceof ProviderQuotaAuthorizationError && error.status === 401) throw error
+      }
+    }
+    if (summaryMetrics.length === 0 && prefetchedQuotaPayload !== undefined) {
+      try {
+        const parsed = parseGoogleCodeAssistQuota(prefetchedQuotaPayload)
+        return {
+          metrics: mergeAntigravityQuotaPools(parsed),
+          ...googleSetupSummary(setup, credential.accountEmail)
+        }
+      } catch {
+        // Fall through to retrieveUserQuota.
+      }
+    }
+  }
   let quotaPayload: unknown
   try {
     quotaPayload = await requestJson(
@@ -164,20 +219,34 @@ export async function probeGoogleCodeAssistQuota(
     )
     const parsed = parseGoogleCodeAssistQuota(quotaPayload)
     return {
-      metrics: client === 'antigravity' ? mergeAntigravityQuotaPools(parsed) : parsed,
+      metrics: client === 'antigravity'
+        ? mergeAntigravitySummaryWithBuckets(summaryMetrics, parsed)
+        : parsed,
       ...googleSetupSummary(setup, credential.accountEmail)
     }
   } catch (error) {
     if (error instanceof ProviderQuotaAuthorizationError) throw error
-    quotaPayload = await requestJson(
-      'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
-      { method: 'POST', headers, body },
-      context
-    )
+    try {
+      quotaPayload = await requestJson(
+        'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
+        { method: 'POST', headers, body },
+        context
+      )
+    } catch (fallbackError) {
+      if (summaryMetrics.length > 0) {
+        return {
+          metrics: summaryMetrics,
+          ...googleSetupSummary(setup, credential.accountEmail)
+        }
+      }
+      throw fallbackError
+    }
   }
   const parsed = parseGoogleCodeAssistQuota(quotaPayload)
   return {
-    metrics: client === 'antigravity' ? mergeAntigravityQuotaPools(parsed) : parsed,
+    metrics: client === 'antigravity'
+      ? mergeAntigravitySummaryWithBuckets(summaryMetrics, parsed)
+      : parsed,
     ...googleSetupSummary(setup, credential.accountEmail)
   }
 }

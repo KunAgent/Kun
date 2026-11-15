@@ -7,6 +7,7 @@ import type { ControlPackageApi } from '@shared/control-package'
 import type { RemoteAccessStatus } from '@shared/remote-access'
 import type { DesktopAccessStatus } from '@shared/remote-desktop'
 import type { MobileLink } from './useMobileLink'
+import { MobilePairingDialog } from './MobilePairingDialog'
 import { RemoteAccessPanel } from './RemoteAccessPanel'
 import i18n from '../../i18n'
 
@@ -337,4 +338,15 @@ it('preserves local/private and Max computer access independently of mobile rela
   expect(control(i18n.t('remoteAccessEnable')).disabled).toBe(false)
   expect(direct.status).toHaveBeenCalledOnce()
   expect(direct.configure).not.toHaveBeenCalled()
+})
+it('never opens the phone pairing dialog or OS attention alert for desktop computer pairings', async () => {
+  const requestUserAttention = vi.fn(async () => undefined)
+  Object.assign(api, { requestUserAttention })
+  mocks.link.state!.pairings = [{ id: 'desk-1', controllerId: 'mac-2', name: 'Other Mac', purpose: 'desktop' }] as NonNullable<MobileLink['state']>['pairings']
+  await act(async () => root.render(createElement(MobilePairingDialog)))
+  expect(container.querySelector('[role="alertdialog"]')).toBeNull()
+  expect(requestUserAttention).toHaveBeenLastCalledWith(expect.objectContaining({ badge: 0 }))
+  mocks.link.state!.pairings = [{ id: 'phone-1', controllerId: 'phone-2', name: 'New iPhone' }] as NonNullable<MobileLink['state']>['pairings']
+  await act(async () => root.render(createElement(MobilePairingDialog)))
+  expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain('New iPhone')
 })
