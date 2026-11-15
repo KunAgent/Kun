@@ -18,6 +18,7 @@ import {
 import { HarnessesConfigSchema } from '../config/kun-config-harnesses.js'
 import { mergeAntigravityQuotaPools, parseAntigravityQuotaSummary } from './antigravity-quota-pools.js'
 import { defaultRuntime } from './provider-subscription-quota-credentials.js'
+import { scopedQuotaFetch } from './provider-quota-security.js'
 import { type ProviderQuotaFetch, runSubscriptionQuotaProbe } from './provider-subscription-quota-service.js'
 
 const tempDirs: string[] = []
@@ -361,19 +362,21 @@ describe('antigravity quota support', () => {
       return new Response('unexpected', { status: 500 })
     })
 
+    const profile = {
+      id: 'native:antigravity',
+      name: 'Antigravity',
+      presetId: 'gemini-subscription',
+      kind: 'antigravity-cli' as const,
+      authType: 'subscription' as const,
+      configured: true,
+      apiKey: '',
+      proxyUrl: ''
+    }
+
     const result = await runSubscriptionQuotaProbe(
       'antigravity-subscription',
-      {
-        id: 'native:antigravity',
-        name: 'Antigravity',
-        presetId: 'gemini-subscription',
-        kind: 'antigravity-cli',
-        authType: 'subscription',
-        configured: true,
-        apiKey: '',
-        proxyUrl: ''
-      },
-      { fetcher, proxyUrl: '' },
+      profile,
+      { fetcher: scopedQuotaFetch(fetcher, profile, 'antigravity-subscription'), proxyUrl: '' },
       {
         ...defaultRuntime,
         resolveAntigravityCredential: async () => ({ accessToken: 'valid-token', accountEmail: 'user@gmail.com' })
