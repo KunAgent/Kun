@@ -1,6 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root { margin: 0; width: 100%; height: 100%; background: transparent; overflow: hidden; user-select: none; }
 .pet-overlay { position: relative; width: 100%; height: 100%; background: transparent; pointer-events: none; }
+.pet-native-drag { position: absolute; z-index: 4; top: 8px; left: 8px; padding: 5px 12px; border-radius: 14px; background: rgba(252,252,254,.9); color: #252529; font: 12px/18px system-ui, sans-serif; pointer-events: auto; -webkit-app-region: drag; }
 .pet-hit { position: absolute; inset: 0; pointer-events: none; background: transparent; }
 .pet-character-stage, .pet-notification-position, .pet-menu-position, .pet-controls-position { position: absolute; }
 .pet-controls-position { display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100% - 16px); }

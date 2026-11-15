@@ -1,5 +1,7 @@
 import { app } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import { openUpdateRollbackReadiness, powershellCaptureGuiProcess, powershellRollbackReadiness, powershellWaitForGuiExit } from './update-rollback-readiness'
 import { access, readFile } from 'node:fs/promises'
 import { join, win32 } from 'node:path'
@@ -65,12 +67,15 @@ export async function scheduleBoundedUpdateRollback(
   try {
     await readiness.listening
     const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64')
+    const relaunchPath = win32.join(tmpdir(), `kun-update-relaunch-${randomUUID()}.txt`)
+    const relaunchAssignment = `$relaunchPath=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(relaunchPath)}'))`
     const assignments = Object.entries(environment).map(([key, value]) =>
       `$env:${key}=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(value)}'))`
     )
     const command = `${powershellHelperDeadline()}\n` + [
       `$script=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(scriptPath)}'))`,
       `$waitPid=${pid}`,
+      relaunchAssignment,
       "$powershell=Join-Path $PSHOME 'powershell.exe'",
       ...assignments,
       // Actions use exit, so each runs in a native child:
@@ -93,7 +98,8 @@ export async function scheduleBoundedUpdateRollback(
       'if ([string]::IsNullOrWhiteSpace($exe)) { exit 1 }',
       '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action FinalizeUpdateTransaction -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-      'Start-Process -FilePath $exe -ErrorAction Stop',
+      // The elevated coordinator only publishes the validated recovery path.
+      '[IO.File]::WriteAllText($relaunchPath, $exe, [Text.Encoding]::Unicode)',
       'exit 0'
     ].join('; ')
     const encoded = encodePowershellCommand(command)
@@ -110,6 +116,15 @@ export async function scheduleBoundedUpdateRollback(
       '$coordinator.WaitForExit()',
       '$exitCode=$coordinator.ExitCode',
       'if ($null -eq $exitCode) { exit 1 }',
+      relaunchAssignment,
+      'try {',
+      '  if ($exitCode -eq 0) {',
+      '    $exe=[IO.File]::ReadAllText($relaunchPath, [Text.Encoding]::Unicode).Trim()',
+      '    if ([string]::IsNullOrWhiteSpace($exe)) { throw "Recovery executable is missing." }',
+      // This bootstrap retains the original GUI user's token; never launch from the elevated coordinator.
+      '    Start-Process -FilePath $exe -ErrorAction Stop',
+      '  }',
+      '} finally { Remove-Item -LiteralPath $relaunchPath -Force -ErrorAction SilentlyContinue }',
       'exit $exitCode'
     ].join('\n')
     const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', bootstrap]

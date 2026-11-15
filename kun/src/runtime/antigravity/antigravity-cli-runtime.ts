@@ -54,6 +54,7 @@ import {
 } from '../delegated-session-binding.js'
 import { recordHandoffInjected, resolveTurnHandoff } from '../../handoff/turn-handoff.js'
 import { runAntigravityProcess } from './antigravity-process.js'
+import { isMissingAntigravitySession } from './antigravity-resume.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
 
 const ANTIGRAVITY_MODEL_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/i
@@ -571,8 +572,9 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
             preparation?.resumed &&
             preparation.nativeSessionId &&
             !launchDenied &&
-            !stream.hasEmittedOutput &&
-            !signal.aborted
+            !stream.hasStartedTurn &&
+            !signal.aborted &&
+            isMissingAntigravitySession(error, preparation.nativeSessionId)
           ) {
             await finishAntigravityTrace(trace, { kind: 'error', error })
             trace = undefined

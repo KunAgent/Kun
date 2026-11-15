@@ -54,6 +54,7 @@ export class AntigravityTurnStream {
     | { inputTokens: number; toolCount: number; resolvedModel: string | undefined }
     | undefined
   private toolSteps = 0
+  private startedTurn = false
 
   constructor(
     private readonly deps: StreamDeps,
@@ -67,6 +68,11 @@ export class AntigravityTurnStream {
   /** Whether any streamed assistant delta has already been published to the timeline. */
   get hasEmittedOutput(): boolean {
     return Boolean(this.item)
+  }
+
+  /** Any accepted request, tool activity, text or usage makes replay unsafe. */
+  get hasStartedTurn(): boolean {
+    return this.startedTurn
   }
 
   get toolStepCount(): number {
@@ -90,6 +96,7 @@ export class AntigravityTurnStream {
   readonly onLine = (line: string): void => {
     const signal = antigravityStreamSignal(line)
     if (!signal) return
+    this.startedTurn = true
     switch (signal.kind) {
       case 'prompt-accepted':
         this.timing.requestStarted()

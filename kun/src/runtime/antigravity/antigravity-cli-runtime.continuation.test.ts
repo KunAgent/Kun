@@ -31,6 +31,7 @@ type ScriptedSpawnStep = {
   stdout?: string
   stderr?: string
   exitCode?: number
+  hang?: boolean
 }
 
 function scriptedSpawn(
@@ -49,19 +50,19 @@ function scriptedSpawn(
     }
     child.stdout = new PassThrough()
     child.stderr = new PassThrough()
-    child.kill = () => true
+    child.kill = () => { queueMicrotask(() => child.emit('exit', null, 'SIGTERM')); return true }
     queueMicrotask(() => {
       if (step.stdout) child.stdout.write(step.stdout)
       child.stdout.end()
       if (step.stderr) child.stderr.write(step.stderr)
       child.stderr.end()
-      child.emit('exit', step.exitCode ?? 0, null)
+      if (!step.hang) child.emit('exit', step.exitCode ?? 0, null)
     })
     return child as unknown as ChildProcess
   }) as typeof spawn
 }
 
-async function setupAntigravityRuntime(steps: ScriptedSpawnStep[]) {
+async function setupAntigravityRuntime(steps: ScriptedSpawnStep[], maxWallTimeMs?: number) {
   const root = await mkdtemp(join(tmpdir(), 'kun-agy-continuation-'))
   cleanupDirs.push(root)
   const threadStore = new InMemoryThreadStore()
@@ -94,6 +95,7 @@ async function setupAntigravityRuntime(steps: ScriptedSpawnStep[]) {
     } as unknown as RuntimeEventRecorder,
     ids: { next: (prefix) => `${prefix}_${++seq}` },
     sessionCoordinator: coordinator,
+    turnLimits: maxWallTimeMs ? { maxWallTimeMs } : undefined,
     spawnFn: scriptedSpawn(steps, calls)
   })
   return { runtime, threadStore, sessionStore, coordinator, recorded, calls }
@@ -151,6 +153,28 @@ async function runTurnWithModel(
 }
 
 describe('AntigravityCliRuntime model-switch continuation', () => {
+  it.each([
+    { label: 'accepted request', stdout: JSON.stringify({ event: 'init' }) + '\n' },
+    { label: 'tool started', stdout: JSON.stringify({ event: 'step_update', step_update: { step_type: 'tool', state: 'ACTIVE' } }) + '\n' },
+    { label: 'tool finished', stdout: JSON.stringify({ event: 'step_update', step_update: { step_type: 'tool', state: 'DONE' } }) + '\n' },
+    { label: 'tool timeout', stdout: JSON.stringify({ event: 'step_update', step_update: { step_type: 'tool', state: 'DONE' } }) + '\n', hang: true },
+    { label: 'unknown failure', stdout: '', stderr: 'network failure' },
+    { label: 'conversation mismatch', stdout: JSON.stringify({ conversation_id: 'conv-other', status: 'SUCCESS', response: 'wrong session' }), exitCode: 0 }
+  ])('does not replay $label and preserves the native binding', async (failure) => {
+    const h = await setupAntigravityRuntime([
+      { stdout: JSON.stringify({ conversation_id: 'conv-agy-stale', status: 'SUCCESS', response: 'Initial' }) },
+      { exitCode: 1, stderr: 'conversation conv-agy-stale not found', ...failure }
+    ], 50)
+    await runTurnWithModel(h, { threadId: 'thr_no_replay', turnId: 'turn_1', prompt: 'Initial', model: 'gemini-3.6-flash' })
+    const binding = await h.coordinator.store.load('thr_no_replay')
+    const rejectResume = vi.spyOn(h.coordinator, 'rejectResume')
+    const result = await runTurnWithModel(h, { threadId: 'thr_no_replay', turnId: 'turn_2', prompt: 'Append once', model: 'gemini-3.6-flash' })
+    expect(result.outcome).not.toBe('completed')
+    expect(h.calls).toHaveLength(2)
+    expect(rejectResume).not.toHaveBeenCalled()
+    expect(await h.coordinator.store.load('thr_no_replay')).toMatchObject({ nativeSessionId: binding!.nativeSessionId, generation: binding!.generation })
+  })
+
   it('resumes the native --conversation with the new --model and emits no handoff brief', async () => {
     const h = await setupAntigravityRuntime([
       {
@@ -285,16 +309,6 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
     {
       label: 'non-zero CLI exit',
       failureStep: { exitCode: 1, stderr: 'conversation conv-agy-stale not found' }
-    },
-    {
-      label: 'conversation_id mismatch',
-      failureStep: {
-        stdout: JSON.stringify({
-          conversation_id: 'conv-other-id',
-          status: 'SUCCESS',
-          response: 'wrong session'
-        })
-      }
     }
   ])('calls rejectResume once and retries with a handoff brief on $label', async ({ failureStep }) => {
     const h = await setupAntigravityRuntime([
