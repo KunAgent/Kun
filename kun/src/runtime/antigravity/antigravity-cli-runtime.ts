@@ -18,8 +18,9 @@ import type {
   ActingTurnModelRoute,
   TurnReasoningEffort
 } from '../../contracts/turns.js'
+import type { AttachmentStore } from '../../attachments/attachment-store.js'
 import { goalContextTexts } from '../../contracts/items.js'
-import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
+import { resolveAntigravityTurnInput } from './antigravity-attachments.js'
 import { historyReferenceInstructions } from '../../prompt/history-reference-context.js'
 import {
   filterGoalContextsForGoalKey,
@@ -54,11 +55,19 @@ import {
 } from '../delegated-session-binding.js'
 import { recordHandoffInjected, resolveTurnHandoff } from '../../handoff/turn-handoff.js'
 import { runAntigravityProcess } from './antigravity-process.js'
-import { isMissingAntigravitySession } from './antigravity-resume.js'
 import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-policy.js'
+import { isMissingAntigravitySession } from './antigravity-resume.js'
+import {
+  buildAntigravityArgs,
+  normalizeAntigravityEffort,
+  normalizeAntigravityModel
+} from './antigravity-args.js'
 
-const ANTIGRAVITY_MODEL_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/i
-const ANTIGRAVITY_MODEL_ID_MAX_LENGTH = 128
+export {
+  buildAntigravityArgs,
+  normalizeAntigravityEffort,
+  normalizeAntigravityModel
+}
 
 export interface AntigravityCliRuntimeDeps {
   nativeNetworkEnv?: () => Record<string, string>
@@ -76,6 +85,7 @@ export interface AntigravityCliRuntimeDeps {
   turns: TurnService
   events: RuntimeEventRecorder
   ids: { next(prefix: string): string }
+  attachmentStore?: AttachmentStore
   debugSink?: LlmDebugSink
   turnLimits?: TurnLimitsConfig
   spawnFn?: typeof spawn
@@ -97,65 +107,6 @@ export interface AntigravityCliRuntimeDeps {
    */
   deterministicHandoff?: boolean
   contextProfile?: (model: string, providerId?: string) => AntigravityContextProfile
-}
-
-export function normalizeAntigravityModel(model: string | undefined): string {
-  if (model?.trim() === 'default') return 'default'
-  const normalized = model?.trim().replace(/^models\//, '').replace(/-(?:low|medium|high)$/i, '')
-  if (
-    !normalized
-    || normalized.length > ANTIGRAVITY_MODEL_ID_MAX_LENGTH
-    || !ANTIGRAVITY_MODEL_ID_PATTERN.test(normalized)
-  ) {
-    throw new Error(`Invalid Antigravity model id: ${model?.trim() || '(empty)'}`)
-  }
-  return normalized
-}
-
-export function normalizeAntigravityEffort(
-  effort: TurnReasoningEffort | undefined
-): 'low' | 'medium' | 'high' {
-  if (effort === 'low') return 'low'
-  if (effort === 'high' || effort === 'max') return 'high'
-  return 'medium'
-}
-
-export function buildAntigravityArgs(input: {
-  prompt: string
-  nativeSessionId?: string
-  model?: string
-  effort?: TurnReasoningEffort
-  timeoutMs: number
-  planMode: boolean
-  approvalPolicy: string
-  sandboxMode: string
-}): string[] {
-  const prompt = input.prompt.startsWith('-') ? `Current request:\n${input.prompt}` : input.prompt
-  const args = [
-    '--print',
-    prompt,
-    '--output-format', 'stream-json',
-    ...(input.nativeSessionId ? ['--conversation', input.nativeSessionId] : []),
-    ...(input.model === 'default' ? [] : ['--model', normalizeAntigravityModel(input.model)]),
-    '--effort', normalizeAntigravityEffort(input.effort),
-    '--print-timeout', `${Math.max(1, Math.ceil(input.timeoutMs / 1000))}s`
-  ]
-  const denyMutation =
-    input.planMode ||
-    input.approvalPolicy !== 'auto' ||
-    input.sandboxMode === 'read-only' ||
-    input.sandboxMode === 'external-sandbox'
-  if (denyMutation) {
-    args.push('--mode', 'plan', '--sandbox')
-  } else if (input.approvalPolicy === 'auto') {
-    args.push('--dangerously-skip-permissions')
-    if (input.sandboxMode !== 'danger-full-access') args.push('--sandbox')
-  } else if (input.sandboxMode !== 'danger-full-access') {
-    // Headless Antigravity cannot surface Kun's interactive approval gate. Preserve the
-    // requested sandbox and let the official CLI soft-deny interactive actions.
-    args.push('--sandbox')
-  }
-  return args
 }
 
 export class AntigravityCliRuntime implements DelegatedTurnRuntime {
@@ -365,32 +316,45 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       workspacePath: thread.workspace,
       taskWorkspaces: this.deps.taskWorkspaces
     })
-    const buildPromptFor = (
+    const buildAttemptInputFor = async (
       prep: typeof preparation,
       handoff: ReturnType<typeof resolveHandoffFor>
-    ): string => composeSdkPromptText({
-      ...(handoff
-        ? { handoffBrief: handoff.brief.text }
-        : {
-            historyTranscript: prep?.resumed ? undefined : buildHistoryTranscript(
-              items,
-              turnId,
-              DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
-            )
-          }),
-      userText: userMessageTextWithComposerContexts(userItem),
-      instructionBlocks: sessionInstructions(prep, instructionBlocks, false, turnDynamicContext.instructions)
-    })
-    const buildArgsFor = (prep: typeof preparation, promptText: string): string[] => buildAntigravityArgs({
-      prompt: promptText,
-      nativeSessionId: prep?.resumed ? prep.nativeSessionId : undefined,
-      model,
-      effort,
-      timeoutMs: limits.maxWallTimeMs,
-      planMode,
-      approvalPolicy,
-      sandboxMode
-    })
+    ): Promise<{ prompt: string; args: string[] }> => {
+      const turnInput = await resolveAntigravityTurnInput({
+        userItem,
+        pendingUserMessages: prep?.pendingUserMessages,
+        attachmentStore: this.deps.attachmentStore,
+        threadId,
+        workspace: thread.workspace
+      })
+      const promptText = composeSdkPromptText({
+        ...(handoff
+          ? { handoffBrief: handoff.brief.text }
+          : {
+              historyTranscript: prep?.resumed ? undefined : buildHistoryTranscript(
+                items,
+                turnId,
+                DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
+              )
+            }),
+        userText: turnInput.userText,
+        instructionBlocks: sessionInstructions(prep, instructionBlocks, false, turnDynamicContext.instructions)
+      })
+      return {
+        prompt: promptText,
+        args: buildAntigravityArgs({
+          prompt: promptText,
+          nativeSessionId: prep?.resumed ? prep.nativeSessionId : undefined,
+          model,
+          effort,
+          timeoutMs: limits.maxWallTimeMs,
+          planMode,
+          approvalPolicy,
+          sandboxMode,
+          additionalDirectories: turnInput.additionalDirectories
+        })
+      }
+    }
     const contextProfile = this.deps.contextProfile?.(model, snapshotProviderId ?? resolvedProviderId)
     let activePromptText = ''
     let activeSentInstructionsText = ''
@@ -452,8 +416,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     }
 
     let turnHandoff = resolveHandoffFor(preparation)
-    let prompt = buildPromptFor(preparation, turnHandoff)
-    let args = buildArgsFor(preparation, prompt)
+    let { prompt, args } = await buildAttemptInputFor(preparation, turnHandoff)
     await recordAttemptEvents(preparation, turnHandoff, prompt)
 
     const createTurnStream = (): AntigravityTurnStream =>
@@ -581,8 +544,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
             await stream.settle()
             preparation = await coordinator.rejectResume(preparation)
             turnHandoff = resolveHandoffFor(preparation)
-            prompt = buildPromptFor(preparation, turnHandoff)
-            args = buildArgsFor(preparation, prompt)
+            ;({ prompt, args } = await buildAttemptInputFor(preparation, turnHandoff))
             await recordAttemptEvents(preparation, turnHandoff, prompt)
             stream = createTurnStream()
             continue

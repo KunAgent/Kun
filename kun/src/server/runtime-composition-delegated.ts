@@ -154,6 +154,7 @@ export function buildMainDelegatedRuntime(
     turns: turnService,
     events,
     ids,
+    ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     ...(llmDebug ? { debugSink: llmDebug } : {}),
     turnLimits: input.options.runtime?.turnLimits,
     sessionCoordinator: delegatedSessions,

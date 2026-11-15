@@ -36,6 +36,7 @@ import {
   mergeAntigravitySummaryWithBuckets,
   parseAntigravityQuotaSummary
 } from '../../kun/src/services/antigravity-quota-pools.js'
+import { resolveDevinQuotaCredential } from '../../kun/src/services/devin-subscription-quota.js'
 
 export { decodeAntigravityUnifiedOAuth }
 import {
@@ -97,6 +98,8 @@ export const defaultSubscriptionQuotaRuntime: SubscriptionQuotaRuntime = {
   resolveGrokCredential,
   resolveCursorSession,
   resolveAntigravityCredential,
+  resolveDevinCredential: (provider) =>
+    resolveDevinQuotaCredential({ apiKey: provider.apiKey ?? '', baseUrl: provider.baseUrl }),
   resolveOpenCodeGoQuota: readOpenCodeGoLocalQuota,
   resolveOpenCodeGoCookie: resolveOpenCodeGoCookieImpl,
   async fetchOpenCodeGoWebQuota(cookieHeader, context) {

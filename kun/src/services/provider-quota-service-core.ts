@@ -310,6 +310,17 @@ export function classifyProviderQuotaProbe(
       dashboardUrl: 'https://antigravity.google'
     }
   }
+  if (
+    stableId === 'devin-subscription' &&
+    provider.kind === 'http' &&
+    (hostname === 'server.codeium.com' || hostname === 'server-beta.codeium.com')
+  ) {
+    return {
+      kind: 'devin-subscription',
+      source: 'Devin subscription quota API',
+      dashboardUrl: 'https://app.devin.ai/settings/usage'
+    }
+  }
   if (provider.kind === 'gemini-cli-api') {
     return {
       kind: 'gemini-cli-subscription',

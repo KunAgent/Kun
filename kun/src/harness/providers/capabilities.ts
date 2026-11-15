@@ -86,7 +86,7 @@ const antigravityStatuses: HarnessCapabilityStatuses = {
   fsMediated: up('antigravity cli writes files directly'),
   terminalMediated: up('antigravity cli runs commands directly'),
   nativeContextTelemetry: up('antigravity cli does not report context usage'),
-  imageInput: todo(),
+  imageInput: { supported: true },
   fileInput: { supported: true },
   nativeCommands: up('antigravity cli has no slash command listing'),
   modes: up('antigravity cli has no mode listing'),

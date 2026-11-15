@@ -221,7 +221,7 @@ describe('peer store, queue and AgentLoop integration', () => {
 
   it('discards a stale draft and regenerates against a peer result before publishing', async () => {
     const f = await fixture(), developer = gate(), reviewer = gate()
-    f.reply((call) => call.memberId === 'developer' ? { body: 'Developer discovered the cancellation race.', wait: developer.promise }
+    f.reply((call) => call.memberId === 'developer' ? { body: 'Developer discovered the cancellation race.', inviteMemberIds: ['reviewer'], wait: developer.promise }
       : call.attempt === 1 ? { body: 'STALE reviewer draft', wait: reviewer.promise } : { body: 'Reviewer now addresses the cancellation race.' })
     const request = await f.send('stale', { mentions: ['developer', 'reviewer'] })
     await f.pump(() => expect(f.calls.map((call) => call.memberId)).toEqual(['developer', 'reviewer']))

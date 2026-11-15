@@ -193,6 +193,7 @@ export function createRuntimeRegistry(
           turns: child.turns,
           events: child.events,
           ids: child.ids,
+          ...(services.attachmentStore ? { attachmentStore: services.attachmentStore } : {}),
           ...(llmDebug ? { debugSink: llmDebug } : {}),
           turnLimits: core.activeOptions.runtime?.turnLimits,
           enforceReadOnly: child.toolPolicy === 'readOnly',

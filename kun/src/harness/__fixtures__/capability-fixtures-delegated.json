@@ -316,8 +316,7 @@
             "upstreamRef": "antigravity cli does not report context usage"
           },
           "imageInput": {
-            "supported": false,
-            "reason": "not-implemented"
+            "supported": true
           },
           "fileInput": {
             "supported": true
@@ -433,8 +432,7 @@
             "upstreamRef": "antigravity cli does not report context usage"
           },
           "imageInput": {
-            "supported": false,
-            "reason": "not-implemented"
+            "supported": true
           },
           "fileInput": {
             "supported": true
