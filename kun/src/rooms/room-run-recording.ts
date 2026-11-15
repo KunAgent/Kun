@@ -219,7 +219,16 @@ export async function reconcileRecordedRoomRuns(deps: RoomRuntimeDeps,
       if (thread?.roomContext?.roomId !== row.value.roomId || thread.roomContext.memberId !== row.value.memberId) continue
       const turn = thread.turns.find((value) => row.value.turnId ? value.id === row.value.turnId : value.clientRequestId === row.value.clientRequestId)
       if (turn?.clientRequestId === row.value.clientRequestId) await observeRecordedRoomTurn(deps, thread, turn)
-      else if (row.value.admissionAttempted) await updateRoomRun(deps.store, row.id, { status: 'recovery_required' })
+      else {
+        // A cancelled request never admits another turn, so its retained receipt can
+        // never resolve. Leaving it queued or recovery_required holds this member's
+        // lane in roomDiscussionBusy and blocks the conversation queue forever.
+        const request = row.value.requestId ? await deps.store.get<RoomRequestState>('request', row.value.requestId) : null
+        if (request?.value.status === 'cancelled') {
+          await updateRoomRun(deps.store, row.id, { status: 'cancelled', outcome: 'cancelled',
+            endedAt: new Date().toISOString() })
+        } else if (row.value.admissionAttempted) await updateRoomRun(deps.store, row.id, { status: 'recovery_required' })
+      }
     }
     if (rows.length < 100) return
     afterSeq = rows.at(-1)!.seq

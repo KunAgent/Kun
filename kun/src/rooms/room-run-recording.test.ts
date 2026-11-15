@@ -7,10 +7,13 @@ import { SendRoomMessageSchema } from '../contracts/rooms.js'
 import { emptyUsageSnapshot } from '../contracts/usage.js'
 import type { RoomRunRecord } from '../contracts/room-runs.js'
 import { ensureRoomThread, enqueueRoomTurn } from './room-execution.js'
-import { roomRunId, updateRoomRun, observeRecordedRoomTurn } from './room-run-recording.js'
+import { prepareRoomRun, reconcileRecordedRoomRuns, roomRunId, updateRoomRun, observeRecordedRoomTurn } from './room-run-recording.js'
 import { roomRunDetail } from './room-run-query.js'
+import { roomDiscussionBusy } from './room-discussion-scheduler.js'
+import { putRoomDocument } from './room-service.js'
 import { RoomService } from './room-service.js'
 import { SqliteRoomStore } from './room-store-sqlite.js'
+import type { RoomRequestState } from './room-runtime-types.js'
 import type { RoomRuntimeDeps } from './room-runtime-types.js'
 
 const cleanups: Array<() => Promise<void>> = []
@@ -71,6 +74,22 @@ describe('room native run admission and publication', () => {
     expect(enqueue).toHaveBeenCalledTimes(1)
     expect((await f.store.get<RoomRunRecord>('room_run', roomRunId(f.room.id, 'unknown')))?.value)
       .toMatchObject({ status: 'recovery_required', admissionAttempted: true })
+  })
+
+  it('settles a queued run once its request is cancelled instead of blocking the lane', async () => {
+    const f = await fixture()
+    // An admission receipt written just before the cancel has no matching turn.
+    await prepareRoomRun(f.deps, f.thread, 'cancelled-orphan', 'Frozen input', [], {
+      requestId: f.input.requestId, phase: 'conversation' })
+    const id = roomRunId(f.room.id, 'cancelled-orphan')
+    expect((await roomDiscussionBusy(f.deps)).has(f.room.id + ':' + f.member.id)).toBe(true)
+    const request = (await f.store.get<RoomRequestState>('request', f.input.requestId))!
+    await putRoomDocument(f.store, 'request', request.id, f.room.id,
+      { ...request.value, status: 'cancelled', cancellationRequested: true }, request)
+    await reconcileRecordedRoomRuns(f.deps, { roomId: f.room.id, requestId: f.input.requestId })
+    expect((await f.store.get<RoomRunRecord>('room_run', id))?.value)
+      .toMatchObject({ status: 'cancelled', outcome: 'cancelled' })
+    expect((await roomDiscussionBusy(f.deps)).has(f.room.id + ':' + f.member.id)).toBe(false)
   })
 
   it('retains a known model and partial usage when completion telemetry is unavailable', async () => {
