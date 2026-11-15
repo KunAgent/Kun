@@ -8,6 +8,7 @@ import {
   clearAntigravityOAuthClientCache,
   clearAntigravityQuotaCredentialCache,
   decodeGoKeyringSecret,
+  discoverAntigravityOAuthClients,
   parseStoredAntigravityToken,
   resolveAntigravityQuotaCredential
 } from './antigravity-quota-credentials.js'
@@ -99,6 +100,37 @@ describe('antigravity quota support', () => {
     })
   })
 
+  it('discovers OAuth clients across streamed binary chunk boundaries and JS bundle scopes', async () => {
+    const dir = await makeTempDir('ag-oauth-clients-')
+    const binPath = join(dir, 'agy')
+    const clientId = 'test-client-aa'
+    const clientSecret = 'test-secret-0001'
+    const oauthPatterns = { clientId: 'test-client-[a-z]{2}', clientSecret: 'test-secret-[0-9]{4}' }
+
+    const buf = Buffer.alloc(1024 * 1024 + 512, 0x41) // 'A' (non-digit boundary)
+    Buffer.from(clientId, 'latin1').copy(buf, 1024 * 1024 - 16)
+    Buffer.from(clientSecret, 'latin1').copy(buf, 1024 * 1024 + 256)
+    await writeFile(binPath, buf)
+
+    expect(await discoverAntigravityOAuthClients({
+      binaryPaths: [binPath],
+      jsPaths: [],
+      oauthPatterns
+    })).toEqual([{ clientId, clientSecret }])
+
+    const jsPath = join(dir, 'main.js')
+    await writeFile(
+      jsPath,
+      `prefix vs/platform/cloudCode/common/oauthClient.js {id:"${clientId}",secret:"${clientSecret}"} suffix`,
+      'utf8'
+    )
+    expect(await discoverAntigravityOAuthClients({
+      jsPaths: [jsPath],
+      binaryPaths: [],
+      oauthPatterns
+    })).toEqual([{ clientId, clientSecret }])
+  })
+
   it('refreshes expired native tokens, caches the result, and falls back to cross-platform state.vscdb', async () => {
     const home = await makeTempDir('ag-home-')
     const tokenDir = join(home, '.gemini', 'antigravity-cli')
@@ -134,12 +166,12 @@ describe('antigravity quota support', () => {
       env: { HOME: home },
       discoverClients: async () => [
         {
-          clientId: 'business-client-id',
-          clientSecret: 'business-client-secret'
+          clientId: '999999999999-test-business-client',
+          clientSecret: 'test-business-secret'
         },
         {
-          clientId: 'personal-client-id',
-          clientSecret: 'personal-client-secret'
+          clientId: '1071006060591-test-personal-client',
+          clientSecret: 'test-personal-secret'
         }
       ]
     }
@@ -147,7 +179,7 @@ describe('antigravity quota support', () => {
     const first = await resolveAntigravityQuotaCredential({ fetcher, proxyUrl: '' }, undefined, deps)
     expect(first).toEqual({ accessToken: 'fresh-token-1', accountEmail: 'user@gmail.com' })
     expect(usedClientIds).toEqual([
-      'personal-client-id'
+      '1071006060591-test-personal-client'
     ])
     expect(antigravityQuotaCredentialCache.get('1//native-refresh')?.accessToken).toBe('fresh-token-1')
 

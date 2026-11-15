@@ -19,8 +19,18 @@ const OAUTH_REFRESH_TIMEOUT_MS = 12_000
 const PERSONAL_CLIENT_PREFIX = '1071006060591-'
 const JS_MARKER = 'vs/platform/cloudCode/common/oauthClient.js'
 const GO_KEYRING_B64_PREFIX = 'go-keyring-base64:'
-const CLIENT_ID_GLOBAL_RE = /(?:^|[^0-9])([0-9]{10,}-[A-Za-z0-9_-]{24,}\.apps\.googleusercontent\.com)/g
-const CLIENT_SECRET_GLOBAL_RE = /GOCSPX-[A-Za-z0-9_-]{28}/g
+const CLIENT_ID_PATTERN = '[0-9]{10,}-[A-Za-z0-9_-]{24,}\\.apps\\.googleusercontent\\.com'
+const CLIENT_SECRET_PATTERN = 'GOCSPX-[A-Za-z0-9_-]{28}'
+const JS_CLIENT_ID_PATTERN = '[0-9]+-[A-Za-z0-9_-]+\\.apps\\.googleusercontent\\.com'
+
+/**
+ * Scanner patterns for `discoverAntigravityOAuthClients`. Callers only override them in tests, so
+ * fixtures can use synthetic tokens instead of strings shaped like real Google OAuth credentials.
+ */
+export type AntigravityOAuthPatterns = {
+  clientId: string
+  clientSecret: string
+}
 
 export type AntigravityOAuthClient = {
   clientId: string
@@ -314,7 +324,10 @@ function dedupePaths(paths: readonly string[]): string[] {
   return [...new Set(paths.filter(Boolean))]
 }
 
-async function scanJsOAuthClients(filePath: string): Promise<AntigravityOAuthClient[]> {
+async function scanJsOAuthClients(
+  filePath: string,
+  patterns: AntigravityOAuthPatterns
+): Promise<AntigravityOAuthClient[]> {
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(filePath, constants.O_RDONLY)
@@ -323,8 +336,8 @@ async function scanJsOAuthClients(filePath: string): Promise<AntigravityOAuthCli
     const content = await readFile(handle, 'utf8')
     const start = Math.max(0, content.indexOf(JS_MARKER))
     const scope = content.slice(start, start + 4_000)
-    const clientId = scope.match(/[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com/u)?.[0]
-    const clientSecret = scope.match(/GOCSPX-[A-Za-z0-9_-]{28}/u)?.[0]
+    const clientId = scope.match(new RegExp(patterns.clientId, 'u'))?.[0]
+    const clientSecret = scope.match(new RegExp(patterns.clientSecret, 'u'))?.[0]
     return clientId && clientSecret ? [{ clientId, clientSecret }] : []
   } catch {
     return []
@@ -333,7 +346,12 @@ async function scanJsOAuthClients(filePath: string): Promise<AntigravityOAuthCli
   }
 }
 
-async function scanBinaryOAuthClients(filePath: string): Promise<AntigravityOAuthClient[]> {
+async function scanBinaryOAuthClients(
+  filePath: string,
+  patterns: AntigravityOAuthPatterns
+): Promise<AntigravityOAuthClient[]> {
+  const clientIdRe = new RegExp(`(?:^|[^0-9])(${patterns.clientId})`, 'g')
+  const clientSecretRe = new RegExp(patterns.clientSecret, 'g')
   let handle: Awaited<ReturnType<typeof open>> | undefined
   try {
     handle = await open(filePath, constants.O_RDONLY)
@@ -351,14 +369,14 @@ async function scanBinaryOAuthClients(filePath: string): Promise<AntigravityOAut
       if (bytesRead <= 0) break
       position += bytesRead
       const windowText = tail + buffer.subarray(0, bytesRead).toString('latin1')
-      for (const match of windowText.matchAll(CLIENT_ID_GLOBAL_RE)) {
+      for (const match of windowText.matchAll(clientIdRe)) {
         const id = match[1]
         if (id && !seenIds.has(id)) {
           seenIds.add(id)
           clientIds.push(id)
         }
       }
-      for (const match of windowText.matchAll(CLIENT_SECRET_GLOBAL_RE)) {
+      for (const match of windowText.matchAll(clientSecretRe)) {
         const secret = match[0]
         if (secret && !seenSecrets.has(secret)) {
           seenSecrets.add(secret)
@@ -386,21 +404,33 @@ export async function discoverAntigravityOAuthClients(deps: {
   home?: string
   jsPaths?: string[]
   binaryPaths?: string[]
+  oauthPatterns?: Partial<AntigravityOAuthPatterns>
 } = {}): Promise<AntigravityOAuthClient[]> {
-  const canCache = !deps.platform && !deps.env && !deps.home && !deps.jsPaths && !deps.binaryPaths
+  const canCache = !deps.platform && !deps.env && !deps.home && !deps.jsPaths &&
+    !deps.binaryPaths && !deps.oauthPatterns
   if (canCache && cachedOAuthClients?.length) return cachedOAuthClients
   const defaults = oauthCandidatePaths(deps)
   const jsPaths = deps.jsPaths ?? defaults.jsPaths
   const binaryPaths = deps.binaryPaths ?? defaults.binaryPaths
+  const jsPatterns: AntigravityOAuthPatterns = {
+    clientId: JS_CLIENT_ID_PATTERN,
+    clientSecret: CLIENT_SECRET_PATTERN,
+    ...deps.oauthPatterns
+  }
+  const binaryPatterns: AntigravityOAuthPatterns = {
+    clientId: CLIENT_ID_PATTERN,
+    clientSecret: CLIENT_SECRET_PATTERN,
+    ...deps.oauthPatterns
+  }
   for (const jsPath of jsPaths) {
-    const clients = await scanJsOAuthClients(jsPath)
+    const clients = await scanJsOAuthClients(jsPath, jsPatterns)
     if (clients.length > 0) {
       if (canCache) cachedOAuthClients = clients
       return clients
     }
   }
   for (const binPath of binaryPaths) {
-    const clients = await scanBinaryOAuthClients(binPath)
+    const clients = await scanBinaryOAuthClients(binPath, binaryPatterns)
     if (clients.length > 0) {
       if (canCache) cachedOAuthClients = clients
       return clients
