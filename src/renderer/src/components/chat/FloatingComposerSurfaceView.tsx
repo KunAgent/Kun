@@ -26,6 +26,7 @@ import { composerSubscriptionSelection } from './composer-subscription-selection
 import { FloatingComposerPrimaryAction } from './FloatingComposerPrimaryAction'
 import { FloatingComposerInterruptSlot } from './FloatingComposerInterruptSlot'
 import type { ComposerInterrupt } from './use-composer-interrupt'
+import { ColabComposerChip } from '../../colab/ColabShortcuts'
 
 /**
  * Composer controls rows, then `aboveInput` (flow panels + the activity tray,
@@ -499,6 +500,7 @@ export function FloatingComposerSurfaceView({
                     onOpenPermissionSettings={() => openSettings('agents')}
                   />
                 ) : null}
+                {!side && (route === 'chat' || route === 'ade') ? <ColabComposerChip workspaceRoot={effectiveWorkspaceRoot} compact={compact} /> : null}
               </div>
             ) : null}
             <div

@@ -2,6 +2,7 @@ import {
   DEFAULT_APPROVAL_REVIEW_MODEL_SELECTION,
   ApprovalReviewModelSelectionSchema
 } from '../../kun/src/contracts/approval-review-config.js'
+import { defaultKunColabSettings } from './app-settings-colab'
 import {
   DEFAULT_APPROVAL_REVIEWER,
   DEFAULT_APPROVAL_POLICY,
@@ -239,6 +240,7 @@ export function defaultKunRuntimeSettings(
     quality: defaultKunQualitySettings(),
     graph: defaultKunGraphSettings(),
     planExecution: { useWorktreeByDefault: true },
+    colab: defaultKunColabSettings(),
     harnesses: defaultKunHarnessSettings(),
     ade: defaultKunAdeSettings(),
     worktrees: defaultKunWorktreeSettings(),

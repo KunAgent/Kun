@@ -32,6 +32,7 @@ import { diffUsage, hasUsage } from '../domain/usage.js'
 import { roomResultProvider } from '../rooms/room-result-tools.js'
 import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-reference-tool.js'
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
+import { buildColabToolProviders } from '../adapters/tool/colab-tool-provider.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 import { buildCodexAppServerDeps, type CodexRuntimeSharedDeps } from './runtime-composition-codex.js'
@@ -468,6 +469,7 @@ export function createRuntimeRegistry(
     // delegated subagents (which use childRegistry/baseToolProviders).
     ...services.computerUseProviders.providers,
     ...services.browserUseProviders.providers,
+    ...buildColabToolProviders(),
     {
       id: 'goal',
       kind: 'built-in' as const,

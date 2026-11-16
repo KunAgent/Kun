@@ -11,6 +11,7 @@ import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
 import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { SessionExportMenu } from './SessionExportMenu'
+import { ColabTopbarCapsule } from '../colab/ColabShortcuts'
 import { TaskSettingsButton } from './workbench/TaskSettingsButton'
 import { HEADER_ICON_CLASS, HEADER_ICON_STROKE, headerTextButtonClass } from './workbench/header-action-button'
 import { WorkbenchSessionActions, WorkbenchOriginChip } from './rooms/WorkbenchSessionBits'
@@ -251,6 +252,7 @@ export function SessionHeader({
                 />
               ) : null}
             </div>
+            <ColabTopbarCapsule workspaceRoot={activeWorkspaceRoot} />
             <WorkbenchSessionActions thread={active} running={busy} />
             <TaskSettingsButton key={active.id} thread={active} />
             <SessionExportMenu
@@ -267,6 +269,7 @@ export function SessionHeader({
             <Folder className="h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden="true" />
             <span className="truncate">{workspaceLabel}</span>
             <CompactGitBranch key={workspaceRoot} workspaceRoot={workspaceRoot} />
+            <ColabTopbarCapsule workspaceRoot={workspaceRoot} />
           </div>
         )}
       </div>

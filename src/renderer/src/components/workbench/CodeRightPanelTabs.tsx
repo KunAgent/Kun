@@ -10,6 +10,7 @@ import {
 import {
   Blocks,
   Bot,
+  Cloud,
   ClipboardList,
   FileEdit,
   Files,
@@ -158,6 +159,7 @@ export function CodeRightPanelTabs({
     },
     { id: BUILTIN_RIGHT_PANEL_IDS.conversationInfo, label: t('conversationInfoTab'), icon: IdCard },
     { id: BUILTIN_RIGHT_PANEL_IDS.wardrobe, label: t('rightPanelWardrobe'), icon: Shirt },
+    { id: BUILTIN_RIGHT_PANEL_IDS.colab, label: t('rightPanelColab', { defaultValue: 'Colab' }), icon: Cloud },
   ], [t])
 
   const builtinById = useMemo(

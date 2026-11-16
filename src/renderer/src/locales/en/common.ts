@@ -100,6 +100,7 @@ import composerApproval from './common/composer-approval.json'
 import composerRecords from './common/composer-records.json'
 import toast from './common/toast.json'
 import workTabMenu from './common/work-tab-menu.json'
+import colab from './common/colab.json'
 
 const common = {
   ...latex,
@@ -208,7 +209,8 @@ const common = {
   ...composerApproval,
   ...composerRecords,
   ...toast,
-  ...workTabMenu
+  ...workTabMenu,
+  ...colab
 }
 
 export default common

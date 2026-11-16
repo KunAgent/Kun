@@ -178,10 +178,12 @@ const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   debug: 'settingsIaDiagnostics',
   storage: 'storageRelocation',
   storageCleanup: 'storageCleanup',
-  dataMigration: 'settingsNavMigration'
+  dataMigration: 'settingsNavMigration',
+  cloudCompute: 'settingsIaCloudCompute'
 }
 
 const SETTINGS_SECTION_DESCRIPTION_KEYS: Partial<Record<SettingsRouteSection, string>> = {
+  cloudCompute: 'settingsIaCloudComputeDesc',
   general: 'settingsIaGeneralDesc',
   appearance: 'settingsIaAppearanceDesc',
   notifications: 'settingsIaNotificationsDesc',

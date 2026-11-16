@@ -97,6 +97,9 @@ const RemoteAccessPanel = lazy(() =>
 const GraphModePanel = lazy(() =>
   import('../graph/GraphModePanel').then((module) => ({ default: module.GraphModePanel }))
 )
+const ColabPanel = lazy(() =>
+  import('../../colab/ColabPanel').then((module) => ({ default: module.ColabPanel }))
+)
 
 type SddAssistantPanelProps = ComponentProps<typeof SddAssistantPanel>
 type ChangeInspectorProps = ComponentProps<typeof ChangeInspector>
@@ -238,6 +241,8 @@ export function WorkbenchRightPanel({
             <WorkspaceFilePreviewPanel {...file} className="h-full max-h-full w-full" />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.mcpSkills ? (
             <McpSkillsPanel workspaceRoot={workspaceRoot} onOpenSettings={mcpSkills.onOpenSettings} />
+          ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.colab ? (
+            <ColabPanel workspaceRoot={workspaceRoot} />
           ) : rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.graph ? (
             <GraphModePanel
               className="h-full max-h-full w-full"
@@ -420,6 +425,9 @@ function CodeRightPanelWorkspace({
     }
     if (id === BUILTIN_RIGHT_PANEL_IDS.remote) {
       return <RemoteAccessPanel className="h-full max-h-full w-full" />
+    }
+    if (id === BUILTIN_RIGHT_PANEL_IDS.colab) {
+      return <ColabPanel workspaceRoot={workspaceRoot} />
     }
     if (isExtensionContributionId(id)) {
       const contribution = code.extensionViews.find((view) => view.id === id)

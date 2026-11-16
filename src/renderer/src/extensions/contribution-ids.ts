@@ -20,7 +20,8 @@ export const BUILTIN_RIGHT_PANEL_IDS = {
   workers: 'builtin:right-panel-workers',
   conversationInfo: 'builtin:right-panel-conversation-info',
   wardrobe: 'builtin:right-panel-wardrobe',
-  appSurface: 'builtin:right-panel-app-surface'
+  appSurface: 'builtin:right-panel-app-surface',
+  colab: 'builtin:right-panel-colab'
 } as const
 
 export type BuiltinRightPanelId = (typeof BUILTIN_RIGHT_PANEL_IDS)[keyof typeof BUILTIN_RIGHT_PANEL_IDS]
@@ -49,7 +50,8 @@ const LEGACY_RIGHT_PANEL_IDS: Readonly<Record<string, BuiltinRightPanelId>> = {
   wardrobe: BUILTIN_RIGHT_PANEL_IDS.wardrobe,
   'agent-perspective': BUILTIN_RIGHT_PANEL_IDS.agentPerspective,
   graph: BUILTIN_RIGHT_PANEL_IDS.graph,
-  remote: BUILTIN_RIGHT_PANEL_IDS.remote
+  remote: BUILTIN_RIGHT_PANEL_IDS.remote,
+  colab: BUILTIN_RIGHT_PANEL_IDS.colab
 }
 
 export function isExtensionContributionId(value: string): value is ExtensionContributionId {

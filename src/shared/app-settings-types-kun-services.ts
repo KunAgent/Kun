@@ -15,6 +15,7 @@ import type { BrowserUseMode } from './browser-use'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
 import type { KunGitHubMcpSettingsPatchV1 } from './github-mcp-authorization'
+import type { KunColabSettingsPatchV1 } from './app-settings-colab'
 
 import {
   KunBrowserUseSettingsV1,
@@ -385,7 +386,7 @@ export type KunWorktreeSettingsPatchV1 = {
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'speak' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'fastContext' | 'lab' | 'harnesses' | 'ade' | 'worktrees'
+    'mcpSearch' | 'githubMcp' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'llmDebug' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'speak' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'browserUse' | 'quality' | 'modelProfiles' | 'subagents' | 'graph' | 'planExecution' | 'colab' | 'fastContext' | 'lab' | 'harnesses' | 'ade' | 'worktrees'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
@@ -412,6 +413,7 @@ export type KunRuntimeSettingsPatchV1 = Partial<
   subagents?: KunSubagentsSettingsPatchV1
   graph?: KunGraphSettingsPatchV1
   planExecution?: Partial<KunPlanExecutionSettingsV1>
+  colab?: KunColabSettingsPatchV1
   fastContext?: Partial<KunFastContextSettingsV1>
   lab?: KunLabSettingsPatchV1
   harnesses?: KunHarnessSettingsPatchV1

@@ -5,6 +5,7 @@ import {
   Bot,
   BrainCircuit,
   Cable,
+  Cloud,
   CircleFadingArrowUp,
   CodeXml,
   FlaskConical,
@@ -76,6 +77,7 @@ export type SettingsCategory =
   | 'updates'
   | 'uninstall'
   | 'pets'
+  | 'cloudCompute'
 
 /** Decorative icon-tile hues. Each one resolves to a theme token in settings-chrome.css. */
 export type SettingsIconTone =
@@ -180,6 +182,10 @@ export const SETTINGS_NAVIGATION_GROUPS: SettingsNavigationGroup[] = [
         category: 'connections', labelKey: 'settingsIaConnections', icon: Plug, tone: 'teal',
         searchKeys: ['notion', 'figma', 'github', 'gmail', 'personalAccessToken']
       },
+      {
+        category: 'cloudCompute', labelKey: 'settingsIaCloudCompute', icon: Cloud, tone: 'blue', desktopOnly: true,
+        searchKeys: ['colabCliTitle', 'colabConnectionsCardTitle', 'colabSafetyCardTitle']
+      },
       { category: 'harnesses', labelKey: 'settingsIaHarnesses', icon: Cable, tone: 'blue' },
       { category: 'collaboration', labelKey: 'settingsIaCollaboration', icon: Workflow, tone: 'green' },
       { category: 'claw', labelKey: 'claw', navigationLabelKey: 'settingsNavPhone', icon: Smartphone, tone: 'green' },
@@ -257,6 +263,7 @@ const SETTINGS_CATEGORY_DESCRIPTION_KEYS: Record<SettingsCategory, string> = {
   skills: 'settingsIaSkillsDesc',
   mcp: 'settingsIaMcpDesc',
   connections: 'settingsIaConnectionsDesc',
+  cloudCompute: 'settingsIaCloudComputeDesc',
   memory: 'memoryOverviewDesc',
   subagents: 'subagentsSettingsIntro',
   projects: 'settingsIaProjectsDesc',
@@ -340,7 +347,8 @@ const ROUTE_SECTION_CATEGORIES: Record<SettingsRouteSection, SettingsCategory> =
   debug: 'debug',
   storage: 'storage',
   storageCleanup: 'storageCleanup',
-  dataMigration: 'dataMigration'
+  dataMigration: 'dataMigration',
+  cloudCompute: 'cloudCompute'
 }
 
 export function settingsCategoryForRouteSection(section: SettingsRouteSection | null | undefined): SettingsCategory {

@@ -9,6 +9,7 @@ import { readToolPresentation } from '../../agent/tool-presentation'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { ToolDetailsContent } from './ToolDetailsContent'
 import { GmailToolCard, gmailToolThread } from './gmail-tool-card'
+import { ColabToolCard, colabToolData } from '../../colab/ColabShortcuts'
 
 export function ToolBlockDetails({ block }: { block: ToolBlock }): ReactElement {
   const { t } = useTranslation('common')
@@ -19,6 +20,8 @@ export function ToolBlockDetails({ block }: { block: ToolBlock }): ReactElement 
   if (githubThread) return <GitHubToolCard threadId={githubThread} presentation={presentation} />
   const gmailThread = gmailToolThread(presentation)
   if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
+  const colabMarker = colabToolData(presentation)
+  if (colabMarker) return <ColabToolCard marker={colabMarker} />
   return <div className="min-w-0" data-tool-block-details>
     <div className="mb-2 flex justify-end">
       <button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
