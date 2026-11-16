@@ -1,33 +1,30 @@
 import { useEffect, useState, type ReactElement } from 'react'
-import { AlertTriangle, Check, Copy, ExternalLink, KeyRound, Loader2 } from 'lucide-react'
+import { AlertTriangle, Check, Copy, ExternalLink, KeyRound, Loader2, XCircle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ColabLoginOutcome, ColabOAuthPendingState } from '@shared/colab/colab-types'
 import { formatColabDuration, useColabStore } from './colab-store'
 
 type Props = {
   workspaceRoot: string
-  existingCount: number
   oauthPending: ColabOAuthPendingState | null
   lastOutcome: ColabLoginOutcome | null
   reauthConnectionId: string | null
-  reauthDefaultName?: string
+  reauthName?: string
   onCancelForm: () => void
 }
 
 export function ColabConnectionsAddFlow({
   workspaceRoot,
-  existingCount,
   oauthPending,
   lastOutcome,
   reauthConnectionId,
-  reauthDefaultName,
+  reauthName,
   onCancelForm
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const showToast = useColabStore((s) => s.showToast)
-  const defaultName =
-    reauthDefaultName || t('colab.defaultConnectionName', { index: existingCount + 1 })
-  const [name, setName] = useState(defaultName)
+  // Blank is intentional: the main process names the connection after the email prefix.
+  const [name, setName] = useState('')
   const [setAsCurrent, setSetAsCurrent] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [errorText, setErrorText] = useState<string | null>(null)
@@ -35,10 +32,6 @@ export function ColabConnectionsAddFlow({
   const [manualCode, setManualCode] = useState('')
   const [copied, setCopied] = useState(false)
   const [remainingSeconds, setRemainingSeconds] = useState(300)
-
-  useEffect(() => {
-    setName(reauthDefaultName || t('colab.defaultConnectionName', { index: existingCount + 1 }))
-  }, [existingCount, reauthDefaultName, t])
 
   useEffect(() => {
     if (!oauthPending) return
@@ -51,7 +44,18 @@ export function ColabConnectionsAddFlow({
     return () => clearInterval(timer)
   }, [oauthPending])
 
-  if (lastOutcome && !lastOutcome.ok && lastOutcome.kind === 'email_mismatch') {
+  const failure = lastOutcome && !lastOutcome.ok ? lastOutcome : null
+
+  const clearOutcome = (): void => {
+    if (failure) void window.kunGui.colabClearLastLoginOutcome()
+  }
+
+  const cancelForm = (): void => {
+    clearOutcome()
+    onCancelForm()
+  }
+
+  if (failure?.kind === 'email_mismatch') {
     return (
       <div className="mt-2 rounded-xl border border-amber-500/35 bg-amber-500/10 p-3 text-[12px]">
         <div className="flex items-start gap-2 text-amber-800 dark:text-amber-200">
@@ -59,22 +63,23 @@ export function ColabConnectionsAddFlow({
           <div className="min-w-0 flex-1">
             <div className="font-medium">
               {t('colab.mismatchTitle', {
-                actual: lastOutcome.actualEmail ?? '',
-                expected: lastOutcome.expectedEmail ?? ''
+                actual: failure.actualEmail ?? '',
+                expected: failure.expectedEmail ?? ''
               })}
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              {lastOutcome.pendingTokenId ? (
+              {failure.pendingTokenId ? (
                 <button
                   type="button"
                   onClick={async () => {
                     const res = await window.kunGui.colabPromoteMismatchedToken({
-                      pendingTokenId: lastOutcome.pendingTokenId!,
+                      pendingTokenId: failure.pendingTokenId!,
                       workspaceRoot,
                       setAsCurrent: true
                     })
                     if (res.ok) {
                       showToast(t('colab.createdToast', { email: res.connection.email }))
+                      onCancelForm()
                     }
                   }}
                   className="rounded-lg bg-accent px-2.5 py-1 text-[11.5px] font-medium text-white hover:opacity-90"
@@ -84,10 +89,7 @@ export function ColabConnectionsAddFlow({
               ) : null}
               <button
                 type="button"
-                onClick={() => {
-                  void window.kunGui.colabClearLastLoginOutcome()
-                  onCancelForm()
-                }}
+                onClick={cancelForm}
                 className="rounded-lg border border-ds-border bg-ds-card px-2.5 py-1 text-[11.5px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
               >
                 {t('colab.cancelBtn')}
@@ -140,6 +142,8 @@ export function ColabConnectionsAddFlow({
             type="button"
             onClick={async () => {
               await window.kunGui.colabCancelOAuthLogin({ flowId: oauthPending.flowId })
+              // A user-initiated cancel needs no failure banner.
+              void window.kunGui.colabClearLastLoginOutcome()
               onCancelForm()
             }}
             className="ml-auto rounded-lg px-2 py-1 text-[11.5px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
@@ -172,19 +176,16 @@ export function ColabConnectionsAddFlow({
                 onClick={async () => {
                   setSubmitting(true)
                   setErrorText(null)
-                  const res = await window.kunGui.colabSubmitOAuthManualCode({
-                    flowId: oauthPending.flowId,
-                    code: manualCode.trim()
-                  })
-                  setSubmitting(false)
-                  if (res.ok) {
-                    showToast(
-                      res.kind === 'refreshed_existing'
-                        ? t('colab.refreshedToast', { name: res.connection.name })
-                        : t('colab.createdToast', { email: res.connection.email })
-                    )
-                  } else {
-                    setErrorText(res.message)
+                  try {
+                    const res = await window.kunGui.colabSubmitOAuthManualCode({
+                      flowId: oauthPending.flowId,
+                      code: manualCode.trim()
+                    })
+                    if (!res.ok) setErrorText(res.message)
+                  } catch (error) {
+                    setErrorText(error instanceof Error ? error.message : String(error))
+                  } finally {
+                    setSubmitting(false)
                   }
                 }}
                 className="rounded-lg bg-accent px-2.5 py-1 text-[11.5px] font-medium text-white disabled:opacity-50"
@@ -200,18 +201,17 @@ export function ColabConnectionsAddFlow({
   }
 
   const startLogin = async (): Promise<void> => {
+    clearOutcome()
     setSubmitting(true)
     setErrorText(null)
     try {
       const res = await window.kunGui.colabStartOAuthLogin({
-        name: name.trim() || defaultName,
+        ...(name.trim() ? { name: name.trim() } : {}),
         setAsCurrent,
         workspaceRoot,
         ...(reauthConnectionId ? { reauthConnectionId } : {})
       })
-      if (!res.ok) {
-        setErrorText(res.message)
-      }
+      if (!res.ok) setErrorText(res.message)
     } catch (error) {
       setErrorText(error instanceof Error ? error.message : String(error))
     } finally {
@@ -219,20 +219,57 @@ export function ColabConnectionsAddFlow({
     }
   }
 
+  const failureText = failure
+    ? failure.kind === 'cancelled'
+      ? t('colab.loginCancelled')
+      : failure.kind === 'timeout'
+        ? t('colab.loginTimedOut')
+        : t('colab.loginFailed', { message: failure.message })
+    : null
+
   return (
     <div
       data-testid="colab-add-account-form"
       className="mt-2 rounded-xl border border-ds-border bg-ds-card p-3 text-[12px]"
     >
-      {!reauthConnectionId ? (
+      {failureText ? (
+        <div
+          role="alert"
+          className="mb-2.5 flex items-center gap-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-[11.5px] text-red-600 dark:text-red-300"
+        >
+          <XCircle className="h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 flex-1">{failureText}</span>
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => void startLogin()}
+            className="shrink-0 font-semibold hover:underline disabled:opacity-50"
+          >
+            {t('colab.retryBtn')}
+          </button>
+        </div>
+      ) : null}
+
+      {reauthConnectionId ? (
+        <div className="font-medium text-ds-ink">
+          {t('colab.errAuthExpiredTitle', { name: reauthName ?? '' })}
+        </div>
+      ) : (
         <div>
-          <label className="block text-[11px] font-medium text-ds-muted">
+          <label className="block text-[11px] font-medium text-ds-muted" htmlFor="colab-connection-name">
             {t('colab.connectionNameLabel')}
           </label>
           <input
+            id="colab-connection-name"
             type="text"
             value={name}
+            autoFocus
+            maxLength={48}
             onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !submitting) void startLogin()
+              else if (e.key === 'Escape') cancelForm()
+            }}
             placeholder={t('colab.connectionNamePlaceholder')}
             className="mt-1 w-full rounded-lg border border-ds-border bg-ds-subtle px-2.5 py-1.5 text-[12px] text-ds-ink focus:border-accent focus:outline-none"
           />
@@ -246,7 +283,7 @@ export function ColabConnectionsAddFlow({
             <span>{t('colab.setAsCurrentAfterLogin')}</span>
           </label>
         </div>
-      ) : null}
+      )}
 
       <p className="mt-2 text-[11px] leading-relaxed text-ds-faint">{t('colab.oauthBrowserHint')}</p>
       {errorText ? <p className="mt-1.5 text-[11px] text-red-500">{errorText}</p> : null}
@@ -254,7 +291,7 @@ export function ColabConnectionsAddFlow({
       <div className="mt-2.5 flex items-center justify-end gap-2">
         <button
           type="button"
-          onClick={onCancelForm}
+          onClick={cancelForm}
           className="rounded-lg px-2.5 py-1.5 text-[11.5px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
         >
           {t('colab.cancelBtn')}

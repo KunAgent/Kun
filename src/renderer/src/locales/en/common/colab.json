@@ -42,7 +42,7 @@
     "artifactsEmpty": "Files saved to the output folder appear here",
     "errGpuUnavailableTitle": "{{accelerator}} capacity unavailable",
     "errGpuUnavailableDesc": "No machine is currently free for this accelerator. No CU was charged.",
-    "switchToL4": "Switch to L4 (~4.8 CU/h)",
+    "switchToAccelerator": "Switch to {{accelerator}} (~{{rate}} CU/h)",
     "retryLater": "Retry",
     "errDisconnectedTitle": "Local stream disconnected; remote VM is still billing",
     "errDisconnectedDesc": "Reconnect to resume log streaming, or stop the remote VM now.",
@@ -56,8 +56,8 @@
     "ignoreBtn": "Ignore",
     "connectionsLabel": "Connections",
     "connectionsSubtitle": "Switching affects new sessions in this workspace; running sessions keep their original account.",
-    "addAccountBtn": "+ Add account",
-    "addAccountMenu": "+ Add account…",
+    "addAccountBtn": "Add account",
+    "addAccountMenu": "Add account…",
     "manageConnectionsMenu": "Manage connections",
     "connectionNameLabel": "Connection label (optional)",
     "connectionNamePlaceholder": "Personal / Lab / Pro+",
@@ -125,6 +125,14 @@
     "startRunBtn": "Start training",
     "startingBtn": "Starting…",
     "toolCardTitle": "Colab Cloud Training",
-    "viewInPanel": "View in panel"
+    "viewInPanel": "View in panel",
+    "loginCancelled": "Sign-in was cancelled",
+    "loginTimedOut": "Sign-in timed out",
+    "loginFailed": "Sign-in failed: {{message}}",
+    "retryBtn": "Retry",
+    "locateBtn": "Locate",
+    "billedToHint": "Billed to \"{{name}}\"",
+    "sessionsLabel": "Sessions",
+    "backToOverview": "Back to overview"
   }
 }

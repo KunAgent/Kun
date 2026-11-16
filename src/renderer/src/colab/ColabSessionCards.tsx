@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import {
   CheckCircle2,
   Circle,
@@ -19,6 +19,7 @@ import type {
 } from '@shared/colab/colab-types'
 import { openTerminal } from '../components/terminal/terminal-open'
 import { formatColabBytes, formatColabDuration, isColabSessionRunning } from './colab-store'
+import { useColabDismiss } from './use-colab-dismiss'
 
 function buildPolylinePoints(values: number[], width: number, height: number): string {
   if (values.length === 0) return ''
@@ -39,16 +40,22 @@ const PROVISIONING_ORDER: ColabProvisioningStep[] = ['assign', 'upload', 'instal
 
 export function ColabSessionCards({
   session,
-  owningConnection
+  owningConnection,
+  activeConnectionId
 }: {
   session: ColabSessionView
   owningConnection?: ColabConnectionView | null
+  activeConnectionId?: string | null
 }): ReactElement {
   const { t } = useTranslation('common')
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const closeMenu = useCallback(() => setMenuOpen(false), [])
+  useColabDismiss(menuOpen, closeMenu, menuRef)
   const metricKeys = useMemo(() => Object.keys(session.metrics), [session.metrics])
   const [selectedMetric, setSelectedMetric] = useState<string>('loss')
   const logContainerRef = useRef<HTMLDivElement>(null)
+  const logPinnedRef = useRef(true)
 
   useEffect(() => {
     if (metricKeys.length > 0 && !metricKeys.includes(selectedMetric)) {
@@ -56,10 +63,18 @@ export function ColabSessionCards({
     }
   }, [metricKeys, selectedMetric])
 
+  // Follow new output only while the user is at the bottom; reading history must not jump.
   useEffect(() => {
     const el = logContainerRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [session.logTail.length])
+    if (el && logPinnedRef.current) el.scrollTop = el.scrollHeight
+  }, [session.logTail])
+
+  useEffect(() => {
+    logPinnedRef.current = true
+  }, [session.id])
+
+  const billedElsewhere =
+    Boolean(activeConnectionId) && activeConnectionId !== session.connectionId
 
   const running = isColabSessionRunning(session)
   const phaseLabel =
@@ -146,9 +161,11 @@ export function ColabSessionCards({
             </span>
             <span className="max-w-[72px] truncate">{session.connectionName}</span>
           </span>
-          <div className="relative">
+          <div ref={menuRef} className="relative">
             <button
               type="button"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
               className="rounded-md p-1 text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
             >
@@ -184,6 +201,12 @@ export function ColabSessionCards({
             {formatColabDuration(session.elapsedSeconds)}
           </span>
         </div>
+        {billedElsewhere ? (
+          <div className="mt-1 text-[10.5px] text-ds-faint">
+            {session.burnRateCuPerHour > 0 ? `${session.burnRateCuPerHour} CU/h · ` : ''}
+            {t('colab.billedToHint', { name: owningConnection?.name ?? session.connectionName })}
+          </div>
+        ) : null}
 
         <div className="mt-2.5 grid grid-cols-4 gap-1.5">
           <button
@@ -273,20 +296,12 @@ export function ColabSessionCards({
         <div className="rounded-xl border border-ds-border bg-ds-card p-2.5">
           <div className="text-[11px] font-medium text-ds-muted">{t('colab.cuBalanceCard')}</div>
           <div className="mt-1 font-mono text-[16px] font-semibold text-ds-ink">
-            {balanceCu !== null ? `${balanceCu} CU` : `${session.consumedCu} CU`}
+            {balanceCu !== null ? `${balanceCu} CU` : '--'}
           </div>
           <div className="mt-0.5 text-[10.5px] text-ds-faint">
             {running && estHoursLeft
               ? t('colab.cuBurnRate', { rate: session.burnRateCuPerHour, hours: estHoursLeft })
               : t('colab.cuIdleHint')}
-          </div>
-          <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-ds-subtle">
-            <div
-              className="h-full rounded-full bg-accent transition-all"
-              style={{
-                width: `${Math.min(100, Math.max(8, balanceCu !== null ? Math.min(100, balanceCu) : 35))}%`
-              }}
-            />
           </div>
         </div>
 
@@ -373,6 +388,10 @@ export function ColabSessionCards({
         </div>
         <div
           ref={logContainerRef}
+          onScroll={(e) => {
+            const el = e.currentTarget
+            logPinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+          }}
           className="max-h-40 overflow-y-auto font-mono text-[11px] leading-relaxed"
         >
           {session.logTail.length > 0 ? (

@@ -42,7 +42,7 @@
     "artifactsEmpty": "出力フォルダ内のファイルがここに表示されます",
     "errGpuUnavailableTitle": "{{accelerator}} の空き容量がありません",
     "errGpuUnavailableDesc": "現在このアクセラレータは割り当てできません。CU は消費されていません。",
-    "switchToL4": "L4 に変更 (~4.8 CU/h)",
+    "switchToAccelerator": "{{accelerator}} に変更 (~{{rate}} CU/h)",
     "retryLater": "再試行",
     "errDisconnectedTitle": "ローカル接続が切断されました（リモート VM は課金継続中）",
     "errDisconnectedDesc": "再接続してログを再開するか、今すぐリモート VM を停止してください。",
@@ -56,8 +56,8 @@
     "ignoreBtn": "無視",
     "connectionsLabel": "接続",
     "connectionsSubtitle": "切り替えはこのワークスペースの新規セッションに適用され、実行中セッションは元のアカウントを維持します。",
-    "addAccountBtn": "+ アカウント追加",
-    "addAccountMenu": "+ アカウント追加…",
+    "addAccountBtn": "アカウントを追加",
+    "addAccountMenu": "アカウントを追加…",
     "manageConnectionsMenu": "接続を管理",
     "connectionNameLabel": "接続名（任意）",
     "connectionNamePlaceholder": "個人 / 研究室 / Pro+",
@@ -125,6 +125,14 @@
     "startRunBtn": "学習を開始",
     "startingBtn": "起動中…",
     "toolCardTitle": "Colab クラウド学習",
-    "viewInPanel": "パネルで表示"
+    "viewInPanel": "パネルで表示",
+    "loginCancelled": "サインインがキャンセルされました",
+    "loginTimedOut": "サインインがタイムアウトしました",
+    "loginFailed": "サインインに失敗しました: {{message}}",
+    "retryBtn": "再試行",
+    "locateBtn": "表示",
+    "billedToHint": "「{{name}}」に課金",
+    "sessionsLabel": "セッション",
+    "backToOverview": "概要に戻る"
   }
 }

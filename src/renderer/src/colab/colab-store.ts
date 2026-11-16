@@ -90,11 +90,18 @@ export function formatColabBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
 }
 
+export type ColabToastAction = {
+  label: string
+  run: () => void
+}
+
 export type ColabPanelToast = {
   id: number
   text: string
-  undo?: () => void
+  action?: ColabToastAction
 }
+
+const HIGHLIGHT_MS = 2_000
 
 const EMPTY_SNAPSHOT: ColabStateSnapshot = {
   cli: { state: 'missing', version: null, pythonVersion: null, venvPath: '' },
@@ -114,6 +121,8 @@ type ColabStoreState = {
   addAccountOpen: boolean
   reauthConnectionId: string | null
   newlyCreatedConnectionId: string | null
+  highlightedConnectionId: string | null
+  pendingSwitchTargetId: string | null
   runDialogOpen: boolean
   runDialogAcceleratorOverride: ColabAccelerator | null
   focusedSessionId: string | null
@@ -123,16 +132,27 @@ type ColabStoreState = {
   setConnectionsExpanded: (expanded: boolean) => void
   openAddAccount: (reauthConnectionId?: string) => void
   closeAddAccount: () => void
+  highlightConnection: (connectionId: string) => void
+  setPendingSwitchTargetId: (connectionId: string | null) => void
   openRunDialog: (accelerator?: ColabAccelerator) => void
   closeRunDialog: () => void
   setFocusedSessionId: (sessionId: string | null) => void
-  showToast: (text: string, undo?: () => void) => void
+  showToast: (text: string, action?: ColabToastAction) => void
   dismissToast: () => void
 }
 
 let toastSeq = 0
 let toastTimer: ReturnType<typeof setTimeout> | null = null
+let highlightTimer: ReturnType<typeof setTimeout> | null = null
 let subscribedUnsub: (() => void) | null = null
+
+// The "new" badge and row highlight are transient confirmation cues, not state.
+function scheduleHighlightReset(): void {
+  if (highlightTimer) clearTimeout(highlightTimer)
+  highlightTimer = setTimeout(() => {
+    useColabStore.setState({ newlyCreatedConnectionId: null, highlightedConnectionId: null })
+  }, HIGHLIGHT_MS)
+}
 
 export const useColabStore = create<ColabStoreState>((set) => ({
   snapshot: EMPTY_SNAPSHOT,
@@ -141,6 +161,8 @@ export const useColabStore = create<ColabStoreState>((set) => ({
   addAccountOpen: false,
   reauthConnectionId: null,
   newlyCreatedConnectionId: null,
+  highlightedConnectionId: null,
+  pendingSwitchTargetId: null,
   runDialogOpen: false,
   runDialogAcceleratorOverride: null,
   focusedSessionId: null,
@@ -149,13 +171,16 @@ export const useColabStore = create<ColabStoreState>((set) => ({
     set((state) => {
       const outcome = nextSnapshot.lastLoginOutcome
       let newlyCreatedConnectionId = state.newlyCreatedConnectionId
+      let highlightedConnectionId = state.highlightedConnectionId
       let addAccountOpen = state.addAccountOpen
       let reauthConnectionId = state.reauthConnectionId
       if (outcome && outcome.ok) {
         addAccountOpen = false
         reauthConnectionId = null
-        if (outcome.kind === 'created') {
+        if (outcome.kind === 'created' && newlyCreatedConnectionId !== outcome.connection.id) {
           newlyCreatedConnectionId = outcome.connection.id
+          highlightedConnectionId = outcome.connection.id
+          scheduleHighlightReset()
         }
       }
       return {
@@ -163,7 +188,8 @@ export const useColabStore = create<ColabStoreState>((set) => ({
         hydrated: true,
         addAccountOpen,
         reauthConnectionId,
-        newlyCreatedConnectionId
+        newlyCreatedConnectionId,
+        highlightedConnectionId
       }
     }),
   refreshSnapshot: async () => {
@@ -185,6 +211,11 @@ export const useColabStore = create<ColabStoreState>((set) => ({
       reauthConnectionId: reauthConnectionId ?? null
     }),
   closeAddAccount: () => set({ addAccountOpen: false, reauthConnectionId: null }),
+  highlightConnection: (connectionId) => {
+    set({ connectionsExpanded: true, highlightedConnectionId: connectionId })
+    scheduleHighlightReset()
+  },
+  setPendingSwitchTargetId: (pendingSwitchTargetId) => set({ pendingSwitchTargetId }),
   openRunDialog: (accelerator) =>
     set({
       runDialogOpen: true,
@@ -192,11 +223,11 @@ export const useColabStore = create<ColabStoreState>((set) => ({
     }),
   closeRunDialog: () => set({ runDialogOpen: false, runDialogAcceleratorOverride: null }),
   setFocusedSessionId: (focusedSessionId) => set({ focusedSessionId }),
-  showToast: (text, undo) => {
+  showToast: (text, action) => {
     toastSeq += 1
     const id = toastSeq
     if (toastTimer) clearTimeout(toastTimer)
-    set({ toast: { id, text, ...(undo ? { undo } : {}) } })
+    set({ toast: { id, text, ...(action ? { action } : {}) } })
     toastTimer = setTimeout(() => {
       set((s) => (s.toast?.id === id ? { toast: null } : s))
     }, 5_000)

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { Check, ChevronDown, Cloud, ExternalLink, Plus, Settings2, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ToolPresentation } from '@shared/tool-presentation'
+import { requestColabConnectionSwitch } from './colab-connection-switch'
 import {
   formatColabDuration,
   isColabSessionRunning,
+  normalizeColabWorkspaceKey,
   openColabPanel,
   selectAllRunningSessions,
   selectWorkspaceActiveConnection,
@@ -12,6 +14,7 @@ import {
   useColabStore,
   useColabSubscription
 } from './colab-store'
+import { useColabDismiss } from './use-colab-dismiss'
 
 export function ColabTopbarCapsule({ workspaceRoot }: { workspaceRoot: string }): ReactElement | null {
   useColabSubscription()
@@ -55,16 +58,8 @@ export function ColabComposerChip({
   const snapshot = useColabStore((s) => s.snapshot)
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onDown = (event: PointerEvent): void => {
-      if (event.target instanceof Node && containerRef.current?.contains(event.target)) return
-      setOpen(false)
-    }
-    window.addEventListener('pointerdown', onDown)
-    return () => window.removeEventListener('pointerdown', onDown)
-  }, [open])
+  const closeMenu = useCallback(() => setOpen(false), [])
+  useColabDismiss(open, closeMenu, containerRef)
 
   const activeConn = selectWorkspaceActiveConnection(snapshot, workspaceRoot)
   const wsSessions = selectWorkspaceSessions(snapshot, workspaceRoot)
@@ -75,7 +70,7 @@ export function ColabComposerChip({
 
   const acceleratorLabel =
     runningSession?.accelerator ??
-    snapshot.lastRunsByWorkspace[workspaceRoot.trim().replace(/[\\/]+$/, '')]?.accelerator ??
+    snapshot.lastRunsByWorkspace[normalizeColabWorkspaceKey(workspaceRoot)]?.accelerator ??
     'T4'
 
   return (
@@ -84,6 +79,7 @@ export function ColabComposerChip({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
+        aria-haspopup="menu"
         className={`inline-flex items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-subtle text-[12px] font-medium text-ds-muted transition hover:border-ds-border hover:bg-ds-hover hover:text-ds-ink ${
           compact ? 'h-7 px-2' : 'h-8 px-2.5'
         }`}
@@ -92,41 +88,55 @@ export function ColabComposerChip({
         <span className="max-w-[110px] truncate">
           {activeConn ? `${activeConn.name} · ${acceleratorLabel}` : t('colab.composerUnconnected')}
         </span>
+        {activeConn?.status === 'expired' ? (
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+        ) : null}
         <ChevronDown className="h-3 w-3 shrink-0 opacity-70" />
       </button>
 
       {open ? (
-        <div className="ds-card-strong absolute bottom-full left-0 z-50 mb-2 w-64 overflow-hidden rounded-xl border border-ds-border py-1.5 text-[12px] shadow-xl">
+        <div
+          role="menu"
+          className="ds-card-strong absolute bottom-full left-0 z-50 mb-2 w-64 overflow-hidden rounded-xl border border-ds-border py-1.5 text-[12px] shadow-xl"
+        >
           <div className="border-b border-ds-border-muted px-3 pb-1.5 pt-1 text-[10.5px] font-semibold text-ds-faint">
             {t('colab.composerPopoverTitle')}
           </div>
           {snapshot.connections.map((conn) => {
             const selected = activeConn?.id === conn.id
+            const expired = conn.status === 'expired'
             return (
               <button
                 key={conn.id}
                 type="button"
-                onClick={async () => {
+                role="menuitemradio"
+                aria-checked={selected}
+                onClick={() => {
                   setOpen(false)
-                  if (conn.status === 'expired') {
-                    openColabPanel({ expandConnections: true, openAddAccount: true })
-                    return
+                  const result = requestColabConnectionSwitch(workspaceRoot, conn, t)
+                  // Re-login and the running-session confirmation both live in the panel.
+                  if (result === 'reauth' || result === 'confirm') {
+                    openColabPanel({ expandConnections: true })
                   }
-                  await window.kunGui.colabSelectWorkspaceConnection({
-                    workspaceRoot,
-                    connectionId: conn.id
-                  })
                 }}
                 className="flex w-full items-center gap-2 px-3 py-2 text-left text-ds-ink hover:bg-ds-hover"
               >
                 <span
-                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9.5px] font-bold text-white"
+                  className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[9.5px] font-bold text-white ${
+                    expired ? 'opacity-50' : ''
+                  }`}
                   style={{ backgroundColor: conn.avatarColor }}
                 >
                   {conn.name.slice(0, 1).toUpperCase()}
                 </span>
-                <span className="min-w-0 flex-1 truncate">{conn.name}</span>
-                {conn.balanceCu !== null ? (
+                <span className={`min-w-0 flex-1 truncate ${expired ? 'text-ds-muted' : ''}`}>
+                  {conn.name}
+                </span>
+                {expired ? (
+                  <span className="shrink-0 whitespace-nowrap rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-300">
+                    {t('colab.expiredBadge')}
+                  </span>
+                ) : conn.balanceCu !== null ? (
                   <span className="shrink-0 font-mono text-[10.5px] text-ds-faint">
                     {conn.balanceCu} CU
                   </span>
@@ -138,6 +148,7 @@ export function ColabComposerChip({
           <div className="my-1 border-t border-ds-border-muted" />
           <button
             type="button"
+            role="menuitem"
             onClick={() => {
               setOpen(false)
               openColabPanel({ expandConnections: true, openAddAccount: true })
@@ -145,10 +156,11 @@ export function ColabComposerChip({
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
           >
             <Plus className="h-3.5 w-3.5" />
-            <span>{t('colab.addAccountMenu').replace(/^\+\s*/, '')}</span>
+            <span>{t('colab.addAccountMenu')}</span>
           </button>
           <button
             type="button"
+            role="menuitem"
             onClick={() => {
               setOpen(false)
               openColabPanel({ expandConnections: true })
@@ -200,8 +212,36 @@ export function colabToolData(presentation: ToolPresentation): ColabToolMarker |
 }
 
 export function ColabToolCard({ marker }: { marker: ColabToolMarker }): ReactElement {
+  useColabSubscription()
   const { t } = useTranslation('common')
-  const isRunning = ['provisioning', 'uploading', 'installing', 'running'].includes(marker.phase)
+  // The tool result is a snapshot taken when the tool returned; prefer the live session so
+  // the chat card and the panel stay two views of the same state.
+  const live = useColabStore((s) => s.snapshot.sessions.find((x) => x.id === marker.sessionId))
+  const phase = live?.phase ?? marker.phase
+  const progressSummary = live?.progressSummary ?? marker.progressSummary
+  const consumedCu = live?.consumedCu ?? marker.consumedCu
+  const estimatedTotalCu = live?.estimatedTotalCu ?? marker.estimatedTotalCu
+  const errorMessage = live ? live.errorMessage : marker.errorMessage
+  const isRunning = live
+    ? isColabSessionRunning(live)
+    : ['provisioning', 'uploading', 'installing', 'running'].includes(phase)
+  const phaseKey: Record<string, string> = {
+    provisioning: 'colab.phaseProvisioning',
+    uploading: 'colab.phaseUploading',
+    installing: 'colab.phaseInstalling',
+    running: 'colab.phaseRunning',
+    completed: 'colab.phaseCompleted',
+    failed: 'colab.phaseFailed',
+    disconnected: 'colab.phaseDisconnected',
+    stopped: 'colab.phaseStopped'
+  }
+  const phaseLabel = phaseKey[phase] ? t(phaseKey[phase]) : phase
+  const cuText =
+    consumedCu !== undefined
+      ? estimatedTotalCu
+        ? ` · ${consumedCu} / ~${estimatedTotalCu} CU`
+        : ` · ${consumedCu} CU`
+      : ''
 
   return (
     <div
@@ -211,17 +251,17 @@ export function ColabToolCard({ marker }: { marker: ColabToolMarker }): ReactEle
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <Cloud className="h-4 w-4 shrink-0 text-accent" />
-          <span className="font-semibold text-ds-ink">{t('colab.toolCardTitle')}</span>
+          <span className="shrink-0 font-semibold text-ds-ink">{t('colab.toolCardTitle')}</span>
           <span className="truncate font-mono text-[11px] text-ds-muted">{marker.sessionName}</span>
         </div>
-        <span className="shrink-0 rounded-full bg-ds-subtle px-2 py-0.5 font-mono text-[10.5px] font-medium text-ds-ink">
-          {marker.accelerator}
+        <span className="shrink-0 whitespace-nowrap rounded-full bg-ds-subtle px-2 py-0.5 font-mono text-[10.5px] font-medium text-ds-ink">
+          {marker.accelerator} · {phaseLabel}
         </span>
       </div>
 
       <div className="mt-1.5 text-[11px] text-ds-muted">
         {marker.connectionLabel}
-        {marker.consumedCu !== undefined ? ` · ${marker.consumedCu} CU` : ''}
+        {cuText}
       </div>
 
       {marker.entryCommand ? (
@@ -230,14 +270,14 @@ export function ColabToolCard({ marker }: { marker: ColabToolMarker }): ReactEle
         </div>
       ) : null}
 
-      {marker.progressSummary ? (
+      {progressSummary ? (
         <div className="mt-1.5 font-mono text-[11px] text-emerald-600 dark:text-emerald-400">
-          {marker.progressSummary}
+          {progressSummary}
         </div>
       ) : null}
 
-      {marker.errorMessage ? (
-        <div className="mt-1.5 text-[11px] text-red-500">{marker.errorMessage}</div>
+      {errorMessage ? (
+        <div className="mt-1.5 text-[11px] text-red-500">{errorMessage}</div>
       ) : null}
 
       <div className="mt-2.5 flex items-center gap-2">

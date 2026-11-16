@@ -42,7 +42,7 @@
     "artifactsEmpty": "출력 폴더의 모델 파일이 여기에 표시됩니다",
     "errGpuUnavailableTitle": "{{accelerator}} 용량 부족",
     "errGpuUnavailableDesc": "현재 사용 가능한 인스턴스가 없습니다. CU는 차감되지 않았습니다.",
-    "switchToL4": "L4로 변경 (~4.8 CU/h)",
+    "switchToAccelerator": "{{accelerator}}(으)로 변경 (~{{rate}} CU/h)",
     "retryLater": "다시 시도",
     "errDisconnectedTitle": "로컬 연결이 끊겼으며 원격 VM은 계속 과금 중입니다",
     "errDisconnectedDesc": "다시 연결하거나 원격 VM을 즉시 중지하세요.",
@@ -56,8 +56,8 @@
     "ignoreBtn": "무시",
     "connectionsLabel": "연결",
     "connectionsSubtitle": "전환 시 현재 워크스페이스의 새 세션에 적용되며 실행 중인 세션은 기존 계정을 유지합니다.",
-    "addAccountBtn": "+ 계정 추가",
-    "addAccountMenu": "+ 계정 추가…",
+    "addAccountBtn": "계정 추가",
+    "addAccountMenu": "계정 추가…",
     "manageConnectionsMenu": "연결 관리",
     "connectionNameLabel": "연결 이름 (선택)",
     "connectionNamePlaceholder": "개인 / 연구실 / Pro+",
@@ -125,6 +125,14 @@
     "startRunBtn": "학습 시작",
     "startingBtn": "시작 중…",
     "toolCardTitle": "Colab 클라우드 학습",
-    "viewInPanel": "패널에서 보기"
+    "viewInPanel": "패널에서 보기",
+    "loginCancelled": "로그인이 취소되었습니다",
+    "loginTimedOut": "로그인 시간이 초과되었습니다",
+    "loginFailed": "로그인 실패: {{message}}",
+    "retryBtn": "다시 시도",
+    "locateBtn": "찾기",
+    "billedToHint": "\"{{name}}\" 계정에 과금",
+    "sessionsLabel": "세션",
+    "backToOverview": "개요로 돌아가기"
   }
 }

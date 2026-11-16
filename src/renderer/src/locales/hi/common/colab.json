@@ -42,7 +42,7 @@
     "artifactsEmpty": "आउटपुट फ़ोल्डर की फ़ाइलें यहाँ दिखेंगी",
     "errGpuUnavailableTitle": "{{accelerator}} क्षमता उपलब्ध नहीं है",
     "errGpuUnavailableDesc": "इस एक्सेलेरेटर के लिए अभी कोई मशीन खाली नहीं है। कोई CU नहीं कटा।",
-    "switchToL4": "L4 चुनें (~4.8 CU/h)",
+    "switchToAccelerator": "{{accelerator}} पर जाएँ (~{{rate}} CU/घं)",
     "retryLater": "पुनः प्रयास करें",
     "errDisconnectedTitle": "लोकल स्ट्रीम टूटी, रिमोट VM पर बिलिंग जारी है",
     "errDisconnectedDesc": "लॉग फिर से जोड़ने के लिए रीकनेक्ट करें या रिमोट VM अभी रोकें।",
@@ -56,8 +56,8 @@
     "ignoreBtn": "अनदेखा करें",
     "connectionsLabel": "कनेक्शन",
     "connectionsSubtitle": "बदलने पर इस वर्कस्पेस के नए सत्र प्रभावित होंगे; चल रहे सत्र पुराने खाते पर रहेंगे।",
-    "addAccountBtn": "+ खाता जोड़ें",
-    "addAccountMenu": "+ खाता जोड़ें…",
+    "addAccountBtn": "खाता जोड़ें",
+    "addAccountMenu": "खाता जोड़ें…",
     "manageConnectionsMenu": "कनेक्शन प्रबंधित करें",
     "connectionNameLabel": "कनेक्शन नाम (वैकल्पिक)",
     "connectionNamePlaceholder": "व्यक्तिगत / लैब / Pro+",
@@ -125,6 +125,14 @@
     "startRunBtn": "प्रशिक्षण शुरू करें",
     "startingBtn": "शुरू हो रहा है…",
     "toolCardTitle": "Colab क्लाउड प्रशिक्षण",
-    "viewInPanel": "पैनल में देखें"
+    "viewInPanel": "पैनल में देखें",
+    "loginCancelled": "साइन-इन रद्द किया गया",
+    "loginTimedOut": "साइन-इन का समय समाप्त हुआ",
+    "loginFailed": "साइन-इन विफल: {{message}}",
+    "retryBtn": "फिर से कोशिश करें",
+    "locateBtn": "दिखाएँ",
+    "billedToHint": "\"{{name}}\" से शुल्क",
+    "sessionsLabel": "सत्र",
+    "backToOverview": "अवलोकन पर लौटें"
   }
 }

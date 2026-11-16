@@ -10,9 +10,11 @@ import {
 } from '@shared/colab/colab-types'
 import {
   formatColabBytes,
+  normalizeColabWorkspaceKey,
   selectWorkspaceActiveConnection,
   useColabStore
 } from './colab-store'
+import { useColabDismiss } from './use-colab-dismiss'
 
 type Props = {
   workspaceRoot: string
@@ -26,10 +28,17 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
   const setFocusedSessionId = useColabStore((s) => s.setFocusedSessionId)
 
   const workspaceConn = selectWorkspaceActiveConnection(snapshot, workspaceRoot)
-  const [selectedConnId, setSelectedConnId] = useState<string>(workspaceConn?.id ?? '')
+  const lastRun = snapshot.lastRunsByWorkspace[normalizeColabWorkspaceKey(workspaceRoot)]
+  const initialConn =
+    workspaceConn?.status === 'expired'
+      ? snapshot.connections.find((c) => c.status === 'connected') ?? workspaceConn
+      : workspaceConn
+  const [selectedConnId, setSelectedConnId] = useState<string>(initialConn?.id ?? '')
   const [alsoSetCurrent, setAlsoSetCurrent] = useState(false)
-  const [entryCommand, setEntryCommand] = useState('python train.py --epochs 10 --out outputs/')
-  const [accelerator, setAccelerator] = useState<ColabAccelerator>(accelOverride ?? 'T4')
+  const [entryCommand, setEntryCommand] = useState(lastRun?.entryCommand ?? '')
+  const [accelerator, setAccelerator] = useState<ColabAccelerator>(
+    accelOverride ?? lastRun?.accelerator ?? 'T4'
+  )
   const [candidates, setCandidates] = useState<ColabSyncCandidate[]>([])
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [outputRemoteDir, setOutputRemoteDir] = useState('outputs/')
@@ -45,10 +54,12 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
   const [errorText, setErrorText] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!selectedConnId && workspaceConn?.id) {
-      setSelectedConnId(workspaceConn.id)
+    if (!selectedConnId && initialConn?.id) {
+      setSelectedConnId(initialConn.id)
     }
-  }, [selectedConnId, workspaceConn?.id])
+  }, [selectedConnId, initialConn?.id])
+
+  useColabDismiss(!starting, onClose)
 
   useEffect(() => {
     if (accelOverride) setAccelerator(accelOverride)
@@ -91,7 +102,8 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
     }
   }, [accelOverride, workspaceRoot])
 
-  const chosenConn = snapshot.connections.find((c) => c.id === selectedConnId) ?? workspaceConn
+  const chosenConn = snapshot.connections.find((c) => c.id === selectedConnId) ?? initialConn
+  const chosenConnExpired = chosenConn?.status === 'expired'
   const spec = COLAB_ACCELERATOR_SPECS[accelerator]
   const totalUploadBytes = useMemo(
     () =>
@@ -122,7 +134,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
   }, [chosenConn, maxCu, snapshot.connections])
 
   const submitStart = async (): Promise<void> => {
-    if (!chosenConn) return
+    if (!chosenConn || chosenConnExpired) return
     setStarting(true)
     setErrorText(null)
     const envVars: Record<string, string> = {}
@@ -134,29 +146,34 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
         if (k) envVars[k] = v
       }
     }
-    const res = await window.kunGui.colabStartRun({
-      workspaceRoot,
-      connectionId: chosenConn.id,
-      setAsWorkspaceCurrent: alsoSetCurrent,
-      entryCommand: entryCommand.trim(),
-      accelerator,
-      syncPaths: [...selectedPaths],
-      outputRemoteDir: outputRemoteDir.trim() || 'outputs/',
-      outputLocalDir: outputLocalDir.trim() || './outputs',
-      maxRuntimeHours,
-      autoStop,
-      saveWorkspaceConfig: saveConfig,
-      mountDrive,
-      ...(Object.keys(envVars).length > 0 ? { envVars } : {}),
-      ...(setupScript.trim() ? { setupScript: setupScript.trim() } : {})
-    })
-    setStarting(false)
-    if (!res.ok) {
-      setErrorText(res.message)
-      return
+    try {
+      const res = await window.kunGui.colabStartRun({
+        workspaceRoot,
+        connectionId: chosenConn.id,
+        setAsWorkspaceCurrent: alsoSetCurrent,
+        entryCommand: entryCommand.trim(),
+        accelerator,
+        syncPaths: [...selectedPaths],
+        outputRemoteDir: outputRemoteDir.trim() || 'outputs/',
+        outputLocalDir: outputLocalDir.trim() || './outputs',
+        maxRuntimeHours,
+        autoStop,
+        saveWorkspaceConfig: saveConfig,
+        mountDrive,
+        ...(Object.keys(envVars).length > 0 ? { envVars } : {}),
+        ...(setupScript.trim() ? { setupScript: setupScript.trim() } : {})
+      })
+      if (!res.ok) {
+        setErrorText(res.message)
+        return
+      }
+      setFocusedSessionId(res.session.id)
+      onClose()
+    } catch (error) {
+      setErrorText(error instanceof Error ? error.message : String(error))
+    } finally {
+      setStarting(false)
     }
-    setFocusedSessionId(res.session.id)
-    onClose()
   }
 
   return createPortal(
@@ -188,6 +205,8 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
             <input
               type="text"
               value={entryCommand}
+              autoFocus
+              placeholder="python train.py"
               onChange={(e) => setEntryCommand(e.target.value)}
               className="mt-1 w-full rounded-xl border border-ds-border bg-ds-subtle px-3 py-2 font-mono text-[12px] text-ds-ink focus:border-accent focus:outline-none"
             />
@@ -206,7 +225,12 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
               {snapshot.connections.map((c) => (
                 <option key={c.id} value={c.id} disabled={c.status === 'expired'}>
                   {c.name} · {c.email}
-                  {c.balanceCu !== null ? ` (${c.balanceCu} CU)` : ''}
+                  {c.status === 'expired'
+                    ? ` (${t('colab.expiredBadge')})`
+                    : c.balanceCu !== null
+                      ? ` (${c.balanceCu} CU)`
+                      : ''}
+                  {c.id === workspaceConn?.id ? ` · ${t('colab.currentConnection')}` : ''}
                 </option>
               ))}
             </select>
@@ -459,7 +483,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
           </button>
           <button
             type="button"
-            disabled={starting || !entryCommand.trim() || !chosenConn}
+            disabled={starting || !entryCommand.trim() || !chosenConn || chosenConnExpired}
             onClick={() => void submitStart()}
             className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-4 py-1.5 text-[12.5px] font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
           >

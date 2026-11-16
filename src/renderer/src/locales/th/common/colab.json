@@ -42,7 +42,7 @@
     "artifactsEmpty": "ไฟล์ในโฟลเดอร์เอาต์พุตจะแสดงที่นี่",
     "errGpuUnavailableTitle": "{{accelerator}} ไม่ว่างในขณะนี้",
     "errGpuUnavailableDesc": "ไม่มีเครื่องว่างสำหรับตัวเร่งนี้ ยังไม่มีการหัก CU",
-    "switchToL4": "เปลี่ยนเป็น L4 (~4.8 CU/ชม.)",
+    "switchToAccelerator": "เปลี่ยนเป็น {{accelerator}} (~{{rate}} CU/ชม.)",
     "retryLater": "ลองอีกครั้ง",
     "errDisconnectedTitle": "การเชื่อมต่อขาด แต่เครื่องระยะไกลยังคิดค่าใช้จ่ายอยู่",
     "errDisconnectedDesc": "เชื่อมต่อใหม่เพื่อดูบันทึกต่อ หรือสั่งหยุดเครื่องทันที",
@@ -56,8 +56,8 @@
     "ignoreBtn": "ละเว้น",
     "connectionsLabel": "การเชื่อมต่อ",
     "connectionsSubtitle": "การสลับจะมีผลกับเซสชันใหม่ในเวิร์กสเปซนี้ เซสชันที่รันอยู่จะใช้บัญชีเดิม",
-    "addAccountBtn": "+ เพิ่มบัญชี",
-    "addAccountMenu": "+ เพิ่มบัญชี…",
+    "addAccountBtn": "เพิ่มบัญชี",
+    "addAccountMenu": "เพิ่มบัญชี…",
     "manageConnectionsMenu": "จัดการการเชื่อมต่อ",
     "connectionNameLabel": "ชื่อการเชื่อมต่อ (ไม่บังคับ)",
     "connectionNamePlaceholder": "ส่วนตัว / แล็บ / Pro+",
@@ -125,6 +125,14 @@
     "startRunBtn": "เริ่มการฝึกสอน",
     "startingBtn": "กำลังเริ่มต้น…",
     "toolCardTitle": "การฝึกสอนบนคลาวด์ Colab",
-    "viewInPanel": "ดูในพาเนล"
+    "viewInPanel": "ดูในพาเนล",
+    "loginCancelled": "ยกเลิกการลงชื่อเข้าใช้แล้ว",
+    "loginTimedOut": "การลงชื่อเข้าใช้หมดเวลา",
+    "loginFailed": "ลงชื่อเข้าใช้ไม่สำเร็จ: {{message}}",
+    "retryBtn": "ลองอีกครั้ง",
+    "locateBtn": "แสดง",
+    "billedToHint": "หักจาก \"{{name}}\"",
+    "sessionsLabel": "เซสชัน",
+    "backToOverview": "กลับไปภาพรวม"
   }
 }

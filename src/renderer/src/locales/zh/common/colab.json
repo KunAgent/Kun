@@ -42,7 +42,7 @@
     "artifactsEmpty": "训练输出目录中的模型与权重文件将显示在此处",
     "errGpuUnavailableTitle": "{{accelerator}} 当前容量不足",
     "errGpuUnavailableDesc": "该型号暂时无可用实例，本次未消耗 CU。",
-    "switchToL4": "改用 L4 (~4.8 CU/h)",
+    "switchToAccelerator": "改用 {{accelerator}} (~{{rate}} CU/h)",
     "retryLater": "稍后重试",
     "errDisconnectedTitle": "本地连接中断，远端会话仍在计费",
     "errDisconnectedDesc": "网络恢复后可重新连接日志流，或立即停机释放实例。",
@@ -56,8 +56,8 @@
     "ignoreBtn": "忽略",
     "connectionsLabel": "连接",
     "connectionsSubtitle": "切换后影响本工作区新建会话，运行中会话保持原账号。",
-    "addAccountBtn": "+ 添加账号",
-    "addAccountMenu": "+ 添加账号…",
+    "addAccountBtn": "添加账号",
+    "addAccountMenu": "添加账号…",
     "manageConnectionsMenu": "管理连接",
     "connectionNameLabel": "连接名称（可选）",
     "connectionNamePlaceholder": "个人 / 实验室 / Pro+",
@@ -125,6 +125,14 @@
     "startRunBtn": "开始训练",
     "startingBtn": "正在启动…",
     "toolCardTitle": "Colab 云端训练",
-    "viewInPanel": "在面板中查看"
+    "viewInPanel": "在面板中查看",
+    "loginCancelled": "登录已取消",
+    "loginTimedOut": "登录超时",
+    "loginFailed": "登录失败：{{message}}",
+    "retryBtn": "重试",
+    "locateBtn": "定位",
+    "billedToHint": "扣「{{name}}」的额度",
+    "sessionsLabel": "会话",
+    "backToOverview": "返回概览"
   }
 }

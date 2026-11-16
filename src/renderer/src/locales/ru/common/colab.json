@@ -42,7 +42,7 @@
     "artifactsEmpty": "Файлы из папки вывода появятся здесь",
     "errGpuUnavailableTitle": "Нет свободных {{accelerator}}",
     "errGpuUnavailableDesc": "Сейчас нет доступных машин этого типа. CU не списаны.",
-    "switchToL4": "Переключить на L4 (~4.8 CU/ч)",
+    "switchToAccelerator": "Перейти на {{accelerator}} (~{{rate}} CU/ч)",
     "retryLater": "Повторить",
     "errDisconnectedTitle": "Локальное соединение прервано, VM продолжает тарифицироваться",
     "errDisconnectedDesc": "Переподключитесь к потоку логов или остановите удалённую машину.",
@@ -56,8 +56,8 @@
     "ignoreBtn": "Скрыть",
     "connectionsLabel": "Подключения",
     "connectionsSubtitle": "Переключение влияет на новые сессии этого пространства; текущие сохраняют свой аккаунт.",
-    "addAccountBtn": "+ Добавить аккаунт",
-    "addAccountMenu": "+ Добавить аккаунт…",
+    "addAccountBtn": "Добавить аккаунт",
+    "addAccountMenu": "Добавить аккаунт…",
     "manageConnectionsMenu": "Управление подключениями",
     "connectionNameLabel": "Название подключения (необязательно)",
     "connectionNamePlaceholder": "Личный / Лаборатория / Pro+",
@@ -125,6 +125,14 @@
     "startRunBtn": "Начать обучение",
     "startingBtn": "Запуск…",
     "toolCardTitle": "Облачное обучение Colab",
-    "viewInPanel": "Открыть в панели"
+    "viewInPanel": "Открыть в панели",
+    "loginCancelled": "Вход отменён",
+    "loginTimedOut": "Время входа истекло",
+    "loginFailed": "Ошибка входа: {{message}}",
+    "retryBtn": "Повторить",
+    "locateBtn": "Показать",
+    "billedToHint": "Списывается с «{{name}}»",
+    "sessionsLabel": "Сеансы",
+    "backToOverview": "К обзору"
   }
 }
