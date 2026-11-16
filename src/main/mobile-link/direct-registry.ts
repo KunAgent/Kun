@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto'
 import { directAddresses, encodeDirectPairing, type DirectPairing } from '@kun/remote-protocol'
-import { mobileLinkScopes, type MobileLinkScope } from '../../shared/mobile-link-scopes'
+import { DIRECT_MOBILE_DEFAULT_SCOPES, mobileLinkScopes, type MobileLinkScope } from '../../shared/mobile-link-scopes'
 
 export type DirectGrant = { id: string; secret: string; deviceId: string; name: string; scopes: MobileLinkScope[]; expiresAt: number }
 export type DirectSettings = { enabled: boolean; port: number; bind: 'lan' | 'loopback'; addresses: string[];
@@ -15,9 +15,9 @@ export class DirectRegistry {
   constructor(readonly hostId: string, readonly name: string, readonly settings: DirectSettings,
     private persist: (settings: DirectSettings) => Promise<void>, private now = Date.now,
     private persistRevocation?: (id: string) => Promise<void>) {}
-  pair(addresses: string[], scopes: unknown): string {
+  pair(addresses: string[], scopes?: unknown): string {
     if (this.closed) throw Error('DIRECT_NOT_RUNNING')
-    const granted = mobileLinkScopes(scopes)
+    const granted = mobileLinkScopes(scopes ?? DIRECT_MOBILE_DEFAULT_SCOPES)
     if (granted.includes('shares.manage')) throw Error('INVALID_SCOPES')
     if (!granted.includes('personal')) throw Error('INVALID_SCOPE')
     if (this.settings.grants.length >= 16) throw Error('DIRECT_DEVICE_LIMIT')

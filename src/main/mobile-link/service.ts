@@ -8,7 +8,7 @@ import { desktopScheduleDescriptors } from './desktop-schedules'
 import { MobileNotifications } from './notifications'
 import { MobileWorkboard } from './workboard'
 import { MobileLinkAuthorities } from './authorities'
-import { mobileLinkScopes, computerDesktopScopes, MOBILE_REMOTE_SCOPES } from '../../shared/mobile-link-scopes'
+import { mobileLinkScopes, computerDesktopScopes, MOBILE_DEFAULT_SCOPES, MOBILE_REMOTE_SCOPES } from '../../shared/mobile-link-scopes'
 import { conditionalCall, conditionalResult } from './read-version'
 import { randomUUID } from 'node:crypto'
 import {
@@ -397,7 +397,7 @@ export class MobileLinkService {
     for (const peer of previous) if (!this.peers.has(peer)) this.subscriptions.clear(peer)
     this.grantPeers = new Map(grants.map((grant) => [grant.id, grant.controllerId]))
     const eligibleGrants = grants.filter(grant => !this.deniedPeers.has(grant.controllerId) && !this.deniedGrants.has(grant.id))
-    for (const peer of this.authorities.sync(eligibleGrants, this.desktopAccess ? MOBILE_REMOTE_SCOPES : undefined,
+    for (const peer of this.authorities.sync(eligibleGrants, this.phoneAccess ? (this.desktopAccess ? MOBILE_REMOTE_SCOPES : MOBILE_DEFAULT_SCOPES) : undefined,
       this.computers.current() ? [...COMPUTER_DESKTOP_SCOPES] : undefined)) this.permissionsChanged(peer)
     const api = this.api, generation = this.generation
     const eligible = () => this.phoneAccess && this.enabled && !this.sessionEnding && this.api === api && generation === this.generation &&
@@ -540,10 +540,9 @@ export class MobileLinkService {
   }
   async confirm(id: string, rawScopes?: unknown) {
     const computer = this.computerPairings.has(id)
-    const chosen = computer ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes)
-    const scopes = !computer && this.desktopAccess ? mobileLinkScopes([...new Set([...chosen, ...MOBILE_REMOTE_SCOPES])]) : chosen
-    if (!/^[a-f0-9-]{36}$/.test(id) || !this.api)
-      throw new Error('INVALID_PAIRING')
+    const chosen = computer ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes ?? MOBILE_DEFAULT_SCOPES)
+    const scopes = !computer && this.desktopAccess ? mobileLinkScopes([...new Set([...chosen, ...COMPUTER_DESKTOP_SCOPES])]) : chosen
+    if (!/^[a-f0-9-]{36}$/.test(id) || !this.api) throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)
     if (computer) await this.computers.requireMax()
     await this.deps.requireMembership(this.owner!)
@@ -559,8 +558,9 @@ export class MobileLinkService {
     const status = await this.status()
     if (generation !== this.generation) throw new Error('ACCOUNT_CHANGED')
     const grant = peer ? status.grants.find((grant) => grant.controllerId === peer && this.grantPeers.get(grant.id) === peer) : undefined
+    const defaults = this.phoneAccess ? (this.desktopAccess ? MOBILE_REMOTE_SCOPES : MOBILE_DEFAULT_SCOPES) : ['personal']
     if (grant && this.authorities.set(peer!, grant.id, scopes)) this.permissionsChanged(peer!)
-    else if ((computer || scopes.length > 1) && !grant) throw new Error('AUTHORIZATION_NOT_READY')
+    else if ((computer || scopes.join(',') !== defaults.join(',')) && !grant) throw new Error('AUTHORIZATION_NOT_READY')
     return { ...status, grants: status.grants.map((g) => ({ ...g, scopes: this.authorities.scopes(g.controllerId, g.id) })) }
   }
   async setScopes(id: string, rawScopes: unknown) {

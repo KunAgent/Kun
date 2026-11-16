@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { MOBILE_DEFAULT_SCOPES, MOBILE_REMOTE_SCOPES } from '../../shared/mobile-link-scopes'
 import { MobileLinkService, type LinkDependencies } from './service'
 import { PHONE_PAIRING_INTERVAL_MS } from './phone-pairing-approval'
 
@@ -62,7 +63,7 @@ describe('phone pairing approval', () => {
     expect((await f.service.status()).pairings).toEqual([])
     await vi.advanceTimersByTimeAsync(PHONE_PAIRING_INTERVAL_MS)
     expect(f.confirms()).toEqual([{ path: '/pairings/' + pairingId + '/confirm', method: 'POST' }])
-    expect((await f.service.status()).grants).toMatchObject([{ id: grantId, scopes: ['personal'] }])
+    expect((await f.service.status()).grants).toMatchObject([{ id: grantId, scopes: MOBILE_DEFAULT_SCOPES }])
   })
   it('keeps a locally revoked phone manual instead of re-approving its next request', async () => {
     vi.useFakeTimers()
@@ -84,7 +85,7 @@ describe('phone pairing approval', () => {
     f.request([{ id: pairingId, controllerId: phone, name: 'iPhone' }])
     await vi.advanceTimersByTimeAsync(PHONE_PAIRING_INTERVAL_MS)
     expect((await f.service.status()).grants[0].scopes)
-      .toEqual(['personal', 'desktop.view', 'desktop.control'])
+      .toEqual(MOBILE_REMOTE_SCOPES)
   })
   it('leaves computer pairings to the computer host switch', async () => {
     vi.useFakeTimers()

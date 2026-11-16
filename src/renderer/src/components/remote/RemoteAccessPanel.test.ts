@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { ComputerAccessApi } from '@shared/computer-access'
 import type { ControlPackageApi } from '@shared/control-package'
 import type { RemoteAccessStatus } from '@shared/remote-access'
+import { MOBILE_DEFAULT_SCOPES, MOBILE_REMOTE_SCOPES } from '@shared/mobile-link-scopes'
 import type { DesktopAccessStatus } from '@shared/remote-desktop'
 import type { MobileLink } from './useMobileLink'
 import { MobilePairingDialog } from './MobilePairingDialog'
@@ -61,7 +62,7 @@ beforeEach(async () => {
     }
   }
   mocks.link = { api: api.mobileLink, zh: false, account: { state: { user: { id: 'owner' } } }, signedIn: true,
-    state: { enabled: true, desktopAccess: true, online: true, pairings: [], grants: [{ id: 'phone', controllerId: 'controller', name: 'iPhone', scopes: ['personal', 'desktop.view', 'desktop.control'] }] },
+    state: { enabled: true, desktopAccess: true, online: true, pairings: [], grants: [{ id: 'phone', controllerId: 'controller', name: 'iPhone', scopes: MOBILE_REMOTE_SCOPES }] },
     enabled: true, starting: false, busy: null, canStop: true, mobileAllowed: true, membershipState: 'active', connectionError: '',
     computerAllowed: false, computerMembershipState: 'maxRequired',
     toggle: vi.fn(), confirm: vi.fn(), setScopes: vi.fn(async () => true), revoke: vi.fn(), refreshMembership: vi.fn() } as unknown as MobileLink
@@ -166,7 +167,7 @@ it('keeps pairing visible on detail pages and requires the consent gate', async 
   await render(); await click('Browser')
   expect(container.textContent).toContain('New phone wants access')
   mocks.gate = false; await click('Allow'); expect(mocks.link.confirm).not.toHaveBeenCalled()
-  mocks.gate = true; await click('Allow'); expect(mocks.link.confirm).toHaveBeenCalledWith('pair', ['personal'])
+  mocks.gate = true; await click('Allow'); expect(mocks.link.confirm).toHaveBeenCalledWith('pair', MOBILE_DEFAULT_SCOPES)
 })
 it('keeps draft permissions on cancelled navigation and discards only after confirmation', async () => {
   await render(); await click('iPhone')

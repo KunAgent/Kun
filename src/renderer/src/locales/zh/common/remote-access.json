@@ -94,7 +94,7 @@
     "stopPhone": "关闭手机访问",
     "pairRequest": "{{name}} 请求访问",
     "allow": "允许",
-    "adjustPermissions": "基础访问 · 调整权限",
+    "adjustPermissions": "默认完整访问 · 调整权限",
     "control": "控制",
     "view": "查看",
     "off": "关闭",

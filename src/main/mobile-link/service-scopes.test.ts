@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Socket } from '@kun/remote-protocol'
+import { MOBILE_DEFAULT_SCOPES, MOBILE_REMOTE_SCOPES } from '../../shared/mobile-link-scopes'
 import { MobileLinkService, type LinkDependencies } from './service'
 const phone = '22222222-2222-4222-8222-222222222222', grant = '33333333-3333-4333-8333-333333333333'
 const pairing = '44444444-4444-4444-8444-444444444444'
@@ -38,6 +39,7 @@ describe('trusted desktop permission dispatch', () => {
     const f = fixture()
     try {
       await f.service.enable(true)
+      await f.service.setScopes(grant, [])
       const before = (await f.service.status()).grants
       const requireMembership = vi.fn(async () => { throw new Error(code) })
       f.deps.requireMembership = requireMembership
@@ -51,7 +53,7 @@ describe('trusted desktop permission dispatch', () => {
     const f = fixture()
     try {
       await f.service.enable(true)
-      await f.service.setScopes(grant, ['groups.read', 'schedules.read'])
+      expect((await f.service.status()).grants[0].scopes).toEqual(MOBILE_DEFAULT_SCOPES)
       const requireMembership = vi.fn(async () => { throw new Error('ENTITLEMENTS_UNAVAILABLE') })
       f.deps.requireMembership = requireMembership
       expect((await f.service.setScopes(grant, ['groups.read'])).grants[0].scopes).toEqual(['personal', 'groups.read'])
@@ -66,6 +68,7 @@ describe('trusted desktop permission dispatch', () => {
     const f = fixture()
     try {
       await f.service.enable(true)
+      await f.service.setScopes(grant, [])
       let release!: () => void
       f.deps.requireMembership = vi.fn(() => new Promise<void>(resolve => { release = resolve }))
       const pending = f.service.setScopes(grant, ['groups.read'])
@@ -75,7 +78,7 @@ describe('trusted desktop permission dispatch', () => {
       else f.service.stop()
       await f.service.enable(true)
       release(); await rejected
-      expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
+      expect((await f.service.status()).grants[0].scopes).toEqual(MOBILE_DEFAULT_SCOPES)
     } finally { f.service.dispose(); await tick() }
   })
   it('does not overwrite a permission reduction completed during expansion verification', async () => {
@@ -92,16 +95,18 @@ describe('trusted desktop permission dispatch', () => {
       expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
     } finally { f.service.dispose(); await tick() }
   })
-  it('one unified enable configures desktop and supplies paired phones desktop rights without setScopes', async () => {
+  it('one unified enable configures desktop and supplies paired phones full mobile and desktop rights without setScopes', async () => {
     const f = fixture(), configureRemoteAccess = vi.fn(async (_enabled: boolean, _current?: () => boolean) => undefined)
     f.deps.desktop = { configureRemoteAccess, stopAll: async () => {}, authorityChanged() {} } as unknown as LinkDependencies['desktop']
     try {
       const status = await f.service.enable(true, true, true)
       expect(configureRemoteAccess).toHaveBeenLastCalledWith(true, expect.any(Function))
       expect(status.desktopAccess).toBe(true)
-      await vi.waitFor(async () => expect((await f.service.status()).grants[0]?.scopes).toEqual(['personal', 'desktop.view', 'desktop.control']))
+      await vi.waitFor(async () => expect((await f.service.status()).grants[0]?.scopes).toEqual(MOBILE_REMOTE_SCOPES))
       const paired = await f.service.confirm(pairing)
-      expect(paired.grants[0].scopes).toEqual(['personal', 'desktop.view', 'desktop.control'])
+      expect(paired.grants[0].scopes).toEqual(MOBILE_REMOTE_SCOPES)
+      const narrowed = await f.service.confirm(pairing, ['groups.read'])
+      expect(narrowed.grants[0].scopes).toEqual(['personal', 'groups.read', 'desktop.view', 'desktop.control'])
       await f.service.setScopes(grant, [])
       expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
       f.deps.requireMembership = async () => { throw Error('vip_mobile_remote_required') }
@@ -112,7 +117,7 @@ describe('trusted desktop permission dispatch', () => {
       expect(configureRemoteAccess.mock.calls.some(call => call[0])).toBe(false)
     } finally { f.service.dispose(); await tick() }
   })
-  it('forwards only fixed history operations with the authenticated personal origin', async () => {
+  it('forwards only fixed history operations with the authenticated phone origin', async () => {
     const f = fixture()
     try {
       await f.service.enable(true); await tick(); f.hello()
@@ -122,7 +127,7 @@ describe('trusted desktop permission dispatch', () => {
       f.invoke('code.rewind.commit', { threadId: 'task', token: 'a'.repeat(64) }, 'commit')
       await vi.waitFor(() => expect(f.calls).toHaveLength(3))
       expect(f.calls.map(call => call.call.method).sort()).toEqual(['code.fork', 'code.rewind.commit', 'code.rewind.preview'])
-      for (const call of f.calls) expect(call).toMatchObject({ accountId: 'owner', deviceId: phone, scopes: ['personal'] })
+      for (const call of f.calls) expect(call).toMatchObject({ accountId: 'owner', deviceId: phone, scopes: MOBILE_DEFAULT_SCOPES })
       f.invoke('ipc.invoke', { channel: 'rewind' }, 'arbitrary'); await tick()
       expect(f.calls).toHaveLength(3)
       await f.service.revoke(grant)
@@ -130,13 +135,17 @@ describe('trusted desktop permission dispatch', () => {
       expect(f.calls).toHaveLength(3)
     } finally { f.service.dispose(); await tick() }
   })
-  it('ignores phone claimed scopes, assigns explicit pairing choices, and removes advanced rights on grant replacement', async () => {
+  it('grants full mobile scopes by default, ignores phone claimed scopes when narrowed, and resets overrides on grant replacement', async () => {
     const f = fixture()
     try {
       await f.service.enable(true); await tick(); f.hello()
+      f.invoke('group.list', {}, 'default_group'); await tick()
+      expect(f.calls.at(-1)).toMatchObject({ scopes: MOBILE_DEFAULT_SCOPES, deviceId: phone })
+      await f.service.setScopes(grant, [])
+      f.calls.length = 0
       f.invoke('group.list', {}); await tick()
       expect(f.calls).toEqual([])
-      await vi.waitFor(() => expect(f.frames.find((v) => v.kind === 'result')?.payload.error).toMatchObject({ code: 'REMOTE_SCOPE_REQUIRED', uncertain: false }))
+      await vi.waitFor(() => expect(f.frames.find((v) => v.kind === 'result' && v.id === 'r')?.payload.error).toMatchObject({ code: 'REMOTE_SCOPE_REQUIRED', uncertain: false }))
       await f.service.confirm(pairing, ['groups.read'])
       expect((await f.service.status()).grants[0].scopes).toEqual(['personal', 'groups.read'])
       f.invoke('group.list', {}, 'group'); await tick()
@@ -148,15 +157,16 @@ describe('trusted desktop permission dispatch', () => {
       expect(f.calls.at(-1).authorizationId).not.toBe(priorAuthority)
       // Control frames are paced 5 ms apart, so the notice may follow a batched acknowledgement.
       await vi.waitFor(() => expect(f.frames.some((frame) => frame.kind === 'resync_required' && frame.payload.reason === 'permissions_changed')).toBe(true))
-      await f.service.setScopes(grant, ['groups.read'])
       f.grants([{ id: '55555555-5555-4555-8555-555555555555', controllerId: phone }])
-      expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
+      expect((await f.service.status()).grants[0].scopes).toEqual(MOBILE_DEFAULT_SCOPES)
+      f.grants([])
+      await expect(f.service.confirm(pairing, [])).rejects.toThrow('AUTHORIZATION_NOT_READY')
     } finally { f.service.dispose(); await tick() }
   })
-  it('fences a late reply on permission shrink without stopping the task and clears choices at next manual start', async () => {
+  it('fences a late reply on permission shrink without stopping the task and restores defaults at next manual start', async () => {
     const f = fixture()
     try {
-      await f.service.enable(true); await tick(); f.hello(); await f.service.setScopes(grant, ['groups.read'])
+      await f.service.enable(true); await tick(); f.hello()
       let resolve!: (value: { ok: boolean; status: number; body: string }) => void
       f.pause(() => new Promise((done) => { resolve = done }))
       f.invoke('group.history', { roomId: 'room' }, 'old'); await tick()
@@ -164,26 +174,23 @@ describe('trusted desktop permission dispatch', () => {
       resolve({ ok: true, status: 200, body: '{"private":"old group contents"}' }); await tick()
       expect(f.frames.filter((v) => v.kind === 'result' && v.id === 'old')).toEqual([])
       expect(f.calls.map((v) => v.call.method)).toEqual(['group.history'])
-      await f.service.setScopes(grant, ['groups.read']); await f.service.enable(false); await f.service.enable(true)
-      expect((await f.service.status()).grants[0].scopes).toEqual(['personal'])
+      await f.service.enable(false); await f.service.enable(true)
+      expect((await f.service.status()).grants[0].scopes).toEqual(MOBILE_DEFAULT_SCOPES)
     } finally { f.service.dispose(); await tick() }
   })
-  it('advertises and dispatches native Desktop schedules only after trusted schedules.read consent', async () => {
+  it('advertises and dispatches native Desktop schedules by default and fences them when schedules.read is removed', async () => {
     const f = fixture(), native = vi.fn(async (_method: string, _params: unknown, _scope: unknown, _lease: unknown) => ({ source: 'desktop_scheduler', schedules: [] }))
     f.deps.desktopSchedules = native
     f.pause(async () => ({ ok: true, status: 200, body: '{"capabilityDescriptors":[]}' }))
     try {
       await f.service.enable(true); await tick(); f.hello()
-      f.invoke('desktop.schedule.list', {}, 'denied'); await tick()
-      expect(native).not.toHaveBeenCalled()
-      await f.service.confirm(pairing, ['schedules.read'])
       f.invoke('catalog.get', {}, 'native_catalog')
       await vi.waitFor(() => expect(f.frames.find((v) => v.id === 'native_catalog' && v.kind === 'result')?.payload.capabilityDescriptors)
         .toMatchObject([{ operation: 'usage.summary.get' }, { operation: 'usage.quotas.list' },
           { operation: 'desktop.schedule.list' }, { operation: 'desktop.schedule.runs.list' }]))
       f.invoke('desktop.schedule.list', {}, 'native_list')
       await vi.waitFor(() => expect(native).toHaveBeenCalledOnce())
-      expect(native.mock.calls[0]![2]).toMatchObject({ accountId: 'owner', deviceId: phone, scopes: ['personal', 'schedules.read'] })
+      expect(native.mock.calls[0]![2]).toMatchObject({ accountId: 'owner', deviceId: phone, scopes: MOBILE_DEFAULT_SCOPES })
       await f.service.setScopes(grant, [])
       f.invoke('desktop.schedule.list', {}, 'revoked'); await tick()
       expect(native).toHaveBeenCalledOnce()

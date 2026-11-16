@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
 import { Network } from 'lucide-react'
 import type { DirectLinkStatus } from '@shared/direct-link'
-import type { MobileLinkScope } from '@shared/mobile-link-scopes'
+import { DIRECT_MOBILE_DEFAULT_SCOPES, type MobileLinkScope } from '@shared/mobile-link-scopes'
 import { MobileScopeOptions } from './MobileScopeOptions'
 import { REMOTE_BUTTON_CLASS, RemoteCopyButton, RemoteGroup, RemoteSwitch } from './remote-panel-ui'
 import { RemoteCompactRow } from './remote-compact-ui'
@@ -15,7 +15,7 @@ export function DirectMobileLink({ onRunningChange }: { onRunningChange?(running
   const [state, setState] = useState<DirectLinkStatus>(), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [open, setOpen] = useState(false), [port, setPort] = useState('0'), [bind, setBind] = useState<'lan' | 'loopback'>('lan')
   const [addresses, setAddresses] = useState(''), [ice, setIce] = useState(''), [pairing, setPairing] = useState<{ link: string; expiresAt: number }>()
-  const [scopes, setScopes] = useState<MobileLinkScope[]>(['personal']), [now, setNow] = useState(Date.now())
+  const [scopes, setScopes] = useState<MobileLinkScope[]>(DIRECT_MOBILE_DEFAULT_SCOPES), [now, setNow] = useState(Date.now())
   const alive = useRef(true), operation = useRef(0)
   const confirmedRunning = state?.running
   useEffect(() => { if (confirmedRunning !== undefined) onRunningChange?.(confirmedRunning) }, [confirmedRunning, onRunningChange])
