@@ -1,6 +1,9 @@
+import { existsSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { HarnessDefinition } from '../../contracts/harness.js'
-import { ANTIGRAVITY_CAPABILITIES } from './capabilities.js'
+import { resolveExecutable } from '../../process/owned-process.js'
+import { ANTIGRAVITY_CAPABILITIES, ANTIGRAVITY_CLI_CAPABILITIES } from './capabilities.js'
 import type { AgentProviderModule, HarnessLoginState, ProviderEnv } from './provider-module.js'
 import type { HarnessLoginProbeDeps } from '../harness-login-probes.js'
 import { antigravityCredentialEvidence } from '../antigravity-credentials.js'
@@ -9,17 +12,24 @@ import { homeOf, nonempty, probeProviderCredential, readJsonFile, readJsonObject
 export const ANTIGRAVITY_DEFINITION: HarnessDefinition = {
   id: 'antigravity',
   displayName: 'Antigravity',
-  transport: 'antigravity-cli',
-  // The supported one-shot protocol is exposed by `agy`, matching the
-  // AntigravityCliRuntime launch command. The IDE launcher is not a turn
+  transport: 'acp',
+  // Official stdio ACP server (`agy acp`); the IDE launcher is not a turn
   // protocol and must not be mistaken for a ready agent.
   detect: { command: 'agy', aliases: [], versionArgs: ['--version'] },
+  launch: { command: 'agy', args: ['acp'], env: {} },
+  variants: {
+    'antigravity-cli': {
+      launch: { command: 'agy', args: [], env: {} },
+      capabilities: ANTIGRAVITY_CLI_CAPABILITIES
+    }
+  },
   credentialModes: ['native-login'],
   permissionModes: [
+    { id: 'plan', label: 'Plan (read-only)', kunPermissionMode: 'ask-for-approval' },
     { id: 'default', label: 'Ask', kunPermissionMode: 'ask-for-approval' },
+    { id: 'accept-edits', label: 'Accept edits', kunPermissionMode: 'full-access' },
     { id: 'auto', label: 'Auto', kunPermissionMode: 'full-access' }
   ],
-  // agy lists the signed-in account's models itself (`agy models`).
   modelSource: 'probe',
   staticModels: [],
   capabilities: ANTIGRAVITY_CAPABILITIES,
@@ -57,6 +67,27 @@ function adcConfigured(path: string): boolean {
     (value.type === 'authorized_user' && typeof value.refresh_token === 'string' && typeof value.client_id === 'string')
 }
 
+function antigravityBinaryName(): string {
+  return process.platform === 'win32' ? 'agy.exe' : 'agy'
+}
+
+async function resolveAntigravityExecutable(): Promise<string> {
+  const fromPath = await resolveExecutable('agy')
+  if (fromPath) return fromPath
+  const binary = antigravityBinaryName()
+  const home = homedir()
+  const appSupport = process.platform === 'darwin'
+    ? join(home, 'Library', 'Application Support', 'Kun')
+    : process.platform === 'win32'
+      ? join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Kun')
+      : join(process.env.XDG_CONFIG_HOME ?? join(home, '.config'), 'Kun')
+  const managed = [
+    join(appSupport, 'provider-cli', 'antigravity', binary),
+    join(appSupport, 'antigravity-cli', binary)
+  ].find((candidate) => existsSync(candidate))
+  return managed ?? 'agy'
+}
+
 export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   definition: ANTIGRAVITY_DEFINITION,
   credentials: {
@@ -73,6 +104,11 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   login: ({ deps, env }) => probeAntigravityLogin(deps, env),
   nativeAccount: { kind: 'antigravity-cli', credentialEnv: 'GEMINI_API_KEY', countsAsEvidence: true },
   binaryEnv: 'KUN_ANTIGRAVITY_BINARY',
-  nativeNetwork: { transport: 'antigravity-cli', snapshotKey: 'antigravity' },
+  managedExecutable: (dataDir) => {
+    const candidate = join(dataDir, 'provider-cli', 'antigravity', antigravityBinaryName())
+    return existsSync(candidate) ? candidate : undefined
+  },
+  resolveExecutable: () => resolveAntigravityExecutable(),
+  nativeNetwork: { transport: 'acp', snapshotKey: 'antigravity' },
   update: { command: 'agy', nativeArgs: ['update'] }
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { BUILTIN_HARNESSES } from './builtin-harnesses.js'
+import { HarnessCatalog } from './harness-catalog.js'
+import { harnessTurnPermissionMode } from './harness-turn-permissions.js'
 import { HarnessDefinitionSchema } from '../contracts/harness.js'
-import { KUN_TOOL_PERMISSION_MODES } from '../contracts/policy.js'
+import { KUN_TOOL_PERMISSION_MODES, kunToolPermissionModeSettings } from '../contracts/policy.js'
 
 const ladderIndex = (mode: string): number => KUN_TOOL_PERMISSION_MODES.indexOf(
   mode as (typeof KUN_TOOL_PERMISSION_MODES)[number]
@@ -76,5 +78,27 @@ describe('BUILTIN_HARNESSES', () => {
     // Provider/SDK-only harnesses and the native loop need no setup card data.
     expect(byId.get('kun')?.setup).toBeUndefined()
     expect(byId.get('cursor')?.setup).toBeUndefined()
+  })
+
+  it('wires Antigravity onto ACP with Kun Tools while keeping the legacy CLI variant', () => {
+    const antigravity = BUILTIN_HARNESSES.find((def) => def.id === 'antigravity')!
+    expect(antigravity.transport).toBe('acp')
+    expect(antigravity.launch).toEqual({ command: 'agy', args: ['acp'], env: {} })
+    expect(antigravity.capabilities.statuses.kunTools).toEqual({ supported: true })
+    expect(harnessTurnPermissionMode(antigravity, {
+      sandboxMode: 'read-only', unattended: false, allowUnattendedFullAccess: false
+    })).toBe('plan')
+    expect(harnessTurnPermissionMode(antigravity, {
+      ...kunToolPermissionModeSettings('ask-for-approval'), unattended: false, allowUnattendedFullAccess: false
+    })).toBe('default')
+    expect(harnessTurnPermissionMode(antigravity, {
+      ...kunToolPermissionModeSettings('full-access'), unattended: false, allowUnattendedFullAccess: false
+    })).toBe('auto')
+    const legacy = new HarnessCatalog({
+      custom: () => [],
+      transportOverrides: () => ({ antigravity: 'antigravity-cli' })
+    }).get('antigravity')!
+    expect(legacy.transport).toBe('antigravity-cli')
+    expect(legacy.capabilities.statuses.kunTools.supported).toBe(false)
   })
 })

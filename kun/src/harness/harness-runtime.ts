@@ -25,6 +25,16 @@ import { ExtensionAgentProviderSource } from './extension-agent-providers.js'
 import { HarnessModelCatalogStore, harnessModelCatalogIdentity } from './harness-model-catalog-store.js'
 import { clearCursorSubscriptionCatalog, loadCursorSubscriptionCatalog, type CursorSubscriptionCatalogSource } from './cursor-subscription-catalog.js'
 
+/** Executable override from settings, `binaryEnv`, or Kun's managed CLI install directory. */
+export function acpHarnessBinaryOverride(
+  harnesses: KunServeRuntimeOptions['harnesses'],
+  dataDir: string | undefined,
+  id: string
+): string | undefined {
+  return harnessCommandOverride(harnesses, id) ?? binaryEnvOverride(id) ??
+    (dataDir ? providerModule(id)?.managedExecutable?.(dataDir) : undefined)
+}
+
 /** Executable override from the engine's environment variable (e.g. a dev build). */
 function binaryEnvOverride(id: string): string | undefined {
   const key = providerModule(id)?.binaryEnv
@@ -148,7 +158,7 @@ export function createHarnessComposition(
   const onCatalog = (definition: HarnessDefinition, catalog: HarnessModelCatalog): void =>
     modelCatalogs.record(definition, catalog)
   const acpModels = new AcpModelProbe({
-    binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
+    binaryPath: (id) => acpHarnessBinaryOverride(options().harnesses, options().dataDir, id),
     resolveSecretEnv: deps.resolveSecretEnv, onCatalog
   })
   const agentSdkModels = new AgentSdkModelProbe({

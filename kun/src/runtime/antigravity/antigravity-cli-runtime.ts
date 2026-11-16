@@ -46,7 +46,7 @@ import type {
   DelegatedTurnRuntime
 } from '../delegated-turn-runtime.js'
 import { capabilitiesV2FromLegacy } from '../../harness/effective-capabilities.js'
-import { ANTIGRAVITY_CAPABILITIES } from '../../harness/builtin-harnesses.js'
+import { ANTIGRAVITY_CLI_CAPABILITIES } from '../../harness/builtin-harnesses.js'
 import {
   delegatedCapabilityFingerprint,
   delegatedCredentialIdentity,
@@ -375,7 +375,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
         phase: prep?.resumed ? 'resumed' : 'rebased',
         ...(prep?.rebaseReason ? { reason: prep.rebaseReason } : {}),
         capabilities,
-        capabilitiesV2: capabilitiesV2FromLegacy(capabilities, ANTIGRAVITY_CAPABILITIES)
+        capabilitiesV2: capabilitiesV2FromLegacy(capabilities, ANTIGRAVITY_CLI_CAPABILITIES)
       })
       await recordHandoffInjected(
         (event) => this.deps.events.record(event),

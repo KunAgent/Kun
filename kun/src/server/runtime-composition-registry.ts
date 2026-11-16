@@ -34,6 +34,7 @@ import { buildHistoryReferenceToolProvider } from '../adapters/tool/history-refe
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
 import { buildColabToolProviders } from '../adapters/tool/colab-tool-provider.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
+import { acpHarnessBinaryOverride } from '../harness/harness-runtime.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 import { buildCodexAppServerDeps, type CodexRuntimeSharedDeps } from './runtime-composition-codex.js'
 import { buildPiRpcDeps } from './runtime-composition-pi.js'
@@ -267,7 +268,7 @@ export function createRuntimeRegistry(
       onNativeSession: (definition, session) => services.harnesses.acpModels.seed(definition, acpSessionCatalog(definition, session)),
       readiness: services.harnesses.readiness,
       binaryPath: (harnessId: string) =>
-        harnessCommandOverride(core.activeOptions.harnesses, harnessId),
+        acpHarnessBinaryOverride(core.activeOptions.harnesses, core.activeOptions.dataDir, harnessId),
       threadStore: child.threadStore,
       sessionStore: child.sessionStore,
       turns: child.turns,

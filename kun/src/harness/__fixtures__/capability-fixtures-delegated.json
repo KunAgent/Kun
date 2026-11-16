@@ -220,10 +220,10 @@
       "name": "antigravity",
       "legacy": {
         "nativeResume": true,
-        "structuredStreaming": false,
-        "kunTools": false,
-        "externalApproval": false,
-        "liveSteering": false,
+        "structuredStreaming": true,
+        "kunTools": true,
+        "externalApproval": true,
+        "liveSteering": true,
         "nativeContextTelemetry": false,
         "fork": false
       },
@@ -235,85 +235,59 @@
           "fork": {
             "supported": false,
             "reason": "upstream",
-            "upstreamRef": "antigravity cli has no native session fork"
+            "upstreamRef": "acp session/fork is not widely implemented"
           },
           "rewind": {
             "supported": false,
             "reason": "upstream",
-            "upstreamRef": "antigravity cli has no native session rewind"
+            "upstreamRef": "acp session/rewind is not widely implemented"
           },
           "structuredStreaming": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli emits final text only"
+            "supported": true
           },
           "reasoningStream": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli emits final text only"
+            "supported": true
           },
           "abort": {
             "supported": true
           },
           "sameTurnSteer": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli is one-shot per turn"
+            "supported": true
           },
           "switchModelMidSession": {
             "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli is one-shot per turn"
+            "reason": "not-implemented"
           },
           "setPermissionModeMidSession": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli is one-shot per turn"
+            "supported": true
           },
           "effort": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no effort control"
+            "supported": true
           },
           "planMode": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no plan mode"
+            "supported": true
           },
           "manualCompact": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no manual compaction"
+            "supported": true
           },
           "kunTools": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli cannot host kun tools"
+            "supported": true
           },
           "externalApproval": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli cannot defer approvals"
+            "supported": true
           },
           "nativeToolInterception": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli tools are not interceptable"
+            "supported": true
           },
           "fsMediated": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli writes files directly"
+            "supported": true
           },
           "terminalMediated": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli runs commands directly"
+            "supported": true
           },
           "nativeContextTelemetry": {
             "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli does not report context usage"
+            "reason": "not-implemented"
           },
           "imageInput": {
             "supported": true
@@ -322,24 +296,18 @@
             "supported": true
           },
           "nativeCommands": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no slash command listing"
+            "supported": true
           },
           "modes": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no mode listing"
+            "supported": true
           },
           "userInput": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli cannot host kun tools"
+            "supported": true
           }
         },
         "facts": {
           "sandbox": "none",
-          "usageReporting": "none",
+          "usageReporting": "exact",
           "compactionOwner": "harness"
         }
       },
@@ -351,85 +319,59 @@
           "fork": {
             "supported": false,
             "reason": "upstream",
-            "upstreamRef": "antigravity cli has no native session fork"
+            "upstreamRef": "acp session/fork is not widely implemented"
           },
           "rewind": {
             "supported": false,
             "reason": "upstream",
-            "upstreamRef": "antigravity cli has no native session rewind"
+            "upstreamRef": "acp session/rewind is not widely implemented"
           },
           "structuredStreaming": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli emits final text only"
+            "supported": true
           },
           "reasoningStream": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli emits final text only"
+            "supported": true
           },
           "abort": {
             "supported": true
           },
           "sameTurnSteer": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli is one-shot per turn"
+            "supported": true
           },
           "switchModelMidSession": {
             "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli is one-shot per turn"
+            "reason": "not-implemented"
           },
           "setPermissionModeMidSession": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli is one-shot per turn"
+            "supported": true
           },
           "effort": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no effort control"
+            "supported": true
           },
           "planMode": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no plan mode"
+            "supported": true
           },
           "manualCompact": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no manual compaction"
+            "supported": true
           },
           "kunTools": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli cannot host kun tools"
+            "supported": true
           },
           "externalApproval": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli cannot defer approvals"
+            "supported": true
           },
           "nativeToolInterception": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli tools are not interceptable"
+            "supported": true
           },
           "fsMediated": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli writes files directly"
+            "supported": true
           },
           "terminalMediated": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli runs commands directly"
+            "supported": true
           },
           "nativeContextTelemetry": {
             "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli does not report context usage"
+            "reason": "not-implemented"
           },
           "imageInput": {
             "supported": true
@@ -438,24 +380,18 @@
             "supported": true
           },
           "nativeCommands": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no slash command listing"
+            "supported": true
           },
           "modes": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli has no mode listing"
+            "supported": true
           },
           "userInput": {
-            "supported": false,
-            "reason": "upstream",
-            "upstreamRef": "antigravity cli cannot host kun tools"
+            "supported": true
           }
         },
         "facts": {
           "sandbox": "none",
-          "usageReporting": "none",
+          "usageReporting": "exact",
           "compactionOwner": "harness"
         }
       }

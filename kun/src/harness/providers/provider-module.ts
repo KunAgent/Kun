@@ -179,6 +179,8 @@ export type AgentProviderModule = {
   readonly binaryEnv?: string
   /** Executable shipped with Kun; `undefined` when unavailable. */
   bundled?(): { version?: string; command?: string } | undefined
+  /** Executable installed into Kun's `dataDir` when no explicit override or `binaryEnv` is set. */
+  managedExecutable?(dataDir: string): string | undefined
   /** Resolve the executable when the definition's command alone is not enough. */
   resolveExecutable?(): Promise<string>
   /**

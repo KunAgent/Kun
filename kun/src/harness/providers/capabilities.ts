@@ -93,7 +93,7 @@ const antigravityStatuses: HarnessCapabilityStatuses = {
   userInput: up('antigravity cli cannot host kun tools')
 }
 
-export const ANTIGRAVITY_CAPABILITIES: HarnessCapabilities = {
+export const ANTIGRAVITY_CLI_CAPABILITIES: HarnessCapabilities = {
   statuses: antigravityStatuses,
   facts: { sandbox: 'none', usageReporting: 'none', compactionOwner: 'harness' }
 }
@@ -117,6 +117,12 @@ export const ACP_DEFAULT_CAPABILITIES: HarnessCapabilities = {
     modes: { supported: true }
   },
   facts: { sandbox: 'native', usageReporting: 'estimated', compactionOwner: 'harness' }
+}
+
+export const ANTIGRAVITY_CAPABILITIES: HarnessCapabilities = {
+  ...ACP_DEFAULT_CAPABILITIES,
+  // ACP alone does not enable Antigravity's optional --sandbox flag; PromptResponse.usage reports exact token counts.
+  facts: { sandbox: 'none', usageReporting: 'exact', compactionOwner: 'harness' }
 }
 
 /**

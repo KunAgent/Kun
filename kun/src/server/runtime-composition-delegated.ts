@@ -37,6 +37,7 @@ import { buildCodexAppServerDeps } from './runtime-composition-codex.js'
 import { buildPiRpcDeps } from './runtime-composition-pi.js'
 import type { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
+import { acpHarnessBinaryOverride } from '../harness/harness-runtime.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
 
 export type MainDelegatedRuntimeInput = {
@@ -207,7 +208,7 @@ export function buildMainDelegatedRuntime(
     readiness: services.harnesses.readiness,
     catalog: services.harnesses.catalog,
     onNativeSession: (definition, session) => services.harnesses.acpModels.seed(definition, acpSessionCatalog(definition, session)),
-    binaryPath: (harnessId) => harnessCommandOverride(core.activeOptions.harnesses, harnessId),
+    binaryPath: (harnessId) => acpHarnessBinaryOverride(core.activeOptions.harnesses, core.activeOptions.dataDir, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),
     resolveSecretEnv: services.harnesses.resolveSecretEnv, threadStore, sessionStore,
     turns: turnService,

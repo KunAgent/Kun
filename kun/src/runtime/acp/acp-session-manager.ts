@@ -339,7 +339,11 @@ export class AcpSessionManager {
     session: AcpSessionHandle,
     ctx: AcpSessionRequest
   ): Promise<void> {
-    await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort))
+    const modelApplied = await applyAcpSessionModel(
+      conn,
+      session,
+      acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort)
+    )
     if (ctx.nativeAgentId) {
       await applyAcpSessionAgent(conn, session, ctx.nativeAgentId)
     } else {
@@ -354,8 +358,9 @@ export class AcpSessionManager {
         byCategory.set(option.category, option)
       }
     }
+    const effectiveEffort = ctx.reasoningEffort ?? modelApplied?.inferredEffort
     await this.setIfDifferent(conn, session, byCategory.get('thought_level'), [
-      ...(ctx.reasoningEffort ? effortCandidates(ctx.reasoningEffort) : [])
+      ...(effectiveEffort ? effortCandidates(effectiveEffort) : [])
     ])
     await applyAcpSessionSettings(conn, session, ctx.harnessSettings, ctx.acpPermission?.configOptionId)
   }
@@ -459,8 +464,10 @@ function effortCandidates(effort: string): string[] {
       return ['medium', 'med', 'default']
     case 'high':
       return ['high', 'max']
+    case 'xhigh':
+      return ['xhigh', 'max', 'high']
     case 'max':
-      return ['max', 'high']
+      return ['max', 'xhigh', 'high']
     default:
       return [effort.trim().toLowerCase()]
   }
