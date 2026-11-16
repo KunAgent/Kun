@@ -3,7 +3,7 @@ import type {
   DelegatedProviderKind,
   DelegatedSessionPreparation
 } from '../runtime/delegated-session-binding.js'
-import { needsHandoff } from './handoff-plan.js'
+import { isSameAgentRebase, needsHandoff } from './handoff-plan.js'
 import { priorItemsForDelegatedTurn } from '../runtime/delegated-session-binding.js'
 import { buildHandoffBrief, type HandoffBriefResult } from './handoff-brief.js'
 import { extractWorkState } from './work-state.js'
@@ -17,7 +17,7 @@ import type {
  * Structural view of the task-workspace service a delegated runtime needs —
  * avoids a hard dependency on the service implementation.
  */
-export type TaskWorkspaceLister = {
+export type TaskWorkspaceLister = import('../runtime/workspace-roots.js').WorkspaceIsolationLookup & {
   list(filter: { ownerThreadId: string }): readonly {
     path: string
     branch?: string
@@ -96,10 +96,11 @@ export function delegatedProviderKindLabel(kind: DelegatedProviderKind | 'kun'):
 }
 
 function handoffReason(preparation: DelegatedSessionPreparation): HandoffReason {
-  return preparation.rebaseReason === 'route_changed' ||
-    preparation.rebaseReason === 'new'
-    ? 'harness-switch'
-    : 'rebase'
+  if (preparation.rebaseReason === 'new') return 'harness-switch'
+  if (preparation.rebaseReason === 'route_changed') {
+    return isSameAgentRebase(preparation) ? 'rebase' : 'harness-switch'
+  }
+  return 'rebase'
 }
 
 function handoffSource(

@@ -450,6 +450,7 @@ export abstract class AgentLoopTurnLifecycle extends AgentLoopBase {
           })
         }
       } finally {
+        this.turnContextResolver.releaseTurn(threadId, turnId)
         this.modelRouting.clear(threadId, turnId)
         this.toolStormBreakers.delete(turnId)
         this.modelRoundEngine.clearTurn(turnId)

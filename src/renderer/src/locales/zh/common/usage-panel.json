@@ -71,5 +71,10 @@
   "usagePanelChartEstimateNote": "这段时间没有实际扣费，柱子按 API 参考价显示。",
   "usagePanelModelsEmpty": "这段时间没有模型用量",
   "usagePanelShowAllModels": "显示全部 {{count}} 个",
-  "usagePanelShowFewerModels": "收起"
+  "usagePanelShowFewerModels": "收起",
+  "usagePanelBreakdownLabel": "用量统计维度",
+  "usagePanelByModel": "按模型",
+  "usagePanelByAgent": "按 Agent",
+  "usagePanelAgentUsage": "Agent 用量",
+  "usagePanelAgentsEmpty": "当前周期暂无 Agent 用量。"
 }

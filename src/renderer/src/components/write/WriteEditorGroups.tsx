@@ -291,8 +291,8 @@ export function WriteEditorGroups({
               </div>
             ) : (
               <>
-                {focused && document && document.kind !== 'image' ? focusedToolbar : null}
-                {focused && document ? paperBar : null}
+                {focused && document && document.kind !== 'image' && document.kind !== 'latex' ? focusedToolbar : null}
+                {focused && document && document.kind !== 'latex' ? paperBar : null}
                 <WriteEditorGroupContent
                   document={document}
                   whiteboard={board}

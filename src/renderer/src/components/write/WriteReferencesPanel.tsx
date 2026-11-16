@@ -5,6 +5,8 @@ import { X } from 'lucide-react'
 import type { WriteQuotedSelection } from '../../write/quoted-selection'
 import { useWriteWorkspaceStore, writeBasenameFromPath } from '../../write/write-workspace-store'
 import { WriteRightPanelEmpty, WriteRightPanelHeader } from './WriteRightPanelHeader'
+import { latexSessionKey } from '../../write/latex/latex-project-store'
+import { LatexReferencesPanel } from './latex/LatexReferencesPanel'
 
 function quoteLocation(quote: WriteQuotedSelection, t: (key: string, options?: Record<string, unknown>) => string): string {
   if (quote.pageStart) return t('workReferencesPage', { page: quote.pageStart })
@@ -17,6 +19,7 @@ function quoteLocation(quote: WriteQuotedSelection, t: (key: string, options?: R
 
 export function WriteReferencesPanel({ onCollapse }: { onCollapse: () => void }): ReactElement {
   const { t } = useTranslation('common')
+  const latexKey = useWriteWorkspaceStore((state) => state.activeFileKind === 'latex' && state.activeFilePath ? latexSessionKey(state.workspaceRoot, state.activeFilePath) : null)
   const { quotes, workspaceRoot, openFile, removeQuote, clearQuotes } = useWriteWorkspaceStore(
     useShallow((state) => ({
       quotes: state.quotedSelections,
@@ -27,6 +30,7 @@ export function WriteReferencesPanel({ onCollapse }: { onCollapse: () => void })
     }))
   )
 
+  if (latexKey) return <LatexReferencesPanel sessionKey={latexKey} onCollapse={onCollapse} />
   return (
     <div className="flex h-full min-h-0 flex-col">
       <WriteRightPanelHeader

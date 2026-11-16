@@ -1,4 +1,5 @@
 import i18n from '../i18n'
+import { releaseLatexWorkspace } from './latex/latex-session-lifecycle'
 import type {
   WriteDocumentSession,
   WriteEditorGroupId,
@@ -87,12 +88,14 @@ export async function prepareActiveWriteFileForNavigation(
 ): Promise<boolean> {
   const state = get()
   const dirtyDocuments = Object.values(state.documentsByPath).filter(
-    (document) => document.kind === 'text' && document.saveStatus !== 'saved'
+    (document) => (document.kind === 'text' || document.kind === 'latex') && document.saveStatus !== 'saved'
   )
   if (dirtyDocuments.length === 0) return true
   if (state.autoSaveEnabled) return get().saveAllDocuments(workspaceRoot)
   if (window.confirm(i18n.t('common:writeSaveAllUnsavedConfirm'))) {
     return get().saveAllDocuments(workspaceRoot)
   }
-  return window.confirm(i18n.t('common:writeDiscardUnsavedChangesConfirm'))
+  const discard = window.confirm(i18n.t('common:writeDiscardUnsavedChangesConfirm'))
+  if (discard) releaseLatexWorkspace(workspaceRoot, true)
+  return discard
 }

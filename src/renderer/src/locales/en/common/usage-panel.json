@@ -71,5 +71,10 @@
   "usagePanelChartEstimateNote": "Nothing was billed in this period; the bars show the API reference price.",
   "usagePanelModelsEmpty": "No model usage in this period",
   "usagePanelShowAllModels": "Show all {{count}}",
-  "usagePanelShowFewerModels": "Show fewer"
+  "usagePanelShowFewerModels": "Show fewer",
+  "usagePanelBreakdownLabel": "Usage breakdown",
+  "usagePanelByModel": "By model",
+  "usagePanelByAgent": "By Agent",
+  "usagePanelAgentUsage": "Agent usage",
+  "usagePanelAgentsEmpty": "No Agent usage in this range yet."
 }

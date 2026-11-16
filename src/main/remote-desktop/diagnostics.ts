@@ -14,7 +14,12 @@ const CODES = new Set([
   'lease_or_authority_expired', 'configuration_changed', 'host_user_ended', 'user_ended',
   'connection_failed', 'setup_timeout', 'reconnect_failed', 'application_quit',
   'authorization_changed', 'display_changed', 'invalid_signaling', 'signal_limit',
-  'conversation_left', 'cancelled', 'host_stopped'
+  'conversation_left', 'cancelled', 'host_stopped', 'host_inactive', 'host_closing',
+  'background', 'foreground_recovery', 'provider_changed', 'replaced', 'cleanup_retry',
+  'ice_refresh_failed', 'signaling_failed', 'invalid_message', 'invalid_media_message',
+  'DESKTOP_CAPTURE_CLOSED', 'DESKTOP_START_CANCELLED', 'DESKTOP_INPUT_BACKPRESSURE',
+  'CONTROL_RPC_TIMEOUT', 'CONTROL_PROCESS_CLOSED', 'CONTROL_PROCESS_UNAVAILABLE',
+  'CONTROL_RPC_REJECTED', 'CONTROL_OPERATION_FAILED'
 ])
 
 /** Do not record remote messages, input text, SDP, ICE candidates or credentials. */

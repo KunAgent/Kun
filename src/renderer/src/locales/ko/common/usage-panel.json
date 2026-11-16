@@ -71,5 +71,10 @@
   "usagePanelChartEstimateNote": "이 기간에는 실제 청구가 없어 막대는 API 참고가로 표시됩니다.",
   "usagePanelModelsEmpty": "이 기간에는 모델 사용량이 없습니다",
   "usagePanelShowAllModels": "전체 {{count}}개 보기",
-  "usagePanelShowFewerModels": "접기"
+  "usagePanelShowFewerModels": "접기",
+  "usagePanelBreakdownLabel": "사용량 분류",
+  "usagePanelByModel": "모델별",
+  "usagePanelByAgent": "Agent별",
+  "usagePanelAgentUsage": "Agent 사용량",
+  "usagePanelAgentsEmpty": "이 기간에 Agent 사용량이 없습니다."
 }

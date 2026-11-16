@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { MobileLinkScope } from '@shared/mobile-link-scopes'
+import { MOBILE_DEFAULT_SCOPES, type MobileLinkScope } from '@shared/mobile-link-scopes'
 import type { MobileLinkStatus } from '@shared/mobile-link'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
-import { MobileScopeOptions, PERSONAL_SCOPES } from './MobileScopeOptions'
+import { MobileScopeOptions } from './MobileScopeOptions'
 import { desktopConsent, mobileRequirement } from './remote-access-state'
 import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS, RemoteGroup } from './remote-panel-ui'
 import { REMOTE_FOCUS } from './remote-compact-ui'
@@ -16,7 +16,7 @@ export function MobileGrantRow({ link, grant, onDirtyChange }: {
 }) {
   const { t } = useTranslation('common')
   const { zh, busy, revoke, setScopes } = link
-  const approved = grant.scopes ?? PERSONAL_SCOPES
+  const approved = grant.scopes ?? MOBILE_DEFAULT_SCOPES
   const serialized = scopeKey(approved)
   const [draft, setDraft] = useState<MobileLinkScope[]>(approved)
   const [saved, setSaved] = useState<string>()

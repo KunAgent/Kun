@@ -137,4 +137,75 @@ describe('composer scoped subscription quota', () => {
     expect(stale.entry?.updatedAt).toBe(first.entry?.updatedAt)
     expect(stale.refreshedAt).toBe(first.refreshedAt)
   })
+
+  it('resolves Antigravity native-login and unbound subscription profiles cleanly', async () => {
+    const fetcher = vi.fn<ProviderQuotaFetch>(async (url) => {
+      const target = String(url)
+      if (target.includes('loadCodeAssist')) {
+        return Response.json({ currentTier: { name: 'Google AI Pro' }, cloudaicompanionProject: 'proj-1' })
+      }
+      return Response.json({
+        buckets: [{ modelId: 'claude-sonnet-4-6', remainingFraction: 0.25, resetTime: '2030-03-17T17:46:40.000Z' }]
+      })
+    })
+    const antigravityNative: ProviderQuotaProbeProfile = {
+      id: 'native:antigravity',
+      name: 'Antigravity',
+      accountId: 'native:abc123',
+      presetId: 'gemini-subscription',
+      kind: 'antigravity-cli',
+      authType: 'subscription',
+      apiKey: '',
+      configured: true
+    }
+    const namedProfile: ProviderQuotaProbeProfile = {
+      id: 'gemini-subscription',
+      name: 'Antigravity Account',
+      presetId: 'gemini-subscription',
+      kind: 'antigravity-cli',
+      authType: 'subscription',
+      apiKey: '',
+      configured: true
+    }
+    let hasLogin = true
+    const resolveNative = vi.fn(async () => (hasLogin ? antigravityNative : undefined))
+    const service = new ProviderQuotaService({
+      loadSource: async () => ({ profiles: [namedProfile] }),
+      fetcher,
+      subscriptionRuntime: {
+        resolveAntigravityCredential: async () => ({ accessToken: 'ag-access', accountEmail: 'user@gmail.com' })
+      }
+    })
+    const nativeResult = await service.subscription(
+      { harnessId: 'antigravity', credentialMode: 'native-login', providerId: 'default' },
+      resolveNative
+    )
+    expect(nativeResult.entry).toMatchObject({
+      providerId: 'native:antigravity',
+      status: 'available',
+      summary: 'Google AI Pro · user@gmail.com',
+      metrics: [{ id: 'pool-claude', label: 'Claude', unit: 'percent', usedPercent: 75 }]
+    })
+
+    const namedResult = await service.subscription(
+      { harnessId: 'kun', providerId: 'gemini-subscription' },
+      resolveNative
+    )
+    expect(namedResult.entry).toMatchObject({ providerId: 'gemini-subscription', status: 'available' })
+
+    hasLogin = false
+    const missingResult = await service.subscription(
+      { harnessId: 'antigravity', credentialMode: 'native-login', providerId: 'gemini-subscription' },
+      resolveNative
+    )
+    expect(missingResult.entry).toMatchObject({ providerId: 'gemini-subscription', status: 'missing_credentials', metrics: [] })
+
+    const apiKeyService = new ProviderQuotaService({
+      loadSource: async () => ({
+        profiles: [{ ...namedProfile, id: 'bad-ag', apiKey: 'AIza-secret' }]
+      }),
+      fetcher
+    })
+    expect((await apiKeyService.subscription({ harnessId: 'kun', providerId: 'bad-ag' }, resolveNative)).entry).toBeNull()
+  })
 })

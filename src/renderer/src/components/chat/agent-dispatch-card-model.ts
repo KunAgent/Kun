@@ -31,7 +31,7 @@ export function dispatchRoutesEditable(intent: AgentDispatchIntentView): boolean
  * One row per worker. Cards written before per-worker routes existed carry
  * only the joined batch title; split it when it lines up with the workers.
  */
-export function dispatchAssignments(intent: AgentDispatchIntentView): AgentDispatchAssignmentView[] {
+export function dispatchAssignments(intent: AgentDispatchIntentView, dispatches: readonly AdeDispatchRecord[] = []): AgentDispatchAssignmentView[] {
   const recommendation = intent.recommendation
   if (recommendation.assignments?.length) return recommendation.assignments
   const route = { agentId: recommendation.agentId,
@@ -42,6 +42,8 @@ export function dispatchAssignments(intent: AgentDispatchIntentView): AgentDispa
   if (workers > 1 && labels.length === workers && labels.every(Boolean)) {
     return labels.map((label) => ({ ...route, label: label.slice(0, 64) }))
   }
+  if (workers > 1) return intent.target!.workerIds!.map((workerId, index) => ({ ...route,
+    label: dispatches.find((entry) => entry.dispatchId === intent.target?.dispatchIds?.[index] && entry.workerId === workerId)?.title ?? workerId }))
   return [{ ...route, label: recommendation.title.slice(0, 64) }]
 }
 
@@ -140,45 +142,78 @@ export function dispatchReviewState(intent: AgentDispatchIntentView,
   return reviews.includes('waived') ? 'waived' : 'passed'
 }
 
-export type WorkerProgressState = 'pending' | 'working' | 'waiting' | 'done' | 'failed' | 'cancelled' | DispatchReviewState
+export type WorkerExecutionState = 'pending' | 'working' | 'waiting' | 'done' | 'failed' | 'cancelled' | 'unknown' | 'refused' | 'skipped'
+export type WorkerProgressState = WorkerExecutionState | DispatchReviewState
 export type WorkerProgress = {
   workerId?: string
   state: WorkerProgressState
+  executionState: WorkerExecutionState
   detail?: string
+  summary?: string
+  startedAt?: string
+  finishedAt?: string
+  reportOutcome?: 'succeeded' | 'partial' | 'failed'
   waitingReason?: ActivityRow['waitingReason']
 }
 
-function fallbackProgress(intent: AgentDispatchIntentView, hasWorker: boolean): WorkerProgressState {
-  switch (dispatchPhase(intent.state)) {
-    case 'completed': case 'review': return hasWorker ? 'done' : 'cancelled'
-    case 'failed': return 'failed'
-    case 'cancelled': return 'cancelled'
-    case 'active': return hasWorker && intent.state === 'running' ? 'working' : 'pending'
-    default: return 'pending'
-  }
+function fallbackProgress(intent: AgentDispatchIntentView): WorkerExecutionState {
+  if (['pending_confirmation', 'countdown', 'paused', 'reviewing', 'queued', 'starting'].includes(intent.state)) return 'pending'
+  if (intent.state === 'cancelled') return 'cancelled'
+  return 'unknown'
 }
 
-/** Live state of the worker at `index`, from the activity feed when it has a row. */
+/** A card follows its dispatch, never the worker's subsequent assignment. */
 export function workerProgress(intent: AgentDispatchIntentView, index: number,
   rows: Readonly<Record<string, ActivityRow>>, dispatches: readonly AdeDispatchRecord[] = []): WorkerProgress {
   const workerId = intent.target?.workerIds?.[index]
-  if (!workerId) return { state: fallbackProgress(intent, false) }
   const original = originalDispatch(intent, index, dispatches)
-  if (original?.state === 'completed') return { workerId, state: completedReview(original), detail: original.verdict?.notes }
-  if (original?.state === 'failed' || original?.state === 'cancelled') return { workerId, state: original.state }
-  // Worker-wide activity may now belong to a later worker_send, not this card.
-  if (['completed', 'awaiting_parent'].includes(intent.state)) return { workerId, state: 'done' }
-  const row = rows[workerId] ?? Object.values(rows).find((entry) => entry.unitId === workerId || entry.threadId === workerId)
-  if (!row) return { workerId, state: fallbackProgress(intent, true) }
-  const detail = row.currentTool || row.progressNote || undefined
-  switch (row.state) {
-    case 'working': case 'initializing': return { workerId, state: 'working', detail }
-    case 'waiting': return { workerId, state: 'waiting', waitingReason: row.waitingReason, detail }
-    case 'failed': return { workerId, state: 'failed', detail: row.lastMessagePreview }
-    default:
-      if (row.lastOutcome === 'failed') return { workerId, state: 'failed', detail: row.lastMessagePreview }
-      if (row.lastOutcome === 'cancelled') return { workerId, state: 'cancelled' }
-      if (row.lastOutcome === 'completed' || row.state === 'done') return { workerId, state: 'done' }
-      return { workerId, state: fallbackProgress(intent, true) }
+  const fallback = fallbackProgress(intent)
+  if (!original) return {
+    ...(workerId && !intent.target?.dispatchIds?.[index] ? { workerId } : {}),
+    state: fallback, executionState: fallback
   }
+  const summary = original.workerReport?.summary?.trim() || original.resultExcerpt?.trim() || original.failureReason?.trim() || undefined
+  const base = {
+    ...(workerId && !original.prelaunchDisposition ? { workerId } : {}),
+    ...(summary ? { summary } : {}),
+    ...(original.startedAt ? { startedAt: original.startedAt } : {}),
+    ...(original.finishedAt ? { finishedAt: original.finishedAt } : {}),
+    ...(original.workerReport ? { reportOutcome: original.workerReport.outcome } : {})
+  }
+  if (original.prelaunchDisposition) return { ...base, state: original.prelaunchDisposition, executionState: original.prelaunchDisposition }
+  if (original.state === 'completed') return { ...base, state: completedReview(original), executionState: 'done', detail: original.verdict?.notes }
+  if (original.state === 'failed' || original.state === 'cancelled') return { ...base, state: original.state, executionState: original.state }
+  if (original.state === 'uncertain') return { ...base, state: 'unknown', executionState: 'unknown' }
+  if (original.state !== 'accepted') return { ...base, state: 'pending', executionState: 'pending' }
+  const activity = workerId ? rows[workerId] ?? Object.values(rows).find((entry) => entry.unitId === workerId || entry.threadId === workerId) : undefined
+  // An unbound/restored activity row is not evidence of this dispatch's execution.
+  const row = activity && original.turnId && activity.turnId === original.turnId && !activity.restoredUnconfirmed ? activity : undefined
+  const state = row?.state === 'waiting' ? 'waiting' : original.startedAt || row?.state === 'working' ? 'working' : 'pending'
+  const detail = row?.currentTool || row?.progressNote || undefined
+  return { ...base, state, executionState: state, ...(detail ? { detail } : {}),
+    ...(state === 'waiting' && row?.waitingReason ? { waitingReason: row.waitingReason } : {}) }
+}
+
+export function dispatchRollup(progresses: readonly WorkerProgress[]): Record<WorkerExecutionState, number> {
+  const counts: Record<WorkerExecutionState, number> = { pending: 0, working: 0, waiting: 0, done: 0, failed: 0, cancelled: 0, unknown: 0, refused: 0, skipped: 0 }
+  for (const progress of progresses) counts[progress.executionState] += 1
+  return counts
+}
+
+/** Missing historical boundaries stay unknown; review writes never extend execution. */
+export function workerElapsed(progress: WorkerProgress, now: number): number | null {
+  const start = Date.parse(progress.startedAt ?? '')
+  const end = progress.finishedAt ? Date.parse(progress.finishedAt)
+    : ['working', 'waiting'].includes(progress.executionState) ? now : NaN
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start) : null
+}
+
+export function dispatchGroupElapsed(progresses: readonly WorkerProgress[], now: number): number | null {
+  const executed = progresses.filter((progress) => !['refused', 'skipped'].includes(progress.executionState) &&
+    !(progress.executionState === 'cancelled' && !progress.startedAt))
+  const timed = executed.filter((progress) => workerElapsed(progress, now) !== null)
+  if (!timed.length || timed.length !== executed.length) return null
+  const starts = timed.map((progress) => Date.parse(progress.startedAt!))
+  const ends = timed.map((progress) => progress.finishedAt ? Date.parse(progress.finishedAt) : now)
+  return Math.max(0, Math.max(...ends) - Math.min(...starts))
 }

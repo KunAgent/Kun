@@ -94,7 +94,7 @@
     "stopPhone": "Stop phone access",
     "pairRequest": "{{name}} wants access",
     "allow": "Allow",
-    "adjustPermissions": "Basic access · Adjust permissions",
+    "adjustPermissions": "Full access by default · Adjust permissions",
     "control": "Control",
     "view": "View",
     "off": "Off",

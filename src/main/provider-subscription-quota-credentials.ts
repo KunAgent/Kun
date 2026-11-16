@@ -27,6 +27,18 @@ import {
   type OpenCodeGoWebQuotaResult
 } from '../../kun/src/services/opencode-go-web-quota.js'
 import {
+  decodeAntigravityUnifiedOAuth,
+  discoverAntigravityOAuthClients,
+  resolveAntigravityQuotaCredential
+} from '../../kun/src/services/antigravity-quota-credentials.js'
+import {
+  mergeAntigravityQuotaPools,
+  mergeAntigravitySummaryWithBuckets,
+  parseAntigravityQuotaSummary
+} from '../../kun/src/services/antigravity-quota-pools.js'
+
+export { decodeAntigravityUnifiedOAuth }
+import {
   codexUserAgent,
   parseCodexCredentials,
   refreshCodexToken,
@@ -62,6 +74,7 @@ import {
   CursorQuotaSession,
   GoogleQuotaCredential,
   GrokQuotaCredential,
+  ProviderQuotaAuthorizationError,
   SubscriptionProbeContext,
   SubscriptionQuotaRuntime
 } from './provider-subscription-quota-types'
@@ -190,6 +203,57 @@ export async function probeGoogleCodeAssistQuota(
     )
   }
   const body = JSON.stringify(project ? { project } : {})
+  let summaryMetrics: ProviderQuotaMetric[] = []
+  let prefetchedQuotaPayload: unknown
+  if (client === 'antigravity') {
+    try {
+      const aicodePayload = await requestSubscriptionJson(
+        'https://aicode.googleapis.com/v1alpha:fetchQuotaStatus',
+        { method: 'GET', headers },
+        context
+      )
+      summaryMetrics = parseAntigravityQuotaSummary(aicodePayload)
+      const hasGeminiGroup = summaryMetrics.some((metric) => /\bgemini\b/i.test(metric.label))
+      const hasThirdPartyGroup = summaryMetrics.some((metric) => /\b(?:claude|gpt|3p)\b/i.test(metric.label))
+      if (summaryMetrics.length > 0 && hasGeminiGroup && hasThirdPartyGroup) {
+        return {
+          metrics: summaryMetrics,
+          ...googleSetupSummary(setupRecord, credential.accountEmail)
+        }
+      }
+      if (summaryMetrics.length === 0) {
+        prefetchedQuotaPayload = aicodePayload
+      }
+    } catch (error) {
+      if (error instanceof ProviderQuotaAuthorizationError && error.status === 401) throw error
+    }
+    if (summaryMetrics.length === 0) {
+      try {
+        const summaryPayload = await requestSubscriptionJson(
+          'https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary',
+          { method: 'POST', headers, body },
+          context
+        )
+        summaryMetrics = parseAntigravityQuotaSummary(summaryPayload)
+        if (summaryMetrics.length === 0 && !prefetchedQuotaPayload) {
+          prefetchedQuotaPayload = summaryPayload
+        }
+      } catch (error) {
+        if (error instanceof ProviderQuotaAuthorizationError && error.status === 401) throw error
+      }
+    }
+    if (summaryMetrics.length === 0 && prefetchedQuotaPayload !== undefined) {
+      try {
+        const parsed = parseGoogleCodeAssistQuota(prefetchedQuotaPayload)
+        return {
+          metrics: mergeAntigravityQuotaPools(parsed),
+          ...googleSetupSummary(setupRecord, credential.accountEmail)
+        }
+      } catch {
+        // Fall through to retrieveUserQuota.
+      }
+    }
+  }
   let quotaPayload: unknown
   try {
     quotaPayload = await requestSubscriptionJson(
@@ -197,20 +261,36 @@ export async function probeGoogleCodeAssistQuota(
       { method: 'POST', headers, body },
       context
     )
-    const metrics = parseGoogleCodeAssistQuota(quotaPayload)
+    const parsed = parseGoogleCodeAssistQuota(quotaPayload)
     return {
-      metrics,
+      metrics: client === 'antigravity'
+        ? mergeAntigravitySummaryWithBuckets(summaryMetrics, parsed)
+        : parsed,
       ...googleSetupSummary(setupRecord, credential.accountEmail)
     }
-  } catch {
-    quotaPayload = await requestSubscriptionJson(
-      'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
-      { method: 'POST', headers, body },
-      context
-    )
+  } catch (error) {
+    if (error instanceof ProviderQuotaAuthorizationError) throw error
+    try {
+      quotaPayload = await requestSubscriptionJson(
+        'https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels',
+        { method: 'POST', headers, body },
+        context
+      )
+    } catch (fallbackError) {
+      if (summaryMetrics.length > 0) {
+        return {
+          metrics: summaryMetrics,
+          ...googleSetupSummary(setupRecord, credential.accountEmail)
+        }
+      }
+      throw fallbackError
+    }
   }
+  const parsed = parseGoogleCodeAssistQuota(quotaPayload)
   return {
-    metrics: parseGoogleCodeAssistQuota(quotaPayload),
+    metrics: client === 'antigravity'
+      ? mergeAntigravitySummaryWithBuckets(summaryMetrics, parsed)
+      : parsed,
     ...googleSetupSummary(setupRecord, credential.accountEmail)
   }
 }
@@ -436,120 +516,18 @@ export async function resolveCursorSession(): Promise<CursorQuotaSession | undef
 }
 
 export async function resolveAntigravityCredential(
-  context: SubscriptionProbeContext
+  context: SubscriptionProbeContext,
+  rejectedAccessToken?: string
 ): Promise<GoogleQuotaCredential | undefined> {
-  const dbPath = process.platform === 'darwin'
-    ? join(homedir(), 'Library', 'Application Support', 'Antigravity', 'User', 'globalStorage', 'state.vscdb')
-    : process.platform === 'linux'
-      ? join(homedir(), '.config', 'Antigravity', 'User', 'globalStorage', 'state.vscdb')
-      : ''
-  if (!dbPath) return undefined
-  const [authStatusValue, unifiedTokenValue] = await Promise.all([
-    readSqliteValue(dbPath, 'antigravityAuthStatus'),
-    readSqliteValue(dbPath, 'antigravityUnifiedStateSync.oauthToken')
-  ])
-  if (!authStatusValue && !unifiedTokenValue) return undefined
-  let accountEmail = ''
-  let fallbackAccessToken = ''
-  try {
-    const record = requireRecord(
-      JSON.parse(authStatusValue ?? ''),
-      'Invalid Antigravity login state.'
-    )
-    fallbackAccessToken = stringValue(record.apiKey)
-    accountEmail = stringValue(record.email)
-  } catch {
-    // The unified OAuth record below may still be usable.
-  }
-  const tokenInfo = decodeAntigravityUnifiedOAuth(unifiedTokenValue)
-  let accessToken = tokenInfo?.accessToken || fallbackAccessToken
-  if (tokenInfo?.refreshToken) {
-    const client = await discoverAntigravityOAuthClient()
-    if (client) {
-      accessToken = await refreshAntigravityAccessToken(
-        tokenInfo.refreshToken,
-        client,
-        context
-      ).catch(() => accessToken)
-    }
-  }
-  return accessToken
-    ? { accessToken, ...(accountEmail ? { accountEmail } : {}) }
-    : undefined
-}
-
-export function decodeAntigravityUnifiedOAuth(value: string | undefined): {
-  accessToken?: string
-  refreshToken?: string
-} | undefined {
-  if (!value || !isBase64(value)) return undefined
-  const outerFields = protobufLengthFields(Buffer.from(value, 'base64'))
-  for (const entry of outerFields.filter((field) => field.number === 1)) {
-    const entryFields = protobufLengthFields(entry.value)
-    const key = entryFields.find((field) => field.number === 1)?.value.toString('utf8')
-    if (key !== 'oauthTokenInfoSentinelKey') continue
-    const wrapper = entryFields.find((field) => field.number === 2)?.value
-    const encodedTokenInfo = wrapper
-      ? protobufLengthFields(wrapper).find((field) => field.number === 1)?.value.toString('utf8')
-      : undefined
-    if (!encodedTokenInfo || !isBase64(encodedTokenInfo)) return undefined
-    const tokenFields = protobufLengthFields(Buffer.from(encodedTokenInfo, 'base64'))
-    const accessToken = tokenFields
-      .find((field) => field.number === 1)?.value.toString('utf8').trim()
-    const refreshToken = tokenFields
-      .find((field) => field.number === 3)?.value.toString('utf8').trim()
-    if (!accessToken && !refreshToken) return undefined
-    return {
-      ...(accessToken ? { accessToken } : {}),
-      ...(refreshToken ? { refreshToken } : {})
-    }
-  }
-  return undefined
+  return resolveAntigravityQuotaCredential(context, rejectedAccessToken)
 }
 
 export async function discoverAntigravityOAuthClient(): Promise<{
   clientId: string
   clientSecret: string
 } | undefined> {
-  const candidates = process.platform === 'darwin'
-    ? [
-        join(
-          '/Applications',
-          'Antigravity IDE.app',
-          'Contents',
-          'Resources',
-          'app',
-          'out',
-          'main.js'
-        ),
-        join(
-          homedir(),
-          'Applications',
-          'Antigravity IDE.app',
-          'Contents',
-          'Resources',
-          'app',
-          'out',
-          'main.js'
-        )
-      ]
-    : []
-  for (const path of candidates) {
-    try {
-      const content = await readFile(path, 'utf8')
-      const marker = 'vs/platform/cloudCode/common/oauthClient.js'
-      const start = Math.max(0, content.indexOf(marker))
-      const scope = content.slice(start, start + 4_000)
-      const clientId = scope.match(
-        /[0-9]+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com/
-      )?.[0]
-      const clientSecret = scope.match(/GOCSPX-[A-Za-z0-9_-]{28}/)?.[0]
-      if (clientId && clientSecret) return { clientId, clientSecret }
-    } catch {
-      // Try the next fixed official-app artifact.
-    }
-  }
-  return undefined
+  const clients = await discoverAntigravityOAuthClients()
+  return clients[0]
 }
 
 export async function refreshAntigravityAccessToken(

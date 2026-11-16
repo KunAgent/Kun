@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { ProviderQuotaEntry, ProviderQuotaMetric } from '@shared/provider-quota'
 import {
   classifyQuotaEntries,
+  formatCompoundResetIn,
   formatQuotaAmount,
+  groupQuotaMetrics,
+  quotaAccountLabel,
   quotaCountText,
   quotaFillPercent,
   quotaPace,
@@ -87,10 +90,50 @@ describe('quota view model', () => {
     expect(quotaCountText(metric({ usedPercent: 10 }), 'used', 'en')).toBeUndefined()
   })
 
-  it('reads plan names and leaves account addresses alone', () => {
+  it('reads plan names and extracts account addresses even when combined', () => {
     expect(quotaPlanLabel('max')).toBe('Max')
     expect(quotaPlanLabel('team_plus')).toBe('Team Plus')
     expect(quotaPlanLabel('Pro+')).toBe('Pro+')
     expect(quotaPlanLabel('me@example.com')).toBeUndefined()
+    expect(quotaAccountLabel('me@example.com')).toBe('me@example.com')
+    expect(quotaPlanLabel('Google AI Pro · user@gmail.com')).toBe('Google AI Pro')
+    expect(quotaAccountLabel('Google AI Pro · user@gmail.com')).toBe('user@gmail.com')
+    expect(quotaPlanLabel('standard-tier · user@gmail.com')).toBe('Standard Tier')
+    expect(quotaPlanLabel('Antigravity · user@gmail.com', 'Antigravity')).toBeUndefined()
+    expect(quotaPlanLabel('Google AI Pro · user@gmail.com', 'Antigravity')).toBe('Google AI Pro')
+    expect(quotaAccountLabel('standard-tier · user@gmail.com')).toBe('user@gmail.com')
+  })
+
+  it('groups Antigravity 5h and Weekly model limits and formats compound reset countdowns', () => {
+    const grouped = groupQuotaMetrics([
+      metric({ id: 'gemini-weekly', label: 'Gemini Models · Weekly limit', usedPercent: 10, windowSeconds: 604_800 }),
+      metric({ id: 'gemini-5h', label: 'Gemini Models · 5h limit', usedPercent: 2, windowSeconds: 18_000 }),
+      metric({ id: '3p-weekly', label: 'Claude and GPT models · Weekly limit', usedPercent: 0, windowSeconds: 604_800 }),
+      metric({ id: '3p-5h', label: 'Claude and GPT models · 5h limit', usedPercent: 0, windowSeconds: 18_000 })
+    ])
+    expect(grouped).toEqual([
+      {
+        title: 'Gemini Models',
+        items: [
+          { metric: expect.objectContaining({ id: 'gemini-weekly' }), windowTitle: 'Weekly limit' },
+          { metric: expect.objectContaining({ id: 'gemini-5h' }), windowTitle: '5h limit' }
+        ]
+      },
+      {
+        title: 'Claude and GPT models',
+        items: [
+          { metric: expect.objectContaining({ id: '3p-weekly' }), windowTitle: 'Weekly limit' },
+          { metric: expect.objectContaining({ id: '3p-5h' }), windowTitle: '5h limit' }
+        ]
+      }
+    ])
+
+    expect(groupQuotaMetrics([
+      metric({ id: 'five-hour', label: '5-hour usage', usedPercent: 40 })
+    ])).toBeUndefined()
+
+    expect(formatCompoundResetIn(new Date(NOW + (6 * 24 + 6) * HOUR).toISOString(), NOW)).toBe('Resets in 6d 6h')
+    expect(formatCompoundResetIn(new Date(NOW + 4 * HOUR + 25 * 60_000).toISOString(), NOW)).toBe('Resets in 4h 25m')
+    expect(formatCompoundResetIn(new Date(NOW - HOUR).toISOString(), NOW)).toBeUndefined()
   })
 })

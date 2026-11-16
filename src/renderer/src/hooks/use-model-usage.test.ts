@@ -86,6 +86,43 @@ describe('model usage helpers', () => {
     expect(normalized.days.map((bucket) => bucket.date)).toEqual(['2026-05-01', '2026-05-02'])
     expect(normalized.totals.activeDays).toBe(1)
     expect(normalized.scope).toBe('all')
+    expect(normalized.agents).toEqual([])
+  })
+
+  it('normalizes agent breakdown buckets alongside models', () => {
+    const normalized = normalizeModelUsageResponse({
+      group_by: 'model',
+      scope: 'primary',
+      from: '2026-05-01',
+      to: '2026-05-02',
+      timezone: 'UTC',
+      buckets: [{ model: 'gemini-3-pro', total_tokens: 200, turns: 2 }],
+      agents: [
+        { harness_id: 'antigravity', input_tokens: 150, output_tokens: 50, total_tokens: 200, turns: 2, thread_count: 1 },
+        { harness_id: 'kun', input_tokens: 80, output_tokens: 20, total_tokens: 100, turns: 1, thread_count: 1 }
+      ],
+      days: [],
+      totals: { total_tokens: 300, turns: 3 }
+    })
+
+    expect(normalized.agents).toEqual([
+      expect.objectContaining({
+        harnessId: 'antigravity',
+        inputTokens: 150,
+        outputTokens: 50,
+        totalTokens: 200,
+        turns: 2,
+        threadCount: 1
+      }),
+      expect.objectContaining({
+        harnessId: 'kun',
+        inputTokens: 80,
+        outputTokens: 20,
+        totalTokens: 100,
+        turns: 1,
+        threadCount: 1
+      })
+    ])
   })
 
   it('normalizes the response scope and falls back to all when missing', () => {

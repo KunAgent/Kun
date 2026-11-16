@@ -1,0 +1,162 @@
+.latex-create-dialog {
+  width: min(700px,calc(100vw - 36px));
+  max-height: 85vh;
+  overflow: auto;
+  border: 1px solid var(--ds-border);
+  border-radius: 22px;
+  background: var(--ds-surface-card);
+  padding: 26px;
+  color: var(--ds-text);
+  box-shadow: 0 24px 80px #0003;
+}
+
+.latex-create-dialog h2 {
+  margin: 0;
+  font-size: 20px;
+  letter-spacing: -.03em;
+  font-weight: 600;
+}
+
+.latex-create-dialog>p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--ds-text-muted,#777);
+  margin: 7px 0 22px;
+}
+
+.latex-create-fields {
+  display: grid;
+  grid-template-columns: 1fr 210px;
+  gap: 22px;
+}
+
+.latex-create-fields label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.latex-create-name {
+  width: 100%;
+  margin: 4px 0 20px;
+  padding: 10px 12px;
+  outline: none;
+  border: 1px solid var(--ds-border);
+  border-radius: 10px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.latex-template {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 12px 13px;
+  margin: 0 0 8px;
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  text-align: left;
+}
+
+.latex-template[aria-pressed=true] {
+  border-color: #5b78ff88;
+  background: #5b78ff06;
+  box-shadow: 0 0 0 1px #5b78ff22;
+}
+
+.latex-template strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.latex-template small {
+  font-size: 11px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-create-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 18px 15px;
+  border: 1px solid var(--ds-border);
+  background: #88888804;
+  border-radius: 13px;
+  font: 11px ui-monospace,monospace;
+}
+
+.latex-create-preview strong {
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+
+.latex-create-preview small {
+  font-size: 10px;
+  color: var(--ds-text-muted,#777);
+  line-height: 1.7;
+  margin-top: 8px;
+}
+
+.latex-create-auto {
+  display: flex!important;
+  align-items: center;
+  gap: 7px;
+  margin-top: 15px;
+}
+
+.latex-create-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  align-items: center;
+  margin-top: 20px;
+  font-size: 12px;
+}
+
+.latex-new-menu {
+  position: absolute;
+  z-index: 60;
+  top: 83px;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  background: var(--ds-surface-card);
+  border: 1px solid var(--ds-border);
+  border-radius: 13px;
+  box-shadow: 0 12px 34px #0002;
+}
+
+.latex-new-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  border-radius: 8px;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 12px;
+}
+
+.latex-new-menu button:hover {
+  background: #8881;
+}
+
+.latex-new-menu hr {
+  margin: 5px;
+  border-color: var(--ds-border);
+}
+
+@media(max-width:850px) {
+  .latex-create-fields {
+    grid-template-columns: 1fr;
+  }
+  .latex-create-preview {
+    display: none;
+  }
+}

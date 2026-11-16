@@ -71,5 +71,10 @@
   "usagePanelChartEstimateNote": "ช่วงนี้ไม่มีการเรียกเก็บจริง แท่งแสดงตามราคาอ้างอิง API",
   "usagePanelModelsEmpty": "ไม่มีการใช้โมเดลในช่วงนี้",
   "usagePanelShowAllModels": "แสดงทั้งหมด {{count}} รายการ",
-  "usagePanelShowFewerModels": "ย่อ"
+  "usagePanelShowFewerModels": "ย่อ",
+  "usagePanelBreakdownLabel": "การจำแนกการใช้งาน",
+  "usagePanelByModel": "ตามโมเดล",
+  "usagePanelByAgent": "ตาม Agent",
+  "usagePanelAgentUsage": "การใช้งานตาม Agent",
+  "usagePanelAgentsEmpty": "ยังไม่มีการใช้งาน Agent ในช่วงเวลานี้"
 }

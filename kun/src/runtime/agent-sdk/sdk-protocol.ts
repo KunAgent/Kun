@@ -226,6 +226,8 @@ export interface SdkQueryOptions {
   effort?: 'low' | 'medium' | 'high' | 'max'
   thinking?: { type: 'adaptive' } | { type: 'disabled' }
   cwd?: string
+  /** Extra canonical directories Claude Code may reach besides `cwd`. */
+  additionalDirectories?: string[]
   systemPrompt?: string | SdkSystemPromptPreset
   /** Base set of Claude Code built-ins. An empty array disables all built-ins. */
   tools?: string[] | { type: 'preset'; preset: 'claude_code' }

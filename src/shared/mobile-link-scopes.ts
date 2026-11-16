@@ -10,8 +10,15 @@ export function computerDesktopScopes(raw: unknown): MobileLinkScope[] {
     raw.includes('desktop.control') && !raw.includes('desktop.view')) throw Error('INVALID_SCOPES')
   return MOBILE_LINK_SCOPES.filter(scope => raw.includes(scope))
 }
-/** The explicit phone-remote switch includes desktop viewing and input, not unrelated advanced access. */
-export const MOBILE_REMOTE_SCOPES: MobileLinkScope[] = ['personal', 'desktop.view', 'desktop.control']
+/** Default phone access includes all non-desktop mobile capabilities; users may narrow per device. */
+export const MOBILE_DEFAULT_SCOPES: MobileLinkScope[] = [
+  'personal', 'groups.read', 'groups.write', 'collaboration.read',
+  'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage'
+]
+/** The unified phone-remote switch includes full phone access plus desktop viewing and input. */
+export const MOBILE_REMOTE_SCOPES: MobileLinkScope[] = [...MOBILE_DEFAULT_SCOPES, 'desktop.view', 'desktop.control']
+/** Direct LAN/tunnel pairing grants all direct-compatible mobile and desktop scopes by default. */
+export const DIRECT_MOBILE_DEFAULT_SCOPES: MobileLinkScope[] = MOBILE_REMOTE_SCOPES.filter((scope) => scope !== 'shares.manage')
 export function mobileLinkScopes(raw: unknown): MobileLinkScope[] {
   if (raw === undefined) return ['personal']
   if (!Array.isArray(raw) || raw.length > MOBILE_LINK_SCOPES.length || new Set(raw).size !== raw.length ||

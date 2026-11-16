@@ -35,6 +35,7 @@ import type {
   ToolHost,
   ToolHostContext
 } from '../ports/tool-host.js'
+import { resolveWorkspaceRoots, type WorkspaceRootSet } from '../runtime/workspace-roots.js'
 import type { UserInputGate } from '../ports/user-input-gate.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
 import type { ApprovalReviewPort } from '../ports/approval-review.js'
@@ -115,6 +116,7 @@ export type KunToolContextBoundary = Pick<
 >
 
 export type KunToolBridgeHostDeps = {
+  workspaceRootsForTurn?: (threadId: string, turnId: string) => WorkspaceRootSet | undefined
   threadStore: ThreadStore
   sessionStore: SessionStore
   registry: CapabilityRegistry
@@ -152,6 +154,7 @@ export type KunToolBridgeHostDeps = {
 
 /** One consistent snapshot of the turn state listing and prompts share. */
 export type KunToolBridgeTurnScope = {
+  workspaceRoots: WorkspaceRootSet
   thread: ThreadRecord
   turn: ThreadRecord['turns'][number]
   plan: { planMode: boolean; guiPlan?: GuiPlanContext }
@@ -175,6 +178,8 @@ export interface KunToolBridgeHost {
     threadId: string,
     turnId: string,
     opts?: {
+      /** Canonical root set shared with the native launch. */
+      workspaceRoots?: WorkspaceRootSet
       /** Raw user text used for skill resolution; defaults to `turn.prompt`. */
       skillPrompt?: string
       /** Caller-resolved route (listing may precede turn metadata persistence). */
@@ -311,9 +316,9 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     const context: ToolHostContext = {
       threadId: thread.id,
       turnId: turn.id,
-      workspace: thread.workspace,
-      ...(thread.additionalWorkspaces?.length
-        ? { additionalWorkspaces: thread.additionalWorkspaces }
+      workspace: scope.workspaceRoots.primary,
+      ...(scope.workspaceRoots.extras.length
+        ? { additionalWorkspaces: scope.workspaceRoots.extras }
         : {}),
       approvalPolicy: scope.approvalPolicy,
       approvalReviewer: scope.approvalReviewer,
@@ -394,6 +399,10 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     const thread = await deps.threadStore.get(threadId)
     const turn = thread?.turns.find((candidate) => candidate.id === turnId)
     if (!thread || !turn) return null
+    const workspaceRoots = opts?.workspaceRoots
+      ?? scopeByTurn.get(skillTurnKey(threadId, turnId))?.workspaceRoots
+      ?? deps.workspaceRootsForTurn?.(threadId, turnId)
+      ?? await resolveWorkspaceRoots(thread)
     const graphPolicy = delegatedGraphTurnPolicy(turn)
     const dedicatedSvgTurn = turn.guiDesignArtifact?.kind === 'svg' && !graphPolicy
     // A dedicated SVG-artifact turn is design work, not plan work — suppress
@@ -416,7 +425,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     const skillResolution = !roomSkillsDisabled && deps.skillRuntime
       ? await deps.skillRuntime.resolveTurn({
           prompt,
-          workspace: thread.workspace,
+          workspace: workspaceRoots.primary,
           threadId,
           turnId,
           ...(allowedSkillIds ? { allowedSkillIds } : {}),
@@ -432,7 +441,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
       !roomSkillsDisabled &&
       typeof deps.skillRuntime?.availableSkillIdsForWorkspace === 'function'
         ? await deps.skillRuntime.availableSkillIdsForWorkspace(
-            thread.workspace,
+            workspaceRoots.primary,
             blockedSkillIds,
             allowedSkillIds
           )
@@ -440,6 +449,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     const scope: KunToolBridgeTurnScope = {
       thread,
       turn,
+      workspaceRoots,
       plan,
       graphPolicy,
       dedicatedSvgTurn,
@@ -520,6 +530,14 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     // in-flight calls. Turns that never listed (e.g. Kun Tools MCP direct
     // calls) fall back to live policy resolution.
     const captured = scopeByTurn.get(skillTurnKey(threadId, turnId))
+    let workspaceRoots: WorkspaceRootSet
+    try {
+      workspaceRoots = captured?.workspaceRoots
+        ?? deps.workspaceRootsForTurn?.(threadId, turnId)
+        ?? await resolveWorkspaceRoots(thread)
+    } catch (error) {
+      return { output: error instanceof Error ? error.message : 'Workspace roots are unavailable', isError: true }
+    }
     const actingModelRoute = captured?.actingModelRoute ?? turn.actingModelRoute
     if (!actingModelRoute) {
       return { output: 'Acting model route is unavailable; tool execution was denied', isError: true }
@@ -527,6 +545,7 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
     const scope: KunToolBridgeTurnScope = {
       thread,
       turn,
+      workspaceRoots,
       plan,
       graphPolicy,
       dedicatedSvgTurn,
@@ -540,9 +559,11 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         : resolvePolicy(thread, turn)),
       actingModelRoute,
       skillResolution: undefined,
-      activeSkillIds: await resolveActiveSkillIds(thread, turn),
+      activeSkillIds: await resolveActiveSkillIds({ ...thread, workspace: workspaceRoots.primary }, turn),
       listingSkillIds: []
     }
+    // MCP callers can execute before listing; the first call still pins scope.
+    if (!captured) scopeByTurn.set(skillTurnKey(threadId, turnId), scope)
     const discoveryContext = buildToolContext(scope, {
       signal: call.signal,
       activeSkillIds: scope.activeSkillIds

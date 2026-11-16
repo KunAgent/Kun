@@ -43,7 +43,14 @@ if (process.platform === 'win32') {
     for (const name of ['kun_windows_startup.node', 'kun-owned-launcher.exe']) {
       files[name] = createHash('sha256').update(await readFile(join(output, name))).digest('hex')
     }
-    await writeFile(join(output, 'manifest.json'), JSON.stringify({ version: 1, arch, files }, null, 2) + '\n')
+    const serviceVersion = (process.env.KUN_APP_VERSION || process.env.KUN_RELEASE_VERSION ||
+      JSON.parse(await readFile(join(root, 'package.json'), 'utf8')).version).trim()
+    if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(serviceVersion))
+      throw Error('Invalid Windows helper service version')
+    let sourceCommit
+    try { sourceCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim() }
+    catch { /* Source archives can still build; CI candidates require provenance. */ }
+    await writeFile(join(output, 'manifest.json'), JSON.stringify({ version: 1, arch, serviceVersion, sourceCommit, files }, null, 2) + '\n')
     console.log(`[windows-startup] Built integrity-checked helpers for ${arch}`)
   } finally { await rm(work, { recursive: true, force: true }) }
 }

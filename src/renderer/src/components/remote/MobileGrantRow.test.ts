@@ -33,20 +33,25 @@ async function click(text: string) {
   expect(button).toBeTruthy(); await act(async () => button.click())
 }
 async function advanced() { await act(async () => (container.querySelector('details input') as HTMLInputElement).click()) }
-it('paired desktop access is included without per-phone controls or a save step', async () => {
+it('paired desktop and advanced access are included by default without per-phone controls or a save step', async () => {
   await act(async () => root.render(createElement(Harness)))
   expect(container.textContent).toContain('查看与控制 · 已包含')
+  expect(container.textContent).toContain('已全部开启')
+  const checkboxes = [...container.querySelectorAll('details input')] as HTMLInputElement[]
+  expect(checkboxes).toHaveLength(7)
+  expect(checkboxes.every(input => input.checked)).toBe(true)
   expect(container.querySelector('[aria-pressed]')).toBeNull()
   expect([...container.querySelectorAll('button')].some(b => b.textContent === '保存权限')).toBe(false)
   expect(save).not.toHaveBeenCalled()
 })
-it('keeps unrelated advanced changes explicit and preserves included desktop access', async () => {
+it('keeps manual permission narrowing explicit and preserves included desktop access', async () => {
   await act(async () => root.render(createElement(Harness))); await advanced()
   expect(save).not.toHaveBeenCalled()
   gate.allowed = false; await click('保存权限'); expect(save).not.toHaveBeenCalled()
   gate.allowed = true; await click('保存权限')
-  expect(save).toHaveBeenCalledWith('grant', expect.arrayContaining([...MOBILE_REMOTE_SCOPES, 'groups.read']))
-  expect(save.mock.calls[0][1]).toHaveLength(4)
+  const expected = MOBILE_REMOTE_SCOPES.filter(scope => !['groups.read', 'groups.write', 'collaboration.read'].includes(scope))
+  expect(save).toHaveBeenCalledWith('grant', expect.arrayContaining(expected))
+  expect(save.mock.calls[0][1]).toHaveLength(expected.length)
   await act(async () => apply(true))
   expect(container.textContent).toContain('权限已保存')
   expect(container.textContent).not.toContain('有未保存的权限变更')
@@ -56,7 +61,7 @@ it('keeps an advanced draft after a failed save and restores it on cancel', asyn
   await act(async () => apply(false))
   expect(container.textContent).toContain('权限未保存，请重试')
   await click('取消')
-  expect((container.querySelector('details input') as HTMLInputElement).checked).toBe(false)
+  expect((container.querySelector('details input') as HTMLInputElement).checked).toBe(true)
   expect(container.textContent).toContain('查看与控制 · 已包含')
 })
 it('does not claim advanced permissions saved before the server echoes them', async () => {
@@ -68,7 +73,7 @@ it('does not claim advanced permissions saved before the server echoes them', as
 it('preserves advanced drafts during polling without changing desktop access', async () => {
   await act(async () => root.render(createElement(Harness)))
   await advanced(); await act(async () => poll([...MOBILE_REMOTE_SCOPES].reverse()))
-  expect((container.querySelector('details input') as HTMLInputElement).checked).toBe(true)
+  expect((container.querySelector('details input') as HTMLInputElement).checked).toBe(false)
   expect(container.textContent).toContain('有未保存的权限变更')
 })
 it('asks before revoking the whole device', async () => {

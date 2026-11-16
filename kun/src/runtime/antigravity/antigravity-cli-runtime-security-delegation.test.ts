@@ -256,7 +256,6 @@ describe('AntigravityCliRuntime', () => {
       delegatedCapabilityFingerprint({
         systemPrompt: '',
         threadPersona: '',
-        effort: 'medium',
         planMode: false,
         approvalPolicy: 'on-request',
         sandboxMode: 'workspace-write',

@@ -218,6 +218,8 @@
     "continueLocalSession": "로컬 세션 이어가기",
     "nextTurnHint": "다음 턴부터 적용됩니다. Code 스레드는 항상 Kun을 사용합니다.",
     "switchConfirmTitle": "{{name}}(으)로 전환하시겠습니까?",
+    "workspaceScope": "작업 범위는 그대로입니다 · 폴더 {{total}}개",
+    "workspaceUnsupported": "{{name}}은(는) 아직 여러 폴더 작업 범위를 지원하지 않습니다. Kun과 모든 폴더가 선택된 상태로 유지됩니다.",
     "switchConfirmBody": "다음 턴은 새 하네스에서 새 세션을 시작하고 핸드오프 요약을 전달합니다. 이전 턴은 원래 하네스를 유지합니다.",
     "switchConfirmYes": "하네스 전환"
   },

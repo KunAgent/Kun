@@ -135,6 +135,9 @@ export async function enqueueRoomTurn(deps: RoomRuntimeDeps, threadId: string,
     return turn.id
   }
   if (existing) return reuse(existing)
+  if (['completed', 'failed', 'cancelled'].includes(run.status)) {
+    throw new Error('Original room run has already ended; start a new attempt')
+  }
   if (run.admissionAttempted) {
     await updateRoomRun(deps.store, run.id, { status: 'recovery_required' })
     throw new Error('Original room run admission requires reconciliation')

@@ -5,6 +5,9 @@ import { shouldAutoTitleThread } from '../lib/thread-title'
 import { findReusableEmptyThreadId } from './chat-store-runtime-helpers'
 import { isCodeThread } from './chat-store-runtime'
 import { readDesignThreadRegistry } from '../design/design-thread-registry'
+import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
+import { additionalWorkspacesEqual, additionalWorkspacesForThread, isMultiRootWorktreeBlocked } from '../lib/code-workspace-folder-sets'
+import i18n from '../i18n'
 
 export function shouldRenameReusedSendThread(
   threads: readonly NormalizedThread[],
@@ -22,8 +25,14 @@ export function createNewSendThread(
   workspaceRoot: string,
   adeSend: boolean
 ): ReturnType<AgentProvider['createThread']> {
+  const additionalWorkspaces = additionalWorkspacesForThread(workspaceRoot,
+    extraRootsForWorkspace(workspaceRoot, input.context.get().codeWorkspaceFolderSets))
+  if (isMultiRootWorktreeBlocked(additionalWorkspaces.length, input.adeDraft?.isolation)) {
+    throw new Error(i18n.t('common:codeProjectWorktreeMultiRootBlocked'))
+  }
   return provider.createThread({
     workspace: workspaceRoot,
+    ...(additionalWorkspaces.length ? { additionalWorkspaces } : {}),
     workspaceIsolation: input.adeDraft?.isolation ?? 'local',
     title: input.generatedTitle,
     titleAuto: true,
@@ -50,6 +59,9 @@ export function createNewSendThread(
 export async function reusableThreadForSend(input: PreparedThreadSend, workspaceRoot: string): Promise<string | null> {
   if (input.adeDraft || input.composerCollaborationEnabled || input.composerCollaborationExplicit || input.codeProjectRoute) return null
   const { get } = input.context
+  const additionalWorkspaces = additionalWorkspacesForThread(workspaceRoot,
+    extraRootsForWorkspace(workspaceRoot, get().codeWorkspaceFolderSets))
   return findReusableEmptyThreadId(get(), input.provider, workspaceRoot,
-    (thread) => isCodeThread(thread, get().clawChannels, undefined, readDesignThreadRegistry()))
+    (thread) => isCodeThread(thread, get().clawChannels, undefined, readDesignThreadRegistry()) &&
+      additionalWorkspacesEqual(thread.additionalWorkspaces, additionalWorkspaces))
 }

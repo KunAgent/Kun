@@ -6,6 +6,7 @@ import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { electronHostForNativeModules } from '../process/host-node.js'
+import { isNpmDistribution } from '../cli/npm-distribution.js'
 
 /**
  * The terminal renderer (opentui) drives a native Zig core through Node's
@@ -181,7 +182,7 @@ export function tuiHandoffEnv(
   if (process.versions.electron) {
     if (!next.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()) next.KUN_PACKAGED_RUNTIME_EXECUTABLE = process.execPath
   } else if (!next.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim() && !next.KUN_HOST_NODE_EXECUTABLE?.trim()) {
-    const electron = electronHost()
+    const electron = isNpmDistribution() ? null : electronHost()
     if (electron) next.KUN_PACKAGED_RUNTIME_EXECUTABLE = electron
     else next.KUN_HOST_NODE_EXECUTABLE = process.execPath
   }

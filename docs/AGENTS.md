@@ -52,6 +52,9 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   profile claims, matching participant records and process birth identities.
   Keep Manager alive until consumers exit. Recheck identity before each signal
   and escalation; never infer shutdown authority from an HTTP timeout.
+  Manager discovery can already be unpublished while its process is still
+  exiting. Recovery may then use the matching canonical claims and verified
+  process birth identities; invalid or conflicting discovery still blocks it.
 - Main-window close, platform Quit, updater exit, and storage relocation use
   the same shutdown barrier. Close admission and restart/recovery timers before
   awaiting cleanup; collect each failure without skipping remaining resources.
@@ -109,6 +112,15 @@ uses the internal `claw` name, and Work retains the internal `write` name, for c
   owner is open; it exits after consumers when that owner closes. Phone
   connectivity and scheduled execution stop with the application. Reopening
   reads existing history; it does not delete or recreate business data.
+
+## Standalone npm Candidates
+
+The npm candidate build reuses `kun/` through a dedicated staging manifest.
+It must not require the desktop application, source checkout or Electron at
+installation/runtime. Desktop still uses its own bundled fixed build. Candidate
+pack/install/acceptance are read-only with respect to registries; do not add an
+implicit publish or tag-promotion step. Real target receipts, not mocked native
+bindings, establish platform support. See [npm distribution](./kun-standalone-npm.md).
 
 ## Allowed Extension Path
 

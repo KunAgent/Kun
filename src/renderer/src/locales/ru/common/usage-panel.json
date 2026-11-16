@@ -71,5 +71,10 @@
   "usagePanelChartEstimateNote": "За период не было списаний; столбцы показывают справочную цену API.",
   "usagePanelModelsEmpty": "За этот период модели не использовались",
   "usagePanelShowAllModels": "Показать все ({{count}})",
-  "usagePanelShowFewerModels": "Свернуть"
+  "usagePanelShowFewerModels": "Свернуть",
+  "usagePanelBreakdownLabel": "Детализация использования",
+  "usagePanelByModel": "По моделям",
+  "usagePanelByAgent": "По Agent",
+  "usagePanelAgentUsage": "Использование по Agent",
+  "usagePanelAgentsEmpty": "В этом периоде нет использования Agent."
 }

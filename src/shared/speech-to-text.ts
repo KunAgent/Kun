@@ -27,7 +27,7 @@ export function isSpeechToTextConfigured(
   if (speechToText.protocol === 'local-whisper' || speechToText.protocol === 'gemini-cli-audio') {
     return speechToText.enabled && Boolean(speechToText.model.trim())
   }
-  if (speechToText.protocol === 'xai-stt') {
+  if (speechToText.protocol === 'xai-stt' || speechToText.protocol === 'deepseek-asr') {
     return (
       speechToText.enabled &&
       Boolean(speechToText.baseUrl.trim()) &&

@@ -39,6 +39,7 @@ import type { ContextWindowBudget } from './context-window-budget.js'
 import type { ContextWindowStateRestore } from '../services/context-window-state.js'
 
 export type AgentLoopOptions = {
+  taskWorkspaces?: import('../runtime/workspace-roots.js').WorkspaceIsolationLookup
   threadStore: ThreadStore
   sessionStore: SessionStore
   approvalGate: ApprovalGate

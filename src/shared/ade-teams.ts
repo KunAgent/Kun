@@ -85,7 +85,27 @@ export type AdeRunWorkerChecksResult = {
   userReport: string
 }
 
+export type AdeWorkerReport = {
+  summary: string
+  outcome: 'succeeded' | 'partial' | 'failed'
+  filesChanged?: string[]
+  checks?: Array<Omit<AdeQualityCheck, 'source'>>
+  risks?: string[]
+  submittedAt: string
+  revision?: ReviewRevision
+}
+
 export type AdeDispatchRecord = {
+  dispatchIntentId?: string
+  prelaunchDisposition?: 'refused' | 'skipped'
+  parentTurnId?: string
+  turnId?: string
+  outcome?: 'completed' | 'failed' | 'aborted'
+  workerReport?: AdeWorkerReport
+  resultExcerpt?: string
+  failureReason?: string
+  startedAt?: string
+  finishedAt?: string
   dispatchId: string
   teamId: string
   workerId: string

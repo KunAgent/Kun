@@ -430,6 +430,78 @@ describe('daily usage service', () => {
     })
   })
 
+  it('aggregates usage by agent harness_id and filters by relation scope', () => {
+    const records = [
+      {
+        threadId: 'thr_ag_1',
+        harnessId: 'antigravity',
+        model: 'gemini-3-pro',
+        completedAt: '2026-05-01T10:00:00.000Z',
+        relation: 'primary' as const,
+        usage: usage({ promptTokens: 400, completionTokens: 100, totalTokens: 500 })
+      },
+      {
+        threadId: 'thr_ag_2',
+        harnessId: 'antigravity',
+        model: 'claude-sonnet-4-5',
+        completedAt: '2026-05-01T11:00:00.000Z',
+        relation: 'primary' as const,
+        usage: usage({ promptTokens: 300, completionTokens: 100, totalTokens: 400 })
+      },
+      {
+        threadId: 'thr_kun_default',
+        model: 'deepseek-chat',
+        completedAt: '2026-05-01T12:00:00.000Z',
+        relation: 'primary' as const,
+        usage: usage({ promptTokens: 200, completionTokens: 50, totalTokens: 250 })
+      },
+      {
+        threadId: 'thr_kun_side',
+        harnessId: 'claude-code',
+        model: 'claude-opus-4-6',
+        completedAt: '2026-05-01T13:00:00.000Z',
+        relation: 'side' as const,
+        usage: usage({ promptTokens: 900, completionTokens: 100, totalTokens: 1000 })
+      }
+    ]
+
+    const primaryResponse = buildModelUsageResponse(records, {
+      groupBy: 'model',
+      from: '2026-05-01',
+      to: '2026-05-01',
+      timezone: 'UTC',
+      scope: 'primary'
+    })
+    expect(ModelUsageResponseSchema.parse(primaryResponse)).toEqual(primaryResponse)
+    expect(primaryResponse.agents).toEqual([
+      expect.objectContaining({
+        harness_id: 'antigravity',
+        total_tokens: 900,
+        turns: 2,
+        thread_count: 2
+      }),
+      expect.objectContaining({
+        harness_id: 'kun',
+        total_tokens: 250,
+        turns: 1,
+        thread_count: 1
+      })
+    ])
+
+    const allResponse = buildModelUsageResponse(records, {
+      groupBy: 'model',
+      from: '2026-05-01',
+      to: '2026-05-01',
+      timezone: 'UTC',
+      scope: 'all'
+    })
+    expect(allResponse.agents?.map((bucket) => bucket.harness_id)).toEqual([
+      'claude-code',
+      'antigravity',
+      'kun'
+    ])
+  })
+
   it('tracks complete, partial, and unavailable reference-price coverage', () => {
     const response = buildDailyUsageResponse([
       {

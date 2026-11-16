@@ -103,7 +103,7 @@ export class CodexSession implements HarnessSession {
         approvalPolicy: 'untrusted', // every request reaches Kun's gate
         sandboxPolicy: toCodexSandboxPolicy(
           input.sandboxMode,
-          input.workspacePath
+          input.workspaceRoots ?? [input.workspacePath]
         ),
         clientUserMessageId: run === 1 ? this.input.turnId : `${this.input.turnId}:${run}`
       })
@@ -421,17 +421,21 @@ function approvalDecisionForCommand(
 
 function toCodexSandboxPolicy(
   sandboxMode: string | undefined,
-  workspacePath: string
+  workspaceRoots: readonly string[]
 ): CodexSandboxPolicy | undefined {
   switch (sandboxMode) {
     case 'read-only':
+      // Read-only never carries writable roots: extra directories must not
+      // become write grants, and Kun's full-access mode is not auto-applied.
       return { type: 'readOnly' }
     case 'danger-full-access':
       return { type: 'dangerFullAccess' }
     case 'external-sandbox':
       return { type: 'externalSandbox' }
-    case 'workspace-write':
-      return { type: 'workspaceWrite', writableRoots: [workspacePath] }
+    case 'workspace-write': {
+      const roots = [...new Set(workspaceRoots.map((root) => root.trim()).filter(Boolean))]
+      return { type: 'workspaceWrite', writableRoots: roots }
+    }
     default:
       return undefined
   }

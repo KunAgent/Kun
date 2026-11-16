@@ -14,7 +14,7 @@ export function MobilePairingDialog(): ReactElement | null {
   const { zh, enabled, state, busy, confirm } = link
   const [later, setLater] = useState<ReadonlySet<string>>(() => new Set())
   const laterButton = useRef<HTMLButtonElement>(null)
-  const pairings = enabled ? state?.pairings ?? [] : []
+  const pairings = enabled ? (state?.pairings ?? []).filter((pairing) => pairing.purpose !== 'desktop') : []
   const pending = pairings.filter((pairing) => !later.has(pairing.id))
   const current = pending[0]
 

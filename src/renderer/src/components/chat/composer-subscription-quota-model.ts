@@ -1,5 +1,5 @@
 import type { ProviderQuotaEntry, ProviderQuotaMetric } from '@shared/provider-quota'
-import { quotaUsedPercent } from '../usage/quota-view-model'
+import { groupQuotaMetrics, quotaUsedPercent } from '../usage/quota-view-model'
 
 export type ComposerQuotaWindow = { metric: ProviderQuotaMetric; remainingPercent: number }
 
@@ -31,7 +31,7 @@ export function composerQuotaWindowLabel(metric: ProviderQuotaMetric, t: (key: s
 /** Unknown percentages stay absent; an exhausted allowance (0% left) is still useful data. */
 export function composerQuotaWindows(entry: ProviderQuotaEntry | null | undefined): ComposerQuotaWindow[] {
   if (entry?.status !== 'available') return []
-  return entry.metrics.flatMap((metric): ComposerQuotaWindow[] => {
+  const windows = entry.metrics.flatMap((metric): ComposerQuotaWindow[] => {
     if (metric.unit !== 'percent') return []
     // Claude may return the same global weekly window in both API formats.
     if (entry.presetId === 'claude-subscription' && metric.label === 'weekly_all' &&
@@ -41,7 +41,11 @@ export function composerQuotaWindows(entry: ProviderQuotaEntry | null | undefine
     )) return []
     const used = quotaUsedPercent(metric)
     return used !== undefined && Number.isFinite(used) ? [{ metric, remainingPercent: Math.max(0, Math.min(100, 100 - used)) }] : []
-  }).sort((left, right) => {
+  })
+  if (groupQuotaMetrics(windows.map((window) => window.metric))) {
+    return windows
+  }
+  return windows.sort((left, right) => {
     const span = (metric: ProviderQuotaMetric): number => composerQuotaWindowSeconds(metric) ?? Number.POSITIVE_INFINITY
     return span(left.metric) - span(right.metric)
   })

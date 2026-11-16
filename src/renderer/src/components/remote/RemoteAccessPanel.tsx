@@ -62,8 +62,8 @@ export function RemoteAccessPanel({ className = '' }: { className?: string }): R
       {view.page === 'home' ? <RemoteAccessHome link={link} browser={browser} desktop={desktop} directRunning={directRunning}
         onBrowser={() => navigate({ page: 'browser' })} onDesktop={() => navigate({ page: 'desktop' })}
         onDevice={id => navigate({ page: 'device', id })} /> : null}
-      {view.page === 'home' && link.api?.computers ? <button type="button" className={`${REMOTE_BUTTON_CLASS} justify-between`} onClick={() => navigate({ page: 'computers' })}>
-        <span>{link.zh ? '电脑与电脑远程桌面 · Max 专享' : 'Computer to computer desktop · Max'}</span>
+      {view.page === 'home' && link.signedIn && link.computerAllowed && link.api?.computers ? <button type="button" className={`${REMOTE_BUTTON_CLASS} justify-between`} onClick={() => navigate({ page: 'computers' })}>
+        <span>{link.zh ? '电脑与电脑远程桌面' : 'Computer to computer desktop'}</span>
         <span>{link.state?.pairings.filter(item => item.purpose === 'desktop').length || '→'}</span>
       </button> : null}
       {view.page === 'computers' ? <ComputerAccessPanel key={directOwner} link={link} desktop={desktop} onBack={() => navigate({ page: 'home' })} /> : null}

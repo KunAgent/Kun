@@ -10,13 +10,14 @@ import {
 } from '../cache/cache-diagnostics.js'
 import { analyzeCacheRegression, cacheRegressionSeverityRank } from '../cache/cache-regression.js'
 import type {
+  AgentUsageBucket,
   DailyUsageBucket,
   DailyUsageCounters,
   ModelUsageBucket,
   ThreadUsageBucket,
   UsageSnapshot
 } from '../contracts/usage.js'
-import { type DailyUsageAccumulator, type ModelUsageAccumulator, type ThreadUsageAccumulator, type UsageCountersTarget } from './usage-service-query.js'
+import { type AgentUsageAccumulator, type DailyUsageAccumulator, type ModelUsageAccumulator, type ThreadUsageAccumulator, type UsageCountersTarget } from './usage-service-query.js'
 
 export function emptyCounters(): DailyUsageCounters {
   return {
@@ -166,6 +167,10 @@ export function emptyModelBucket(model: string): ModelUsageAccumulator {
   return { model, ...emptyCounters(), threadIds: new Set<string>(), harnessIds: new Set<string>(), hasCacheTelemetry: false }
 }
 
+export function emptyAgentBucket(harnessId: string): AgentUsageAccumulator {
+  return { harness_id: harnessId, ...emptyCounters(), threadIds: new Set<string>(), hasCacheTelemetry: false }
+}
+
 type CounterFields = Omit<DailyUsageCounters, 'thread_count'>
 
 function counters(bucket: CounterFields): CounterFields {
@@ -221,6 +226,11 @@ export function finalizeModelBucket(bucket: ModelUsageAccumulator): ModelUsageBu
   const finalized = counters(finalizeCacheRate(bucket, bucket.hasCacheTelemetry))
   return { model: bucket.model, ...finalized, thread_count: bucket.thread_count,
     ...(bucket.harnessIds.size ? { harness_ids: [...bucket.harnessIds].sort() } : {}) }
+}
+
+export function finalizeAgentBucket(bucket: AgentUsageAccumulator): AgentUsageBucket {
+  const finalized = counters(finalizeCacheRate(bucket, bucket.hasCacheTelemetry))
+  return { harness_id: bucket.harness_id, ...finalized, thread_count: bucket.thread_count }
 }
 
 function referenceCoverage(value: Pick<

@@ -89,7 +89,8 @@ export class DirectHost {
       this.settings.port = (server.address() as { port: number }).port
       await this.deps.write(owner, this.settings)
       if (this.settings.grants.some(grant => grant.expiresAt > Date.now() && grant.scopes.includes('desktop.view')))
-        await this.deps.link.desktop?.configureRemoteAccess?.(true, current)
+        await this.deps.link.desktop?.configureRemoteAccess?.(true, current).catch(() => {})
+      if (!current()) { await this.stop(); return }
       this.error = undefined
     } catch (error) {
       this.error = (error as NodeJS.ErrnoException).code === 'EADDRINUSE' ? 'DIRECT_PORT_IN_USE' : 'DIRECT_START_FAILED'
@@ -108,15 +109,15 @@ export class DirectHost {
       grants: this.settings.grants.map(({ secret: _secret, deviceId, ...grant }) => ({ ...grant,
         online: [...this.connections].some(connection => connection.grant?.deviceId === deviceId && connection.current()) })) }
   }
-  async pair(scopes: unknown) {
+  async pair(scopes?: unknown) {
     const registry = this.registry, owner = this.ownerId
     if (!registry || !this.server?.listening || owner !== this.deps.owner()) throw Error('DIRECT_NOT_RUNNING')
     if (this.settings.bind === 'loopback' && !this.settings.addresses.length) throw Error('DIRECT_ADDRESS_REQUIRED')
     const addresses = [...new Set([...this.settings.addresses, ...this.status().localAddresses])].slice(0, 6)
     const link = registry.pair(addresses, scopes)
     if (parseDirectPairing(link).expiresAt <= Date.now()) throw Error('DIRECT_PAIRING_EXPIRED')
-    if (JSON.stringify(scopes).includes('desktop.view')) {
-      await this.deps.link.desktop?.configureRemoteAccess?.(true, () => this.registry === registry && this.deps.owner() === owner)
+    if (scopes === undefined || JSON.stringify(scopes).includes('desktop.view')) {
+      await this.deps.link.desktop?.configureRemoteAccess?.(true, () => this.registry === registry && this.deps.owner() === owner).catch(() => {})
       if (this.registry !== registry || this.deps.owner() !== owner) throw Error('ACCOUNT_CHANGED')
     }
     return { link, expiresAt: parseDirectPairing(link).expiresAt }
@@ -148,6 +149,7 @@ export class DirectHost {
     await transfers?.stop()
     await this.deps.link.desktop?.stopAll('host_stopped').catch(() => {})
     await this.deps.link.terminal?.stopAll('host_stopped').catch(() => {})
+    await this.deps.link.simulator?.stopAll().catch(() => {})
   }
   async endSession() { this.ownerId = undefined; await this.stop(); this.settings = emptyDirectSettings() }
 }
