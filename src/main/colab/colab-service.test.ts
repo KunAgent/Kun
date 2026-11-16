@@ -40,6 +40,22 @@ afterEach(async () => {
 })
 
 describe('Colab engine & multi-account isolation', () => {
+  it('waits for persisted workspace connections on concurrent first snapshots', async () => {
+    const root = await createTempDir('kun-colab-snapshot-')
+    const workspaceConnections = { '/work/project': 'conn-a' }
+    await writeFile(join(root, 'state.v1.json'), JSON.stringify({ version: 1, workspaceConnections }))
+    const service = new ColabService({
+      colabRootDir: root, safeStorage: mockSafeStorage as any,
+      openExternal: async () => undefined, getColabSettings: defaultKunColabSettings
+    })
+    try {
+      const snapshots = await Promise.all([service.getSnapshot(), service.getSnapshot()])
+      for (const snapshot of snapshots) expect(snapshot.workspaceConnections).toEqual(workspaceConnections)
+    } finally {
+      await service.shutdown()
+    }
+  })
+
   it('encrypts, materializes, and syncs per-connection OAuth tokens independently', async () => {
     const root = await createTempDir('kun-colab-cred-')
     const store = new ColabCredentialStore(root, mockSafeStorage as any)

@@ -2,12 +2,11 @@ import { useEffect } from 'react'
 import { create } from 'zustand'
 import type {
   ColabAccelerator,
+  ColabCliRuntimeStatus,
   ColabConnectionView,
   ColabSessionView,
   ColabStateSnapshot
 } from '@shared/colab/colab-types'
-
-export const OPEN_COLAB_PANEL_EVENT = 'kun:open-colab-panel'
 
 export type OpenColabPanelOptions = {
   expandConnections?: boolean
@@ -30,9 +29,7 @@ export function openColabPanel(options?: OpenColabPanelOptions): void {
   if (options?.focusSessionId) {
     store.setFocusedSessionId(options.focusSessionId)
   }
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent(OPEN_COLAB_PANEL_EVENT, { detail: options ?? {} }))
-  }
+  useColabStore.setState({ panelOpenRequested: true })
 }
 
 export function normalizeColabWorkspaceKey(workspaceRoot: string | undefined | null): string {
@@ -117,6 +114,7 @@ const EMPTY_SNAPSHOT: ColabStateSnapshot = {
 type ColabStoreState = {
   snapshot: ColabStateSnapshot
   hydrated: boolean
+  panelOpenRequested: boolean
   connectionsExpanded: boolean
   addAccountOpen: boolean
   reauthConnectionId: string | null
@@ -129,6 +127,7 @@ type ColabStoreState = {
   toast: ColabPanelToast | null
   applySnapshot: (snapshot: ColabStateSnapshot) => void
   refreshSnapshot: () => Promise<void>
+  prepareCli: () => Promise<void>
   setConnectionsExpanded: (expanded: boolean) => void
   openAddAccount: (reauthConnectionId?: string) => void
   closeAddAccount: () => void
@@ -154,9 +153,10 @@ function scheduleHighlightReset(): void {
   }, HIGHLIGHT_MS)
 }
 
-export const useColabStore = create<ColabStoreState>((set) => ({
+export const useColabStore = create<ColabStoreState>((set, get) => ({
   snapshot: EMPTY_SNAPSHOT,
   hydrated: false,
+  panelOpenRequested: false,
   connectionsExpanded: false,
   addAccountOpen: false,
   reauthConnectionId: null,
@@ -201,6 +201,21 @@ export const useColabStore = create<ColabStoreState>((set) => ({
       useColabStore.getState().applySnapshot(snap)
     } catch {
       // Ignore snapshot fetch failure when host is unavailable.
+    }
+  },
+  prepareCli: async () => {
+    const previous = get().snapshot.cli
+    if (previous.state === 'installing') return
+    const setCli = (cli: ColabCliRuntimeStatus): void =>
+      set((state) => ({ snapshot: { ...state.snapshot, cli } }))
+    setCli({ ...previous, state: 'installing', message: undefined })
+    try {
+      setCli(await window.kunGui.colabEnsureCliRuntime({ upgrade: previous.state === 'ready' }))
+    } catch (error) {
+      setCli({
+        ...previous, state: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
     }
   },
   setConnectionsExpanded: (connectionsExpanded) => set({ connectionsExpanded }),

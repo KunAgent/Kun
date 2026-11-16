@@ -6,6 +6,7 @@ import { openTerminal } from '../components/terminal/terminal-open'
 import { ColabConnectionsSection } from './ColabConnectionsSection'
 import { ColabSessionCallouts, ColabUntrackedCallout } from './ColabPanelCallouts'
 import { ColabRunDialog } from './ColabRunDialog'
+import { ColabRuntimeSetup } from './ColabRuntimeSetup'
 import { ColabSessionCards } from './ColabSessionCards'
 import {
   formatColabDuration,
@@ -129,6 +130,7 @@ export function ColabPanel({ workspaceRoot }: { workspaceRoot?: string }): React
         className="flex h-full min-h-0 w-full flex-col bg-ds-sidebar text-ds-ink"
       >
         {toastBanner}
+        <ColabRuntimeSetup inPanel />
         <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-4">
           <ColabConnectionsSection workspaceRoot={wsKey} />
         </div>
@@ -142,6 +144,7 @@ export function ColabPanel({ workspaceRoot }: { workspaceRoot?: string }): React
       className="flex h-full min-h-0 w-full flex-col bg-ds-sidebar text-ds-ink"
     >
       {toastBanner}
+      {snapshot.cli.state !== 'ready' && <ColabRuntimeSetup inPanel />}
 
       <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto p-3">
         {snapshot.untrackedSessions.map((untracked) => (

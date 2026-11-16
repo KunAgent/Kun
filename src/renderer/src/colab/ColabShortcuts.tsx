@@ -2,6 +2,8 @@ import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { Check, ChevronDown, Cloud, ExternalLink, Plus, Settings2, Square } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ToolPresentation } from '@shared/tool-presentation'
+import { headerTextButtonClass, HEADER_ICON_CLASS, HEADER_ICON_STROKE } from '../components/workbench/header-action-button'
+import { isRemoteWeb } from '../lib/remote-mobile'
 import { requestColabConnectionSwitch } from './colab-connection-switch'
 import {
   formatColabDuration,
@@ -18,10 +20,23 @@ import { useColabDismiss } from './use-colab-dismiss'
 
 export function ColabTopbarCapsule({ workspaceRoot }: { workspaceRoot: string }): ReactElement | null {
   useColabSubscription()
-  const { t } = useTranslation('common')
+  const { t } = useTranslation(['common', 'settings'])
   const snapshot = useColabStore((s) => s.snapshot)
+  if (isRemoteWeb()) return null
   const allRunning = selectAllRunningSessions(snapshot)
-  if (allRunning.length === 0) return null
+  if (allRunning.length === 0) {
+    return (
+      <button
+        type="button"
+        onClick={() => openColabPanel()}
+        className={headerTextButtonClass()}
+        title={t('settings:colabManageInPanelBtn')}
+      >
+        <Cloud className={HEADER_ICON_CLASS} strokeWidth={HEADER_ICON_STROKE} aria-hidden="true" />
+        <span>{t('rightPanelColab')}</span>
+      </button>
+    )
+  }
 
   const wsRunning = selectWorkspaceSessions(snapshot, workspaceRoot).filter(isColabSessionRunning)
   const primary = wsRunning[0] ?? allRunning[0]!

@@ -1,6 +1,7 @@
-import { useState, type ReactElement } from 'react'
-import { ArrowRight, Loader2, RefreshCw } from 'lucide-react'
+import type { ReactElement } from 'react'
+import { ArrowRight } from 'lucide-react'
 import { defaultKunColabSettings } from '@shared/app-settings-colab'
+import { ColabRuntimeSetup } from '../colab/ColabRuntimeSetup'
 import {
   openColabPanel,
   selectAllRunningSessions,
@@ -12,61 +13,21 @@ import { SettingRow, SettingsCard, Toggle } from './settings-controls'
 
 export function CloudComputeSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   useColabSubscription()
-  const { t, kun, updateKun, goBack } = ctx
+  const { t, kun, updateKun, flushPendingSave, openCode } = ctx
   const colabSettings = kun?.colab ?? defaultKunColabSettings()
   const snapshot = useColabStore((s) => s.snapshot)
-  const [provisioning, setProvisioning] = useState(false)
-
-  const cli = snapshot.cli
   const runningCount = selectAllRunningSessions(snapshot).length
 
-  const handlePrepareRuntime = async (upgrade: boolean): Promise<void> => {
-    setProvisioning(true)
-    try {
-      await window.kunGui.colabEnsureCliRuntime({ upgrade })
-    } finally {
-      setProvisioning(false)
-    }
+  const manageConnections = async (): Promise<void> => {
+    await flushPendingSave()
+    await openCode()
+    openColabPanel({ expandConnections: true })
   }
-
-  const cliDescription =
-    cli.state === 'ready'
-      ? t('colabCliReady', {
-          version: cli.version ?? '0.8.0',
-          python: cli.pythonVersion ?? '3.12'
-        })
-      : cli.state === 'installing' || provisioning
-        ? t('colabCliInstalling')
-        : cli.state === 'error'
-          ? t('colabCliError', { message: cli.message ?? '' })
-          : t('colabCliMissing')
 
   return (
     <div className="space-y-5">
       <SettingsCard title={t('colabCliTitle')} description={t('colabCliDesc')}>
-        <SettingRow
-          title="google-colab-cli"
-          description={cliDescription}
-          control={
-            <button
-              type="button"
-              disabled={provisioning || cli.state === 'installing'}
-              onClick={() => void handlePrepareRuntime(cli.state === 'ready')}
-              className={settingsButtonClass({
-                variant: cli.state === 'ready' ? 'secondary' : 'primary'
-              })}
-            >
-              {provisioning || cli.state === 'installing' ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="h-3.5 w-3.5" />
-              )}
-              <span>
-                {cli.state === 'ready' ? t('colabCliUpdateBtn') : t('colabCliPrepareBtn')}
-              </span>
-            </button>
-          }
-        />
+        <ColabRuntimeSetup />
       </SettingsCard>
 
       <SettingsCard
@@ -86,10 +47,7 @@ export function CloudComputeSettingsSection({ ctx }: { ctx: Record<string, any> 
           control={
             <button
               type="button"
-              onClick={() => {
-                if (typeof goBack === 'function') goBack()
-                openColabPanel({ expandConnections: true })
-              }}
+              onClick={() => void manageConnections()}
               className={settingsButtonClass({ variant: 'secondary' })}
             >
               <span>{t('colabManageInPanelBtn')}</span>

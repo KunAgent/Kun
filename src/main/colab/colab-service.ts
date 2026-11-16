@@ -62,7 +62,7 @@ export class ColabService {
   private sessions = new Map<string, ColabSessionView>()
   private untrackedSessions: ColabUntrackedSession[] = []
   private lastLoginOutcome: ColabLoginOutcome | null = null
-  private initialized = false
+  private initialization: Promise<void> | null = null
   private refreshInterval: ReturnType<typeof setInterval> | null = null
   private clockInterval: ReturnType<typeof setInterval> | null = null
   private lowBalanceNotifiedIds = new Set<string>()
@@ -115,9 +115,15 @@ export class ColabService {
     })
   }
 
-  async initialize(): Promise<void> {
-    if (this.initialized) return
-    this.initialized = true
+  initialize(): Promise<void> {
+    this.initialization ??= this.loadStateAndStartTimers().catch((error) => {
+      this.initialization = null
+      throw error
+    })
+    return this.initialization
+  }
+
+  private async loadStateAndStartTimers(): Promise<void> {
     await mkdir(this.options.colabRootDir, { recursive: true, mode: 0o700 })
     const loaded = await loadColabPersistedState(this.statePath)
     this.connections = loaded.connections
@@ -666,6 +672,7 @@ export class ColabService {
   }
 
   async shutdown(): Promise<void> {
+    await this.initialization?.catch(() => undefined)
     if (this.clockInterval) clearInterval(this.clockInterval)
     if (this.refreshInterval) clearInterval(this.refreshInterval)
     this.clockInterval = null

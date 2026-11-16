@@ -97,6 +97,7 @@ export function classifyColabErrorOutput(output: string): ColabSessionErrorKind 
 
 export class ColabCliRuntime {
   private cachedStatus: ColabCliRuntimeStatus
+  private probeInFlight: Promise<ColabCliRuntimeStatus> | null = null
   private installInFlight: Promise<ColabCliRuntimeStatus> | null = null
 
   constructor(
@@ -125,47 +126,34 @@ export class ColabCliRuntime {
     return this.cachedStatus
   }
 
-  async probe(): Promise<ColabCliRuntimeStatus> {
-    if (this.installInFlight) return this.cachedStatus
-    const py = this.venvPythonPath
-    if (!existsSync(py)) {
-      this.cachedStatus = {
-        state: 'missing',
-        version: null,
-        pythonVersion: null,
-        venvPath: this.venvDir
-      }
-      return this.cachedStatus
-    }
+  private async inspectInstallation(): Promise<ColabCliRuntimeStatus> {
+    const base = { version: null, pythonVersion: null, venvPath: this.venvDir }
+    if (!existsSync(this.venvPythonPath)) return { ...base, state: 'missing' }
     try {
-      const { stdout } = await execFileAsync(
-        py,
-        [
-          '-c',
-          'import sys; from importlib.metadata import version; print(f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}|{version(\'google-colab-cli\')}")'
-        ],
-        { timeout: 10_000 }
-      )
-      const [pythonVersion, cliVersion] = stdout.trim().split('|')
-      if (cliVersion) {
-        this.cachedStatus = {
-          state: 'ready',
-          version: cliVersion,
-          pythonVersion: pythonVersion || null,
-          venvPath: this.venvDir
-        }
-        return this.cachedStatus
-      }
-    } catch {
-      // Fall through to missing state.
+      const { stdout } = await execFileAsync(this.venvPythonPath, [
+        '-I', '-c',
+        'from platform import python_version; from importlib.metadata import version; print(python_version(), version("google-colab-cli"), sep="|")'
+      ], { timeout: 10_000 })
+      const [pythonVersion, version] = stdout.trim().split('|')
+      if (!pythonVersion || !version) throw new Error('无法读取 Colab CLI 或 Python 的版本。')
+      return { state: 'ready', version, pythonVersion, venvPath: this.venvDir }
+    } catch (error) {
+      const detail = error instanceof Error && 'stderr' in error && typeof error.stderr === 'string'
+        ? error.stderr.trim().split(/\r?\n/).at(-1)
+        : undefined
+      return { ...base, state: 'error', message: detail || (error instanceof Error ? error.message : String(error)) }
     }
-    this.cachedStatus = {
-      state: 'missing',
-      version: null,
-      pythonVersion: null,
-      venvPath: this.venvDir
-    }
-    return this.cachedStatus
+  }
+
+  probe(): Promise<ColabCliRuntimeStatus> {
+    if (this.installInFlight) return Promise.resolve(this.cachedStatus)
+    this.probeInFlight ??= this.inspectInstallation()
+      .then((status) => {
+        this.cachedStatus = status
+        return status
+      })
+      .finally(() => { this.probeInFlight = null })
+    return this.probeInFlight
   }
 
   async ensureInstalled(options?: {
@@ -173,14 +161,11 @@ export class ColabCliRuntime {
     onStatusChange?: (status: ColabCliRuntimeStatus) => void
   }): Promise<ColabCliRuntimeStatus> {
     if (this.installInFlight) return this.installInFlight
-    if (!options?.upgrade) {
-      const probed = await this.probe()
-      if (probed.state === 'ready') return probed
-    }
+    const status = await this.probe()
+    if (this.installInFlight) return this.installInFlight
+    if (status.state === 'ready' && !options?.upgrade) return status
     this.installInFlight = this.performInstall(Boolean(options?.upgrade), options?.onStatusChange)
-      .finally(() => {
-        this.installInFlight = null
-      })
+      .finally(() => { this.installInFlight = null })
     return this.installInFlight
   }
 
@@ -195,19 +180,18 @@ export class ColabCliRuntime {
       venvPath: this.venvDir
     }
     onStatusChange?.(this.cachedStatus)
-    await mkdir(this.colabRootDir, { recursive: true, mode: 0o700 })
-
     try {
+      await mkdir(this.colabRootDir, { recursive: true, mode: 0o700 })
       const uvInstalled = await this.tryInstallWithUv(upgrade)
       if (!uvInstalled) {
         await this.installWithPython312(upgrade)
       }
-      const ready = await this.probe()
-      if (ready.state !== 'ready') {
-        throw new Error('google-colab-cli 安装完成后未能通过校验。')
+      // Public probes report progress while the installer owns the environment.
+      const verified = await this.inspectInstallation()
+      if (verified.state === 'missing') {
+        throw new Error(`Colab 虚拟环境中未找到 Python：${this.venvPythonPath}`)
       }
-      onStatusChange?.(ready)
-      return ready
+      this.cachedStatus = verified
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       this.cachedStatus = {
@@ -217,9 +201,9 @@ export class ColabCliRuntime {
         venvPath: this.venvDir,
         message
       }
-      onStatusChange?.(this.cachedStatus)
-      return this.cachedStatus
     }
+    onStatusChange?.(this.cachedStatus)
+    return this.cachedStatus
   }
 
   private async tryInstallWithUv(upgrade: boolean): Promise<boolean> {

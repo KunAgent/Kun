@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ColabStateSnapshot } from '@shared/colab/colab-types'
 import { colabToolData } from './ColabShortcuts'
 import {
@@ -87,6 +87,31 @@ const sampleSnapshot: ColabStateSnapshot = {
 }
 
 describe('colab renderer store & selectors', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    useColabStore.setState(useColabStore.getInitialState())
+  })
+
+  it('shows preparation progress, reports bridge errors, and retries with the returned CLI status', async () => {
+    const ensureCli = vi.fn()
+      .mockRejectedValueOnce(new Error('CLI host unavailable'))
+      .mockResolvedValue(sampleSnapshot.cli)
+    vi.stubGlobal('window', { kunGui: { colabEnsureCliRuntime: ensureCli } })
+    const { prepareCli, applySnapshot } = useColabStore.getState()
+    applySnapshot({ ...sampleSnapshot, cli: useColabStore.getInitialState().snapshot.cli })
+
+    const first = prepareCli()
+    expect(useColabStore.getState().snapshot.cli.state).toBe('installing')
+    await Promise.all([first, prepareCli()])
+    expect(ensureCli).toHaveBeenCalledOnce()
+    expect(useColabStore.getState().snapshot.cli).toMatchObject({ state: 'error', message: 'CLI host unavailable' })
+    await prepareCli()
+    expect(ensureCli).toHaveBeenLastCalledWith({ upgrade: false })
+    expect(useColabStore.getState().snapshot).toEqual(sampleSnapshot)
+    await prepareCli()
+    expect(ensureCli).toHaveBeenLastCalledWith({ upgrade: true })
+  })
+
   it('resolves workspace-specific active connections and sessions independently', () => {
     expect(selectWorkspaceActiveConnection(sampleSnapshot, '/work/proj-a/')?.id).toBe('c1')
     expect(selectWorkspaceActiveConnection(sampleSnapshot, '/work/proj-b')?.id).toBe('c2')

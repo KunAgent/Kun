@@ -10,7 +10,7 @@ import {
 import { useReviewStore } from '../../store/review-store'
 import { takePlanBuildReview } from '../../store/plan-build-watch'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
-import { OPEN_COLAB_PANEL_EVENT } from '../../colab/colab-store'
+import { useColabStore } from '../../colab/colab-store'
 import { OPEN_WORKER_SESSION_EVENT } from '../workers/worker-view-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
@@ -206,11 +206,13 @@ export function useWorkbenchRightTools({
     return () => window.removeEventListener(OPEN_WORKERS_PANEL_EVENT, open)
   }, [openRightPanelTab])
 
+  // Settings replaces the workbench. Its request must survive until Code is mounted.
+  const colabPanelRequested = useColabStore((state) => state.panelOpenRequested)
   useEffect(() => {
-    const open = (): void => openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.colab)
-    window.addEventListener(OPEN_COLAB_PANEL_EVENT, open)
-    return () => window.removeEventListener(OPEN_COLAB_PANEL_EVENT, open)
-  }, [openRightPanelTab])
+    if (!colabPanelRequested) return
+    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.colab)
+    useColabStore.setState({ panelOpenRequested: false })
+  }, [colabPanelRequested, openRightPanelTab])
 
   // Layout tabs are workspace-scoped, but worker conversations are manager-scoped.
   // Switching managers closes their tabs; missing activity alone never does.
