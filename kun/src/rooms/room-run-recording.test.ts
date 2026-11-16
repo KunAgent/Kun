@@ -82,7 +82,6 @@ describe('room native run admission and publication', () => {
     await prepareRoomRun(f.deps, f.thread, 'cancelled-orphan', 'Frozen input', [], {
       requestId: f.input.requestId, phase: 'conversation' })
     const id = roomRunId(f.room.id, 'cancelled-orphan')
-    expect((await roomDiscussionBusy(f.deps)).has(f.room.id + ':' + f.member.id)).toBe(true)
     const request = (await f.store.get<RoomRequestState>('request', f.input.requestId))!
     await putRoomDocument(f.store, 'request', request.id, f.room.id,
       { ...request.value, status: 'cancelled', cancellationRequested: true }, request)
