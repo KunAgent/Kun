@@ -1,4 +1,6 @@
 import { acpLaunchIdentity, acpPermissionSelection } from '../../harness/acp-launch-args.js'
+import { providerModuleFor } from '../../harness/providers/registry.js'
+import { continueAcpPendingTools } from './acp-pending-tool-continuation.js'
 import { sessionInstructions } from '../../session/session-instructions.js'
 /**
  * ACP delegated runtime. `runTurn` owns a full Kun turn
@@ -51,7 +53,8 @@ import {
   acpStaticCapabilities,
   finishAcpTrace,
   kunToolsDescriptorOf,
-  mapAcpFailure,
+  failAcpTurn,
+  failAcpTurnFromError,
   missingAcpCoordinator,
   resolveAcpCredentialContext,
   startAcpTrace,
@@ -228,7 +231,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         )
       }
       if (signal.aborted) await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
-      else await this.failFromAcpError(threadId, turnId, error, true, definition.id)
+      else await failAcpTurnFromError(this.deps.turns, threadId, turnId, error, true, definition.id)
       return undefined
     })
     if (!lease) return signal.aborted ? 'aborted' : 'failed'
@@ -331,7 +334,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
         return 'aborted'
       }
-      await this.failFromAcpError(threadId, turnId, error, true, definition.id)
+      await failAcpTurnFromError(this.deps.turns, threadId, turnId, error, true, definition.id)
       return 'failed'
     }
     // A subagent's own steps live in the Agent's session store, not on ACP.
@@ -412,7 +415,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
             )
           : undefined,
       instructionBlocks: sessionInstructions(preparation, [
-        ...instructionBlocks, buildClientSurfaceInstruction(resolveTurnClientSurface(turn))
+        ...instructionBlocks, buildClientSurfaceInstruction(resolveTurnClientSurface(turn)),
+        ...providerModuleFor(definition)?.acp?.turnInstructions ?? []
       ], false, turnDynamicContext.instructions),
       ...userInput,
       imageCapable,
@@ -509,8 +513,32 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       const sessionUsage = await beginAcpSessionUsage(definition.id, {
         sessionId: session.sessionId, workspace, env: { ...process.env, ...definition.launch?.env }
       })
-      const sendPrompt = (blocks: typeof prompt) => conn.rpc.request(
-        ACP_AGENT_METHODS.sessionPrompt, { sessionId: session.sessionId, prompt: blocks }, { timeoutMs: limits.maxWallTimeMs })
+      const promptDeadline = Date.now() + limits.maxWallTimeMs
+      const continuePendingTools = providerModuleFor(definition)?.acp?.continuePendingTools === true
+      const requestPrompt = (blocks: typeof prompt) => {
+        signal.throwIfAborted()
+        if (streamError) throw streamError
+        return conn.rpc.request(ACP_AGENT_METHODS.sessionPrompt,
+          { sessionId: session.sessionId, prompt: blocks }, { timeoutMs: Math.max(1, promptDeadline - Date.now()) })
+      }
+      const bookPromptUsage = async (result: unknown): Promise<void> => {
+        await emitQueue
+        const usage = mapper.applyPromptResult(acpPromptResultUsage(definition.id, AcpPromptResultSchema.parse(result)))
+        timing.observe(usage)
+        await emitter.emitAll(usage)
+      }
+      const sendPrompt = async (blocks: typeof prompt) => continueAcpPendingTools(await Promise.race([requestPrompt(blocks), streamFailure]), {
+        enabled: continuePendingTools,
+        signal, deadlineMs: promptDeadline, pendingTools: () => mapper.pendingTools(), onIncomplete: failStream,
+        sendPrompt: (text) => {
+          timing.requestStarted()
+          return Promise.race([requestPrompt([{ type: 'text', text }]), streamFailure])
+        },
+        onUnsettledResult: async (result) => {
+          await bookPromptUsage(result)
+          await emitter.emitAll(mapper.closeSegment())
+        }
+      })
       companions = startAcpTurnCompanions({
         harnessId: definition.id, threadId, turnId, model: model ?? 'default', acpSessionId: session.sessionId,
         ...(childSessionDb ? { sessionDbPath: childSessionDb } : {}),
@@ -546,6 +574,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       })
       timing.requestStarted()
       const raw = await Promise.race([sendPrompt(prompt), streamFailure])
+      const mainUsageRecorded = continuePendingTools && AcpPromptResultSchema.safeParse(raw).success
+      if (mainUsageRecorded) await bookPromptUsage(raw)
       const stopReason = AcpPromptResultSchema.safeParse(raw).data?.stopReason
       await Promise.race([companions.afterPrompt({
         followUp: !signal.aborted && stopReason !== 'cancelled' && stopReason !== 'refusal'
@@ -562,7 +592,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
           'session/prompt response is missing required fields'
         )
       }
-      const resultDrafts = companions.settleUsage(acpPromptResultUsage(definition.id, parsed.data),
+      const resultDrafts = companions.settleUsage(mainUsageRecorded ? undefined : acpPromptResultUsage(definition.id, parsed.data),
         (usage) => mapper.applyPromptResult(usage))
       timing.observe(resultDrafts)
       await emitter.emitAll(resultDrafts)
@@ -583,7 +613,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         return 'aborted'
       }
       if (parsed.data.stopReason === 'refusal') {
-        return this.failTurn(
+        return failAcpTurn(
+          this.deps.turns,
           threadId,
           turnId,
           'The harness refused this turn',
@@ -634,7 +665,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         turnId,
         turnHandoff
       )
-      await this.failFromAcpError(threadId, turnId, error, false, definition.id)
+      await failAcpTurnFromError(this.deps.turns, threadId, turnId, error, false, definition.id)
       return 'failed'
     } finally {
       acceptEvidence = false
@@ -651,33 +682,4 @@ export class AcpRuntime implements DelegatedTurnRuntime {
     }
   }
 
-  private async failTurn(threadId: string, turnId: string, error: string, code?: string): Promise<'failed'> {
-    await this.deps.turns.finishTurn({
-      threadId,
-      turnId,
-      status: 'failed',
-      error,
-      ...(code ? { code } : {}),
-      severity: 'error'
-    })
-    return 'failed'
-  }
-
-  private async failFromAcpError(
-    threadId: string,
-    turnId: string,
-    error: unknown,
-    startup: boolean,
-    harnessId?: string
-  ): Promise<void> {
-    const mapped = mapAcpFailure(error, startup, harnessId)
-    await this.deps.turns.finishTurn({
-      threadId,
-      turnId,
-      status: 'failed',
-      error: mapped.message,
-      code: mapped.code,
-      severity: 'error'
-    })
-  }
 }

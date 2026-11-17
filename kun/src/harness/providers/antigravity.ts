@@ -8,6 +8,7 @@ import type { AgentProviderModule, HarnessLoginState, ProviderEnv } from './prov
 import type { HarnessLoginProbeDeps } from '../harness-login-probes.js'
 import { antigravityCredentialEvidence } from '../antigravity-credentials.js'
 import { homeOf, nonempty, probeProviderCredential, readJsonFile, readJsonObject } from './support.js'
+import { projectAntigravityToolInputSchema } from '../../adapters/model/antigravity-tool-schema-projection.js'
 
 const AGY_DETECT = { command: 'agy', aliases: [], versionArgs: ['--version'] }
 // Official `agy acp` first shipped in CLI 1.5.0; older builds open the TUI.
@@ -99,6 +100,13 @@ async function resolveAntigravityExecutable(): Promise<string> {
 
 export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   definition: ANTIGRAVITY_DEFINITION,
+  acp: {
+    projectToolInputSchema: projectAntigravityToolInputSchema,
+    continuePendingTools: true,
+    turnInstructions: [
+      'In this ACP session, wait for native background commands and scheduled checks to finish before ending your response. Use the existing task id to wait for or inspect the result; do not end with a promise to continue automatically. A native schedule is not a Kun-owned continuation.'
+    ]
+  },
   installation: {
     nativePaths: ({ home, canonicalHome, dataDir }) => [
       ...new Set([home, canonicalHome].flatMap((root) => [

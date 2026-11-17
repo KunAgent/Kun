@@ -22,6 +22,7 @@ import type { ApprovalRequest } from '../../domain/approval.js'
 const NOW = '2026-01-01T00:00:00.000Z'
 
 type FixtureOptions = {
+  harnessId?: string
   runningTurn?: boolean
   workerThread?: boolean
   catalog?: CapabilityToolSpec[]
@@ -107,7 +108,7 @@ function makeFixture(options: FixtureOptions = {}) {
   const tokens = new HarnessTokenService()
   const token = tokens.issue({
     threadId: thread.id,
-    harnessId: 'devin',
+    harnessId: options.harnessId ?? 'devin',
     credentialIdentity: 'cred:test',
     scopes: ['kun-tools']
   })
@@ -263,6 +264,21 @@ describe('kun tools MCP route', () => {
     expect(tool.inputSchema).not.toHaveProperty('oneOf')
     expect(tool.inputSchema.type).toBe('object')
     expect(tool.inputSchema.required).toEqual(['action'])
+  })
+
+  it.each(['antigravity', 'devin'])('projects %s tools/list using the authenticated harness and keeps numeric call arguments', async (harnessId) => {
+    const schema = { type: 'object', properties: { duration: { type: 'integer', enum: [6, 10] } } }
+    const execute = vi.fn(async (call: { arguments: Record<string, unknown> }) => ({ item: { kind: 'tool_result', output: call.arguments }, approved: false }))
+    const { runtime, token } = makeFixture({ harnessId, execute: execute as never,
+      catalog: [{ name: 'generate_video', description: 'Generate video', inputSchema: schema }] as unknown as CapabilityToolSpec[] })
+    const listed = await post(runtime, rpc('tools/list', { harnessId: harnessId === 'antigravity' ? 'devin' : 'antigravity' }), token)
+    const duration = (await listed.json()).result.tools[0].inputSchema.properties.duration
+    if (harnessId === 'antigravity') {
+      expect(duration).toEqual({ type: 'integer', minimum: 6, maximum: 10, description: 'Allowed values: 6, 10.' })
+    } else expect(duration).toEqual({ type: 'integer', enum: [6, 10] })
+    expect(schema.properties.duration.enum).toEqual([6, 10])
+    await post(runtime, rpc('tools/call', { name: 'generate_video', arguments: { duration: 10 } }), token)
+    expect(execute.mock.calls[0]?.[0].arguments).toEqual({ duration: 10 })
   })
 
   it('returns a tool error when no turn is running', async () => {

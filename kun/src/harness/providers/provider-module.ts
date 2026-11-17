@@ -120,6 +120,12 @@ export type AcpSessionUsageSource = {
 
 /** ACP session behaviour that differs per engine. */
 export type ProviderAcpHooks = {
+  /** Wire-only MCP schema adaptation; canonical ToolHost validation stays unchanged. */
+  projectToolInputSchema?(schema: Record<string, unknown>): Record<string, unknown>
+  /** A normal prompt may finish before native async tools; settle them before the Kun turn ends. */
+  readonly continuePendingTools?: boolean
+  /** Stable instructions for this engine's session behavior. */
+  readonly turnInstructions?: readonly string[]
   /** Permission-dependent startup flags; session metadata must still confirm the mode. */
   launchArgs?(args: string[], permissionMode: string | undefined): string[]
   /** Usage from the engine's session log when the protocol carries none. */

@@ -1,4 +1,5 @@
 import { providerModule } from '../../harness/providers/registry.js'
+import type { TurnService } from '../../services/turn-service.js'
 import type { HarnessGatewayBinding } from '../../contracts/harness-gateway-binding.js'
 /**
  * AcpRuntime support: delegated trace records (same shape as the other
@@ -106,6 +107,29 @@ export function mapAcpFailure(
   // shared database, hidden service failures); keep the stable code.
   const explained = providerModule(harnessId)?.explainFailure?.(mapped.message, false)
   return explained && !explained.authRequired ? { code: mapped.code, message: explained.detail } : mapped
+}
+
+export async function failAcpTurn(
+  turns: Pick<TurnService, 'finishTurn'>,
+  threadId: string,
+  turnId: string,
+  error: string,
+  code?: string
+): Promise<'failed'> {
+  await turns.finishTurn({ threadId, turnId, status: 'failed', error, ...(code ? { code } : {}), severity: 'error' })
+  return 'failed'
+}
+
+export async function failAcpTurnFromError(
+  turns: Pick<TurnService, 'finishTurn'>,
+  threadId: string,
+  turnId: string,
+  error: unknown,
+  startup: boolean,
+  harnessId?: string
+): Promise<void> {
+  const mapped = mapAcpFailure(error, startup, harnessId)
+  await failAcpTurn(turns, threadId, turnId, mapped.message, mapped.code)
 }
 
 function mapAcpFailureCode(

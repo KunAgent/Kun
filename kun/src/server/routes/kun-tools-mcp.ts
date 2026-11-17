@@ -1,4 +1,5 @@
 import { projectAnthropicToolInputSchema } from '../../adapters/model/anthropic-tool-schema-projection.js'
+import { providerModule } from '../../harness/providers/registry.js'
 import { KUN_VERSION } from '../../version.js'
 import type { HarnessTokenGrant } from '../../harness/harness-token-service.js'
 import { mapKunResultToSdkContent } from '../../runtime/agent-sdk/sdk-tool-bridge.js'
@@ -74,14 +75,16 @@ function activeTurn(thread: ThreadRecord | null): ThreadRecord['turns'][number] 
 }
 
 function mcpToolList(
-  tools: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[]
+  tools: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[],
+  harnessId: string
 ): { tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> } {
+  const project = providerModule(harnessId)?.acp?.projectToolInputSchema ?? ((schema: Record<string, unknown>) => schema)
   return {
     tools: tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
       // Downstream gateways (Anthropic-format) reject top-level oneOf/anyOf/allOf.
-      inputSchema: projectAnthropicToolInputSchema(tool.inputSchema)
+      inputSchema: project(projectAnthropicToolInputSchema(tool.inputSchema))
     }))
   }
 }
@@ -165,7 +168,7 @@ async function handleToolMethod(
   if (message.method === 'tools/list') {
     if (!turn) return rpcError(id, NO_ACTIVE_TURN, 'no active turn for this session')
     const tools = await host.listTools(grant.threadId, turn.id)
-    return rpcResult(id, mcpToolList(tools))
+    return rpcResult(id, mcpToolList(tools, grant.harnessId))
   }
 
   const params = isRecord(message.params) ? message.params : undefined
