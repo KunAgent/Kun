@@ -214,11 +214,12 @@ export class HarnessReadinessService {
           { env: snapshot.env, signal: bounded }), bounded)
         snapshot.hasKey = evidence.configured === true
       }
-      checks.push({ id: 'installation', ok: installation, detail: installation ? 'Installed supported runtime' : 'Install a supported runtime and retry' })
+      checks.push({ id: 'installation', ok: installation, detail: installation ? 'Installed supported runtime' : status.message ?? 'Install a supported runtime and retry' })
       checks.push({ id: 'configuration', ok: snapshot.configured, ...(snapshot.detail ? { detail: snapshot.detail } : {}) })
       if (!terminalLaunch && installation && snapshot.configured && input.level !== 'detect') {
         const hsStarted = this.now()
-        const { catalog: probedCatalog, ...wire } = await raceProbeAbort(this.handshake(snapshot, status, bounded), bounded)
+        const remainingMs = Math.max(1, budgetMs - (this.now() - started))
+        const { catalog: probedCatalog, ...wire } = await raceProbeAbort(this.handshake(snapshot, status, bounded, remainingMs), bounded)
         handshake = { ...wire, durationMs: this.now() - hsStarted }
         catalog = probedCatalog
       }
@@ -593,18 +594,18 @@ export class HarnessReadinessService {
       reuseIdentity: readinessFingerprint({ options, definition, route: { ...route, model: '' }, secretEnv, command }) }
   }
 
-  private async handshake(snapshot: Snapshot, status: HarnessStatus, signal: AbortSignal): Promise<Handshake> {
+  private async handshake(snapshot: Snapshot, status: HarnessStatus, signal: AbortSignal, timeoutMs: number): Promise<Handshake> {
     const { definition } = snapshot
     const probeEnv = await readinessProbeEnvironment(definition, snapshot.route, snapshot.env)
     const env = probeEnv.env
-    try { return await this.runHandshake(snapshot, status, signal, env) } finally { await probeEnv.dispose() }
+    try { return await this.runHandshake(snapshot, status, signal, env, timeoutMs) } finally { await probeEnv.dispose() }
   }
 
-  private async runHandshake(snapshot: Snapshot, status: HarnessStatus, signal: AbortSignal, env: Record<string, string>): Promise<Handshake> {
+  private async runHandshake(snapshot: Snapshot, status: HarnessStatus, signal: AbortSignal, env: Record<string, string>, timeoutMs: number): Promise<Handshake> {
     const { definition } = snapshot
     const command = status.resolvedCommand ?? definition.launch?.command ?? definition.detect?.command ?? definition.id
     if (this.deps.handshake) return this.deps.handshake(definition, command, env, signal)
-    const options = { env, signal, resolveSecretEnv: this.deps.resolveSecretEnv }
+    const options = { env, signal, timeoutMs, resolveSecretEnv: this.deps.resolveSecretEnv }
     switch (definition.transport) {
       case 'native-loop': return { ok: true, supported: true, protocol: 'native-loop' }
       // ACP does not offer session-scoped settings until session/new. Defer
@@ -621,9 +622,10 @@ export class HarnessReadinessService {
       }
       case 'cursor-sdk': return probeCursorSdkReadiness(signal)
       case 'antigravity-cli': {
-        const result = await spawnCaptured(command, ['models'], { timeoutMs: AGY_MODELS_TIMEOUT_MS, signal,
+        const modelsTimeoutMs = Math.min(timeoutMs, AGY_MODELS_TIMEOUT_MS)
+        const result = await spawnCaptured(command, ['models'], { timeoutMs: modelsTimeoutMs, signal,
           env: { ...nativeAgentNetworkEnv(definition, process.env, env), ...env } })
-        return agyModelsHandshake(result)
+        return agyModelsHandshake(result, modelsTimeoutMs)
       }
       default: return { ok: false, supported: false, detail: 'No supported non-inference readiness check for this transport' }
     }

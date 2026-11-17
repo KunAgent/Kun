@@ -13,3 +13,19 @@ it('uses official identity-checked release metadata through an explicit proxy wi
   proxy.fetch.mockResolvedValueOnce(new Response('{}', { status: 503 }))
   await expect(latestHarnessVersion('codex', 'managed')).rejects.toThrow('503')
 })
+
+it('checks Antigravity releases without running the native updater', async () => {
+  vi.stubEnv('HTTPS_PROXY', 'http://proxy.invalid:8080')
+  const release = { url: 'https://api.github.com/repos/google-antigravity/antigravity-cli/releases/123',
+    tag_name: '1.5.9', draft: false, prerelease: false }
+  proxy.fetch.mockResolvedValueOnce(new Response(JSON.stringify(release)))
+  expect(await latestHarnessVersion('antigravity', 'native')).toBe('1.5.9')
+  expect(proxy.fetch).toHaveBeenCalledWith('https://api.github.com/repos/google-antigravity/antigravity-cli/releases/latest',
+    expect.objectContaining({ redirect: 'error' }))
+  for (const patch of [{ url: 'https://api.github.com/repos/other/cli/releases/123' }, { draft: true }, { prerelease: true }]) {
+    proxy.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ ...release, ...patch })))
+    await expect(latestHarnessVersion('antigravity', 'native')).rejects.toThrow('identity mismatch')
+  }
+  proxy.fetch.mockResolvedValueOnce(new Response(JSON.stringify({ ...release, tag_name: 'invalid-version' })))
+  await expect(latestHarnessVersion('antigravity', 'native')).rejects.toThrow('invalid version')
+})

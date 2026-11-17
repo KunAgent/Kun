@@ -74,6 +74,8 @@ export type ProviderInstallation = {
   readonly bundledPathMarkers?: readonly string[]
   /** Native self-updating installer layout: versions under the canonical home, launcher under home. */
   native?(homes: { home: string; canonicalHome: string }): { versionsDir: string; launcher: string; owner: string }
+  /** Known standalone executables that support their own in-place updater. */
+  nativePaths?(homes: { home: string; canonicalHome: string; dataDir?: string }): readonly string[]
   /** Look for a newer local installation next to the configured one. */
   readonly localCandidates?: boolean
 }

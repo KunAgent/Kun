@@ -239,6 +239,7 @@ export function createHarnessComposition(
     else if (transport === 'cursor-sdk') clearCursorSubscriptionCatalog()
   }
   const updates = new HarnessUpdates({
+    dataDir: options().dataDir,
     definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),
     currentStatus: (id) => {
       const status = detector.cachedStatus(id)

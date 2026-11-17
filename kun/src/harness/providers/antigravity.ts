@@ -9,16 +9,22 @@ import type { HarnessLoginProbeDeps } from '../harness-login-probes.js'
 import { antigravityCredentialEvidence } from '../antigravity-credentials.js'
 import { homeOf, nonempty, probeProviderCredential, readJsonFile, readJsonObject } from './support.js'
 
+const AGY_DETECT = { command: 'agy', aliases: [], versionArgs: ['--version'] }
+// Official `agy acp` first shipped in CLI 1.5.0; older builds open the TUI.
+// https://antigravity.google/docs/changelog
+export const ANTIGRAVITY_ACP_MIN_VERSION = '1.5.0'
+
 export const ANTIGRAVITY_DEFINITION: HarnessDefinition = {
   id: 'antigravity',
   displayName: 'Antigravity',
   transport: 'acp',
   // Official stdio ACP server (`agy acp`); the IDE launcher is not a turn
   // protocol and must not be mistaken for a ready agent.
-  detect: { command: 'agy', aliases: [], versionArgs: ['--version'] },
+  detect: { ...AGY_DETECT, minVersion: ANTIGRAVITY_ACP_MIN_VERSION },
   launch: { command: 'agy', args: ['acp'], env: {} },
   variants: {
     'antigravity-cli': {
+      detect: AGY_DETECT,
       launch: { command: 'agy', args: [], env: {} },
       capabilities: ANTIGRAVITY_CLI_CAPABILITIES
     }
@@ -71,25 +77,40 @@ function antigravityBinaryName(): string {
   return process.platform === 'win32' ? 'agy.exe' : 'agy'
 }
 
-async function resolveAntigravityExecutable(): Promise<string> {
-  const fromPath = await resolveExecutable('agy')
-  if (fromPath) return fromPath
+function antigravityManagedPaths(home: string): string[] {
   const binary = antigravityBinaryName()
-  const home = homedir()
   const appSupport = process.platform === 'darwin'
     ? join(home, 'Library', 'Application Support', 'Kun')
     : process.platform === 'win32'
       ? join(process.env.APPDATA ?? join(home, 'AppData', 'Roaming'), 'Kun')
       : join(process.env.XDG_CONFIG_HOME ?? join(home, '.config'), 'Kun')
-  const managed = [
+  return [
     join(appSupport, 'provider-cli', 'antigravity', binary),
     join(appSupport, 'antigravity-cli', binary)
-  ].find((candidate) => existsSync(candidate))
+  ]
+}
+
+async function resolveAntigravityExecutable(): Promise<string> {
+  const fromPath = await resolveExecutable('agy')
+  if (fromPath) return fromPath
+  const managed = antigravityManagedPaths(homedir()).find((candidate) => existsSync(candidate))
   return managed ?? 'agy'
 }
 
 export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   definition: ANTIGRAVITY_DEFINITION,
+  installation: {
+    nativePaths: ({ home, canonicalHome, dataDir }) => [
+      ...new Set([home, canonicalHome].flatMap((root) => [
+        ...antigravityManagedPaths(root),
+        process.platform === 'win32'
+          ? join(process.env.LOCALAPPDATA ?? join(root, 'AppData', 'Local'), 'agy', 'bin', antigravityBinaryName())
+          : join(root, '.local', 'bin', antigravityBinaryName())
+      ])),
+      ...(dataDir ? [join(dataDir, 'provider-cli', 'antigravity', antigravityBinaryName())] : [])
+    ],
+    localCandidates: true
+  },
   credentials: {
     envKeys: ['GEMINI_API_KEY', 'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS'],
     evidenceEnvKeys: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
@@ -110,5 +131,5 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   },
   resolveExecutable: () => resolveAntigravityExecutable(),
   nativeNetwork: { transport: 'acp', snapshotKey: 'antigravity' },
-  update: { command: 'agy', nativeArgs: ['update'] }
+  update: { command: 'agy', nativeArgs: ['update'], githubRepo: 'google-antigravity/antigravity-cli' }
 }
