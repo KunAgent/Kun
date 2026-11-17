@@ -14,10 +14,13 @@ import {
   ACP_PROTOCOL_VERSION,
   AcpError,
   AcpInitializeResultSchema,
+  AcpSessionNotificationSchema,
   parseAcpSessionNotification,
   type AcpInitializeResult,
   type SessionUpdate
 } from './acp-schema.js'
+
+const NotificationRouteSchema = AcpSessionNotificationSchema.pick({ sessionId: true })
 
 /** Cold starts include first-run bootstraps (OpenCode ~32s); see acp-readiness-probe. */
 export const ACP_INITIALIZE_TIMEOUT_MS = 60_000
@@ -168,14 +171,13 @@ export class AcpConnection {
         error instanceof AcpError
           ? error
           : new AcpError('harness_protocol_error', String(error))
-      // A notification that does not even carry a sessionId cannot be routed;
-      // surface it on every live session so the turn fails closed.
-      const targets =
-        this.sessionSubscribers.size > 0
-          ? [...this.sessionSubscribers.values()]
-          : []
+      // Only an unrouteable notification fails every live session on the connection.
+      const route = NotificationRouteSchema.safeParse(params)
+      const targets = route.success
+        ? [this.sessionSubscribers.get(route.data.sessionId)]
+        : this.sessionSubscribers.values()
       for (const set of targets) {
-        for (const subscriber of set) subscriber.onError?.(acpError)
+        for (const subscriber of set ?? []) subscriber.onError?.(acpError)
       }
       return
     }

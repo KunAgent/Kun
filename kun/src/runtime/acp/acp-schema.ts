@@ -460,6 +460,7 @@ const AcpToolKindSchema = z.enum([
 ])
 
 const ToolCallSharedFields = {
+  toolCallId: z.string().min(1).max(1_024),
   kind: AcpToolKindSchema.nullish(),
   status: AcpToolCallStatusSchema.nullish(),
   content: z.array(ToolCallContentItemSchema).nullish(),
@@ -468,17 +469,20 @@ const ToolCallSharedFields = {
   rawOutput: z.unknown().optional()
 }
 
+const MAX_TOOL_TITLE_CHARS = 4_096
+const ToolDisplayTitleSchema = z.string().transform((title) =>
+  title.length > MAX_TOOL_TITLE_CHARS ? `${title.slice(0, MAX_TOOL_TITLE_CHARS - 3)}...` : title
+)
+
 export const AcpToolCallSchema = MetaSchema.extend({
   sessionUpdate: z.literal('tool_call'),
-  toolCallId: z.string().min(1).max(1_024),
-  title: z.string().max(4_096),
+  title: ToolDisplayTitleSchema,
   ...ToolCallSharedFields
 })
 
 export const AcpToolCallUpdateWireSchema = MetaSchema.extend({
   sessionUpdate: z.literal('tool_call_update'),
-  toolCallId: z.string().min(1).max(1_024),
-  title: z.string().max(4_096).nullish(),
+  title: ToolDisplayTitleSchema.nullish(),
   ...ToolCallSharedFields
 })
 
@@ -556,10 +560,11 @@ export function parseAcpSessionUpdate(update: unknown):
   }
   const parsed = schema.safeParse(update)
   if (!parsed.success) {
+    const issues = parsed.error.issues.slice(0, 8).map((issue) => `${String(issue.path[0] ?? 'payload')} (${issue.code})`)
     throw new AcpError(
       'harness_protocol_error',
-      `session/update ${variant.data.sessionUpdate} is missing required fields`,
-      { data: { issues: parsed.error.issues.slice(0, 8).map((issue) => issue.message) } }
+      `session/update ${variant.data.sessionUpdate}: invalid ${issues.join(', ')}`,
+      { data: { issues } }
     )
   }
   return parsed.data as SessionUpdate
@@ -621,14 +626,8 @@ export function parseAcpSessionNotification(params: unknown): AcpParsedSessionNo
 export const AcpRequestPermissionParamsSchema = MetaSchema.extend({
   sessionId: z.string().min(1).max(1_024),
   toolCall: MetaSchema.extend({
-    toolCallId: z.string().min(1).max(1_024),
-    title: z.string().max(4_096).nullish(),
-    kind: AcpToolKindSchema.nullish(),
-    status: AcpToolCallStatusSchema.nullish(),
-    content: z.array(ToolCallContentItemSchema).nullish(),
-    locations: z.array(ToolCallLocationSchema).nullish(),
-    rawInput: z.unknown().optional(),
-    rawOutput: z.unknown().optional()
+    title: z.string().max(MAX_TOOL_TITLE_CHARS).nullish(),
+    ...ToolCallSharedFields
   }),
   options: AcpPermissionOptionsSchema
 })
