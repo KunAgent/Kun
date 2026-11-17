@@ -5,7 +5,7 @@
  * approval pipeline, user-input requests route into the `UserInputGate`.
  */
 import type { ApprovalRequest } from '../domain/approval.js'
-import { createApprovalRequest } from '../domain/approval.js'
+import { createApprovalActionEnvelope, createApprovalRequest } from '../domain/approval.js'
 import { AcpDraftEmitter } from '../runtime/acp/acp-turn-emitter.js'
 import { harnessTurnTiming } from '../runtime/harness-turn-timing.js'
 import type { UserInputGate, UserInputQuestion } from '../ports/user-input-gate.js'
@@ -23,6 +23,7 @@ export type KunTimelineTurnSinkDeps = {
   userInputGate?: UserInputGate
   threadId: string
   turnId: string
+  workspace: string
   ids: { next(prefix: string): string }
   diagnostic?: (summary: string) => void
 }
@@ -63,13 +64,31 @@ export class KunTimelineTurnSink implements HarnessTurnSink {
   async requestApproval(
     request: HarnessApprovalRequest
   ): Promise<HarnessApprovalResponse> {
+    const toolName = APPROVAL_TOOL_NAMES[request.kind] ?? 'harness_action'
+    const detail = request.detail ?? {}
     const approval: ApprovalRequest = createApprovalRequest({
       id: this.deps.ids.next('approval'),
       threadId: this.deps.threadId,
       turnId: this.deps.turnId,
-      toolName: APPROVAL_TOOL_NAMES[request.kind] ?? 'harness_action',
+      toolName,
       summary: request.summary,
-      ...(request.detail ? { action: request.detail as never } : {})
+      action: createApprovalActionEnvelope({
+        toolName,
+        ...(request.kind === 'command' ? { toolKind: 'command_execution' as const } : {}),
+        ...(request.kind === 'file-change' ? { toolKind: 'file_change' as const } : {}),
+        // Harness details do not reliably describe all effects; review conservatively.
+        effects: {
+          network: true,
+          externalWrite: true,
+          processExecution: request.kind === 'command',
+          guiAutomation: true
+        },
+        arguments: detail,
+        workspace: this.deps.workspace,
+        ...(typeof detail.cwd === 'string' && detail.cwd.trim() ? { cwd: detail.cwd } : {}),
+        reason: request.summary,
+        requiresUserDecision: request.risky === true
+      })
     })
     const decision = await this.deps.approve(approval)
     return { decision: decision === 'allow' ? 'accept' : 'decline' }

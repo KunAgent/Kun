@@ -291,6 +291,7 @@ export class SessionTurnRuntime implements DelegatedTurnRuntime {
         return resolution.decision === 'allow' ? 'allow' : 'deny'
       },
       userInputGate: this.deps.userInputGate,
+      workspace: ctx.workspace,
       threadId,
       turnId,
       ids: this.deps.ids,
