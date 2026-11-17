@@ -8,7 +8,6 @@ import {
   Blocks,
   Bot,
   Check,
-  Cloud,
   Code2,
   ClipboardList,
   Ellipsis,
@@ -50,7 +49,6 @@ import { useRemoteMobileLayout } from '../../lib/remote-mobile'
 import { useMobilePairings } from '../remote/mobile-pairing-store'
 import { switchRemoteSurface } from '../../mobile/use-remote-surface'
 import { CollaborationIcon } from '../workers/CollaborationIcon'
-import { selectAllRunningSessions, useColabStore, useColabSubscription } from '../../colab/colab-store'
 
 export type { RightPanelMode } from '../../extensions/contribution-ids'
 
@@ -391,8 +389,6 @@ export function WorkbenchSideRail({
   onSelectExtension
 }: Props): ReactElement | null {
   const { t } = useTranslation(['common', 'settings'])
-  useColabSubscription()
-  const colabRunning = useColabStore((state) => selectAllRunningSessions(state.snapshot).length > 0)
   const railCollapsed = useRailCollapseStore((state) => state.collapsed)
   // The Remote panel configures this host; hide the entry inside Remote clients.
   const isRemoteWeb = typeof window !== 'undefined' && window.kunGui?.isRemoteWeb === true
@@ -406,8 +402,7 @@ export function WorkbenchSideRail({
       disabled: !fileTreeEnabled, onClick: onToggleFileTree }] : []),
     panel(BUILTIN_RIGHT_PANEL_IDS.changes, t('rightPanelChanges'), FileEdit),
     ...(planPanelEnabled ? [panel(BUILTIN_RIGHT_PANEL_IDS.plan, t('rightPanelPlan'), ClipboardList)] : []),
-    panel(BUILTIN_RIGHT_PANEL_IDS.browser, t('rightPanelBrowser'), Globe2),
-    ...(isRemoteWeb ? [] : [{ ...panel(BUILTIN_RIGHT_PANEL_IDS.colab, t('rightPanelColab', { defaultValue: 'Colab' }), Cloud), running: colabRunning }])
+    panel(BUILTIN_RIGHT_PANEL_IDS.browser, t('rightPanelBrowser'), Globe2)
   ], [
     ...(onOpenSideChat ? [{ key: 'side-chat', label: t('sidePanelOpen'), icon: MessageCircleMore, active: sideChatOpen,
       disabled: !sideChatEnabled, onClick: onOpenSideChat, running: sideChatRunningCount > 0 }] : []),

@@ -54,8 +54,22 @@ sys.exit(proc.wait())
 `
 }
 
-const GPU_PROBE_PYTHON = `import subprocess
+const RUNTIME_PROBE_PYTHON = (includeGpu: boolean): string => `import shutil, subprocess
 try:
+    mt = ma = 0
+    with open("/proc/meminfo") as f:
+        for ln in f:
+            if ln.startswith("MemTotal:"): mt = int(ln.split()[1])
+            elif ln.startswith("MemAvailable:"): ma = int(ln.split()[1])
+    du = shutil.disk_usage("/content")
+    ram_used = max(0.0, (mt - ma) / 1048576.0) if mt else 0.0
+    disk_pct = round(du.used * 100.0 / du.total) if du.total else 0
+    print(f"KUN_SYS:{ram_used:.1f},{disk_pct}")
+except Exception:
+    pass
+${
+  includeGpu
+    ? `try:
     out = subprocess.check_output(
         ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
         text=True,
@@ -63,7 +77,9 @@ try:
     ).strip().splitlines()[0]
     print("KUN_GPU:" + out)
 except Exception:
-    pass
+    pass`
+    : ''
+}
 `
 
 const ARTIFACT_LIST_PYTHON = (remoteDir: string): string => `import json, os
@@ -365,37 +381,45 @@ export class ColabSessionExecutor {
     const poll = async (): Promise<void> => {
       const current = this.deps.getSession(sessionId)
       if (!current || current.phase !== 'running') return
-      if (current.accelerator !== 'CPU') {
-        const res = await this.deps.cli.runCommand({
-          sessionsJsonPath,
-          args: ['exec', '-s', current.sessionName, '--timeout', '10'],
-          env,
-          stdinText: GPU_PROBE_PYTHON,
-          timeoutMs: 15_000
-        })
-        const gpuLine = res.stdout.split(/\r?\n/).find((l) => l.startsWith('KUN_GPU:'))
-        if (gpuLine) {
-          const [utilRaw, usedMbRaw] = gpuLine.slice('KUN_GPU:'.length).split(',')
-          const util = Number(utilRaw?.trim())
-          const usedGb = Number(usedMbRaw?.trim()) / 1024
-          if (Number.isFinite(util)) {
-            const history = [...current.gpuHistory, util].slice(-24)
-            this.deps.patchSession(sessionId, {
-              gpuUtilizationPct: Math.round(util),
-              vramUsedGb: Number.isFinite(usedGb) ? Number(usedGb.toFixed(1)) : current.vramUsedGb,
-              gpuHistory: history
-            })
-          }
+      const res = await this.deps.cli.runCommand({
+        sessionsJsonPath,
+        args: ['exec', '-s', current.sessionName, '--timeout', '10'],
+        env,
+        stdinText: RUNTIME_PROBE_PYTHON(current.accelerator !== 'CPU'),
+        timeoutMs: 15_000
+      })
+      const lines = res.stdout.split(/\r?\n/)
+      const patch: Partial<ColabSessionView> = {}
+      const sysLine = lines.find((l) => l.startsWith('KUN_SYS:'))
+      if (sysLine) {
+        const [ramRaw, diskRaw] = sysLine.slice('KUN_SYS:'.length).split(',')
+        const ramUsed = Number(ramRaw?.trim())
+        const diskPct = Number(diskRaw?.trim())
+        if (Number.isFinite(ramUsed)) patch.ramUsedGb = Number(ramUsed.toFixed(1))
+        if (Number.isFinite(diskPct)) patch.diskUsedPct = Math.round(diskPct)
+      }
+      const gpuLine = lines.find((l) => l.startsWith('KUN_GPU:'))
+      if (gpuLine) {
+        const [utilRaw, usedMbRaw] = gpuLine.slice('KUN_GPU:'.length).split(',')
+        const util = Number(utilRaw?.trim())
+        const usedGb = Number(usedMbRaw?.trim()) / 1024
+        if (Number.isFinite(util)) {
+          patch.gpuUtilizationPct = Math.round(util)
+          patch.vramUsedGb = Number.isFinite(usedGb) ? Number(usedGb.toFixed(1)) : current.vramUsedGb
+          patch.gpuHistory = [...current.gpuHistory, util].slice(-24)
         }
       }
-      const artifacts = await this.listRemoteArtifacts(
-        current.sessionName,
-        current.outputRemoteDir,
-        sessionsJsonPath,
-        env
-      )
-      if (artifacts.length > 0) {
-        this.deps.patchSession(sessionId, { artifacts })
+      if (Object.keys(patch).length > 0) this.deps.patchSession(sessionId, patch)
+      if (current.outputRemoteDir.trim()) {
+        const artifacts = await this.listRemoteArtifacts(
+          current.sessionName,
+          current.outputRemoteDir,
+          sessionsJsonPath,
+          env
+        )
+        if (artifacts.length > 0) {
+          this.deps.patchSession(sessionId, { artifacts })
+        }
       }
     }
     void poll()

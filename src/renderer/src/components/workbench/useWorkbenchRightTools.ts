@@ -11,6 +11,7 @@ import { useReviewStore } from '../../store/review-store'
 import { takePlanBuildReview } from '../../store/plan-build-watch'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
 import { useColabStore } from '../../colab/colab-store'
+import { useChatStore } from '../../store/chat-store'
 import { OPEN_WORKER_SESSION_EVENT } from '../workers/worker-view-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useCodeCanvasDesignSurface } from '../../design/code-canvas-design-surface'
@@ -210,9 +211,9 @@ export function useWorkbenchRightTools({
   const colabPanelRequested = useColabStore((state) => state.panelOpenRequested)
   useEffect(() => {
     if (!colabPanelRequested) return
-    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.colab)
+    useChatStore.getState().setRoute('colab')
     useColabStore.setState({ panelOpenRequested: false })
-  }, [colabPanelRequested, openRightPanelTab])
+  }, [colabPanelRequested])
 
   // Layout tabs are workspace-scoped, but worker conversations are manager-scoped.
   // Switching managers closes their tabs; missing activity alone never does.

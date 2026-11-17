@@ -64,6 +64,7 @@ import composerRecords from './common/composer-records.json'
 import toast from './common/toast.json'
 import workTabMenu from './common/work-tab-menu.json'
 import colab from './common/colab.json'
+import colabNotebook from './common/colab-notebook.json'
 
 const common = {
   ...writeSelectionMenu,
@@ -130,7 +131,8 @@ const common = {
   ...composerRecords,
   ...toast,
   ...workTabMenu,
-  ...colab
+  ...colab,
+  ...colabNotebook
 }
 
 export default common

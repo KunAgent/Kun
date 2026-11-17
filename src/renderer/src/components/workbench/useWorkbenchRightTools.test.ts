@@ -7,6 +7,7 @@ import { openWorkerSession } from '../workers/worker-view-store'
 import { useActivityStore } from '../../store/activity-store'
 import { ColabTopbarCapsule } from '../../colab/ColabShortcuts'
 import { useColabStore } from '../../colab/colab-store'
+import { useChatStore } from '../../store/chat-store'
 import { CloudComputeSettingsSection } from '../settings-section-cloud-compute'
 import { workerSessionTabId } from '../../extensions/contribution-ids'
 import { openCodeRightTab, emptyCodeRightTabsState } from './code-right-tabs-state'
@@ -36,17 +37,19 @@ function Harness(props: ReturnType<typeof toolsProps>) {
 }
 
 describe('Colab navigation', () => {
-  it('opens the panel from the Code header with no accounts or running sessions', async () => {
+  it('switches the workbench route to Colab mode when requested', async () => {
+    useChatStore.setState({ route: 'chat' })
     const props = toolsProps()
     await render(createElement(Harness, props))
     const header = await render(createElement(ColabTopbarCapsule, { workspaceRoot: '' }))
     await act(async () => header.root.findByType('button').props.onClick())
-    expect(props.openRightPanelTab).toHaveBeenCalledWith(BUILTIN_RIGHT_PANEL_IDS.colab)
+    expect(useChatStore.getState().route).toBe('colab')
   })
 
   it('keeps the settings request until Code mounts and consumes it only once', async () => {
+    useChatStore.setState({ route: 'settings' })
     const flushPendingSave = vi.fn(async () => true)
-    const openCode = vi.fn(async () => undefined)
+    const openCode = vi.fn(async () => { useChatStore.setState({ route: 'chat' }) })
     const settings = await render(createElement(CloudComputeSettingsSection, {
       ctx: { t: (key: string) => key, flushPendingSave, openCode }
     }))
@@ -59,11 +62,12 @@ describe('Colab navigation', () => {
 
     const props = toolsProps()
     await render(createElement(Harness, props))
-    expect(props.openRightPanelTab.mock.calls).toEqual([[BUILTIN_RIGHT_PANEL_IDS.colab]])
+    expect(useChatStore.getState().route).toBe('colab')
     expect(useColabStore.getState().panelOpenRequested).toBe(false)
+    useChatStore.setState({ route: 'chat' })
     const nextProps = toolsProps()
     await render(createElement(Harness, nextProps))
-    expect(nextProps.openRightPanelTab).not.toHaveBeenCalled()
+    expect(useChatStore.getState().route).toBe('chat')
   })
 })
 

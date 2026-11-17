@@ -2,6 +2,8 @@ import { dialog, ipcMain } from 'electron'
 import { z } from 'zod'
 import { COLAB_ACCELERATORS } from '../../shared/colab/colab-types'
 import { configureColabHost } from '../colab/colab-host'
+import { requestColabNotebookAssist } from '../colab/colab-notebook-assist'
+import { ColabNotebookKernel } from '../colab/colab-notebook-kernel'
 import type { RegisterAppIpcHandlersOptions } from './app-ipc-handler-options'
 import { parseIpcPayload } from './app-ipc-handler-utils'
 
@@ -126,6 +128,36 @@ const untrackedSchema = z
   })
   .strict()
 
+const notebookExecSchema = z
+  .object({
+    sessionId: z.string().min(1).max(128),
+    execId: z.string().min(1).max(128),
+    code: z.string().max(1_000_000)
+  })
+  .strict()
+const notebookInterruptSchema = z.object({ execId: z.string().min(1).max(128) }).strict()
+const notebookListSchema = z
+  .object({ sessionId: z.string().min(1).max(128), path: z.string().min(1).max(1024) })
+  .strict()
+const notebookAssistSchema = z
+  .object({
+    prompt: z.string().min(1).max(16_000),
+    mode: z.enum(['insert', 'replace']),
+    cells: z
+      .array(
+        z
+          .object({
+            kind: z.enum(['code', 'markdown']),
+            source: z.string().max(100_000),
+            output: z.string().max(32_000).optional(),
+            selected: z.boolean().optional()
+          })
+          .strict()
+      )
+      .max(64)
+  })
+  .strict()
+
 export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const service = configureColabHost({
     getSettings: () => options.store.load()
@@ -241,6 +273,27 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
       connectionId: req.connectionId,
       endpoint: req.endpoint
     })
+  })
+  const notebookKernel = new ColabNotebookKernel(service, (event) => {
+    const win = options.getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send('colab:notebook:event', event)
+  })
+  ipcMain.handle('colab:notebook:execute', async (_, payload: unknown) => {
+    const req = parseIpcPayload('colab:notebook:execute', notebookExecSchema, payload)
+    return notebookKernel.execute(req)
+  })
+  ipcMain.handle('colab:notebook:interrupt', async (_, payload: unknown) => {
+    const req = parseIpcPayload('colab:notebook:interrupt', notebookInterruptSchema, payload)
+    return notebookKernel.interrupt(req.execId)
+  })
+  ipcMain.handle('colab:notebook:list-files', async (_, payload: unknown) => {
+    const req = parseIpcPayload('colab:notebook:list-files', notebookListSchema, payload)
+    return notebookKernel.listFiles(req)
+  })
+  ipcMain.handle('colab:notebook:assist', async (_, payload: unknown) => {
+    const req = parseIpcPayload('colab:notebook:assist', notebookAssistSchema, payload)
+    const settings = await options.store.load()
+    return requestColabNotebookAssist(settings, req)
   })
   ipcMain.handle('colab:untracked:ignore', async (_, payload: unknown) => {
     const req = parseIpcPayload('colab:untracked:ignore', untrackedSchema, payload)

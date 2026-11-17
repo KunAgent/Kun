@@ -8,6 +8,13 @@ import type {
   ColabSyncCandidate,
   ColabWorkspaceRunConfig
 } from './colab-types'
+import type {
+  ColabNotebookAssistRequest,
+  ColabNotebookAssistResult,
+  ColabNotebookExecEvent,
+  ColabNotebookExecuteResult,
+  ColabRemoteListResult
+} from './colab-notebook-types'
 
 export type KunGuiColabApi = {
   colabGetSnapshot: () => Promise<ColabStateSnapshot>
@@ -93,4 +100,13 @@ export type KunGuiColabApi = {
     endpoint: string
   }) => Promise<{ ok: boolean }>
   onColabStateChanged: (handler: (snapshot: ColabStateSnapshot) => void) => () => void
+  colabNotebookExecute: (input: {
+    sessionId: string
+    execId: string
+    code: string
+  }) => Promise<ColabNotebookExecuteResult>
+  colabNotebookInterrupt: (input: { execId: string }) => Promise<{ ok: boolean }>
+  colabNotebookListFiles: (input: { sessionId: string; path: string }) => Promise<ColabRemoteListResult>
+  colabNotebookAssist: (input: ColabNotebookAssistRequest) => Promise<ColabNotebookAssistResult>
+  onColabNotebookEvent: (handler: (event: ColabNotebookExecEvent) => void) => () => void
 }

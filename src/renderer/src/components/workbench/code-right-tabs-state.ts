@@ -24,7 +24,8 @@ function codeTabTarget(id: RightPanelContributionId): RightPanelContributionId {
 function isCodeRightTabContributionId(value: unknown): value is RightPanelContributionId {
   return isRightPanelContributionId(value) &&
     value !== BUILTIN_RIGHT_PANEL_IDS.sddAi &&
-    value !== BUILTIN_RIGHT_PANEL_IDS.terminal
+    value !== BUILTIN_RIGHT_PANEL_IDS.terminal &&
+    value !== BUILTIN_RIGHT_PANEL_IDS.colab
 }
 
 export type StoredCodeRightTabsRegistry = {

@@ -132,6 +132,8 @@ export type ColabSessionView = {
   uploadTotalBytes: number
   gpuUtilizationPct: number | null
   vramUsedGb: number | null
+  ramUsedGb?: number | null
+  diskUsedPct?: number | null
   gpuHistory: number[]
   metrics: Record<string, ColabMetricPoint[]>
   progressSummary?: string

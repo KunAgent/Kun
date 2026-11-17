@@ -1,5 +1,6 @@
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { ColabStateSnapshot } from '../shared/colab/colab-types'
+import type { ColabNotebookExecEvent } from '../shared/colab/colab-notebook-types'
 import type { KunGuiColabApi } from '../shared/colab/kun-gui-api-colab'
 
 /**
@@ -37,5 +38,16 @@ export const colabApi: KunGuiColabApi = {
     }
     ipcRenderer.on('colab:state-changed', wrapped)
     return () => ipcRenderer.removeListener('colab:state-changed', wrapped)
+  },
+  colabNotebookExecute: (input) => ipcRenderer.invoke('colab:notebook:execute', input),
+  colabNotebookInterrupt: (input) => ipcRenderer.invoke('colab:notebook:interrupt', input),
+  colabNotebookListFiles: (input) => ipcRenderer.invoke('colab:notebook:list-files', input),
+  colabNotebookAssist: (input) => ipcRenderer.invoke('colab:notebook:assist', input),
+  onColabNotebookEvent: (handler) => {
+    const wrapped = (_event: IpcRendererEvent, event: ColabNotebookExecEvent): void => {
+      handler(event)
+    }
+    ipcRenderer.on('colab:notebook:event', wrapped)
+    return () => ipcRenderer.removeListener('colab:notebook:event', wrapped)
   }
 }
