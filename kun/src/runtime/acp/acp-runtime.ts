@@ -337,7 +337,9 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       await failAcpTurnFromError(this.deps.turns, threadId, turnId, error, true, definition.id)
       return 'failed'
     }
-    if (definition.id === 'antigravity') emitter.antigravityOutputSessionId = session.sessionId
+    if (definition.id === 'antigravity' || definition.id === 'devin') {
+      emitter.outputLocator = { harnessId: definition.id, sessionId: session.sessionId }
+    }
     // A subagent's own steps live in the Agent's session store, not on ACP.
     const childSessions = childSessionDb && mapper.subagents ? startOpenCodeChildSessions({
       dbPath: childSessionDb, acpSessionId: session.sessionId, tracker: mapper.subagents,

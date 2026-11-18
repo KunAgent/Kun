@@ -59,6 +59,13 @@ export function readToolPresentation(block: PresentationBlock): ToolPresentation
   return value
 }
 
+/** The display kind may be more specific than the ACP `other` bucket. */
+export function displayedAcpToolKind(block: PresentationBlock): string | undefined {
+  const kind = block.meta?.acpKind
+  if (typeof kind === 'string' && kind !== 'other') return kind
+  if (kind === 'other' || record(block.meta?.toolPresentation).source === 'acp') return readToolPresentation(block).kind
+}
+
 function readPresentation(block: PresentationBlock): ToolPresentation {
   const meta = block.meta ?? {}
   const explicit = record(meta.toolPresentation)
@@ -108,7 +115,7 @@ export function mergeToolPresentations(current: unknown, incoming: unknown, pref
   const merged = { ...a, ...defined(b) }
   if (a.source === 'acp' && b.name?.startsWith('acp:') && a.name && !a.name.startsWith('acp:')) {
     merged.name = a.name
-    if (a.kind === 'mcp' && b.kind === 'other') merged.kind = a.kind
+    if (b.kind === 'other') merged.kind = a.kind
   }
   if (a.state === 'running' && b.state === 'pending') {
     merged.state = a.state

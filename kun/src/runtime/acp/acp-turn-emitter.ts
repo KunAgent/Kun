@@ -8,6 +8,7 @@
  * recorded event.
  */
 import type { TurnItem } from '../../contracts/items.js'
+import type { AcpOutputLocator } from '../../contracts/acp-tool-output.js'
 import type { RuntimeEventDraft } from '../../services/runtime-event-recorder.js'
 import type { TurnService } from '../../services/turn-service.js'
 import type { RuntimeEventRecorder } from '../../services/runtime-event-recorder.js'
@@ -38,7 +39,7 @@ export class AcpDraftEmitter {
   private readonly materializedItems = new Set<string>()
   private readonly itemTimes = new DelegatedItemTimes()
   /** Bound by Kun after session/new or session/load, never taken from tool parameters. */
-  antigravityOutputSessionId?: string
+  outputLocator?: AcpOutputLocator
 
   constructor(
     private readonly deps: AcpDraftEmitterDeps,
@@ -65,8 +66,8 @@ export class AcpDraftEmitter {
       return
     }
     const drafted = 'item' in input ? (input.item as TurnItem | undefined) : undefined
-    const located = drafted?.kind === 'tool_result' && this.antigravityOutputSessionId
-      ? { ...drafted, meta: { ...drafted.meta, antigravityOutputSessionId: this.antigravityOutputSessionId } } : drafted
+    const located = drafted?.kind === 'tool_result' && this.outputLocator
+      ? { ...drafted, meta: { ...drafted.meta, acpOutputLocator: this.outputLocator } } : drafted
     const item = located ? this.itemTimes.stamp(located) : undefined
     const draft = item ? { ...input, item } as RuntimeEventDraft : input
     switch (draft.kind) {

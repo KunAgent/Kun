@@ -29,9 +29,9 @@ export function useAcpToolOutput(block: ToolBlock, p: ToolPresentation) {
   return { presentation, loadingOutput: Boolean(key && key !== saved?.key) }
 }
 
-function presentAcpToolOutput(p: ToolPresentation, { text, truncated }: AcpToolOutput): ToolPresentation {
+function presentAcpToolOutput(p: ToolPresentation, { text, truncated, provider }: AcpToolOutput): ToolPresentation {
   let output: unknown = text
-  if (!truncated && p.kind !== 'read' && /^\s*(?:\[|\{)/u.test(text)) {
+  if (provider !== 'devin' && !truncated && p.kind !== 'read' && /^\s*(?:\[|\{)/u.test(text)) {
     try { output = JSON.parse(text) } catch { /* Plain text that starts with a bracket is still evidence. */ }
   }
   const result = output && typeof output === 'object' && !Array.isArray(output) ? output as Record<string, unknown> : undefined
@@ -43,7 +43,7 @@ function presentAcpToolOutput(p: ToolPresentation, { text, truncated }: AcpToolO
   if (view.state === 'failed') view.error ??= view.text
   // Antigravity read_file has already numbered the returned lines. Keep the
   // original in Output and let the code viewer number its excerpt only once.
-  if (p.kind === 'read') {
+  if (provider !== 'devin' && p.kind === 'read') {
     const match = /^Showing lines (\d+)-(\d+) of \d+\r?\n/u.exec(text)
     if (match) {
       const first = Number(match[1]), lines = text.slice(match[0].length).split(/\r?\n/u)

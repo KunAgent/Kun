@@ -3,11 +3,13 @@ import { chatBlockFromItem, mergeChatBlocks } from '../../agent/kun-mapper'
 import type { CoreTurnItemJson } from '../../agent/kun-contract'
 import { readToolPresentation } from '../../agent/tool-presentation'
 import type { ToolBlock } from '../../agent/types'
-import { summarizeToolBlock } from './message-timeline-process-detail'
+import { summarizeToolBlock, toolNameForBlock } from './message-timeline-process-detail'
+import { summarizeProcessWork } from './message-timeline-process-summary'
+import { summarizeToolLiveAction } from './message-timeline-tool-action'
 
 const t = (key: string) => key
-function stored(kind: string, input: object, name: string, title: string) {
-  const view = { version: 1, source: 'acp', kind, name, title, input, canCancel: false }
+function stored(kind: string, input: object, name: string | undefined, title: string) {
+  const view = { version: 1, source: 'acp', kind, ...(name ? { name } : {}), title, input, canCancel: false }
   const base = { threadId: 'thread', turnId: 'turn', callId: 'call_123', role: 'tool', createdAt: '2026-11-18T13:32:30Z',
     toolKind: 'tool_call', toolName: 'acp:' + kind } as const
   const item = (entry: Partial<CoreTurnItemJson>, state: string) => chatBlockFromItem({
@@ -34,5 +36,27 @@ describe('ACP process rows from saved call/result pairs', () => {
     expect(read.fileContent).toBeUndefined()
     expect(readToolPresentation(stored('execute', { CommandLine: 'npm test', Cwd: '/repo' }, 'run_command', 'Test')))
       .toMatchObject({ command: 'npm test', cwd: '/repo' })
+  })
+
+  it('shows the actual action, target and counts for DeepSeek Harness calls reported as other', () => {
+    const calls = [stored('other', { command: 'git status', description: 'Check changes' }, undefined, 'bash'),
+      stored('other', { file_path: '/repo/image.png' }, undefined, 'read_image'),
+      stored('other', { file_path: '/repo/a.ts', old_string: 'before', new_string: 'after' }, undefined, 'edit'),
+      stored('other', { file_path: '/repo/b.ts', content: '' }, undefined, 'write'),
+      stored('other', { pattern: '*.ts' }, undefined, 'glob')]
+    expect(calls.map(block => readToolPresentation(block).kind)).toEqual(['execute', 'read', 'edit', 'edit', 'search'])
+    expect(calls.map(toolNameForBlock)).toEqual(['shell', 'read_file', 'edit_file', 'edit_file', 'search_files'])
+    expect(calls.map(block => summarizeToolBlock(block, t))).toEqual(['toolBuiltinBash git status', 'toolBuiltinRead /repo/image.png',
+      'toolBuiltinEdit /repo/a.ts', 'toolBuiltinEdit /repo/b.ts', 'toolBuiltinGrep *.ts'])
+    expect(summarizeToolLiveAction(calls[0], t)).toBe('toolLiveActionRun')
+    expect(summarizeProcessWork(calls, t)).toBe('groupReadFile · groupSearchedOnce · groupEditedFiles · groupRanCommand')
+  })
+
+  it('preserves explicit kinds and unknown tools instead of guessing from text or arguments', () => {
+    for (const block of [stored('other', { command: 'git status' }, undefined, 'bash would be useful'),
+      stored('other', { command: 'git status' }, 'custom', 'bash'), stored('other', {}, undefined, 'bash')]) {
+      expect(readToolPresentation(block).kind).toBe('other')
+    }
+    expect(readToolPresentation(stored('fetch', { command: 'git status' }, undefined, 'bash')).kind).toBe('fetch')
   })
 })

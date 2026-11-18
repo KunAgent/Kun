@@ -128,7 +128,7 @@ it('runs Antigravity over ACP with kun-tools MCP injection, model normalization,
 
     expect(h.recorded).toEqual(expect.arrayContaining([
       expect.objectContaining({ kind: 'tool_call_finished', item: expect.objectContaining({
-        callId: 'call_git', meta: expect.objectContaining({ antigravityOutputSessionId: 'agy-session-1' })
+        callId: 'call_git', meta: expect.objectContaining({ acpOutputLocator: { harnessId: 'antigravity', sessionId: 'agy-session-1' } })
       }) }),
       expect.objectContaining({
         kind: 'delegated_runtime',

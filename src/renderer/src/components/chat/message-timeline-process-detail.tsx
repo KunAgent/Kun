@@ -5,7 +5,7 @@ import { ToolBlockDetails } from './ToolBlockDetails'
 import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
-import { readToolPresentation } from '../../agent/tool-presentation'
+import { displayedAcpToolKind, readToolPresentation } from '../../agent/tool-presentation'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { MessageBubble } from './message-timeline-bubbles'
@@ -33,11 +33,12 @@ import {
 import { HandoffBriefDetail } from './message-timeline-handoff-entry'
 
 export function toolNameForBlock(block: ToolBlock): string {
-  if (typeof block.meta?.acpKind === 'string') {
+  const acpKind = displayedAcpToolKind(block)
+  if (acpKind) {
     const names: Record<string, string> = { read: 'read_file', search: 'search_files', execute: 'shell', edit: 'edit_file',
       delete: 'edit_file', move: 'edit_file', 'fs.write': 'write_file', fetch: 'fetch' }
-    if (typeof names[block.meta.acpKind] === 'string') return names[block.meta.acpKind]
-    return `acp:${block.meta.acpKind}`
+    if (typeof names[acpKind] === 'string') return names[acpKind]
+    return `acp:${acpKind}`
   }
   const rawSummary = block.summary?.trim() ?? ''
   return (extractToolName(rawSummary) || readMetaString(block.meta, 'toolName') || '').toLowerCase()

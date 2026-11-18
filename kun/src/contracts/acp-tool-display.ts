@@ -10,8 +10,22 @@ export function acpToolDisplay(p: ToolPresentation): ToolPresentation {
   // Other server/tool names containing underscores are opaque; never guess their split.
   const mcp = /^mcp__(.+?)__(.+)$/.exec(name ?? '') ?? /^mcp:([^:]+):(.+)$/.exec(name ?? '')
     ?? /^mcp_(kun-tools(?:_[a-f0-9]{8})?)_(.+)$/.exec(name ?? '')
-  return { ...acpToolTargets(p),
-    ...(mcp ? { kind: 'mcp', server: mcp[1], name: mcp[2] } : {}),
+  const targets = acpToolTargets(p)
+  // Some agents (notably DeepSeek Harness) put only a bare tool id in the
+  // title and send `other` for every call. Use an exact id and matching
+  // arguments for presentation; never use prose or change the wire kind.
+  const id = name ?? p.title
+  let kind: string | undefined
+  if (p.kind === 'other' && !mcp) {
+    if ((id === 'bash' || id === 'shell' || id === 'exec_command') && targets.command) kind = 'execute'
+    else if ((id === 'read' || id === 'read_file' || id === 'read_image') && targets.filePath) kind = 'read'
+    else if ((id === 'write' || id === 'write_file') && targets.filePath && typeof input.content === 'string') kind = 'edit'
+    else if ((id === 'edit' || id === 'edit_file') && targets.filePath &&
+      typeof input.old_string === 'string' && typeof input.new_string === 'string') kind = 'edit'
+    else if ((id === 'glob' || id === 'grep' || id === 'search_files') && targets.query) kind = 'search'
+  }
+  return { ...targets,
+    ...(mcp ? { kind: 'mcp', server: mcp[1], name: mcp[2] } : kind ? { kind, name: id } : {}),
     ...(summary ? { title: summary.slice(0, 4096) } : {})
   }
 }
