@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import type { ColabAccelerator } from '@shared/colab/colab-types'
-import type { ColabNotebookExecEvent, ColabRemoteEntry } from '@shared/colab/colab-notebook-types'
+import type {
+  ColabKernelVariable,
+  ColabNotebookExecEvent,
+  ColabRemoteEntry,
+  NotebookRuntimeBackend
+} from '@shared/colab/colab-notebook-types'
 import {
   appendOutput,
   createCell,
@@ -15,6 +20,25 @@ export const COLAB_REMOTE_ROOT = '/content'
 const NOTEBOOK_READ_MAX_BYTES = 16 * 1024 * 1024
 
 type RemoteDir = { status: 'loading' | 'ready' | 'error'; entries: ColabRemoteEntry[]; error?: string }
+
+/** A cell the user asked Kun about; the side panel consumes it into the composer. */
+export type ColabKunCellRequest = { cellNumber: number; nonce: number }
+
+function computeChangedCellIds(baseline: NotebookCell[], next: NotebookCell[]): string[] {
+  const counts = new Map<string, number>()
+  for (const cell of baseline) {
+    const key = `${cell.kind}\0${cell.source}`
+    counts.set(key, (counts.get(key) ?? 0) + 1)
+  }
+  const changed: string[] = []
+  for (const cell of next) {
+    const key = `${cell.kind}\0${cell.source}`
+    const left = counts.get(key) ?? 0
+    if (left > 0) counts.set(key, left - 1)
+    else changed.push(cell.id)
+  }
+  return changed
+}
 
 type NotebookState = {
   workspaceRoot: string
@@ -32,28 +56,51 @@ type NotebookState = {
   execCounter: number
   remoteDirs: Record<string, RemoteDir>
   expandedDirs: string[]
+  variables: ColabKernelVariable[]
+  variablesLoading: boolean
+  runtimeBackend: NotebookRuntimeBackend
+  sidePanelOpen: boolean
+  connectionsFocusRequest: number
+  kunCellRequest: ColabKunCellRequest | null
+  kunBaselineCells: NotebookCell[] | null
+  kunChangedCellIds: string[]
+  /** Kun is editing the .ipynb on disk; local edits pause so they cannot overwrite its writes. */
+  kunBusy: boolean
 }
 
 type NotebookActions = {
   setAccelerator: (accelerator: ColabAccelerator) => void
-  refreshNotebooks: (workspaceRoot: string) => Promise<void>
+  setRuntimeBackend: (backend: NotebookRuntimeBackend) => void
+  refreshNotebooks: (workspaceRoot: string, options?: { selectFirst?: boolean }) => Promise<void>
   openNotebook: (path: string) => Promise<void>
   createNotebook: (workspaceRoot: string) => Promise<void>
+  importLocalNotebooks: (workspaceRoot: string) => Promise<boolean>
   saveNotebook: () => Promise<boolean>
   selectCell: (id: string | null) => void
   updateCellSource: (id: string, source: string) => void
   setCellKind: (id: string, kind: NotebookCellKind) => void
   addCell: (kind: NotebookCellKind, afterId?: string | null) => void
-  applyAssistCell: (input: { kind: NotebookCellKind; source: string; replaceSelected: boolean }) => void
+  setSidePanelOpen: (open: boolean) => void
+  focusConnections: () => void
+  askKunAboutCell: (id: string) => void
+  consumeKunCellRequest: () => void
+  captureKunBaseline: () => void
+  undoKunChanges: () => Promise<void>
+  dismissKunChanges: () => void
+  reloadActiveNotebook: () => Promise<void>
   deleteCell: (id: string) => void
   moveCell: (id: string, delta: -1 | 1) => void
   clearOutputs: () => void
-  runCells: (sessionId: string, ids: string[]) => void
+  runCells: (sessionId: string, ids: string[], options?: { agent?: boolean }) => void
+  /** Runs cells for a Kun tool call and resolves once they finish or the queue stops. */
+  runCellsAndWait: (sessionId: string, ids: string[]) => Promise<void>
+  setKunBusy: (busy: boolean) => void
   interrupt: () => Promise<void>
   resetKernelState: () => void
   restartKernel: (sessionId: string) => Promise<void>
   loadRemoteDir: (sessionId: string, path: string) => Promise<void>
   toggleRemoteDir: (sessionId: string, path: string) => void
+  loadVariables: (sessionId: string) => Promise<void>
 }
 
 const initialState: NotebookState = {
@@ -71,23 +118,36 @@ const initialState: NotebookState = {
   queue: [],
   execCounter: 0,
   remoteDirs: {},
-  expandedDirs: [COLAB_REMOTE_ROOT]
+  expandedDirs: [COLAB_REMOTE_ROOT, '/'],
+  variables: [],
+  variablesLoading: false,
+  runtimeBackend: 'colab',
+  sidePanelOpen: true,
+  connectionsFocusRequest: 0,
+  kunCellRequest: null,
+  kunBaselineCells: null,
+  kunChangedCellIds: [],
+  kunBusy: false
 }
 
 let execSeq = 0
 let activeSessionId: string | null = null
 let unsubscribe: (() => void) | null = null
 
-export const useColabNotebookStore = create<NotebookState & NotebookActions>((set, get) => {
+export const useColabNotebookStore = create<NotebookState & NotebookActions>((set, get, api) => {
   const patchCell = (id: string, patch: (cell: NotebookCell) => NotebookCell): void => {
     set((state) => ({ cells: state.cells.map((cell) => (cell.id === id ? patch(cell) : cell)), dirty: true }))
   }
+  const editLocked = (): boolean => get().kunBusy
 
   const startNext = (): void => {
     const state = get()
     if (state.runningExecId || !activeSessionId) return
     const [nextId, ...rest] = state.queue
-    if (!nextId) return
+    if (!nextId) {
+      if (typeof window.kunGui?.colabNotebookVariables === 'function') void get().loadVariables(activeSessionId)
+      return
+    }
     const cell = state.cells.find((c) => c.id === nextId)
     if (!cell || cell.kind !== 'code') {
       set({ queue: rest })
@@ -109,6 +169,10 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
     const state = get()
     if (event.execId !== state.runningExecId || !state.runningCellId) return
     const cellId = state.runningCellId
+    if (event.kind === 'clear') {
+      patchCell(cellId, (c) => ({ ...c, outputs: [] }))
+      return
+    }
     if (event.kind === 'output') {
       patchCell(cellId, (c) => ({ ...c, outputs: appendOutput(c.outputs, event.output) }))
       return
@@ -140,10 +204,12 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
     ...initialState,
 
     setAccelerator: (accelerator) => set({ accelerator }),
+    setRuntimeBackend: (runtimeBackend) => set({ runtimeBackend }),
 
-    refreshNotebooks: async (workspaceRoot) => {
+    refreshNotebooks: async (workspaceRoot, options) => {
       if (workspaceRoot !== get().workspaceRoot) {
-        set({ ...initialState, accelerator: get().accelerator, workspaceRoot })
+        const { accelerator, runtimeBackend, sidePanelOpen, connectionsFocusRequest, kunBusy } = get()
+        set({ ...initialState, accelerator, runtimeBackend, sidePanelOpen, connectionsFocusRequest, kunBusy, workspaceRoot })
       }
       if (!workspaceRoot) return
       const res = await window.kunGui.listWorkspaceFiles({ workspaceRoot })
@@ -152,7 +218,7 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
         .filter((file) => file.toLowerCase().endsWith('.ipynb') && !file.includes('.ipynb_checkpoints/'))
         .sort((a, b) => a.localeCompare(b))
       set({ notebooks })
-      if (!get().activePath && notebooks[0]) await get().openNotebook(notebooks[0])
+      if (options?.selectFirst !== false && !get().activePath && notebooks[0]) await get().openNotebook(notebooks[0])
     },
 
     openNotebook: async (path) => {
@@ -161,7 +227,14 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
       if (dirty) await get().saveNotebook()
       const res = await window.kunGui.readWorkspaceFile({ path, workspaceRoot, maxBytes: NOTEBOOK_READ_MAX_BYTES })
       if (!res.ok) {
-        set({ activePath: path, cells: [], loadError: res.message, dirty: false })
+        set({
+          activePath: path,
+          cells: [],
+          loadError: res.message,
+          dirty: false,
+          kunBaselineCells: null,
+          kunChangedCellIds: []
+        })
         return
       }
       try {
@@ -171,10 +244,19 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
           cells: cells.length ? cells : [createCell('code')],
           selectedCellId: null,
           loadError: null,
-          dirty: false
+          dirty: false,
+          kunBaselineCells: null,
+          kunChangedCellIds: []
         })
       } catch (error) {
-        set({ activePath: path, cells: [], loadError: error instanceof Error ? error.message : String(error), dirty: false })
+        set({
+          activePath: path,
+          cells: [],
+          loadError: error instanceof Error ? error.message : String(error),
+          dirty: false,
+          kunBaselineCells: null,
+          kunChangedCellIds: []
+        })
       }
     },
 
@@ -200,8 +282,20 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
         cells,
         selectedCellId: cells[1]?.id ?? null,
         loadError: null,
-        dirty: false
+        dirty: false,
+        kunBaselineCells: null,
+        kunChangedCellIds: []
       }))
+    },
+
+    importLocalNotebooks: async (workspaceRoot) => {
+      if (!workspaceRoot || typeof window.kunGui?.colabImportLocalNotebooks !== 'function') return false
+      const res = await window.kunGui.colabImportLocalNotebooks({ workspaceRoot })
+      if (!res.ok || res.relativePaths.length === 0 || get().workspaceRoot !== workspaceRoot) return false
+      await get().refreshNotebooks(workspaceRoot, { selectFirst: false })
+      if (get().workspaceRoot !== workspaceRoot) return false
+      await get().openNotebook(res.relativePaths[0])
+      return get().activePath === res.relativePaths[0]
     },
 
     saveNotebook: async () => {
@@ -219,10 +313,15 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
     },
 
     selectCell: (id) => set({ selectedCellId: id }),
-    updateCellSource: (id, source) => patchCell(id, (c) => ({ ...c, source })),
-    setCellKind: (id, kind) => patchCell(id, (c) => ({ ...c, kind, outputs: kind === 'code' ? c.outputs : [] })),
+    updateCellSource: (id, source) => {
+      if (!editLocked()) patchCell(id, (c) => ({ ...c, source }))
+    },
+    setCellKind: (id, kind) => {
+      if (!editLocked()) patchCell(id, (c) => ({ ...c, kind, outputs: kind === 'code' ? c.outputs : [] }))
+    },
 
     addCell: (kind, afterId) => {
+      if (editLocked()) return
       const cell = createCell(kind)
       set((state) => {
         const anchor = afterId ?? state.selectedCellId
@@ -233,36 +332,82 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
       })
     },
 
-    applyAssistCell: ({ kind, source, replaceSelected }) => {
-      set((state) => {
-        const targetId = state.selectedCellId
-        if (replaceSelected && targetId && targetId !== state.runningCellId) {
-          const idx = state.cells.findIndex((c) => c.id === targetId)
-          if (idx >= 0) {
-            const cells = [...state.cells]
-            cells[idx] = { ...cells[idx], kind, source, outputs: kind === 'code' ? cells[idx].outputs : [] }
-            return { cells, dirty: true }
-          }
-        }
-        const cell = createCell(kind, source)
-        const index = targetId ? state.cells.findIndex((c) => c.id === targetId) : -1
-        const cells = [...state.cells]
-        cells.splice(index >= 0 ? index + 1 : cells.length, 0, cell)
-        return { cells, selectedCellId: cell.id, dirty: true }
+    setSidePanelOpen: (open) => set({ sidePanelOpen: open }),
+    focusConnections: () => set((state) => ({ connectionsFocusRequest: state.connectionsFocusRequest + 1 })),
+
+    askKunAboutCell: (id) => {
+      const index = get().cells.findIndex((c) => c.id === id)
+      if (index < 0) return
+      set((state) => ({
+        sidePanelOpen: true,
+        selectedCellId: id,
+        kunCellRequest: { cellNumber: index + 1, nonce: (state.kunCellRequest?.nonce ?? 0) + 1 }
+      }))
+    },
+
+    consumeKunCellRequest: () => set({ kunCellRequest: null }),
+
+    captureKunBaseline: () => {
+      set((state) => ({
+        kunBaselineCells: state.cells.map((c) => ({ ...c, outputs: [...c.outputs] })),
+        kunChangedCellIds: []
+      }))
+    },
+
+    undoKunChanges: async () => {
+      const { kunBaselineCells } = get()
+      if (!kunBaselineCells) return
+      set({
+        cells: kunBaselineCells,
+        kunBaselineCells: null,
+        kunChangedCellIds: [],
+        selectedCellId: null,
+        dirty: true
       })
+      await get().saveNotebook()
+    },
+
+    dismissKunChanges: () => set({ kunBaselineCells: null, kunChangedCellIds: [] }),
+
+    // Kun edits the .ipynb on disk; pick that up unless local edits, a save, or a run would be lost.
+    reloadActiveNotebook: async () => {
+      const { activePath, workspaceRoot, dirty, saving, runningExecId, queue, cells, accelerator, kunBaselineCells } = get()
+      if (!activePath || dirty || saving || runningExecId || queue.length > 0) return
+      const res = await window.kunGui.readWorkspaceFile({ path: activePath, workspaceRoot, maxBytes: NOTEBOOK_READ_MAX_BYTES })
+      const current = get()
+      if (!res.ok || current.activePath !== activePath || current.dirty || current.saving || current.runningExecId || current.queue.length > 0) return
+      if (res.content === serializeIpynb(cells, accelerator)) return
+      try {
+        const parsed = parseIpynb(res.content)
+        const next = parsed.length ? parsed : [createCell('code')]
+        const baseline = kunBaselineCells ?? cells
+        const changedIds = computeChangedCellIds(baseline, next)
+        set({
+          cells: next,
+          selectedCellId: changedIds[0] ?? null,
+          loadError: null,
+          dirty: false,
+          kunBaselineCells: baseline,
+          kunChangedCellIds: changedIds
+        })
+      } catch {
+        // A half-written file stays unloaded; the next turn end retries.
+      }
     },
 
     deleteCell: (id) => {
-      if (get().runningCellId === id) return
+      if (editLocked() || get().runningCellId === id) return
       set((state) => ({
         cells: state.cells.filter((c) => c.id !== id),
         queue: state.queue.filter((q) => q !== id),
         selectedCellId: state.selectedCellId === id ? null : state.selectedCellId,
+        kunChangedCellIds: state.kunChangedCellIds.filter((cid) => cid !== id),
         dirty: true
       }))
     },
 
     moveCell: (id, delta) => {
+      if (editLocked()) return
       set((state) => {
         const index = state.cells.findIndex((c) => c.id === id)
         const target = index + delta
@@ -274,13 +419,17 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
       })
     },
 
-    clearOutputs: () =>
+    clearOutputs: () => {
+      if (editLocked()) return
       set((state) => ({
         cells: state.cells.map((c) => (c.id === state.runningCellId ? c : { ...c, outputs: [], executionCount: null })),
         dirty: true
-      })),
+      }))
+    },
 
-    runCells: (sessionId, ids) => {
+    runCells: (sessionId, ids, options) => {
+      // User runs mark outputs dirty, which would block reloading Kun's edits mid-turn.
+      if (editLocked() && !options?.agent) return
       ensureSubscribed()
       activeSessionId = sessionId
       const queued = new Set(get().queue)
@@ -289,26 +438,48 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
       startNext()
     },
 
+    runCellsAndWait: async (sessionId, ids) => {
+      get().runCells(sessionId, ids, { agent: true })
+      const finished = (): boolean => {
+        const state = get()
+        return !state.runningExecId && !state.queue.some((id) => ids.includes(id))
+      }
+      if (finished()) return
+      await new Promise<void>((resolve) => {
+        const unsubscribeStore = api.subscribe(() => {
+          if (!finished()) return
+          unsubscribeStore()
+          resolve()
+        })
+      })
+    },
+
+    setKunBusy: (kunBusy) => {
+      if (get().kunBusy !== kunBusy) set({ kunBusy })
+    },
+
     interrupt: async () => {
       const { runningExecId } = get()
       set({ queue: [] })
       if (runningExecId) await window.kunGui.colabNotebookInterrupt({ execId: runningExecId })
     },
 
-    resetKernelState: () => set({ execCounter: 0, queue: [], remoteDirs: {} }),
+    resetKernelState: () => set({ execCounter: 0, queue: [], remoteDirs: {}, variables: [] }),
 
     restartKernel: async (sessionId) => {
       await get().interrupt()
-      // Killing the kernel process is how Colab restarts a session: the
-      // runtime VM (and its files) stays, Python state is discarded.
-      await window.kunGui
-        .colabNotebookExecute({
-          sessionId,
-          execId: `nb-restart-${Date.now().toString(36)}`,
-          code: 'import os, signal\nos.kill(os.getpid(), signal.SIGKILL)'
-        })
-        .catch(() => undefined)
-      set({ execCounter: 0 })
+      if (typeof window.kunGui?.colabNotebookRestart === 'function') {
+        await window.kunGui.colabNotebookRestart({ sessionId }).catch(() => undefined)
+      } else {
+        await window.kunGui
+          .colabNotebookExecute({
+            sessionId,
+            execId: `nb-restart-${Date.now().toString(36)}`,
+            code: 'import os, signal\nos.kill(os.getpid(), signal.SIGKILL)'
+          })
+          .catch(() => undefined)
+      }
+      set({ execCounter: 0, variables: [] })
     },
 
     loadRemoteDir: async (sessionId, path) => {
@@ -332,6 +503,17 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
         expandedDirs: expanded ? state.expandedDirs.filter((p) => p !== path) : [...state.expandedDirs, path]
       }))
       if (!expanded && !get().remoteDirs[path]) void get().loadRemoteDir(sessionId, path)
+    },
+
+    loadVariables: async (sessionId) => {
+      if (typeof window.kunGui?.colabNotebookVariables !== 'function') return
+      set({ variablesLoading: true })
+      try {
+        const res = await window.kunGui.colabNotebookVariables({ sessionId })
+        if (res.ok) set({ variables: res.variables })
+      } finally {
+        set({ variablesLoading: false })
+      }
     }
   }
 })

@@ -1,46 +1,18 @@
 import type { ApprovalActionEnvelope } from '../../contracts/approvals.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
+import { callColabBridge, type ColabBridgeBinding } from './colab-bridge-client.js'
+import { buildColabNotebookTools } from './colab-notebook-tools.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 
 export const KUN_COLAB_BRIDGE_URL_ENV = 'KUN_COLAB_BRIDGE_URL'
 export const KUN_COLAB_BRIDGE_TOKEN_ENV = 'KUN_COLAB_BRIDGE_TOKEN'
-
-type ColabBridgeBinding = {
-  url: string
-  token: string
-}
 
 function resolveColabBridgeBinding(): ColabBridgeBinding | null {
   const url = process.env[KUN_COLAB_BRIDGE_URL_ENV]?.trim()
   const token = process.env[KUN_COLAB_BRIDGE_TOKEN_ENV]?.trim()
   if (!url || !token) return null
   return { url, token }
-}
-
-async function callColabBridge<T>(
-  binding: ColabBridgeBinding,
-  path: string,
-  body: Record<string, unknown>,
-  signal?: AbortSignal
-): Promise<T> {
-  const resp = await fetch(`${binding.url}${path}`, {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      accept: 'application/json',
-      authorization: `Bearer ${binding.token}`
-    },
-    body: JSON.stringify(body),
-    signal: signal
-      ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
-      : AbortSignal.timeout(30_000)
-  })
-  const data = (await resp.json()) as T & { error?: string; message?: string }
-  if (!resp.ok) {
-    throw new Error(data.message || data.error || `Colab bridge HTTP ${resp.status}`)
-  }
-  return data
 }
 
 function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
@@ -419,7 +391,7 @@ export function buildColabToolProviders(options?: {
       kind: 'gui',
       enabled: true,
       available: true,
-      tools: [colabStatusTool, colabRunTool, colabStopTool]
+      tools: [colabStatusTool, colabRunTool, colabStopTool, ...buildColabNotebookTools(binding, guiOnly)]
     }
   ]
 }

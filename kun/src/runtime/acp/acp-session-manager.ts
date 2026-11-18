@@ -26,6 +26,7 @@ import {
   AcpLoadSessionResultSchema,
   AcpNewSessionResultSchema,
   AcpError,
+  parseAcpResponse,
   type ConfigOptionUpdate,
   type CurrentModeUpdate,
   type AcpConfigOption,
@@ -205,16 +206,10 @@ export class AcpSessionManager {
           { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
         )
         stage = 'session/load_result'
-        const parsed = AcpLoadSessionResultSchema.safeParse(raw)
-        if (!parsed.success) {
-          throw new AcpError(
-            'harness_protocol_error',
-            'session/load response is missing required fields'
-          )
-        }
-        handle.configOptions = parsed.data.configOptions ?? handle.configOptions
-        handle.modes = parsed.data.modes ?? handle.modes
-        handle.models = parseAcpLegacyModels(parsed.data.models)
+        const parsed = parseAcpResponse('session/load response', AcpLoadSessionResultSchema, raw)
+        handle.configOptions = parsed.configOptions ?? handle.configOptions
+        handle.modes = parsed.modes ?? handle.modes
+        handle.models = parseAcpLegacyModels(parsed.models)
         handle.phase = 'ready'
         conn.registerSession(handle.sessionId, ctx.threadId)
         stage = 'session/configure'
@@ -287,26 +282,20 @@ export class AcpSessionManager {
       { cwd: ctx.workspacePath, mcpServers: ctx.sessionMcpServers?.(mcpSessionKey) ?? ctx.mcpServers ?? [] },
       { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
     )
-    const parsed = AcpNewSessionResultSchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new AcpError(
-        'harness_protocol_error',
-        'session/new response is missing required fields'
-      )
-    }
+    const parsed = parseAcpResponse('session/new response', AcpNewSessionResultSchema, raw)
     const handle: AcpSessionHandle = {
-      sessionId: parsed.data.sessionId,
+      sessionId: parsed.sessionId,
       mcpSessionKey,
       preparation,
       phase: 'ready',
       // Fresh agent session: the prompt carries the handoff brief (08).
       replayedHistory: true,
-      configOptions: parsed.data.configOptions,
-      modes: parsed.data.modes,
-      models: parseAcpLegacyModels(parsed.data.models),
+      configOptions: parsed.configOptions,
+      modes: parsed.modes,
+      models: parseAcpLegacyModels(parsed.models),
       detach: () => unsubscribe()
     }
-    const unsubscribe = conn.subscribeSession(parsed.data.sessionId, {
+    const unsubscribe = conn.subscribeSession(parsed.sessionId, {
       onUpdate: (update) => { absorbLoadingUpdate(handle, update); sink?.(update) }
     })
     conn.registerSession(handle.sessionId, ctx.threadId)

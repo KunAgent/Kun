@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, type KeyboardEvent, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowDown, ArrowUp, Code2, Loader2, Play, Trash2, Type } from 'lucide-react'
+import { ArrowDown, ArrowUp, Code2, Loader2, Play, Sparkles, Trash2, Type } from 'lucide-react'
 import type { ColabNotebookOutput } from '@shared/colab/colab-notebook-types'
 import { PassiveAssistantMarkdown } from '../../components/chat/PassiveAssistantMarkdown'
 import { renderStreamText, type NotebookCell } from './ipynb-format'
@@ -17,7 +17,8 @@ function AutoTextarea({
   onChange,
   onKeyDown,
   onFocus,
-  mono
+  mono,
+  readOnly = false
 }: {
   value: string
   placeholder: string
@@ -26,6 +27,7 @@ function AutoTextarea({
   onKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void
   onFocus: () => void
   mono: boolean
+  readOnly?: boolean
 }): ReactElement {
   const ref = useRef<HTMLTextAreaElement>(null)
   const highlighted = useMemo(() => (mono && value ? highlightPythonCode(value) : null), [mono, value])
@@ -88,6 +90,7 @@ function AutoTextarea({
           spellCheck={false}
           placeholder={placeholder}
           rows={1}
+          readOnly={readOnly}
           onChange={(event) => onChange(event.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={onFocus}
@@ -106,6 +109,7 @@ function AutoTextarea({
       spellCheck={false}
       placeholder={placeholder}
       rows={1}
+      readOnly={readOnly}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={handleKeyDown}
       onFocus={onFocus}
@@ -140,6 +144,7 @@ export const ColabNotebookCell = memo(function ColabNotebookCell({
   running,
   queued,
   canRun,
+  kunChanged = false,
   onRun
 }: {
   cell: NotebookCell
@@ -149,6 +154,7 @@ export const ColabNotebookCell = memo(function ColabNotebookCell({
   running: boolean
   queued: boolean
   canRun: boolean
+  kunChanged?: boolean
   onRun: (id: string, advance: boolean) => void
 }): ReactElement {
   const { t } = useTranslation('common')
@@ -157,6 +163,10 @@ export const ColabNotebookCell = memo(function ColabNotebookCell({
   const setCellKind = useColabNotebookStore((s) => s.setCellKind)
   const deleteCell = useColabNotebookStore((s) => s.deleteCell)
   const moveCell = useColabNotebookStore((s) => s.moveCell)
+  const askKunAboutCell = useColabNotebookStore((s) => s.askKunAboutCell)
+  const undoKunChanges = useColabNotebookStore((s) => s.undoKunChanges)
+  const dismissKunChanges = useColabNotebookStore((s) => s.dismissKunChanges)
+  const kunBusy = useColabNotebookStore((s) => s.kunBusy)
   const isCode = cell.kind === 'code'
   const showMarkdownEditor = !isCode && (selected || !cell.source.trim())
 
@@ -206,15 +216,54 @@ export const ColabNotebookCell = memo(function ColabNotebookCell({
         ) : null}
       </div>
       <div className="min-w-0 flex-1">
+        {kunChanged ? (
+          <div className="mb-1 flex items-center gap-2 px-0.5 text-[11.5px] text-accent">
+            <span className="inline-flex items-center gap-1 font-medium">
+              <Sparkles className="h-3 w-3" />
+              {t('colabNb.kunModifiedBadge')}
+            </span>
+            <span className="ml-auto flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => void undoKunChanges()}
+                className="rounded-md border border-ds-border bg-ds-card px-2 py-0.5 text-[11px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
+              >
+                {t('colabNb.kunUndo')}
+              </button>
+              <button
+                type="button"
+                onClick={dismissKunChanges}
+                className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-medium text-white hover:opacity-90"
+              >
+                {t('colabNb.kunKeep')}
+              </button>
+            </span>
+          </div>
+        ) : null}
         <div
           className={`rounded-[9px] border transition ${
-            isCode ? 'bg-ds-sidebar/60 px-3 py-2.5' : showMarkdownEditor ? 'px-3 py-2.5' : 'px-1 py-1'
-          } ${selected ? 'border-accent shadow-[0_0_0_3px_rgba(79,107,237,0.12)]' : isCode || showMarkdownEditor ? 'border-ds-border' : 'border-transparent'}`}
+            kunChanged
+              ? 'bg-emerald-500/[0.04] px-3 py-2.5'
+              : isCode
+                ? 'bg-ds-sidebar/60 px-3 py-2.5'
+                : showMarkdownEditor
+                  ? 'px-3 py-2.5'
+                  : 'px-1 py-1'
+          } ${
+            selected
+              ? 'border-accent shadow-[0_0_0_3px_rgba(79,107,237,0.12)]'
+              : kunChanged
+                ? 'border-accent/45'
+                : isCode || showMarkdownEditor
+                  ? 'border-ds-border'
+                  : 'border-transparent'
+          }`}
         >
           {isCode || showMarkdownEditor ? (
             <AutoTextarea
               value={cell.source}
               mono={isCode}
+              readOnly={kunBusy}
               autoFocus={selected && !cell.source && !isCode}
               placeholder={isCode ? t('colabNb.codePlaceholder') : t('colabNb.mdPlaceholder')}
               onChange={(value) => updateCellSource(cell.id, value)}
@@ -238,6 +287,15 @@ export const ColabNotebookCell = memo(function ColabNotebookCell({
           selected ? 'flex' : 'hidden group-hover/cell:flex'
         }`}
       >
+        <button
+          type="button"
+          className={`${toolButton} text-accent hover:text-accent`}
+          title={t('colabNb.sendCellToKun')}
+          aria-label={t('colabNb.sendCellToKun')}
+          onClick={() => askKunAboutCell(cell.id)}
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+        </button>
         <button type="button" className={toolButton} disabled={index === 0} title={t('colabNb.moveUp')} aria-label={t('colabNb.moveUp')}
           onClick={() => moveCell(cell.id, -1)}><ArrowUp className="h-3.5 w-3.5" /></button>
         <button type="button" className={toolButton} disabled={index === total - 1} title={t('colabNb.moveDown')} aria-label={t('colabNb.moveDown')}

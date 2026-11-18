@@ -2,7 +2,11 @@ import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { KunColabSettingsV1 } from '../../shared/app-settings-colab'
 import { COLAB_ACCELERATOR_SPECS, type ColabAccelerator } from '../../shared/colab/colab-types'
+import type { ColabNotebookAgentRelay } from './colab-notebook-agent-relay'
 import type { ColabService } from './colab-service'
+
+/** Each notebook long-poll stays well below the Kun tool's 30s request timeout. */
+const NOTEBOOK_POLL_MS = 20_000
 
 export const KUN_COLAB_BRIDGE_URL_ENV = 'KUN_COLAB_BRIDGE_URL'
 export const KUN_COLAB_BRIDGE_TOKEN_ENV = 'KUN_COLAB_BRIDGE_TOKEN'
@@ -18,7 +22,8 @@ export class ColabBridgeServer {
 
   constructor(
     private readonly service: ColabService,
-    private readonly getSettings: () => KunColabSettingsV1
+    private readonly getSettings: () => KunColabSettingsV1,
+    private readonly getNotebookRelay: () => ColabNotebookAgentRelay | null = () => null
   ) {}
 
   async start(): Promise<ColabBridgeLaunch> {
@@ -209,11 +214,57 @@ export class ColabBridgeServer {
         return
       }
 
+      if (req.method === 'POST' && url.pathname.startsWith('/v1/notebook/')) {
+        await this.handleNotebook(url.pathname, await this.readBody(req), res)
+        return
+      }
+
       this.sendJson(res, 404, { error: 'not_found' })
     } catch (error) {
       this.sendJson(res, 500, {
         error: error instanceof Error ? error.message : String(error)
       })
     }
+  }
+
+  private async handleNotebook(
+    pathname: string,
+    body: Record<string, unknown>,
+    res: ServerResponse
+  ): Promise<void> {
+    const relay = this.getNotebookRelay()
+    if (!relay) {
+      this.sendJson(res, 503, { error: 'Notebook bridge is not ready.' })
+      return
+    }
+    const workspaceRoot = typeof body.workspaceRoot === 'string' ? body.workspaceRoot : ''
+    const requestId = typeof body.requestId === 'string' ? body.requestId : ''
+    let pollId = ''
+    if (pathname === '/v1/notebook/run') {
+      const cells = Array.isArray(body.cells)
+        ? body.cells.filter((n): n is number => typeof n === 'number' && Number.isInteger(n) && n > 0).slice(0, 200)
+        : undefined
+      pollId = relay.start({
+        kind: 'run',
+        workspaceRoot,
+        ...(typeof body.path === 'string' && body.path.trim() ? { path: body.path.trim() } : {}),
+        ...(cells && cells.length > 0 ? { cells } : {})
+      })
+    } else if (pathname === '/v1/notebook/variables') {
+      pollId = relay.start({ kind: 'variables', workspaceRoot })
+    } else if (pathname === '/v1/notebook/interrupt') {
+      pollId = relay.start({ kind: 'interrupt', workspaceRoot })
+    } else if (pathname === '/v1/notebook/result') {
+      pollId = requestId
+    } else {
+      this.sendJson(res, 404, { error: 'not_found' })
+      return
+    }
+    const poll = await relay.wait(pollId, NOTEBOOK_POLL_MS)
+    if (!poll) {
+      this.sendJson(res, 404, { error: `Unknown notebook request ${pollId}.` })
+      return
+    }
+    this.sendJson(res, 200, poll)
   }
 }

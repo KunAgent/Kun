@@ -1,9 +1,11 @@
 import type { ChildProcess } from 'node:child_process'
 import {
   COLAB_NOTEBOOK_MARKER,
+  type ColabKernelVariable,
   type ColabNotebookExecEvent,
   type ColabNotebookExecuteResult,
   type ColabNotebookOutput,
+  type ColabNotebookVariablesResult,
   type ColabRemoteEntry,
   type ColabRemoteListResult
 } from '../../shared/colab/colab-notebook-types'
@@ -171,6 +173,54 @@ export function parseRemoteListOutput(stdout: string): ColabRemoteEntry[] | { er
   return null
 }
 
+export function buildKernelVariablesPython(): string {
+  const m = COLAB_NOTEBOOK_MARKER
+  return [
+    'def _kun_nb_vars():',
+    '    import json as _j, types as _t',
+    '    _skip = {"In", "Out", "get_ipython", "exit", "quit", "open"}',
+    '    _skip_t = (_t.ModuleType, _t.FunctionType, _t.BuiltinFunctionType, _t.MethodType, type)',
+    '    _out = []',
+    '    for _k, _v in list(globals().items()):',
+    '        if _k.startswith("_") or _k in _skip or isinstance(_v, _skip_t):',
+    '            continue',
+    '        _tn = type(_v).__name__',
+    '        _sm = ""',
+    '        try:',
+    '            if hasattr(_v, "shape") and hasattr(_v, "dtype"):',
+    '                _sm = f"{tuple(_v.shape)} · {_v.dtype}"',
+    '            elif _tn == "DataFrame" and hasattr(_v, "shape"):',
+    '                _sm = f"{_v.shape[0]}x{_v.shape[1]}"',
+    '            elif isinstance(_v, (int, float, bool)):',
+    '                _sm = repr(_v)[:36]',
+    '            elif isinstance(_v, str):',
+    '                _sm = (repr(_v[:28]) + ("…" if len(_v) > 28 else ""))',
+    '            elif hasattr(_v, "__len__"):',
+    '                _sm = f"{len(_v)}"',
+    '        except Exception:',
+    '            _sm = ""',
+    '        _out.append({"name": str(_k), "typeName": _tn, "summary": _sm})',
+    '    _out.sort(key=lambda x: x["name"].lower())',
+    `    print(${JSON.stringify(m + 'VARS:')} + _j.dumps(_out[:60]), flush=True)`,
+    '_kun_nb_vars()',
+    'del _kun_nb_vars',
+    ''
+  ].join('\n')
+}
+
+export function parseKernelVariablesOutput(stdout: string): ColabKernelVariable[] | null {
+  for (const line of stdout.split(/\r?\n/)) {
+    if (line.startsWith(COLAB_NOTEBOOK_MARKER + 'VARS:')) {
+      try {
+        return JSON.parse(line.slice(COLAB_NOTEBOOK_MARKER.length + 5)) as ColabKernelVariable[]
+      } catch {
+        return null
+      }
+    }
+  }
+  return null
+}
+
 type RunningExec = { child: ChildProcess; interrupted: boolean }
 
 /** Runs notebook cells against a provisioned Colab session's persistent kernel. */
@@ -271,6 +321,24 @@ export class ColabNotebookKernel {
     }
     if ('error' in parsed) return { ok: false, message: parsed.error }
     return { ok: true, path: input.path, entries: parsed }
+  }
+
+  async listVariables(input: { sessionId: string }): Promise<ColabNotebookVariablesResult> {
+    const prepared = await this.prepare(input.sessionId)
+    if (!prepared.ok) return prepared
+    const res = await this.service.cli.runCommand({
+      sessionsJsonPath: prepared.sessionsJsonPath,
+      args: ['exec', '-s', prepared.sessionName, '--timeout', '15'],
+      env: prepared.env,
+      stdinText: buildKernelVariablesPython(),
+      timeoutMs: 20_000
+    })
+    await this.service.credentials.syncRuntimeTokenBack(prepared.connectionId).catch(() => undefined)
+    const parsed = parseKernelVariablesOutput(res.stdout)
+    if (!parsed) {
+      return { ok: false, message: `${res.stderr || res.stdout}`.trim().slice(0, 300) || 'Failed to inspect variables.' }
+    }
+    return { ok: true, variables: parsed }
   }
 
   shutdown(): void {

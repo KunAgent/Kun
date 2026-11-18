@@ -24,10 +24,37 @@ export function acpToolDisplay(p: ToolPresentation): ToolPresentation {
       typeof input.old_string === 'string' && typeof input.new_string === 'string') kind = 'edit'
     else if ((id === 'glob' || id === 'grep' || id === 'search_files') && targets.query) kind = 'search'
   }
+  const displayTitle = summary || executeDescriptionTitle(kind ?? p.kind, p.title, name, targets.command, input.description)
   return { ...targets,
     ...(mcp ? { kind: 'mcp', server: mcp[1], name: mcp[2] } : kind ? { kind, name: id } : {}),
-    ...(summary ? { title: summary.slice(0, 4096) } : {})
+    ...(displayTitle ? { title: displayTitle.slice(0, 4096) } : {})
   }
+}
+
+const BARE_EXECUTE_IDS = new Set(['bash', 'shell', 'exec_command'])
+
+/** Agents like Qoder stuff the full shell command into `title` even when `rawInput.description` has a concise label. */
+function executeDescriptionTitle(
+  effectiveKind: string,
+  rawTitle: string | undefined,
+  explicitName: string | undefined,
+  command: string | undefined,
+  description: unknown
+): string {
+  if (effectiveKind !== 'execute' || typeof description !== 'string') return ''
+  const desc = description.trim()
+  if (!desc) return ''
+  const trimmedTitle = (rawTitle ?? '').trim()
+  if (!trimmedTitle || trimmedTitle === explicitName || BARE_EXECUTE_IDS.has(trimmedTitle)) return desc
+  if (!command) return ''
+  const unquoted = trimmedTitle.startsWith('`') && trimmedTitle.endsWith('`') && trimmedTitle.length >= 2
+    ? trimmedTitle.slice(1, -1).trim()
+    : trimmedTitle
+  if (unquoted === command.trim()) return desc
+  if (rawTitle && rawTitle.endsWith('...') && rawTitle.length > 3 && command.startsWith(rawTitle.slice(0, -3))) {
+    return desc
+  }
+  return ''
 }
 
 /** Keep the original wire name/title in the runtime; path and command are also

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from 'react'
-import { ChevronDown, ChevronRight, Cloud, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, Cloud, CloudDownload, Cpu, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ColabConnectionView } from '@shared/colab/colab-types'
 import { ColabConnectionRow } from './ColabConnectionRow'
@@ -15,9 +15,13 @@ import {
 
 type Props = {
   workspaceRoot: string
+  notebookActions?: {
+    onPull: (connection: ColabConnectionView) => void
+    onCompute: (connection: ColabConnectionView) => void
+  }
 }
 
-export function ColabConnectionsSection({ workspaceRoot }: Props): ReactElement {
+export function ColabConnectionsSection({ workspaceRoot, notebookActions }: Props): ReactElement {
   const { t } = useTranslation('common')
   const snapshot = useColabStore((s) => s.snapshot)
   const expanded = useColabStore((s) => s.connectionsExpanded)
@@ -107,13 +111,14 @@ export function ColabConnectionsSection({ workspaceRoot }: Props): ReactElement 
       reauthName={
         reauthConnectionId ? connections.find((c) => c.id === reauthConnectionId)?.name : undefined
       }
+      loginOnly={Boolean(notebookActions)}
       onCancelForm={closeAddAccount}
     />
   ) : null
 
   if (connections.length === 0) {
     return (
-      <section data-testid="colab-connections-empty" className="w-full max-w-[360px]">
+      <section data-testid="colab-connections-empty" className={notebookActions ? 'px-2 pb-2' : 'w-full max-w-[360px]'}>
         <div className="rounded-xl border border-ds-border bg-ds-card p-5 text-center">
           <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-accent/10 text-accent">
             <Cloud className="h-5 w-5" />
@@ -135,7 +140,7 @@ export function ColabConnectionsSection({ workspaceRoot }: Props): ReactElement 
     )
   }
 
-  const isExpanded = expanded || addFlowVisible || pendingSwitchTarget !== null
+  const isExpanded = Boolean(notebookActions) || expanded || addFlowVisible || pendingSwitchTarget !== null
 
   if (!isExpanded && activeConnection) {
     const expired = activeConnection.status === 'expired'
@@ -183,22 +188,21 @@ export function ColabConnectionsSection({ workspaceRoot }: Props): ReactElement 
   return (
     <section
       data-testid="colab-connections-expanded"
-      className="max-h-[56%] shrink-0 overflow-y-auto border-t border-ds-border bg-ds-sidebar p-3"
+      className={notebookActions ? 'px-2 pb-2' : 'max-h-[56%] shrink-0 overflow-y-auto border-t border-ds-border bg-ds-sidebar p-3'}
     >
       <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          aria-expanded
-          onClick={() => {
+        {notebookActions ? (
+          <h3 className="text-[11.5px] font-semibold text-ds-faint">Google Colab</h3>
+        ) : (
+          <button type="button" aria-expanded onClick={() => {
             closeAddAccount()
             setPendingSwitchTargetId(null)
             setExpanded(false)
-          }}
-          className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ds-ink hover:text-accent"
-        >
-          <ChevronDown className="h-3.5 w-3.5 text-ds-faint" />
-          <span>{t('colab.connectionsLabel')}</span>
-        </button>
+          }} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-ds-ink hover:text-accent">
+            <ChevronDown className="h-3.5 w-3.5 text-ds-faint" />
+            {t('colab.connectionsLabel')}
+          </button>
+        )}
         {!addFlowVisible ? (
           <button
             type="button"
@@ -210,34 +214,50 @@ export function ColabConnectionsSection({ workspaceRoot }: Props): ReactElement 
           </button>
         ) : null}
       </div>
-      <p className="mt-1 text-[11px] text-ds-faint">{t('colab.connectionsSubtitle')}</p>
+      {!notebookActions ? <p className="mt-1 text-[11px] text-ds-faint">{t('colab.connectionsSubtitle')}</p> : null}
 
-      <div role="radiogroup" aria-label={t('colab.connectionsLabel')} className="mt-2 space-y-1.5">
+      <div role={notebookActions ? undefined : 'radiogroup'} aria-label={t('colab.connectionsLabel')} className="mt-2 space-y-1.5">
         {connections.map((conn, idx) => (
-          <ColabConnectionRow
-            key={conn.id}
-            conn={conn}
-            wsKey={wsKey}
-            selected={activeConnection?.id === conn.id}
-            focusable={idx === rovingIdx}
-            isNew={newlyCreatedId === conn.id}
-            highlighted={highlightedId === conn.id}
-            registerRef={(el) => {
-              rowRefs.current[idx] = el
-            }}
-            onFocus={() => setFocusIdx(idx)}
-            onKeyDown={(e) => handleRowKeyDown(e, idx)}
-            onActivate={() => requestColabConnectionSwitch(workspaceRoot, conn, t)}
-            onReauth={() => openAddAccount(conn.id)}
-            onRequestSignOut={() => {
-              setStopBeforeSignOut(true)
-              setSignOutTarget(conn)
-            }}
-          />
+          <div key={conn.id}>
+            <ColabConnectionRow
+              conn={conn}
+              wsKey={wsKey}
+              selectable={!notebookActions}
+              selected={!notebookActions && activeConnection?.id === conn.id}
+              focusable={idx === rovingIdx}
+              isNew={newlyCreatedId === conn.id}
+              highlighted={highlightedId === conn.id}
+              registerRef={(el) => {
+                rowRefs.current[idx] = el
+              }}
+              onFocus={() => setFocusIdx(idx)}
+              onKeyDown={(e) => handleRowKeyDown(e, idx)}
+              onActivate={() => requestColabConnectionSwitch(workspaceRoot, conn, t)}
+              onReauth={() => openAddAccount(conn.id)}
+              onRequestSignOut={() => {
+                setStopBeforeSignOut(true)
+                setSignOutTarget(conn)
+              }}
+            />
+            {notebookActions && conn.status === 'connected' ? (
+              <div className="flex flex-col items-start gap-0.5 pb-1 pl-3 pt-1">
+                <button type="button" disabled={!wsKey} onClick={() => notebookActions.onPull(conn)}
+                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[12px] font-medium text-accent hover:bg-ds-hover disabled:opacity-45">
+                  <CloudDownload className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {t('colabNb.pullFromDrive')}
+                </button>
+                <button type="button" disabled={!wsKey} onClick={() => notebookActions.onCompute(conn)}
+                  className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-left text-[12px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink disabled:opacity-45">
+                  <Cpu className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  {t('colabNb.computeTitle')}
+                </button>
+              </div>
+            ) : null}
+          </div>
         ))}
       </div>
 
-      {pendingSwitchTarget && activeConnection ? (
+      {!notebookActions && pendingSwitchTarget && activeConnection ? (
         <div
           role="alertdialog"
           className="mt-2 rounded-xl border border-amber-500/35 bg-ds-card p-3 text-[12px] shadow-md"

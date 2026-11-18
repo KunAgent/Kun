@@ -28,7 +28,9 @@ const PATH_PREFIX_BOUNDARY = String.raw`(?<![\p{L}\p{N}_@.~\/\\-])`
 
 const EXTENSIONS = [
   'astro',
+  'avif',
   'bash',
+  'bmp',
   'c',
   'cc',
   'cjs',
@@ -38,12 +40,17 @@ const EXTENSIONS = [
   'dart',
   'env',
   'fish',
+  'gif',
   'go',
   'h',
+  'heic',
+  'heif',
   'hpp',
   'html?',
+  'ico',
   'ini',
   'java',
+  'jpe?g',
   'jsx?',
   'json',
   'kt',
@@ -53,6 +60,7 @@ const EXTENSIONS = [
   'mdx?',
   'mjs',
   'php',
+  'png',
   'py',
   'rb',
   'rs',
@@ -61,11 +69,14 @@ const EXTENSIONS = [
   'sh',
   'sql',
   'svelte',
+  'svg',
   'swift',
+  'tiff?',
   'toml',
   'tsx?',
   'txt',
   'vue',
+  'webp',
   'ya?ml',
   'xml',
   'zsh'
@@ -236,7 +247,37 @@ function linkifyTextNode(node: HastNode): HastNode[] {
   return next
 }
 
+function fileUrlAnchorTarget(href: unknown): FileReferenceTarget | null {
+  if (typeof href !== 'string' || !/^file:\/\//i.test(href.trim())) return null
+  try {
+    const parsed = new URL(href.trim())
+    if (parsed.protocol !== 'file:' || (parsed.hostname && parsed.hostname !== 'localhost')) {
+      return null
+    }
+    const rawPathname = decodeURIComponent(parsed.pathname)
+    const path = /^\/[A-Za-z]:\//.test(rawPathname) ? rawPathname.slice(1) : rawPathname
+    if (!path) return null
+    const hashLine = /^#L(\d+)(?:-L\d+)?$/i.exec(parsed.hash)
+    const line = hashLine ? Number.parseInt(hashLine[1], 10) : undefined
+    return {
+      path,
+      ...(line && Number.isFinite(line) && line > 0 ? { line } : {})
+    }
+  } catch {
+    return null
+  }
+}
+
 function visit(node: HastNode, blocked: boolean): void {
+  if (!blocked && node.tagName === 'a' && node.properties) {
+    const target = fileUrlAnchorTarget(node.properties.href)
+    if (target) {
+      node.properties = {
+        ...node.properties,
+        href: createFileReferenceHref(target)
+      }
+    }
+  }
   const children = node.children
   if (!children?.length) return
 

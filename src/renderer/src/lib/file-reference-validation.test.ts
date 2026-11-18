@@ -1,4 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { WorkspaceFileResolveResult } from '@shared/workspace-file'
+import {
+  findFileReferences,
+  parseFileReferenceHref,
+  rehypeFileReferences
+} from './file-references'
 import {
   clearFileReferenceValidationCache,
   fileReferenceValidationCacheSize,
@@ -8,11 +14,11 @@ import {
 } from './file-reference-validation'
 
 function installResolveWorkspaceFile(
-  resolveWorkspaceFile = vi.fn(async ({ path }: { path: string }) => ({
+  resolveWorkspaceFile = vi.fn(async ({ path }: { path: string; workspaceRoot?: string }): Promise<WorkspaceFileResolveResult> => ({
     ok: true,
     path: `/resolved/${path}`
   }))
-): ReturnType<typeof vi.fn> {
+): typeof resolveWorkspaceFile {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: {
@@ -86,5 +92,62 @@ describe('file reference validation cache', () => {
 
     await expect(validateFileReference({ path: 'src/main.ts' }, '/repo')).resolves.toEqual({ status: 'invalid' })
     expect(fileReferenceValidationCacheSize()).toBe(1)
+  })
+
+  it('validates explicit local PNG paths outside the workspace while keeping workspace boundaries for other paths', async () => {
+    const resolveWorkspaceFile = installResolveWorkspaceFile(
+      vi.fn(async ({ path, workspaceRoot }: { path: string; workspaceRoot?: string }): Promise<WorkspaceFileResolveResult> => {
+        if (workspaceRoot && !path.startsWith(workspaceRoot) && path.startsWith('/')) {
+          return { ok: false, message: 'Path must stay within the selected workspace.' }
+        }
+        return { ok: true, path }
+      })
+    )
+
+    await expect(validateFileReference({ path: '/tmp/colab-kun-sidebar.png' }, '/repo')).resolves.toEqual({
+      status: 'valid',
+      path: '/tmp/colab-kun-sidebar.png'
+    })
+    expect(resolveWorkspaceFile).toHaveBeenCalledWith({
+      path: '/tmp/colab-kun-sidebar.png',
+      line: undefined,
+      column: undefined
+    })
+
+    await expect(validateFileReference({ path: '/tmp/outside.txt' }, '/repo')).resolves.toEqual({
+      status: 'invalid'
+    })
+    expect(resolveWorkspaceFile).toHaveBeenLastCalledWith({
+      path: '/tmp/outside.txt',
+      line: undefined,
+      column: undefined,
+      workspaceRoot: '/repo'
+    })
+  })
+
+  it('detects PNG file references and converts local file:// links for sidebar preview', () => {
+    expect(findFileReferences('Saved screenshot to /tmp/colab-kun-sidebar.png.')).toEqual([
+      {
+        start: 20,
+        end: 46,
+        text: '/tmp/colab-kun-sidebar.png',
+        target: { path: '/tmp/colab-kun-sidebar.png' }
+      }
+    ])
+
+    const tree = {
+      type: 'root',
+      children: [
+        {
+          type: 'element',
+          tagName: 'a',
+          properties: { href: 'file:///tmp/colab-kun-sidebar.png' },
+          children: [{ type: 'text', value: 'colab-kun-sidebar.png' }]
+        }
+      ]
+    }
+    rehypeFileReferences()(tree)
+    const href = tree.children[0]?.properties?.href as string | undefined
+    expect(parseFileReferenceHref(href)).toEqual({ path: '/tmp/colab-kun-sidebar.png' })
   })
 })

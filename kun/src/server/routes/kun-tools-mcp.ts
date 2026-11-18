@@ -75,17 +75,35 @@ function activeTurn(thread: ThreadRecord | null): ThreadRecord['turns'][number] 
 }
 
 function mcpToolList(
-  tools: readonly { name: string; description: string; inputSchema: Record<string, unknown> }[],
+  tools: readonly {
+    name: string
+    description: string
+    inputSchema: Record<string, unknown>
+    providerId?: string
+    providerKind?: string
+  }[],
   harnessId: string
-): { tools: Array<{ name: string; description: string; inputSchema: Record<string, unknown> }> } {
-  const project = providerModule(harnessId)?.acp?.projectToolInputSchema ?? ((schema: Record<string, unknown>) => schema)
+): {
+  tools: Array<{
+    name: string
+    description: string
+    inputSchema: Record<string, unknown>
+    _meta?: Record<string, unknown>
+  }>
+} {
+  const acp = providerModule(harnessId)?.acp
+  const project = acp?.projectToolInputSchema ?? ((schema: Record<string, unknown>) => schema)
   return {
-    tools: tools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      // Downstream gateways (Anthropic-format) reject top-level oneOf/anyOf/allOf.
-      inputSchema: project(projectAnthropicToolInputSchema(tool.inputSchema))
-    }))
+    tools: tools.map((tool, index) => {
+      const meta = acp?.mcpToolMeta?.(tool, index)
+      return {
+        name: tool.name,
+        description: tool.description,
+        // Downstream gateways (Anthropic-format) reject top-level oneOf/anyOf/allOf.
+        inputSchema: project(projectAnthropicToolInputSchema(tool.inputSchema)),
+        ...(meta ? { _meta: meta } : {})
+      }
+    })
   }
 }
 

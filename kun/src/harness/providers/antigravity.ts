@@ -15,15 +15,19 @@ const AGY_DETECT = { command: 'agy', aliases: [], versionArgs: ['--version'] }
 // Official `agy acp` first shipped in CLI 1.5.0; older builds open the TUI.
 // https://antigravity.google/docs/changelog
 export const ANTIGRAVITY_ACP_MIN_VERSION = '1.5.0'
+const ANTIGRAVITY_MAX_EAGER_TOOLS = 200
+// agy exposes MCP tools as `mcp_kun-tools_<name>` under Gemini's 64-char name limit.
+const ANTIGRAVITY_EAGER_TOOL_NAME = /^[a-zA-Z0-9_.:-]{1,50}$/
 
 export const ANTIGRAVITY_DEFINITION: HarnessDefinition = {
   id: 'antigravity',
   displayName: 'Antigravity',
   transport: 'acp',
+  poolScope: 'thread',
   // Official stdio ACP server (`agy acp`); the IDE launcher is not a turn
   // protocol and must not be mistaken for a ready agent.
   detect: { ...AGY_DETECT, minVersion: ANTIGRAVITY_ACP_MIN_VERSION },
-  launch: { command: 'agy', args: ['acp'], env: {} },
+  launch: { command: 'agy', args: ['acp', '--process-per-session'], env: {} },
   variants: {
     'antigravity-cli': {
       detect: AGY_DETECT,
@@ -103,6 +107,10 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   definition: ANTIGRAVITY_DEFINITION,
   acp: {
     projectToolInputSchema: projectAntigravityToolInputSchema,
+    mcpToolMeta: (tool, index) =>
+      index < ANTIGRAVITY_MAX_EAGER_TOOLS && ANTIGRAVITY_EAGER_TOOL_NAME.test(tool.name)
+        ? { 'antigravity/alwaysLoad': true }
+        : undefined,
     continuePendingTools: true,
     emptyEffortsWithoutThoughtLevel: true,
     managesReasoningBudget: isAntigravityOrchestrator,

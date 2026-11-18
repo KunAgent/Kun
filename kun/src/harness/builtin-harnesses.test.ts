@@ -83,7 +83,8 @@ describe('BUILTIN_HARNESSES', () => {
   it('wires Antigravity onto ACP with Kun Tools while keeping the legacy CLI variant', () => {
     const antigravity = BUILTIN_HARNESSES.find((def) => def.id === 'antigravity')!
     expect(antigravity.transport).toBe('acp')
-    expect(antigravity.launch).toEqual({ command: 'agy', args: ['acp'], env: {} })
+    expect(antigravity.poolScope).toBe('thread')
+    expect(antigravity.launch).toEqual({ command: 'agy', args: ['acp', '--process-per-session'], env: {} })
     expect(antigravity.capabilities.statuses.kunTools).toEqual({ supported: true })
     expect(harnessTurnPermissionMode(antigravity, {
       sandboxMode: 'read-only', unattended: false, allowUnattendedFullAccess: false

@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
+import { projectAnthropicToolInputSchema } from './anthropic-tool-schema-projection.js'
 import { projectAntigravityToolInputSchema } from './antigravity-tool-schema-projection.js'
+import { createDesignOpenTool } from '../tool/design-open-tool.js'
 import { buildVideoGenToolProviders } from '../tool/media-gen-tool-provider.js'
+import { createReportOpenTool } from '../tool/report-open-tool.js'
 
 it('accepts the actual enabled Grok video tool schema before sending the complete catalog to Antigravity', () => {
   const config = { enabled: true, protocol: 'grok-imagine-video', model: 'grok-imagine-video-1.5-preview',
@@ -51,4 +54,62 @@ it('keeps unrelated nested schema branches and annotations intact', () => {
   for (let depth = 0; depth < 12; depth++) nested = { type: 'object', properties: { nested } }
   const schema = { ...nested, $id: 'https://schema.example.test/tool', 'x-display': 'task' }
   expect(projectAntigravityToolInputSchema(schema)).toEqual(schema)
+})
+
+it('projects const, exclusive bounds, and nested oneOf for eager Kun tools', () => {
+  const projected = projectAntigravityToolInputSchema({
+    type: 'object',
+    properties: {
+      branch: { const: 'default-branch' },
+      version: { const: 1, description: 'Payload version.' },
+      flag: { const: true },
+      count: { type: 'integer', exclusiveMinimum: 0, exclusiveMaximum: 10 },
+      ratio: { type: 'number', exclusiveMinimum: 0.5, exclusiveMaximum: 1.5 },
+      mode: { oneOf: [{ const: 'auto' }, { const: 'manual' }] }
+    }
+  })
+  const props = projected.properties as Record<string, Record<string, unknown>>
+  expect(props.branch).toEqual({ type: 'string', enum: ['default-branch'] })
+  expect(props.version).toEqual({ type: 'integer', minimum: 1, maximum: 1, description: 'Payload version. Allowed values: 1.' })
+  expect(props.flag).toEqual({ type: 'boolean', description: 'Allowed values: true.' })
+  expect(props.count).toEqual({ type: 'integer', minimum: 1, maximum: 9 })
+  expect(props.ratio).toEqual({ type: 'number', minimum: 0.5, maximum: 1.5 })
+  expect(props.mode).toEqual({
+    anyOf: [
+      { type: 'string', enum: ['auto'] },
+      { type: 'string', enum: ['manual'] }
+    ]
+  })
+})
+
+it('projects design_open and report_open schemas without unsupported Gemini keywords', () => {
+  const assertGeminiCompatible = (node: unknown): void => {
+    if (Array.isArray(node)) {
+      for (const entry of node) assertGeminiCompatible(entry)
+      return
+    }
+    if (!node || typeof node !== 'object') return
+    const record = node as Record<string, unknown>
+    expect(record).not.toHaveProperty('const')
+    expect(record).not.toHaveProperty('oneOf')
+    expect(record).not.toHaveProperty('exclusiveMinimum')
+    expect(record).not.toHaveProperty('exclusiveMaximum')
+    if ('enum' in record) {
+      expect(Array.isArray(record.enum)).toBe(true)
+      for (const value of record.enum as unknown[]) {
+        expect(typeof value).toBe('string')
+        expect((value as string).length).toBeGreaterThan(0)
+      }
+    }
+    for (const value of Object.values(record)) assertGeminiCompatible(value)
+  }
+
+  const designProjected = projectAntigravityToolInputSchema(
+    projectAnthropicToolInputSchema(createDesignOpenTool().inputSchema)
+  )
+  const reportProjected = projectAntigravityToolInputSchema(
+    projectAnthropicToolInputSchema(createReportOpenTool().inputSchema)
+  )
+  assertGeminiCompatible(designProjected)
+  assertGeminiCompatible(reportProjected)
 })

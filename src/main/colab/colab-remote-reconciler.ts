@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { mkdir, stat, writeFile } from 'node:fs/promises'
 import { basename, join, posix } from 'node:path'
 import type { KunColabSettingsV1 } from '../../shared/app-settings-colab'
+import { activeDrivePullSessions } from './colab-drive-notebooks'
 import type { ColabSessionView, ColabUntrackedSession } from '../../shared/colab/colab-types'
 import {
   classifyColabErrorOutput,
@@ -83,7 +84,7 @@ export async function pollColabBalancesAndRemoteSessions(options: {
               s.connectionId === conn.id &&
               (s.sessionName === item.name || s.endpoint === item.endpoint)
           )
-          if (!tracked && !options.ignoredUntrackedKeys.has(key)) {
+          if (!tracked && !activeDrivePullSessions.has(item.name) && !options.ignoredUntrackedKeys.has(key)) {
             discoveredUntracked.push({
               connectionId: conn.id,
               connectionName: conn.name,

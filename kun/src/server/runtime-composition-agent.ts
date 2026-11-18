@@ -31,6 +31,7 @@ import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
 import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
+import { COMPONENT_DESIGN_TOOL_NAME } from '../adapters/tool/component-design-tool-provider.js'
 import { DESIGN_OPEN_TOOL_NAME } from '../adapters/tool/design-open-tool.js'
 import { REPORT_OPEN_TOOL_NAME } from '../adapters/tool/report-open-tool.js'
 import { FileTeamStore } from '../ade/team-store.js'
@@ -184,8 +185,8 @@ export async function createRuntimeAgentComposition(
     defaultApprovalReviewer: core.activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
     callIdPrefix: 'mcp',
     // ACP and Codex transcripts only carry their own MCP call items; record
-    // Kun's design_open / report_open results so the GUI cards still open.
-    recordResultItemTools: new Set([DESIGN_OPEN_TOOL_NAME, REPORT_OPEN_TOOL_NAME]),
+    // Kun's design_open / design_component / report_open results so the GUI cards still open.
+    recordResultItemTools: new Set([DESIGN_OPEN_TOOL_NAME, COMPONENT_DESIGN_TOOL_NAME, REPORT_OPEN_TOOL_NAME]),
     nowIso
   })
   // dep assembly extracted to runtime-composition-delegated.ts for the

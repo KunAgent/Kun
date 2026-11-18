@@ -75,6 +75,7 @@ import {
   ACP_AGENT_METHODS,
   AcpError,
   AcpPromptResultSchema,
+  parseAcpResponse,
   type SessionUpdate
 } from './acp-schema.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
@@ -526,7 +527,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       }
       const bookPromptUsage = async (result: unknown): Promise<void> => {
         await emitQueue
-        const usage = mapper.applyPromptResult(acpPromptResultUsage(definition.id, AcpPromptResultSchema.parse(result)))
+        const usage = mapper.applyPromptResult(acpPromptResultUsage(definition.id, parseAcpResponse('session/prompt response', AcpPromptResultSchema, result)))
         timing.observe(usage)
         await emitter.emitAll(usage)
       }
@@ -588,14 +589,8 @@ export class AcpRuntime implements DelegatedTurnRuntime {
       acceptEvidence = false
       await childSessions?.stop()
       await emitQueue
-      const parsed = AcpPromptResultSchema.safeParse(raw)
-      if (!parsed.success) {
-        throw new AcpError(
-          'harness_protocol_error',
-          'session/prompt response is missing required fields'
-        )
-      }
-      const resultDrafts = companions.settleUsage(mainUsageRecorded ? undefined : acpPromptResultUsage(definition.id, parsed.data),
+      const promptResult = parseAcpResponse('session/prompt response', AcpPromptResultSchema, raw)
+      const resultDrafts = companions.settleUsage(mainUsageRecorded ? undefined : acpPromptResultUsage(definition.id, promptResult),
         (usage) => mapper.applyPromptResult(usage))
       timing.observe(resultDrafts)
       await emitter.emitAll(resultDrafts)
@@ -611,11 +606,11 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         turnId,
         turnHandoff
       )
-      if (parsed.data.stopReason === 'cancelled' || signal.aborted) {
+      if (promptResult.stopReason === 'cancelled' || signal.aborted) {
         await this.deps.turns.finishTurn({ threadId, turnId, status: 'aborted' })
         return 'aborted'
       }
-      if (parsed.data.stopReason === 'refusal') {
+      if (promptResult.stopReason === 'refusal') {
         return failAcpTurn(
           this.deps.turns,
           threadId,

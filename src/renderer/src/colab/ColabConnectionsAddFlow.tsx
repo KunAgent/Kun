@@ -10,6 +10,7 @@ type Props = {
   lastOutcome: ColabLoginOutcome | null
   reauthConnectionId: string | null
   reauthName?: string
+  loginOnly?: boolean
   onCancelForm: () => void
 }
 
@@ -19,6 +20,7 @@ export function ColabConnectionsAddFlow({
   lastOutcome,
   reauthConnectionId,
   reauthName,
+  loginOnly = false,
   onCancelForm
 }: Props): ReactElement {
   const { t } = useTranslation('common')
@@ -75,7 +77,7 @@ export function ColabConnectionsAddFlow({
                     const res = await window.kunGui.colabPromoteMismatchedToken({
                       pendingTokenId: failure.pendingTokenId!,
                       workspaceRoot,
-                      setAsCurrent: true
+                      setAsCurrent: !loginOnly
                     })
                     if (res.ok) {
                       showToast(t('colab.createdToast', { email: res.connection.email }))
@@ -207,7 +209,7 @@ export function ColabConnectionsAddFlow({
     try {
       const res = await window.kunGui.colabStartOAuthLogin({
         ...(name.trim() ? { name: name.trim() } : {}),
-        setAsCurrent,
+        setAsCurrent: !loginOnly && setAsCurrent,
         workspaceRoot,
         ...(reauthConnectionId ? { reauthConnectionId } : {})
       })
@@ -273,15 +275,13 @@ export function ColabConnectionsAddFlow({
             placeholder={t('colab.connectionNamePlaceholder')}
             className="mt-1 w-full rounded-lg border border-ds-border bg-ds-subtle px-2.5 py-1.5 text-[12px] text-ds-ink focus:border-accent focus:outline-none"
           />
-          <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11.5px] text-ds-ink">
-            <input
-              type="checkbox"
-              checked={setAsCurrent}
-              onChange={(e) => setSetAsCurrent(e.target.checked)}
-              className="rounded border-ds-border text-accent"
-            />
-            <span>{t('colab.setAsCurrentAfterLogin')}</span>
-          </label>
+          {!loginOnly ? (
+            <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11.5px] text-ds-ink">
+              <input type="checkbox" checked={setAsCurrent} onChange={(e) => setSetAsCurrent(e.target.checked)}
+                className="rounded border-ds-border text-accent" />
+              <span>{t('colab.setAsCurrentAfterLogin')}</span>
+            </label>
+          ) : null}
         </div>
       )}
 

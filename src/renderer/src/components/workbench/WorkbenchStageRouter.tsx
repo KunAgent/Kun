@@ -244,7 +244,11 @@ export function WorkbenchStageRouter({
           </Suspense>
         ) : normalizedRoute === 'colab' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
-            <ColabNotebookView leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} />
+            <ColabNotebookView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+              chat={conversation.chat}
+            />
           </Suspense>
         ) : (
           <WorkbenchConversationStage {...conversation} route={normalizedRoute} />

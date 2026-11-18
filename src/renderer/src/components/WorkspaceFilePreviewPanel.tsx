@@ -18,10 +18,10 @@ import {
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatFilePathForDisplay } from '../lib/diff-stats'
-import { openWorkspacePathInEditor } from '../lib/open-workspace-path'
+import { openWorkspacePathInEditor, revealWorkspacePathInFileManager } from '../lib/open-workspace-path'
 import { relativeWorkspacePath } from '../lib/composer-file-references'
 import { highlightCodeHtml, languageFromFilePath, renderFallbackCodeHtml } from '../lib/code-highlighting'
-import { workspaceFilePreviewKind } from '../lib/workspace-text-preview'
+import { isExternalLocalImagePreviewPath, workspaceFilePreviewKind } from '../lib/workspace-text-preview'
 
 export {
   PREVIEW_SCROLL_POSITIONS_KEY,
@@ -315,10 +315,20 @@ export function WorkspaceFilePreviewPanel({
 
   const openTargetInEditor = (targetToOpen: WorkspaceFileTarget | null): void => {
     const isActive = targetKey(targetToOpen) === activeTargetKey
+    const effectiveTargetRoot = targetToOpen?.workspaceRoot ?? workspaceRoot
+    const externalTargetImage = Boolean(
+      targetToOpen &&
+      workspaceFilePreviewKind(targetToOpen.path) === 'image' &&
+      isExternalLocalImagePreviewPath(targetToOpen.path, effectiveTargetRoot)
+    )
     const resultMatchesTarget = Boolean(
       targetToOpen && isActive && result?.ok && resolvedPreviewPathMatchesTarget(result.path, targetToOpen, workspaceRoot)
     )
-    const path = resultMatchesTarget && result?.ok ? result.path : targetToOpen?.path
+    const path = externalTargetImage && isActive && imageResult?.ok
+      ? imageResult.path
+      : resultMatchesTarget && result?.ok
+        ? result.path
+        : targetToOpen?.path
     if (!path) return
     void openWorkspacePathInEditor(
       {
@@ -326,7 +336,7 @@ export function WorkspaceFilePreviewPanel({
         line: resultMatchesTarget && result?.ok ? result.line : targetToOpen?.line,
         column: resultMatchesTarget && result?.ok ? result.column : targetToOpen?.column
       },
-      targetToOpen?.workspaceRoot ?? workspaceRoot
+      externalTargetImage ? undefined : effectiveTargetRoot
     ).then((next) => {
       if (!next.ok) {
         void window.kunGui?.logError?.('editor-open', 'Failed to open previewed file', { message: next.message, target: targetToOpen })?.catch(() => undefined)
@@ -334,12 +344,23 @@ export function WorkspaceFilePreviewPanel({
     })
   }
 
+  const externalActiveImage = Boolean(
+    target && previewKind === 'image' && isExternalLocalImagePreviewPath(target.path, root)
+  )
   const openInSystem = (): void => {
     if (!target) return
+    if (externalActiveImage) {
+      void window.kunGui.openWorkspaceFileInSystem({ path: imageResult?.ok ? imageResult.path : target.path })
+      return
+    }
     void window.kunGui.openWorkspaceFileInSystem({ ...target, workspaceRoot: root })
   }
   const revealInFileManager = (): void => {
     if (!target) return
+    if (externalActiveImage) {
+      void revealWorkspacePathInFileManager(imageResult?.ok ? imageResult.path : target.path)
+      return
+    }
     void window.kunGui.revealWorkspaceFileInFolder({ ...target, workspaceRoot: root })
   }
   const copyText = (value: string): void => {

@@ -1,10 +1,14 @@
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { ColabStateSnapshot } from '../shared/colab/colab-types'
-import type { ColabNotebookExecEvent } from '../shared/colab/colab-notebook-types'
+import type {
+  ColabNotebookAgentRequest,
+  ColabNotebookExecEvent,
+  JupyterStateSnapshot
+} from '../shared/colab/colab-notebook-types'
 import type { KunGuiColabApi } from '../shared/colab/kun-gui-api-colab'
 
 /**
- * Colab cloud compute bridge methods. Spread into `kunGui` in `index.ts`
+ * Colab and Jupyter cloud compute bridge methods. Spread into `kunGui` in `index.ts`
  * using only sandbox-supported Electron imports.
  */
 export const colabApi: KunGuiColabApi = {
@@ -41,7 +45,16 @@ export const colabApi: KunGuiColabApi = {
   },
   colabNotebookExecute: (input) => ipcRenderer.invoke('colab:notebook:execute', input),
   colabNotebookInterrupt: (input) => ipcRenderer.invoke('colab:notebook:interrupt', input),
+  colabNotebookRestart: (input) => ipcRenderer.invoke('colab:notebook:restart', input),
   colabNotebookListFiles: (input) => ipcRenderer.invoke('colab:notebook:list-files', input),
+  colabNotebookVariables: (input) => ipcRenderer.invoke('colab:notebook:variables', input),
+  colabDriveStartPull: (input) => ipcRenderer.invoke('colab:drive:start-pull', input),
+  colabDriveListNotebooks: (input) => ipcRenderer.invoke('colab:drive:list-notebooks', input),
+  colabDriveCompleteAuth: (input) => ipcRenderer.invoke('colab:drive:complete-auth', input),
+  colabDriveOpenAuth: (input) => ipcRenderer.invoke('colab:drive:open-auth', input),
+  colabDriveClosePull: (input) => ipcRenderer.invoke('colab:drive:close-pull', input),
+  colabDriveImportNotebook: (input) => ipcRenderer.invoke('colab:drive:import-notebook', input),
+  colabImportLocalNotebooks: (input) => ipcRenderer.invoke('colab:notebook:import-local', input),
   colabNotebookAssist: (input) => ipcRenderer.invoke('colab:notebook:assist', input),
   onColabNotebookEvent: (handler) => {
     const wrapped = (_event: IpcRendererEvent, event: ColabNotebookExecEvent): void => {
@@ -49,5 +62,28 @@ export const colabApi: KunGuiColabApi = {
     }
     ipcRenderer.on('colab:notebook:event', wrapped)
     return () => ipcRenderer.removeListener('colab:notebook:event', wrapped)
-  }
+  },
+  jupyterGetSnapshot: () => ipcRenderer.invoke('jupyter:get-snapshot'),
+  jupyterSaveServer: (input) => ipcRenderer.invoke('jupyter:save-server', input),
+  jupyterListNotebooks: (input) => ipcRenderer.invoke('jupyter:list-notebooks', input),
+  jupyterImportNotebook: (input) => ipcRenderer.invoke('jupyter:import-notebook', input),
+  jupyterConnect: (input) => ipcRenderer.invoke('jupyter:connect', input),
+  jupyterDisconnect: (input) => ipcRenderer.invoke('jupyter:disconnect', input),
+  jupyterRemoveServer: (input) => ipcRenderer.invoke('jupyter:remove-server', input),
+  jupyterOpenBrowser: (input) => ipcRenderer.invoke('jupyter:open-browser', input),
+  onJupyterStateChanged: (handler) => {
+    const wrapped = (_event: IpcRendererEvent, snapshot: JupyterStateSnapshot): void => {
+      handler(snapshot)
+    }
+    ipcRenderer.on('jupyter:state-changed', wrapped)
+    return () => ipcRenderer.removeListener('jupyter:state-changed', wrapped)
+  },
+  onColabNotebookAgentRequest: (handler) => {
+    const wrapped = (_event: IpcRendererEvent, request: ColabNotebookAgentRequest): void => {
+      handler(request)
+    }
+    ipcRenderer.on('colab:notebook:agent-request', wrapped)
+    return () => ipcRenderer.removeListener('colab:notebook:agent-request', wrapped)
+  },
+  colabNotebookAgentRespond: (response) => ipcRenderer.invoke('colab:notebook:agent-respond', response)
 }

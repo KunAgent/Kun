@@ -281,6 +281,29 @@ describe('kun tools MCP route', () => {
     expect(execute.mock.calls[0]?.[0].arguments).toEqual({ duration: 10 })
   })
 
+  it('marks Antigravity eager MCP tools with _meta alwaysLoad when name fits Gemini limits', async () => {
+    const longName = 'tool_name_exceeding_fifty_characters_for_gemini_limit'
+    const catalog = [
+      { name: 'design_open', description: 'Design canvas', inputSchema: { type: 'object', properties: {} } },
+      { name: longName, description: 'Too long', inputSchema: { type: 'object', properties: {} } }
+    ] as unknown as CapabilityToolSpec[]
+
+    const antigravity = makeFixture({ harnessId: 'antigravity', catalog })
+    const agyListed = await post(antigravity.runtime, rpc('tools/list', undefined, 'agy-1'), antigravity.token)
+    const agyTools = (await agyListed.json()).result.tools as Array<{ name: string; _meta?: Record<string, unknown> }>
+    expect(agyTools).toEqual([
+      expect.objectContaining({ name: 'design_open', _meta: { 'antigravity/alwaysLoad': true } }),
+      expect.not.objectContaining({ _meta: expect.anything() })
+    ])
+    expect(agyTools[1]?.name).toBe(longName)
+    expect(agyTools[1]?._meta).toBeUndefined()
+
+    const devin = makeFixture({ harnessId: 'devin', catalog })
+    const devinListed = await post(devin.runtime, rpc('tools/list', undefined, 'devin-1'), devin.token)
+    const devinTools = (await devinListed.json()).result.tools as Array<{ name: string; _meta?: Record<string, unknown> }>
+    expect(devinTools[0]?._meta).toBeUndefined()
+  })
+
   it('returns a tool error when no turn is running', async () => {
     const { runtime, token } = makeFixture({ runningTurn: false })
     const called = await post(

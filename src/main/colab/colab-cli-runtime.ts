@@ -282,6 +282,7 @@ export class ColabCliRuntime {
     env: Record<string, string>
     stdinText?: string
     timeoutMs?: number
+    maxOutputChars?: number
     signal?: AbortSignal
   }): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     const status = await this.ensureInstalled()
@@ -292,6 +293,7 @@ export class ColabCliRuntime {
         stderr: status.message || 'Colab CLI 运行环境尚未就绪。'
       }
     }
+    if (params.signal?.aborted) return { exitCode: 1, stdout: '', stderr: 'Colab command canceled.' }
     return new Promise((resolve) => {
       const child = spawn(
         this.venvPythonPath,
@@ -314,11 +316,13 @@ export class ColabCliRuntime {
       params.signal?.addEventListener('abort', onAbort, { once: true })
 
       child.stdout.on('data', (chunk: Buffer) => {
-        if (stdout.length < 512_000) stdout += chunk.toString('utf8')
+        const remaining = (params.maxOutputChars ?? 512_000) - stdout.length
+        if (remaining > 0) stdout += chunk.toString('utf8').slice(0, remaining)
       })
       child.stderr.on('data', (chunk: Buffer) => {
         if (stderr.length < 512_000) stderr += chunk.toString('utf8')
       })
+      child.stdin.on('error', () => { /* The CLI can exit before consuming stdin. */ })
       if (params.stdinText !== undefined) {
         child.stdin.write(params.stdinText)
       }

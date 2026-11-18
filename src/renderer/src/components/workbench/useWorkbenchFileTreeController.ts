@@ -11,6 +11,7 @@ import {
 } from '../../lib/composer-file-references'
 import { normalizeWorkspaceRoot, workspaceRootScopeKey } from '../../lib/workspace-path'
 import { workspaceFileTargetKey } from '../../lib/workspace-file-target-key'
+import { isExternalLocalImagePreviewPath } from '../../lib/workspace-text-preview'
 import {
   readBrowserStorageItem,
   removeBrowserStorageItem,
@@ -286,7 +287,7 @@ export function useWorkbenchFileTreeController({
       ...target,
       workspaceRoot: target.workspaceRoot ?? fileTreeWorkspaceRoot
     }
-    if (!nextTarget.workspaceRoot) return
+    if (!nextTarget.workspaceRoot && !isExternalLocalImagePreviewPath(nextTarget.path, '')) return
     const key = workspaceFileTargetKey(nextTarget)
     const current = openFilePreviewTargetsRef.current
     const existingIndex = current.findIndex((item) => workspaceFileTargetKey(item) === key)

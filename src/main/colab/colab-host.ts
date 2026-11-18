@@ -4,12 +4,27 @@ import { defaultKunColabSettings, normalizeKunColabSettings } from '../../shared
 import type { KunColabSettingsV1 } from '../../shared/app-settings-colab'
 import { resolveKunRuntimeSettings, type AppSettingsV1 } from '../../shared/app-settings'
 import { ColabBridgeServer, type ColabBridgeLaunch } from './colab-bridge-server'
+import type { ColabNotebookAgentRelay } from './colab-notebook-agent-relay'
 import { ColabService } from './colab-service'
 
 let colabService: ColabService | null = null
 let colabBridge: ColabBridgeServer | null = null
 let cachedColabSettings: KunColabSettingsV1 = defaultKunColabSettings()
 let settingsGetter: (() => KunColabSettingsV1) | null = null
+const subsystemShutdownHooks = new Set<() => Promise<void> | void>()
+let notebookAgentRelay: ColabNotebookAgentRelay | null = null
+
+export function setColabNotebookAgentRelay(relay: ColabNotebookAgentRelay | null): void {
+  notebookAgentRelay = relay
+}
+
+export function getColabNotebookAgentRelay(): ColabNotebookAgentRelay | null {
+  return notebookAgentRelay
+}
+
+export function registerColabSubsystemShutdown(hook: () => Promise<void> | void): void {
+  subsystemShutdownHooks.add(hook)
+}
 
 export function configureColabHost(options: {
   getSettings: () => AppSettingsV1 | Promise<AppSettingsV1>
@@ -79,13 +94,19 @@ export async function prepareColabHostForKunLaunch(
   if (!colabBridge) {
     colabBridge = new ColabBridgeServer(
       service,
-      () => settingsGetter?.() ?? normalizeKunColabSettings(resolveKunRuntimeSettings(settings).colab)
+      () => settingsGetter?.() ?? normalizeKunColabSettings(resolveKunRuntimeSettings(settings).colab),
+      () => notebookAgentRelay
     )
   }
   return colabBridge.start()
 }
 
 export async function shutdownColabHost(): Promise<void> {
+  const hooks = [...subsystemShutdownHooks]
+  subsystemShutdownHooks.clear()
+  await Promise.allSettled(hooks.map((hook) => Promise.resolve().then(hook)))
+  notebookAgentRelay?.shutdown()
+  notebookAgentRelay = null
   const bridge = colabBridge
   colabBridge = null
   await bridge?.stop().catch(() => undefined)

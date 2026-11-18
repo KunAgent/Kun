@@ -285,7 +285,7 @@ export function Sidebar({
           t={t}
         />
       ) : colabActive ? (
-        <ColabSidebarContent workspaceRoot={workspaceRoot} onOpenSettings={() => onOpenSettings('cloudCompute')} />
+        <ColabSidebarContent workspaceRoot={workspaceRoot} />
       ) : projectBoardEnabled && activeView === 'board' ? (
         <SidebarProjectBoardsSection
           threads={threads}

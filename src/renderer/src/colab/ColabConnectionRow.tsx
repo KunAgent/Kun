@@ -21,6 +21,7 @@ type Props = {
   conn: ColabConnectionView
   wsKey: string
   selected: boolean
+  selectable?: boolean
   focusable: boolean
   isNew: boolean
   highlighted: boolean
@@ -36,6 +37,7 @@ export function ColabConnectionRow({
   conn,
   wsKey,
   selected,
+  selectable = true,
   focusable,
   isNew,
   highlighted,
@@ -123,20 +125,19 @@ export function ColabConnectionRow({
         rowRef.current = el
         registerRef(el)
       }}
-      role="radio"
-      aria-checked={selected}
-      aria-disabled={expired || undefined}
-      tabIndex={focusable ? 0 : -1}
-      onKeyDown={(e) => {
-        if (renaming) return
-        onKeyDown(e)
-      }}
-      onFocus={onFocus}
-      onClick={() => {
+      role={selectable ? 'radio' : undefined}
+      aria-checked={selectable ? selected : undefined}
+      aria-disabled={selectable && expired ? true : undefined}
+      tabIndex={selectable ? (focusable ? 0 : -1) : undefined}
+      onKeyDown={selectable ? (e) => {
+        if (!renaming && e.target === e.currentTarget) onKeyDown(e)
+      } : undefined}
+      onFocus={selectable ? onFocus : undefined}
+      onClick={selectable ? () => {
         if (!renaming) onActivate()
-      }}
+      } : undefined}
       className={`relative rounded-xl border p-2.5 text-[12px] outline-none transition focus-visible:ring-2 focus-visible:ring-accent/50 ${
-        expired ? 'cursor-default' : 'cursor-pointer'
+        expired || !selectable ? 'cursor-default' : 'cursor-pointer'
       } ${
         selected
           ? 'border-accent/55 bg-accent/[0.06]'
@@ -144,13 +145,13 @@ export function ColabConnectionRow({
       } ${highlighted ? 'ring-2 ring-emerald-500/50' : ''}`}
     >
       <div className="flex items-center gap-2">
-        <span
-          className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
+        {selectable ? (
+          <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border ${
             selected ? 'border-accent' : expired ? 'border-ds-border-muted' : 'border-ds-faint'
-          }`}
-        >
-          {selected ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
-        </span>
+          }`}>
+            {selected ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
+          </span>
+        ) : null}
         <span
           className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold text-white ${
             expired ? 'opacity-50' : ''

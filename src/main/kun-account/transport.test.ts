@@ -5,9 +5,11 @@ import { KUN_ACCOUNT_ISSUER } from './config'
 function fixture(supabaseUrl = KUN_ACCOUNT_ISSUER) {
   const fetcher = vi.fn(async (input: URL | RequestInfo, _options?: RequestInit): Promise<Response> => {
     const url = String(input)
-    if (url.endsWith('/auth/config')) {
+    const discovery = new URL(url)
+    if (discovery.pathname === '/auth/config') {
       return Response.json({
-        supabase_url: supabaseUrl, publishable_key: 'sb_publishable_test', oauth_enabled: true,
+        supabase_url: discovery.searchParams.get('transport') === 'gateway' ? supabaseUrl : 'https://legacy.supabase.co',
+        publishable_key: 'sb_publishable_test', oauth_enabled: true,
         providers: { email: true, google: true, github: true }
       })
     }
@@ -20,10 +22,11 @@ function fixture(supabaseUrl = KUN_ACCOUNT_ISSUER) {
   return { fetcher, transport: createAccountTransport(fetcher, 'desktop-client', () => 1000) }
 }
 describe('Kun desktop OAuth transport', () => {
-  it('routes all auth requests to KUN_ACCOUNT_ISSUER', async () => {
+  it('selects the gateway when default discovery advertises a legacy transport', async () => {
     const f = fixture()
     const tokens = await f.transport.exchange({ grant_type: 'authorization_code', code: 'c', code_verifier: 'v' })
     expect(tokens.expiresAt).toBe(3601000)
+    expect(String(f.fetcher.mock.calls[0][0])).toBe(`${KUN_ACCOUNT_ISSUER}/auth/config?transport=gateway`)
     const call = f.fetcher.mock.calls.find(([url]) => String(url).endsWith('/oauth/token'))!
     expect(String(call[0])).toBe(`${KUN_ACCOUNT_ISSUER}/auth/v1/oauth/token`)
     const fields = new URLSearchParams(String(call[1]?.body))

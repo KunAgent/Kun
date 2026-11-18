@@ -122,6 +122,8 @@ export type AcpSessionUsageSource = {
 export type ProviderAcpHooks = {
   /** Wire-only MCP schema adaptation; canonical ToolHost validation stays unchanged. */
   projectToolInputSchema?(schema: Record<string, unknown>): Record<string, unknown>
+  /** Extra `_meta` attached to an MCP `tools/list` entry for this engine. */
+  mcpToolMeta?(tool: { name: string; providerId?: string; providerKind?: string }, index: number): Record<string, unknown> | undefined
   /** A normal prompt may finish before native async tools; settle them before the Kun turn ends. */
   readonly continuePendingTools?: boolean
   /** Stable instructions for this engine's session behavior. */

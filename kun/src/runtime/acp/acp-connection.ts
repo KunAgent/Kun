@@ -7,6 +7,7 @@
 import { KUN_VERSION } from '../../version.js'
 import { bindTurnMutationContext } from '../../manager/turn-mutation-context.js'
 import type { AcpProcess } from './acp-process.js'
+import { acpDiagnosticText } from './acp-diagnostic-text.js'
 import { AcpJsonRpc, type AcpDebugLog, type AcpProcessExitInfo } from './acp-jsonrpc.js'
 import {
   ACP_AGENT_METHODS,
@@ -15,6 +16,7 @@ import {
   AcpError,
   AcpInitializeResultSchema,
   AcpSessionNotificationSchema,
+  parseAcpResponse,
   parseAcpSessionNotification,
   type AcpInitializeResult,
   type SessionUpdate
@@ -43,6 +45,7 @@ export class AcpConnection {
   /** Pool key fragment: delegatedCredentialIdentity() of the resolved login. */
   readonly identity: string
   private initResultValue: AcpInitializeResult | undefined
+  private readonly debug?: AcpDebugLog
   private readonly sessionSubscribers = new Map<string, Set<AcpSessionSubscriber>>()
   /** sessionId → owning Kun thread; used to mark bindings when we die. */
   private readonly sessionOwners = new Map<string, string>()
@@ -54,6 +57,7 @@ export class AcpConnection {
   }) {
     this.process = input.process
     this.identity = input.identity
+    this.debug = input.debug
     this.rpc = new AcpJsonRpc({
       stdin: input.process.stdin!,
       stdout: input.process.stdout!,
@@ -110,21 +114,15 @@ export class AcpConnection {
       },
       { timeoutMs: input.timeoutMs ?? ACP_INITIALIZE_TIMEOUT_MS }
     )
-    const parsed = AcpInitializeResultSchema.safeParse(raw)
-    if (!parsed.success) {
+    const parsed = parseAcpResponse('initialize response', AcpInitializeResultSchema, raw)
+    if (parsed.protocolVersion !== ACP_PROTOCOL_VERSION) {
       throw new AcpError(
         'harness_protocol_error',
-        'initialize response is missing required fields'
+        `protocol_version_unsupported: agent reported ${parsed.protocolVersion}, Kun speaks ${ACP_PROTOCOL_VERSION}`
       )
     }
-    if (parsed.data.protocolVersion !== ACP_PROTOCOL_VERSION) {
-      throw new AcpError(
-        'harness_protocol_error',
-        `protocol_version_unsupported: agent reported ${parsed.data.protocolVersion}, Kun speaks ${ACP_PROTOCOL_VERSION}`
-      )
-    }
-    this.initResultValue = parsed.data
-    return parsed.data
+    this.initResultValue = parsed
+    return parsed
   }
 
   subscribeSession(sessionId: string, subscriber: AcpSessionSubscriber): () => void {
@@ -171,6 +169,10 @@ export class AcpConnection {
         error instanceof AcpError
           ? error
           : new AcpError('harness_protocol_error', String(error))
+      this.debug?.({
+        direction: 'note',
+        summary: `rejected session/update: ${acpDiagnosticText(acpError.message, 512)}`
+      })
       // Only an unrouteable notification fails every live session on the connection.
       const route = NotificationRouteSchema.safeParse(params)
       const targets = route.success

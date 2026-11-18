@@ -9,11 +9,24 @@ import type {
   ColabWorkspaceRunConfig
 } from './colab-types'
 import type {
+  ColabDriveNotebooksListResult,
+  ColabDrivePullCloseResult,
+  ColabDrivePullStart,
+  ColabNotebookAgentRequest,
+  ColabNotebookAgentResponse,
   ColabNotebookAssistRequest,
   ColabNotebookAssistResult,
   ColabNotebookExecEvent,
   ColabNotebookExecuteResult,
-  ColabRemoteListResult
+  ColabNotebookImportResult,
+  ColabNotebookVariablesResult,
+  ColabRemoteListResult,
+  JupyterConnectRequest,
+  JupyterConnectResult,
+  JupyterSaveServerRequest,
+  JupyterSaveServerResult,
+  JupyterStateSnapshot,
+  NotebookPullImportResult
 } from './colab-notebook-types'
 
 export type KunGuiColabApi = {
@@ -106,7 +119,27 @@ export type KunGuiColabApi = {
     code: string
   }) => Promise<ColabNotebookExecuteResult>
   colabNotebookInterrupt: (input: { execId: string }) => Promise<{ ok: boolean }>
+  colabNotebookRestart: (input: { sessionId: string }) => Promise<{ ok: boolean; message?: string }>
   colabNotebookListFiles: (input: { sessionId: string; path: string }) => Promise<ColabRemoteListResult>
+  colabNotebookVariables: (input: { sessionId: string }) => Promise<ColabNotebookVariablesResult>
+  colabDriveStartPull: (input: ColabDrivePullStart) => Promise<ColabDriveNotebooksListResult>
+  colabDriveListNotebooks: (input: { pullId: string }) => Promise<ColabDriveNotebooksListResult>
+  colabDriveCompleteAuth: (input: { pullId: string }) => Promise<ColabDriveNotebooksListResult>
+  colabDriveOpenAuth: (input: { pullId: string }) => Promise<{ ok: boolean }>
+  colabDriveClosePull: (input: { pullId: string }) => Promise<ColabDrivePullCloseResult>
+  colabDriveImportNotebook: (input: { pullId: string; remotePath: string }) => Promise<NotebookPullImportResult>
+  colabImportLocalNotebooks: (input: { workspaceRoot: string }) => Promise<ColabNotebookImportResult>
   colabNotebookAssist: (input: ColabNotebookAssistRequest) => Promise<ColabNotebookAssistResult>
   onColabNotebookEvent: (handler: (event: ColabNotebookExecEvent) => void) => () => void
+  jupyterGetSnapshot: () => Promise<JupyterStateSnapshot>
+  jupyterSaveServer: (input: JupyterSaveServerRequest) => Promise<JupyterSaveServerResult>
+  jupyterListNotebooks: (input: { serverId: string }) => Promise<ColabDriveNotebooksListResult>
+  jupyterImportNotebook: (input: { serverId: string; workspaceRoot: string; remotePath: string }) => Promise<NotebookPullImportResult>
+  jupyterConnect: (input: JupyterConnectRequest) => Promise<JupyterConnectResult>
+  jupyterDisconnect: (input: { sessionId: string }) => Promise<{ ok: boolean }>
+  jupyterRemoveServer: (input: { serverId: string }) => Promise<{ ok: boolean }>
+  jupyterOpenBrowser: (input: { serverId: string }) => Promise<{ ok: boolean }>
+  onJupyterStateChanged: (handler: (snapshot: JupyterStateSnapshot) => void) => () => void
+  onColabNotebookAgentRequest: (handler: (request: ColabNotebookAgentRequest) => void) => () => void
+  colabNotebookAgentRespond: (response: ColabNotebookAgentResponse) => Promise<{ ok: boolean }>
 }

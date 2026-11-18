@@ -110,7 +110,7 @@ it('runs Antigravity over ACP with kun-tools MCP injection, model normalization,
     expect(await h.runtime.runTurn('thread_1', 'turn_1', new AbortController().signal)).toBe('completed')
     expect(spawnAgent).toHaveBeenCalledTimes(1)
     expect(spawnAgent.mock.calls[0]?.[0]).toBe('agy')
-    expect(spawnAgent.mock.calls[0]?.[1]).toEqual(['acp'])
+    expect(spawnAgent.mock.calls[0]?.[1]).toEqual(['acp', '--process-per-session'])
 
     const sessionNew = h.requests('session/new')[0]?.params as { mcpServers?: Array<{ name: string; args?: string[] }> }
     expect(sessionNew?.mcpServers).toEqual([

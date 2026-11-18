@@ -17,6 +17,39 @@ function record(value: unknown): value is Record<string, unknown> {
 }
 
 function visit(schema: Record<string, unknown>): void {
+  if ('const' in schema && schema.const !== undefined) {
+    const constant = schema.const
+    delete schema.const
+    if (!Array.isArray(schema.enum)) {
+      if (typeof constant === 'string' && constant.length > 0) {
+        if (schema.type === undefined) schema.type = 'string'
+        schema.enum = [constant]
+      } else {
+        if (schema.type === undefined) {
+          if (typeof constant === 'number' && Number.isFinite(constant)) {
+            schema.type = Number.isInteger(constant) ? 'integer' : 'number'
+          } else if (typeof constant === 'boolean') {
+            schema.type = 'boolean'
+          }
+        }
+        schema.enum = [constant]
+      }
+    }
+  }
+  if (typeof schema.exclusiveMinimum === 'number' && Number.isFinite(schema.exclusiveMinimum)) {
+    const lower = schema.type === 'integer' ? Math.floor(schema.exclusiveMinimum) + 1 : schema.exclusiveMinimum
+    schema.minimum = typeof schema.minimum === 'number' ? Math.max(schema.minimum, lower) : lower
+    delete schema.exclusiveMinimum
+  }
+  if (typeof schema.exclusiveMaximum === 'number' && Number.isFinite(schema.exclusiveMaximum)) {
+    const upper = schema.type === 'integer' ? Math.ceil(schema.exclusiveMaximum) - 1 : schema.exclusiveMaximum
+    schema.maximum = typeof schema.maximum === 'number' ? Math.min(schema.maximum, upper) : upper
+    delete schema.exclusiveMaximum
+  }
+  if (Array.isArray(schema.oneOf)) {
+    if (!Array.isArray(schema.anyOf)) schema.anyOf = schema.oneOf
+    delete schema.oneOf
+  }
   const values = schema.enum
   if (Array.isArray(values) && (!values.length || values.some((value) => typeof value !== 'string' || !value.length))) {
     delete schema.enum

@@ -66,7 +66,7 @@ export async function makeHarness(scenario: string | Record<string, unknown>, in
   applied: TurnItem[]
   items: TurnItem[]
   deltas: Array<{ text: string; delta: string }>
-  finished: Array<{ status: string; error?: string; code?: string }>
+  finished: Array<{ status: string; error?: string; code?: string; details?: unknown }>
   recorded: RuntimeEvent[]
   coordinator: DelegatedSessionCoordinator
 }> {
@@ -121,7 +121,7 @@ export async function makeHarness(scenario: string | Record<string, unknown>, in
   }
   const applied: TurnItem[] = []
   const deltas: Array<{ text: string; delta: string }> = []
-  const finished: Array<{ status: string; error?: string; code?: string }> = []
+  const finished: Array<{ status: string; error?: string; code?: string; details?: unknown }> = []
   const recorded: RuntimeEvent[] = []
   const items: TurnItem[] = [
     ...(input.items ?? [
@@ -172,7 +172,7 @@ export async function makeHarness(scenario: string | Record<string, unknown>, in
         input.onDelta?.()
       },
       updateItem: async () => ({}),
-      finishTurn: async (args: { status: string; error?: string; code?: string }) => {
+      finishTurn: async (args: { status: string; error?: string; code?: string; details?: unknown }) => {
         finished.push(args)
       },
       updateTurnMetadata: async () => ({}),

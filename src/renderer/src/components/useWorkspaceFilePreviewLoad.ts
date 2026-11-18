@@ -14,6 +14,7 @@ import type {
   WorkspaceTextEncoding
 } from '@shared/workspace-file'
 import {
+  isExternalLocalImagePreviewPath,
   isWorkspaceTextBackedPreviewKind,
   workspaceFilePreviewKind
 } from '../lib/workspace-text-preview'
@@ -110,10 +111,19 @@ export function useWorkspaceFilePreviewLoad({
       setResult(null)
     }
 
-    const readTarget = {
-      ...target,
-      workspaceRoot: target.workspaceRoot ?? workspaceRoot
-    }
+    const effectiveWorkspaceRoot = target.workspaceRoot ?? workspaceRoot
+    const externalLocalImage =
+      previewKind === 'image' && isExternalLocalImagePreviewPath(target.path, effectiveWorkspaceRoot)
+    const readTarget: WorkspaceFileTarget = externalLocalImage
+      ? {
+          path: target.path,
+          ...(target.line ? { line: target.line } : {}),
+          ...(target.column ? { column: target.column } : {})
+        }
+      : {
+          ...target,
+          workspaceRoot: effectiveWorkspaceRoot
+        }
 
     if (previewKind === 'image') {
       void window.kunGui

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FileReferenceTarget } from './file-references'
+import { isExternalLocalImagePreviewPath } from './workspace-text-preview'
 
 type ValidationState =
   | { status: 'idle' }
@@ -81,11 +82,15 @@ export async function validateFileReference(
       return { status: 'invalid' }
     }
 
+    const externalLocalImage = isExternalLocalImagePreviewPath(
+      normalizedTarget.path,
+      normalizedWorkspace
+    )
     const result = await window.kunGui.resolveWorkspaceFile({
       path: normalizedTarget.path,
       line: normalizedTarget.line,
       column: normalizedTarget.column,
-      workspaceRoot: normalizedWorkspace
+      ...(externalLocalImage ? {} : { workspaceRoot: normalizedWorkspace })
     })
 
     return result.ok ? { status: 'valid', path: result.path } : { status: 'invalid' }
