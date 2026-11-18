@@ -11,7 +11,6 @@ import type {
   ModelEndpointFormat,
   ModelProviderEndpointsV1,
   ModelProviderModelProfileV1,
-  ModelReasoningEffort,
   ScheduleRunResult,
   ScheduleRuntimeStatus,
   ScheduleTaskFromTextResult,
@@ -618,17 +617,11 @@ export type SdkDownloadState = {
   message?: string
 }
 
-export type AntigravityReasoningEffort = Extract<ModelReasoningEffort, 'low' | 'medium' | 'high'>
-
-export type AntigravitySubscriptionModel = {
-  id: string
-  supportedEfforts: AntigravityReasoningEffort[]
-  defaultEffort: AntigravityReasoningEffort
-}
-
-export type AntigravitySubscriptionModelCatalog = {
-  models: AntigravitySubscriptionModel[]
-}
+export type {
+  AntigravityReasoningEffort,
+  AntigravityCatalogModel as AntigravitySubscriptionModel,
+  AntigravityModelCatalog as AntigravitySubscriptionModelCatalog
+} from '@kun/provider-catalog'
 
 export const UNREADABLE_CREDENTIAL_KEY_ERROR_CODE = 'credential_key_unreadable'
 

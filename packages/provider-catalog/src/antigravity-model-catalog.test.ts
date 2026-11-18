@@ -23,6 +23,21 @@ describe('parseAntigravityModelCatalog', () => {
     ] })
   })
 
+  it('does not invent a medium budget for either Orchestrator in agy models', () => {
+    const { models } = parseAntigravityModelCatalog([
+      'gemini-pro-orchestrator        Orchestrator (Carbon)',
+      'gemini-pro-orchestrator-argon  Orchestrator (Argon)',
+      'gemini-4-carbon-high           Gemini 4 Carbon (High)',
+      'gemini-4-hydrogen-xhigh        Gemini 4 Hydrogen (XHigh)'
+    ].join('\n'))
+    expect(models).toEqual([
+      { id: 'gemini-pro-orchestrator', supportedEfforts: [] },
+      { id: 'gemini-pro-orchestrator-argon', supportedEfforts: [] },
+      { id: 'gemini-4-carbon', supportedEfforts: ['high'], defaultEffort: 'high' },
+      { id: 'gemini-4-hydrogen', supportedEfforts: ['xhigh'], defaultEffort: 'xhigh' }
+    ])
+  })
+
   it('chooses high when medium is unavailable', () => {
     expect(parseAntigravityModelCatalog('gemini-3.5-flash-low\ngemini-3.5-flash-high'))
       .toEqual({ models: [{

@@ -58,6 +58,41 @@ describe('ACP legacy model selection', () => {
     })
   })
 
+  it('uses the replacement options when changing models and restoring a saved effort', async () => {
+    const modelIds = ['carbon', 'gemini-pro-orchestrator', 'gemini-pro-orchestrator-argon', 'hydrogen']
+    const model = (currentValue: string): AcpConfigOption => ({ id: 'model', name: 'Model', category: 'model',
+      type: 'select', currentValue, options: modelIds.map((value) => ({ value, name: value })) })
+    const thought = (levels: string[]): AcpConfigOption => ({ id: 'thought_level', name: 'Reasoning', category: 'thought_level',
+      type: 'select', currentValue: 'medium', options: levels.map((value) => ({ value, name: value })) })
+    const { conn, request } = connection()
+    const manager = new AcpSessionManager({ coordinator: {} as DelegatedSessionCoordinator })
+    const state = { sessionId: 's', configOptions: [model('carbon'), thought(['medium', 'high'])] } as AcpSessionHandle
+    const select = (id: string | undefined, reasoningEffort: string) => manager.applyConfigOptions(conn, state, {
+      threadId: 't', turnId: 'turn', workspacePath: '/tmp', harnessId: 'antigravity', model: id, reasoningEffort, items: []
+    })
+    for (const id of modelIds.slice(1, 3)) {
+      request.mockResolvedValueOnce({ configOptions: [model(id)] })
+      await select(id, 'high')
+      expect(state.configOptions?.map((option) => option.id)).toEqual(['model'])
+      await select(undefined, 'high')
+      expect(request).toHaveBeenCalledExactlyOnceWith('session/set_config_option', { sessionId: 's', configId: 'model', value: id })
+      request.mockClear()
+    }
+    request.mockResolvedValueOnce({ configOptions: [model('hydrogen'), thought(['medium', 'high', 'xhigh'])] })
+    await select('hydrogen', 'xhigh')
+    expect(request.mock.calls).toEqual([
+      ['session/set_config_option', { sessionId: 's', configId: 'model', value: 'hydrogen' }],
+      ['session/set_config_option', { sessionId: 's', configId: 'thought_level', value: 'xhigh' }]
+    ])
+    // Old Agents may acknowledge the model without sending replacement options.
+    request.mockClear()
+    await select('gemini-pro-orchestrator', 'high')
+    await select(undefined, 'high')
+    expect(request).toHaveBeenCalledExactlyOnceWith('session/set_config_option', {
+      sessionId: 's', configId: 'model', value: 'gemini-pro-orchestrator'
+    })
+  })
+
   it('maps a reasoning level onto the advertised legacy variant', async () => {
     const models = { currentModelId: 'gpt', availableModels: ['gpt', 'gpt/low', 'gpt/high', 'gpt/xhigh', 'other'] }
     expect(acpLegacyVariantModel({ models }, 'gpt', 'high')).toBe('gpt/high')

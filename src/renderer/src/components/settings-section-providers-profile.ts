@@ -108,8 +108,9 @@ export function antigravityProviderCatalogPatch(
     } satisfies ModelProviderModelProfileV1
     modelProfiles[model.id] = withModelObservation(existing, {
       id: 'antigravity-official-cli', source: 'provider', match: 'exact', observedAt: new Date().toISOString(),
-      values: { supportsReasoning: true, reasoning: { supportedEfforts: [...model.supportedEfforts],
-        defaultEffort: model.defaultEffort, requestProtocol: 'none' } }
+      // A managed model can reason, but leaves the budget entirely to the Agent.
+      values: { supportsReasoning: true, reasoning: { supportedEfforts: model.supportedEfforts.length ? [...model.supportedEfforts] : ['auto'],
+        defaultEffort: model.defaultEffort ?? 'auto', requestProtocol: 'none' } }
     })
   }
   return { models, modelProfiles }

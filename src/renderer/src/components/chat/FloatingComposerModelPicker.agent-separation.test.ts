@@ -55,6 +55,32 @@ describe('Model picker after Agent selection moves to the mode control', () => {
     expect(document.querySelector('[data-devin-model-list] select')).toBeNull()
   })
 
+  it('removes the budget control on both Orchestrators and restores the selected Gemini model levels', async () => {
+    const ids = ['gemini-4-carbon', 'gemini-pro-orchestrator', 'gemini-pro-orchestrator-argon', 'gemini-4-hydrogen']
+    const providerId = 'ade-cred:native-login'
+    const renderModel = async (composerModel: string) => act(async () => root.render(createElement(FloatingComposerModelPicker, {
+      compact: false, mode: 'select', composerModel, composerProviderId: providerId, composerPickList: ids,
+      composerModelGroups: [{ providerId, label: 'Antigravity account', nativeHarnessId: 'antigravity', modelIds: ids,
+        modelInfo: { [ids[0]]: { id: ids[0], reasoningEfforts: ['low', 'medium', 'high'] },
+          [ids[1]]: { id: ids[1], displayName: 'Orchestrator (Carbon)', reasoningEfforts: ['high'] },
+          [ids[3]]: { id: ids[3], reasoningEfforts: ['low', 'medium', 'high', 'xhigh'] } } }],
+      composerReasoningEffort: 'high', onComposerReasoningEffortChange: vi.fn(), canChangeModel: true, onComposerModelChange: vi.fn()
+    })))
+    const trigger = () => host.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]')!
+    const choices = () => [...document.querySelectorAll<HTMLButtonElement>('[data-composer-model-panel] button[data-reasoning-effort]')].map((b) => b.dataset.reasoningEffort)
+    await renderModel(ids[0])
+    await act(async () => trigger().click())
+    expect(choices()).toEqual(['auto', 'low', 'medium', 'high'])
+    for (const id of ids.slice(1, 3)) {
+      await renderModel(id)
+      expect(document.querySelector('[data-composer-model-panel]')).not.toBeNull()
+      expect(choices()).toEqual([])
+      expect(trigger().textContent).not.toMatch(/High|Off|Auto/i)
+    }
+    await renderModel(ids[3])
+    expect(choices()).toEqual(['auto', 'low', 'medium', 'high', 'xhigh'])
+  })
+
   it('offers an Agent model only the levels it advertises, plus Auto', async () => {
     expect(nativeReasoningChoices({ reasoningEfforts: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] }))
       .toEqual(['auto', 'low', 'medium', 'high', 'max'])

@@ -1,3 +1,4 @@
+import { isAntigravityOrchestrator } from '@kun/provider-catalog'
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -103,6 +104,8 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   acp: {
     projectToolInputSchema: projectAntigravityToolInputSchema,
     continuePendingTools: true,
+    emptyEffortsWithoutThoughtLevel: true,
+    managesReasoningBudget: isAntigravityOrchestrator,
     turnInstructions: [
       'In this ACP session, wait for native background commands and scheduled checks to finish before ending your response. Use the existing task id to wait for or inspect the result; do not end with a promise to continue automatically. A native schedule is not a Kun-owned continuation.'
     ]

@@ -216,7 +216,7 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
       threadId: 'thr_1',
       turnId: 'turn_2',
       prompt: 'Switch to Orchestrator Carbon',
-      model: 'orchestrator-carbon'
+      model: 'gemini-pro-orchestrator'
     })
     expect(second.outcome).toBe('completed')
     expect(h.calls).toHaveLength(2)
@@ -225,7 +225,7 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
     const convIdx = turn2Args.indexOf('--conversation')
     expect(convIdx).toBeGreaterThan(-1)
     expect(turn2Args[convIdx + 1]).toBe('conv-agy-1')
-    expect(turn2Args).toEqual(expect.arrayContaining(['--model', 'orchestrator-carbon']))
+    expect(turn2Args).toEqual(expect.arrayContaining(['--model', 'gemini-pro-orchestrator']))
     expect(String(turn2Args[1] ?? '')).not.toContain('<kun_handoff')
 
     expect(h.recorded.some((e) => e.kind === 'handoff_injected')).toBe(false)
@@ -239,7 +239,7 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
     const binding = await h.coordinator.store.load('thr_1')
     expect(binding).toMatchObject({
       nativeSessionId: 'conv-agy-1',
-      model: 'orchestrator-carbon',
+      model: 'gemini-pro-orchestrator',
       modelScope: 'session',
       generation: 1
     })
@@ -277,8 +277,8 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
     const second = await runTurnWithModel(h, {
       threadId: 'thr_default',
       turnId: 'turn_2',
-      prompt: 'Now use Carbon with medium effort',
-      model: 'orchestrator-carbon',
+      prompt: 'Now use Orchestrator Carbon',
+      model: 'gemini-pro-orchestrator',
       reasoningEffort: 'medium'
     })
     expect(second.outcome).toBe('completed')
@@ -289,11 +289,10 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
         '--conversation',
         'conv-agy-default',
         '--model',
-        'orchestrator-carbon',
-        '--effort',
-        'medium'
+        'gemini-pro-orchestrator'
       ])
     )
+    expect(turn2Args).not.toContain('--effort')
     expect(String(turn2Args[1] ?? '')).not.toContain('<kun_handoff')
     expect(h.recorded.some((e) => e.kind === 'handoff_injected')).toBe(false)
     expect(h.recorded).toContainEqual(
@@ -341,7 +340,7 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
       threadId: 'thr_fallback',
       turnId: 'turn_2',
       prompt: 'Follow-up after switch',
-      model: 'orchestrator-carbon'
+      model: 'gemini-pro-orchestrator'
     })
     expect(second.outcome).toBe('completed')
     // Turn 1 (1 spawn) + Turn 2 failed resume (1 spawn) + Turn 2 rebased retry (1 spawn).
@@ -349,13 +348,13 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
 
     const failedResumeArgs = h.calls[1]!
     expect(failedResumeArgs).toEqual(
-      expect.arrayContaining(['--conversation', 'conv-agy-stale', '--model', 'orchestrator-carbon'])
+      expect.arrayContaining(['--conversation', 'conv-agy-stale', '--model', 'gemini-pro-orchestrator'])
     )
     expect(String(failedResumeArgs[1] ?? '')).not.toContain('<kun_handoff')
 
     const retryArgs = h.calls[2]!
     expect(retryArgs).not.toContain('--conversation')
-    expect(retryArgs).toEqual(expect.arrayContaining(['--model', 'orchestrator-carbon']))
+    expect(retryArgs).toEqual(expect.arrayContaining(['--model', 'gemini-pro-orchestrator']))
     expect(String(retryArgs[1] ?? '')).toContain('<kun_handoff')
     expect(String(retryArgs[1] ?? '')).toContain('Initial prompt')
 
@@ -378,7 +377,7 @@ describe('AntigravityCliRuntime model-switch continuation', () => {
     expect(binding).toMatchObject({
       nativeSessionId: 'conv-agy-fresh-2',
       generation: 2,
-      model: 'orchestrator-carbon'
+      model: 'gemini-pro-orchestrator'
     })
   })
 })

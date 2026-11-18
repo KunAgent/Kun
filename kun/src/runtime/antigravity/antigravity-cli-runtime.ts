@@ -59,15 +59,14 @@ import { parkDelegatedGraphTurnAfterRecovery } from '../delegated-graph-turn-pol
 import { isMissingAntigravitySession } from './antigravity-resume.js'
 import {
   buildAntigravityArgs,
-  normalizeAntigravityEffort,
-  normalizeAntigravityModel
+  resolveAntigravityPrintModel
 } from './antigravity-args.js'
 
 export {
   buildAntigravityArgs,
   normalizeAntigravityEffort,
   normalizeAntigravityModel
-}
+} from './antigravity-args.js'
 
 export interface AntigravityCliRuntimeDeps {
   nativeNetworkEnv?: () => Record<string, string>
@@ -235,13 +234,14 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
         ? thread.accountId?.trim()
         : undefined
     )
-    let model: string
+    let selection: ReturnType<typeof resolveAntigravityPrintModel>
     try {
-      model = normalizeAntigravityModel(
+      selection = resolveAntigravityPrintModel(
         turn.actingModelRoute?.model ||
         turn.model ||
         thread.model ||
-        this.deps.defaultModel
+        this.deps.defaultModel,
+        turn.reasoningEffort
       )
     } catch (error) {
       await this.deps.turns.finishTurn({
@@ -252,6 +252,7 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
       })
       return 'failed'
     }
+    const { model, effort } = selection
     const actingModelRoute: ActingTurnModelRoute = turn.actingModelRoute ?? {
       model,
       providerId: fallbackProviderId,
@@ -264,7 +265,6 @@ export class AntigravityCliRuntime implements DelegatedTurnRuntime {
     if (!turn.actingModelRoute) {
       await this.deps.turns.updateTurnMetadata(threadId, turnId, { actingModelRoute })
     }
-    const effort = normalizeAntigravityEffort(turn.reasoningEffort)
     const approvalPolicy = this.deps.enforceReadOnly === true
       ? 'never'
       : turn.approvalPolicy ?? thread.approvalPolicy

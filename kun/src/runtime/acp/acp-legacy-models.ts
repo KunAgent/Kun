@@ -1,5 +1,7 @@
 import type { AcpConnection } from './acp-connection.js'
-import { ACP_AGENT_METHODS, ACP_RPC_ERROR, AcpError, acpConfigOptionValues, type AcpConfigOption } from './acp-schema.js'
+import { ACP_AGENT_METHODS, ACP_RPC_ERROR, AcpError, AcpConfigOptionSchema, acpConfigOptionValues, type AcpConfigOption } from './acp-schema.js'
+
+const configOptionsSchema = AcpConfigOptionSchema.array()
 
 /** Compatibility surface from the official ACP v0.9.1 unstable schema. */
 export type AcpLegacyModels = {
@@ -135,7 +137,12 @@ export async function applyAcpSessionModel(
       `The agent kept model '${echoed}' instead of '${targetModelId}'. Refresh its model list or choose Agent default; no prompt was sent.`
     )
   }
-  option.currentValue = targetModelId
+  // A model switch can add or remove the reasoning selector. The response
+  // carries the complete replacement; a separate update notification is optional.
+  const next = result && typeof result === 'object' && 'configOptions' in result
+    ? configOptionsSchema.safeParse(result.configOptions) : undefined
+  if (next?.success) session.configOptions = next.data
+  else option.currentValue = targetModelId
   return resolved.inferredEffort ? { inferredEffort: resolved.inferredEffort } : undefined
 }
 

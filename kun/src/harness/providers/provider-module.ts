@@ -150,6 +150,8 @@ export type ProviderAcpHooks = {
   modelCategory?(value: string): NonNullable<HarnessModelInfo['category']>
   /** Report a known-empty reasoning list when no thought_level option exists. */
   readonly emptyEffortsWithoutThoughtLevel?: boolean
+  /** Models that assign their own reasoning budget, even with a stale session selector. */
+  managesReasoningBudget?(model: string | undefined): boolean
   /**
    * A `session/prompt` sent while another is running joins that run: the
    * engine records the new user message and answers it before the run ends,

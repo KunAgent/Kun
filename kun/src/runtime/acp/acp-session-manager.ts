@@ -339,15 +339,14 @@ export class AcpSessionManager {
     session: AcpSessionHandle,
     ctx: AcpSessionRequest
   ): Promise<void> {
-    const modelApplied = await applyAcpSessionModel(
-      conn,
-      session,
-      acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort)
-    )
+    const provider = providerModule(ctx.harnessId)
+    const managesBudget = provider?.acp?.managesReasoningBudget
+    const requestedEffort = managesBudget?.(ctx.model) ? undefined : ctx.reasoningEffort
+    const modelApplied = await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, requestedEffort))
     if (ctx.nativeAgentId) {
       await applyAcpSessionAgent(conn, session, ctx.nativeAgentId)
     } else {
-      await applyAcpProviderPermission(conn, session, ctx.permissionModeId, providerModule(ctx.harnessId), ctx.acpPermission,
+      await applyAcpProviderPermission(conn, session, ctx.permissionModeId, provider, ctx.acpPermission,
         undefined, ctx.customPermissionMode ?? false)
     }
     const options = session.configOptions
@@ -358,10 +357,12 @@ export class AcpSessionManager {
         byCategory.set(option.category, option)
       }
     }
-    const effectiveEffort = ctx.reasoningEffort ?? modelApplied?.inferredEffort
-    await this.setIfDifferent(conn, session, byCategory.get('thought_level'), [
-      ...(effectiveEffort ? effortCandidates(effectiveEffort) : [])
-    ])
+    const selected = byCategory.get('model')?.currentValue
+    const currentModel = typeof selected === 'string' ? selected : session.models?.currentModelId ?? ctx.model
+    const effort = requestedEffort ?? modelApplied?.inferredEffort
+    if (effort && !managesBudget?.(currentModel)) {
+      await this.setIfDifferent(conn, session, byCategory.get('thought_level'), effortCandidates(effort))
+    }
     await applyAcpSessionSettings(conn, session, ctx.harnessSettings, ctx.acpPermission?.configOptionId)
   }
 
