@@ -37,6 +37,8 @@ export class AcpDraftEmitter {
   private readonly reasoningAccums = new Map<string, string>()
   private readonly materializedItems = new Set<string>()
   private readonly itemTimes = new DelegatedItemTimes()
+  /** Bound by Kun after session/new or session/load, never taken from tool parameters. */
+  antigravityOutputSessionId?: string
 
   constructor(
     private readonly deps: AcpDraftEmitterDeps,
@@ -63,7 +65,9 @@ export class AcpDraftEmitter {
       return
     }
     const drafted = 'item' in input ? (input.item as TurnItem | undefined) : undefined
-    const item = drafted ? this.itemTimes.stamp(drafted) : undefined
+    const located = drafted?.kind === 'tool_result' && this.antigravityOutputSessionId
+      ? { ...drafted, meta: { ...drafted.meta, antigravityOutputSessionId: this.antigravityOutputSessionId } } : drafted
+    const item = located ? this.itemTimes.stamp(located) : undefined
     const draft = item ? { ...input, item } as RuntimeEventDraft : input
     switch (draft.kind) {
       case 'assistant_text_delta':

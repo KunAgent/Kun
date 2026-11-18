@@ -9,15 +9,19 @@ import '../../src/renderer/src/styles/markdown-code.css'
 const actions: unknown[] = []
 Object.assign(window, { kunGui: { platform: 'linux',
   openExternal: async (url: string) => { actions.push({ type: 'external', url }) },
-  runtimeRequest: async () => ({ ok: true, status: 200, body: JSON.stringify({ buckets: [] }) }) } })
+  runtimeRequest: async (path: string, method: string) => ({ ok: true, status: 200, body: JSON.stringify(
+    method === 'GET' && path === '/v1/threads/fixture-thread/turns/fixture-turn/tool-calls/call_git/output'
+      ? { text: JSON.stringify({ command: ['git', 'status', '--short', '--branch'], exit_code: 0, output: '## recorded-branch' }), truncated: false }
+      : { buckets: [] }) }) } })
 const [{ ToolBlockDetails }, { ToolStateMeta }, { FloatingComposerApprovalPanel }, { useChatStore },
-  { TimelineFilePreviewWorkspaceProvider }, language, theme] = await Promise.all([
+  { TimelineFilePreviewWorkspaceProvider }, language, theme, { summarizeToolBlock }] = await Promise.all([
   import('../../src/renderer/src/components/chat/ToolBlockDetails'),
   import('../../src/renderer/src/components/chat/ToolStateMeta'),
   import('../../src/renderer/src/components/chat/FloatingComposerApprovalPanel'),
   import('../../src/renderer/src/store/chat-store'),
   import('../../src/renderer/src/components/chat/timeline-file-preview-workspace'),
-  import('../../src/renderer/src/i18n'), import('../../src/renderer/src/lib/apply-theme')
+  import('../../src/renderer/src/i18n'), import('../../src/renderer/src/lib/apply-theme'),
+  import('../../src/renderer/src/components/chat/message-timeline-process-detail')
 ])
 await language.default.changeLanguage('en')
 theme.applyTheme('light')
@@ -44,6 +48,8 @@ const cases: Record<string, ToolPresentation> = {
     text: 'Documentation loaded. No remote content is executed.', output: { status: 200 } },
   mcp: { ...base, kind: 'mcp', title: 'Search connected documents', server: 'documents', name: 'mcp__documents__search',
     input: { query: 'project notes' }, output: { documents: [{ title: 'Project notes', id: 'doc-1' }] } },
+  'acp-git': { ...base, source: 'acp', kind: 'other', title: 'Run mcp_kun-tools_git_inspect', name: 'mcp_kun-tools_git_inspect',
+    input: { operation: 'status', args: ['--short', '--branch'], toolSummary: 'Check git status and branch' }, output: '' },
   rich: { ...base, kind: 'other', title: 'Tool resources', content: [
     { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aB1sAAAAASUVORK5CYII=', name: 'Inline preview' },
     { type: 'resource_link', uri: 'https://example.invalid/report', name: 'Remote report' },
@@ -76,18 +82,21 @@ function Fixture(): ReactElement {
   choose = setName
   const p = cases[name] ?? cases.read
   const block: ToolBlock = { kind: 'tool', id: name, summary: p.title ?? name,
-    status: p.state === 'failed' || p.state === 'canceled' ? 'error' : 'success', meta: { toolPresentation: p } }
+    status: p.state === 'failed' || p.state === 'canceled' ? 'error' : 'success', meta: { toolPresentation: p },
+    ...(name === 'acp-git' ? { turnId: 'fixture-turn', summary: 'acp:other', meta: { toolPresentation: p, acpKind: 'other', callId: 'call_git' } } : {}) }
   return <main className="tool-fixture">
     <header><strong>Tool presentation</strong><nav>{[...Object.keys(cases), 'approval'].map((key) =>
       <button key={key} onClick={() => setName(key)}>{key}</button>)}</nav></header>
     <section className="tool-fixture-content" data-fixture-case={name}>
       <TimelineFilePreviewWorkspaceProvider workspaceRoot="/fixture" threadId="fixture-thread">
         {name.startsWith('approval') ? <FloatingComposerApprovalPanel approvals={[name === 'approval-long' ? longApproval : approval]} t={language.default.t.bind(language.default)} />
-          : <><div className="mb-4 flex flex-wrap items-center gap-3"><h1>{p.title}</h1><ToolStateMeta block={block} /></div><ToolBlockDetails key={name} block={block} /></>}
+          : <><div className="mb-4 flex flex-wrap items-center gap-3"><h1>{name === 'acp-git'
+            ? summarizeToolBlock(block, language.default.t.bind(language.default)) : p.title}</h1><ToolStateMeta block={block} /></div><ToolBlockDetails key={name} block={block} /></>}
       </TimelineFilePreviewWorkspaceProvider>
     </section>
   </main>
 }
 createRoot(document.getElementById('root')!).render(<Fixture />)
 Object.assign(window, { __toolXss: 0, toolFixture: { ready: true, cases, actions,
-  scenario: (name: string) => choose(name), theme: theme.applyTheme } })
+  scenario: (name: string) => choose(name), theme: theme.applyTheme,
+  language: (locale: string) => language.default.changeLanguage(locale) } })

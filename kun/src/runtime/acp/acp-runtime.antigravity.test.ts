@@ -63,6 +63,10 @@ rl.on('line', line => {
   if (r.method === 'session/prompt') {
     const sessionId = r.params.sessionId;
     send({ method: 'session/update', params: { sessionId, update: {
+      sessionUpdate: 'tool_call', toolCallId: 'call_git', name: 'mcp_kun-tools_git_inspect', title: 'Check Git',
+      kind: 'other', status: 'completed', rawInput: { sessionId: 'not-the-native-session', operation: 'status' }
+    } } });
+    send({ method: 'session/update', params: { sessionId, update: {
       sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'Design canvas opened.' }
     } } });
     send({ method: 'session/update', params: { sessionId, update: {
@@ -123,6 +127,9 @@ it('runs Antigravity over ACP with kun-tools MCP injection, model normalization,
     ])
 
     expect(h.recorded).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'tool_call_finished', item: expect.objectContaining({
+        callId: 'call_git', meta: expect.objectContaining({ antigravityOutputSessionId: 'agy-session-1' })
+      }) }),
       expect.objectContaining({
         kind: 'delegated_runtime',
         harnessId: 'antigravity',
