@@ -326,7 +326,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
               {hasLargeDir ? (
                 <p className="mt-1 flex items-center gap-1 text-[11px] text-amber-600 dark:text-amber-300">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
-                  <span>{t('colab.driveLargeDataHint')}</span>
+                  <span>{t('colabNb.uploadColabHint')}</span>
                 </p>
               ) : null}
             </div>

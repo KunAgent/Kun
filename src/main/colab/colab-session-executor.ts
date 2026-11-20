@@ -1,15 +1,22 @@
 import type { ChildProcess } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { join, posix } from 'node:path'
-import {
-  COLAB_ACCELERATOR_SPECS,
-  type ColabSessionArtifact,
-  type ColabSessionView,
-  type ColabStartRunRequest
+import type {
+  ColabSessionArtifact,
+  ColabSessionView,
+  ColabStartRunRequest
 } from '../../shared/colab/colab-types'
 import { classifyColabErrorOutput, type ColabCliRuntime } from './colab-cli-runtime'
 import type { ColabCredentialStore } from './colab-credential-store'
+import { provisionColabHardware } from './colab-hardware-provisioner'
+import { colabUploadAccess } from './colab-upload-access'
+import { uploadRuntimeFiles } from './runtime-file-upload'
 import type { ColabPythonIsolation } from './colab-python-isolation'
+import {
+  buildExtendVmWatchdogPython,
+  buildInstallVmWatchdogPython,
+  parseWatchdogOutput
+} from './colab-watchdog-guard'
 import {
   collectSyncFileList,
   parseTrainingStdoutLine,
@@ -140,39 +147,60 @@ export class ColabSessionExecutor {
         credFile
       )
 
-      // Step 1: Provision session (`colab new`)
-      this.deps.patchSession(session.id, {
-        phase: 'provisioning',
-        provisioningStep: 'assign'
-      })
-      const spec = COLAB_ACCELERATOR_SPECS[session.accelerator]
-      const newArgs = ['new', '-s', session.sessionName]
-      if (spec.cliGpuFlag) newArgs.push('--gpu', spec.cliGpuFlag)
-
-      const newRes = await this.deps.cli.runCommand({
+      // Step 1: Provision session (`colab new` with optional `--high-mem` & min VRAM targeting)
+      const provRes = await provisionColabHardware({
+        baseSessionName: session.sessionName,
+        accelerator: session.accelerator,
+        highMem: request.highMem,
+        minVramGb: request.minVramGb,
+        maxAttempts: request.maxProvisionAttempts,
+        onExhausted: request.onProvisionExhausted,
         sessionsJsonPath: paths.sessionsJsonPath,
-        args: newArgs,
         env,
-        timeoutMs: 120_000,
+        runCli: (p) => this.deps.cli.runCommand(p),
+        syncTokenBack: () => this.deps.credentials.syncRuntimeTokenBack(session.connectionId),
+        onAttempt: (attempt, maxAttempts, sessionName) => {
+          session.sessionName = sessionName
+          this.deps.patchSession(session.id, {
+            phase: 'provisioning',
+            provisioningStep: 'assign',
+            provisioningAttempt: attempt,
+            provisioningMaxAttempts: maxAttempts,
+            sessionName
+          })
+        },
+        onLog: (msg) => this.deps.appendLog(session.id, msg),
         signal: controller.signal
       })
-      await this.deps.credentials.syncRuntimeTokenBack(session.connectionId)
-      if (controller.signal.aborted) return
-
-      if (newRes.exitCode !== 0) {
-        const combined = `${newRes.stdout}\n${newRes.stderr}`.trim()
-        const errorKind = classifyColabErrorOutput(combined)
-        if (errorKind === 'auth_expired') {
+      if (!provRes.ok) {
+        if (provRes.aborted) return
+        if (provRes.errorKind === 'auth_expired') {
           this.deps.onSessionAuthExpired(session.connectionId)
         }
         this.deps.patchSession(session.id, {
           phase: 'failed',
           finishedAt: new Date().toISOString(),
-          errorKind,
-          errorMessage: combined.slice(0, 400) || `创建 Colab 会话失败（退出码 ${newRes.exitCode}）。`
+          errorKind: provRes.errorKind,
+          errorMessage: provRes.errorMessage
         })
         return
       }
+      session.sessionName = provRes.sessionName
+      if (provRes.ramGb !== null || provRes.vramGb !== null) {
+        this.deps.patchSession(session.id, {
+          ...(provRes.ramGb !== null ? { ramGb: provRes.ramGb } : {}),
+          ...(provRes.vramGb !== null ? { vramGb: provRes.vramGb } : {})
+        })
+      }
+
+      await this.installVmWatchdog(
+        session.id,
+        session.sessionName,
+        request,
+        paths.sessionsJsonPath,
+        env
+      )
+      this.scheduleMaxRuntimeTimer(session.id, handle, request.maxRuntimeHours)
 
       if (request.terminalOnly) {
         this.deps.patchSession(session.id, {
@@ -194,23 +222,24 @@ export class ColabSessionExecutor {
         uploadTransferredBytes: 0
       })
 
-      let transferred = 0
       const syncStarted = Date.now()
-      for (const file of syncFiles) {
-        if (controller.signal.aborted) return
-        const remoteDest = posix.join('content', file.remoteRelPath)
-        const upRes = await this.deps.cli.runCommand({
-          sessionsJsonPath: paths.sessionsJsonPath,
-          args: ['upload', '-s', session.sessionName, file.absPath, remoteDest],
-          env,
-          timeoutMs: 180_000,
-          signal: controller.signal
+      let prefix = 0
+      const files = syncFiles.map((file) => {
+        const start = prefix
+        prefix += file.sizeBytes
+        return { localPath: file.absPath, remotePath: posix.join('content', file.remoteRelPath), start }
+      })
+      const access = colabUploadAccess({ pythonPath: this.deps.cli.venvPythonPath,
+        sessionsJsonPath: paths.sessionsJsonPath, sessionName: session.sessionName, env })
+      const synced = await uploadRuntimeFiles(files, access, {
+        signal: controller.signal,
+        onProgress: ({ fileIndex, transferredBytes }) => this.deps.patchSession(session.id, {
+          uploadTransferredBytes: files[fileIndex - 1].start + transferredBytes
         })
-        if (upRes.exitCode !== 0) {
-          throw new Error(`上传文件 ${file.remoteRelPath} 失败：${upRes.stderr || upRes.stdout}`)
-        }
-        transferred += file.sizeBytes
-        this.deps.patchSession(session.id, { uploadTransferredBytes: transferred })
+      })
+      if (!synced.ok) {
+        if (synced.canceled) return
+        throw new Error(synced.message)
       }
       if (syncFiles.length > 0) {
         const elapsedSec = Math.max(1, Math.round((Date.now() - syncStarted) / 1000))
@@ -257,16 +286,6 @@ export class ColabSessionExecutor {
       })
       this.deps.appendLog(session.id, `$ ${request.entryCommand}`)
       this.startTelemetryLoop(session.id, paths.sessionsJsonPath, env, handle)
-
-      if (request.maxRuntimeHours > 0) {
-        handle.maxRuntimeTimer = setTimeout(() => {
-          this.deps.appendLog(
-            session.id,
-            `[colab] 已达到最长运行时长 ${request.maxRuntimeHours} 小时，正在停止训练…`
-          )
-          void this.stopSession(session.id, true)
-        }, request.maxRuntimeHours * 3600 * 1000)
-      }
 
       const runnerPy = buildRemoteShellRunnerPython(
         request.entryCommand,
@@ -370,6 +389,113 @@ export class ColabSessionExecutor {
       const latest = this.deps.getSession(session.id)
       if (latest) this.deps.onSessionFinished(latest)
     }
+  }
+
+  private scheduleMaxRuntimeTimer(
+    sessionId: string,
+    handle: ActiveExecutionHandle,
+    maxRuntimeHours: number
+  ): void {
+    if (handle.maxRuntimeTimer) {
+      clearTimeout(handle.maxRuntimeTimer)
+      handle.maxRuntimeTimer = null
+    }
+    if (maxRuntimeHours <= 0) return
+    const current = this.deps.getSession(sessionId)
+    const elapsedMs = (current?.elapsedSeconds ?? 0) * 1000
+    const remainingMs = Math.max(1_000, maxRuntimeHours * 3_600_000 - elapsedMs)
+    handle.maxRuntimeTimer = setTimeout(() => {
+      this.deps.appendLog(
+        sessionId,
+        `[colab] 已达到最长运行时长 ${maxRuntimeHours} 小时，正在自动停机…`
+      )
+      void this.stopSession(sessionId, true)
+    }, remainingMs)
+  }
+
+  private async installVmWatchdog(
+    sessionId: string,
+    sessionName: string,
+    request: ColabStartRunRequest,
+    sessionsJsonPath: string,
+    env: Record<string, string>
+  ): Promise<void> {
+    const maxSec = request.maxRuntimeHours > 0 ? Math.round(request.maxRuntimeHours * 3600) : null
+    const idleSec =
+      request.idleAutoStopMinutes && request.idleAutoStopMinutes > 0
+        ? Math.round(request.idleAutoStopMinutes * 60)
+        : null
+    if (!maxSec && !idleSec) return
+    const fallbackAutoStopAt = maxSec ? new Date(Date.now() + maxSec * 1000).toISOString() : null
+    try {
+      const res = await this.deps.cli.runCommand({
+        sessionsJsonPath,
+        args: ['exec', '-s', sessionName, '--timeout', '15'],
+        env,
+        stdinText: buildInstallVmWatchdogPython({
+          maxRuntimeSeconds: maxSec,
+          idleTimeoutSeconds: idleSec
+        }),
+        timeoutMs: 20_000
+      })
+      const parsed = parseWatchdogOutput(res.stdout)
+      this.deps.patchSession(sessionId, {
+        watchdogActive: parsed.ok,
+        autoStopAt: parsed.autoStopAt ?? fallbackAutoStopAt
+      })
+    } catch {
+      this.deps.patchSession(sessionId, {
+        watchdogActive: false,
+        autoStopAt: fallbackAutoStopAt
+      })
+    }
+  }
+
+  async extendSession(sessionId: string, addMinutes: number): Promise<boolean> {
+    const session = this.deps.getSession(sessionId)
+    if (!session || session.phase !== 'running') return false
+    const clampedMinutes = Math.max(5, Math.min(720, Math.round(addMinutes)))
+    const baseRemainingSec =
+      session.maxRuntimeHours > 0
+        ? Math.max(0, session.maxRuntimeHours * 3600 - session.elapsedSeconds)
+        : 0
+    const nextTotalSec = session.elapsedSeconds + baseRemainingSec + clampedMinutes * 60
+    const nextMaxHours = Number((nextTotalSec / 3600).toFixed(2))
+    const nextAutoStopAt = new Date(
+      Date.now() + (baseRemainingSec + clampedMinutes * 60) * 1000
+    ).toISOString()
+
+    let watchdogActive = session.watchdogActive ?? false
+    try {
+      const credFile = await this.deps.credentials.materializeRuntimeToken(session.connectionId)
+      const { paths, env } = await this.deps.isolation.prepareConnectionEnvironment(
+        session.connectionId,
+        credFile
+      )
+      const res = await this.deps.cli.runCommand({
+        sessionsJsonPath: paths.sessionsJsonPath,
+        args: ['exec', '-s', session.sessionName, '--timeout', '15'],
+        env,
+        stdinText: buildExtendVmWatchdogPython((baseRemainingSec + clampedMinutes * 60)),
+        timeoutMs: 20_000
+      })
+      const parsed = parseWatchdogOutput(res.stdout)
+      if (parsed.ok) watchdogActive = true
+    } catch {
+      // App-side timer still enforces the extended deadline.
+    }
+
+    this.deps.patchSession(sessionId, {
+      maxRuntimeHours: nextMaxHours,
+      autoStopAt: nextAutoStopAt,
+      watchdogActive,
+      guardWarnings: (session.guardWarnings ?? []).filter((w) => w !== 'runtime_nearing')
+    })
+    const handle = this.handles.get(sessionId)
+    if (handle) {
+      this.scheduleMaxRuntimeTimer(sessionId, handle, nextMaxHours)
+    }
+    return true
   }
 
   private startTelemetryLoop(

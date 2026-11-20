@@ -7,6 +7,7 @@ import type {
   JupyterSessionView,
   NotebookRuntimeBackend
 } from '@shared/colab/colab-notebook-types'
+import { openTerminal } from '../../components/terminal/terminal-open'
 import {
   isColabSessionRunning,
   normalizeColabWorkspaceKey,
@@ -16,6 +17,7 @@ import {
   useColabSubscription
 } from '../colab-store'
 import { COLAB_REMOTE_ROOT, useColabNotebookStore } from './colab-notebook-store'
+import { useColabPortForwardSubscription } from './colab-port-forward-store'
 import { useJupyterStore, useJupyterSubscription } from './jupyter-store'
 
 export type ColabNotebookRuntime = {
@@ -33,6 +35,8 @@ export type ColabNotebookRuntime = {
   error: string | null
   connect: (accelerator: ColabAccelerator, account: ColabConnectionView) => Promise<void>
   disconnect: () => Promise<void>
+  extendSession: (addMinutes: number) => Promise<void>
+  openSshTerminal: () => Promise<void>
   jupyterServers: JupyterServerView[]
   jupyterSession: JupyterSessionView | null
   jupyterConnecting: boolean
@@ -52,6 +56,7 @@ export type ColabNotebookRuntime = {
 export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRuntime {
   useColabSubscription()
   useJupyterSubscription()
+  useColabPortForwardSubscription()
   const snapshot = useColabStore((s) => s.snapshot)
   const jupyterSnapshot = useJupyterStore((s) => s.snapshot)
   const selectedBackend = useColabNotebookStore((s) => s.runtimeBackend)
@@ -100,17 +105,26 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
       setConnecting(true)
       setError(null)
       try {
+        const opts = useColabNotebookStore.getState().launchOptions
+        const minVramGb =
+          accelerator === 'A100' && opts.requireA10080Gb ? 70 : null
         const res = await window.kunGui.colabStartRun({
           workspaceRoot: wsKey,
           connectionId: account.id,
           entryCommand: COLAB_NOTEBOOK_ENTRY_COMMAND,
           setAsWorkspaceCurrent: true,
           accelerator,
+          highMem: opts.highMem,
+          minVramGb,
+          maxProvisionAttempts: minVramGb ? 3 : 1,
           syncPaths: [],
           outputRemoteDir: '',
           outputLocalDir: '',
-          maxRuntimeHours: 0,
-          autoStop: false,
+          maxRuntimeHours: opts.maxRuntimeHours,
+          idleAutoStopMinutes: opts.idleAutoStopMinutes,
+          maxSpendCu: opts.maxSpendCu,
+          minBalanceCu: opts.minBalanceCu,
+          autoStop: opts.maxRuntimeHours > 0 || opts.idleAutoStopMinutes > 0,
           terminalOnly: true
         })
         if (!res.ok) setError(res.message)
@@ -134,6 +148,32 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
     await window.kunGui.colabStopSession({ sessionId: target.id })
     useColabNotebookStore.getState().resetKernelState()
   }, [pending, session])
+
+  const extendSession = useCallback(
+    async (addMinutes: number) => {
+      if (!session || typeof window.kunGui?.colabExtendSession !== 'function') return
+      await window.kunGui.colabExtendSession({ sessionId: session.id, addMinutes })
+    },
+    [session]
+  )
+
+  const openSshTerminal = useCallback(async () => {
+    const connId = session?.connectionId ?? connection?.id
+    if (!connId || typeof window.kunGui?.colabPrepareTerminalLaunch !== 'function') return
+    const res = await window.kunGui.colabPrepareTerminalLaunch({
+      sessionId: session?.id,
+      connectionId: connId,
+      workspaceRoot: wsKey
+    })
+    if (!res.ok) return
+    const shellBin = window.kunGui.platform === 'win32' ? 'cmd.exe' : '/bin/sh'
+    const shellFlag = window.kunGui.platform === 'win32' ? '/c' : '-c'
+    openTerminal({
+      title: res.title,
+      cwd: res.cwd,
+      profileLaunch: { argv: [shellBin, shellFlag, res.command], env: res.env }
+    })
+  }, [connection?.id, session?.connectionId, session?.id, wsKey])
 
   const connectJupyter = useCallback(
     async (input: Omit<JupyterConnectRequest, 'workspaceRoot'>): Promise<boolean> => {
@@ -193,6 +233,8 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
     error,
     connect,
     disconnect,
+    extendSession,
+    openSshTerminal,
     jupyterServers: jupyterSnapshot.servers,
     jupyterSession,
     jupyterConnecting,

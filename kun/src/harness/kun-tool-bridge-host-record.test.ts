@@ -20,16 +20,31 @@ const thread = {
   }]
 } as unknown as ThreadRecord
 
-function hostFor(output: unknown, isError = false, current = thread,
-  workspaceRootsForTurn?: (threadId: string, turnId: string) => WorkspaceRootSet | undefined) {
+function hostFor(
+  output: unknown,
+  isError = false,
+  current = thread,
+  workspaceRootsForTurn?: (threadId: string, turnId: string) => WorkspaceRootSet | undefined,
+  opts?: { meta?: Record<string, unknown>; recordAppSurfaceResultItems?: boolean }
+) {
   const contexts: ToolHostContext[] = []
-  const applied: Array<{ id: string; toolName?: string; output?: unknown }> = []
+  const applied: Array<{ id: string; toolName?: string; output?: unknown; meta?: Record<string, unknown> }> = []
   const toolHost: ToolHost = {
     id: 'fake',
     listTools: async () => [],
     execute: async (call, context) => {
       contexts.push(context)
-      return { item: { kind: 'tool_result', id: 'item_native', toolName: call.toolName, output, isError }, approved: false } as never
+      return {
+        item: {
+          kind: 'tool_result',
+          id: 'item_native',
+          toolName: call.toolName,
+          output,
+          isError,
+          ...(opts?.meta ? { meta: opts.meta } : {})
+        },
+        approved: false
+      } as never
     }
   }
   const host = createKunToolBridgeHost({
@@ -42,7 +57,8 @@ function hostFor(output: unknown, isError = false, current = thread,
     events: { record: async () => undefined } as never,
     ids: { next: (prefix: string) => `${prefix}_7` },
     defaultApprovalPolicy: 'never',
-    recordResultItemTools: new Set(['design_open'])
+    recordResultItemTools: new Set(['design_open']),
+    ...(opts?.recordAppSurfaceResultItems ? { recordAppSurfaceResultItems: true } : {})
   })
   return { host, applied, contexts }
 }
@@ -68,6 +84,71 @@ describe('KunToolBridgeHost result item recording', () => {
     const failed = hostFor('screen "A" needs html', true)
     await failed.host.execute('thread_1', 'turn_1', { toolName: 'design_open', args: {}, callId: 'c', signal: new AbortController().signal })
     expect(failed.applied).toEqual([])
+  })
+
+  it('records MCP App and Gen UI sideband results when recordAppSurfaceResultItems is enabled', async () => {
+    const mcpApp = {
+      serverId: 'kun_canvas',
+      toolName: 'canvas_create',
+      resourceUri: 'ui://kun-canvas/index.html',
+      surface: 'canvas'
+    }
+    const direct = hostFor(
+      { serverId: 'kun_canvas', toolName: 'canvas_create', result: { structuredContent: { boardId: 'cb_1' } } },
+      false,
+      thread,
+      undefined,
+      { meta: { mcpApp }, recordAppSurfaceResultItems: true }
+    )
+    await direct.host.execute('thread_1', 'turn_1', {
+      toolName: 'mcp_kun_canvas_canvas_create',
+      args: { title: 'Notebook Redesign' },
+      callId: 'mcp_9',
+      signal: new AbortController().signal
+    })
+    expect(direct.applied).toEqual([expect.objectContaining({
+      id: 'item_toolresult_turn_1_mcp_9_kun_7',
+      toolName: 'mcp_kun_canvas_canvas_create',
+      meta: { mcpApp, mcpAppArguments: { title: 'Notebook Redesign' } }
+    })])
+
+    const viaMcpCall = hostFor(
+      { serverId: 'kun_canvas', toolName: 'canvas_open', result: { structuredContent: { boardId: 'cb_1' } } },
+      false,
+      thread,
+      undefined,
+      { meta: { mcpApp: { ...mcpApp, toolName: 'canvas_open' } }, recordAppSurfaceResultItems: true }
+    )
+    await viaMcpCall.host.execute('thread_1', 'turn_1', {
+      toolName: 'mcp_call',
+      args: { toolId: 'mcp_kun_canvas_canvas_open', arguments: { boardId: 'cb_1' } },
+      callId: 'mcp_10',
+      signal: new AbortController().signal
+    })
+    expect(viaMcpCall.applied[0]?.meta).toEqual({
+      mcpApp: { ...mcpApp, toolName: 'canvas_open' },
+      mcpAppArguments: { boardId: 'cb_1' }
+    })
+
+    const genUiMeta = { genUi: { widgetId: 'gw_1', sha256: 'a'.repeat(64), bytes: 12, title: 'W', mode: 'inline' } }
+    const widgetHost = hostFor({ ok: true }, false, thread, undefined, { meta: genUiMeta, recordAppSurfaceResultItems: true })
+    await widgetHost.host.execute('thread_1', 'turn_1', {
+      toolName: 'render_widget',
+      args: {},
+      callId: 'mcp_11',
+      signal: new AbortController().signal
+    })
+    expect(widgetHost.applied).toHaveLength(1)
+    expect(widgetHost.applied[0]?.meta).toEqual(genUiMeta)
+
+    const disabled = hostFor({ ok: true }, false, thread, undefined, { meta: { mcpApp } })
+    await disabled.host.execute('thread_1', 'turn_1', {
+      toolName: 'mcp_kun_canvas_canvas_create',
+      args: { title: 'Disabled' },
+      callId: 'mcp_12',
+      signal: new AbortController().signal
+    })
+    expect(disabled.applied).toEqual([])
   })
 })
 

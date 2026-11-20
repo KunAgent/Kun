@@ -11,6 +11,7 @@ import { useReviewStore } from '../../store/review-store'
 import { takePlanBuildReview } from '../../store/plan-build-watch'
 import { OPEN_WORKERS_PANEL_EVENT } from '../chat/FloatingComposerWorkersPill'
 import { useColabStore } from '../../colab/colab-store'
+import { useColabNotebookStore } from '../../colab/notebook/colab-notebook-store'
 import { useChatStore } from '../../store/chat-store'
 import { OPEN_WORKER_SESSION_EVENT } from '../workers/worker-view-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
@@ -211,6 +212,10 @@ export function useWorkbenchRightTools({
   const colabPanelRequested = useColabStore((state) => state.panelOpenRequested)
   useEffect(() => {
     if (!colabPanelRequested) return
+    const colabState = useColabStore.getState()
+    if (colabState.connectionsExpanded || colabState.addAccountOpen) {
+      useColabNotebookStore.getState().setKernelPickerOpen(true)
+    }
     useChatStore.getState().setRoute('colab')
     useColabStore.setState({ panelOpenRequested: false })
   }, [colabPanelRequested])

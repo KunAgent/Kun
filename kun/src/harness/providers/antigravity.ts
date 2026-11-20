@@ -4,20 +4,19 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { HarnessDefinition } from '../../contracts/harness.js'
 import { resolveExecutable } from '../../process/owned-process.js'
+import { harnessExecutableEnv } from '../harness-executable-env.js'
 import { ANTIGRAVITY_CAPABILITIES, ANTIGRAVITY_CLI_CAPABILITIES } from './capabilities.js'
 import type { AgentProviderModule, HarnessLoginState, ProviderEnv } from './provider-module.js'
 import type { HarnessLoginProbeDeps } from '../harness-login-probes.js'
 import { antigravityCredentialEvidence } from '../antigravity-credentials.js'
 import { homeOf, nonempty, probeProviderCredential, readJsonFile, readJsonObject } from './support.js'
 import { projectAntigravityToolInputSchema } from '../../adapters/model/antigravity-tool-schema-projection.js'
+import { selectAntigravityMcpToolListMeta } from './antigravity-mcp-eager.js'
 
 const AGY_DETECT = { command: 'agy', aliases: [], versionArgs: ['--version'] }
 // Official `agy acp` first shipped in CLI 1.5.0; older builds open the TUI.
 // https://antigravity.google/docs/changelog
 export const ANTIGRAVITY_ACP_MIN_VERSION = '1.5.0'
-const ANTIGRAVITY_MAX_EAGER_TOOLS = 200
-// agy exposes MCP tools as `mcp_kun-tools_<name>` under Gemini's 64-char name limit.
-const ANTIGRAVITY_EAGER_TOOL_NAME = /^[a-zA-Z0-9_.:-]{1,50}$/
 
 export const ANTIGRAVITY_DEFINITION: HarnessDefinition = {
   id: 'antigravity',
@@ -97,7 +96,7 @@ function antigravityManagedPaths(home: string): string[] {
 }
 
 async function resolveAntigravityExecutable(): Promise<string> {
-  const fromPath = await resolveExecutable('agy')
+  const fromPath = await resolveExecutable('agy', { env: harnessExecutableEnv() })
   if (fromPath) return fromPath
   const managed = antigravityManagedPaths(homedir()).find((candidate) => existsSync(candidate))
   return managed ?? 'agy'
@@ -107,10 +106,7 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   definition: ANTIGRAVITY_DEFINITION,
   acp: {
     projectToolInputSchema: projectAntigravityToolInputSchema,
-    mcpToolMeta: (tool, index) =>
-      index < ANTIGRAVITY_MAX_EAGER_TOOLS && ANTIGRAVITY_EAGER_TOOL_NAME.test(tool.name)
-        ? { 'antigravity/alwaysLoad': true }
-        : undefined,
+    mcpToolListMeta: selectAntigravityMcpToolListMeta,
     continuePendingTools: true,
     emptyEffortsWithoutThoughtLevel: true,
     managesReasoningBudget: isAntigravityOrchestrator,
@@ -136,7 +132,7 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
     pointerEnvKeys: ['CLOUDSDK_CONFIG', 'GOOGLE_APPLICATION_CREDENTIALS'],
     files: (env, home) => [env.GOOGLE_APPLICATION_CREDENTIALS ||
       join(env.CLOUDSDK_CONFIG || join(home, '.config/gcloud'), 'application_default_credentials.json')],
-    profileFiles: (_env, home) => [join(home, '.gemini', 'antigravity-cli', 'settings.json')],
+    // agy rewrites settings.json when switching session models/efforts; credentials live in files + snapshotEvidence.
     configured: (context) => (context.selected.GOOGLE_APPLICATION_CREDENTIALS
       ? [context.selected.GOOGLE_APPLICATION_CREDENTIALS] : context.files()).some(adcConfigured),
     snapshotEvidence: (env) => antigravityCredentialEvidence(env)
@@ -145,8 +141,11 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
   nativeAccount: { kind: 'antigravity-cli', credentialEnv: 'GEMINI_API_KEY', countsAsEvidence: true },
   binaryEnv: 'KUN_ANTIGRAVITY_BINARY',
   managedExecutable: (dataDir) => {
-    const candidate = join(dataDir, 'provider-cli', 'antigravity', antigravityBinaryName())
-    return existsSync(candidate) ? candidate : undefined
+    const candidates = [
+      join(dataDir, 'provider-cli', 'antigravity', antigravityBinaryName()),
+      ...antigravityManagedPaths(homedir())
+    ]
+    return candidates.find((candidate) => existsSync(candidate))
   },
   resolveExecutable: () => resolveAntigravityExecutable(),
   nativeNetwork: { transport: 'acp', snapshotKey: 'antigravity' },

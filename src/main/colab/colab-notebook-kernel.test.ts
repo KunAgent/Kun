@@ -51,6 +51,7 @@ describe('colab notebook kernel protocol', () => {
     const py = buildNotebookCellPython(source)
     expect(py).toContain(Buffer.from(source, 'utf8').toString('base64'))
     expect(py).not.toContain(source)
+    expect(py).toContain('/root/.kun-colab/heartbeat')
     expect(buildRemoteListPython("/content/it's")).toContain(Buffer.from("/content/it's").toString('base64'))
   })
 

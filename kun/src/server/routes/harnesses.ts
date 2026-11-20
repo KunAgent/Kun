@@ -59,9 +59,12 @@ export async function listHarnesses(
         return status?.detecting === true || harnesses.detector.detecting(definition.id)
       })
       .map((definition) => harnesses.detector.status(definition.id).catch(() => undefined))
-    if (pending.length > 0) {
+    const warming = harnesses.readiness?.waitForWarming
+      ? [harnesses.readiness.waitForWarming(list.map((definition) => definition.id), waitMs)]
+      : []
+    if (pending.length > 0 || warming.length > 0) {
       await Promise.race([
-        Promise.allSettled(pending),
+        Promise.allSettled([...pending, ...warming]),
         new Promise((resolve) => setTimeout(resolve, waitMs))
       ])
       for (const definition of list) {
@@ -332,9 +335,11 @@ export async function listHarnessModels(
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
         if (selectedModelParam && selectedModelParam.length > 1024) return ERRORS.validation('invalid model id')
         // A catalog from a previous Runtime is useful until the Agent changes.
-        // An explicit refresh and a per-model detail lookup still ask the Agent.
-        const kept = !refresh && !selectedModelParam ? harnesses.modelCatalogs?.get(definition) : undefined
-        if (kept) return reply({ harnessId: definition.id, ...kept.catalog }, 'cache', kept.fetchedAt)
+        // An explicit refresh and an unlearned per-model detail lookup still ask the Agent.
+        const kept = !refresh ? harnesses.modelCatalogs?.get(definition) : undefined
+        if (kept && (!selectedModelParam || kept.catalog.modelInfo?.find((entry) => entry.id === selectedModelParam)?.reasoningEfforts !== undefined)) {
+          return reply({ harnessId: definition.id, ...kept.catalog }, 'cache', kept.fetchedAt)
+        }
         return replyCatalog(await harnesses.acpModels.probeCatalog(definition, selectedModelParam))
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {

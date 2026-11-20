@@ -39,6 +39,7 @@ import type { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
 import { acpHarnessBinaryOverride } from '../harness/harness-runtime.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
+import type { AcpDesignDeliveryHost } from '../runtime/acp/acp-design-delivery.js'
 
 export type MainDelegatedRuntimeInput = {
   options: KunServeRuntimeOptions
@@ -57,6 +58,8 @@ export type MainDelegatedRuntimeContext = {
   toolHost: LocalToolHost
   providerPool: ReturnType<typeof createProviderPoolAccess>
   graphHarnessSummary: ReturnType<typeof createGraphHarnessSummary>
+  /** Real bridge + event bus: only the main desktop scope publishes to the canvas. */
+  designDelivery: AcpDesignDeliveryHost
 }
 
 export function buildMainDelegatedRuntime(
@@ -222,6 +225,7 @@ export function buildMainDelegatedRuntime(
     approvalGate, approvalReview: approvalReviewService,
     userInputGate, workerCallbacks: services.workerCallbacks,
     kunToolsMcp: services.kunToolsMcp, credentialEnv: services.acpCredentialEnv,
+    designDelivery: ctx.designDelivery,
     ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
     allowUnattendedFullAccess: input.options.ade?.allowUnattendedFullAccess === true,

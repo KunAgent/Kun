@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import {
   COLAB_ACCELERATOR_SPECS,
+  type ColabLastRunSummary,
   type ColabLoginOutcome,
   type ColabOAuthPendingState,
   type ColabSessionView,
@@ -10,6 +11,7 @@ import type { ColabCredentialStore, StoredColabOAuthToken } from './colab-creden
 import type { VerifiedColabIdentity } from './colab-oauth-flow'
 import {
   buildColabConnectionView,
+  isActiveColabSessionPhase,
   type PersistedConnectionRecord,
   pickAvatarColor,
   workspaceShortLabel
@@ -135,6 +137,8 @@ export function createColabSessionDraft(
     connectionAvatarColor: conn.avatarColor,
     workspaceRoot: wsKey,
     accelerator: input.accelerator,
+    highMem: Boolean(input.highMem),
+    minVramGb: input.minVramGb ?? null,
     vramGb: spec.vramGb,
     ramGb: spec.ramGb,
     phase: 'provisioning',
@@ -146,6 +150,12 @@ export function createColabSessionDraft(
     outputRemoteDir: input.outputRemoteDir || 'outputs/',
     outputLocalDir: input.outputLocalDir || './outputs',
     maxRuntimeHours: input.maxRuntimeHours,
+    idleAutoStopMinutes: input.idleAutoStopMinutes ?? 0,
+    maxSpendCu: input.maxSpendCu ?? null,
+    minBalanceCu: input.minBalanceCu ?? null,
+    watchdogActive: false,
+    autoStopAt: null,
+    guardWarnings: [],
     autoStop: input.autoStop,
     mountDrive: Boolean(input.mountDrive),
     consumedCu: 0,
@@ -160,4 +170,56 @@ export function createColabSessionDraft(
     logTail: [],
     artifacts: []
   }
+}
+
+export function buildLastRunSummary(session: ColabSessionView): ColabLastRunSummary {
+  return {
+    entryCommand: session.entryCommand,
+    accelerator: session.accelerator,
+    syncPaths: session.syncPaths,
+    outputRemoteDir: session.outputRemoteDir,
+    outputLocalDir: session.outputLocalDir,
+    maxRuntimeHours: session.maxRuntimeHours,
+    autoStop: session.autoStop,
+    mountDrive: session.mountDrive,
+    envVars: {},
+    setupScript: '',
+    durationSeconds: session.elapsedSeconds,
+    consumedCu: session.consumedCu,
+    connectionId: session.connectionId,
+    finishedAt: session.finishedAt || new Date().toISOString()
+  }
+}
+
+export async function removeColabConnection(options: {
+  connectionId: string
+  stopRunningSessions: boolean
+  connections: PersistedConnectionRecord[]
+  workspaceConnections: Record<string, string>
+  sessions: Map<string, ColabSessionView>
+  credentials: ColabCredentialStore
+  stopSession: (sessionId: string, remoteStop: boolean) => Promise<void>
+}): Promise<{ ok: boolean; switchedToConnectionId: string | null; message?: string }> {
+  const idx = options.connections.findIndex((c) => c.id === options.connectionId)
+  if (idx === -1) return { ok: false, switchedToConnectionId: null, message: '连接不存在。' }
+
+  const activeForConn = [...options.sessions.values()].filter(
+    (s) => s.connectionId === options.connectionId && isActiveColabSessionPhase(s.phase)
+  )
+  for (const s of activeForConn) {
+    await options.stopSession(s.id, options.stopRunningSessions)
+    options.sessions.delete(s.id)
+  }
+
+  options.connections.splice(idx, 1)
+  await options.credentials.removeConnection(options.connectionId)
+
+  const fallback = options.connections.find((c) => c.status === 'connected')?.id ?? null
+  for (const [ws, cid] of Object.entries(options.workspaceConnections)) {
+    if (cid === options.connectionId) {
+      if (fallback) options.workspaceConnections[ws] = fallback
+      else delete options.workspaceConnections[ws]
+    }
+  }
+  return { ok: true, switchedToConnectionId: fallback }
 }

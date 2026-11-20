@@ -93,14 +93,22 @@ function mcpToolList(
 } {
   const acp = providerModule(harnessId)?.acp
   const project = acp?.projectToolInputSchema ?? ((schema: Record<string, unknown>) => schema)
+  const projected = tools.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    // Downstream gateways (Anthropic-format) reject top-level oneOf/anyOf/allOf.
+    inputSchema: project(projectAnthropicToolInputSchema(tool.inputSchema)),
+    providerId: tool.providerId,
+    providerKind: tool.providerKind
+  }))
+  const metas = acp?.mcpToolListMeta?.(projected)
   return {
-    tools: tools.map((tool, index) => {
-      const meta = acp?.mcpToolMeta?.(tool, index)
+    tools: projected.map((tool, index) => {
+      const meta = metas?.[index]
       return {
         name: tool.name,
         description: tool.description,
-        // Downstream gateways (Anthropic-format) reject top-level oneOf/anyOf/allOf.
-        inputSchema: project(projectAnthropicToolInputSchema(tool.inputSchema)),
+        inputSchema: tool.inputSchema,
         ...(meta ? { _meta: meta } : {})
       }
     })

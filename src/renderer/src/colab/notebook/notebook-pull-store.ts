@@ -50,6 +50,7 @@ type PullStore = {
   visible: boolean
   otherSourceRequested: boolean
   open: (source: NotebookPullSource, workspaceRoot: string) => void
+  setDriveAccount: (connectionId: string, label: string) => void
   show: () => void
   hide: () => void
   workspaceChanged: (workspaceRoot: string) => void
@@ -141,6 +142,7 @@ export const useNotebookPullStore = create<PullStore>((set, get) => {
     if (entries.length === 0) return
     const ticket = ++revision
     let saved = task.saved
+    const batchSavedPaths: string[] = []
     const retrying = new Set(entries.map((entry) => entry.remotePath))
     let failed = task.failed.filter(({ entry }) => !retrying.has(entry.remotePath))
     patch(ticket, { phase: 'importing', progress: { completed: 0, total: entries.length }, error: undefined })
@@ -159,13 +161,22 @@ export const useNotebookPullStore = create<PullStore>((set, get) => {
       const result = await work
       if (currentWrite === work) currentWrite = undefined
       if (ticket !== revision) break
-      if (result.ok) saved = [...saved, result.file]
+      if (result.ok) {
+        saved = [...saved, result.file]
+        batchSavedPaths.push(result.file.relativePath)
+      }
       else failed = [...failed, { entry, message: 'message' in result ? result.message : undefined }]
       patch(ticket, { saved, failed, progress: { completed: index + 1, total: entries.length } })
     }
     if (ticket !== revision) return
     patch(ticket, { phase: 'result', picked: [], progress: null })
     const notebook = useColabNotebookStore.getState()
+    if (batchSavedPaths.length > 0) {
+      notebook.recordRecentImports?.(task.workspaceRoot, batchSavedPaths, {
+        kind: task.source.kind,
+        label: task.source.label
+      })
+    }
     if (saved.length > 0 && notebook.workspaceRoot === task.workspaceRoot) {
       void notebook.refreshNotebooks(task.workspaceRoot, { selectFirst: false }).catch(() => undefined)
     }
@@ -198,6 +209,11 @@ export const useNotebookPullStore = create<PullStore>((set, get) => {
         task: { workspaceRoot, source, phase: 'prepare', query: '', entries: [], picked: [], saved: [], failed: [], progress: null }
       })
       if (source.kind === 'jupyter') void get().refresh()
+    },
+    setDriveAccount: (connectionId, label) => {
+      const { task } = get()
+      if (!task || task.source.kind !== 'drive' || task.phase !== 'prepare' || task.access) return
+      set({ task: { ...task, source: { kind: 'drive', connectionId, label }, error: undefined } })
     },
     show: () => set({ visible: true, otherSourceRequested: false }),
     hide: () => set({ visible: false, otherSourceRequested: false }),

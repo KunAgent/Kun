@@ -16,8 +16,8 @@ import { parseGatewayModelId } from './gateway-model-id.js'
 import { exposableProvider } from '../domain/model-gateway-export-policy.js'
 import { nativeAgentNetworkEnv, nativeAgentNetworkStatus } from './native-agent-network.js'
 import { raceProbeAbort } from './probe-abort.js'
-import { harnessProfile, harnessProfileKey, nativeHasKey,
-  readinessFingerprint, readinessProvider, type ReadinessOptions } from './harness-readiness-profile.js'
+import { effectiveReadinessProvider, harnessProfile, harnessProfileKey, nativeHasKey,
+  readinessFingerprint, type ReadinessOptions } from './harness-readiness-profile.js'
 import { readinessProbeEnvironment } from './harness-readiness-env.js'
 import { probeCursorSdkReadiness } from './cursor-sdk-readiness.js'
 import { spawnCaptured } from './harness-detector.js'
@@ -38,7 +38,7 @@ export const PROOF_TTL_MS = 30 * 60_000
  * re-validates it in the background: the next turn admission, an explicit
  * test, or selecting the Agent in the composer does.
  */
-export const PROOF_DISPLAY_TTL_MS = 12 * 60 * 60_000
+export const PROOF_DISPLAY_TTL_MS = 7 * 24 * 60 * 60_000
 /** Turn admission reuses a proof only when it still has this much life left. */
 const PROOF_REUSE_MIN_REMAINING_MS = 15_000
 const WARM_RETRY_BASE_MS = 15_000
@@ -369,7 +369,23 @@ export class HarnessReadinessService {
    * still-valid proof keeps the Agent usable, so it must not read as detecting.
    */
   verifying(id: string): boolean {
+    if (this.deferredWarms.has(id)) return true
     return [...this.warming.keys()].some((key) => JSON.parse(key)[0] === id && !this.refreshingKeys.has(key))
+  }
+
+  /** Wait up to `timeoutMs` for initial (non-refresh) warm-ups of the listed Agents. */
+  async waitForWarming(ids: readonly string[], timeoutMs: number): Promise<void> {
+    if (timeoutMs <= 0 || ids.length === 0) return
+    const started = this.now()
+    await Promise.race([this.restored, new Promise((resolve) => setTimeout(resolve, timeoutMs))])
+    const remaining = timeoutMs - (this.now() - started)
+    if (remaining <= 0) return
+    const wanted = new Set(ids)
+    const tasks = [...this.warming.entries()]
+      .filter(([key]) => !this.refreshingKeys.has(key) && wanted.has(JSON.parse(key)[0]))
+      .map(([, task]) => task)
+    if (tasks.length === 0) return
+    await Promise.race([Promise.allSettled(tasks), new Promise((resolve) => setTimeout(resolve, remaining))])
   }
 
   async readyProfiles(id: string): Promise<ReadyHarnessProfile[]> {
@@ -528,9 +544,7 @@ export class HarnessReadinessService {
     const nativeEvidence = snapshotEvidence
       ? await snapshotEvidence({ ...process.env, ...definition.launch?.env, ...secretEnv }) : undefined
     if (nativeEvidence) secretEnv.__KUN_READINESS_NATIVE_AUTH = nativeEvidence.fingerprint
-    const candidate = readinessProvider(options, route)
-    const provider = route.credentialMode === 'native-login' && (!route.providerId || route.providerId === 'default') &&
-      candidate?.kind !== module?.nativeAccount?.kind ? undefined : candidate
+    const provider = effectiveReadinessProvider(options, definition, route)
     let apiKey = provider?.apiKey?.trim() ?? ''
     if (provider?.credentialSourceId) {
       apiKey = (await this.deps.resolveProviderCredential?.(provider.credentialSourceId))?.apiKey?.trim() ?? ''

@@ -371,7 +371,7 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                 }`}
                 buttonClassName="items-center gap-2 px-2.5 py-2"
                 actionsVisibility="hidden"
-                actionsLayout="overlay"
+                actionsLayout="swap"
                 actions={
                   <>
                     <SidebarIconButton
@@ -402,12 +402,12 @@ export function SidebarProjectsContent(props: SidebarProjectsContentProps): Reac
                 )}
                 <span className="min-w-0 flex-1 truncate">{folderName}</span>
                 {projectFolderCount > 0 ? (
-                  <span className="shrink-0 rounded-md bg-ds-card/70 px-1.5 py-0.5 text-[10.5px] text-ds-faint tabular-nums">
+                  <span className="shrink-0 rounded-md bg-ds-card/70 px-1.5 py-0.5 text-[10.5px] text-ds-faint tabular-nums group-hover:hidden group-focus-within:hidden">
                     {t('codeProjectFolderCount', { count: projectFolderCount })}
                   </span>
                 ) : null}
                 {workspaceContext ? (
-                  <span className="min-w-0 max-w-[42%] shrink truncate text-[12.5px] text-ds-faint transition group-hover:opacity-0 group-focus-within:opacity-0">
+                  <span className="min-w-0 max-w-[42%] shrink truncate text-[12.5px] text-ds-faint group-hover:hidden group-focus-within:hidden">
                     {workspaceContext}
                   </span>
                 ) : null}

@@ -2,11 +2,16 @@ import { createElement, Fragment } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import type { ColabNotebookExecEvent } from '@shared/colab/colab-notebook-types'
+import {
+  COLAB_NOTEBOOK_ENTRY_COMMAND,
+  type ColabNotebookExecEvent
+} from '@shared/colab/colab-notebook-types'
 import i18n from '../../i18n'
 import { createCell, serializeIpynb } from './ipynb-format'
 import { buildColabKunTurnPrompt } from './colab-kun-turn'
+import { useColabStore } from '../colab-store'
 import { useColabNotebookStore } from './colab-notebook-store'
+import { useColabPortForwardStore } from './colab-port-forward-store'
 import { handleColabNotebookAgentRequest } from './use-colab-notebook-agent'
 import { ColabNotebookCell } from './ColabNotebookCell'
 import { ColabNotebookView } from './ColabNotebookView'
@@ -303,14 +308,14 @@ describe('ColabNotebookCell and ColabNotebookView', () => {
     expect(stripped).toBe(code)
   })
 
-  it('opens a server pull from the left while keeping the editor and Kun chat mounted', async () => {
+  it('manages runtime picker, modal import dialog, right panel tabs, and pinned sidebar runtime card while keeping Kun mounted', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     const first = createCell('code', 'a = 1')
     const workspaceRoot = '/tmp/demo'
     const jupyterListNotebooks = vi.fn(async () => ({
       ok: true as const, status: 'ready' as const, entries: [{
         name: 'analysis.ipynb', remotePath: 'experiments/analysis.ipynb', relativePath: 'experiments/analysis.ipynb',
-        sizeBytes: 125, modifiedAtMs: 0
+        sizeBytes: 125, modifiedAtMs: Date.now() - 7_200_000
       }]
     }))
     const jupyterConnect = vi.fn()
@@ -318,8 +323,8 @@ describe('ColabNotebookCell and ColabNotebookView', () => {
     vi.stubGlobal('window', { ...priorWindow, kunGui: { ...priorWindow.kunGui, jupyterListNotebooks, jupyterConnect } })
     useChatStore.setState({ workspaceRoot })
     useColabNotebookStore.setState({
-      workspaceRoot, activePath: 'train.ipynb', cells: [first], selectedCellId: first.id,
-      loadError: null, dirty: false, sidePanelOpen: true
+      workspaceRoot, notebooks: ['train.ipynb', 'eval.ipynb'], activePath: 'train.ipynb', cells: [first], selectedCellId: first.id,
+      loadError: null, dirty: false, sidePanelOpen: true, sidePanelTab: 'kun', kernelPickerOpen: false
     })
     useJupyterStore.getState().setSnapshot({ servers: [{
       id: 'lab', name: 'Research Lab', baseUrl: 'https://jupyter.example', hasAuth: true,
@@ -337,41 +342,325 @@ describe('ColabNotebookCell and ColabNotebookView', () => {
       const { root } = renderer!
       const sidebar = root.findByType(ColabSidebarContent)
       const stage = root.findByType(ColabNotebookView)
-      const button = (scope: typeof root, text: string) => scope.findAllByType('button').find((node) => node.children.includes(text))!
       const chat = stage.findByType(ColabKunPane)
-      const chatAside = () => stage.findByProps({ 'data-colab-right-sidebar': 'kun' })
-      const editor = () => stage.findByProps({ 'data-colab-notebook-editor': true })
-      expect(JSON.stringify(renderer!.toJSON())).toContain('Run all')
-      expect(chatAside().props.hidden).toBe(false)
-      expect(sidebar.findByProps({ 'data-colab-connections': true })).toBeDefined()
-      expect(stage.findAllByProps({ 'data-colab-right-sidebar': 'runtime' })).toHaveLength(0)
+      const rightAside = () => stage.findByProps({ id: 'colab-kun-sidebar' })
 
-      await act(async () => button(sidebar, 'Browse server notebooks').props.onClick())
+      expect(JSON.stringify(renderer!.toJSON())).toContain('Run all')
+      expect(rightAside().props.hidden).toBe(false)
+      expect(sidebar.findAllByProps({ 'data-colab-connections': true })).toHaveLength(0)
+      expect(sidebar.findByProps({ 'data-colab-runtime-card': 'offline' })).toBeDefined()
+      expect(stage.findByProps({ 'data-colab-status-bar': true })).toBeDefined()
+
+      // Left-bottom runtime card opens the topbar kernel picker popover defaulting to Custom Jupyter when Jupyter servers exist without Colab accounts
+      const connectBtn = sidebar.findByProps({ 'data-colab-runtime-connect': true })
+      await act(async () => connectBtn.props.onClick())
+      expect(stage.findByProps({ 'data-colab-kernel-picker': true })).toBeDefined()
+      expect(stage.findByProps({ 'data-colab-kernel-section': 'jupyter' })).toBeDefined()
+      await act(async () => stage.findByProps({ 'data-colab-kernel-picker-trigger': true }).props.onClick())
+      expect(stage.findAllByProps({ 'data-colab-kernel-picker': true })).toHaveLength(0)
+
+      const buttonWithText = (scope: typeof root, text: string) =>
+        scope.findAllByType('button').find(
+          (node) =>
+            node.children.includes(text) ||
+            node.findAllByType('span').some((s) => s.children.includes(text))
+        )!
+
+      // Topbar Import menu opens the centered modal dialog without unmounting the editor or Kun chat
+      await act(async () => stage.findByProps({ 'data-colab-import-trigger': true }).props.onClick())
+      const importMenu = stage.findByProps({ 'data-colab-import-menu': true })
+      const fromJupyterBtn = buttonWithText(importMenu, 'From Jupyter server')
+      await act(async () => fromJupyterBtn.props.onClick())
       expect(jupyterListNotebooks).toHaveBeenCalledWith({ serverId: 'lab' })
       expect(jupyterConnect).not.toHaveBeenCalled()
-      expect(editor().props.hidden).toBe(true)
+
       const pull = stage.findByProps({ 'data-notebook-pull-page': 'select' })
+      expect(pull.props.role).toBe('dialog')
       expect(JSON.stringify(pull.findAllByType('strong').map((node) => node.children))).toContain('Research Lab')
       expect(pull.findAllByType('strong').some((node) => node.props.title === workspaceRoot)).toBe(true)
       await act(async () => pull.findByProps({ 'aria-label': 'experiments/analysis.ipynb' }).props.onChange({ target: { checked: true } }))
-      await act(async () => button(stage, 'Notebook editor').props.onClick())
-      expect(editor().props.hidden).toBe(false)
+
+      // Dismissing the non-temporary modal preserves checked selection and returns to editor
+      const closeDialogBtn = pull.findByProps({ 'aria-label': 'Cancel' })
+      await act(async () => closeDialogBtn.props.onClick())
+      expect(stage.findAllByProps({ 'data-notebook-pull-page': 'select' })).toHaveLength(0)
       expect(useColabNotebookStore.getState().cells[0]).toEqual(first)
-      await act(async () => button(stage, 'Browse server notebooks').props.onClick())
+
+      // Reopen via Import -> Resume active import…
+      await act(async () => stage.findByProps({ 'data-colab-import-trigger': true }).props.onClick())
+      const resumeBtn = buttonWithText(stage.findByProps({ 'data-colab-import-menu': true }), 'Resume active import…')
+      await act(async () => resumeBtn.props.onClick())
       expect(stage.findByProps({ 'aria-label': 'experiments/analysis.ipynb' }).props.checked).toBe(true)
       expect(jupyterListNotebooks).toHaveBeenCalledTimes(1)
 
-      await act(async () => stage.findByProps({ 'aria-label': 'Hide Kun chat (⌘J)' }).props.onClick())
-      expect(chatAside().props.hidden).toBe(true)
-      expect(stage.findByProps({ 'data-colab-chat-rail': true })).toBeDefined()
+      // Right sidebar shows 4 tabs (hiding Colab-only Ports when not on Colab) and keeps ColabKunPane mounted
+      const tabs = rightAside().findAllByProps({ role: 'tab' })
+      expect(tabs).toHaveLength(4)
+      await act(async () => tabs[1]!.props.onClick())
+      expect(useColabNotebookStore.getState().sidePanelTab).toBe('variables')
       expect(stage.findByType(ColabKunPane)).toBe(chat)
-      await act(async () => stage.findByProps({ 'aria-label': 'Show Kun chat (⌘J)' }).props.onClick())
-      expect(chatAside().props.hidden).toBe(false)
+      await act(async () => tabs[3]!.props.onClick())
+      expect(useColabNotebookStore.getState().sidePanelTab).toBe('resources')
+      expect(stage.findByType(ColabKunPane)).toBe(chat)
+      await act(async () => tabs[0]!.props.onClick())
+      expect(useColabNotebookStore.getState().sidePanelTab).toBe('kun')
+
+      // Collapse and reopen via topbar Kun toggle
+      await act(async () => rightAside().findByProps({ 'aria-label': 'Hide side panel (⌘J)' }).props.onClick())
+      expect(rightAside().props.hidden).toBe(true)
+      expect(stage.findByType(ColabKunPane)).toBe(chat)
+      await act(async () => stage.findByProps({ 'data-colab-kun-toggle': true }).props.onClick())
+      expect(rightAside().props.hidden).toBe(false)
       expect(stage.findByType(ColabKunPane)).toBe(chat)
     } finally {
       if (renderer) await act(async () => renderer?.unmount())
       useNotebookPullStore.setState({ task: null, visible: false })
       useJupyterStore.getState().setSnapshot({ servers: [], sessions: [] })
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('surfaces hardware/cost guards, unmanaged runtime adoption, session extension, and port forwarding', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const workspaceRoot = '/tmp/demo'
+    const first = createCell('code', 'import gradio as gr')
+    const colabExtendSession = vi.fn(async () => ({ ok: true as const }))
+    const colabPortForwardStart = vi.fn(async (req: { sessionId: string; remotePort: number; localPort?: number; label?: string }) => ({
+      ok: true as const,
+      forward: {
+        id: 'pf-1',
+        sessionId: req.sessionId,
+        sessionName: 'kun-a100',
+        localPort: req.localPort ?? req.remotePort,
+        remotePort: req.remotePort,
+        localUrl: `http://127.0.0.1:${req.localPort ?? req.remotePort}`,
+        label: req.label,
+        state: 'up' as const
+      }
+    }))
+    const priorWindow = window
+    vi.stubGlobal('window', {
+      ...priorWindow,
+      kunGui: { ...priorWindow.kunGui, colabExtendSession, colabPortForwardStart }
+    })
+
+    const nowIso = new Date().toISOString()
+    useChatStore.setState({ workspaceRoot })
+    useColabPortForwardStore.setState({ forwards: [] })
+    useColabStore.getState().applySnapshot({
+      cli: { state: 'ready', version: '0.1.0', pythonVersion: '3.11', venvPath: '/tmp/venv' },
+      connections: [
+        {
+          id: 'conn-1',
+          name: 'Research Lab',
+          email: 'lab@example.com',
+          avatarColor: '#4f46e5',
+          planLabel: 'Colab Pro+',
+          status: 'connected',
+          balanceCu: 42.5,
+          burnRateCuPerHour: 5.4,
+          activeSessions: [],
+          createdAt: nowIso,
+          updatedAt: nowIso
+        }
+      ],
+      workspaceConnections: { [workspaceRoot]: 'conn-1' },
+      oauthPending: null,
+      lastLoginOutcome: null,
+      sessions: [
+        {
+          id: 'sess-a100',
+          sessionName: 'kun-a100',
+          connectionId: 'conn-1',
+          connectionName: 'Research Lab',
+          connectionEmail: 'lab@example.com',
+          connectionAvatarColor: '#4f46e5',
+          workspaceRoot,
+          entryCommand: COLAB_NOTEBOOK_ENTRY_COMMAND,
+          phase: 'running',
+          provisioningStep: 'start',
+          accelerator: 'A100',
+          highMem: true,
+          ramGb: 167,
+          vramGb: 80,
+          syncPaths: [],
+          outputRemoteDir: '',
+          outputLocalDir: '',
+          maxRuntimeHours: 2,
+          idleAutoStopMinutes: 30,
+          autoStop: true,
+          mountDrive: false,
+          watchdogActive: true,
+          autoStopAt: new Date(Date.now() + 540_000).toISOString(),
+          guardWarnings: ['runtime_nearing'],
+          startedAt: nowIso,
+          elapsedSeconds: 6660,
+          consumedCu: 9.8,
+          burnRateCuPerHour: 11.8,
+          estimatedTotalCu: 23.6,
+          uploadTransferredBytes: 0,
+          uploadTotalBytes: 0,
+          gpuUtilizationPct: 35,
+          vramUsedGb: 22,
+          gpuHistory: [35],
+          metrics: {},
+          logTail: [],
+          artifacts: []
+        }
+      ],
+      untrackedSessions: [
+        {
+          connectionId: 'conn-1',
+          connectionName: 'Research Lab',
+          connectionEmail: 'lab@example.com',
+          endpoint: 'm-s-browser-1',
+          accelerator: 'T4',
+          variant: 'GPU',
+          remoteLabel: 'Colab Browser T4',
+          detectedAt: nowIso
+        }
+      ],
+      lastRunsByWorkspace: {}
+    })
+    useColabNotebookStore.setState({
+      workspaceRoot,
+      notebooks: ['train.ipynb'],
+      activePath: 'train.ipynb',
+      cells: [first],
+      selectedCellId: first.id,
+      loadError: null,
+      dirty: false,
+      sidePanelOpen: true,
+      sidePanelTab: 'ports',
+      kernelPickerOpen: true
+    })
+
+    let renderer: ReturnType<typeof create> | undefined
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(ColabNotebookView, {
+            leftSidebarCollapsed: false,
+            onToggleLeftSidebar: () => undefined
+          })
+        )
+      })
+      const stage = renderer!.root.findByType(ColabNotebookView)
+      const buttonWithText = (scope: typeof stage, text: string) =>
+        scope.findAllByType('button').find(
+          (node) =>
+            node.children.includes(text) ||
+            node.findAllByType('span').some((s) => s.children.includes(text))
+        )!
+
+      // Kernel picker defaults to Colab when Colab is running, showing unmanaged banner, guards, and all 5 right-sidebar tabs
+      expect(stage.findByProps({ id: 'colab-kun-sidebar' }).findAllByProps({ role: 'tab' })).toHaveLength(5)
+      expect(stage.findByProps({ 'data-colab-kernel-section': 'colab' })).toBeDefined()
+      expect(stage.findByProps({ 'data-colab-untracked-list': true })).toBeDefined()
+      await act(async () => stage.findByProps({ 'data-colab-guards-toggle': true }).props.onClick())
+      expect(stage.findByProps({ 'data-colab-guards-panel': true })).toBeDefined()
+
+      // Switching kernel picker source tab reveals Custom Jupyter quick-start onboarding
+      await act(async () => stage.findByProps({ 'data-runtime-source': 'jupyter' }).props.onClick())
+      expect(stage.findByProps({ 'data-colab-kernel-section': 'jupyter' })).toBeDefined()
+      expect(JSON.stringify(renderer!.toJSON())).toContain('jupyter lab --no-browser --port 8888')
+
+      // Inline cost guard warning banner triggers +30m session extension
+      const warnBanner = stage.findByProps({ 'data-colab-guard-warning': true })
+      await act(async () => buttonWithText(warnBanner, '+30m').props.onClick())
+      expect(colabExtendSession).toHaveBeenCalledWith({ sessionId: 'sess-a100', addMinutes: 30 })
+
+      // Ports tab blocks reserved port 8080 and starts a preset Gradio :7860 tunnel
+      const portsPane = stage.findByProps({ 'data-colab-tab-pane': 'ports' })
+      const inputs = portsPane.findAllByType('input')
+      await act(async () => inputs[0]!.props.onChange({ target: { value: '8080' } }))
+      await act(async () => portsPane.findByType('form').props.onSubmit({ preventDefault: () => undefined }))
+      expect(portsPane.findByProps({ role: 'alert' }).children.join('')).toContain('8080')
+      expect(colabPortForwardStart).not.toHaveBeenCalled()
+
+      await act(async () => buttonWithText(portsPane, 'Gradio').props.onClick())
+      expect(colabPortForwardStart).toHaveBeenCalledWith({
+        sessionId: 'sess-a100',
+        remotePort: 7860,
+        localPort: 7860,
+        label: 'Gradio'
+      })
+      expect(stage.findByProps({ 'data-colab-status-bar': true })).toBeDefined()
+      const renderedJson = JSON.stringify(renderer!.toJSON())
+      expect(renderedJson).toContain('7860')
+      expect(renderedJson).toContain('1 port(s)')
+      expect(renderedJson).toContain('Auto-stop in')
+    } finally {
+      if (renderer) await act(async () => renderer?.unmount())
+      useColabPortForwardStore.setState({ forwards: [] })
+      useColabStore.getState().applySnapshot({
+        cli: { state: 'missing', version: null, pythonVersion: null, venvPath: '' },
+        connections: [],
+        workspaceConnections: {},
+        oauthPending: null,
+        lastLoginOutcome: null,
+        sessions: [],
+        untrackedSessions: [],
+        lastRunsByWorkspace: {}
+      })
+      useColabNotebookStore.setState({ kernelPickerOpen: false, sidePanelTab: 'kun' })
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('gives custom local/remote Jupyter notebooks first-class runtime controls without Colab noise', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const workspaceRoot = '/tmp/demo'
+    const first = createCell('code', 'import sys; print(sys.executable)')
+    const jupyterConnect = vi.fn(async () => ({ ok: false as const, message: 'mocked' }))
+    const priorWindow = window
+    vi.stubGlobal('window', { ...priorWindow, kunGui: { ...priorWindow.kunGui, jupyterConnect } })
+
+    const nowIso = new Date().toISOString()
+    useChatStore.setState({ workspaceRoot })
+    useJupyterStore.getState().setSnapshot({
+      servers: [{
+        id: 'local-1', name: 'Local Lab', baseUrl: 'http://127.0.0.1:8888', hasAuth: true,
+        authMode: 'token', kernelName: 'python3', availableKernels: ['python3', 'pytorch-gpu'], updatedAt: nowIso
+      }],
+      sessions: [{
+        id: 'jpy-local-1', serverId: 'local-1', serverName: 'Local Lab', baseUrl: 'http://127.0.0.1:8888',
+        workspaceRoot, kernelId: 'k-1', kernelName: 'python3', startedAt: nowIso
+      }]
+    })
+    useColabNotebookStore.setState({
+      workspaceRoot, notebooks: ['exp.ipynb'], activePath: 'exp.ipynb', cells: [first], selectedCellId: first.id,
+      loadError: null, dirty: false, sidePanelOpen: true, sidePanelTab: 'ports', kernelPickerOpen: false
+    })
+
+    let renderer: ReturnType<typeof create> | undefined
+    try {
+      await act(async () => {
+        renderer = create(createElement(Fragment, null,
+          createElement(ColabSidebarContent, { workspaceRoot }),
+          createElement(ColabNotebookView, { leftSidebarCollapsed: false, onToggleLeftSidebar: () => undefined })
+        ))
+      })
+      const sidebar = renderer!.root.findByType(ColabSidebarContent)
+      const stage = renderer!.root.findByType(ColabNotebookView)
+      const rightAside = stage.findByProps({ id: 'colab-kun-sidebar' })
+
+      // Left sidebar card shows Local Jupyter; right sidebar hides Colab-only Ports tab and falls back cleanly to Resources
+      expect(sidebar.findByProps({ 'data-colab-runtime-card': 'jupyter' })).toBeDefined()
+      expect(rightAside.findAllByProps({ role: 'tab' })).toHaveLength(4)
+      const resourcesPane = stage.findByProps({ 'data-colab-tab-pane': 'resources' })
+      expect(JSON.stringify(renderer!.toJSON())).toContain('Local Jupyter')
+
+      // Switching kernel directly inside Resources tab invokes jupyterConnect with the new kernel
+      const kernelSelect = resourcesPane.findByProps({ 'aria-label': 'Switch execution kernel' })
+      await act(async () => kernelSelect.props.onChange({ target: { value: 'pytorch-gpu' } }))
+      expect(jupyterConnect).toHaveBeenCalledWith({
+        workspaceRoot, serverId: 'local-1', kernelName: 'pytorch-gpu'
+      })
+    } finally {
+      if (renderer) await act(async () => renderer?.unmount())
+      useJupyterStore.getState().setSnapshot({ servers: [], sessions: [] })
+      useColabNotebookStore.setState({ sidePanelTab: 'kun', kernelPickerOpen: false })
       vi.unstubAllGlobals()
     }
   })

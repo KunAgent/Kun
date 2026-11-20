@@ -1,32 +1,28 @@
-import { useCallback, useEffect, useMemo, type ReactElement } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  CloudDownload,
-  Eraser,
-  ExternalLink,
+  AlertTriangle,
+  Cpu,
   FolderOpen,
   Loader2,
   NotebookPen,
-  Play,
+  Plug,
   Plus,
-  RotateCcw,
-  Save,
-  Square,
-  X
+  Sparkles
 } from 'lucide-react'
-import { SidebarTitlebarToggleButton } from '../../components/sidebar/SidebarPrimitives'
+import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { useChatStore } from '../../store/chat-store'
 import type { ColabKunChatHost } from './ColabKunPane'
 import { ColabNotebookCell } from './ColabNotebookCell'
 import { ColabRightSidebar } from './ColabRightSidebar'
+import { NotebookCommandBar } from './NotebookCommandBar'
 import { NotebookPullView } from './NotebookPullView'
-import { useNotebookPullStore } from './notebook-pull-store'
+import { NotebookStatusBar } from './NotebookStatusBar'
+import { NotebookTopbar } from './NotebookTopbar'
 import { useColabNotebookStore } from './colab-notebook-store'
+import { useNotebookPullStore } from './notebook-pull-store'
 import { useColabNotebookAgent } from './use-colab-notebook-agent'
 import { useColabNotebookRuntime } from './use-colab-notebook-runtime'
-
-const barButton =
-  'inline-flex h-7 items-center gap-1.5 rounded-[7px] px-2.5 text-[12.5px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40 disabled:hover:bg-transparent'
 
 export function closeColabPage(): void {
   const { route, setRoute } = useChatStore.getState()
@@ -46,6 +42,7 @@ export function ColabNotebookView({
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   const chooseWorkspace = useChatStore((s) => s.chooseWorkspace)
   const runtime = useColabNotebookRuntime(workspaceRoot)
+
   const cells = useColabNotebookStore((s) => s.cells)
   const activePath = useColabNotebookStore((s) => s.activePath)
   const loadError = useColabNotebookStore((s) => s.loadError)
@@ -54,10 +51,12 @@ export function ColabNotebookView({
   const queue = useColabNotebookStore((s) => s.queue)
   const dirty = useColabNotebookStore((s) => s.dirty)
   const saving = useColabNotebookStore((s) => s.saving)
-  const pullTask = useNotebookPullStore((s) => s.task)
-  const pullVisible = useNotebookPullStore((s) => s.visible)
   const kunChangedCellIds = useColabNotebookStore((s) => s.kunChangedCellIds)
   const kunBusy = useColabNotebookStore((s) => s.kunBusy)
+
+  const pullTask = useNotebookPullStore((s) => s.task)
+  const pullVisible = useNotebookPullStore((s) => s.visible)
+
   const addCell = useColabNotebookStore((s) => s.addCell)
   const createNotebook = useColabNotebookStore((s) => s.createNotebook)
   const importLocalNotebooks = useColabNotebookStore((s) => s.importLocalNotebooks)
@@ -69,10 +68,15 @@ export function ColabNotebookView({
   const selectCell = useColabNotebookStore((s) => s.selectCell)
   const refreshNotebooks = useColabNotebookStore((s) => s.refreshNotebooks)
   const setSidePanelOpen = useColabNotebookStore((s) => s.setSidePanelOpen)
-  const configureExecution = (): void => {
-    if (leftSidebarCollapsed) onToggleLeftSidebar()
-    useColabNotebookStore.getState().focusConnections()
-  }
+  const setSidePanelTab = useColabNotebookStore((s) => s.setSidePanelTab)
+  const setKernelPickerOpen = useColabNotebookStore((s) => s.setKernelPickerOpen)
+  const askKunAboutCell = useColabNotebookStore((s) => s.askKunAboutCell)
+
+  const [offlineBannerDismissed, setOfflineBannerDismissed] = useState(false)
+
+  const configureExecution = useCallback((): void => {
+    setKernelPickerOpen(true)
+  }, [setKernelPickerOpen])
 
   useEffect(() => {
     useNotebookPullStore.getState().workspaceChanged(runtime.wsKey)
@@ -81,36 +85,69 @@ export function ColabNotebookView({
   useColabNotebookAgent(runtime)
 
   const sessionId = runtime.activeSessionId
+  const connecting = Boolean(runtime.pending || runtime.connecting || runtime.jupyterConnecting)
   const busy = Boolean(runningCellId) || queue.length > 0
   const queuedSet = useMemo(() => new Set(queue), [queue])
   const kunChangedSet = useMemo(() => new Set(kunChangedCellIds), [kunChangedCellIds])
-  const usingJupyter = Boolean(sessionId && runtime.jupyterSession && sessionId === runtime.jupyterSession.id)
+  const usingJupyter = Boolean(
+    sessionId && runtime.jupyterSession && sessionId === runtime.jupyterSession.id
+  )
+
+  const codeCellIds = useMemo(
+    () => cells.filter((cell) => cell.kind === 'code').map((cell) => cell.id),
+    [cells]
+  )
+  const runningCellNumber = useMemo(() => {
+    if (!runningCellId) return null
+    const idx = cells.findIndex((cell) => cell.id === runningCellId)
+    return idx >= 0 ? idx + 1 : null
+  }, [cells, runningCellId])
+
+  const projectLabel = runtime.wsKey ? workspaceLabelFromPath(runtime.wsKey) : ''
+  const docStem = useMemo(() => {
+    if (!activePath) return ''
+    const base = activePath.split('/').pop() || activePath
+    return base.replace(/\.ipynb$/i, '')
+  }, [activePath])
+  const firstCellHasHeading = Boolean(
+    cells[0]?.kind === 'markdown' && /^\s*#\s+\S/.test(cells[0].source)
+  )
+  const docLocation = projectLabel && activePath ? `${projectLabel}/${activePath}` : activePath
 
   const runCell = useCallback(
     (id: string, advance: boolean) => {
       const { cells: current } = useColabNotebookStore.getState()
       const index = current.findIndex((c) => c.id === id)
-      const target = current[index]
-      if (!target) return
-      if (target.kind === 'markdown') {
-        if (!advance) {
-          selectCell(null)
-          return
-        }
+      const cell = current[index]
+      if (!cell) return
+      if (cell.kind === 'markdown') {
         const next = current[index + 1]
         if (next) selectCell(next.id)
         else selectCell(null)
         return
       }
-      if (!sessionId || kunBusy) return
+      if (kunBusy) return
+      if (!sessionId) {
+        setKernelPickerOpen(true)
+        return
+      }
       runCells(sessionId, [id])
       if (!advance) return
       const next = current[index + 1]
       if (next) selectCell(next.id)
       else addCell('code', id)
     },
-    [addCell, kunBusy, runCells, selectCell, sessionId]
+    [addCell, kunBusy, runCells, selectCell, sessionId, setKernelPickerOpen]
   )
+
+  const handleRunAll = useCallback(() => {
+    if (kunBusy || codeCellIds.length === 0) return
+    if (!sessionId) {
+      setKernelPickerOpen(true)
+      return
+    }
+    runCells(sessionId, codeCellIds)
+  }, [codeCellIds, kunBusy, runCells, sessionId, setKernelPickerOpen])
 
   // Debounced autosave keeps the .ipynb on disk in step with edits and outputs.
   // Paused while Kun edits the file so a stale local copy never overwrites its writes.
@@ -137,249 +174,334 @@ export function ColabNotebookView({
     return () => window.removeEventListener('keydown', onKey)
   }, [saveNotebook, setSidePanelOpen])
 
-  const status = sessionId && runtime.activeRuntimeLabel
-    ? {
-        tone: 'bg-emerald-500/10 text-emerald-600',
-        dot: busy ? 'bg-amber-500' : 'bg-emerald-500',
-        label: usingJupyter
-          ? t(busy ? 'colabNb.jupyterKernelBusy' : 'colabNb.jupyterKernelIdle', { label: runtime.activeRuntimeLabel })
-          : t(busy ? 'colabNb.kernelBusy' : 'colabNb.kernelIdle', { gpu: runtime.activeRuntimeLabel })
-      }
-    : runtime.pending || runtime.jupyterConnecting
-      ? { tone: 'bg-amber-500/10 text-amber-600', dot: 'bg-amber-500 animate-pulse', label: t('colabNb.kernelConnecting') }
-      : { tone: 'bg-ds-hover text-ds-muted', dot: 'bg-ds-faint', label: t('colabNb.kernelOffline') }
+  const openKunForNewCell = (): void => {
+    setSidePanelTab('kun')
+  }
 
   return (
-    <div className="ds-drag flex h-full min-h-0 bg-ds-main" data-colab-notebook>
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="ds-stage-inset shrink-0">
-          <header className="ds-topbar-surface relative z-10 mt-3 flex min-h-[46px] w-full items-center justify-between gap-3 rounded-[24px] px-3">
-            <div className={`flex min-w-0 items-center gap-2 ${leftSidebarCollapsed ? 'ds-window-controls-collapsed-titlebar-inset' : ''}`}>
-              <SidebarTitlebarToggleButton
-                onClick={onToggleLeftSidebar}
-                title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
-                ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
-              />
-              <span className="text-[13.5px] text-ds-muted">{t('colabNb.navLabel')}</span>
-              {activePath ? (
-                <>
-                  <span className="text-ds-faint">›</span>
-                  <h1 className="min-w-0 truncate text-[14px] font-semibold text-ds-ink" title={activePath}>{activePath}</h1>
-                  <span className="shrink-0 text-[11.5px] text-ds-faint">
-                    {saving ? t('colabNb.saving') : dirty ? t('colabNb.unsaved') : t('colabNb.saved')}
-                  </span>
-                </>
-              ) : null}
-            </div>
-            <div className="ds-no-drag flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                onClick={configureExecution}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold transition hover:opacity-85 ${status.tone}`}
-              >
-                <span className={`h-[7px] w-[7px] rounded-full ${status.dot}`} />
-                {status.label}
-              </button>
-              <button
-                type="button"
-                className={barButton}
-                disabled={usingJupyter ? !runtime.jupyterSession : (!runtime.session || !runtime.connection)}
-                onClick={runtime.openExternalNotebookUi}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                {usingJupyter ? t('colabNb.jupyterOpenLab') : t('colabNb.openInColab')}
-              </button>
-              <button
-                type="button"
-                onClick={closeColabPage}
-                aria-label={t('artifactsClose')}
-                title={t('artifactsClose')}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
-              >
-                <X className="h-4 w-4" aria-hidden />
-              </button>
-            </div>
-          </header>
-        </div>
+    <div className="ds-drag relative flex h-full min-h-0 flex-col bg-ds-main" data-colab-notebook>
+      <NotebookTopbar
+        leftSidebarCollapsed={leftSidebarCollapsed}
+        onToggleLeftSidebar={onToggleLeftSidebar}
+        onClose={closeColabPage}
+        runtime={runtime}
+        busy={busy}
+        usingJupyter={usingJupyter}
+      />
 
-        {pullTask ? (
-          <nav className="ds-no-drag flex shrink-0 flex-wrap items-center gap-1 border-b border-ds-border px-4 py-2" aria-label={t('colabNb.navLabel')}>
-            <button type="button" className={`${barButton} ${!pullVisible ? 'bg-ds-hover font-semibold text-ds-ink' : ''}`}
-              aria-current={!pullVisible ? 'page' : undefined} onClick={() => useNotebookPullStore.getState().hide()}>
-              <NotebookPen className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />{t('colabNb.pullEditorTab')}
-            </button>
-            <button type="button" className={`${barButton} ${pullVisible ? 'bg-accent/10 font-semibold text-accent' : ''}`}
-              aria-current={pullVisible ? 'page' : undefined} onClick={() => useNotebookPullStore.getState().show()}>
-              <CloudDownload className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-              {t(pullTask.source.kind === 'drive' ? 'colabNb.pullFromDrive' : 'colabNb.jupyterBrowseNotebooks')}
-            </button>
-          </nav>
-        ) : null}
-        {pullTask && pullVisible ? <NotebookPullView task={pullTask} workspaceRoot={runtime.wsKey}
-          onConfigureExecution={configureExecution} /> : null}
-
-        <div data-colab-notebook-editor hidden={Boolean(pullTask && pullVisible)}
-          className={pullTask && pullVisible ? 'hidden' : 'flex min-h-0 flex-1 flex-col'}>
-          {activePath && !loadError ? (
-            <div className="ds-no-drag mx-auto mt-2 flex w-full max-w-[1016px] flex-wrap items-center gap-1 border-b border-ds-border/70 px-7 pb-2">
-              <button type="button" className={barButton} disabled={kunBusy} onClick={() => addCell('code')}>
-                <Plus className="h-3.5 w-3.5" />
-                {t('colabNb.addCode')}
-              </button>
-              <button type="button" className={barButton} disabled={kunBusy} onClick={() => addCell('markdown')}>
-                <Plus className="h-3.5 w-3.5" />
-                {t('colabNb.addText')}
-              </button>
-              <span className="mx-1 h-4 w-px bg-ds-border" />
-              <button
-                type="button"
-                disabled={!sessionId || busy || kunBusy}
-                onClick={() => sessionId && runCells(sessionId, cells.filter((c) => c.kind === 'code').map((c) => c.id))}
-                className="inline-flex h-7 items-center gap-1.5 rounded-[7px] bg-ds-ink px-2.5 text-[12.5px] font-medium text-ds-main hover:opacity-90 disabled:opacity-40"
-              >
-                <Play className="h-3.5 w-3.5 fill-current" />
-                {t('colabNb.runAll')}
-              </button>
-              <button type="button" className={barButton} disabled={!busy} title={t('colabNb.interruptHint')} onClick={() => void interrupt()}>
-                <Square className="h-3 w-3 fill-current" />
-                {t('colabNb.interrupt')}
-              </button>
-              <button type="button" className={barButton} disabled={!sessionId} onClick={() => sessionId && void restartKernel(sessionId)}>
-                <RotateCcw className="h-3.5 w-3.5" />
-                {t('colabNb.restart')}
-              </button>
-              <button type="button" className={barButton} disabled={kunBusy} onClick={clearOutputs}>
-                <Eraser className="h-3.5 w-3.5" />
-                {t('colabNb.clearOutputs')}
-              </button>
-              <span className="flex-1" />
-              {dirty ? (
-                <button type="button" className={barButton} disabled={saving} onClick={() => void saveNotebook()}>
-                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                  {t('colabNb.save')}
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div
-            className="ds-no-drag min-h-0 flex-1 overflow-y-auto pb-16 pt-4"
-            onMouseDown={() => selectedCellId && selectCell(null)}
-          >
-            {!activePath ? (
-              <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
-                <NotebookPen className="h-8 w-8 text-amber-500/80" strokeWidth={1.6} />
-                <p className="max-w-[380px] text-[13px] text-ds-muted">
-                  {runtime.wsKey ? t('colabNb.pickNotebook') : t('colabNb.noWorkspace')}
-                </p>
-                {runtime.wsKey ? (
-                  <div className="flex flex-wrap items-center justify-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void createNotebook(runtime.wsKey)}
-                      className="inline-flex items-center gap-1.5 rounded-[8px] bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      {t('colabNb.newNotebook')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={configureExecution}
-                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-ds-border bg-ds-card px-3 py-1.5 text-[12.5px] font-medium text-ds-ink hover:bg-ds-hover"
-                    >
-                      <CloudDownload className="h-3.5 w-3.5 text-accent" />
-                      {t('colabNb.accountsAndConnections')}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void importLocalNotebooks(runtime.wsKey)}
-                      className="inline-flex items-center gap-1.5 rounded-[8px] border border-ds-border bg-ds-card px-3 py-1.5 text-[12.5px] font-medium text-ds-ink hover:bg-ds-hover"
-                    >
-                      <FolderOpen className="h-3.5 w-3.5" />
-                      {t('colabNb.importLocalBtn')}
-                    </button>
-                  </div>
-                ) : (
+      <div data-colab-notebook-editor className="ds-no-drag flex min-h-0 flex-1 overflow-hidden">
+        <div
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto bg-ds-surface-subtle/35 pb-16"
+          onMouseDown={() => selectedCellId && selectCell(null)}
+        >
+          {!activePath ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 px-6 text-center">
+              <NotebookPen className="h-8 w-8 text-amber-500" strokeWidth={1.6} />
+              <p className="max-w-[380px] text-[13px] text-ds-muted">
+                {runtime.wsKey ? t('colabNb.pickNotebook') : t('colabNb.noWorkspace')}
+              </p>
+              {runtime.wsKey ? (
+                <div className="flex flex-wrap items-center justify-center gap-2">
                   <button
                     type="button"
-                    onClick={() => void chooseWorkspace({ createThreadAfter: false, selectThreadAfter: false })}
-                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-ds-border bg-ds-card px-3.5 py-1.5 text-[12.5px] font-medium text-ds-ink hover:bg-ds-hover"
+                    onClick={() => void createNotebook(runtime.wsKey)}
+                    className="inline-flex items-center gap-1.5 rounded-[8px] bg-accent px-3.5 py-1.5 text-[12.5px] font-semibold text-white hover:opacity-90"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    {t('colabNb.newNotebook')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void importLocalNotebooks(runtime.wsKey)}
+                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-ds-border bg-ds-card px-3 py-1.5 text-[12.5px] font-medium text-ds-ink hover:bg-ds-hover"
                   >
                     <FolderOpen className="h-3.5 w-3.5" />
-                    {t('colabNb.chooseProject')}
+                    {t('colabNb.importLocalBtn')}
                   </button>
-                )}
-              </div>
-            ) : loadError ? (
-              <div className="mx-auto max-w-[720px] px-7 py-10 text-[13px] text-red-500">{t('colabNb.loadFailed', { message: loadError })}</div>
-            ) : (
-              <div className="flex flex-col gap-3">
+                  <button
+                    type="button"
+                    onClick={configureExecution}
+                    className="inline-flex items-center gap-1.5 rounded-[8px] border border-ds-border bg-ds-card px-3 py-1.5 text-[12.5px] font-medium text-ds-ink hover:bg-ds-hover"
+                  >
+                    <Cpu className="h-3.5 w-3.5 text-accent" />
+                    {t('colabNb.connectRuntimeBtn')}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() =>
+                    void chooseWorkspace({ createThreadAfter: false, selectThreadAfter: false })
+                  }
+                  className="inline-flex items-center gap-1.5 rounded-[8px] border border-ds-border bg-ds-card px-3.5 py-1.5 text-[12.5px] font-medium text-ds-ink hover:bg-ds-hover"
+                >
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  {t('colabNb.chooseProject')}
+                </button>
+              )}
+            </div>
+          ) : loadError ? (
+            <div className="mx-auto max-w-[720px] px-7 py-10 text-[13px] text-red-500">
+              {t('colabNb.loadFailed', { message: loadError })}
+            </div>
+          ) : (
+            <div className="flex flex-col">
+              <div className="mx-auto w-full max-w-[960px] px-7">
+                <NotebookCommandBar
+                  cellCount={cells.length}
+                  hasCodeCells={codeCellIds.length > 0}
+                  hasRuntime={Boolean(sessionId)}
+                  busy={busy}
+                  kunBusy={kunBusy}
+                  dirty={dirty}
+                  saving={saving}
+                  runningCellNumber={runningCellNumber}
+                  queueLength={queue.length}
+                  onAddCode={() => addCell('code')}
+                  onAddText={() => addCell('markdown')}
+                  onRunAll={handleRunAll}
+                  onInterrupt={() => void interrupt()}
+                  onRestart={() => sessionId && void restartKernel(sessionId)}
+                  onClearOutputs={clearOutputs}
+                  onSave={() => void saveNotebook()}
+                />
+
+                {!sessionId && !connecting && !offlineBannerDismissed ? (
+                  <div
+                    role="status"
+                    data-colab-offline-banner
+                    onMouseDown={(event) => event.stopPropagation()}
+                    className="mb-4 ml-[52px] mt-0.5 flex flex-wrap items-center gap-3 rounded-[12px] border border-accent-tint/25 bg-accent-tint/[0.05] px-3.5 py-2.5"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[8px] border border-accent-tint/20 bg-ds-card text-accent">
+                      <Plug className="h-4 w-4" aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0 flex-1 text-[12px] leading-relaxed text-ds-muted">
+                      <div className="text-[13px] font-semibold text-ds-ink">
+                        {t('colabNb.offlineBannerTitle')}
+                      </div>
+                      <div>{t('colabNb.offlineBannerDesc')}</div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        data-colab-offline-later
+                        onClick={() => setOfflineBannerDismissed(true)}
+                        className="inline-flex h-7 items-center rounded-[8px] px-2.5 text-[12.5px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                      >
+                        {t('colabNb.offlineBannerLater')}
+                      </button>
+                      <button
+                        type="button"
+                        data-colab-offline-connect
+                        onClick={configureExecution}
+                        className="inline-flex h-7 items-center rounded-[8px] bg-accent px-3 text-[12.5px] font-medium text-white transition hover:opacity-90"
+                      >
+                        {t('colabNb.connectRuntimeBtn')}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {!usingJupyter &&
+                runtime.session &&
+                runtime.session.guardWarnings &&
+                runtime.session.guardWarnings.length > 0 ? (
+                  <div
+                    role="status"
+                    data-colab-guard-warning
+                    onMouseDown={(event) => event.stopPropagation()}
+                    className="mb-3 ml-[52px] flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-amber-500/35 bg-amber-500/10 px-3.5 py-2 text-[12px] text-amber-900 dark:text-amber-200"
+                  >
+                    <span className="flex min-w-0 flex-1 items-center gap-2">
+                      <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <span className="truncate">
+                        {runtime.session.guardWarnings.includes('runtime_nearing')
+                          ? t('colabNb.guardWarnRuntime')
+                          : runtime.session.guardWarnings.includes('spend_nearing')
+                            ? t('colabNb.guardWarnSpend', { cu: runtime.session.maxSpendCu ?? 0 })
+                            : runtime.session.guardWarnings.includes('balance_nearing')
+                              ? t('colabNb.guardWarnBalance', {
+                                  cu: runtime.session.minBalanceCu ?? 0
+                                })
+                              : t('colabNb.guardWarnStaleBalance')}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-1.5">
+                      {runtime.session.guardWarnings.includes('runtime_nearing') ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => void runtime.extendSession(30)}
+                            className="rounded-md bg-accent px-2.5 py-0.5 text-[11.5px] font-semibold text-white hover:opacity-90"
+                          >
+                            {t('colabNb.extend30m')}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void runtime.extendSession(60)}
+                            className="rounded-md border border-ds-border bg-ds-card px-2 py-0.5 text-[11.5px] font-medium text-ds-ink hover:bg-ds-hover"
+                          >
+                            {t('colabNb.extend1h')}
+                          </button>
+                        </>
+                      ) : runtime.session.guardWarnings.includes('balance_stale') ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            void window.kunGui.colabRefreshBalances({
+                              connectionId: runtime.session!.connectionId
+                            })
+                          }
+                          className="rounded-md border border-ds-border bg-ds-card px-2.5 py-0.5 text-[11.5px] font-medium text-ds-ink hover:bg-ds-hover"
+                        >
+                          {t('colabNb.refresh')}
+                        </button>
+                      ) : null}
+                    </span>
+                  </div>
+                ) : null}
+
                 {kunBusy ? (
                   <div
-                    className="mx-auto flex w-full max-w-[904px] items-center gap-2 rounded-[10px] border border-accent/30 bg-accent/[0.06] px-4 py-2 text-[12.5px] text-accent"
-                    style={{ width: 'calc(100% - 112px)' }}
+                    className="mb-3 ml-[52px] flex items-center gap-2 rounded-[10px] border border-accent-tint/30 bg-accent-tint/[0.06] px-3.5 py-2 text-[12.5px] text-accent"
                     data-colab-kun-lock
                   >
                     <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                     <span className="min-w-0 flex-1">{t('colabNb.kunEditingLock')}</span>
                   </div>
                 ) : null}
-                {!sessionId ? (
-                  <div
-                    className="mx-auto flex w-full max-w-[904px] items-center gap-3 rounded-[10px] border border-dashed border-ds-border px-4 py-2.5 text-[12.5px] text-ds-muted"
-                    style={{ width: 'calc(100% - 112px)' }}
-                  >
-                    <span className="min-w-0 flex-1">{t('colabNb.needRuntime')}</span>
-                    <button
-                      type="button"
-                      onClick={configureExecution}
-                      className="shrink-0 rounded-[7px] border border-ds-border bg-ds-card px-2.5 py-1 text-[12px] font-medium text-ds-ink hover:bg-ds-hover"
-                    >
-                      {t('colabNb.openRuntimeTab')}
-                    </button>
+
+                <div className="mb-4 ml-[52px] mt-1">
+                  {!firstCellHasHeading && docStem ? (
+                    <h2 className="text-[21px] font-semibold tracking-[-0.015em] text-ds-ink">
+                      {docStem}
+                    </h2>
+                  ) : null}
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-ds-faint">
+                    <span>
+                      {usingJupyter && runtime.jupyterSession
+                        ? runtime.jupyterSession.kernelName
+                        : 'Python 3'}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>{t('colabNb.cellsCount', { count: cells.length })}</span>
+                    {docLocation ? (
+                      <>
+                        <span aria-hidden="true">·</span>
+                        <span className="truncate">{docLocation}</span>
+                      </>
+                    ) : null}
                   </div>
-                ) : null}
+                </div>
+              </div>
+
+              <div className="flex flex-col">
                 {cells.map((cell, index) => (
-                  <ColabNotebookCell
-                    key={cell.id}
-                    cell={cell}
-                    index={index}
-                    total={cells.length}
-                    selected={cell.id === selectedCellId}
-                    running={cell.id === runningCellId}
-                    queued={queuedSet.has(cell.id)}
-                    canRun={Boolean(sessionId) && !kunBusy}
-                    kunChanged={kunChangedSet.has(cell.id)}
-                    onRun={runCell}
-                  />
+                  <Fragment key={cell.id}>
+                    <ColabNotebookCell
+                      cell={cell}
+                      index={index}
+                      total={cells.length}
+                      selected={cell.id === selectedCellId}
+                      running={cell.id === runningCellId}
+                      queued={queuedSet.has(cell.id)}
+                      canRun={Boolean(sessionId) && !kunBusy}
+                      kunChanged={kunChangedSet.has(cell.id)}
+                      onRun={runCell}
+                    />
+                    {index < cells.length - 1 ? (
+                      <div
+                        className="group/insert mx-auto flex h-5 w-full max-w-[960px] items-center px-7"
+                        onMouseDown={(event) => event.stopPropagation()}
+                      >
+                        <div className="ml-[52px] flex flex-1 items-center gap-2 opacity-0 transition-opacity focus-within:opacity-100 group-hover/insert:opacity-100">
+                          <span className="h-px flex-1 bg-accent-tint/25" aria-hidden="true" />
+                          <button
+                            type="button"
+                            disabled={kunBusy}
+                            onClick={() => addCell('code', cell.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-ds-border bg-ds-card px-2 py-[1px] text-[11px] text-ds-muted transition hover:border-ds-border-strong hover:text-ds-ink disabled:opacity-40"
+                          >
+                            <Plus className="h-2.5 w-2.5" aria-hidden="true" />
+                            <span>{t('colabNb.addCode')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={kunBusy}
+                            onClick={() => addCell('markdown', cell.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-ds-border bg-ds-card px-2 py-[1px] text-[11px] text-ds-muted transition hover:border-ds-border-strong hover:text-ds-ink disabled:opacity-40"
+                          >
+                            <Plus className="h-2.5 w-2.5" aria-hidden="true" />
+                            <span>{t('colabNb.addText')}</span>
+                          </button>
+                          <button
+                            type="button"
+                            disabled={kunBusy}
+                            onClick={() => askKunAboutCell(cell.id)}
+                            className="inline-flex items-center gap-1 rounded-full border border-accent-tint/30 bg-ds-card px-2 py-[1px] text-[11px] text-accent transition hover:bg-accent-tint/10 disabled:opacity-40"
+                          >
+                            <Sparkles className="h-2.5 w-2.5" aria-hidden="true" />
+                            <span>{t('colabNb.askKunShortInsert')}</span>
+                          </button>
+                          <span className="h-px flex-1 bg-accent-tint/25" aria-hidden="true" />
+                        </div>
+                      </div>
+                    ) : null}
+                  </Fragment>
                 ))}
-                <div className="flex justify-center gap-2 pt-1" onMouseDown={(e) => e.stopPropagation()}>
+              </div>
+
+              <div className="mx-auto w-full max-w-[960px] px-7">
+                <div
+                  className="ml-[52px] mt-3.5 flex flex-wrap gap-2"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
                   <button
                     type="button"
                     disabled={kunBusy}
                     onClick={() => addCell('code', cells[cells.length - 1]?.id ?? null)}
-                    className="inline-flex items-center gap-1 rounded-full border border-ds-border px-3 py-0.5 text-[12px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
+                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-dashed border-ds-border-strong px-3 py-1.5 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
                   >
-                    <Plus className="h-3 w-3" />
-                    {t('colabNb.addCode')}
+                    <Plus className="h-3 w-3" aria-hidden="true" />
+                    <span>{t('colabNb.addCodeCellLong')}</span>
                   </button>
                   <button
                     type="button"
                     disabled={kunBusy}
                     onClick={() => addCell('markdown', cells[cells.length - 1]?.id ?? null)}
-                    className="inline-flex items-center gap-1 rounded-full border border-ds-border px-3 py-0.5 text-[12px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
+                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-dashed border-ds-border-strong px-3 py-1.5 text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
                   >
-                    <Plus className="h-3 w-3" />
-                    {t('colabNb.addText')}
+                    <Plus className="h-3 w-3" aria-hidden="true" />
+                    <span>{t('colabNb.addTextCellLong')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={kunBusy}
+                    onClick={openKunForNewCell}
+                    className="inline-flex items-center gap-1.5 rounded-[9px] border border-dashed border-accent-tint/40 px-3 py-1.5 text-[12px] text-accent transition hover:bg-accent-tint/[0.08] disabled:opacity-40"
+                  >
+                    <Sparkles className="h-3 w-3" aria-hidden="true" />
+                    <span>{t('colabNb.addCellWithKunLong')}</span>
                   </button>
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
+
+        <ColabRightSidebar runtime={runtime} chat={chat} />
       </div>
 
-      <ColabRightSidebar runtime={runtime} chat={chat} />
+      <NotebookStatusBar runtime={runtime} busy={busy} />
+
+      {pullTask && pullVisible ? (
+        <NotebookPullView
+          task={pullTask}
+          workspaceRoot={runtime.wsKey}
+          onConfigureExecution={configureExecution}
+        />
+      ) : null}
     </div>
   )
 }

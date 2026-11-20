@@ -20,6 +20,8 @@ import type {
 import { openTerminal } from '../components/terminal/terminal-open'
 import { formatColabBytes, formatColabDuration, isColabSessionRunning } from './colab-store'
 import { useColabDismiss } from './use-colab-dismiss'
+import { useRuntimeUploads } from './runtime-upload-store'
+import { RuntimeUploadStatus } from './RuntimeUploadStatus'
 
 function buildPolylinePoints(values: number[], width: number, height: number): string {
   if (values.length === 0) return ''
@@ -49,6 +51,8 @@ export function ColabSessionCards({
 }): ReactElement {
   const { t } = useTranslation('common')
   const [menuOpen, setMenuOpen] = useState(false)
+  const uploading = useRuntimeUploads((s) => s.sessions[session.id]?.busy)
+  const upload = useRuntimeUploads((s) => s.start)
   const menuRef = useRef<HTMLDivElement>(null)
   const closeMenu = useCallback(() => setMenuOpen(false), [])
   useColabDismiss(menuOpen, closeMenu, menuRef)
@@ -211,8 +215,8 @@ export function ColabSessionCards({
         <div className="mt-2.5 grid grid-cols-4 gap-1.5">
           <button
             type="button"
-            disabled={!running}
-            onClick={() => void window.kunGui.colabUploadToSession({ sessionId: session.id })}
+            disabled={session.phase !== 'running' || uploading}
+            onClick={() => void upload(session.id)}
             className="inline-flex items-center justify-center gap-1 rounded-lg border border-ds-border bg-ds-subtle px-2 py-1.5 text-[11px] font-medium text-ds-ink hover:bg-ds-hover disabled:opacity-45"
           >
             <Upload className="h-3 w-3" />
@@ -245,6 +249,7 @@ export function ColabSessionCards({
             <span>{t('colab.stopBtn')}</span>
           </button>
         </div>
+        <RuntimeUploadStatus sessionId={session.id} />
       </div>
 
       {/* 2. Provisioning Checklist */}

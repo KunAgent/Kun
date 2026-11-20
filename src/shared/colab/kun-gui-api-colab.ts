@@ -1,3 +1,4 @@
+import type { RuntimeUploadEvent, RuntimeUploadResult } from './runtime-upload'
 import type {
   ColabCliRuntimeStatus,
   ColabLoginOutcome,
@@ -20,6 +21,9 @@ import type {
   ColabNotebookExecuteResult,
   ColabNotebookImportResult,
   ColabNotebookVariablesResult,
+  ColabPortForwardStartRequest,
+  ColabPortForwardStartResult,
+  ColabPortForwardView,
   ColabRemoteListResult,
   JupyterConnectRequest,
   JupyterConnectResult,
@@ -82,11 +86,17 @@ export type KunGuiColabApi = {
     input: ColabStartRunRequest
   ) => Promise<{ ok: true; session: ColabSessionView } | { ok: false; code?: string; message: string }>
   colabStopSession: (input: { sessionId: string }) => Promise<{ ok: boolean; message?: string }>
+  colabExtendSession: (input: {
+    sessionId: string
+    addMinutes: number
+  }) => Promise<{ ok: boolean; session?: ColabSessionView; message?: string }>
   colabReconnectSession: (input: { sessionId: string }) => Promise<{ ok: boolean; message?: string }>
   colabUploadToSession: (input: {
     sessionId: string
-    localPaths?: string[]
-  }) => Promise<{ ok: boolean; uploadedCount?: number; message?: string }>
+    workspaceNotebook?: string
+  }) => Promise<RuntimeUploadResult>
+  colabCancelUpload: (input: { sessionId: string }) => Promise<void>
+  onColabUploadProgress: (handler: (event: RuntimeUploadEvent) => void) => () => void
   colabDownloadFromSession: (input: {
     sessionId: string
     remotePath?: string
@@ -142,4 +152,8 @@ export type KunGuiColabApi = {
   onJupyterStateChanged: (handler: (snapshot: JupyterStateSnapshot) => void) => () => void
   onColabNotebookAgentRequest: (handler: (request: ColabNotebookAgentRequest) => void) => () => void
   colabNotebookAgentRespond: (response: ColabNotebookAgentResponse) => Promise<{ ok: boolean }>
+  colabPortForwardList: () => Promise<ColabPortForwardView[]>
+  colabPortForwardStart: (input: ColabPortForwardStartRequest) => Promise<ColabPortForwardStartResult>
+  colabPortForwardStop: (input: { forwardId: string }) => Promise<{ ok: boolean }>
+  onColabPortForwardsChanged: (handler: (forwards: ColabPortForwardView[]) => void) => () => void
 }

@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, posix } from 'node:path'
 import { shell } from 'electron'
+import type { RuntimeUploadResult } from '../../shared/colab/runtime-upload'
+import { uploadRuntimeFiles, type UploadOptions } from './runtime-file-upload'
 import { NOTEBOOK_PULL_MAX_FILES } from '../../shared/colab/colab-notebook-types'
 import type {
   ColabDriveNotebookEntry,
@@ -510,27 +512,12 @@ export class JupyterServerManager {
     }
   }
 
-  async uploadFiles(
-    sessionId: string,
-    localPaths: string[]
-  ): Promise<{ ok: boolean; uploadedCount?: number; message?: string }> {
-    const active = this.sessions.get(sessionId)
-    if (!active) return { ok: false, message: 'Jupyter session not connected.' }
-    let count = 0
-    for (const localPath of localPaths) {
-      const info = await stat(localPath).catch(() => null)
-      if (!info?.isFile()) continue
-      const bytes = await readFile(localPath)
-      const remote = encodeJupyterPath(posix.basename(localPath))
-      const res = await this.fetchFn(`${active.view.baseUrl}/api/contents/${remote}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...active.headers },
-        body: JSON.stringify({ type: 'file', format: 'base64', content: bytes.toString('base64') }),
-        signal: AbortSignal.timeout(60_000)
-      })
-      if (res.ok) count += 1
-    }
-    return { ok: true, uploadedCount: count }
+  uploadFiles(sessionId: string, localPaths: string[], transfer: UploadOptions): Promise<RuntimeUploadResult> {
+    return uploadRuntimeFiles(localPaths.map((localPath) => ({ localPath, remotePath: basename(localPath) })), async () => {
+      const active = this.sessions.get(sessionId)
+      if (!active) throw new Error('Jupyter session not connected.')
+      return { baseUrl: active.view.baseUrl, headers: active.headers }
+    }, transfer, this.fetchFn)
   }
 
   async downloadFile(

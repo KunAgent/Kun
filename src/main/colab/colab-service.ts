@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { SafeStorage } from 'electron'
+import type { RuntimeUploadResult } from '../../shared/colab/runtime-upload'
+import type { UploadOptions } from './runtime-file-upload'
 import type { KunColabSettingsV1 } from '../../shared/app-settings-colab'
 import type {
   ColabCliRuntimeStatus,
@@ -15,11 +17,17 @@ import type {
   ColabUntrackedSession,
   ColabWorkspaceRunConfig
 } from '../../shared/colab/colab-types'
-import { applyColabAuthorizedIdentity, createColabSessionDraft } from './colab-account-mutator'
+import {
+  applyColabAuthorizedIdentity,
+  buildLastRunSummary,
+  createColabSessionDraft,
+  removeColabConnection
+} from './colab-account-mutator'
 import { ColabCliRuntime } from './colab-cli-runtime'
 import { ColabCredentialStore, type StoredColabOAuthToken } from './colab-credential-store'
 import { ColabOAuthCoordinator, type VerifiedColabIdentity } from './colab-oauth-flow'
 import { ColabPythonIsolation } from './colab-python-isolation'
+import { evaluateSessionCostGuard } from './colab-watchdog-guard'
 import {
   downloadArtifactsFromColabSession,
   pollColabBalancesAndRemoteSessions,
@@ -352,31 +360,20 @@ export class ColabService {
     stopRunningSessions: boolean
   ): Promise<{ ok: boolean; switchedToConnectionId: string | null; message?: string }> {
     await this.initialize()
-    const idx = this.connections.findIndex((c) => c.id === connectionId)
-    if (idx === -1) return { ok: false, switchedToConnectionId: null, message: '连接不存在。' }
-
-    const activeForConn = [...this.sessions.values()].filter(
-      (s) => s.connectionId === connectionId && isActiveColabSessionPhase(s.phase)
-    )
-    for (const s of activeForConn) {
-      await this.executor.stopSession(s.id, stopRunningSessions)
-      this.sessions.delete(s.id)
-    }
-
-    this.connections.splice(idx, 1)
-    await this.credentials.removeConnection(connectionId)
+    const res = await removeColabConnection({
+      connectionId,
+      stopRunningSessions,
+      connections: this.connections,
+      workspaceConnections: this.workspaceConnections,
+      sessions: this.sessions,
+      credentials: this.credentials,
+      stopSession: (id, remoteStop) => this.executor.stopSession(id, remoteStop)
+    })
+    if (!res.ok) return res
     this.untrackedSessions = this.untrackedSessions.filter((u) => u.connectionId !== connectionId)
-
-    const fallback = this.connections.find((c) => c.status === 'connected')?.id ?? null
-    for (const [ws, cid] of Object.entries(this.workspaceConnections)) {
-      if (cid === connectionId) {
-        if (fallback) this.workspaceConnections[ws] = fallback
-        else delete this.workspaceConnections[ws]
-      }
-    }
     await this.saveState()
     this.emit()
-    return { ok: true, switchedToConnectionId: fallback }
+    return res
   }
 
   async refreshBalances(input?: { connectionId?: string }): Promise<ColabStateSnapshot> {
@@ -461,6 +458,16 @@ export class ColabService {
     return { ok: true }
   }
 
+  async extendSession(
+    sessionId: string,
+    addMinutes: number
+  ): Promise<{ ok: boolean; session?: ColabSessionView; message?: string }> {
+    await this.initialize()
+    const ok = await this.executor.extendSession(sessionId, addMinutes)
+    if (!ok) return { ok: false, message: '无法延长当前未运行的会话。' }
+    return { ok: true, session: this.sessions.get(sessionId) }
+  }
+
   async reconnectSession(sessionId: string): Promise<{ ok: boolean; message?: string }> {
     if (!this.sessions.has(sessionId)) return { ok: false, message: '会话不存在。' }
     this.patchSession(sessionId, {
@@ -473,21 +480,21 @@ export class ColabService {
 
   async uploadToSession(
     sessionId: string,
-    localPaths?: string[]
-  ): Promise<{ ok: boolean; uploadedCount?: number; message?: string }> {
+    localPaths: string[],
+    transfer: UploadOptions
+  ): Promise<RuntimeUploadResult> {
     const s = this.sessions.get(sessionId)
-    if (!s) return { ok: false, message: '会话不存在。' }
-    if (!localPaths?.length) return { ok: true, uploadedCount: 0 }
+    if (!s || s.phase !== 'running') return { ok: false, uploadedCount: 0, message: '运行时未连接。' }
     const res = await uploadFilesToColabSession({
       session: s,
-      localPaths,
+      localPaths, transfer,
       cli: this.cli,
       credentials: this.credentials,
       isolation: this.isolation
     })
-    if (res.ok && res.uploadedCount) {
+    if (res.uploadedCount) {
       this.patchSession(sessionId, {
-        logTail: [...s.logTail, `[sync] uploaded ${res.uploadedCount} file(s)`].slice(-250)
+        logTail: [...(this.sessions.get(sessionId)?.logTail ?? []), `[sync] uploaded ${res.uploadedCount} file(s)`].slice(-250)
       })
     }
     return res
@@ -626,22 +633,7 @@ export class ColabService {
 
   private recordLastRun(session: ColabSessionView): void {
     if (!session.workspaceRoot) return
-    this.lastRunsByWorkspace[session.workspaceRoot] = {
-      entryCommand: session.entryCommand,
-      accelerator: session.accelerator,
-      syncPaths: session.syncPaths,
-      outputRemoteDir: session.outputRemoteDir,
-      outputLocalDir: session.outputLocalDir,
-      maxRuntimeHours: session.maxRuntimeHours,
-      autoStop: session.autoStop,
-      mountDrive: session.mountDrive,
-      envVars: {},
-      setupScript: '',
-      durationSeconds: session.elapsedSeconds,
-      consumedCu: session.consumedCu,
-      connectionId: session.connectionId,
-      finishedAt: session.finishedAt || new Date().toISOString()
-    }
+    this.lastRunsByWorkspace[session.workspaceRoot] = buildLastRunSummary(session)
     void this.saveState()
   }
 
@@ -652,20 +644,34 @@ export class ColabService {
     for (const s of this.sessions.values()) {
       if (!isActiveColabSessionPhase(s.phase)) continue
       const startedMs = Date.parse(s.startedAt)
-      if (Number.isFinite(startedMs)) {
-        const elapsed = Math.max(0, Math.floor((now - startedMs) / 1000))
-        if (elapsed !== s.elapsedSeconds) {
-          s.elapsedSeconds = elapsed
-          s.consumedCu = Number(((elapsed / 3600) * s.burnRateCuPerHour).toFixed(2))
+      if (!Number.isFinite(startedMs)) continue
+      const elapsed = Math.max(0, Math.floor((now - startedMs) / 1000))
+      if (elapsed !== s.elapsedSeconds) {
+        s.elapsedSeconds = elapsed
+        s.consumedCu = Number(((elapsed / 3600) * s.burnRateCuPerHour).toFixed(2))
+        changed = true
+      }
+      if (s.phase === 'running') {
+        const conn = this.connections.find((c) => c.id === s.connectionId) ?? null
+        const guard = evaluateSessionCostGuard({ session: s, connection: conn, nowMs: now })
+        const prevWarn = (s.guardWarnings ?? []).join(',')
+        if (guard.warnings.join(',') !== prevWarn) {
+          s.guardWarnings = guard.warnings
           changed = true
         }
-        if (
-          settings.idleAutoStopEnabled &&
-          s.entryCommand === '(adopted remote session)' &&
-          elapsed >= settings.idleAutoStopMinutes * 60
-        ) {
+        if (guard.stopReason) {
+          s.guardStoppedReason = guard.stopReason
+          changed = true
           void this.executor.stopSession(s.id, true)
+          continue
         }
+      }
+      if (
+        settings.idleAutoStopEnabled &&
+        s.entryCommand === '(adopted remote session)' &&
+        elapsed >= settings.idleAutoStopMinutes * 60
+      ) {
+        void this.executor.stopSession(s.id, true)
       }
     }
     if (changed) this.emit()

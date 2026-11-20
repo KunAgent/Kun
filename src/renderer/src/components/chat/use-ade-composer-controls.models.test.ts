@@ -111,6 +111,36 @@ describe('external Agent model discovery', () => {
       ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
     }
   })
+  it('forces a readiness reload from composer menus when an enabled Agent still has no ready proof', async () => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    const enabledPending = { ...withHarnessReadiness({ definition: {
+      id: 'antigravity', displayName: 'Antigravity', transport: 'acp', credentialModes: ['native-login'],
+      permissionModes: [], modelSource: 'probe', staticModels: [], builtin: true
+    }, status: { harnessId: 'antigravity', installed: 'yes', login: 'unknown', checkedAt: '' } }), readyProfiles: [] }
+    fixture.chat.composerHarnessId = 'antigravity'
+    fixture.harnesses.rows = [enabledPending]
+    let controls!: ReturnType<typeof useAdeComposerControls>
+    function Probe() {
+      controls = useAdeComposerControls({ enabled: true, activeThreadId: null, workspaceRoot: '/repo',
+        threadHarnessId: undefined, threadTaskWorkspaceId: undefined, threadHasUserMessages: false, hasConfiguredProvider: true })
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    try {
+      await act(async () => root.render(createElement(Probe)))
+      vi.mocked(loadHarnesses).mockClear()
+      vi.mocked(loadHarnessModels).mockClear()
+      await act(async () => controls.refreshRows())
+      expect(loadHarnesses).toHaveBeenCalledWith(true, { waitMs: 3_000 })
+      vi.mocked(loadHarnesses).mockClear()
+      await act(async () => controls.onModelPickerOpen(true))
+      expect(loadHarnesses).toHaveBeenCalledWith(true, { waitMs: 3_000 })
+      expect(loadHarnessModels).toHaveBeenCalledWith('antigravity', false)
+    } finally {
+      await act(async () => root.unmount())
+      ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false
+    }
+  })
   it('loads missing Antigravity levels for the selected model, without probing a fixed budget', async () => {
     vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
     const regular = 'gemini-4-hydrogen', fixed = 'gemini-pro-orchestrator-argon'

@@ -31,8 +31,11 @@ import { CanvasReceiptRegistry } from '../services/canvas-receipt-registry.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
 import { HarnessRouter, HarnessRuntimeMap } from '../harness/harness-router.js'
 import { createKunToolBridgeHost } from '../harness/kun-tool-bridge-host.js'
+import { CHART_TOOL_NAME } from '../adapters/tool/chart-tool-provider.js'
 import { COMPONENT_DESIGN_TOOL_NAME } from '../adapters/tool/component-design-tool-provider.js'
+import { CONVERSATION_VISUALIZATION_TOOL_NAME } from '../adapters/tool/conversation-visualization-tool-provider.js'
 import { DESIGN_OPEN_TOOL_NAME } from '../adapters/tool/design-open-tool.js'
+import { DIAGRAM_VISUALIZATION_TOOL_NAME } from '../adapters/tool/diagram-visualization-tool-provider.js'
 import { REPORT_OPEN_TOOL_NAME } from '../adapters/tool/report-open-tool.js'
 import { FileTeamStore } from '../ade/team-store.js'
 import { handleAdeThreadDeleted } from '../ade/team-lifecycle.js'
@@ -185,8 +188,16 @@ export async function createRuntimeAgentComposition(
     defaultApprovalReviewer: core.activeOptions.approvalReviewer ?? DEFAULT_APPROVAL_REVIEWER,
     callIdPrefix: 'mcp',
     // ACP and Codex transcripts only carry their own MCP call items; record
-    // Kun's design_open / design_component / report_open results so the GUI cards still open.
-    recordResultItemTools: new Set([DESIGN_OPEN_TOOL_NAME, COMPONENT_DESIGN_TOOL_NAME, REPORT_OPEN_TOOL_NAME]),
+    // Kun's card/visual tool results and MCP App / Gen UI sidebands so GUI cards and panels still open.
+    recordResultItemTools: new Set([
+      DESIGN_OPEN_TOOL_NAME,
+      COMPONENT_DESIGN_TOOL_NAME,
+      REPORT_OPEN_TOOL_NAME,
+      CHART_TOOL_NAME,
+      DIAGRAM_VISUALIZATION_TOOL_NAME,
+      CONVERSATION_VISUALIZATION_TOOL_NAME
+    ]),
+    recordAppSurfaceResultItems: true,
     nowIso
   })
   // dep assembly extracted to runtime-composition-delegated.ts for the
@@ -198,7 +209,10 @@ export async function createRuntimeAgentComposition(
       canvasReceipts,
       toolHost,
       providerPool,
-      graphHarnessSummary
+      graphHarnessSummary,
+      // Main desktop ACP uses the real per-turn tool bridge and live bus, so a
+      // canvas receipt is observed as soon as the MCP call lands.
+      designDelivery: { bridge: kunToolBridge, events: eventBus }
     })
 
   const adeTeamStore = new FileTeamStore(core.activeOptions.dataDir, nowIso)

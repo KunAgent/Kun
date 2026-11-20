@@ -170,3 +170,43 @@ export type ColabNotebookAgentResponse =
 
 /** Record separator prefix keeps protocol markers distinct from user prints. */
 export const COLAB_NOTEBOOK_MARKER = '\u001eKUN_NB_'
+
+/** Colab reserves port 8080 for its own internal node server inside the VM. */
+export const COLAB_RESERVED_VM_PORT = 8080
+
+export type ColabPortForwardState = 'starting' | 'up' | 'reconnecting' | 'failed'
+
+export type ColabPortForwardErrorKind =
+  | 'port_reserved'
+  | 'port_in_use'
+  | 'ssh_busy'
+  | 'session_gone'
+  | 'auth_required'
+  | 'ssh_missing'
+  | 'timeout'
+  | 'other'
+
+export type ColabPortForwardView = {
+  id: string
+  sessionId: string
+  sessionName: string
+  localPort: number
+  remotePort: number
+  localUrl: string
+  label?: string
+  state: ColabPortForwardState
+  errorKind?: ColabPortForwardErrorKind
+  errorMessage?: string
+  reconnectAttempt?: number
+}
+
+export type ColabPortForwardStartRequest = {
+  sessionId: string
+  remotePort: number
+  localPort?: number
+  label?: string
+}
+
+export type ColabPortForwardStartResult =
+  | { ok: true; forward: ColabPortForwardView }
+  | { ok: false; errorKind?: ColabPortForwardErrorKind; message: string }

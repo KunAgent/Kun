@@ -1,8 +1,10 @@
 import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { ColabStateSnapshot } from '../shared/colab/colab-types'
+import type { RuntimeUploadEvent } from '../shared/colab/runtime-upload'
 import type {
   ColabNotebookAgentRequest,
   ColabNotebookExecEvent,
+  ColabPortForwardView,
   JupyterStateSnapshot
 } from '../shared/colab/colab-notebook-types'
 import type { KunGuiColabApi } from '../shared/colab/kun-gui-api-colab'
@@ -29,8 +31,15 @@ export const colabApi: KunGuiColabApi = {
   colabSaveWorkspaceConfig: (input) => ipcRenderer.invoke('colab:workspace:save-config', input),
   colabStartRun: (input) => ipcRenderer.invoke('colab:session:start', input),
   colabStopSession: (input) => ipcRenderer.invoke('colab:session:stop', input),
+  colabExtendSession: (input) => ipcRenderer.invoke('colab:session:extend', input),
   colabReconnectSession: (input) => ipcRenderer.invoke('colab:session:reconnect', input),
   colabUploadToSession: (input) => ipcRenderer.invoke('colab:session:upload', input),
+  colabCancelUpload: (input) => ipcRenderer.invoke('colab:session:cancel-upload', input),
+  onColabUploadProgress: (handler) => {
+    const wrapped = (_event: IpcRendererEvent, progress: RuntimeUploadEvent): void => handler(progress)
+    ipcRenderer.on('colab:session:upload-progress', wrapped)
+    return () => ipcRenderer.removeListener('colab:session:upload-progress', wrapped)
+  },
   colabDownloadFromSession: (input) => ipcRenderer.invoke('colab:session:download', input),
   colabPrepareTerminalLaunch: (input) => ipcRenderer.invoke('colab:session:prepare-terminal', input),
   colabAdoptUntrackedSession: (input) => ipcRenderer.invoke('colab:untracked:adopt', input),
@@ -85,5 +94,15 @@ export const colabApi: KunGuiColabApi = {
     ipcRenderer.on('colab:notebook:agent-request', wrapped)
     return () => ipcRenderer.removeListener('colab:notebook:agent-request', wrapped)
   },
-  colabNotebookAgentRespond: (response) => ipcRenderer.invoke('colab:notebook:agent-respond', response)
+  colabNotebookAgentRespond: (response) => ipcRenderer.invoke('colab:notebook:agent-respond', response),
+  colabPortForwardList: () => ipcRenderer.invoke('colab:port-forward:list'),
+  colabPortForwardStart: (input) => ipcRenderer.invoke('colab:port-forward:start', input),
+  colabPortForwardStop: (input) => ipcRenderer.invoke('colab:port-forward:stop', input),
+  onColabPortForwardsChanged: (handler) => {
+    const wrapped = (_event: IpcRendererEvent, forwards: ColabPortForwardView[]): void => {
+      handler(forwards)
+    }
+    ipcRenderer.on('colab:port-forwards-changed', wrapped)
+    return () => ipcRenderer.removeListener('colab:port-forwards-changed', wrapped)
+  }
 }

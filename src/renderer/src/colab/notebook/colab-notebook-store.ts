@@ -24,6 +24,24 @@ type RemoteDir = { status: 'loading' | 'ready' | 'error'; entries: ColabRemoteEn
 /** A cell the user asked Kun about; the side panel consumes it into the composer. */
 export type ColabKunCellRequest = { cellNumber: number; nonce: number }
 
+export type NotebookSidePanelTab = 'kun' | 'variables' | 'files' | 'ports' | 'resources'
+
+export type NotebookColabLaunchOptions = {
+  highMem: boolean
+  requireA10080Gb: boolean
+  maxRuntimeHours: number
+  idleAutoStopMinutes: number
+  maxSpendCu: number | null
+  minBalanceCu: number | null
+}
+
+export type NotebookRecentImport = {
+  workspaceRoot: string
+  relativePath: string
+  sourceKind: 'drive' | 'jupyter'
+  sourceLabel: string
+}
+
 function computeChangedCellIds(baseline: NotebookCell[], next: NotebookCell[]): string[] {
   const counts = new Map<string, number>()
   for (const cell of baseline) {
@@ -50,8 +68,11 @@ type NotebookState = {
   loadError: string | null
   saving: boolean
   accelerator: ColabAccelerator
+  launchOptions: NotebookColabLaunchOptions
   runningCellId: string | null
   runningExecId: string | null
+  runningStartedAt: number | null
+  cellDurationsMs: Record<string, number>
   queue: string[]
   execCounter: number
   remoteDirs: Record<string, RemoteDir>
@@ -60,6 +81,12 @@ type NotebookState = {
   variablesLoading: boolean
   runtimeBackend: NotebookRuntimeBackend
   sidePanelOpen: boolean
+  sidePanelTab: NotebookSidePanelTab
+  kernelPickerOpen: boolean
+  kernelPickerInitialAddJupyter: boolean
+  kernelPickerTabOverride: NotebookRuntimeBackend | null
+  lastSavedAt: number | null
+  recentImports: NotebookRecentImport[]
   connectionsFocusRequest: number
   kunCellRequest: ColabKunCellRequest | null
   kunBaselineCells: NotebookCell[] | null
@@ -70,6 +97,7 @@ type NotebookState = {
 
 type NotebookActions = {
   setAccelerator: (accelerator: ColabAccelerator) => void
+  patchLaunchOptions: (patch: Partial<NotebookColabLaunchOptions>) => void
   setRuntimeBackend: (backend: NotebookRuntimeBackend) => void
   refreshNotebooks: (workspaceRoot: string, options?: { selectFirst?: boolean }) => Promise<void>
   openNotebook: (path: string) => Promise<void>
@@ -81,6 +109,16 @@ type NotebookActions = {
   setCellKind: (id: string, kind: NotebookCellKind) => void
   addCell: (kind: NotebookCellKind, afterId?: string | null) => void
   setSidePanelOpen: (open: boolean) => void
+  setSidePanelTab: (tab: NotebookSidePanelTab) => void
+  setKernelPickerOpen: (
+    open: boolean,
+    options?: { addJupyter?: boolean; backend?: NotebookRuntimeBackend }
+  ) => void
+  recordRecentImports: (
+    workspaceRoot: string,
+    relativePaths: string[],
+    source: { kind: 'drive' | 'jupyter'; label: string }
+  ) => void
   focusConnections: () => void
   askKunAboutCell: (id: string) => void
   consumeKunCellRequest: () => void
@@ -113,8 +151,18 @@ const initialState: NotebookState = {
   loadError: null,
   saving: false,
   accelerator: 'T4',
+  launchOptions: {
+    highMem: false,
+    requireA10080Gb: false,
+    maxRuntimeHours: 2,
+    idleAutoStopMinutes: 30,
+    maxSpendCu: null,
+    minBalanceCu: null
+  },
   runningCellId: null,
   runningExecId: null,
+  runningStartedAt: null,
+  cellDurationsMs: {},
   queue: [],
   execCounter: 0,
   remoteDirs: {},
@@ -123,6 +171,12 @@ const initialState: NotebookState = {
   variablesLoading: false,
   runtimeBackend: 'colab',
   sidePanelOpen: true,
+  sidePanelTab: 'kun',
+  kernelPickerOpen: false,
+  kernelPickerInitialAddJupyter: false,
+  kernelPickerTabOverride: null,
+  lastSavedAt: null,
+  recentImports: [],
   connectionsFocusRequest: 0,
   kunCellRequest: null,
   kunBaselineCells: null,
@@ -156,7 +210,17 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
     }
     execSeq += 1
     const execId = `nb-${Date.now().toString(36)}-${execSeq}`
-    set({ queue: rest, runningCellId: cell.id, runningExecId: execId })
+    set((current) => {
+      const nextDurations = { ...current.cellDurationsMs }
+      delete nextDurations[cell.id]
+      return {
+        queue: rest,
+        runningCellId: cell.id,
+        runningExecId: execId,
+        runningStartedAt: Date.now(),
+        cellDurationsMs: nextDurations
+      }
+    })
     patchCell(cell.id, (c) => ({ ...c, outputs: [], executionCount: null }))
     void window.kunGui
       .colabNotebookExecute({ sessionId: activeSessionId, execId, code: cell.source })
@@ -185,13 +249,20 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
         ? appendOutput(c.outputs, { type: 'stream', name: 'stderr', text: `\n${event.message}\n` })
         : c.outputs
     }))
+    const elapsedMs =
+      state.runningStartedAt != null ? Math.max(0, Date.now() - state.runningStartedAt) : null
     // A failed cell stops the run-all queue, matching Jupyter.
-    set({
+    set((current) => ({
       execCounter: count,
       runningCellId: null,
       runningExecId: null,
-      queue: event.ok ? get().queue : []
-    })
+      runningStartedAt: null,
+      cellDurationsMs:
+        event.ok && elapsedMs != null
+          ? { ...current.cellDurationsMs, [cellId]: elapsedMs }
+          : current.cellDurationsMs,
+      queue: event.ok ? current.queue : []
+    }))
     startNext()
   }
 
@@ -204,12 +275,34 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
     ...initialState,
 
     setAccelerator: (accelerator) => set({ accelerator }),
+    patchLaunchOptions: (patch) =>
+      set((state) => ({ launchOptions: { ...state.launchOptions, ...patch } })),
     setRuntimeBackend: (runtimeBackend) => set({ runtimeBackend }),
 
     refreshNotebooks: async (workspaceRoot, options) => {
       if (workspaceRoot !== get().workspaceRoot) {
-        const { accelerator, runtimeBackend, sidePanelOpen, connectionsFocusRequest, kunBusy } = get()
-        set({ ...initialState, accelerator, runtimeBackend, sidePanelOpen, connectionsFocusRequest, kunBusy, workspaceRoot })
+        const {
+          accelerator,
+          launchOptions,
+          runtimeBackend,
+          sidePanelOpen,
+          sidePanelTab,
+          recentImports,
+          connectionsFocusRequest,
+          kunBusy
+        } = get()
+        set({
+          ...initialState,
+          accelerator,
+          launchOptions,
+          runtimeBackend,
+          sidePanelOpen,
+          sidePanelTab,
+          recentImports,
+          connectionsFocusRequest,
+          kunBusy,
+          workspaceRoot
+        })
       }
       if (!workspaceRoot) return
       const res = await window.kunGui.listWorkspaceFiles({ workspaceRoot })
@@ -232,6 +325,8 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
           cells: [],
           loadError: res.message,
           dirty: false,
+          runningStartedAt: null,
+          cellDurationsMs: {},
           kunBaselineCells: null,
           kunChangedCellIds: []
         })
@@ -308,7 +403,11 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
         content: serializeIpynb(cells, accelerator),
         force: true
       })
-      set({ saving: false, dirty: res.ok ? false : get().dirty })
+      set({
+        saving: false,
+        dirty: res.ok ? false : get().dirty,
+        ...(res.ok ? { lastSavedAt: Date.now() } : {})
+      })
       return res.ok
     },
 
@@ -333,13 +432,46 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
     },
 
     setSidePanelOpen: (open) => set({ sidePanelOpen: open }),
-    focusConnections: () => set((state) => ({ connectionsFocusRequest: state.connectionsFocusRequest + 1 })),
+    setSidePanelTab: (tab) => set({ sidePanelOpen: true, sidePanelTab: tab }),
+    setKernelPickerOpen: (open, options) =>
+      set({
+        kernelPickerOpen: open,
+        kernelPickerInitialAddJupyter: open ? Boolean(options?.addJupyter) : false,
+        kernelPickerTabOverride: open
+          ? options?.addJupyter
+            ? 'jupyter'
+            : (options?.backend ?? null)
+          : null
+      }),
+    recordRecentImports: (workspaceRoot, relativePaths, source) => {
+      if (!workspaceRoot || relativePaths.length === 0) return
+      set((state) => {
+        const added: NotebookRecentImport[] = relativePaths.map((relativePath) => ({
+          workspaceRoot,
+          relativePath,
+          sourceKind: source.kind,
+          sourceLabel: source.label
+        }))
+        const addedKeys = new Set(added.map((item) => `${item.workspaceRoot}\0${item.relativePath}`))
+        const rest = state.recentImports.filter(
+          (item) => !addedKeys.has(`${item.workspaceRoot}\0${item.relativePath}`)
+        )
+        return { recentImports: [...added, ...rest].slice(0, 12) }
+      })
+    },
+    focusConnections: () =>
+      set((state) => ({
+        kernelPickerOpen: true,
+        kernelPickerInitialAddJupyter: false,
+        connectionsFocusRequest: state.connectionsFocusRequest + 1
+      })),
 
     askKunAboutCell: (id) => {
       const index = get().cells.findIndex((c) => c.id === id)
       if (index < 0) return
       set((state) => ({
         sidePanelOpen: true,
+        sidePanelTab: 'kun',
         selectedCellId: id,
         kunCellRequest: { cellNumber: index + 1, nonce: (state.kunCellRequest?.nonce ?? 0) + 1 }
       }))
@@ -423,6 +555,9 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
       if (editLocked()) return
       set((state) => ({
         cells: state.cells.map((c) => (c.id === state.runningCellId ? c : { ...c, outputs: [], executionCount: null })),
+        cellDurationsMs: state.runningCellId && state.cellDurationsMs[state.runningCellId] != null
+          ? { [state.runningCellId]: state.cellDurationsMs[state.runningCellId]! }
+          : {},
         dirty: true
       }))
     },

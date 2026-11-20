@@ -2,6 +2,8 @@ import { join } from 'node:path'
 import { app, dialog, ipcMain } from 'electron'
 import { z } from 'zod'
 import { COLAB_ACCELERATORS } from '../../shared/colab/colab-types'
+import type { RuntimeUploadProgress, RuntimeUploadResult } from '../../shared/colab/runtime-upload'
+import { resolveOpenTargetPath } from '../services/workspace-paths'
 import {
   configureColabHost,
   getColabNotebookAgentRelay,
@@ -10,6 +12,7 @@ import {
 } from '../colab/colab-host'
 import { ColabNotebookAgentRelay } from '../colab/colab-notebook-agent-relay'
 import { ColabDriveNotebookManager } from '../colab/colab-drive-notebooks'
+import { ColabPortForwardManager } from '../colab/colab-port-forward-manager'
 import { isJupyterSessionId, JupyterServerManager } from '../colab/jupyter-server-manager'
 import { requestColabNotebookAssist } from '../colab/colab-notebook-assist'
 import { ColabNotebookKernel } from '../colab/colab-notebook-kernel'
@@ -97,10 +100,17 @@ const startRunSchema = z
     setAsWorkspaceCurrent: z.boolean().optional(),
     entryCommand: z.string().min(1).max(2048),
     accelerator: z.enum(COLAB_ACCELERATORS),
+    highMem: z.boolean().optional(),
+    minVramGb: z.number().min(0).max(256).nullable().optional(),
+    maxProvisionAttempts: z.number().int().min(1).max(8).optional(),
+    onProvisionExhausted: z.enum(['stop_and_fail', 'keep_last']).optional(),
     syncPaths: z.array(z.string().max(1024)).max(128),
     outputRemoteDir: z.string().max(512),
     outputLocalDir: z.string().max(512),
     maxRuntimeHours: z.number().min(0).max(48),
+    idleAutoStopMinutes: z.number().min(0).max(1440).optional(),
+    maxSpendCu: z.number().min(0).max(10000).nullable().optional(),
+    minBalanceCu: z.number().min(0).max(10000).nullable().optional(),
     autoStop: z.boolean(),
     saveWorkspaceConfig: z.boolean().optional(),
     mountDrive: z.boolean().optional(),
@@ -110,10 +120,25 @@ const startRunSchema = z
   })
   .strict()
 const sessionIdSchema = z.object({ sessionId: z.string().min(1).max(128) }).strict()
+const extendSessionSchema = z
+  .object({
+    sessionId: z.string().min(1).max(128),
+    addMinutes: z.number().min(1).max(720)
+  })
+  .strict()
+const portForwardStartSchema = z
+  .object({
+    sessionId: z.string().min(1).max(128),
+    remotePort: z.number().int().min(1).max(65535),
+    localPort: z.number().int().min(1).max(65535).optional(),
+    label: z.string().max(64).optional()
+  })
+  .strict()
+const portForwardStopSchema = z.object({ forwardId: z.string().min(1).max(128) }).strict()
 const uploadSchema = z
   .object({
     sessionId: z.string().min(1).max(128),
-    localPaths: z.array(z.string().max(4096)).max(64).optional()
+    workspaceNotebook: z.string().min(1).max(4096).regex(/\.ipynb$/i).optional()
   })
   .strict()
 const downloadSchema = z
@@ -226,6 +251,7 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
     getSettings: () => options.store.load()
   })
 
+  const uploads = new Map<string, { controller: AbortController; owner: number }>()
   const driveNotebooks = new ColabDriveNotebookManager(service)
   service.subscribe((snapshot) => {
     const win = options.getMainWindow()
@@ -296,7 +322,12 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
   })
   ipcMain.handle('colab:session:stop', async (_, payload: unknown) => {
     const req = parseIpcPayload('colab:session:stop', sessionIdSchema, payload)
+    uploads.get(req.sessionId)?.controller.abort()
     return service.stopSession(req.sessionId)
+  })
+  ipcMain.handle('colab:session:extend', async (_, payload: unknown) => {
+    const req = parseIpcPayload('colab:session:extend', extendSessionSchema, payload)
+    return service.extendSession(req.sessionId, req.addMinutes)
   })
   ipcMain.handle('colab:session:reconnect', async (_, payload: unknown) => {
     const req = parseIpcPayload('colab:session:reconnect', sessionIdSchema, payload)
@@ -316,8 +347,26 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
     const win = options.getMainWindow()
     if (win && !win.isDestroyed()) win.webContents.send('jupyter:state-changed', snapshot)
   })
+  const portForwards = new ColabPortForwardManager(service)
+  portForwards.subscribe((forwards) => {
+    const win = options.getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send('colab:port-forwards-changed', forwards)
+  })
+  ipcMain.handle('colab:port-forward:list', async () => portForwards.list())
+  ipcMain.handle('colab:port-forward:start', async (_, payload: unknown) =>
+    portForwards.startForward(
+      parseIpcPayload('colab:port-forward:start', portForwardStartSchema, payload)
+    )
+  )
+  ipcMain.handle('colab:port-forward:stop', async (_, payload: unknown) =>
+    portForwards.stopForward(
+      parseIpcPayload('colab:port-forward:stop', portForwardStopSchema, payload).forwardId
+    )
+  )
   registerColabSubsystemShutdown(async () => {
+    for (const upload of uploads.values()) upload.controller.abort()
     notebookKernel.shutdown()
+    portForwards.shutdown()
     await Promise.all([driveNotebooks.shutdown(), jupyterManager.shutdown()])
   })
   setColabNotebookAgentRelay(
@@ -334,22 +383,48 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
     return { ok: true }
   })
 
-  ipcMain.handle('colab:session:upload', async (_, payload: unknown) => {
-    const req = parseIpcPayload('colab:session:upload', uploadSchema, payload)
-    let paths = req.localPaths
-    if (!paths || paths.length === 0) {
-      const win = options.getMainWindow()
-      const picked = win
-        ? await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] })
-        : await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
-      if (picked.canceled || picked.filePaths.length === 0) {
-        return { ok: true, uploadedCount: 0 }
+  ipcMain.handle('colab:session:upload', async ({ sender }, payload: unknown): Promise<RuntimeUploadResult> => {
+    const { sessionId, workspaceNotebook } = parseIpcPayload('colab:session:upload', uploadSchema, payload)
+    if (uploads.has(sessionId)) return { ok: false, uploadedCount: 0, message: 'An upload is already in progress.' }
+    const controller = new AbortController()
+    const abort = (): void => controller.abort()
+    uploads.set(sessionId, { controller, owner: sender.id })
+    sender.once('destroyed', abort)
+    try {
+      const jupyter = isJupyterSessionId(sessionId)
+      const session = (jupyter ? jupyterManager : service).getSnapshotSync().sessions.find((s) => s.id === sessionId)
+      if (!session) throw new Error('Runtime not connected.')
+      let paths: string[]
+      if (workspaceNotebook) {
+        if (!session.workspaceRoot.trim()) throw new Error('No workspace connected.')
+        const path = await resolveOpenTargetPath(workspaceNotebook, session.workspaceRoot, { allowBasenameFallback: false })
+        if (!path.toLowerCase().endsWith('.ipynb')) throw new Error('Select a project notebook.')
+        paths = [path]
+      } else {
+        const win = options.getMainWindow()
+        const picked = win
+          ? await dialog.showOpenDialog(win, { properties: ['openFile', 'multiSelections'] })
+          : await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] })
+        if (picked.canceled || !picked.filePaths.length) return { ok: true, uploadedCount: 0 }
+        paths = picked.filePaths
       }
-      paths = picked.filePaths
+      controller.signal.throwIfAborted()
+      const transfer = { signal: controller.signal, onProgress: (progress: RuntimeUploadProgress) => {
+        if (!sender.isDestroyed()) sender.send('colab:session:upload-progress', { ...progress, sessionId })
+      } }
+      return await (jupyter ? jupyterManager.uploadFiles(sessionId, paths, transfer) : service.uploadToSession(sessionId, paths, transfer))
+    } catch (error) {
+      return controller.signal.aborted ? { ok: false, canceled: true, uploadedCount: 0 }
+        : { ok: false, uploadedCount: 0, message: error instanceof Error ? error.message : 'Upload failed.' }
+    } finally {
+      sender.removeListener('destroyed', abort)
+      uploads.delete(sessionId)
     }
-    return isJupyterSessionId(req.sessionId)
-      ? jupyterManager.uploadFiles(req.sessionId, paths)
-      : service.uploadToSession(req.sessionId, paths)
+  })
+  ipcMain.handle('colab:session:cancel-upload', ({ sender }, payload: unknown) => {
+    const { sessionId } = parseIpcPayload('colab:session:cancel-upload', sessionIdSchema, payload)
+    const upload = uploads.get(sessionId)
+    if (upload?.owner === sender.id) upload.controller.abort()
   })
   ipcMain.handle('colab:session:download', async (_, payload: unknown) => {
     const req = parseIpcPayload('colab:session:download', downloadSchema, payload)
@@ -431,6 +506,7 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
   })
   ipcMain.handle('jupyter:disconnect', async (_, payload: unknown) => {
     const req = parseIpcPayload('jupyter:disconnect', sessionIdSchema, payload)
+    uploads.get(req.sessionId)?.controller.abort()
     return jupyterManager.disconnect(req.sessionId)
   })
   ipcMain.handle('jupyter:remove-server', async (_, payload: unknown) => {

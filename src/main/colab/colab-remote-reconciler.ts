@@ -1,7 +1,10 @@
 import { spawn } from 'node:child_process'
-import { mkdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, join, posix } from 'node:path'
 import type { KunColabSettingsV1 } from '../../shared/app-settings-colab'
+import type { RuntimeUploadResult } from '../../shared/colab/runtime-upload'
+import { colabUploadAccess } from './colab-upload-access'
+import { uploadRuntimeFiles, type UploadOptions } from './runtime-file-upload'
 import { activeDrivePullSessions } from './colab-drive-notebooks'
 import type { ColabSessionView, ColabUntrackedSession } from '../../shared/colab/colab-types'
 import {
@@ -136,32 +139,26 @@ export async function stopRemoteUntrackedEndpoint(options: {
 export async function uploadFilesToColabSession(options: {
   session: ColabSessionView
   localPaths: string[]
+  transfer?: UploadOptions
   cli: ColabCliRuntime
   credentials: ColabCredentialStore
   isolation: ColabPythonIsolation
-}): Promise<{ ok: boolean; uploadedCount?: number; message?: string }> {
+}): Promise<RuntimeUploadResult> {
   try {
     const credFile = await options.credentials.materializeRuntimeToken(options.session.connectionId)
     const { paths, env } = await options.isolation.prepareConnectionEnvironment(
       options.session.connectionId,
       credFile
     )
-    let count = 0
-    for (const localPath of options.localPaths) {
-      const info = await stat(localPath)
-      if (!info.isFile()) continue
-      const remote = posix.join('content', basename(localPath))
-      const res = await options.cli.runCommand({
-        sessionsJsonPath: paths.sessionsJsonPath,
-        args: ['upload', '-s', options.session.sessionName, localPath, remote],
-        env,
-        timeoutMs: 180_000
-      })
-      if (res.exitCode === 0) count += 1
-    }
-    return { ok: true, uploadedCount: count }
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) }
+    const access = colabUploadAccess({
+      pythonPath: options.cli.venvPythonPath, sessionsJsonPath: paths.sessionsJsonPath,
+      sessionName: options.session.sessionName, env
+    })
+    return await uploadRuntimeFiles(options.localPaths.map((localPath) => ({
+      localPath, remotePath: posix.join('content', basename(localPath))
+    })), access, options.transfer)
+  } catch {
+    return { ok: false, uploadedCount: 0, message: 'Could not prepare the connected Colab runtime for upload.' }
   }
 }
 

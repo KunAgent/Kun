@@ -100,6 +100,15 @@ export type ColabSessionErrorKind =
   | 'disconnected_billing'
   | 'command_failed'
   | 'cli_unavailable'
+  | 'not_entitled'
+
+export type ColabGuardWarningKind =
+  | 'runtime_nearing'
+  | 'spend_nearing'
+  | 'balance_nearing'
+  | 'balance_stale'
+
+export type ColabGuardStopReason = 'max_runtime' | 'max_spend' | 'balance_floor'
 
 export type ColabSessionView = {
   id: string
@@ -111,10 +120,14 @@ export type ColabSessionView = {
   connectionAvatarColor: string
   workspaceRoot: string
   accelerator: ColabAccelerator
+  highMem?: boolean
+  minVramGb?: number | null
   vramGb: number | null
   ramGb: number
   phase: ColabSessionPhase
   provisioningStep: ColabProvisioningStep
+  provisioningAttempt?: number
+  provisioningMaxAttempts?: number
   startedAt: string
   finishedAt?: string
   elapsedSeconds: number
@@ -123,6 +136,13 @@ export type ColabSessionView = {
   outputRemoteDir: string
   outputLocalDir: string
   maxRuntimeHours: number
+  idleAutoStopMinutes?: number
+  maxSpendCu?: number | null
+  minBalanceCu?: number | null
+  watchdogActive?: boolean
+  autoStopAt?: string | null
+  guardWarnings?: ColabGuardWarningKind[]
+  guardStoppedReason?: ColabGuardStopReason
   autoStop: boolean
   mountDrive: boolean
   consumedCu: number
@@ -210,10 +230,17 @@ export type ColabStartRunRequest = {
   setAsWorkspaceCurrent?: boolean
   entryCommand: string
   accelerator: ColabAccelerator
+  highMem?: boolean
+  minVramGb?: number | null
+  maxProvisionAttempts?: number
+  onProvisionExhausted?: 'stop_and_fail' | 'keep_last'
   syncPaths: string[]
   outputRemoteDir: string
   outputLocalDir: string
   maxRuntimeHours: number
+  idleAutoStopMinutes?: number
+  maxSpendCu?: number | null
+  minBalanceCu?: number | null
   autoStop: boolean
   saveWorkspaceConfig?: boolean
   mountDrive?: boolean

@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ChevronDown, ExternalLink, FileCode2, History, Loader2, Sparkles, SquarePen } from 'lucide-react'
+import {
+  BarChart3,
+  Bug,
+  ChevronRight,
+  Loader2,
+  Sparkles,
+  Target,
+  Wand2
+} from 'lucide-react'
 import type { DesignComposerContext } from '../../design/design-composer-context'
 import { FloatingComposer } from '../../components/chat/FloatingComposer'
 import { LazyMessageTimeline } from '../../components/chat/LazyMessageTimeline'
@@ -9,6 +17,7 @@ import { useWorkComposerReferenceProps } from '../../components/write/use-work-c
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { useChatStore } from '../../store/chat-store'
 import { useWorkComposerReferences } from '../../write/work-composer-references'
+import { NotebookKunDiffCard } from './NotebookKunDiffCard'
 import { readColabKunThreadIds, rememberColabKunThread } from './colab-kun-threads'
 import { sendColabKunTurn } from './colab-kun-turn'
 import { useColabNotebookStore } from './colab-notebook-store'
@@ -27,16 +36,26 @@ export type ColabKunChatHost = Pick<
   | 'onOpenSettings'
 >
 
+export type ColabKunSessionControl = {
+  draftFresh: boolean
+  setDraftFresh: (fresh: boolean) => void
+  colabThreadIds: string[]
+  setColabThreadIds: (ids: string[]) => void
+  effectiveThreadId: string | null
+}
+
 const CHIP_NOTEBOOK_ID = 'colab-active-notebook'
 const CHIP_CELL_ID = 'colab-selected-cell'
 
 /** Code-mode Kun session pane docked inside the Colab right sidebar. */
 export function ColabKunPane({
   chat,
-  runtime
+  runtime,
+  sessionControl
 }: {
   chat?: ColabKunChatHost
   runtime: ColabNotebookRuntime
+  sessionControl?: ColabKunSessionControl
 }): ReactElement {
   const { t } = useTranslation('common')
   const threads = useChatStore((s) => s.threads)
@@ -45,6 +64,7 @@ export function ColabKunPane({
   const dirty = useColabNotebookStore((s) => s.dirty)
   const selectedCellId = useColabNotebookStore((s) => s.selectedCellId)
   const kunCellRequest = useColabNotebookStore((s) => s.kunCellRequest)
+  const kunBaselineCells = useColabNotebookStore((s) => s.kunBaselineCells)
   const kunChangedCellIds = useColabNotebookStore((s) => s.kunChangedCellIds)
   const saveNotebook = useColabNotebookStore((s) => s.saveNotebook)
   const selectCell = useColabNotebookStore((s) => s.selectCell)
@@ -56,12 +76,19 @@ export function ColabKunPane({
   const refreshNotebooks = useColabNotebookStore((s) => s.refreshNotebooks)
   const setKunBusy = useColabNotebookStore((s) => s.setKunBusy)
 
-  const [draftFresh, setDraftFresh] = useState(false)
-  const [colabThreadIds, setColabThreadIds] = useState<string[]>(() => readColabKunThreadIds())
+  const [localDraftFresh, setLocalDraftFresh] = useState(false)
+  const [localColabThreadIds, setLocalColabThreadIds] = useState<string[]>(() =>
+    readColabKunThreadIds()
+  )
   const [notebookChipDetached, setNotebookChipDetached] = useState(false)
   const [cellChipDetached, setCellChipDetached] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const historyRef = useRef<HTMLDivElement>(null)
+
+  const draftFresh = sessionControl ? sessionControl.draftFresh : localDraftFresh
+  const setDraftFresh = sessionControl ? sessionControl.setDraftFresh : setLocalDraftFresh
+  const colabThreadIds = sessionControl ? sessionControl.colabThreadIds : localColabThreadIds
+  const setColabThreadIds = sessionControl
+    ? sessionControl.setColabThreadIds
+    : setLocalColabThreadIds
 
   const referenceProps = useWorkComposerReferenceProps(runtime.wsKey)
 
@@ -79,33 +106,19 @@ export function ColabKunPane({
     consumeKunCellRequest()
   }, [consumeKunCellRequest, kunCellRequest])
 
-  useEffect(() => {
-    if (!historyOpen) return
-    const onDown = (e: MouseEvent): void => {
-      if (historyRef.current && !historyRef.current.contains(e.target as Node)) setHistoryOpen(false)
+  const localEffectiveThreadId = useMemo(() => {
+    if (draftFresh || !chat?.activeThreadId || !colabThreadIds.includes(chat.activeThreadId)) {
+      return null
     }
-    window.addEventListener('mousedown', onDown)
-    return () => window.removeEventListener('mousedown', onDown)
-  }, [historyOpen])
-
-  const workspaceThreads = useMemo(() => {
-    const root = normalizeWorkspaceRoot(runtime.wsKey)
-    const colabSet = new Set(colabThreadIds)
-    const inWorkspace = threads.filter(
-      (th) => !th.archived && (!root || normalizeWorkspaceRoot(th.workspace ?? '') === root)
-    )
-    // Notebook conversations first, then other threads of this project.
-    return [...inWorkspace.filter((th) => colabSet.has(th.id)), ...inWorkspace.filter((th) => !colabSet.has(th.id))].slice(0, 20)
-  }, [colabThreadIds, runtime.wsKey, threads])
-
-  const activeThread = useMemo(() => {
-    if (draftFresh || !chat?.activeThreadId || !colabThreadIds.includes(chat.activeThreadId)) return null
     const thread = threads.find((th) => th.id === chat.activeThreadId)
     if (!thread) return null
     const root = normalizeWorkspaceRoot(runtime.wsKey)
-    return !root || normalizeWorkspaceRoot(thread.workspace ?? '') === root ? thread : null
+    return !root || normalizeWorkspaceRoot(thread.workspace ?? '') === root ? thread.id : null
   }, [chat?.activeThreadId, colabThreadIds, draftFresh, runtime.wsKey, threads])
-  const effectiveThreadId = activeThread?.id ?? null
+
+  const effectiveThreadId = sessionControl
+    ? sessionControl.effectiveThreadId
+    : localEffectiveThreadId
   const showing = Boolean(effectiveThreadId && chat?.activeThreadId === effectiveThreadId)
   const busy = Boolean(showing && chat?.busy)
 
@@ -149,7 +162,7 @@ export function ColabKunPane({
     if (selectedCellNumber != null) {
       chips.push({
         id: CHIP_CELL_ID,
-        kind: 'document-quote',
+        kind: 'canvas-selection',
         label: `[${selectedCellNumber}]`,
         removable: true
       })
@@ -207,12 +220,6 @@ export function ColabKunPane({
     setDraftFresh(false)
   }
 
-  const openInCode = (): void => {
-    const store = useChatStore.getState()
-    store.setRoute('chat')
-    if (effectiveThreadId) void store.selectThread(effectiveThreadId)
-  }
-
   const locateChangedCell = (): void => {
     const firstId = kunChangedCellIds[0]
     if (!firstId) return
@@ -223,80 +230,44 @@ export function ColabKunPane({
 
   const hasTimeline =
     showing &&
-    (chat.blocks.length > 0 || chat.liveAssistant.trim().length > 0 || chat.liveReasoning.trim().length > 0)
+    (chat.blocks.length > 0 ||
+      chat.liveAssistant.trim().length > 0 ||
+      chat.liveReasoning.trim().length > 0)
 
-  const quickPrompts = [
-    t('colabNb.quickExplainCell'),
-    t('colabNb.quickFixError'),
-    t('colabNb.quickEvalPlot'),
-    t('colabNb.quickCleanNotebook')
+  const explainTitle =
+    selectedCellNumber != null
+      ? t('colabNb.quickExplainSelectedCell', { num: selectedCellNumber })
+      : t('colabNb.quickExplainCell')
+
+  const quickSuggestions = [
+    {
+      icon: Target,
+      title: explainTitle,
+      desc: t('colabNb.quickExplainDesc'),
+      prompt: explainTitle
+    },
+    {
+      icon: Bug,
+      title: t('colabNb.quickFixError'),
+      desc: t('colabNb.quickFixErrorDesc'),
+      prompt: t('colabNb.quickFixError')
+    },
+    {
+      icon: BarChart3,
+      title: t('colabNb.quickEvalPlot'),
+      desc: t('colabNb.quickEvalPlotDesc'),
+      prompt: t('colabNb.quickEvalPlot')
+    },
+    {
+      icon: Wand2,
+      title: t('colabNb.quickCleanNotebook'),
+      desc: t('colabNb.quickCleanNotebookDesc'),
+      prompt: t('colabNb.quickCleanNotebook')
+    }
   ]
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-colab-kun-pane>
-      <div className="flex h-10 shrink-0 items-center gap-1.5 border-b border-ds-border/70 px-3.5">
-        <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-ds-ink">
-          {activeThread?.title?.trim() || t('colabNb.kunNewSession')}
-        </span>
-        <div ref={historyRef} className="relative">
-          <button
-            type="button"
-            disabled={workspaceThreads.length === 0}
-            onClick={() => setHistoryOpen((v) => !v)}
-            title={t('colabNb.kunHistory')}
-            aria-label={t('colabNb.kunHistory')}
-            className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-ds-muted hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40"
-          >
-            <History className="h-3.5 w-3.5" />
-            <ChevronDown className="h-3 w-3" />
-          </button>
-          {historyOpen ? (
-            <div className="absolute right-0 top-8 z-30 max-h-64 w-64 overflow-y-auto rounded-[10px] border border-ds-border bg-ds-card p-1 shadow-xl">
-              {workspaceThreads.map((th) => {
-                const isCurrent = !draftFresh && th.id === effectiveThreadId
-                return (
-                  <button
-                    key={th.id}
-                    type="button"
-                    onClick={() => {
-                      setDraftFresh(false)
-                      setHistoryOpen(false)
-                      setColabThreadIds(rememberColabKunThread(th.id))
-                      void useChatStore.getState().selectThread(th.id)
-                    }}
-                    className={`flex w-full items-center gap-2 rounded-[7px] px-2.5 py-1.5 text-left text-[12px] ${
-                      isCurrent ? 'bg-accent/10 font-semibold text-accent' : 'text-ds-ink hover:bg-ds-hover'
-                    }`}
-                  >
-                    <span className="min-w-0 flex-1 truncate">{th.title?.trim() || t('colabNb.kunNewSession')}</span>
-                  </button>
-                )
-              })}
-            </div>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={() => setDraftFresh(true)}
-          title={t('colabNb.kunNewSession')}
-          aria-label={t('colabNb.kunNewSession')}
-          className="flex h-7 w-7 items-center justify-center rounded-md text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
-        >
-          <SquarePen className="h-3.5 w-3.5" />
-        </button>
-        {effectiveThreadId ? (
-          <button
-            type="button"
-            onClick={openInCode}
-            title={t('colabNb.kunOpenInCode')}
-            aria-label={t('colabNb.kunOpenInCode')}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
-      </div>
-
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {hasTimeline ? (
           <LazyMessageTimeline
@@ -311,27 +282,56 @@ export function ColabKunPane({
             compactCards
           />
         ) : (
-          <div className="flex flex-1 flex-col justify-center gap-3 overflow-y-auto px-5 py-6">
-            <div className="flex items-center gap-2">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-accent/12 text-accent">
-                <Sparkles className="h-4 w-4" />
+          <div
+            data-colab-kun-empty
+            className="flex flex-1 flex-col overflow-y-auto px-4 pb-4 pt-5"
+          >
+            <div className="flex items-start gap-2.5">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-gradient-to-br from-[#6d84f5] to-[#4f6bed] text-white shadow-sm">
+                <Sparkles className="h-4 w-4" aria-hidden="true" />
               </span>
-              <div>
-                <div className="text-[13.5px] font-semibold text-ds-ink">{t('colabNb.kunEmptyTitle')}</div>
-                <div className="text-[11.5px] text-ds-muted">{t('colabNb.kunEmptySubtitle')}</div>
+              <div className="min-w-0">
+                <div className="text-[14px] font-semibold text-ds-ink">
+                  {t('colabNb.kunEmptyTitle')}
+                </div>
+                <p className="mt-1 text-[12px] leading-relaxed text-ds-muted">
+                  {t('colabNb.kunEmptySubtitle')}
+                </p>
               </div>
             </div>
-            <div className="mt-1 flex flex-col gap-1.5">
-              {quickPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => composer.setInput(prompt)}
-                  className="rounded-[9px] border border-ds-border bg-ds-main/70 px-3 py-2 text-left text-[12.5px] text-ds-ink transition hover:border-accent/40 hover:bg-ds-hover"
-                >
-                  {prompt}
-                </button>
-              ))}
+
+            <div className="mb-2 mt-5 text-[11.5px] font-semibold text-ds-faint">
+              {t('colabNb.kunSectionForNotebook')}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              {quickSuggestions.map((item) => {
+                const Icon = item.icon
+                return (
+                  <button
+                    key={item.title}
+                    type="button"
+                    onClick={() => composer.setInput(item.prompt)}
+                    className="group flex items-center gap-2.5 rounded-[10px] border border-ds-border-muted bg-ds-card px-2.5 py-2 text-left transition hover:border-accent-tint/40 hover:bg-ds-hover"
+                  >
+                    <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[7px] bg-ds-surface-subtle text-ds-muted transition group-hover:bg-accent-tint/10 group-hover:text-accent">
+                      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[12.5px] font-medium text-ds-ink">
+                        {item.title}
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-ds-faint">
+                        {item.desc}
+                      </span>
+                    </span>
+                    <ChevronRight
+                      className="h-3.5 w-3.5 shrink-0 text-ds-faint opacity-60 transition group-hover:translate-x-0.5 group-hover:text-ds-muted"
+                      aria-hidden="true"
+                    />
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
@@ -339,33 +339,14 @@ export function ColabKunPane({
 
       <div className="shrink-0 px-3 pb-2.5 pt-1.5">
         {kunChangedCellIds.length > 0 && !busy ? (
-          <div className="mb-2 flex items-center gap-2 rounded-[10px] border border-ds-border bg-ds-main px-2.5 py-1.5 text-[12px]">
-            <FileCode2 className="h-3.5 w-3.5 shrink-0 text-accent" />
-            <span className="min-w-0 flex-1 truncate font-medium text-ds-ink">
-              {t('colabNb.kunModifiedCellsCount', { total: kunChangedCellIds.length })}
-            </span>
-            <button
-              type="button"
-              onClick={locateChangedCell}
-              className="shrink-0 text-[11.5px] text-ds-muted hover:text-ds-ink"
-            >
-              {t('colabNb.kunLocateCell')}
-            </button>
-            <button
-              type="button"
-              onClick={() => void undoKunChanges()}
-              className="shrink-0 rounded-md border border-ds-border bg-ds-card px-2 py-0.5 text-[11px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
-            >
-              {t('colabNb.kunUndo')}
-            </button>
-            <button
-              type="button"
-              onClick={dismissKunChanges}
-              className="shrink-0 rounded-md bg-ds-ink px-2 py-0.5 text-[11px] font-medium text-ds-main hover:opacity-90"
-            >
-              {t('colabNb.kunKeep')}
-            </button>
-          </div>
+          <NotebookKunDiffCard
+            baseline={kunBaselineCells}
+            cells={cells}
+            changedCellIds={kunChangedCellIds}
+            onLocate={locateChangedCell}
+            onUndo={() => void undoKunChanges()}
+            onKeep={dismissKunChanges}
+          />
         ) : null}
 
         <FloatingComposer
@@ -414,26 +395,6 @@ export function ColabKunPane({
           onSend={() => void send()}
           onInterrupt={composer.onInterrupt}
         />
-
-        <div className="mt-1.5 flex items-center justify-between px-1 text-[11px] text-ds-muted">
-          <span className="inline-flex min-w-0 items-center gap-1.5 rounded px-1 py-0.5">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                runtime.activeSessionId
-                  ? 'bg-emerald-500'
-                  : runtime.pending || runtime.jupyterConnecting
-                    ? 'bg-amber-500 animate-pulse'
-                    : 'bg-ds-faint'
-              }`}
-            />
-            <span className="font-mono">
-              {runtime.activeRuntimeLabel
-                ? t('colabNb.gpuRunning', { gpu: runtime.activeRuntimeLabel })
-                : t('colabNb.kernelOffline')}
-            </span>
-          </span>
-          {activePath ? <span className="truncate font-mono text-ds-faint">{activePath}</span> : null}
-        </div>
       </div>
     </div>
   )
