@@ -207,6 +207,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   tencentcloud: 'tencentcloud',
   three02ai: 'ai302',
   together: 'together',
+  trustedrouter: 'gateway',
   'vercel-ai-gateway': 'vercel',
   volcengine: 'doubao',
   'volcengine-agent-plan': 'doubao',

@@ -247,6 +247,9 @@ exports[`preset request URLs > builds stable URLs for every preset, region and p
   "together": {
     "chat_completions": "https://api.together.xyz/v1/chat/completions",
   },
+  "trustedrouter": {
+    "chat_completions": "https://api.trustedrouter.com/v1/chat/completions",
+  },
   "vercel-ai-gateway": {
     "chat_completions": "https://ai-gateway.vercel.sh/v1/chat/completions",
   },

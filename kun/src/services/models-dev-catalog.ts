@@ -88,6 +88,7 @@ const PROFILE_MATCHES: Record<string, ModelsDevProviderMatch> = {
   ollama: catalogMatch('ollama-cloud', 'enrichment-only'),
   'grok-subscription': catalogMatch('xai', 'enrichment-only'),
   opper: catalogMatch('opper'),
+  trustedrouter: catalogMatch('trustedrouter'),
   'vercel-ai-gateway': catalogMatch('vercel')
 }
 const XIAOMI_TOKEN_PLAN_URLS = urlMatchMap({
@@ -157,6 +158,7 @@ const UNAMBIGUOUS_URL_MATCHES = urlMatchMap({
   'https://api.lkeap.cloud.tencent.com/plan/v3': 'tencent-token-plan',
   'https://ai-gateway.vercel.sh/v1': 'vercel',
   'https://api.opper.ai/v3/compat': 'opper',
+  'https://api.trustedrouter.com/v1': 'trustedrouter',
   'https://token-plan-cn.xiaomimimo.com/v1': 'xiaomi-token-plan-cn',
   'https://token-plan-sgp.xiaomimimo.com/v1': 'xiaomi-token-plan-sgp',
   'https://token-plan-ams.xiaomimimo.com/v1': 'xiaomi-token-plan-ams',

@@ -73,6 +73,21 @@ Opper:
 - behavior: direct providers remain the default; adding this preset does not
   route existing providers through Opper
 
+TrustedRouter:
+
+- id: `trustedrouter`
+- base URL: `https://api.trustedrouter.com/v1`
+- endpoint format: OpenAI Chat Completions
+- models: imported on demand from the gateway `GET /models` endpoint
+  (public, no key required)
+- model ids: vendor-prefixed such as `anthropic/claude-sonnet-4.5` or
+  `deepseek/deepseek-v4-flash`; `trustedrouter/auto` uses the gateway's default
+  routing
+- role: optional OpenAI-compatible multi-provider gateway; the API key comes
+  from `https://trustedrouter.com/console/api-keys` (`TRUSTEDROUTER_API_KEY`)
+- behavior: direct providers remain the default; adding this preset does not
+  route existing providers through TrustedRouter
+
 Vercel AI Gateway:
 
 - id: `vercel-ai-gateway`

@@ -378,6 +378,15 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
     apiKeyUrl: 'https://platform.opper.ai'
   },
 {
+    id: 'trustedrouter',
+    name: 'TrustedRouter',
+    baseUrl: 'https://api.trustedrouter.com/v1',
+    endpointFormat: 'chat_completions',
+    models: [],
+    docsUrl: 'https://trustedrouter.com/docs',
+    apiKeyUrl: 'https://trustedrouter.com/console/api-keys'
+  },
+{
     id: 'vercel-ai-gateway',
     name: 'Vercel AI Gateway',
     origin: 'relay',

@@ -47,6 +47,7 @@ export type ModelProviderPresetId =
   | 'aliyun'
   | 'tencentcloud'
   | 'opper'
+  | 'trustedrouter'
   | 'vercel-ai-gateway'
   | 'stepfun'
   | 'openai-api'

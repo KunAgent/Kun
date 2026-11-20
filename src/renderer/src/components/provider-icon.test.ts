@@ -46,7 +46,8 @@ describe('provider icon resolution', () => {
     ['vercel-ai-gateway', 'vercel'],
     ['local-openai', 'local-server'],
     ['magpie', 'magpie'],
-    ['opper', 'gateway']
+    ['opper', 'gateway'],
+    ['trustedrouter', 'gateway']
   ])('maps trusted preset %s to %s', (presetId, expected) => {
     expect(resolveProviderIconKey({ presetId, providerId: 'custom-account-4' })).toBe(expected)
   })

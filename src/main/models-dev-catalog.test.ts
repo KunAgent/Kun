@@ -239,7 +239,8 @@ describe('resolveModelsDevProvider', () => {
     ['ollama', 'https://ollama.com/v1', 'ollama-cloud', 'enrichment-only'],
     ['grok-subscription', 'https://cli-chat-proxy.grok.com/v1', 'xai', 'enrichment-only'],
     ['vercel-ai-gateway', 'https://ai-gateway.vercel.sh/v1', 'vercel', 'catalog'],
-    ['opper', 'https://api.opper.ai/v3/compat', 'opper', 'catalog']
+    ['opper', 'https://api.opper.ai/v3/compat', 'opper', 'catalog'],
+    ['trustedrouter', 'https://api.trustedrouter.com/v1', 'trustedrouter', 'catalog']
   ])('maps %s deterministically', (providerId, baseUrl, providerKey, matchMode) => {
     expect(resolveModelsDevProvider({ providerId, baseUrl })).toEqual({ providerKey, matchMode })
   })
@@ -257,6 +258,10 @@ describe('resolveModelsDevProvider', () => {
       providerId: 'my-opper-gateway',
       baseUrl: 'https://api.opper.ai/v3/compat/'
     })).toEqual({ providerKey: 'opper', matchMode: 'catalog' })
+    expect(resolveModelsDevProvider({
+      providerId: 'my-trustedrouter-gateway',
+      baseUrl: 'https://api.trustedrouter.com/v1/'
+    })).toEqual({ providerKey: 'trustedrouter', matchMode: 'catalog' })
     expect(resolveModelsDevProvider({
       providerId: 'looks-like-minimax',
       baseUrl: 'https://proxy.example/minimax'

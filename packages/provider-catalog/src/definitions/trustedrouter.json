@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "trustedrouter",
+  "name": "TrustedRouter",
+  "category": "api",
+  "kind": "http",
+  "authFlow": "api-key",
+  "authType": "api-key",
+  "baseUrl": "https://api.trustedrouter.com/v1",
+  "endpointFormat": "chat_completions",
+  "models": [],
+  "docsUrl": "https://trustedrouter.com/docs",
+  "credentialUrl": "https://trustedrouter.com/console/api-keys"
+}
