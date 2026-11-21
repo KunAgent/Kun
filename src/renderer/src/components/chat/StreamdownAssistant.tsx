@@ -8,6 +8,7 @@ import { useValidatedFileReference } from '../../lib/file-reference-validation'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { loadKatexCopyTex } from '../../lib/katex-copy-tex'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
+import { isExternalLocalImagePreviewPath } from '../../lib/workspace-text-preview'
 import { sanitizeAssistantCanvasToolDisplay } from '../../design/canvas/strip-canvas-tool-display'
 import { ResolvedPreviewImage } from '../workspace-file-preview-support'
 import { localImageSource, LOCAL_IMAGE_SCHEME, rehypeLocalImages } from './rehype-local-images'
@@ -142,7 +143,10 @@ function StreamdownLink({
   const handleDoubleClick = (event: MouseEvent<HTMLAnchorElement>): void => {
     if (!resolvedFileTarget) return
     event.preventDefault()
-    void openWorkspacePathInEditor(resolvedFileTarget, workspaceRoot).then((result) => {
+    const editorWorkspaceRoot = isExternalLocalImagePreviewPath(resolvedFileTarget.path, workspaceRoot)
+      ? undefined
+      : workspaceRoot
+    void openWorkspacePathInEditor(resolvedFileTarget, editorWorkspaceRoot).then((result) => {
       if (!result.ok) {
         void window.kunGui?.logError?.('editor-open', 'Failed to open file reference', {
           message: result.message,

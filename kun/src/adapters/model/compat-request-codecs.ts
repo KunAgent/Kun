@@ -196,8 +196,12 @@ export class CompatRequestCodecs {
       .map((message) => this.deps.plainText(message.content).trim())
       .filter(Boolean)
       .join('\n\n')
+    // Responses otherwise tries to strict-normalize schemas (making optional
+    // fields required), which can make discriminated action unions unsatisfiable.
+    // Keep the canonical schemas; ToolHost still validates arguments locally.
     const responseTools = input.tools.map((tool) => ({
-      type: 'function', name: tool.name, description: tool.description, parameters: tool.inputSchema
+      type: 'function', name: tool.name, description: tool.description,
+      parameters: tool.inputSchema, strict: false
     }))
     let responseInput = this.deps.responsesInput(this.deps.splitOpenAiMessages(replayable))
     if (input.isCodex && !input.isCodexLite && responseInput.length === 0 && instructions) {

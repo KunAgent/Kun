@@ -58,6 +58,41 @@ describe('ACP legacy model selection', () => {
     })
   })
 
+  it('uses the replacement options when changing models and restoring a saved effort', async () => {
+    const modelIds = ['carbon', 'gemini-pro-orchestrator', 'gemini-pro-orchestrator-argon', 'hydrogen']
+    const model = (currentValue: string): AcpConfigOption => ({ id: 'model', name: 'Model', category: 'model',
+      type: 'select', currentValue, options: modelIds.map((value) => ({ value, name: value })) })
+    const thought = (levels: string[]): AcpConfigOption => ({ id: 'thought_level', name: 'Reasoning', category: 'thought_level',
+      type: 'select', currentValue: 'medium', options: levels.map((value) => ({ value, name: value })) })
+    const { conn, request } = connection()
+    const manager = new AcpSessionManager({ coordinator: {} as DelegatedSessionCoordinator })
+    const state = { sessionId: 's', configOptions: [model('carbon'), thought(['medium', 'high'])] } as AcpSessionHandle
+    const select = (id: string | undefined, reasoningEffort: string) => manager.applyConfigOptions(conn, state, {
+      threadId: 't', turnId: 'turn', workspacePath: '/tmp', harnessId: 'antigravity', model: id, reasoningEffort, items: []
+    })
+    for (const id of modelIds.slice(1, 3)) {
+      request.mockResolvedValueOnce({ configOptions: [model(id)] })
+      await select(id, 'high')
+      expect(state.configOptions?.map((option) => option.id)).toEqual(['model'])
+      await select(undefined, 'high')
+      expect(request).toHaveBeenCalledExactlyOnceWith('session/set_config_option', { sessionId: 's', configId: 'model', value: id })
+      request.mockClear()
+    }
+    request.mockResolvedValueOnce({ configOptions: [model('hydrogen'), thought(['medium', 'high', 'xhigh'])] })
+    await select('hydrogen', 'xhigh')
+    expect(request.mock.calls).toEqual([
+      ['session/set_config_option', { sessionId: 's', configId: 'model', value: 'hydrogen' }],
+      ['session/set_config_option', { sessionId: 's', configId: 'thought_level', value: 'xhigh' }]
+    ])
+    // Old Agents may acknowledge the model without sending replacement options.
+    request.mockClear()
+    await select('gemini-pro-orchestrator', 'high')
+    await select(undefined, 'high')
+    expect(request).toHaveBeenCalledExactlyOnceWith('session/set_config_option', {
+      sessionId: 's', configId: 'model', value: 'gemini-pro-orchestrator'
+    })
+  })
+
   it('maps a reasoning level onto the advertised legacy variant', async () => {
     const models = { currentModelId: 'gpt', availableModels: ['gpt', 'gpt/low', 'gpt/high', 'gpt/xhigh', 'other'] }
     expect(acpLegacyVariantModel({ models }, 'gpt', 'high')).toBe('gpt/high')
@@ -96,5 +131,67 @@ describe('ACP legacy model selection', () => {
       ...session(), configOptions: [option as AcpConfigOption]
     }, 'two')).rejects.toMatchObject({ code: 'agent_error', message: expect.stringContaining('does not offer') })
     expect(request).not.toHaveBeenCalled()
+  })
+
+  it('normalizes legacy Antigravity model prefixes and effort suffixes while preserving exact model ids', async () => {
+    const makeOptions = (): AcpConfigOption[] => [
+      {
+        id: 'model',
+        category: 'model',
+        type: 'select',
+        currentValue: 'gemini-4-carbon',
+        options: [
+          { value: 'gemini-4-carbon', name: 'Gemini 4 Carbon' },
+          { value: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen' },
+          { value: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+          { value: 'gpt-oss-120b-medium', name: 'GPT-OSS 120B (Medium)' }
+        ]
+      },
+      {
+        id: 'thought_level',
+        category: 'thought_level',
+        type: 'select',
+        currentValue: 'medium',
+        options: [
+          { value: 'low', name: 'Low' },
+          { value: 'medium', name: 'Medium' },
+          { value: 'high', name: 'High' },
+          { value: 'xhigh', name: 'XHigh' }
+        ]
+      }
+    ]
+    const manager = new AcpSessionManager({ coordinator: {} as DelegatedSessionCoordinator })
+
+    // `models/gemini-3.8-flash-high` strips `models/` and infers `high` effort.
+    const flash = connection()
+    await manager.applyConfigOptions(flash.conn, { sessionId: 's1', configOptions: makeOptions() } as AcpSessionHandle, {
+      threadId: 'thread', turnId: 'turn', workspacePath: '/tmp', harnessId: 'custom-agent',
+      model: 'models/gemini-3.8-flash-high', items: []
+    })
+    expect(flash.request.mock.calls).toEqual([
+      ['session/set_config_option', { sessionId: 's1', configId: 'model', value: 'gemini-3.8-flash' }],
+      ['session/set_config_option', { sessionId: 's1', configId: 'thought_level', value: 'high' }]
+    ])
+
+    // `gemini-4-hydrogen-xhigh` maps to `gemini-4-hydrogen` + `xhigh` thought_level; explicit reasoningEffort still wins.
+    const xhigh = connection()
+    await manager.applyConfigOptions(xhigh.conn, { sessionId: 's2', configOptions: makeOptions() } as AcpSessionHandle, {
+      threadId: 'thread', turnId: 'turn', workspacePath: '/tmp', harnessId: 'custom-agent',
+      model: 'gemini-4-hydrogen-xhigh', items: []
+    })
+    expect(xhigh.request.mock.calls).toEqual([
+      ['session/set_config_option', { sessionId: 's2', configId: 'model', value: 'gemini-4-hydrogen' }],
+      ['session/set_config_option', { sessionId: 's2', configId: 'thought_level', value: 'xhigh' }]
+    ])
+
+    // Exact offered model ids ending with `-medium` (`gpt-oss-120b-medium`) stay untouched.
+    const exact = connection()
+    await manager.applyConfigOptions(exact.conn, { sessionId: 's3', configOptions: makeOptions() } as AcpSessionHandle, {
+      threadId: 'thread', turnId: 'turn', workspacePath: '/tmp', harnessId: 'custom-agent',
+      model: 'gpt-oss-120b-medium', items: []
+    })
+    expect(exact.request).toHaveBeenCalledExactlyOnceWith('session/set_config_option', {
+      sessionId: 's3', configId: 'model', value: 'gpt-oss-120b-medium'
+    })
   })
 })

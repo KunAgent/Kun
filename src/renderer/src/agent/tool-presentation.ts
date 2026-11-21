@@ -3,6 +3,7 @@ import { boundedToolValue, toolPresentationFields, toolPresentationKind } from '
 import type { CoreTurnItemJson } from './kun-contract'
 import type { ToolBlock } from './types'
 import { boundCompleteToolPresentation } from '../../../../kun/src/contracts/tool-presentation-bounds'
+import { acpToolDisplay } from '@shared/tool-presentation'
 
 const STATES = new Set<ToolPresentationState>(['pending', 'running', 'completed', 'failed', 'canceled'])
 const TEXT_FIELDS = ['title', 'name', 'server', 'error', 'text', 'filePath', 'fileContent', 'patch', 'command', 'cwd', 'query', 'url', 'startedAt', 'finishedAt'] as const
@@ -12,7 +13,9 @@ export function toolPresentationFromItem(item: CoreTurnItemJson): ToolPresentati
   const explicit = record(item.meta?.toolPresentation ?? item.meta?.delegatedTool)
   const name = item.toolName ?? 'tool'
   const input = item.kind === 'tool_call' ? item.arguments : undefined
-  const output = item.kind === 'tool_result' ? item.output : undefined
+  // ACP's canonical result uses '' when the Agent only reported completion.
+  const output = item.kind === 'tool_result' && !(name.startsWith('acp:') && item.output === '' && explicit.output == null)
+    ? item.output : undefined
   const kind = toolPresentationKind(name, item.toolKind)
   const result = record(output)
   const state: ToolPresentationState = result.code === 'tool_cancelled_by_user' || item.status === 'aborted' ? 'canceled'
@@ -41,7 +44,7 @@ export function toolPresentationFromItem(item: CoreTurnItemJson): ToolPresentati
   else if (!normalized.error) normalized.error = typeof result.error === 'string' ? result.error
     : item.isError && typeof output === 'string' ? output : undefined
   inferMcpIdentity(normalized)
-  return boundCompleteToolPresentation(normalized)
+  return boundCompleteToolPresentation(acpToolDisplay(normalized))
 }
 
 /** Public UI reader: new snapshots, older ACP metadata and native history share one view. */
@@ -56,22 +59,32 @@ export function readToolPresentation(block: PresentationBlock): ToolPresentation
   return value
 }
 
+/** The display kind may be more specific than the ACP `other` bucket. */
+export function displayedAcpToolKind(block: PresentationBlock): string | undefined {
+  const kind = block.meta?.acpKind
+  if (typeof kind === 'string' && kind !== 'other') return kind
+  if (kind === 'other' || record(block.meta?.toolPresentation).source === 'acp') return readToolPresentation(block).kind
+}
+
 function readPresentation(block: PresentationBlock): ToolPresentation {
   const meta = block.meta ?? {}
   const explicit = record(meta.toolPresentation)
   const name = typeof meta.toolName === 'string' ? meta.toolName : block.summary
-  const legacyAcp = typeof meta.acpKind === 'string'
-  const kind = legacyAcp ? String(meta.acpKind) : toolPresentationKind(name, block.toolKind)
+  const legacyAcp = typeof meta.acpKind === 'string' || name.startsWith('acp:')
+  const kind = typeof meta.acpKind === 'string' ? meta.acpKind : toolPresentationKind(name, block.toolKind)
   const fallbackState = block.status === 'running' ? 'running' : block.status === 'error' ? 'failed' : 'completed'
   const detail = parseLegacyDetail(block.detail)
-  const legacyInput = meta.acpInput ?? (meta.sourceItemKind === 'tool_call' ? detail : undefined)
-  const legacyOutput = meta.acpOutput ?? (meta.sourceItemKind !== 'tool_call' ? detail : undefined)
+  const call = legacyAcp && meta.sourceItemKind === 'tool_call' ? record(detail) : {}
+  const legacyInput = meta.acpInput ?? (meta.sourceItemKind === 'tool_call' ? call.rawInput ?? detail : undefined)
+  // A merged row may still carry the *call's arguments* in detail. Modern
+  // ACP items have independent evidence fields, even on a status-only result.
+  const legacyOutput = meta.acpOutput ?? (meta.sourceItemKind !== 'tool_call' && !(legacyAcp && explicit.version === 1) ? detail : undefined)
   const base: ToolPresentation = {
     version: 1, source: legacyAcp ? 'acp' : 'legacy', kind, name,
     state: fallbackState, canCancel: false,
     ...toolPresentationFields(kind, legacyInput, legacyOutput),
     ...(block.filePath ? { filePath: block.filePath } : {}),
-    ...(typeof meta.acpTitle === 'string' ? { title: meta.acpTitle } : { title: block.summary }),
+    title: typeof meta.acpTitle === 'string' ? meta.acpTitle : typeof call.title === 'string' ? call.title : block.summary,
     ...(legacyInput !== undefined ? { input: legacyInput } : {}),
     ...(legacyOutput !== undefined ? { output: legacyOutput } : {}),
     ...(typeof meta.acpText === 'string' ? { text: meta.acpText } : !legacyAcp && block.detail ? { text: block.detail } : {}),
@@ -83,9 +96,13 @@ function readPresentation(block: PresentationBlock): ToolPresentation {
     ...(meta.acpTruncated === true ? { truncated: true } : {})
   }
   const presentation = normalizePresentation({ ...defined({ diffs: meta.acpDiffs, terminals: meta.acpTerminals }), ...explicit }, base)
+  // Old renderer caches derived an empty read body from the synthetic ''
+  // result. A genuinely empty file has explicit independent file evidence.
+  if (legacyAcp && presentation.output === '' && presentation.fileContent === '' &&
+    meta.acpFileContent === undefined && meta.acpOutput === undefined) delete presentation.fileContent
   if (terminal(presentation.state) || presentation.source === 'acp') presentation.canCancel = false
   inferMcpIdentity(presentation)
-  return boundCompleteToolPresentation(presentation)
+  return boundCompleteToolPresentation(acpToolDisplay(presentation))
 }
 
 export function mergeToolPresentations(current: unknown, incoming: unknown, preferCurrentOutput = false): ToolPresentation | undefined {
@@ -96,6 +113,10 @@ export function mergeToolPresentations(current: unknown, incoming: unknown, pref
   const a = current as ToolPresentation, b = incoming as ToolPresentation
   const stale = preferCurrentOutput || (terminal(a.state) && !terminal(b.state))
   const merged = { ...a, ...defined(b) }
+  if (a.source === 'acp' && b.name?.startsWith('acp:') && a.name && !a.name.startsWith('acp:')) {
+    merged.name = a.name
+    if (b.kind === 'other') merged.kind = a.kind
+  }
   if (a.state === 'running' && b.state === 'pending') {
     merged.state = a.state
     merged.canCancel = a.canCancel

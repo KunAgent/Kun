@@ -53,6 +53,7 @@ export function record(value: unknown): Record<string, unknown> | undefined {
 }
 
 export function artifactText(value: unknown, max = 240): string {
+  // eslint-disable-next-line no-control-regex -- artifact labels strip ASCII controls
   return typeof value === 'string' ? value.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, max) : ''
 }
 

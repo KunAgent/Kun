@@ -51,6 +51,33 @@ describe('app surface tool meta', () => {
     expect(isAppSurfaceBlock(block(meta, 'running'))).toBe(false)
   })
 
+  it('reads fallback MCP App arguments from recorded tool_result sidebands and mcp_read_only_call', () => {
+    const standalone: Record<string, unknown> = {}
+    applyAppSurfaceToolMeta(standalone, {
+      kind: 'tool_result',
+      toolName: 'mcp_kun_canvas_canvas_open',
+      output: { result: { structuredContent: { boardId: 'cb_9' } } },
+      meta: {
+        mcpApp: { serverId: 'kun_canvas', toolName: 'canvas_open', resourceUri: 'ui://kun-canvas/index.html', surface: 'canvas' },
+        mcpAppArguments: { boardId: 'cb_9' }
+      }
+    })
+    expect(mcpAppArgumentsFromBlock(block(standalone))).toEqual({ boardId: 'cb_9' })
+    expect(mcpAppFromBlock(block(standalone))).toMatchObject({
+      serverId: 'kun_canvas',
+      toolName: 'canvas_open',
+      result: { structuredContent: { boardId: 'cb_9' } }
+    })
+
+    const readOnly: Record<string, unknown> = {}
+    applyAppSurfaceToolMeta(readOnly, {
+      kind: 'tool_call',
+      toolName: 'mcp_read_only_call',
+      arguments: { toolId: 'mcp_kun_canvas_canvas_read', arguments: { boardId: 'cb_9' } }
+    })
+    expect(mcpAppArgumentsFromBlock(block(readOnly))).toEqual({ boardId: 'cb_9' })
+  })
+
   it('omits oversized result fields so pages re-read from their server', () => {
     const bounded = boundedMcpToolResult({ structuredContent: { big: 'x'.repeat(70_000) }, content: [], isError: true })
     expect(bounded.omitted).toEqual(['structuredContent'])

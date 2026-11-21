@@ -37,6 +37,7 @@ export type HarnessUpdatesDeps = {
   run?: typeof runHarnessUpdater
   resolve?: typeof resolveExecutable
   home?: string
+  dataDir?: string
 }
 
 /** Update discovery is cached/read-only. Mutations require a fingerprint-bound explicit action. */
@@ -62,7 +63,7 @@ export class HarnessUpdates {
   private async checkOnce(definition: HarnessDefinition, force = false): Promise<HarnessUpdateState> {
     const id = definition.id
     const status = (!force ? this.deps.currentStatus?.(id) : undefined) ?? await this.deps.detect(id)
-    const current = await (this.deps.describe ?? describeHarnessInstallation)(id, status, this.deps.home)
+    const current = await (this.deps.describe ?? describeHarnessInstallation)(id, status, this.deps.home, this.deps.dataDir)
     const recipe = definition.builtin ? harnessUpdateRecipe(id) : undefined
     const candidate = recipe ? await (this.deps.candidate ?? localHarnessCandidate)(id, current) : undefined
     const value: HarnessUpdateState = { harnessId: id, current, candidate,
@@ -182,7 +183,7 @@ export class HarnessUpdates {
           args = ['upgrade', '--cask', recipe.cask!]; path = state.current.path!
         } else if (state.current.source === 'npm') {
           const description = await (this.deps.describe ?? describeHarnessInstallation)(id,
-            { harnessId: id, resolvedCommand: state.current.path, installed: 'yes', login: 'unknown', checkedAt: '' }, this.deps.home)
+            { harnessId: id, resolvedCommand: state.current.path, installed: 'yes', login: 'unknown', checkedAt: '' }, this.deps.home, this.deps.dataDir)
           if (!description.prefix || !recipe.packageName || !state.latestVersion) throw new Error('The original npm prefix could not be verified')
           command = await resolve('npm', { env: harnessExecutableEnv() }) ?? ''
           args = ['install', '--global', '--prefix', description.prefix, '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org', `${recipe.packageName}@${state.latestVersion}`]

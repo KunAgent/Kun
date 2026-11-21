@@ -74,6 +74,7 @@ export class ArtifactBundle {
   private add(path: string, data: Buffer, mimeType: string, read: () => Promise<Buffer>): PreviewAssetRecord {
     const existing = this.paths.get(path)
     if (existing) return existing
+    // eslint-disable-next-line no-control-regex -- bundle paths reject ASCII controls
     if (!path || path.startsWith('/') || /[\\\x00-\x1f\x7f?#]/.test(path) ||
       /^[a-z][a-z0-9+.-]*:/i.test(path) || path.split('/').some(part => !part || part === '.' || part === '..'))
       throw new Error('FILE_NOT_ALLOWED')

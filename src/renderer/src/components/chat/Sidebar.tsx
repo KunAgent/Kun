@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Clock3,
+  Cloud,
   Columns3,
   LayoutGrid,
   Layers,
@@ -37,6 +38,7 @@ import { SidebarFrame } from '../sidebar/SidebarPrimitives'
 import { SidebarStandardFooter } from '../sidebar/SidebarStandardFooter'
 import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 import { openCodeProjectCreate } from '../../store/code-workspace-project-editor'
+import { ColabNavBadge, ColabSidebarContent } from '../../colab/notebook/ColabSidebarContent'
 
 type Props = {
   threads: NormalizedThread[]
@@ -120,6 +122,8 @@ export function Sidebar({
 
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   const artifactsActive = useChatStore((s) => s.route === 'artifacts')
+  const colabActive = useChatStore((s) => s.route === 'colab')
+  const setRoute = useChatStore((s) => s.setRoute)
   const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const codeWorkspaceRoots = useChatStore((s) => s.codeWorkspaceRoots)
   const threadListStatus = useChatStore((s) => s.threadListStatus)
@@ -236,6 +240,14 @@ export function Sidebar({
             onClick={openArtifactsPage}
             active={artifactsActive}
           />
+          <SidebarNavRow
+            icon={<Cloud {...iconProps} />}
+            label={t('colabNb.navLabel')}
+            // Re-selecting Colab returns to Code, like the automation views.
+            onClick={() => setRoute(colabActive ? 'chat' : 'colab')}
+            active={colabActive}
+            trailing={<ColabNavBadge workspaceRoot={workspaceRoot} />}
+          />
           {projectBoardEnabled ? (
             <SidebarNavRow
               icon={<Columns3 {...iconProps} />}
@@ -272,6 +284,8 @@ export function Sidebar({
           onOpenSettings={() => setImDialogMode('edit')}
           t={t}
         />
+      ) : colabActive ? (
+        <ColabSidebarContent workspaceRoot={workspaceRoot} />
       ) : projectBoardEnabled && activeView === 'board' ? (
         <SidebarProjectBoardsSection
           threads={threads}

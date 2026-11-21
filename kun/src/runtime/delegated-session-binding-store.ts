@@ -23,6 +23,11 @@ export class FileDelegatedSessionBindingStore implements DelegatedSessionBinding
     this.stateDir = join(rootDir, 'provider-state')
   }
 
+  async peek(threadId: string): Promise<DelegatedSessionBinding | null> {
+    const binding = await this.bindingFile(threadId).read(() => null).catch(() => null)
+    return binding?.threadId === threadId ? binding : null
+  }
+
   async load(threadId: string): Promise<DelegatedSessionBinding | null> {
     const file = this.bindingFile(threadId)
     const binding = await file.read(() => null).catch(async () => {

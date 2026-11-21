@@ -5,7 +5,7 @@ import type { ToolHostContext } from '../ports/tool-host.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { RoomStore, RoomStoredDocument } from './room-store.js'
 import { RoomPeerStore } from './room-peer-state.js'
-import { peerInboxRows } from './room-peer-inbox.js'
+import { peerInboxRows, peerParallelAnswers } from './room-peer-inbox.js'
 import { ROOM_PEER_HOLD_LIMITS, type RoomPeerActivation, type RoomPeerMemberState, type RoomPeerTopic,
   type RoomPeerInboxItem } from './room-peer-types.js'
 import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
@@ -82,7 +82,8 @@ export function roomPeerTools(threads: ThreadStore) {
           if ([...input.mentionMemberIds, ...input.inviteMemberIds].some((id) => id === room.memberId || !allowed.has(id))) {
             throw new Error('invitation must address another enabled room member')
           }
-          if (topic.value.publicationRevision !== state.activation.basePublicationRevision) {
+          if (topic.value.publicationRevision !== state.activation.basePublicationRevision &&
+            !(await hasOnlyParallelSiblingAnswers(store, topic.value, room.memberId, state.activation, input.replyToMessageId))) {
             const held = await holdStalePeerDraft(store, room.rootRequestId, room.memberId,
               state.activation, topic.value.publicationRevision, topic.value.generation)
             if (held) return { output: held }
@@ -95,9 +96,11 @@ export function roomPeerTools(threads: ThreadStore) {
           afterSeq: state.handledInboxSeq, peerGeneration: topic.value.generation,
           coalescePeerMessages: true, order: 'asc', limit: 20
         })
+        const draftIsStale = topic.value.publicationRevision !== state.activation.basePublicationRevision &&
+          !(await hasOnlyParallelSiblingAnswers(store, topic.value, room.memberId, state.activation))
         return { output: {
           generation: topic.value.generation, publicationRevision: topic.value.publicationRevision,
-          draftIsStale: topic.value.publicationRevision !== state.activation.basePublicationRevision,
+          draftIsStale,
           note: 'These are reference updates. New input will be processed in a fresh activation if this draft is stale.',
           messages: items.filter((item) => item.value.generation === topic.value.generation).map((item) => ({
             id: item.value.sourceId, revision: item.value.sourceRevision, kind: item.value.sourceKind,
@@ -109,6 +112,18 @@ export function roomPeerTools(threads: ThreadStore) {
       }
     }
   }))
+}
+
+async function hasOnlyParallelSiblingAnswers(
+  store: RoomStore,
+  topic: RoomPeerTopic,
+  memberId: string,
+  activation: RoomPeerActivation,
+  explicitReplyToMessageId?: string
+): Promise<boolean> {
+  const replyToMessageId = explicitReplyToMessageId ??
+    (await store.get<{ replyToMessageId?: string }>('context', activation.contextId))?.value.replyToMessageId
+  return (await peerParallelAnswers(store, topic, memberId, activation.seenThroughSeq, replyToMessageId)) !== null
 }
 
 /** A bounded stale-draft hold: the unseen batch is committed into the activation so the same turn can revise. */

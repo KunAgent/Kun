@@ -1,3 +1,5 @@
+import { isAntigravityOrchestrator } from '@kun/provider-catalog'
+import { useNativeModelDetails } from '../../hooks/use-native-model-details'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { AgentDispatchAssignmentRoute } from '@shared/agent-dispatch'
@@ -28,7 +30,7 @@ export function AgentDispatchRouteLabel({ route, agentName }: { route: AgentDisp
     <AgentIcon harnessId={route.agentId} size={14} />
     <span className="shrink-0 font-medium text-ds-ink">{name}</span>
     {model ? <span className="min-w-0 truncate" title={model}>· {model}</span> : null}
-    {route.reasoningEffort ? <span className="shrink-0" data-dispatch-reasoning={route.reasoningEffort}>
+    {route.reasoningEffort && !(route.agentId === 'antigravity' && isAntigravityOrchestrator(model)) ? <span className="shrink-0" data-dispatch-reasoning={route.reasoningEffort}>
       · {t('composerReasoning')} {t(reasoningLabelKey(route.reasoningEffort))}
     </span> : null}
     {role ? <span className="shrink-0 rounded-md bg-ds-hover px-1.5 text-[11px] text-ds-ink" data-dispatch-route-role={route.profileId}>{role}</span> : null}
@@ -186,6 +188,7 @@ export function AgentDispatchRoutePicker({ route, disabled, onChange, onInteract
     onChange(next)
   }
   const displayModel = workbenchDisplayModel(current)
+  useNativeModelDetails(shownId, displayModel, native, !disabled && canChooseReasoning && current.credentialMode === 'native-login')
   return <div className="flex min-w-0 shrink-0 flex-wrap items-center gap-1" data-dispatch-route-picker={id}
     data-dispatch-route-pending={pendingAgent ?? undefined}
     onPointerDownCapture={onInteract} onKeyDownCapture={onInteract}>

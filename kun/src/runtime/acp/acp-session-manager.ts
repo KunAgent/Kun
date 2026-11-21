@@ -26,6 +26,7 @@ import {
   AcpLoadSessionResultSchema,
   AcpNewSessionResultSchema,
   AcpError,
+  parseAcpResponse,
   type ConfigOptionUpdate,
   type CurrentModeUpdate,
   type AcpConfigOption,
@@ -205,16 +206,10 @@ export class AcpSessionManager {
           { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
         )
         stage = 'session/load_result'
-        const parsed = AcpLoadSessionResultSchema.safeParse(raw)
-        if (!parsed.success) {
-          throw new AcpError(
-            'harness_protocol_error',
-            'session/load response is missing required fields'
-          )
-        }
-        handle.configOptions = parsed.data.configOptions ?? handle.configOptions
-        handle.modes = parsed.data.modes ?? handle.modes
-        handle.models = parseAcpLegacyModels(parsed.data.models)
+        const parsed = parseAcpResponse('session/load response', AcpLoadSessionResultSchema, raw)
+        handle.configOptions = parsed.configOptions ?? handle.configOptions
+        handle.modes = parsed.modes ?? handle.modes
+        handle.models = parseAcpLegacyModels(parsed.models)
         handle.phase = 'ready'
         conn.registerSession(handle.sessionId, ctx.threadId)
         stage = 'session/configure'
@@ -287,26 +282,20 @@ export class AcpSessionManager {
       { cwd: ctx.workspacePath, mcpServers: ctx.sessionMcpServers?.(mcpSessionKey) ?? ctx.mcpServers ?? [] },
       { timeoutMs: this.deps.sessionRequestTimeoutMs ?? SESSION_REQUEST_TIMEOUT_MS }
     )
-    const parsed = AcpNewSessionResultSchema.safeParse(raw)
-    if (!parsed.success) {
-      throw new AcpError(
-        'harness_protocol_error',
-        'session/new response is missing required fields'
-      )
-    }
+    const parsed = parseAcpResponse('session/new response', AcpNewSessionResultSchema, raw)
     const handle: AcpSessionHandle = {
-      sessionId: parsed.data.sessionId,
+      sessionId: parsed.sessionId,
       mcpSessionKey,
       preparation,
       phase: 'ready',
       // Fresh agent session: the prompt carries the handoff brief (08).
       replayedHistory: true,
-      configOptions: parsed.data.configOptions,
-      modes: parsed.data.modes,
-      models: parseAcpLegacyModels(parsed.data.models),
+      configOptions: parsed.configOptions,
+      modes: parsed.modes,
+      models: parseAcpLegacyModels(parsed.models),
       detach: () => unsubscribe()
     }
-    const unsubscribe = conn.subscribeSession(parsed.data.sessionId, {
+    const unsubscribe = conn.subscribeSession(parsed.sessionId, {
       onUpdate: (update) => { absorbLoadingUpdate(handle, update); sink?.(update) }
     })
     conn.registerSession(handle.sessionId, ctx.threadId)
@@ -339,11 +328,14 @@ export class AcpSessionManager {
     session: AcpSessionHandle,
     ctx: AcpSessionRequest
   ): Promise<void> {
-    await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, ctx.reasoningEffort))
+    const provider = providerModule(ctx.harnessId)
+    const managesBudget = provider?.acp?.managesReasoningBudget
+    const requestedEffort = managesBudget?.(ctx.model) ? undefined : ctx.reasoningEffort
+    const modelApplied = await applyAcpSessionModel(conn, session, acpLegacyVariantModel(session, ctx.model, requestedEffort))
     if (ctx.nativeAgentId) {
       await applyAcpSessionAgent(conn, session, ctx.nativeAgentId)
     } else {
-      await applyAcpProviderPermission(conn, session, ctx.permissionModeId, providerModule(ctx.harnessId), ctx.acpPermission,
+      await applyAcpProviderPermission(conn, session, ctx.permissionModeId, provider, ctx.acpPermission,
         undefined, ctx.customPermissionMode ?? false)
     }
     const options = session.configOptions
@@ -354,9 +346,12 @@ export class AcpSessionManager {
         byCategory.set(option.category, option)
       }
     }
-    await this.setIfDifferent(conn, session, byCategory.get('thought_level'), [
-      ...(ctx.reasoningEffort ? effortCandidates(ctx.reasoningEffort) : [])
-    ])
+    const selected = byCategory.get('model')?.currentValue
+    const currentModel = typeof selected === 'string' ? selected : session.models?.currentModelId ?? ctx.model
+    const effort = requestedEffort ?? modelApplied?.inferredEffort
+    if (effort && !managesBudget?.(currentModel)) {
+      await this.setIfDifferent(conn, session, byCategory.get('thought_level'), effortCandidates(effort))
+    }
     await applyAcpSessionSettings(conn, session, ctx.harnessSettings, ctx.acpPermission?.configOptionId)
   }
 
@@ -459,8 +454,10 @@ function effortCandidates(effort: string): string[] {
       return ['medium', 'med', 'default']
     case 'high':
       return ['high', 'max']
+    case 'xhigh':
+      return ['xhigh', 'max', 'high']
     case 'max':
-      return ['max', 'high']
+      return ['max', 'xhigh', 'high']
     default:
       return [effort.trim().toLowerCase()]
   }

@@ -37,6 +37,7 @@ describe('composer subscription evidence', () => {
     ] }
     expect(composerSubscriptionSelection(input)).toEqual({ harnessId: 'codex', credentialMode: 'native-login', providerId: 'default' })
     expect(composerSubscriptionSelection({ ...input, harnessId: 'antigravity' })).toEqual({ harnessId: 'antigravity', credentialMode: 'native-login', providerId: 'default' })
+    expect(composerSubscriptionSelection({ ...input, harnessId: 'devin' })).toEqual({ harnessId: 'devin', credentialMode: 'native-login', providerId: 'default' })
     expect(composerSubscriptionSelection({ ...input, harnessId: 'antigravity', credentialMode: 'provider', providerId: 'gemini-subscription' })).toEqual({ harnessId: 'antigravity', credentialMode: 'provider', providerId: 'gemini-subscription' })
     expect(composerSubscriptionSelection({ ...input, providerId: 'personal-native' })?.providerId).toBe('personal-native')
     expect(composerSubscriptionSelection({ ...input, credentialMode: 'provider', providerId: 'http-account' })?.accountId).toBe('api-account')
@@ -47,9 +48,11 @@ describe('composer subscription evidence', () => {
 })
 
 
-it('labels a one-week window without a stray numeric scope', () => {
+it('labels a one-week or daily window without a stray scope prefix', () => {
   expect(composerQuotaWindowLabel({ id: 'primary', label: '1 week', unit: 'percent', usedPercent: 37, windowSeconds: 604800 },
     key => key === 'subscriptionQuota.weekly' ? 'Weekly' : key)).toBe('Weekly')
+  expect(composerQuotaWindowLabel({ id: 'daily', label: 'Daily quota', unit: 'percent', usedPercent: 38, windowSeconds: 86400 },
+    (key, values) => `${key}:${values?.count}`)).toBe('subscriptionQuota.windowDays:1')
 })
 
 it('shows the Claude global weekly limit only once when the provider returns both formats', () => {

@@ -14,6 +14,7 @@ describe('provider icon resolution', () => {
     ['codex', 'codex'],
     ['claude-subscription', 'claude'],
     ['cursor-subscription', 'cursor'],
+    ['devin-subscription', 'devin'],
     ['gemini-cli-subscription', 'gemini'],
     ['gemini-subscription', 'antigravity'],
     ['grok-subscription', 'grok'],
@@ -60,6 +61,8 @@ describe('provider icon resolution', () => {
 
   it('uses exact built-in provider ids without guessing suffixes or custom names', () => {
     expect(resolveProviderIconKey({ providerId: 'deepseek' })).toBe('deepseek')
+    expect(resolveProviderIconKey({ providerId: 'devin' })).toBe('devin')
+    expect(resolveProviderIconKey({ providerId: 'native:devin' })).toBe('devin')
     expect(resolveProviderIconKey({ providerId: 'litellm' })).toBe('litellm')
     expect(resolveProviderIconKey({ providerId: 'codex' })).toBe('codex')
     expect(resolveProviderIconKey({ providerId: 'codex-2' })).toBe('kun')

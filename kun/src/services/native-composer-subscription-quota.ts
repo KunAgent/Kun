@@ -16,6 +16,7 @@ import {
   detectAntigravityLocalLogin,
   type AntigravityLocalLoginEvidence
 } from './antigravity-native-quota-profile.js'
+import { resolveDevinQuotaCredential } from './devin-subscription-quota.js'
 
 type Env = Record<string, string | undefined>
 export type NativeComposerQuotaDependencies = {
@@ -32,7 +33,7 @@ export type NativeComposerQuotaDependencies = {
 /** No CLI spawn, login, helper execution or credential mutation is performed. */
 export async function nativeComposerSubscriptionProfile(options: NativeComposerQuotaDependencies): Promise<ProviderQuotaProbeProfile | undefined> {
   const { definition } = options
-  if (!['codex', 'claude-code', 'antigravity'].includes(definition.id)) return undefined
+  if (!['codex', 'claude-code', 'antigravity', 'devin'].includes(definition.id)) return undefined
   const base = options.baseEnv ?? process.env
   const read = options.readText ?? readBoundedText
   let env: Env
@@ -67,6 +68,26 @@ export async function nativeComposerSubscriptionProfile(options: NativeComposerQ
       kind: 'antigravity-cli',
       authType: 'subscription',
       apiKey: '',
+      proxyUrl,
+      configured: true
+    }
+  }
+  if (definition.id === 'devin') {
+    const credential = await resolveDevinQuotaCredential(undefined, {
+      env,
+      home,
+      platform: options.platform,
+      readText: read
+    })
+    if (!credential) return undefined
+    return {
+      id: 'native:devin',
+      name: 'Devin',
+      presetId: 'devin-subscription',
+      kind: 'http',
+      authType: 'subscription',
+      baseUrl: credential.apiServerUrl,
+      apiKey: credential.apiKey,
       proxyUrl,
       configured: true
     }

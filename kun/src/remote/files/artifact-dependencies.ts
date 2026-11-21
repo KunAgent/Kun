@@ -23,6 +23,7 @@ function localPath(base: string, reference: string) {
     const url = new URL(value, new URL(base, ORIGIN))
     if (url.origin !== new URL(ORIGIN).origin || url.username || url.password) return
     const path = decodeURIComponent(url.pathname).replace(/^\/+/, '')
+    // eslint-disable-next-line no-control-regex -- local dependency paths reject ASCII controls
     if (!path || /[\\\x00-\x1f]/.test(path)) return
     return path
   } catch { return }

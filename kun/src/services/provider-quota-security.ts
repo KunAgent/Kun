@@ -11,6 +11,7 @@ const hosts: Record<ProviderQuotaProbeKind, string[]> = {
   'codex-subscription': ['chatgpt.com', 'auth.openai.com'], 'grok-subscription': ['grok.com', 'auth.x.ai'],
   'cursor-subscription': ['cursor.com', 'www.cursor.com', 'api2.cursor.sh'],
   'antigravity-subscription': ['aicode.googleapis.com', 'cloudcode-pa.googleapis.com', 'oauth2.googleapis.com'],
+  'devin-subscription': ['server.codeium.com', 'server-beta.codeium.com'],
   'gemini-cli-subscription': ['cloudcode-pa.googleapis.com', 'oauth2.googleapis.com'], 'opencode-go-local': ['opencode.ai'],
   'siliconflow-cn': ['api.siliconflow.cn'], 'siliconflow-global': ['api.siliconflow.com'],
   'stepfun-cn': ['api.stepfun.com'], 'stepfun-global': ['api.stepfun.ai'], aihubmix: ['aihubmix.com'],

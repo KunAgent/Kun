@@ -36,6 +36,24 @@ afterEach(async () => {
 const render = () => act(async () => root.render(createElement(AgentUpdateControl, { row, t })))
 const button = (selector: string) => host.querySelector<HTMLButtonElement>(selector)
 
+it('offers native Antigravity upgrades for an installed CLI that is too old for ACP', async () => {
+  const state: HarnessUpdateState = { harnessId: 'antigravity', current: {
+    path: '/Kun/antigravity-cli/agy', source: 'native', version: '1.1.13', fingerprint: 'old-agy'
+  }, status: 'available', latestVersion: '1.5.9', channel: 'latest', canUpdate: true, canInstallManaged: false }
+  const antigravity = { definition: { id: 'antigravity' }, status: {
+    installed: 'yes', version: '1.1.13', versionSupported: false, reasonCode: 'version_too_low'
+  } } as AdeHarnessRow
+  receiveHarnessUpdate(state)
+  f.request.mockImplementation((path: string) => String(path).endsWith('/start')
+    ? new Promise(() => {}) : Promise.resolve({ ok: true, status: 200, body: JSON.stringify(state) }))
+  await act(async () => root.render(createElement(AgentUpdateControl, { row: antigravity, t })))
+  expect(button('[data-agent-update-start]')?.textContent).toBe('agentUpdate.updateTo:1.5.9')
+  await act(async () => button('[data-agent-update-start]')!.click())
+  expect(useAgentUpdateRunner.getState().items.antigravity?.phase).toBe('starting')
+  expect(f.request.mock.calls.find(([path]) => String(path).endsWith('/start'))?.slice(1))
+    .toEqual(['POST', JSON.stringify({ action: 'update', expectedFingerprint: 'old-agy' })])
+})
+
 it('replaces the offer with the steps the moment the update is clicked', async () => {
   receiveHarnessUpdate(initial)
   let release: (value: unknown) => void = () => undefined

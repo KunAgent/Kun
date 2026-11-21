@@ -149,7 +149,42 @@ export type KunToolBridgeHostDeps = {
    * the tools the GUI renders from that item, such as design_open's card.
    */
   recordResultItemTools?: ReadonlySet<string>
+  /**
+   * Also record successful tool results carrying `meta.mcpApp` or `meta.genUi`
+   * sidebands (e.g. `kun_canvas` or `render_widget`) so MCP App / Gen UI cards
+   * and right-hand App panels still open on ACP and Codex turns.
+   */
+  recordAppSurfaceResultItems?: boolean
   nowIso?: () => string
+}
+
+const MAX_RECORDED_MCP_APP_ARGUMENT_BYTES = 16 * 1024
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function hasAppSurfaceResultMeta(meta: unknown): boolean {
+  if (!isPlainRecord(meta)) return false
+  return isPlainRecord(meta.mcpApp) || isPlainRecord(meta.genUi)
+}
+
+function boundedMcpAppArguments(
+  toolName: string,
+  args: Record<string, unknown>
+): Record<string, unknown> | undefined {
+  const candidate =
+    toolName === 'mcp_call' || toolName === 'mcp_read_only_call'
+      ? (isPlainRecord(args.arguments) ? args.arguments : undefined)
+      : args
+  if (!candidate) return undefined
+  try {
+    return Buffer.byteLength(JSON.stringify(candidate), 'utf8') <= MAX_RECORDED_MCP_APP_ARGUMENT_BYTES
+      ? candidate
+      : undefined
+  } catch {
+    return undefined
+  }
 }
 
 /** One consistent snapshot of the turn state listing and prompts share. */
@@ -623,9 +658,19 @@ export function createKunToolBridgeHost(deps: KunToolBridgeHostDeps): KunToolBri
         if (finalized) return finalized
         return { output: 'Renderer receipt timed out; the canvas was not verified.', isError: true }
       }
-      if (deps.recordResultItemTools?.has(call.toolName) && !result.item.isError) {
+      const recordAppSurface =
+        deps.recordAppSurfaceResultItems === true && hasAppSurfaceResultMeta(result.item.meta)
+      if (!result.item.isError && (deps.recordResultItemTools?.has(call.toolName) || recordAppSurface)) {
+        const recordedMeta =
+          recordAppSurface && isPlainRecord(result.item.meta) && isPlainRecord(result.item.meta.mcpApp)
+            ? (() => {
+                const mcpAppArguments = boundedMcpAppArguments(call.toolName, call.args)
+                return mcpAppArguments ? { ...result.item.meta, mcpAppArguments } : result.item.meta
+              })()
+            : result.item.meta
         await deps.turns.applyItem(threadId, {
           ...result.item,
+          ...(recordedMeta ? { meta: recordedMeta } : {}),
           id: `item_toolresult_${turnId}_${toolCall.callId}_${deps.ids.next('kun')}`
         })
       }

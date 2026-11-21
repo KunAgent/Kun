@@ -248,7 +248,8 @@ import {
 } from './kun-gui-api-contracts'
 import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
 import type { KunGuiMarketApi } from './market/kun-gui-api-market'
-export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi &
+import type { KunGuiColabApi } from './colab/kun-gui-api-colab'
+export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi & KunGuiColabApi &
   import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi & import('./terminal-dock').KunGuiTerminalDockApi &
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
   import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi & import('./artifact-thumbnail').KunGuiArtifactThumbnailApi &

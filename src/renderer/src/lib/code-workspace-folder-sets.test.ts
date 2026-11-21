@@ -51,6 +51,22 @@ describe('code workspace folder sets', () => {
     vi.unstubAllGlobals()
   })
 
+  it('preserves case-distinct Linux projects and extra roots through save and load', () => {
+    vi.stubGlobal('window', { localStorage: storage, kunGui: { platform: 'linux' } })
+    const first = saveWorkspaceProject(emptyCodeWorkspaceFolderSetsRegistry(), {
+      mode: 'create', displayName: 'Upper', primary: '/home/user/Repo', extraRoots: ['/home/user/repo']
+    })
+    expect(first.error).toBeUndefined()
+    const second = saveWorkspaceProject(first.registry, {
+      mode: 'create', displayName: 'Lower', primary: '/home/user/repo', extraRoots: ['/home/user/Repo']
+    })
+    expect(second.error).toBeUndefined()
+    saveCodeWorkspaceFolderSets(second.registry, storage)
+    const loaded = readCodeWorkspaceFolderSets(storage)
+    expect(loaded.sets.map((set) => set.primary)).toEqual(['/home/user/Repo', '/home/user/repo'])
+    expect(loaded.sets.map((set) => set.extraRoots)).toEqual([['/home/user/repo'], ['/home/user/Repo']])
+  })
+
   it('normalizes paths, drops empty extras, and dedupes by identity', () => {
     const registry = normalizeCodeWorkspaceFolderSetsRegistry({
       version: 1,

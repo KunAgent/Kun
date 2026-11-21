@@ -61,7 +61,10 @@ export function boundedMcpToolResult(value: unknown): { result?: Record<string, 
  */
 export function applyAppSurfaceToolMeta(meta: Record<string, unknown>, item: ToolItemLike): void {
   if (item.kind === 'tool_call' && item.toolName?.startsWith('mcp_')) {
-    const args = item.toolName === 'mcp_call' ? record(record(item.arguments)?.arguments) : record(item.arguments)
+    const args =
+      item.toolName === 'mcp_call' || item.toolName === 'mcp_read_only_call'
+        ? record(record(item.arguments)?.arguments)
+        : record(item.arguments)
     if (args && jsonBytes(args) <= MAX_ARGUMENT_BYTES) meta.mcpAppArguments = args
     return
   }
@@ -71,6 +74,10 @@ export function applyAppSurfaceToolMeta(meta: Record<string, unknown>, item: Too
   if (genUi.success) meta.genUi = genUi.data
   const mcpApp = parseMcpAppToolOutputMeta(sideband?.mcpApp)
   if (mcpApp) {
+    const sidebandArgs = record(sideband?.mcpAppArguments)
+    if (!meta.mcpAppArguments && sidebandArgs && jsonBytes(sidebandArgs) <= MAX_ARGUMENT_BYTES) {
+      meta.mcpAppArguments = sidebandArgs
+    }
     const bounded = boundedMcpToolResult(record(item.output)?.result)
     const value: McpAppBlockMeta = {
       ...mcpApp,

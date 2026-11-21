@@ -13,7 +13,7 @@ export function composerSubscriptionSelection(input: {
   modelGroups?: readonly ModelProviderModelGroup[]
   gatewayBinding?: ComposerSubscriptionQuotaRequest['gatewayBinding']
 }): ComposerSubscriptionQuotaRequest | undefined {
-  if (!input.enabled || !['codex', 'claude-code', 'antigravity'].includes(input.harnessId ?? '') || input.gatewayBinding) return undefined
+  if (!input.enabled || !['codex', 'claude-code', 'antigravity', 'devin'].includes(input.harnessId ?? '') || input.gatewayBinding) return undefined
   if (input.credentialMode !== 'native-login' && input.credentialMode !== 'provider') return undefined
   const providerId = input.providerId?.trim() ?? ''
   if (input.credentialMode === 'provider' && !providerId) return undefined

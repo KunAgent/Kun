@@ -372,7 +372,9 @@ export class HarnessDetector {
     // Protocol harnesses also prove readiness: a version response alone does
     // not mean the agent can serve turns.
     let ready: HarnessStatus['ready']
-    let readyMessage: string | undefined
+    let readyMessage = supported === false
+      ? `${def.displayName} ${version.text || '(unknown version)'} is incompatible with the ${def.transport} transport. Requires ${def.detect?.exactVersion ?? `${def.detect?.minVersion} or later`}. Update the Agent CLI and retry.`
+      : undefined
     if (supported !== false && (def.transport === 'acp' || def.transport === 'codex-app-server') && command && this.deps.probeReady) {
       const protocolLabel = def.transport === 'acp' ? 'ACP' : 'Codex app-server'
       // The old persisted cache knew only command/version, so a replaced

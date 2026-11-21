@@ -83,6 +83,38 @@ it('keeps catalogs across a restart and drops the error of a degraded lookup', a
   expect((await start()).get(definition)).toBeUndefined()
 })
 
+it('preserves learned per-model reasoning levels across restarts and base refreshes', async () => {
+  const { dir, command, definition } = await scratch()
+  const path = join(dir, 'harness-model-catalogs.json')
+  const start = async () => {
+    const { HarnessModelCatalogStore, harnessModelCatalogIdentity } = await freshProcess()
+    return new HarnessModelCatalogStore({ path, identity: (target) => harnessModelCatalogIdentity(target, [command]) })
+  }
+  const first = await start()
+  first.record(definition, {
+    models: ['gemini-4-carbon', 'claude-opus-5-5'],
+    modelInfo: [{ id: 'gemini-4-carbon', isDefault: true, reasoningEfforts: ['low', 'high'] }, { id: 'claude-opus-5-5' }]
+  })
+  first.recordModelDetails(definition, 'claude-opus-5-5', {
+    models: ['gemini-4-carbon', 'claude-opus-5-5'],
+    modelInfo: [{ id: 'gemini-4-carbon' }, { id: 'claude-opus-5-5', isDefault: true, reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'medium' }]
+  })
+  await first.flush()
+
+  const restarted = await start()
+  expect(restarted.get(definition)?.catalog.modelInfo).toEqual([
+    { id: 'gemini-4-carbon', isDefault: true, reasoningEfforts: ['low', 'high'] },
+    { id: 'claude-opus-5-5', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'medium' }
+  ])
+  restarted.record(definition, {
+    models: ['gemini-4-carbon', 'claude-opus-5-5'],
+    modelInfo: [{ id: 'gemini-4-carbon', isDefault: true, reasoningEfforts: ['low', 'high'] }, { id: 'claude-opus-5-5' }]
+  })
+  expect(restarted.get(definition)?.catalog.modelInfo[1]).toEqual({
+    id: 'claude-opus-5-5', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'medium'
+  })
+})
+
 it('ignores an unreadable file and entries that fail validation', async () => {
   const { dir, command, definition } = await scratch()
   const path = join(dir, 'harness-model-catalogs.json')

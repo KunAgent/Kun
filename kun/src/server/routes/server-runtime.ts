@@ -185,6 +185,8 @@ export type ExtensionPlatformRuntime = {
  * file-backed adapters without leaking concrete types into routes.
  */
 export type ServerRuntime = {
+  readAcpToolOutput?: (threadId: string, turnId: string, callId: string) =>
+    Promise<import('../../contracts/acp-tool-output.js').AcpToolOutput | null>
   /** Native installed-app Gmail connection; credentials remain in the local encrypted store. */
   githubApp?: import('../../github-app/service.js').GitHubAppServicePort
   gmail?: import('../../gmail/ports.js').GmailServicePort

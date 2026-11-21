@@ -76,6 +76,7 @@ import {
 import {
   stopComputerUseHost
 } from './computer-use/computer-use-host'
+import { shutdownColabHost } from './colab/colab-host'
 import {
   developmentRendererUrl,
   extensionViewSessions,
@@ -238,7 +239,8 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
   }, cleanup.deadline(20_000))
   await cleanup.group([
     { name: 'browser', run: stopBrowserUseHost },
-    { name: 'computer', run: stopComputerUseHost }
+    { name: 'computer', run: stopComputerUseHost },
+    { name: 'colab', run: shutdownColabHost }
   ], cleanup.deadline(20_000))
   // A live execution process must not lose its data writer or let another
   // application claim that data directory. Keep ownership if containment failed.

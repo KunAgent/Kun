@@ -6,7 +6,7 @@ import { providerQuotaIdentity } from './provider-quota-security.js'
 import { validClaudeToken } from './provider-subscription-quota-metrics.js'
 import { parseStoredCodexOAuthCredentials } from './codex-oauth-credential-refresher.js'
 
-export type NativeSubscriptionProfileResolver = (harnessId: 'claude-code' | 'codex' | 'antigravity') => Promise<ProviderQuotaProbeProfile | undefined>
+export type NativeSubscriptionProfileResolver = (harnessId: 'claude-code' | 'codex' | 'antigravity' | 'devin') => Promise<ProviderQuotaProbeProfile | undefined>
 type Selection = { profile: ProviderQuotaProbeProfile; supported: boolean }
 
 /** The composer's exact billing route, with no model-name/preset-first account inference. */
@@ -18,15 +18,15 @@ export async function queryComposerSubscriptionQuota(query: ComposerSubscription
   publicScopeKey: (identity: string) => string
 }): Promise<ComposerSubscriptionQuotaResponse> {
   const empty = (): ComposerSubscriptionQuotaResponse => ({ entry: null, refreshedAt: deps.nowIso() })
-  if (!['kun', 'claude-code', 'codex', 'antigravity'].includes(query.harnessId) || query.gatewayBinding) return empty()
+  if (!['kun', 'claude-code', 'codex', 'antigravity', 'devin'].includes(query.harnessId) || query.gatewayBinding) return empty()
   const select = async (): Promise<Selection | undefined> => {
     const source = await deps.loadSource()
     const mode = query.credentialMode ?? (query.harnessId === 'kun' ? 'provider' : 'native-login')
     const native = mode === 'native-login'
     const id = query.providerId?.trim() ?? ''
     let profile: ProviderQuotaProbeProfile | undefined
-    if (native && (!id || id === 'default')) {
-      if ((query.harnessId !== 'claude-code' && query.harnessId !== 'codex' && query.harnessId !== 'antigravity') || query.accountId) return undefined
+    if (native && (!id || id === 'default' || (query.harnessId === 'devin' && id === 'native:devin'))) {
+      if ((query.harnessId !== 'claude-code' && query.harnessId !== 'codex' && query.harnessId !== 'antigravity' && query.harnessId !== 'devin') || query.accountId) return undefined
       // The SDK uses the runtime default token only when that default itself
       // is the matching subscription route; otherwise it launches the system login.
       const defaultProfile = source.profiles.find((item) => item.id === (source.defaultProviderId ?? 'default'))
@@ -36,7 +36,7 @@ export async function queryComposerSubscriptionQuota(query: ComposerSubscription
           ? defaultProfile
           : await deps.native(query.harnessId)
     } else {
-      if (!id || (native && query.harnessId === 'codex')) return undefined
+      if (!id || (native && (query.harnessId === 'codex' || query.harnessId === 'devin'))) return undefined
       profile = source.profiles.find((item) => item.id === id)
       if (query.accountId && profile?.accountId !== query.accountId) return undefined
       if (native && query.harnessId === 'claude-code' && profile?.kind !== 'agent-sdk') return undefined
@@ -114,6 +114,14 @@ function officialSubscriptionProfile(profile: ProviderQuotaProbeProfile): boolea
   }
   if (preset === 'gemini-subscription' && profile.kind === 'antigravity-cli') {
     return !profile.apiKey.trim() && !profile.credentialSourceId
+  }
+  if (
+    preset === 'devin-subscription' &&
+    profile.kind === 'http' &&
+    (officialHost(profile.baseUrl, 'server.codeium.com') ||
+      officialHost(profile.baseUrl, 'server-beta.codeium.com'))
+  ) {
+    return Boolean(profile.apiKey.trim())
   }
   return false
 }
