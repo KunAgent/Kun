@@ -1,8 +1,9 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "trustedrouter",
   "name": "TrustedRouter",
   "category": "api",
+  "origin": "relay",
   "kind": "http",
   "authFlow": "api-key",
   "authType": "api-key",

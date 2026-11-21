@@ -83,8 +83,8 @@ TrustedRouter:
 - model ids: vendor-prefixed such as `anthropic/claude-sonnet-4.5` or
   `deepseek/deepseek-v4-flash`; `trustedrouter/auto` uses the gateway's default
   routing
-- role: optional OpenAI-compatible multi-provider gateway; the API key comes
-  from `https://trustedrouter.com/console/api-keys` (`TRUSTEDROUTER_API_KEY`)
+- role: optional OpenAI-compatible multi-provider gateway; paste an API key
+  from `https://trustedrouter.com/console/api-keys` in Settings > Providers
 - behavior: direct providers remain the default; adding this preset does not
   route existing providers through TrustedRouter
 

@@ -380,6 +380,8 @@ export const MODEL_PROVIDER_PRESETS_EXTENDED: ModelProviderPreset[] = [
 {
     id: 'trustedrouter',
     name: 'TrustedRouter',
+    origin: 'relay',
+    note: 'Privacy-first multi-vendor gateway behind one key',
     baseUrl: 'https://api.trustedrouter.com/v1',
     endpointFormat: 'chat_completions',
     models: [],

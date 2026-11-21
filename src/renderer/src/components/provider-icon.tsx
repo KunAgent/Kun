@@ -48,6 +48,7 @@ import siliconflowIconUrl from '../assets/provider-icons/siliconflow.svg?url'
 import stepfunIconUrl from '../assets/provider-icons/stepfun.svg?url'
 import tencentcloudIconUrl from '../assets/provider-icons/tencentcloud.svg?url'
 import togetherIconUrl from '../assets/provider-icons/together.svg?url'
+import trustedrouterIconUrl from '../assets/provider-icons/trustedrouter.svg?url'
 import vercelIconUrl from '../assets/provider-icons/vercel.svg?url'
 import xaiIconUrl from '../assets/provider-icons/xai.svg?url'
 import yylxIconUrl from '../assets/provider-icons/yylx.svg?url'
@@ -102,6 +103,7 @@ export type ProviderBrandIconKey =
   | 'stepfun'
   | 'tencentcloud'
   | 'together'
+  | 'trustedrouter'
   | 'vercel'
   | 'xai'
   | 'yylx'
@@ -155,6 +157,7 @@ const PROVIDER_ICON_ASSETS: Readonly<Record<ProviderBrandIconKey, string>> = {
   stepfun: stepfunIconUrl,
   tencentcloud: tencentcloudIconUrl,
   together: togetherIconUrl,
+  trustedrouter: trustedrouterIconUrl,
   vercel: vercelIconUrl,
   xai: xaiIconUrl,
   yylx: yylxIconUrl,
@@ -211,7 +214,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   tencentcloud: 'tencentcloud',
   three02ai: 'ai302',
   together: 'together',
-  trustedrouter: 'gateway',
+  trustedrouter: 'trustedrouter',
   'vercel-ai-gateway': 'vercel',
   volcengine: 'doubao',
   'volcengine-agent-plan': 'doubao',

@@ -48,7 +48,7 @@ describe('provider icon resolution', () => {
     ['local-openai', 'local-server'],
     ['magpie', 'magpie'],
     ['opper', 'gateway'],
-    ['trustedrouter', 'gateway']
+    ['trustedrouter', 'trustedrouter']
   ])('maps trusted preset %s to %s', (presetId, expected) => {
     expect(resolveProviderIconKey({ presetId, providerId: 'custom-account-4' })).toBe(expected)
   })
