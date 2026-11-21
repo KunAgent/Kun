@@ -93,8 +93,6 @@ import {
   KUN_COMPUTER_USE_BRIDGE_URL_ENV
 } from '../../kun/src/contracts/computer-use-bridge.js'
 import { prepareComputerUseHostForKunLaunch } from './computer-use/computer-use-host'
-import { KUN_COLAB_BRIDGE_TOKEN_ENV, KUN_COLAB_BRIDGE_URL_ENV } from './colab/colab-bridge-server'
-import { prepareColabHostForKunLaunch } from './colab/colab-host'
 import {
   buildGuiScheduleKunMcpServer,
   GUI_SCHEDULE_MCP_SERVER_NAME,
@@ -486,6 +484,8 @@ async function prepareKunLaunch(
   const computerUseBridge = runtime.computerUse.enabled
     ? await prepareComputerUseHostForKunLaunch()
     : undefined
+  const [{ KUN_COLAB_BRIDGE_TOKEN_ENV, KUN_COLAB_BRIDGE_URL_ENV }, { prepareColabHostForKunLaunch }] =
+    await Promise.all([import('./colab/colab-bridge-server'), import('./colab/colab-host')])
   const colabBridge = await prepareColabHostForKunLaunch(settings)
   const paperSearch = normalizeWritePaperModeSettings(settings.write?.paperMode)
   const env: NodeJS.ProcessEnv = {

@@ -48,7 +48,6 @@ export function configureColabHost(options: {
       // Keep last known settings on transient load error.
     }
   }
-  refreshCached()
   settingsGetter = () => {
     refreshCached()
     return cachedColabSettings
@@ -86,6 +85,7 @@ export function getColabHostService(): ColabService | null {
 export async function prepareColabHostForKunLaunch(
   settings: AppSettingsV1
 ): Promise<ColabBridgeLaunch> {
+  cachedColabSettings = normalizeKunColabSettings(resolveKunRuntimeSettings(settings).colab)
   const service =
     colabService ??
     configureColabHost({

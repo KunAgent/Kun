@@ -56,11 +56,11 @@ export function useTimelineJumpRail({ containerRef, turnRefMap, visibleTurnAncho
       })
     }
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(container)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(container)
     window.addEventListener('resize', update)
     return () => {
-      observer.disconnect()
+      observer?.disconnect()
       window.removeEventListener('resize', update)
     }
   }, [visibleTurnAnchors.length, containerRef, setJumpRailLayout])
