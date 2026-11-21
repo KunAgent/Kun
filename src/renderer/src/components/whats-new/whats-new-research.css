@@ -1,0 +1,341 @@
+/* The 0.4.6 release card: Notebook training, LaTeX papers, and Agent quotas. */
+.kun-wn-dialog[data-release-layout='research'] {
+  --rs-canvas: var(--ds-bg-sidebar);
+  --rs-paper: var(--ds-bg-canvas);
+  --rs-line: color-mix(in srgb, var(--ds-text-muted) 20%, var(--rs-paper));
+  --rs-fill: color-mix(in srgb, var(--ds-accent) 16%, var(--rs-paper));
+  --rs-violet: #7c56e6;
+  --rs-violet-soft: color-mix(in srgb, #7c56e6 16%, var(--rs-paper));
+  --rs-emerald: #129958;
+  --rs-emerald-soft: color-mix(in srgb, #129958 15%, var(--rs-paper));
+  width: min(860px, 100%);
+  max-height: min(780px, 100%);
+  border-radius: 22px;
+  background: var(--ds-surface-elevated);
+}
+
+[data-theme='dark'] .kun-wn-dialog[data-release-layout='research'] {
+  --rs-violet: #b69cfb;
+  --rs-violet-soft: rgba(166, 130, 255, 0.18);
+  --rs-emerald: #44cf85;
+  --rs-emerald-soft: rgba(68, 207, 133, 0.16);
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-hero {
+  display: flex;
+  height: auto;
+  align-items: center;
+  gap: 20px;
+  padding: 30px 36px 24px;
+  overflow: hidden;
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, var(--ds-accent) 8%, var(--ds-surface-elevated)) 0%,
+    color-mix(in srgb, #7c56e6 5%, var(--ds-surface-elevated)) 48%,
+    var(--ds-surface-elevated) 100%
+  );
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-glow {
+  top: -88px;
+  right: -32px;
+  width: 260px;
+  height: 260px;
+  opacity: 0.7;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-art {
+  position: relative;
+  z-index: 1;
+  order: 2;
+  flex: none;
+  width: 132px;
+  height: 132px;
+  margin-right: 16px;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-heading {
+  position: relative;
+  z-index: 1;
+  top: auto;
+  right: auto;
+  left: auto;
+  flex: 1;
+  min-width: 0;
+  gap: 10px;
+}
+
+.kun-wn-research-pill {
+  display: inline-flex;
+  height: 22px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--wn-accent-soft);
+  color: var(--wn-accent-ink);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.kun-wn-research-pill svg {
+  color: var(--wn-ok);
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-title {
+  margin-top: 2px;
+  font-size: 28px;
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-body {
+  min-height: 0;
+  gap: 14px;
+  padding: 4px 36px 10px;
+}
+
+.kun-wn-research-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kun-wn-research-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 12px;
+  border: 1px solid var(--wn-line);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--wn-surface) 78%, var(--wn-surface-2));
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.kun-wn-research-card:hover {
+  border-color: color-mix(in srgb, var(--wn-accent) 36%, var(--wn-line));
+  background: var(--wn-surface);
+}
+
+.kun-wn-research-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 13px 2px 2px;
+}
+
+.kun-wn-research-copy h3 {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.kun-wn-research-copy p {
+  margin: 0;
+  color: var(--wn-text-3);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.kun-wn-research-action {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  padding: 10px 0 0;
+  border: 0;
+  background: none;
+  color: var(--wn-accent-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kun-wn-research-action svg {
+  transition: transform 150ms ease;
+}
+
+.kun-wn-research-action:hover svg {
+  transform: translateX(3px);
+}
+
+.kun-wn-research-action:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--ds-focus-ring, var(--wn-accent));
+  outline-offset: 3px;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-more-features {
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-more-features > .kun-wn-disclosure .kun-wn-disclosure-label,
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fixes > .kun-wn-disclosure .kun-wn-disclosure-label {
+  flex: none;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-disclosure .kun-wn-count {
+  margin-left: auto;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fixes .kun-wn-count {
+  order: 2;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fixes .kun-wn-chevron {
+  order: 3;
+}
+
+.kun-wn-more-preview {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.kun-wn-more-pill {
+  flex: none;
+  max-width: 180px;
+  overflow: hidden;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--wn-surface-2);
+  color: var(--wn-text-3);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-feature-list:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 8px;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fixes {
+  margin-top: 0;
+  padding-top: 6px;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fix-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fix-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 13px 0;
+  border-top: 1px solid var(--wn-line);
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fix-list > li > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--wn-accent-ink);
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-fix-list p {
+  margin: 4px 0 0;
+  color: var(--wn-text-3);
+  line-height: 1.55;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-footer {
+  padding: 16px 36px 18px;
+}
+
+.kun-wn-dialog[data-release-layout='research'] .kun-wn-primary {
+  display: inline-flex;
+  min-height: 40px;
+  height: auto;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 18px;
+  padding: 10px 18px;
+  border-radius: 10px;
+}
+
+@media (max-width: 800px) {
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-hero {
+    padding: 24px;
+  }
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-art {
+    width: 90px;
+    height: 90px;
+    margin-right: 0;
+  }
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-title {
+    font-size: 23px;
+  }
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-body {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+  .kun-wn-research-features {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .kun-wn-research-card {
+    display: grid;
+    grid-template-columns: 148px minmax(0, 1fr);
+    column-gap: 14px;
+    align-items: center;
+  }
+  .kun-wn-research-card .kun-wn-preview {
+    height: 118px;
+  }
+  .kun-wn-research-copy {
+    padding: 2px 0;
+  }
+  .kun-wn-more-preview {
+    display: none;
+  }
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-feature-list:not([hidden]),
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-fix-list {
+    grid-template-columns: 1fr;
+  }
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-footer {
+    padding: 15px 24px;
+  }
+}
+
+@media (max-width: 460px) {
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-art {
+    display: none;
+  }
+  .kun-wn-research-card {
+    grid-template-columns: 1fr;
+    row-gap: 10px;
+  }
+  .kun-wn-dialog[data-release-layout='research'] .kun-wn-footer {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-wn-research-card,
+  .kun-wn-research-action svg {
+    transition: none;
+  }
+}
