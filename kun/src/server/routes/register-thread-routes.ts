@@ -400,6 +400,13 @@ export function registerThreadRoutes(
     if (forwarded) return forwarded
     return interruptTurn(runtime.turnService, ctx.params.id, ctx.params.turnId, request)
   })
+  router.add('GET', '/v1/threads/:id/turns/:turnId/tool-calls/:callId/output', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    const { id, turnId, callId } = ctx.params
+    const forwarded = await runtime.forwardThreadControl?.(request, id)
+    if (forwarded) return forwarded
+    return jsonResponse(await runtime.readAcpToolOutput?.(id, turnId, callId) ?? null)
+  })
   router.add('POST', '/v1/threads/:id/turns/:turnId/tool-calls/:callId/cancel', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     const forwarded = await runtime.forwardThreadControl?.(request, ctx.params.id)

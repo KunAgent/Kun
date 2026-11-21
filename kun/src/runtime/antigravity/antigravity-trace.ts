@@ -1,3 +1,4 @@
+import type { AntigravityReasoningEffort } from '@kun/provider-catalog'
 import type {
   ModelRequestTraceDelegated,
   ModelRequestTraceRecord
@@ -24,7 +25,7 @@ export async function startAntigravityTrace(
     model: string
     prompt: string
     redactedRequestValues: readonly string[]
-    effort: 'low' | 'medium' | 'high'
+    effort?: AntigravityReasoningEffort
     planMode: boolean
     approvalPolicy: string
     sandboxMode: string

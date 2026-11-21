@@ -5,6 +5,7 @@ import { resolve } from 'node:path'
 import { antigravityCredentialEvidence } from '../harness/antigravity-credentials.js'
 import type { KunServeRuntimeOptions } from '../server/runtime-factory-types.js'
 import { antigravityStateDbPaths } from './antigravity-quota-credentials.js'
+import { appendNativeDevinQuotaProfile } from './devin-subscription-quota.js'
 import { readSqliteValue } from './provider-subscription-quota-opencode-cookie.js'
 import type { ProviderQuotaProbeProfile } from './provider-subscription-quota-service.js'
 
@@ -129,4 +130,12 @@ export async function appendNativeAntigravityQuotaProfile(
       proxyUrl: options.modelProxyUrl ?? ''
     }
   ]
+}
+
+export async function appendNativeAgentQuotaProfiles(
+  profiles: ProviderQuotaProbeProfile[],
+  options: Pick<KunServeRuntimeOptions, 'harnesses' | 'modelProxyUrl'>
+): Promise<ProviderQuotaProbeProfile[]> {
+  const withAntigravity = await appendNativeAntigravityQuotaProfile(profiles, options)
+  return appendNativeDevinQuotaProfile(withAntigravity, options)
 }

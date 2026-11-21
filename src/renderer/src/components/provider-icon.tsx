@@ -18,6 +18,7 @@ import codexIconUrl from '../assets/provider-icons/codex.svg?url'
 import commandcodeIconUrl from '../assets/provider-icons/commandcode.svg?url'
 import cursorIconUrl from '../assets/provider-icons/cursor.svg?url'
 import deepseekIconUrl from '../assets/provider-icons/deepseek.svg?url'
+import devinIconUrl from '../assets/agent-icons/devin.svg?url'
 import doubaoIconUrl from '../assets/provider-icons/doubao.svg?url'
 import fireworksIconUrl from '../assets/provider-icons/fireworks.svg?url'
 import gatewayIconUrl from '../assets/provider-icons/gateway.svg?url'
@@ -70,6 +71,7 @@ export type ProviderBrandIconKey =
   | 'commandcode'
   | 'cursor'
   | 'deepseek'
+  | 'devin'
   | 'doubao'
   | 'fireworks'
   | 'gateway'
@@ -122,6 +124,7 @@ const PROVIDER_ICON_ASSETS: Readonly<Record<ProviderBrandIconKey, string>> = {
   commandcode: commandcodeIconUrl,
   cursor: cursorIconUrl,
   deepseek: deepseekIconUrl,
+  devin: devinIconUrl,
   doubao: doubaoIconUrl,
   fireworks: fireworksIconUrl,
   gateway: gatewayIconUrl,
@@ -172,6 +175,7 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   codex: 'codex',
   commandcode: 'commandcode',
   'cursor-subscription': 'cursor',
+  'devin-subscription': 'devin',
   fireworks: 'fireworks',
   'gemini-api': 'gemini',
   'gemini-cli-subscription': 'gemini',
@@ -223,6 +227,8 @@ const ICON_BY_PRESET_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
 
 const ICON_BY_EXACT_PROVIDER_ID: Readonly<Record<string, ProviderBrandIconKey>> = {
   deepseek: 'deepseek',
+  devin: 'devin',
+  'native:devin': 'devin',
   ...ICON_BY_PRESET_ID
 }
 

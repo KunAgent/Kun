@@ -5,6 +5,14 @@ const { readFile } = require('node:fs/promises')
 const { join } = require('node:path')
 const { sameOwnedPath, sameAutomaticGui, runtimeProbeEndpoint, probeAutomaticRuntime, waitForAutomaticReady } = require('./smoke-windows-installer-relaunch.cjs')
 
+test('installer rollback relaunch uses the interactive shell token without elevated Exec fallback', async () => {
+  const source = await readFile(join(__dirname, '../build/installer-automatic-update.nsh'), 'utf8')
+  const recovery = source.match(/Function KunTryRelaunchOldApp\b[\s\S]*?FunctionEnd/)?.[0]
+  assert.ok(recovery)
+  assert.match(recovery, /\$\{StdUtils\.ExecShellAsUser\} \$R1 "\$R0" "open" ""/)
+  assert.doesNotMatch(recovery, /^\s*Exec(?:Wait)?\s/m)
+})
+
 test('Windows manager ownership allows case/normalization equivalence but never a prefix, relative path or another scenario', () => {
   const expected = 'C:\\Users\\runneradmin\\AppData\\Roaming\\kun-gui-upgrade-normal-AbC\\runtime-data'
   assert.equal(sameOwnedPath(expected.toLowerCase(), expected, 'win32'), true)

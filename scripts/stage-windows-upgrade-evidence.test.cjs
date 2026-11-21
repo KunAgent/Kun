@@ -1,6 +1,6 @@
 'use strict'
 const assert = require('node:assert/strict')
-const { mkdtemp, mkdir, writeFile, readFile, readdir, rm, symlink } = require('node:fs/promises')
+const { mkdtemp, mkdir, writeFile, readFile, readdir, realpath, rm, symlink } = require('node:fs/promises')
 const { join } = require('node:path')
 const { tmpdir } = require('node:os')
 const test = require('node:test')
@@ -9,7 +9,7 @@ const { stageEvidence, sanitizeDiagnostic, MAX_FILE_BYTES, MAX_TOTAL_BYTES, MAX_
 async function fixture(t) {
   // On Windows CI these deliberately reside on checkout D: and temporary C:.
   const workspace = await mkdtemp(join(process.cwd(), '.stage-evidence-test-'))
-  const appData = await mkdtemp(join(tmpdir(), 'kun-evidence-appdata-'))
+  const appData = await mkdtemp(join(await realpath(tmpdir()), 'kun-evidence-appdata-'))
   t.after(async () => { await rm(workspace, { recursive: true, force: true }); await rm(appData, { recursive: true, force: true }) })
   const root = join(appData, 'kun-gui-upgrade-normal-owned123')
   await mkdir(root)

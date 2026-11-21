@@ -38,13 +38,14 @@ describe('Code project route projection', () => {
 
     const createThread = vi.fn(async () => ({ id: 'created' }))
     await createNewSendThread({ createThread } as unknown as AgentProvider, {
+      context: { get: () => state, set: vi.fn() },
       generatedTitle: 'Task', composerModel: patch.composerModel,
       composerProviderId: patch.composerProviderId,
       composerHarnessId: patch.composerHarnessId,
       composerCredentialMode: patch.composerCredentialMode,
       codeProjectRoute: frozen,
       requestedAgentSurface: 'code', mode: 'agent'
-    } as PreparedThreadSend, '/repo', false)
+    } as unknown as PreparedThreadSend, '/repo', false)
     expect(createThread).toHaveBeenCalledWith(expect.objectContaining({
       routeIntent: 'inherit', projectDefaultsRevision: revision,
       harnessId: 'claude-code', model: 'claude-sonnet', credentialMode: 'native-login'

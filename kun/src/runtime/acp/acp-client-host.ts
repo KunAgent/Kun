@@ -176,7 +176,7 @@ export class AcpClientHost {
   // ---- fs -----------------------------------------------------------------
 
   private async handleReadFile(params: unknown): Promise<{ content: string }> {
-    const parsed = parseAcpParams(AcpReadTextFileParamsSchema, params)
+    const parsed = parseAcpParams(AcpReadTextFileParamsSchema, params, ACP_CLIENT_METHODS.fsReadTextFile)
     const ctx = this.contextFor(parsed.sessionId)
     const abs = await resolveInside(ctx.readRoots, parsed.path)
     const result = await readTextFile(abs, { line: parsed.line, limit: parsed.limit })
@@ -185,7 +185,7 @@ export class AcpClientHost {
   }
 
   private async handleWriteFile(params: unknown): Promise<Record<string, never>> {
-    const parsed = parseAcpParams(AcpWriteTextFileParamsSchema, params)
+    const parsed = parseAcpParams(AcpWriteTextFileParamsSchema, params, ACP_CLIENT_METHODS.fsWriteTextFile)
     const ctx = this.contextFor(parsed.sessionId)
     const abs = await resolveInside(ctx.writeRoots, parsed.path)
     if (!this.memo.has(ctx.turnId, 'file', abs)) {
@@ -253,7 +253,7 @@ export class AcpClientHost {
       | { outcome: 'selected'; optionId: string }
       | { outcome: 'cancelled' }
   }> {
-    const parsed = parseAcpParams(AcpRequestPermissionParamsSchema, params)
+    const parsed = parseAcpParams(AcpRequestPermissionParamsSchema, params, ACP_CLIENT_METHODS.requestPermission)
     const ctx = this.contextFor(parsed.sessionId)
     const slot = this.pending.track(parsed.sessionId)
     try {
@@ -289,7 +289,7 @@ export class AcpClientHost {
   // ---- terminal ---------------------------------------------------------------
 
   private async handleTerminalCreate(params: unknown): Promise<{ terminalId: string }> {
-    const parsed = parseAcpParams(AcpTerminalCreateParamsSchema, params)
+    const parsed = parseAcpParams(AcpTerminalCreateParamsSchema, params, ACP_CLIENT_METHODS.terminalCreate)
     const ctx = this.contextFor(parsed.sessionId)
     const cwd = parsed.cwd
       ? await resolveInside(ctx.writeRoots, parsed.cwd)
@@ -352,7 +352,7 @@ export class AcpClientHost {
     truncated: boolean
     exitStatus?: { exitCode: number | null; signal: string | null }
   } {
-    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params)
+    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params, ACP_CLIENT_METHODS.terminalOutput)
     this.contextFor(parsed.sessionId)
     return this.terminals.output(parsed.terminalId)
   }
@@ -361,19 +361,19 @@ export class AcpClientHost {
     exitCode: number | null
     signal: string | null
   }> {
-    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params)
+    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params, ACP_CLIENT_METHODS.terminalWaitForExit)
     const ctx = this.contextFor(parsed.sessionId)
     return this.terminals.waitForExit(parsed.terminalId, ctx.signal)
   }
 
   private async handleTerminalKill(params: unknown): Promise<Record<string, never>> {
-    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params)
+    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params, ACP_CLIENT_METHODS.terminalKill)
     this.contextFor(parsed.sessionId)
     return this.terminals.kill(parsed.terminalId)
   }
 
   private async handleTerminalRelease(params: unknown): Promise<Record<string, never>> {
-    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params)
+    const parsed = parseAcpParams(AcpTerminalIdParamsSchema, params, ACP_CLIENT_METHODS.terminalRelease)
     this.contextFor(parsed.sessionId)
     return this.terminals.release(parsed.terminalId)
   }
@@ -388,7 +388,7 @@ export class AcpClientHost {
   private async handleElicitation(
     params: unknown
   ): Promise<CreateElicitationResponse> {
-    const parsed = parseAcpParams(AcpCreateElicitationParamsSchema, params)
+    const parsed = parseAcpParams(AcpCreateElicitationParamsSchema, params, ACP_CLIENT_METHODS.elicitationCreate)
     if (parsed.mode !== 'form' || parsed.requestedSchema === undefined) {
       return { action: 'decline' }
     }

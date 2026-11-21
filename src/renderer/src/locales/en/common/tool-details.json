@@ -9,6 +9,8 @@
     "command": "Command", "exit": "Exit code {{code}}", "signal": "Signal {{signal}}",
     "query": "Query", "matches": "Search results", "status": "HTTP {{code}}",
     "waiting": "Waiting for tool output…", "empty": "The tool returned no output.",
+    "acpNoOutput": "No output was recorded for this call.",
+    "loadingOutput": "Loading the recorded tool output…",
     "summaryOnly": "The agent returned a summary without the file contents.",
     "truncated": "Showing the retained portion of a longer result.",
     "contentOmitted": "This attachment was not retained in the conversation.",

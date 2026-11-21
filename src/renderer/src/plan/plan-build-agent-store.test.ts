@@ -4,6 +4,14 @@ import { normalizePlanBuildReasoningEffort, planBuildReasoningEffort, resolvePla
 const composer = { harnessId: 'kun', model: 'deepseek-v4', providerId: 'deepseek', credentialMode: '' }
 
 describe('plan build agent store', () => {
+  it('clears saved and inherited manual levels on Orchestrator routes', () => {
+    const model = 'gemini-pro-orchestrator-argon'
+    const picked = { agentId: 'antigravity', model, reasoningEffort: 'high' as const }
+    expect(resolvePlanBuildRoute(picked, composer)).toEqual({ agentId: 'antigravity', model })
+    expect(resolvePlanBuildRoute(undefined, { ...composer, harnessId: 'antigravity', model, reasoningEffort: 'high' }).reasoningEffort).toBeUndefined()
+    expect(planBuildReasoningEffort(picked)).toBeUndefined()
+  })
+
   afterEach(() => usePlanBuildAgentStore.setState({ plans: {}, handoffs: {} }))
 
   it.each(['auto', 'off', 'low', 'medium', 'high', 'xhigh', 'max'] as const)('keeps canonical %s reasoning across plan route conversion', (effort) => {

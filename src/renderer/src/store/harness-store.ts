@@ -186,12 +186,42 @@ const lastWarmRequestAt = new Map<string, number>()
  */
 export function warmHarnessReadiness(harnessId: string): void {
   if (harnessId === 'kun' || typeof window === 'undefined' || !window.kunGui?.runtimeRequest) return
+  const row = useHarnessStore.getState().rows.find((entry) => entry.definition.id === harnessId)
+  const needsReadyProof = Boolean(row && row.enabled === true && readyHarnessProfiles(row).length === 0)
   const last = lastWarmRequestAt.get(harnessId) ?? 0
-  if (now() - last < HARNESS_WARM_MIN_INTERVAL_MS) return
+  if (!needsReadyProof && now() - last < HARNESS_WARM_MIN_INTERVAL_MS) return
   lastWarmRequestAt.set(harnessId, now())
-  void rendererRuntimeClient.runtimeRequest(kunHarnessWarmPath(harnessId), 'POST', '{}').catch(() => {
-    lastWarmRequestAt.delete(harnessId)
-  })
+  void rendererRuntimeClient.runtimeRequest(kunHarnessWarmPath(harnessId), 'POST', '{}')
+    .then(() => {
+      const current = useHarnessStore.getState().rows.find((entry) => entry.definition.id === harnessId)
+      if (current && current.enabled === true && readyHarnessProfiles(current).length === 0) {
+        resetHarnessPolling()
+        void loadHarnesses(true, { waitMs: 3_000 })
+      }
+    })
+    .catch(() => {
+      lastWarmRequestAt.delete(harnessId)
+    })
+}
+
+function shouldInvalidateModelsOnRowChange(
+  oldRow: AdeHarnessRow | undefined,
+  newRow: AdeHarnessRow | undefined,
+  entry: HarnessModelCacheEntry | undefined
+): boolean {
+  if (!newRow) return true
+  if (oldRow && harnessModelFingerprint(oldRow) === harnessModelFingerprint(newRow)) return false
+  const provisional = !oldRow || oldRow.status.detecting === true || oldRow.status.installed === 'unknown'
+  if (!provisional) return true
+  if (oldRow && (
+    oldRow.definition.transport !== newRow.definition.transport ||
+    JSON.stringify(oldRow.definition.credentialModes) !== JSON.stringify(newRow.definition.credentialModes) ||
+    Boolean(oldRow.status.networkFingerprint && oldRow.status.networkFingerprint !== newRow.status.networkFingerprint)
+  )) return true
+  if (!entry) return false
+  if (entry.loading) return false
+  if (entry.error || entry.models.length === 0) return true
+  return Boolean(newRow.status.version && entry.catalogStatus?.version && entry.catalogStatus.version !== newRow.status.version)
 }
 
 export async function loadHarnesses(
@@ -209,15 +239,23 @@ export async function loadHarnesses(
     const rows = await provider.listHarnesses({ ...options, includeDisabled: true })
     if (requestGeneration !== catalogGeneration) return
     const previous = useHarnessStore.getState()
-    const oldRows = new Map(previous.rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
-    const newRows = new Map(rows.map((row) => [row.definition.id, harnessModelFingerprint(row)]))
+    const oldRowsById = new Map(previous.rows.map((row) => [row.definition.id, row]))
+    const newRowsById = new Map(rows.map((row) => [row.definition.id, row]))
     const models = { ...previous.models }
     const providerGroups = { ...previous.providerGroups }
-    for (const id of new Set([...oldRows.keys(), ...newRows.keys()])) {
-      if (oldRows.get(id) === newRows.get(id)) continue
+    for (const id of new Set([...oldRowsById.keys(), ...newRowsById.keys()])) {
+      const oldRow = oldRowsById.get(id)
+      const newRow = newRowsById.get(id)
+      if (!shouldInvalidateModelsOnRowChange(oldRow, newRow, models[id])) continue
       modelRequestGeneration.set(id, generationFor(id) + 1)
       delete models[id]
       delete providerGroups[id]
+    }
+    for (const row of rows) {
+      if (!models[row.definition.id] && row.enabled === true && row.definition.credentialModes.includes('native-login')) {
+        const seeded = seedCacheEntry(row.definition.id, row.status.version)
+        if (seeded) models[row.definition.id] = seeded
+      }
     }
     scheduleReadinessExpiry(rows)
     rememberAgentIconAliases(rows)
@@ -279,19 +317,26 @@ function writeCatalogSeed(harnessId: string, seed: NativeCatalogSeed): void {
   } catch { /* storage is a convenience; the live catalog stays authoritative */ }
 }
 
+function seedCacheEntry(harnessId: string, version?: string): HarnessModelCacheEntry | undefined {
+  const seed = readCatalogSeed(harnessId)
+  if (!seed || (version && seed.version && seed.version !== version)) return undefined
+  return {
+    models: seed.models,
+    ...(seed.modelInfo ? { modelInfo: seed.modelInfo } : {}),
+    loading: false,
+    catalogStatus: { source: 'cache', fetchedAt: seed.savedAt, ...(seed.version ? { version: seed.version } : {}) }
+  }
+}
+
 export async function loadHarnessModels(harnessId: string, force = false, selectedModel?: string): Promise<void> {
   const provider = getProvider()
   if (!provider.listHarnessModels) return
-  let existing = useHarnessStore.getState().models[harnessId]
+  let existing: HarnessModelCacheEntry | undefined = useHarnessStore.getState().models[harnessId]
   // Seed a cold start with the last live catalog (same Agent version when
   // known) so the menu is usable while a slow Agent answers the live read.
   if (!existing && !selectedModel) {
-    const seed = readCatalogSeed(harnessId)
     const version = useHarnessStore.getState().rows.find((row) => row.definition.id === harnessId)?.status.version
-    if (seed && (!version || !seed.version || seed.version === version)) {
-      existing = { models: seed.models, ...(seed.modelInfo ? { modelInfo: seed.modelInfo } : {}), loading: false,
-        catalogStatus: { source: 'cache', fetchedAt: seed.savedAt, ...(seed.version ? { version: seed.version } : {}) } }
-    }
+    existing = seedCacheEntry(harnessId, version)
   }
   if (existing?.loading || (existing && !existing.error && !force &&
     (!selectedModel || existing.detailsModel === selectedModel) && Date.now() - (existing.loadedAt ?? 0) < 60_000)) return
@@ -309,17 +354,20 @@ export async function loadHarnessModels(harnessId: string, force = false, select
     const lookupError = result.catalogStatus?.error
     const failed = result.models.length === 0 && (lookupError !== undefined || result.catalogStatus?.source === 'fallback')
     const models = failed && existing?.models.length ? existing.models : result.models
-    if (!failed && !selectedModel && result.models.length > 0 && result.catalogStatus?.source !== 'provider' &&
-      result.catalogStatus?.source !== 'static' && result.catalogStatus?.source !== 'fallback') {
-      writeCatalogSeed(harnessId, { models: result.models, ...(result.modelInfo ? { modelInfo: result.modelInfo } : {}),
+    const modelInfo = failed && existing?.models.length ? existing.modelInfo : result.modelInfo?.map((entry) => {
+      const previous = existing?.modelInfo?.find((old) => old.id === entry.id)
+      return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
+        ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
+    })
+    if (!failed && result.models.length > 0 && result.catalogStatus?.source !== 'provider' &&
+      result.catalogStatus?.source !== 'static' && result.catalogStatus?.source !== 'fallback' &&
+      (!selectedModel || existing?.models.length)) {
+      writeCatalogSeed(harnessId, { models, ...(modelInfo ? { modelInfo } : {}),
         ...(result.catalogStatus?.version ? { version: result.catalogStatus.version } : {}), savedAt: result.catalogStatus?.fetchedAt ?? new Date().toISOString() })
     }
     useHarnessStore.setState((state) => ({
-      models: { ...state.models, [harnessId]: { models, modelInfo: failed && existing?.models.length ? existing.modelInfo : result.modelInfo?.map((entry) => {
-        const previous = existing?.modelInfo?.find((old) => old.id === entry.id)
-        return { ...(entry.reasoningEfforts === undefined && previous?.reasoningEfforts !== undefined
-          ? { reasoningEfforts: previous.reasoningEfforts, defaultReasoningEffort: previous.defaultReasoningEffort } : {}), ...entry }
-      }), ...nativeAgentCacheFields(result.agents?.length ? result : existing),
+      models: { ...state.models, [harnessId]: { models, modelInfo,
+        ...nativeAgentCacheFields(result.agents?.length ? result : existing),
         ...settingsCacheFields(result.settings?.length ? result : existing),
         detailsModel: selectedModel, catalogStatus: result.catalogStatus,
         loadedAt: Date.now(), loading: false,

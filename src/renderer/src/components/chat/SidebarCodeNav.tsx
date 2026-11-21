@@ -55,12 +55,13 @@ export function SidebarMenuRow({ icon, label, items, trailing }: {
 }
 
 /** A single compact navigation row for destinations that stand alone. */
-export function SidebarNavRow({ icon, label, active, disabled = false, onClick }: {
-  icon: ReactNode; label: string; active: boolean; disabled?: boolean; onClick?: () => void
+export function SidebarNavRow({ icon, label, active, disabled = false, onClick, trailing }: {
+  icon: ReactNode; label: string; active: boolean; disabled?: boolean; onClick?: () => void; trailing?: ReactNode
 }): ReactElement {
   return <button type="button" className={'sidebar-menu-row' + (active ? ' is-active' : '')} data-cursor-spotlight-target
     aria-current={active ? 'page' : undefined} disabled={disabled} onClick={onClick}>
     <span className="sidebar-menu-row-icon" aria-hidden="true">{icon}</span>
     <span className="sidebar-menu-row-label">{label}</span>
+    {trailing ? <span className="sidebar-menu-row-trailing">{trailing}</span> : null}
   </button>
 }

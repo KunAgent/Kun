@@ -92,9 +92,10 @@ export function WorkspaceModeTabs({
       if (!inChats) useChatStore.getState().setRoute('agent-chat')
       return
     }
-    // Automation and board views map to the Code tab but are not Code itself, and a
-    // conversation is not a Code task: picking Code from either returns to the task.
-    if (inChats || activeView !== 'chat') onCodeOpen()
+    // Automation, board, artifacts and Colab views map to the Code tab but are not
+    // Code itself, and a conversation is not a Code task: picking Code returns to the task.
+    const currentRoute = useChatStore.getState().route
+    if (inChats || activeView !== 'chat' || currentRoute !== 'chat') onCodeOpen()
   }
 
   const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number): void => {

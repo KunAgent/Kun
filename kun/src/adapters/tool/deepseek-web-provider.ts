@@ -25,11 +25,14 @@ export function resolveDeepSeekToolsEndpointUrl(
   baseUrl: string,
   toolName: 'search' | 'fetch'
 ): string {
-  const root = (baseUrl.trim() || DEFAULT_DEEPSEEK_API_BASE_URL)
-    .replace(/\/+$/, '')
-    .replace(/\/(?:v1|beta)$/i, '')
-    .replace(/\/+$/, '')
-  return `${root}/v1/tools/${toolName}`
+  const parsed = new URL(baseUrl.trim() || DEFAULT_DEEPSEEK_API_BASE_URL)
+  // Official tools are independent of the configured model endpoint.
+  const root = isOfficialDeepSeekUrl(parsed.origin)
+    ? ''
+    : parsed.pathname.replace(/\/+$/, '').replace(/\/(?:v1|beta)$/i, '')
+  parsed.pathname = `${root}/v1/tools/${toolName}`
+  parsed.hash = ''
+  return parsed.toString()
 }
 
 export class DeepSeekWebProvider implements WebProvider {

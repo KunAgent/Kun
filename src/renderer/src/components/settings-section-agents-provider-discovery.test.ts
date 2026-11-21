@@ -47,6 +47,11 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
         }
       ]
     }
+    it('imports a managed budget without inserting a medium default', () => {
+      const id = 'gemini-pro-orchestrator'
+      const patch = antigravityProviderCatalogPatch({ models: [{ id, supportedEfforts: [] }] })
+      expect(patch.modelProfiles[id].reasoning).toMatchObject({ supportedEfforts: ['auto'], defaultEffort: 'auto', requestProtocol: 'none' })
+    })
     const probeModelProvider = vi.fn(async (): Promise<ModelProviderProbeResult> => ({
       ok: true as const,
       latencyMs: 18,

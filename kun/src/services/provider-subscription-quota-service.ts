@@ -41,6 +41,10 @@ import { defaultRuntime, probeGoogleCodeAssistQuota, probeGrokSubscriptionQuota,
 import { grpcWebDataFrames, looksLikeProtobufPayload, mergeProtobufScan, type ProtobufScan, requestCodexSubscriptionQuota, requestJson, sameNumberPath, scanProtobuf, startsWithNumberPath } from './provider-subscription-quota-transport.js'
 import { codexAdditionalLimitLabel, codexWindowMetric, cursorMoneyMetric, firstUsageRecord, googleQuotaMetric, percentageMetric, percentageWindowMetric } from './provider-subscription-quota-metrics.js'
 import { clearOpenCodeGoCookieCache, getOpenCodeGoCookieFailureReason, OPENCODE_GO_KEYCHAIN_MESSAGE, OPENCODE_GO_SIGN_IN_MESSAGE, resolveOpenCodeGoCookie } from './provider-subscription-quota-opencode-cookie.js'
+import {
+  probeDevinSubscriptionQuota,
+  type DevinQuotaCredential
+} from './devin-subscription-quota.js'
 import { parseAntigravityQuotaSummary } from './antigravity-quota-pools.js'
 import { clampPercentage, isoDateValue, numberValue, optionalRecord, requireRecord, stringValue } from './provider-subscription-quota-support.js'
 
@@ -84,6 +88,7 @@ export type SubscriptionQuotaProbeKind =
   | 'grok-subscription'
   | 'cursor-subscription'
   | 'antigravity-subscription'
+  | 'devin-subscription'
   | 'gemini-cli-subscription'
   | 'opencode-go-local'
 
@@ -134,6 +139,9 @@ export type SubscriptionQuotaRuntime = {
     context: ProbeContext,
     rejectedAccessToken?: string
   ): Promise<GoogleCredential | undefined>
+  resolveDevinCredential(
+    provider: ProviderQuotaProbeProfile
+  ): Promise<DevinQuotaCredential | undefined>
   resolveGeminiCliToken(context: ProbeContext): Promise<string | undefined>
   resolveOpenCodeGoQuota(): Promise<OpenCodeGoLocalQuotaResult | undefined>
   resolveOpenCodeGoCookie(): Promise<string | undefined>
@@ -276,6 +284,29 @@ export async function runSubscriptionQuotaProbe(
         )
       }
       return probeGoogleCodeAssistQuota(refreshed, context, 'antigravity')
+    }
+  }
+  if (kind === 'devin-subscription') {
+    const credential = await runtime.resolveDevinCredential(provider)
+    if (!credential) {
+      throw new ProviderQuotaMissingCredentialError(
+        'Sign in with `devin auth login` or set WINDSURF_API_KEY before refreshing quota.'
+      )
+    }
+    try {
+      return await probeDevinSubscriptionQuota(credential, (url, input) =>
+        requestJson(url, input, context)
+      )
+    } catch (error) {
+      if (
+        error instanceof ProviderQuotaAuthorizationError ||
+        (error instanceof Error && error.name === 'DevinQuotaAuthorizationError')
+      ) {
+        throw new ProviderQuotaMissingCredentialError(
+          'The Devin login expired or is unauthorized. Run `devin auth login` again.'
+        )
+      }
+      throw error
     }
   }
   if (kind === 'opencode-go-local') {

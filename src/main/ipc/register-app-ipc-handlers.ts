@@ -30,6 +30,7 @@ import { configureRuntimeModelExecutor } from '../services/runtime-model-request
 import { registerAgentIntegrationIpcHandlers } from './register-agent-integration-ipc-handlers'
 import { registerKunAccountIpc } from './register-kun-account-ipc'
 import { registerAppSandboxIpcHandlers } from '../app-sandbox/app-sandbox-host'
+import { registerAppColabIpcHandlers } from './register-app-colab-ipc-handlers'
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
   const accountAccess = registerKunAccountIpc(options.getMainWindow, (path, method, body) =>
@@ -76,6 +77,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   registerAppPaperReaderIpcHandlers(options)
   registerAppPaperEvidenceIpcHandlers(options)
   registerAppContentIpcHandlers(options)
+  registerAppColabIpcHandlers(options)
   registerAppSandboxIpcHandlers({
     getMainWindow: options.getMainWindow,
     runtimeRequest: (path, method, body) => options.runtimeRequest(path, method, body)

@@ -145,7 +145,8 @@ async function explainFailure(input: {
 }): Promise<ProbeResult> {
   const { launch, stage, error } = input
   const module = providerModuleFor(launch.definition)
-  const timedOut = error instanceof AcpError && error.code === 'request_timeout'
+  const timedOut = (error instanceof AcpError && error.code === 'request_timeout') ||
+    (error instanceof Error && error.name === 'TimeoutError')
   const message = `${errorMessage(error)}${rpcErrorData(error)}`
   const parts = [stage === 'launch' ? `spawn failed: ${message}` : `${stage} failed: ${message}`]
   if (input.stderr) parts.push(`stderr: ${input.stderr}`)

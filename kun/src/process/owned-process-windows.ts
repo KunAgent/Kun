@@ -23,6 +23,31 @@ export function quoteWindowsArgument(value: string): string {
   return `"${value.replace(/(\\*)"/gu, '$1$1\\"').replace(/(\\+)$/u, '$1$1')}"`
 }
 
+function windowsBatchSource(values: readonly string[]): string {
+  // Batch parsing cannot faithfully preserve embedded quotes or expansion.
+  // Callers needing shell syntax must provide one explicit /c source string.
+  if (values.some((value) => /[%!&|<>^"\r\n]/u.test(value))) {
+    throw new Error('Use a single explicit shell command for arguments containing shell metacharacters')
+  }
+  return values.map((value) => value && !/[\s()]/u.test(value) ? value : `"${value}"`).join(' ')
+}
+
+export function windowsCommandLine(executable: string, args: readonly string[]): string {
+  if (/(?:^|[\\/])cmd(?:\.exe)?$/iu.test(executable)) {
+    const commandIndex = args.findIndex((arg) => /^\/[ck]$/iu.test(arg))
+    if (commandIndex >= 0) {
+      const switches = args.slice(0, commandIndex + 1)
+      if (!switches.some((arg) => /^\/s$/iu.test(arg))) switches.unshift('/s')
+      // /s strips this outer pair; cmd must see the shell source unchanged,
+      // not CommandLineToArgvW's backslash escapes for embedded quotes.
+      const tail = args.slice(commandIndex + 1)
+      const source = tail.length <= 1 ? tail[0] ?? '' : windowsBatchSource(tail)
+      return `${quoteWindowsArgument(executable)} ${switches.join(' ')} "${source}"`
+    }
+  }
+  return [executable, ...args].map(quoteWindowsArgument).join(' ')
+}
+
 export async function resolveWindowsExecutablePath(command: string, options: SpawnOptions): Promise<string> {
   const environment = options.env ?? process.env
   const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === 'path')
@@ -47,14 +72,14 @@ async function prepareWindowsLaunch(command: string, args: readonly string[], op
   if (stopping) throw new Error('Owned process admission is closed')
   if (options.shell) throw new Error('Owned commands must select an explicit shell executable')
   let executable = await resolveWindowsExecutablePath(command, options)
-  let commandLine = [executable, ...args].map(quoteWindowsArgument).join(' ')
+  let commandLine = windowsCommandLine(executable, args)
   if (/\.(?:cmd|bat)$/iu.test(executable)) {
     // Batch commands require cmd.exe; reject metacharacters instead of silently
     // treating a configured stdio argument as executable shell source.
     if ([executable, ...args].some((value) => /[%!&|<>^\r\n]/u.test(value))) {
       throw new Error('Use an executable or explicit shell for batch arguments containing shell metacharacters')
     }
-    commandLine = `${quoteWindowsArgument(process.env.ComSpec ?? 'cmd.exe')} /d /s /c "${commandLine}"`
+    commandLine = `${quoteWindowsArgument(process.env.ComSpec ?? 'cmd.exe')} /d /s /c "${windowsBatchSource([executable, ...args])}"`
     executable = await resolveWindowsExecutablePath(process.env.ComSpec ?? 'cmd.exe', options)
   }
   const launcher = windowsOwnedLauncherPath()

@@ -105,6 +105,7 @@ export function isSubscriptionQuotaProbe(
     kind === 'grok-subscription' ||
     kind === 'cursor-subscription' ||
     kind === 'antigravity-subscription' ||
+    kind === 'devin-subscription' ||
     kind === 'gemini-cli-subscription' ||
     kind === 'opencode-go-local'
 }

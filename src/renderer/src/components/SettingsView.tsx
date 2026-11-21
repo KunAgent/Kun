@@ -554,6 +554,7 @@ export function SettingsView(): ReactElement {
     t,
     tCommon,
     goBack: guardedGoBack,
+    flushPendingSave,
     openStorageSettings: () => setCategory('storage'),
     settingsSection,
     form,

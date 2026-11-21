@@ -89,7 +89,10 @@ describe('one-shot update helper deadlines', () => {
     expect(command).toContain('finally { $gui.Dispose() }')
     expect(command.indexOf('$null=$gui.Handle')).toBeLessThan(command.indexOf("WriteLine('ready:"))
     expect(command).not.toContain('Wait-Process -Id $waitPid')
-    expect(command).toContain('Start-Process -FilePath $exe -ErrorAction Stop; exit 0')
+    expect(command).not.toContain('Start-Process -FilePath $exe')
+    expect(command).toContain('[IO.File]::WriteAllText($relaunchPath, $exe, [Text.Encoding]::Unicode)')
+    expect(bootstrap).toContain('Start-Process -FilePath $exe -ErrorAction Stop')
+    expect(bootstrap.indexOf('$coordinator.WaitForExit()')).toBeLessThan(bootstrap.indexOf('Start-Process -FilePath $exe'))
     expect(command).toContain('[KunOneShotDeadline]::Start(300000, $false)')
     expect(command.indexOf('-Action ValidateUpdateRollback')).toBeLessThan(command.indexOf("WriteLine('ready:"))
     expect(command.indexOf("WriteLine('armed:")).toBeLessThan(command.indexOf('$gui.WaitForExit(90000)'))
@@ -102,6 +105,21 @@ describe('one-shot update helper deadlines', () => {
     await scheduled
     expect(test.child.unref).toHaveBeenCalledOnce()
     expect(test.child.kill).not.toHaveBeenCalled()
+  })
+
+  it('keeps all-users relaunch in the original-token bootstrap, never in the elevated coordinator', async () => {
+    const test = fixture()
+    const scheduled = scheduleBoundedUpdateRollback('C:\\Kun\\recover.ps1', { ...environment, KUN_INSTALLER_INSTALL_MODE: 'all' }, 123, test.spawnHelper)
+    const { command, bootstrap } = await launched(test, true)
+    try {
+      expect(command).not.toContain('Start-Process -FilePath $exe')
+      expect(bootstrap).toContain('if ($exitCode -eq 0)')
+      expect(bootstrap).toContain('[IO.File]::ReadAllText($relaunchPath, [Text.Encoding]::Unicode)')
+      expect(bootstrap).toContain('Start-Process -FilePath $exe -ErrorAction Stop')
+      expect(bootstrap).toContain('finally { Remove-Item -LiteralPath $relaunchPath')
+      const relaunch = bootstrap.slice(bootstrap.indexOf('try {'))
+      expect(relaunch).not.toContain('-Verb RunAs')
+    } finally { await acknowledge(command); await scheduled }
   })
 
   it('isolates every migration exit and reads the executable from its Unicode result file', async () => {

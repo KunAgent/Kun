@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createAgentSdkRuntime, resolveTurnPlanContext, waitForGate } from './agent-sdk-runtime-factory.js'
@@ -196,7 +196,7 @@ describe('createAgentSdkRuntime turn context', () => {
     credentialContextLoader(options)()
 
   test('injects native AGENTS.md instructions and records turn metadata', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'kun-sdk-instructions-'))
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'kun-sdk-instructions-')))
     try {
       const home = join(root, 'home')
       const workspace = join(root, 'workspace')

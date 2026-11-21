@@ -28,6 +28,7 @@ import {
 import { useValidatedFileReference } from '../../lib/file-reference-validation'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
+import { isExternalLocalImagePreviewPath } from '../../lib/workspace-text-preview'
 import {
   extensionForLanguage,
   highlightCodeHtml,
@@ -179,7 +180,10 @@ function InlineFileReferenceCode({
   }
 
   const handleOpenEditor = (): void => {
-    void openWorkspacePathInEditor(resolvedTarget, workspaceRoot).then((result) => {
+    const editorWorkspaceRoot = isExternalLocalImagePreviewPath(resolvedTarget.path, workspaceRoot)
+      ? undefined
+      : workspaceRoot
+    void openWorkspacePathInEditor(resolvedTarget, editorWorkspaceRoot).then((result) => {
       if (!result.ok) {
         void window.kunGui?.logError?.('editor-open', 'Failed to open inline file reference', {
           message: result.message,

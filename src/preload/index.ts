@@ -28,6 +28,7 @@ import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { petsPreloadApi } from './pets-bridge'
 import { marketApi } from './market-api'
+import { colabApi } from './colab-api'
 import { gitCommitApi } from './git-commit-api'
 import { terminalDockApi } from './terminal-dock-api'
 import { kunAccountApi } from './kun-account'
@@ -678,6 +679,7 @@ const api = {
   },
   ...paperApi,
   ...marketApi,
+  ...colabApi,
   ...gitCommitApi,
   ...terminalDockApi,
   ...appSandboxPreloadApi,

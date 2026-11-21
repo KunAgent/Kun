@@ -34,7 +34,8 @@ export async function antigravityCredentialEvidence(env: NodeJS.ProcessEnv = pro
           : typeof nested?.refresh_token === 'string'
             ? nested.refresh_token.trim()
             : ''
-        if (refreshToken) return evidence(true, content)
+        // Hash the durable refresh token rather than volatile hourly access_token/expiry fields.
+        if (refreshToken) return evidence(true, refreshToken)
       }
     }
   } catch { /* Native keyring profiles do not have a token file. */ }

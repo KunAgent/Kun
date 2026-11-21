@@ -1,4 +1,5 @@
 import type { ToolBlock } from '../../agent/types'
+import { displayedAcpToolKind } from '../../agent/tool-presentation'
 
 type Translate = (key: string, opts?: Record<string, unknown>) => string
 
@@ -25,7 +26,7 @@ const DELEGATE_TOOLS = new Set(['delegate_task', 'generate_subagent', 'spawn_age
  * and tool kind, never the rendered summary text.
  */
 export function summarizeToolLiveAction(block: ToolBlock, t: Translate): string {
-  const acp = typeof block.meta?.acpKind === 'string' ? block.meta.acpKind : ''
+  const acp = displayedAcpToolKind(block) ?? ''
   const acpNames: Record<string, string> = { read: 'read', search: 'search', execute: 'shell',
     edit: 'edit', delete: 'edit', move: 'edit', 'fs.write': 'write' }
   const toolName = acpNames[acp] ?? (typeof block.meta?.toolName === 'string'

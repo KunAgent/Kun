@@ -580,6 +580,7 @@ export function FloatingComposerSurfaceView({
                       showProviderInModelLabel={showProviderInModelLabel}
                       canChangeModel={canChangeModel}
                       stretch={stretchModelPicker || showToolbarStartControls}
+                      onOpenChange={externalAgent ? adeComposer?.onModelPickerOpen : undefined}
                       onComposerModelChange={onComposerModelChange}
                       onComposerReasoningEffortChange={onComposerReasoningEffortChange}
                       onComposerFastModeChange={onComposerFastModeChange}

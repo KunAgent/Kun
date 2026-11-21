@@ -5,6 +5,7 @@
  * healthy run takes 7-13 s and more on a busy machine. The list comes from
  * stdout lines `<id>\t<display name>`.
  */
+import { ANTIGRAVITY_CLI_EFFORTS } from '@kun/provider-catalog'
 import type { HarnessTestHandshake } from '../contracts/harness-test.js'
 import type { HarnessModelCatalog, HarnessModelInfo } from '../contracts/harness-models.js'
 import { redactApprovalSensitiveText } from '../domain/approval.js'
@@ -20,8 +21,7 @@ export function agyModelIds(stdout: string): string[] {
   return [...new Set(stdout.match(/\b[a-z][a-z0-9]*(?:[-.][a-z0-9]+)+\b/gi) ?? [])]
 }
 
-const EFFORTS = ['low', 'medium', 'high'] as const
-const EFFORT_SUFFIX = /-(low|medium|high)$/i
+const EFFORT_SUFFIX = /-(low|medium|high|xhigh)$/i
 
 /**
  * agy lists one row per model and effort (`gemini-3.8-flash-high`). The
@@ -45,7 +45,7 @@ export function agyModelCatalog(stdout: string): HarnessModelCatalog {
     info.set(base, entry)
   }
   const modelInfo = [...info.values()].map((entry) => ({ ...entry,
-    reasoningEfforts: EFFORTS.filter((effort) => entry.reasoningEfforts.includes(effort)) }))
+    reasoningEfforts: ANTIGRAVITY_CLI_EFFORTS.filter((effort) => entry.reasoningEfforts.includes(effort)) }))
   return { models: modelInfo.map((entry) => entry.id), modelInfo }
 }
 

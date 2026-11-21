@@ -85,6 +85,8 @@ export type DelegatedSessionPreparation = {
 }
 
 export interface DelegatedSessionBindingStore {
+  /** Inspection only: no migration, repair, deletion or provider-state writes. */
+  peek?(threadId: string): Promise<DelegatedSessionBinding | null>
   load(threadId: string): Promise<DelegatedSessionBinding | null>
   save(binding: DelegatedSessionBinding): Promise<void>
   delete(threadId: string): Promise<void>

@@ -1,3 +1,4 @@
+import { useNativeModelDetails } from '../../hooks/use-native-model-details'
 import { checkHarnessUpdate, useHarnessUpdateStore } from '../../store/harness-update-store'
 import { useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -179,12 +180,7 @@ export function useAdeComposerControls(input: {
   const isNativeHarness = harnessId !== 'kun' &&
     Boolean(composerHarnessId.trim() || threadHarnessId?.trim())
 
-  useEffect(() => {
-    if (!enabled || harnessId !== 'devin' || credentialMode !== 'native-login' || modelCache?.loading ||
-      !composerModel || !modelCache?.models.includes(composerModel) || modelCache.detailsModel === composerModel ||
-      modelCache.modelInfo?.find((entry) => entry.id === composerModel)?.reasoningEfforts !== undefined) return
-    void loadHarnessModels(harnessId, false, composerModel)
-  }, [enabled, harnessId, credentialMode, composerModel, modelCache])
+  useNativeModelDetails(harnessId, composerModel, modelCache, enabled && credentialMode === 'native-login')
 
   useEffect(() => {
     if (!enabled || !isNativeHarness || credentialMode !== 'native-login' || modelCache?.loading) return
@@ -395,8 +391,21 @@ export function useAdeComposerControls(input: {
     supportsAdditionalRoots,
     rowUnavailableCode: harnessRowUnavailableCode,
     refreshRows: () => {
-      void loadHarnesses()
+      const hasPendingEnabled = useHarnessStore.getState().rows.some(
+        (entry) => entry.definition.id !== 'kun' && entry.enabled === true && readyHarnessProfiles(entry).length === 0
+      )
+      if (hasPendingEnabled) void loadHarnesses(true, { waitMs: 3_000 })
+      else void loadHarnesses()
       if (harnessId !== 'kun') void loadHarnessModels(harnessId)
+    },
+    onModelPickerOpen: (open: boolean) => {
+      if (!open || !isNativeHarness) return
+      if (!row || (row.enabled === true && readyHarnessProfiles(row).length === 0)) {
+        void loadHarnesses(true, { waitMs: 3_000 })
+      }
+      if (!modelCache?.loading && !modelCache?.models.length) {
+        void loadHarnessModels(harnessId, Boolean(modelCache?.error))
+      }
     },
     pickList,
     modelGroups,

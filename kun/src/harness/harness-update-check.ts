@@ -8,8 +8,10 @@ export async function latestHarnessVersion(id: string, source: string, policy?: 
   const recipe = harnessUpdateRecipe(id)
   if (!recipe) return undefined
   const cask = source === 'homebrew' || !recipe.packageName ? recipe.cask : undefined
+  const github = !cask && !recipe.packageName ? recipe.githubRepo : undefined
   const url = cask ? `https://formulae.brew.sh/api/cask/${cask}.json`
-    : recipe.packageName ? `https://registry.npmjs.org/${encodeURIComponent(recipe.packageName)}/${recipe.tag ?? 'latest'}` : undefined
+    : recipe.packageName ? `https://registry.npmjs.org/${encodeURIComponent(recipe.packageName)}/${recipe.tag ?? 'latest'}`
+    : github ? `https://api.github.com/repos/${github}/releases/latest` : undefined
   if (!url) return undefined
   const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy ||
     (policy?.source === 'system' ? policy.proxyUrl : undefined)
@@ -31,8 +33,13 @@ export async function latestHarnessVersion(id: string, source: string, policy?: 
     }
   } finally { await reader.cancel().catch(() => undefined) }
   const value = JSON.parse(text + decoder.decode())
-  if (cask ? value.token !== cask : value.name !== recipe.packageName) throw new Error('Update package identity mismatch')
-  const version = typeof value.version === 'string' ? value.version.split(',')[0] : undefined
+  const matches = github
+    ? typeof value.url === 'string' && value.url.startsWith(`https://api.github.com/repos/${github}/releases/`) &&
+      value.draft === false && value.prerelease === false
+    : cask ? value.token === cask : value.name === recipe.packageName
+  if (!matches) throw new Error('Update package identity mismatch')
+  const version = github ? typeof value.tag_name === 'string' ? value.tag_name.replace(/^v/, '') : undefined
+    : typeof value.version === 'string' ? value.version.split(',')[0] : undefined
   if (!version || !semver.valid(version)) throw new Error('Update metadata contains an invalid version')
   return version
 }

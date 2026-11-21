@@ -33,6 +33,7 @@ import type { AcpSpawnFn } from './acp-process.js'
 import type { AcpCredentialEnvInput } from './acp-runtime-support.js'
 import type { AcpDebugLog } from './acp-jsonrpc.js'
 import type { KunToolsMcpProvider } from './kun-tools-mcp.js'
+import type { AcpDesignDeliveryHost } from './acp-design-delivery.js'
 import type { HarnessDefaultsEntry } from '../../config/kun-config-application.js'
 import type { HarnessSecretRefResolver } from '../../harness/harness-secret-env.js'
 
@@ -77,6 +78,11 @@ export interface AcpRuntimeDeps {
   attachmentStore?: AttachmentStore
   /** Kun Tools MCP provider: per-turn kun-tools grant + descriptor. */
   kunToolsMcp?: KunToolsMcpProvider
+  /**
+   * Main desktop ACP only: the Kun Design canvas delivery gate. Absent for
+   * child/delegated scopes, which never publish to the desktop canvas.
+   */
+  designDelivery?: AcpDesignDeliveryHost
   taskWorkspaces?: TaskWorkspaceLister
   deterministicHandoff?: boolean
   /** Delegated read-only children deny mutation regardless of parent defaults. */

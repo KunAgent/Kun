@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -45,7 +45,7 @@ type JournalEntry = {
 
 export type Harness = Awaited<ReturnType<typeof makeHarness>>
 
-export async function makeHarness(scenarioFile: string, input: {
+export async function makeHarness(scenario: string | Record<string, unknown>, input: {
   turn?: Record<string, unknown>
   thread?: Record<string, unknown>
   items?: TurnItem[]
@@ -66,7 +66,7 @@ export async function makeHarness(scenarioFile: string, input: {
   applied: TurnItem[]
   items: TurnItem[]
   deltas: Array<{ text: string; delta: string }>
-  finished: Array<{ status: string; error?: string; code?: string }>
+  finished: Array<{ status: string; error?: string; code?: string; details?: unknown }>
   recorded: RuntimeEvent[]
   coordinator: DelegatedSessionCoordinator
 }> {
@@ -75,7 +75,8 @@ export async function makeHarness(scenarioFile: string, input: {
   const workspace = join(dir, 'work')
   const journalPath = join(dir, 'journal.jsonl')
   const bindingDir = join(dir, 'bindings')
-  const scenarioPath = join(SCENARIOS, scenarioFile)
+  const scenarioPath = typeof scenario === 'string' ? join(SCENARIOS, scenario) : join(dir, 'scenario.json')
+  if (typeof scenario !== 'string') writeFileSync(scenarioPath, JSON.stringify(scenario))
 
   const definition = {
     id: 'fake-acp',
@@ -120,7 +121,7 @@ export async function makeHarness(scenarioFile: string, input: {
   }
   const applied: TurnItem[] = []
   const deltas: Array<{ text: string; delta: string }> = []
-  const finished: Array<{ status: string; error?: string; code?: string }> = []
+  const finished: Array<{ status: string; error?: string; code?: string; details?: unknown }> = []
   const recorded: RuntimeEvent[] = []
   const items: TurnItem[] = [
     ...(input.items ?? [
@@ -171,7 +172,7 @@ export async function makeHarness(scenarioFile: string, input: {
         input.onDelta?.()
       },
       updateItem: async () => ({}),
-      finishTurn: async (args: { status: string; error?: string; code?: string }) => {
+      finishTurn: async (args: { status: string; error?: string; code?: string; details?: unknown }) => {
         finished.push(args)
       },
       updateTurnMetadata: async () => ({}),

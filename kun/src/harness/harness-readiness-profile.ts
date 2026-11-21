@@ -37,6 +37,21 @@ export function readinessProvider(options: ReadinessOptions, route: HarnessRoute
     credentialSourceId: options.credentialSourceId, selectedModel: options.model }
 }
 
+/** A system native-login route never depends on Kun's unrelated HTTP provider/model selection. */
+export function effectiveReadinessProvider(
+  options: ReadinessOptions,
+  definition: HarnessDefinition,
+  route: HarnessRoute
+): ServeProviderConfig | undefined {
+  const candidate = readinessProvider(options, route)
+  const module = providerModule(definition.id)
+  return route.credentialMode === 'native-login' &&
+    (!route.providerId || route.providerId === 'default') &&
+    candidate?.kind !== module?.nativeAccount?.kind
+    ? undefined
+    : candidate
+}
+
 function fileFingerprint(path: string): unknown {
   try {
     const stat = lstatSync(path, { bigint: true })
@@ -84,7 +99,7 @@ export function readinessFingerprint(input: {
     defaults: options.harnesses?.defaults?.[definition.id],
     permissionPolicy: [options.approvalPolicy, options.sandboxMode, options.approvalReviewer],
     engine: providerModule(definition.id)?.credentials?.fingerprint?.({ ...process.env, ...definition.launch?.env, ...input.secretEnv }),
-    provider: readinessProvider(options, route), secretEnv: input.secretEnv,
+    provider: effectiveReadinessProvider(options, definition, route), secretEnv: input.secretEnv,
     ...(route.gatewayBinding ? { aliasRouting: {
       pools: options.routePools?.filter((pool) => pool.id === route.gatewayBinding!.main.routeId || pool.id === route.gatewayBinding!.small?.routeId),
       providers: Object.fromEntries([...new Set([...route.gatewayBinding.main.allowedConnectionIds, ...(route.gatewayBinding.small?.allowedConnectionIds ?? [])])]

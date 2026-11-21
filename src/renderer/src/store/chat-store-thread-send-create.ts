@@ -26,7 +26,7 @@ export function createNewSendThread(
   adeSend: boolean
 ): ReturnType<AgentProvider['createThread']> {
   const additionalWorkspaces = additionalWorkspacesForThread(workspaceRoot,
-    extraRootsForWorkspace(workspaceRoot, input.context.get().codeWorkspaceFolderSets))
+    extraRootsForWorkspace(workspaceRoot, input.context?.get().codeWorkspaceFolderSets))
   if (isMultiRootWorktreeBlocked(additionalWorkspaces.length, input.adeDraft?.isolation)) {
     throw new Error(i18n.t('common:codeProjectWorktreeMultiRootBlocked'))
   }

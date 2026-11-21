@@ -1,4 +1,4 @@
-import type { PetOverlayLayout } from '@shared/pets'
+import type { PetOverlayLayout } from '../../../shared/pets'
 
 export type PetSurfaceSize = { width: number; height: number }
 export type PetSurfaceRect = PetSurfaceSize & { left: number; top: number }
@@ -7,6 +7,15 @@ const MARGIN = 8
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(value, Math.max(min, max)))
+}
+
+/** Native Wayland size acknowledgements can arrive after Main's layout event. */
+export function petViewportAnchor(anchor: PetOverlayLayout, viewport: PetSurfaceSize, petWidth: number): PetOverlayLayout {
+  if (!anchor.nativeWindowDrag) return anchor
+  const height = Math.round(petWidth * 208 / 192)
+  return { ...anchor, viewportWidth: viewport.width, viewportHeight: viewport.height,
+    anchorX: clamp(anchor.anchorX, petWidth / 2, viewport.width - petWidth / 2),
+    anchorY: clamp(anchor.anchorY, height / 2, viewport.height - height / 2) }
 }
 
 /** All coordinates are relative to the native canvas; no panel participates in pet layout. */

@@ -28,7 +28,8 @@ export function createAccountTransport(fetcher: typeof fetch, clientId: string, 
     return data
   }
   function key(): Promise<string> {
-    discovery ??= request(`${KUN_ACCOUNT_ISSUER}/auth/config`).then(json).then((data) => {
+    // Local builds can share a version number with releases that still use direct Supabase.
+    discovery ??= request(`${KUN_ACCOUNT_ISSUER}/auth/config?transport=gateway`).then(json).then((data) => {
       const providers = data.providers as Record<string, unknown> | undefined
       const hasProvider = Boolean(providers?.email || providers?.google || providers?.github || providers?.apple)
       if (data.supabase_url !== KUN_ACCOUNT_ISSUER || !data.oauth_enabled || !hasProvider ||

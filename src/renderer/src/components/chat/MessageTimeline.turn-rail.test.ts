@@ -1,7 +1,13 @@
-import { createElement } from 'react'
+// @vitest-environment jsdom
+
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ChatBlock } from '../../agent/types'
+import type { TimelineSurface } from './timeline-surface'
 import {
+  MessageTimeline,
   TimelineJumpPreviewTitle,
   activeTimelineTurnKey,
   timelineJumpRailLeft,
@@ -10,6 +16,71 @@ import {
   timelineJumpPreviewTop,
   timelineJumpWaveDistance
 } from './MessageTimeline'
+
+describe('MessageTimeline turn rail', () => {
+  let host: HTMLDivElement
+  let root: Root
+  const scrollIntoView = vi.fn()
+
+  beforeEach(() => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    vi.stubGlobal('ResizeObserver', class {
+      observe(): void {}
+      disconnect(): void {}
+    })
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scrollIntoView
+    })
+    host = document.createElement('div')
+    document.body.append(host)
+    root = createRoot(host)
+  })
+
+  afterEach(async () => {
+    await act(async () => root.unmount())
+    host.remove()
+    delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView
+    scrollIntoView.mockClear()
+    vi.unstubAllGlobals()
+  })
+
+  async function render(turnCount: number, surface: TimelineSurface): Promise<void> {
+    const blocks = Array.from({ length: turnCount }, (_, index): ChatBlock[] => [
+      { kind: 'user', id: `user-${index}`, turnId: `turn-${index}`, text: `Question ${index}` },
+      { kind: 'assistant', id: `reply-${index}`, turnId: `turn-${index}`, text: `Answer ${index}` }
+    ]).flat()
+    await act(async () => root.render(createElement(MessageTimeline, {
+      blocks,
+      activeThreadId: 'thread-rail',
+      surface,
+      live: '',
+      liveReasoning: '',
+      runtimeConnection: 'ready',
+      onRetryConnection: () => undefined,
+      onOpenSettings: () => undefined
+    })))
+  }
+
+  it.each([1, 2])('previews and jumps to a question in a %i-turn desktop session', async (turnCount) => {
+    await render(turnCount, 'desktop')
+    const marks = host.querySelectorAll<HTMLButtonElement>('.timeline-jump-rail button')
+    expect(marks).toHaveLength(turnCount)
+
+    await act(async () => marks[0].focus())
+    const preview = host.querySelector('[role="tooltip"]')
+    expect(preview?.textContent).toContain('Question 0')
+    expect(preview?.textContent).toContain('Answer 0')
+
+    await act(async () => marks[0].click())
+    expect(scrollIntoView.mock.contexts).toContain(host.querySelector('[data-turn-id="turn-0"]'))
+  })
+
+  it('does not render the desktop marks on mobile', async () => {
+    await render(3, 'mobile')
+    expect(host.querySelector('.timeline-jump-rail')).toBeNull()
+  })
+})
 
 describe('TimelineJumpPreviewTitle', () => {
   it('shows the question number before the prompt preview', () => {

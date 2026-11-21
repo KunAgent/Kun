@@ -428,5 +428,89 @@ describe('AcpClientHost', () => {
       .then(() => null)
       .catch((e: unknown) => e as AcpError)
     expect((error as AcpError).rpcCode).toBe(-32602)
+    expect((error as AcpError).message).toContain('elicitation/create params are invalid')
+    expect((error as AcpError).message).toContain('message')
+    expect((error as AcpError).data).toEqual({
+      issues: [
+        expect.objectContaining({
+          path: 'message',
+          code: 'invalid_type',
+          message: expect.stringContaining('expected string')
+        })
+      ]
+    })
+  })
+
+  test('request_permission accepts >4096-char tool titles and maps oversized command targets to policy_denied', async () => {
+    const h = await makeHarness({ approve: async () => 'allow' })
+    const longTitle = 'x'.repeat(7_496)
+    const allowed = await h.call<{ outcome: { outcome: string; optionId?: string } }>(
+      ACP_CLIENT_METHODS.requestPermission,
+      {
+        sessionId: 'sess-1',
+        toolCall: {
+          toolCallId: 'qoder-long-title',
+          kind: 'execute',
+          title: longTitle,
+          rawInput: { command: 'npm test', description: 'Run test suite' }
+        },
+        options: [{ optionId: 'once', name: 'Allow once', kind: 'allow_once' }]
+      }
+    )
+    expect(allowed.outcome).toEqual({ outcome: 'selected', optionId: 'once' })
+    expect(h.approvals[0]?.action?.arguments.title).toHaveLength(1_024)
+
+    const oversizedTarget = await h
+      .call(ACP_CLIENT_METHODS.requestPermission, {
+        sessionId: 'sess-1',
+        toolCall: {
+          toolCallId: 'qoder-oversized-cmd',
+          kind: 'execute',
+          title: longTitle,
+          rawInput: { command: `printf '%s' '${'a'.repeat(5_223)}'` }
+        },
+        options: [{ optionId: 'once', name: 'Allow once', kind: 'allow_once' }]
+      })
+      .then(() => null)
+      .catch((e: unknown) => e as AcpError)
+    expect(oversizedTarget).toBeInstanceOf(AcpError)
+    expect(oversizedTarget?.code).toBe('policy_denied')
+    expect(oversizedTarget?.rpcCode).toBe(-32001)
+    expect(oversizedTarget?.message).toContain('command target exceeds')
+  })
+
+  test.skipIf(process.platform === 'win32')('terminal/create accepts scripts longer than 4096 chars when pre-memoized', async () => {
+    const spawnedArgs: Array<{ cmd: string; args: readonly string[] }> = []
+    const h = await makeHarness({
+      spawnTerminal: async (cmd, args, opts) => {
+        spawnedArgs.push({ cmd, args })
+        return spawn(process.execPath, ['-e', "process.stdout.write('ok\\n')"], {
+          cwd: opts.cwd,
+          env: opts.env,
+          stdio: ['ignore', 'pipe', 'pipe']
+        })
+      },
+      stopTerminal: async (child) => { child.kill('SIGKILL') }
+    })
+    const longScript = `printf '%s\\n' '${'b'.repeat(7_496)}'`
+    // Memoize the executable so we specifically exercise the >4096 wire schema path.
+    await h.call(ACP_CLIENT_METHODS.requestPermission, {
+      sessionId: 'sess-1',
+      toolCall: {
+        toolCallId: 'memo-bash',
+        kind: 'execute',
+        title: longScript,
+        rawInput: { command: '/bin/sh' }
+      },
+      options: [{ optionId: 'once', name: 'Allow once', kind: 'allow_once' }]
+    })
+    const created = await h.call<{ terminalId: string }>(ACP_CLIENT_METHODS.terminalCreate, {
+      sessionId: 'sess-1',
+      command: '/bin/sh',
+      args: ['-c', longScript]
+    })
+    await h.host.terminals.waitForExit(created.terminalId)
+    expect(spawnedArgs).toEqual([{ cmd: '/bin/sh', args: ['-c', longScript] }])
+    await h.host.turnEnded('turn_1')
   })
 })

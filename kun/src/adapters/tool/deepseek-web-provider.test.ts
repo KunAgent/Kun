@@ -6,6 +6,17 @@ import { DeepSeekWebProvider, resolveDeepSeekToolsEndpointUrl } from './deepseek
 import { buildWebToolProviders } from './web-tool-provider.js'
 
 describe('DeepSeekWebProvider', () => {
+  it.each(['v1/chat/completions', 'chat/completions', 'beta/chat/completions', 'anthropic'])('resolves official tools independently of model path %s', (path) => {
+    for (const tool of ['search', 'fetch'] as const) {
+      expect(resolveDeepSeekToolsEndpointUrl(`https://api.deepseek.com/${path}`, tool))
+        .toBe(`https://api.deepseek.com/v1/tools/${tool}`)
+    }
+  })
+
+  it('preserves custom relay prefixes and URL queries', () => {
+    expect(resolveDeepSeekToolsEndpointUrl('https://relay.test/deepseek/v1?deployment=x', 'search'))
+      .toBe('https://relay.test/deepseek/v1/tools/search?deployment=x')
+  })
   it('normalizes root, /v1, and /beta base URLs for /v1/tools endpoints', () => {
     expect(resolveDeepSeekToolsEndpointUrl('https://api.deepseek.com', 'search')).toBe(
       'https://api.deepseek.com/v1/tools/search'

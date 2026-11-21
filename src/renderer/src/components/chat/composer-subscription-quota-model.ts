@@ -18,7 +18,7 @@ export function composerQuotaWindowLabel(metric: ProviderQuotaMetric, t: (key: s
   if (!seconds) return metric.label
   const knownScopes: Record<string, string> = { 'seven-day-sonnet': 'Sonnet', 'seven-day-opus': 'Opus', 'seven-day-oauth-apps': 'OAuth apps' }
   const scope = knownScopes[metric.id] ?? metric.label
-    .replace(/\b(?:\d+(?:\.\d+)?\s*-?\s*(?:hours?|hrs?|h|days?|d|weeks?|w|minutes?|mins?|m)|five[-\s]?hour|seven[-\s]?day|weekly(?:_all)?|week)\b/gi, '')
+    .replace(/\b(?:\d+(?:\.\d+)?\s*-?\s*(?:hours?|hrs?|h|days?|d|weeks?|w|minutes?|mins?|m)|five[-\s]?hour|seven[-\s]?day|weekly(?:_all)?|week|daily)\b/gi, '')
     .replace(/\b(?:usage|quota|window|limit|primary|secondary|rate)\b/gi, '')
     .replace(/^[\s·:–—-]+|[\s·:–—-]+$/g, '').trim()
   const span = seconds === 604_800 ? t('subscriptionQuota.weekly')

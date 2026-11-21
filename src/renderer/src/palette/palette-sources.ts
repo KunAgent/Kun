@@ -32,7 +32,7 @@ import {
   Sparkles,
   Target,
   Workflow,
-  type LucideIcon, Layers } from 'lucide-react'
+  type LucideIcon, Layers, Cloud } from 'lucide-react'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { NormalizedThread } from '../agent/types'
 import type { AppRoute, SettingsRouteSection } from '../store/chat-store-types'
@@ -113,7 +113,8 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   workflow: 'workflowCreate',
   ade: 'workspaceModeAdeLabel',
   wardrobe: 'roomsWardrobeMine',
-  artifacts: 'artifactsNav'
+  artifacts: 'artifactsNav',
+  colab: 'colabNb.navLabel'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
@@ -132,7 +133,8 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   workflow: Workflow,
   ade: Network,
   wardrobe: Shirt,
-  artifacts: Layers
+  artifacts: Layers,
+  colab: Cloud
 }
 
 /**
@@ -178,10 +180,12 @@ const SETTINGS_SECTION_LABEL_KEYS: Record<SettingsRouteSection, string> = {
   debug: 'settingsIaDiagnostics',
   storage: 'storageRelocation',
   storageCleanup: 'storageCleanup',
-  dataMigration: 'settingsNavMigration'
+  dataMigration: 'settingsNavMigration',
+  cloudCompute: 'settingsIaCloudCompute'
 }
 
 const SETTINGS_SECTION_DESCRIPTION_KEYS: Partial<Record<SettingsRouteSection, string>> = {
+  cloudCompute: 'settingsIaCloudComputeDesc',
   general: 'settingsIaGeneralDesc',
   appearance: 'settingsIaAppearanceDesc',
   notifications: 'settingsIaNotificationsDesc',
