@@ -1,6 +1,7 @@
 import { type ChildProcess } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import './kun-process'
 import {
   processController
 } from './kun-process-state'
