@@ -4,7 +4,7 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { RpcPeer } from '@kun/control-host'
-import { LIMITS } from '@kun/remote-protocol'
+import { DESKTOP_MOBILE_ORIGIN_CAPABILITY, LIMITS } from '@kun/remote-protocol'
 import { ControlDesktop } from './desktop'
 import { ControlRelay } from './transport'
 import { DesktopInputArbiter } from '../remote-desktop/input-arbiter'
@@ -153,7 +153,7 @@ it('restores host registration after stop/start and ignores attachments while su
   } finally { relay.stop(); await instance.stop() }
 })
 
-it('runs the desktop engine through real RPC while the host owns permissions, input arbitration and cleanup', async () => {
+it.each(['code', 'device'] as const)('runs the %s desktop through real RPC with host-owned permissions and cleanup', async kind => {
   let desktop!: ControlDesktop, capture: any, live = true, curtain = false
   const arbiter = new DesktopInputArbiter(), inputs: any[] = []
   const instance = await processFixture({ 'desktop.port': value => desktop.ports.call(value) }, (name, value) => {
@@ -161,6 +161,7 @@ it('runs the desktop engine through real RPC while the host owns permissions, in
   })
   const deps: DesktopEngineDependencies = {
     supported: () => true, displays: () => [{ id: 1, primary: true, fingerprint: 'display', label: 'Synthetic', pixelWidth: 1280, pixelHeight: 720, rotation: 0 }],
+    mobileOriginSupported: () => kind === 'device',
     permissions: async () => ({ screenRecording: 'granted', accessibility: 'granted' }),
     privacySupported: () => true,
     capture: (_id, receive) => capture = { receive, privacy: async (enabled?: boolean) => curtain = enabled ?? curtain, open: async () => {}, identity: async () => ({ pid: 42, birth: '1:2' }),
@@ -169,12 +170,20 @@ it('runs the desktop engine through real RPC while the host owns permissions, in
     ice: async () => [], authorizeOrigin: async () => {}, id: randomUUID, now: Date.now, arbiter
   }
   desktop = new ControlDesktop(deps, async () => instance.rpc)
-  const authority: DesktopAuthority = { accountId: 'owner', deviceId: 'phone', authorizationId: 'grant', scopes: ['desktop.view', 'desktop.control'], current: () => live, emit: () => {} }
+  const authority: DesktopAuthority = { accountId: 'owner', deviceId: 'phone', authorizationId: 'grant', hostId: 'paired-mac',
+    scopes: ['desktop.view', 'desktop.control'], current: () => live, emit: () => {} }
   try {
     await desktop.attach(instance.rpc); await desktop.configureRemoteAccess(true)
     const display = (await desktop.status()).displays[0]
-    const result = await desktop.invoke('desktop.session.start', { startId: 'start', origin: { kind: 'code', id: 'thread' }, displayToken: display.token, displayRevision: display.revision, quality: 'balanced' }, authority)
+    const access = await desktop.invoke('desktop.access.get', {}, authority)
+    expect(access.capabilities.includes(DESKTOP_MOBILE_ORIGIN_CAPABILITY)).toBe(kind === 'device')
+    const request = { startId: 'start', origin: { kind, id: kind === 'device' ? authority.hostId : 'thread' },
+      displayToken: display.token, displayRevision: display.revision, quality: 'balanced' }
+    await expect(desktop.invoke('desktop.session.start', { ...request, origin: { kind: 'device', id: 'other-mac' } }, authority)).rejects.toThrow('DESKTOP_AUTHORITY_CHANGED')
+    expect(capture).toBeUndefined()
+    const result = await desktop.invoke('desktop.session.start', request, authority)
     const session = result.session
+    expect(session.origin).toEqual(request.origin)
     await desktop.invoke('desktop.session.answer', { sessionId: session.sessionId, epoch: session.epoch, answer: { type: 'answer', sdp: 'v=0\r\n' } }, authority)
     capture.receive({ event: 'data', value: { label: 'kun.desktop.control.v1', raw: JSON.stringify({ v: 1, sessionId: session.sessionId, epoch: session.epoch, type: 'hello', seq: 0 }) } })
     capture.receive({ event: 'health', value: { sampleId: 1, trackState: 'live', muted: false, sourceFrames: 1, framesEncoded: 1, framesSent: 1 } })

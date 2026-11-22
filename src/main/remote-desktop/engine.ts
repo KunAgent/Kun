@@ -20,7 +20,7 @@ export async function stopBuiltinDesktopEngines() {
   finally { await stopControlRuntimeHost() }
 }
 
-export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promise<unknown[]>, authorizeOrigin: (authority: DesktopAuthority, origin: { kind: 'code' | 'agent' | 'device'; id: string }) => Promise<void>) {
+export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promise<unknown[]>, authorizeConversation: (authority: DesktopAuthority, origin: { kind: 'code' | 'agent'; id: string }) => Promise<void>) {
   const portal = isWayland() ? new WaylandSession(() => { void service.stopAll('host_inactive').catch(() => {}) }) : undefined
   const service: ControlDesktop = controlRuntimeHost().desktop({
     supported: () => desktopHelperAvailable(),
@@ -29,6 +29,7 @@ export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promis
     prepareHost: portal ? async enabled => { if (enabled) await portal.prepare(); else portal.close() } : undefined,
     privacySupported: privacyScreenSupported,
     gameSupported: desktopHelperAvailable,
+    mobileOriginSupported: () => true,
     diagnostic: value => logInfo('remote-desktop', 'Desktop session state.', value),
     virtualSupported: mobileDisplaySupported, virtualDisplay: lost => new NativeMobileDisplay(lost),
     displays: () => portal ? (portal.selection ? [{ id: PORTAL_DISPLAY, primary: true,
@@ -36,7 +37,16 @@ export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promis
       pixelHeight: portal.selection.height, rotation: 0 }] : []) : screen.getAllDisplays().filter(display => !isKunMobileDisplay(display.id)).map(display => ({ id: display.id, primary: display.id === screen.getPrimaryDisplay().id, fingerprint: displayFingerprint(display), label: display.label || `Display ${display.id}`,
       pixelWidth: Math.round(display.size.width * display.scaleFactor), pixelHeight: Math.round(display.size.height * display.scaleFactor), rotation: display.rotation })),
     capture: (id, receive) => new ElectronDesktopCapture(id, receive, () => controlRuntimeHost().captureDirectory(), portal),
-    input: lost => portal ? portal.input() : new NativeDesktopInput(lost), ice, authorizeOrigin,
+    input: lost => portal ? portal.input() : new NativeDesktopInput(lost), ice,
+    authorizeOrigin: async (authority, origin) => {
+      if (origin.kind === 'device') {
+        if (!authority.hostId || origin.id !== authority.hostId || !authority.current() || !authority.scopes.includes('desktop.view'))
+          throw Error('DESKTOP_AUTHORITY_CHANGED')
+        return
+      }
+      if (origin.kind !== 'code' && origin.kind !== 'agent') throw Error('DESKTOP_AUTHORITY_CHANGED')
+      await authorizeConversation(authority, { kind: origin.kind, id: origin.id })
+    },
     indicator: new DesktopShareIndicator(),
     now: () => performance.now(), id: randomUUID, arbiter: desktopInputArbiter
   })

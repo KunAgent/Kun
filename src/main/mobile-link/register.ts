@@ -66,10 +66,6 @@ export function registerMobileLink(
     diagnostic: value => (value.event === 'ice_ready' ? logInfo : logWarn)('remote-desktop', 'Desktop ICE request.', value)
   })
   const desktop = createDesktopEngine(authority => desktopIce.request(authority), async (authority, resource) => {
-    if (resource.kind === 'device') {
-      if (authority.purpose !== 'desktop' || resource.id !== authority.hostId || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
-      return
-    }
     const lease = await options.acquireRuntimeRequestLease()
     if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
     const response = await lease.request('/v1/remote/invoke', 'POST', JSON.stringify({ accountId: authority.accountId,
