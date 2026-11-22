@@ -1,37 +1,47 @@
 import assert from 'node:assert/strict'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { ControlDesktop } from '../../src/main/control-host/desktop'
+import { startControlProcess, type ControlProcess } from '../../src/main/control-host/process'
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import { RemoteDesktopService, type DesktopEngineDependencies } from '@kun/control-runtime/desktop'
 import { ElectronDesktopCapture } from '../../src/main/remote-desktop/capture-host'
+import { createPrivacyDisplay } from './mac-privacy-display'
 import { exerciseViewerGameSwitch } from './computer-viewer-game'
 import { DesktopInputArbiter } from '../../src/main/remote-desktop/input-arbiter'
 
 app.setPath('userData',join(app.getAppPath(),'profile'))
 app.on('window-all-closed',()=>{})
 let service: RemoteDesktopService, receiver: BrowserWindow, captureWindow: BrowserWindow | undefined
+let controlProcess: ControlProcess | undefined
 let inputCount=0,releases=0
 const states: unknown[]=[]
+const privacy = process.env.KUN_FIXTURE_PRIVACY === '1'
+let privacyDisplay: Awaited<ReturnType<typeof createPrivacyDisplay>> | undefined
 const gaming=process.env.KUN_FIXTURE_GAME==='1'
 const measureSeconds=Number(process.env.KUN_FIXTURE_SECONDS)||0
-const authority={accountId:'fixture-owner',deviceId:'fixture-controller',hostId:'fixture-host',purpose:'desktop' as const,
+const authority={accountId:'fixture-owner',deviceId:'fixture-controller',hostId:'fixture-host',...(privacy ? {} : {purpose:'desktop' as const}),
   authorizationId:'fixture-authority',scopes:['desktop.view','desktop.control'],current:()=>true,
-  emit:(value:unknown)=>{if(receiver&&!receiver.isDestroyed())receiver.webContents.send('fixture:event',value)}}
+  emit:(value:unknown)=>{if(privacy && (value as any).event !== 'desktop.signal.ice') states.push(value); if(receiver&&!receiver.isDestroyed())receiver.webContents.send('fixture:event',value)}}
 const timeout=setTimeout(()=>finish(Error('computer smoke timed out')),measureSeconds*1000+(process.env.KUN_FIXTURE_VIEWER==='1'?55000:30000))
 async function finish(error?:unknown) {
   clearTimeout(timeout)
   await service?.stopAll('fixture_ended').catch(()=>{})
-  if(error)console.error(error instanceof Error?error.message:String(error))
+  await controlProcess?.stop()
+  await privacyDisplay?.stop()
+  if(error)console.error(error instanceof Error?error.message:String(error), JSON.stringify(states))
   for(const window of BrowserWindow.getAllWindows())window.destroy()
   app.exit(error?1:0)
 }
 app.whenReady().then(async()=>{
-  const deps:DesktopEngineDependencies={supported:()=>true, gameSupported:()=>gaming, systemAudioAllowed:()=>gaming, permissions:async()=>({screenRecording:'granted',accessibility:'granted'}),
-    displays:()=>[{id:1,primary:true,fingerprint:'synthetic',label:'Synthetic display',pixelWidth:measureSeconds?1920:320,pixelHeight:measureSeconds?1080:200,rotation:0}],
+  if (privacy) privacyDisplay = await createPrivacyDisplay()
+  const deps:DesktopEngineDependencies={supported:()=>true, privacySupported:()=>privacy, gameSupported:()=>gaming, systemAudioAllowed:()=>gaming, permissions:async()=>({screenRecording:'granted',accessibility:'granted'}),
+    displays:()=>[{id:privacyDisplay?.id ?? 1,primary:true,fingerprint:'synthetic',label:'Synthetic display',pixelWidth:measureSeconds?1920:320,pixelHeight:measureSeconds?1080:200,rotation:0}],
     id:randomUUID,now:()=>performance.now(),ice:async()=>[],arbiter:new DesktopInputArbiter(),diagnostic:value=>states.push(value),
-    authorizeOrigin:async(actor,origin)=>{assert.equal(actor.purpose,'desktop');assert.deepEqual(origin,{kind:'device',id:'fixture-host'})},
+    authorizeOrigin:async(actor,origin)=>{assert.equal(actor.purpose,privacy ? undefined : 'desktop');assert.deepEqual(origin,privacy ? {kind:'code',id:'fixture-thread'} : {kind:'device',id:'fixture-host'})},
     input:()=>({start:async()=>{},ready:async()=>{},setupLease:async()=>{},lease:async()=>{},
-      input:async value=>{assert.ok(['key','text.commit','pointer.relative','pointer.gameButton'].includes(String(value.type)));inputCount++},release:async()=>{releases++},stop:async()=>{releases++}}),
+      input:async value=>{assert.ok(['key','text.commit','pointer.relative','pointer.gameButton'].includes(String(value.type)));inputCount++;if(privacyDisplay) await privacyDisplay.green()},release:async()=>{releases++},stop:async()=>{releases++}}),
     capture:(id,receive)=>{
       let frames: ReturnType<typeof setInterval> | undefined
       const portal = process.env.KUN_FIXTURE_PORTAL === '1' ? {
@@ -64,6 +74,7 @@ app.whenReady().then(async()=>{
         assert.ok(captureWindow)
         const scale = screen.getDisplayMatching(captureWindow.getBounds()).scaleFactor
         captureWindow.setContentSize(measureSeconds ? Math.round(1920 / scale) : 320, measureSeconds ? Math.round(1080 / scale) : 200)
+        if (privacy) return // Exercise the production approved-screen selector on the synthetic display.
         captureWindow.webContents.session.setDisplayMediaRequestHandler((request,callback)=>{
           assert.equal(request.frame,captureWindow!.webContents.mainFrame);callback({video:request.frame!, ...(request.audioRequested ? { audio:request.frame! } : {})})
         })
@@ -102,13 +113,25 @@ app.whenReady().then(async()=>{
       return capture
     }
   }
-  service=new RemoteDesktopService(deps)
+  if (privacy) {
+    const directory = join(app.getAppPath(), 'control')
+    const manifest = JSON.parse(readFileSync(join(directory, 'manifest.json'), 'utf8'))
+    const host = new ControlDesktop(deps, async () => controlProcess!.rpc)
+    controlProcess = await startControlProcess(directory, manifest, { 'desktop.port': value => host.ports.call(value) },
+      (name, value) => {
+        if (name === 'desktop.emit') host.emit(value.handle, value.event)
+        if (name === 'desktop.diagnostic') states.push(value.value)
+      }, () => {})
+    await host.attach(controlProcess.rpc)
+    service = host
+  } else service=new RemoteDesktopService(deps)
   await service.configureRemoteAccess(true)
   receiver=new BrowserWindow({show:false,webPreferences:{partition:'computer-fixture-receiver',preload:join(app.getAppPath(),'receiver-preload.cjs'),sandbox:true,nodeIntegration:false,contextIsolation:true,backgroundThrottling:false,autoplayPolicy:'no-user-gesture-required'}})
   receiver.webContents.session.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false))
   receiver.webContents.session.setPermissionCheckHandler(()=>false)
   receiver.webContents.session.setDisplayMediaRequestHandler((_request,callback)=>callback({}))
   ipcMain.handle('fixture:invoke',(event,method,params)=>{assert.equal(event.sender,receiver.webContents);return service.invoke(method,params,authority)})
+  ipcMain.handle('fixture:local-color', (event, kind) => { assert.equal(event.sender,receiver.webContents); return privacyDisplay!.requireColor(kind) })
   ipcMain.handle('fixture:stats',()=>({inputCount,releases}))
   ipcMain.handle('fixture:sender-stats', async()=>!captureWindow || captureWindow.isDestroyed() ? null : captureWindow.webContents.executeJavaScript(`(async()=>{
     const pc=window.fixturePc
@@ -136,7 +159,8 @@ app.whenReady().then(async()=>{
       assert.equal(event.sender,receiver.webContents);assert.equal(value.phase,'ended')
       assert.ok(inputCount>=3);assert.ok(releases>0);assert.equal((await service.status()).active,undefined)
       assert.ok(captureWindow?.isDestroyed())
-      console.log(JSON.stringify({computerDesktop:true,electron:process.versions.electron,realFrames:value.frames,viewBeforeControl:true,inputCount,keyboardReleased:true,hostCleanupConfirmed:true,portalFrames:process.env.KUN_FIXTURE_PORTAL==='1',gameAudio:value.gameAudio,measurement:value.measurement,states}))
+      if (privacyDisplay) await privacyDisplay.requireColor('green')
+      console.log(JSON.stringify({computerDesktop:true,privacyScreen:privacy,abruptDisconnect:value.abruptDisconnect===true,electron:process.versions.electron,realFrames:value.frames,viewBeforeControl:true,inputCount,keyboardReleased:true,hostCleanupConfirmed:true,portalFrames:process.env.KUN_FIXTURE_PORTAL==='1',gameAudio:value.gameAudio,measurement:value.measurement,states}))
       await finish()
     } catch(error){await finish(error)}
   })

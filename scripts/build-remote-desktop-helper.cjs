@@ -21,7 +21,9 @@ if (process.platform === 'win32') {
     execFileSync('xcrun', ['clang', '-target', target, '-fobjc-arc', '-fmodules', '-O2', '-c', resolve(root, 'native/remote-desktop/macos-virtual-display.m'), '-o', display], { stdio: 'inherit' })
     const audio = resolve(cache, `system-audio-${arch}.o`)
     execFileSync('xcrun', ['clang', '-target', target, '-fobjc-arc', '-fmodules', '-O2', '-c', resolve(root, 'native/remote-desktop/macos-system-audio.m'), '-o', audio], { stdio: 'inherit' })
-    execFileSync('xcrun', ['swiftc', '-target', target, '-module-cache-path', resolve(cache, arch), '-O', resolve(root, 'native/remote-desktop/macos-input.swift'), display, audio, '-framework', 'ScreenCaptureKit', '-framework', 'CoreMedia', '-o', output], { stdio: 'inherit' })
+    const privacy = resolve(cache, `privacy-screen-${arch}.o`)
+    execFileSync('xcrun', ['clang', '-target', target, '-fobjc-arc', '-fmodules', '-O2', '-c', resolve(root, 'native/remote-desktop/macos-privacy-screen.m'), '-o', privacy], { stdio: 'inherit' })
+    execFileSync('xcrun', ['swiftc', '-target', target, '-module-cache-path', resolve(cache, arch), '-O', resolve(root, 'native/remote-desktop/macos-input.swift'), display, audio, privacy, '-framework', 'AppKit', '-framework', 'Carbon', '-framework', 'QuartzCore', '-framework', 'CoreVideo', '-framework', 'ScreenCaptureKit', '-framework', 'CoreMedia', '-o', output], { stdio: 'inherit' })
     return output
   })
   // Existing desktop releases also package Intel; the packaging hook thins this resource

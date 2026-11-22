@@ -1,3 +1,4 @@
+import { exercisePrivacy } from './mac-privacy-receiver'
 import { measureMotion } from './stream-performance'
 import { DesktopSessionManager } from '@kun/control-runtime/controller'
 import { BrowserDesktopPeer } from '../../src/renderer/src/computer-viewer/browser-peer'
@@ -5,7 +6,7 @@ import { validateDesktopParams, validateDesktopResult, type DesktopMethod, type 
 
 const fixture=(window as any).fixture, video=document.querySelector('video')!
 let frames=0, measuredPeer: BrowserDesktopPeer | undefined
-const manager=new DesktopSessionManager({kind:'device',id:'fixture-host'},{id:()=>crypto.randomUUID(),current:()=>true,
+const manager=new DesktopSessionManager(fixture.privacy ? {kind:'code',id:'fixture-thread'} : {kind:'device',id:'fixture-host'},{id:()=>crypto.randomUUID(),current:()=>true,
   signal:{ice:async()=>({schemaVersion:1,iceServers:[],expiresAt:Date.now()+600000}),events:listener=>fixture.events(listener),
     invoke:async<M extends DesktopMethod>(method:M,params:DesktopParams[M])=>{validateDesktopParams(method,params);return validateDesktopResult(method,await fixture.invoke(method,params))}},
   peer:(_session,servers,events)=>(measuredPeer=new BrowserDesktopPeer(servers,video,events, fixture.gaming))})
@@ -34,6 +35,7 @@ void(async()=>{
     }
     return manager.snapshot().phase==='controlling'
   },'control not acquired on fresh media')
+  const verifyPrivacy = fixture.privacy ? await exercisePrivacy(fixture, video, manager.snapshot().session!) : undefined
   manager.input('key',{code:'KeyA',pressed:true});manager.input('key',{code:'KeyA',pressed:false});manager.input('text.commit',{text:'合成测试'})
   if (fixture.gaming) {
     manager.input('pointer.relative',{deltaX:20,deltaY:-5})
@@ -41,6 +43,13 @@ void(async()=>{
     manager.input('pointer.gameButton',{button:'left',pressed:false})
   }
   await until(async()=>(await fixture.stats()).inputCount>=(fixture.gaming?6:3),'input did not reach bounded host sink')
+  await verifyPrivacy?.()
+  if (fixture.dropConnection) {
+    measuredPeer?.close()
+    await until(() => manager.snapshot().phase === 'ended', 'host did not retire the disconnected peer')
+    fixture.complete({ phase: 'ended', frames, abruptDisconnect: true })
+    return
+  }
   manager.release();await until(async()=>(await fixture.stats()).releases>0,'input not released')
   const measurement=fixture.measureSeconds ? await measureMotion(fixture.measureSeconds,video,()=>frames,
     ()=>manager.snapshot(),()=>measuredPeer?.videoSample(),()=>fixture.senderStats()) : undefined

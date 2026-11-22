@@ -11,6 +11,7 @@ import { captureFailureName, permitsDesktopCapture } from './capture-permissions
 import { resolveNamedPreloadPath } from '../main-paths'
 import type { WaylandSession } from './wayland-session'
 import { SystemOutput } from './system-output'
+import { MacPrivacyScreen, macPrivacyScreenSupported } from './mac-privacy-screen'
 import { isKunMobileDisplay } from './virtual-display'
 function bounded(value: unknown, max: number) { try { return Buffer.byteLength(JSON.stringify(value)) <= max } catch { return false } }
 export interface DesktopCapturePort {
@@ -34,6 +35,8 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
   private processIdentity?: { pid: number; birth: string }
   private audio?: Pick<SystemOutput, 'start' | 'stop'>
   private loopbackAllowed = false
+  private curtain?: MacPrivacyScreen
+  private privacyChanging = false
   private audioPending = 0
   private nextFrame?: () => void
   private portalFrame = (frame: Buffer, consumed: () => void) => {
@@ -153,29 +156,77 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
   }
   async answer(answer: unknown) { await this.command('answer', { answer }) }
   async ice(candidates: unknown[]) { await this.command('ice', { candidates }) }
-  async send(label: string, data: unknown, remainingMs = 0) { await this.command('send', { label, data, remainingMs }) }
+  async send(label: string, data: unknown, remainingMs = 0) {
+    if ((data as { type?: string })?.type === 'probe') this.curtain?.lease(remainingMs)
+    await this.command('send', { label, data, remainingMs })
+  }
+  async privacy(enabled?: boolean, authorize?: () => void): Promise<boolean> {
+    if (this.closing || !this.processIdentity || !macPrivacyScreenSupported()) throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
+    if (this.privacyChanging) throw Error('DESKTOP_BUSY')
+    if (enabled === undefined || enabled === Boolean(this.curtain?.visible)) return Boolean(this.curtain?.visible)
+    this.privacyChanging = true
+    const virtual = isKunMobileDisplay(this.displayId)
+    const source = this.curtain ?? new MacPrivacyScreen(this.displayId, this.processIdentity, virtual, (data, size) => {
+      if (this.curtain !== source || this.closing || !this.window || this.window.isDestroyed()) return
+      this.nextFrame = () => source.requestFrame()
+      this.window.webContents.send(channels.sample, { kind: 'video', ...size, data })
+    }, localExit => {
+      if (!this.closing) this.receive({ event: 'closed', value: localExit ? 'host_user_ended' : 'media_closed' })
+    })
+    this.curtain = source
+    let switching = false
+    try {
+      if (enabled) {
+        const size = await source.open()
+        if (this.closing) throw Error('DESKTOP_CAPTURE_CLOSED')
+        if (!virtual) {
+          switching = true
+          const replaced = this.command('privacy', { enabled: true, ...size })
+          source.requestFrame()
+          await replaced
+        }
+        if (this.closing) throw Error('DESKTOP_CAPTURE_CLOSED')
+        authorize?.()
+        await source.show()
+      } else {
+        await source.stop()
+        if (!virtual) await this.command('privacy', { enabled: false })
+        this.curtain = undefined
+      }
+      return enabled
+    } catch (error) {
+      await source.stop().catch(failure => {
+        if (!this.closing) this.receive({ event: 'closed' })
+        throw failure
+      })
+      this.curtain = undefined
+      if (!this.closing && switching) {
+        await this.command('privacy', { enabled: false }).catch(() => this.receive({ event: 'closed' }))
+      } else if (!this.closing && !enabled) this.receive({ event: 'closed' })
+      throw error
+    } finally {
+      if (!this.curtain) this.nextFrame = undefined
+      this.privacyChanging = false
+    }
+  }
   async quality(quality: string) { await this.command('quality', { quality }) }
   async stop() {
     this.portal?.detach(this.portalFrame); this.nextFrame = undefined
     this.loopbackAllowed = false
-    const audioStop = this.audio?.stop().then(() => undefined, error => error as Error)
-    if (this.closing) {
-      if (this.processIdentity) await terminateDesktopProcess(this.processIdentity.pid, this.processIdentity.birth)
-      const failure = await audioStop; if (failure) throw failure
-      return
+    const helpers = Promise.allSettled([this.curtain?.stop(), this.audio?.stop()])
+    if (!this.closing) {
+      this.closing = true
+      await this.command('stop').catch(() => {})
+      const window = this.window; this.window = undefined
+      ipcMain.removeListener(channels.consumed, this.onConsumed)
+      ipcMain.removeListener(channels.response, this.onReply); ipcMain.removeListener(channels.event, this.onEvent)
+      for (const call of this.calls.values()) { clearTimeout(call.timer); call.reject(new Error('DESKTOP_CAPTURE_CLOSED')) }
+      this.calls.clear()
+      if (window && !window.isDestroyed()) window.destroy()
     }
-    this.closing = true
-    await this.command('stop').catch(() => {})
-    const window = this.window; this.window = undefined
-    ipcMain.removeListener(channels.consumed, this.onConsumed)
-    ipcMain.removeListener(channels.response, this.onReply); ipcMain.removeListener(channels.event, this.onEvent)
-    for (const call of this.calls.values()) { clearTimeout(call.timer); call.reject(new Error('DESKTOP_CAPTURE_CLOSED')) }
-    this.calls.clear()
-    if (window && !window.isDestroyed()) window.destroy()
-    const audioFailure = await audioStop
-    // A renderer acknowledgement/window flag alone is not process-exit proof.
+    // Confirm the renderer and the native window owner have actually exited.
     if (this.processIdentity) await terminateDesktopProcess(this.processIdentity.pid, this.processIdentity.birth)
-    if (audioFailure) throw audioFailure
+    for (const result of await helpers) if (result.status === 'rejected') throw result.reason
   }
 }
 export function displayFingerprint(display: Electron.Display) {

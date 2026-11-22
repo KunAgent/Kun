@@ -92,6 +92,12 @@ let args = Array(CommandLine.arguments.dropFirst())
 @_silgen_name("kun_display_supported") func kunDisplaySupported() -> Int32
 @_silgen_name("kun_display_run") func kunDisplayRun() -> Int32
 @_silgen_name("kun_system_audio") func kunSystemAudio(_ display: UInt32, _ pid: Int32) -> Int32
+@_silgen_name("kun_privacy_screen") func kunPrivacyScreen(_ display: UInt32, _ pid: Int32, _ virtual: Int32) -> Int32
+if args == ["--privacy-screen-probe"] { print("kun-privacy-screen-v1"); exit(0) }
+if args.count == 5 && args[0] == "--privacy-screen", let display = UInt32(args[1]), let pid = Int32(args[2]),
+   ownedCapture(pid, args[3]), ["physical", "virtual"].contains(args[4]) {
+  exit(kunPrivacyScreen(display, pid, args[4] == "virtual" ? 1 : 0))
+}
 if args.count == 4 && args[0] == "--system-audio", let selected = UInt32(args[1]), let pid = Int32(args[2]), ownedCapture(pid, args[3]) {
   exit(kunSystemAudio(selected, pid))
 }

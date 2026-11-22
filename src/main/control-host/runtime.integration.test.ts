@@ -154,7 +154,7 @@ it('restores host registration after stop/start and ignores attachments while su
 })
 
 it('runs the desktop engine through real RPC while the host owns permissions, input arbitration and cleanup', async () => {
-  let desktop!: ControlDesktop, capture: any, live = true
+  let desktop!: ControlDesktop, capture: any, live = true, curtain = false
   const arbiter = new DesktopInputArbiter(), inputs: any[] = []
   const instance = await processFixture({ 'desktop.port': value => desktop.ports.call(value) }, (name, value) => {
     if (name === 'desktop.emit') desktop.emit(value.handle, value.event)
@@ -162,8 +162,9 @@ it('runs the desktop engine through real RPC while the host owns permissions, in
   const deps: DesktopEngineDependencies = {
     supported: () => true, displays: () => [{ id: 1, primary: true, fingerprint: 'display', label: 'Synthetic', pixelWidth: 1280, pixelHeight: 720, rotation: 0 }],
     permissions: async () => ({ screenRecording: 'granted', accessibility: 'granted' }),
-    capture: (_id, receive) => capture = { receive, open: async () => {}, identity: async () => ({ pid: 42, birth: '1:2' }),
-      start: async () => ({ type: 'offer' as const, sdp: 'v=0\r\n' }), answer: async () => {}, ice: async () => {}, send: async () => {}, quality: async () => {}, stop: vi.fn(async () => {}) },
+    privacySupported: () => true,
+    capture: (_id, receive) => capture = { receive, privacy: async (enabled?: boolean) => curtain = enabled ?? curtain, open: async () => {}, identity: async () => ({ pid: 42, birth: '1:2' }),
+      start: async () => ({ type: 'offer' as const, sdp: 'v=0\r\n' }), answer: async () => {}, ice: async () => {}, send: async () => {}, quality: async () => {}, stop: vi.fn(async () => { curtain = false }) },
     input: () => { const input = { start: async () => {}, ready: async () => {}, setupLease: async () => {}, lease: async () => {}, input: vi.fn(async () => {}), release: vi.fn(async () => {}), stop: vi.fn(async () => {}) }; inputs.push(input); return input },
     ice: async () => [], authorizeOrigin: async () => {}, id: randomUUID, now: Date.now, arbiter
   }
@@ -178,11 +179,22 @@ it('runs the desktop engine through real RPC while the host owns permissions, in
     capture.receive({ event: 'data', value: { label: 'kun.desktop.control.v1', raw: JSON.stringify({ v: 1, sessionId: session.sessionId, epoch: session.epoch, type: 'hello', seq: 0 }) } })
     capture.receive({ event: 'health', value: { sampleId: 1, trackState: 'live', muted: false, sourceFrames: 1, framesEncoded: 1, framesSent: 1 } })
     await vi.waitFor(async () => expect((await desktop.status()).active?.mode).toBe('view'))
-    await desktop.invoke('desktop.control.acquire', { sessionId: session.sessionId, epoch: session.epoch }, authority)
+    const identity = { sessionId: session.sessionId, epoch: session.epoch }
+    expect((await desktop.invoke('desktop.access.get', {}, authority)).capabilities).toContain('desktop.privacy-screen.v1')
+    await expect(desktop.invoke('desktop.session.privacy', { ...identity, enabled: true }, authority)).rejects.toThrow('DESKTOP_CONTROL_REQUIRED')
+    await desktop.invoke('desktop.control.acquire', identity, authority)
+    await expect(desktop.invoke('desktop.session.privacy', identity, authority)).resolves.toEqual({ enabled: false })
+    for (const invalid of [{ ...authority, scopes: ['desktop.view'] }, { ...authority, authorizationId: 'another-grant' }]) {
+      await expect(desktop.invoke('desktop.session.privacy', { ...identity, enabled: true }, invalid)).rejects.toThrow()
+    }
+    await expect(desktop.invoke('desktop.session.privacy', { ...identity, epoch: identity.epoch + 1, enabled: true }, authority)).rejects.toThrow('DESKTOP_STALE_EPOCH')
+    await expect(desktop.invoke('desktop.session.privacy', { ...identity, enabled: true }, authority)).resolves.toEqual({ enabled: true })
+    expect(curtain).toBe(true)
     expect(() => arbiter.beginAi()).toThrow('HUMAN_CONTROL_ACTIVE')
     live = false; desktop.pulse()
     await desktop.stopAll('authorization_changed')
     expect(inputs[0].stop).toHaveBeenCalled(); expect(capture.stop).toHaveBeenCalled()
+    expect(curtain).toBe(false)
     expect(desktop.ports.busy()).toBe(false)
     arbiter.beginAi()()
   } finally { await desktop.stopAll().catch(() => {}); await instance.stop() }

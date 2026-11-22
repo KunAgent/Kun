@@ -7,6 +7,7 @@ import { ElectronDesktopCapture, displayFingerprint } from './capture-host'
 import { NativeDesktopInput, desktopHelperAvailable } from './native-input'
 import { desktopInputArbiter } from './input-arbiter'
 import { getComputerUsePermissions } from '../services/computer-use-permissions'
+import { macPrivacyScreenSupported } from './mac-privacy-screen'
 import { DesktopShareIndicator } from './indicator'
 import { bindDesktopDisplayStops, bindDesktopPrivacyStops } from './host-lifecycle'
 import { logInfo } from '../logger'
@@ -26,6 +27,7 @@ export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promis
     permissions: async () => portal ? { screenRecording: portal.selection ? 'granted' : 'denied',
       accessibility: portal.selection?.input ? 'granted' : 'denied' } : getComputerUsePermissions(),
     prepareHost: portal ? async enabled => { if (enabled) await portal.prepare(); else portal.close() } : undefined,
+    privacySupported: macPrivacyScreenSupported,
     gameSupported: desktopHelperAvailable,
     diagnostic: value => logInfo('remote-desktop', 'Desktop session state.', value),
     virtualSupported: mobileDisplaySupported, virtualDisplay: lost => new NativeMobileDisplay(lost),

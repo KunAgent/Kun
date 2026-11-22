@@ -18,7 +18,7 @@ export type DesktopAccessStatus = {
   active?: { sessionId: string; peer: string; mode: 'view' | 'control' }
 }
 export type DesktopConfiguration = { enabled: boolean; displayTokens: string[]; allowVirtual?: boolean; allowGame?: boolean; allowSystemAudio?: boolean }
-export type CaptureCommand = { id: string; operation: 'start' | 'answer' | 'ice' | 'stop' | 'send' | 'quality'; params: Record<string, unknown> }
+export type CaptureCommand = { id: string; operation: 'start' | 'answer' | 'ice' | 'stop' | 'send' | 'quality' | 'privacy'; params: Record<string, unknown> }
 export type CaptureReply = { id: string; value?: unknown; error?: string }
 export type CaptureEvent = { event: 'ice' | 'data' | 'closed' | 'ready' | 'health'; value?: unknown }
 export type NativeCaptureSample = { kind: 'audio' | 'video'; data: Uint8Array; width?: number; height?: number }

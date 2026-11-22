@@ -17,6 +17,12 @@ Build the Windows input helper with Go 1.22 or later. The macOS helper builds wi
 
 During a desktop session, the Kun remote desktop icon appears in the menu bar or system tray. Its menu identifies the display, controller and view/control mode and provides a local action to end the session. The capture window is protected from the older LAN workbench IPC mirroring mechanism.
 
+### Mac privacy screen
+
+In KunApp, take control of a Mac, open the full-screen remote desktop menu and turn on **Mac privacy screen**. The Mac covers its monitors with black panels. The phone continues to see and operate the approved display. Turn the switch off to restore the monitors, or press **Control + Option + Shift + P** at the Mac to end the session locally. Disconnecting restores the displays automatically, including after the media lease expires.
+
+The mobile client, Mac host and downloaded control package negotiate `desktop.privacy-screen.v1`. The Mac switches its video sender to a ScreenCaptureKit stream that excludes the curtain process. An independent virtual mobile display keeps its existing video source. The helper exits when its renderer, host or lease is lost.
+
 ## Connection and cleanup
 
 The Electron Main process handles `desktop.*` methods before the generic runtime invocation path. A private, nonpersistent renderer owns the WebRTC sender. Its sandboxed preload exposes only the capture command/reply interface. A distinct partition and renderer ownership check are required before the native guard can supervise the capture process.
@@ -42,3 +48,5 @@ Ordinary Agent/Code tasks continue when the desktop session ends. Closing the ma
 - `npm run check:built-preload` validates the emitted sandbox preloads. They must not require local CommonJS chunks.
 
 A signed Mac-to-iPhone session, real capture/input permissions, touch/IME accuracy, WAN/TURN quality, native memory use and physical-device disconnect behavior still need their own release evidence. Successful synthetic peer and process smoke tests are not evidence of those device checks.
+
+On macOS 14 or later, `node scripts/smoke-computer-desktop.cjs --privacy` verifies local black pixels and changing WebRTC video on a synthetic secondary monitor. Use `--privacy-drop` to verify restoration after an abrupt peer disconnect.

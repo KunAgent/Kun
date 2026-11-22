@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { DESKTOP_CAPABILITY, DESKTOP_GAME_CAPABILITY, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY, DESKTOP_VIRTUAL_CAPABILITY, DESKTOP_METHODS, validateDesktopParams } from '@kun/remote-protocol'
+import { DESKTOP_PRIVACY_CAPABILITY, DESKTOP_CAPABILITY, DESKTOP_GAME_CAPABILITY, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY, DESKTOP_VIRTUAL_CAPABILITY, DESKTOP_METHODS, validateDesktopParams } from '@kun/remote-protocol'
 import type { RpcPeer } from '@kun/control-host'
 import type { DesktopAuthority, DesktopEngineDependencies, DesktopAccessStatus, DesktopConfiguration } from '@kun/control-runtime/desktop'
 import { DesktopPorts } from './desktop-ports'
@@ -17,6 +17,7 @@ export class ControlDesktop {
   private stopping?: Promise<void>
   private cleanupBlocked = false
   private deviceOrigins = false
+  private privacyCapable = false
   private gameCapable = false
   private gameEnabled = false
   private systemAudio = false
@@ -30,7 +31,7 @@ export class ControlDesktop {
       reason => { void this.stopAll(reason).catch(() => {}) }, () => this.enabled && this.virtualCapable && this.virtualEnabled,
       () => this.enabled && this.gameCapable && this.gameEnabled && this.admittedGame, () => this.systemAudio)
   }
-  private snapshot() { return { supported: this.deps.supported(), gameSupported: this.gameCapable && this.gameEnabled, systemAudioAllowed: this.systemAudio, displays: this.deps.displays(), virtualSupported: this.deps.virtualSupported?.() === true } }
+  private snapshot() { return { supported: this.deps.supported(), privacySupported: this.deps.privacySupported?.() === true, gameSupported: this.gameCapable && this.gameEnabled, systemAudioAllowed: this.systemAudio, displays: this.deps.displays(), virtualSupported: this.deps.virtualSupported?.() === true } }
   private selectedIds(status: DesktopAccessStatus) {
     const allowed = new Set(status.displays.filter(value => value.allowed).map(value => value.revision))
     return new Set(this.deps.displays().filter(d => allowed.has(createHash('sha256').update(d.fingerprint).digest('hex'))).map(d => d.id))
@@ -41,6 +42,7 @@ export class ControlDesktop {
     await rpc.call('desktop.create', { id: this.id, snapshot })
     const status = await rpc.call<DesktopAccessStatus>('desktop.command', { id: this.id, method: 'status', snapshot })
     const features = await rpc.call<string[]>('desktop.command', { id: this.id, method: 'capabilities' }).catch((): string[] => [])
+    this.privacyCapable = snapshot.privacySupported && Array.isArray(features) && features.includes(DESKTOP_PRIVACY_CAPABILITY)
     this.deviceOrigins = Array.isArray(features) && (features as string[]).includes(DESKTOP_DEVICE_CAPABILITY)
     this.gameCapable = this.deps.gameSupported?.() === true && Array.isArray(features) && features.includes(DESKTOP_GAME_CAPABILITY)
     this.virtualCapable = snapshot.virtualSupported && Array.isArray(features) && (features as string[]).includes(DESKTOP_VIRTUAL_CAPABILITY)
@@ -114,16 +116,19 @@ export class ControlDesktop {
   capabilities() { return this.rpc && !this.rpc.closed && this.deps.supported() && this.enabled ? [DESKTOP_CAPABILITY,
     ...(this.deviceOrigins ? [DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY] : []), ...(this.virtualCapable && this.virtualEnabled ? [DESKTOP_VIRTUAL_CAPABILITY] : [])] : [] }
   descriptors(scopes: readonly string[]) {
-    return DESKTOP_METHODS.filter(operation => !operation.startsWith('desktop.virtual.') || (this.virtualCapable && this.virtualEnabled)).map(operation => ({ operation, schemaVersion: 1, resourceKind: 'desktop', supported: this.deps.supported(), enabled: this.enabled && Boolean(this.rpc && !this.rpc.closed),
-      authorized: scopes.includes('desktop.view') && (operation !== 'desktop.control.acquire' || scopes.includes('desktop.control')), online: true, allowedActions: ['read', 'control'] }))
+    return DESKTOP_METHODS.filter(operation => operation !== 'desktop.session.privacy' || this.privacyCapable).filter(operation => !operation.startsWith('desktop.virtual.') || (this.virtualCapable && this.virtualEnabled)).map(operation => ({ operation, schemaVersion: 1, resourceKind: 'desktop', supported: this.deps.supported(), enabled: this.enabled && Boolean(this.rpc && !this.rpc.closed),
+      authorized: scopes.includes('desktop.view') && (!['desktop.control.acquire', 'desktop.session.privacy'].includes(operation) || scopes.includes('desktop.control')), online: true, allowedActions: ['read', 'control'] }))
   }
   async invoke(method: string, params: unknown, authority: DesktopAuthority) {
     if (this.stopping || this.cleanupBlocked) throw Error('DESKTOP_CLEANUP_UNCONFIRMED')
     validateDesktopParams(method as any, params)
     if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
     if (method.startsWith('desktop.virtual.') && (authority.purpose === 'desktop' || !this.enabled || !this.virtualCapable || !this.virtualEnabled)) throw Error('DESKTOP_VIRTUAL_UNAVAILABLE')
+    const privacy = this.privacyCapable && this.enabled && Boolean(this.rpc && !this.rpc.closed) &&
+      authority.purpose !== 'desktop' && authority.scopes.includes('desktop.view') && authority.scopes.includes('desktop.control')
+    if (method === 'desktop.session.privacy' && !privacy) throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
     if (method === 'desktop.access.get') return {
-      capabilities: [...this.capabilities(), ...(this.enabled && this.gameEnabled && this.gameCapable && authority.purpose === 'desktop' ? [DESKTOP_GAME_CAPABILITY] : [])], supported: this.deps.supported(), enabled: this.enabled,
+      capabilities: [...this.capabilities(), ...(privacy ? [DESKTOP_PRIVACY_CAPABILITY] : []), ...(this.enabled && this.gameEnabled && this.gameCapable && authority.purpose === 'desktop' ? [DESKTOP_GAME_CAPABILITY] : [])], supported: this.deps.supported(), enabled: this.enabled,
       viewAllowed: authority.scopes.includes('desktop.view'),
       controlAllowed: authority.scopes.includes('desktop.view') && authority.scopes.includes('desktop.control'), busy: desktopActivityGate.busy()
     }
@@ -200,6 +205,7 @@ export class ControlDesktop {
     }
   }
   detach() {
+    this.privacyCapable = false
     this.rpc = undefined; this.contexts.clear(); this.deviceOrigins = false; this.virtualCapable = false
     if (!this.ports.busy()) { this.admittedGame = false; this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id) }
   }

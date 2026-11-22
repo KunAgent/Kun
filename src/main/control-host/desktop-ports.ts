@@ -108,7 +108,7 @@ export class DesktopPorts {
       resource.displayId = result.id
       return result
     }
-    const methods = kind === 'capture' ? ['open', 'identity', 'start', 'answer', 'ice', 'send', 'quality', 'stop'] : kind === 'input' ? ['start', 'ready', 'setupLease', 'lease', 'input', 'release', 'stop'] : []
+    const methods = kind === 'capture' ? ['open', 'identity', 'start', 'answer', 'ice', 'send', 'quality', 'privacy', 'stop'] : kind === 'input' ? ['start', 'ready', 'setupLease', 'lease', 'input', 'release', 'stop'] : []
     if (!methods.includes(method) || !Array.isArray(args) || args.length > 5) throw Error('CONTROL_RPC_REJECTED')
     let resource = this.resources.get(resourceId)
     const cleanup = ['stop', 'release'].includes(method)
@@ -134,6 +134,25 @@ export class DesktopPorts {
       this.resources.set(resourceId, resource)
     }
     if (resource.kind !== kind) throw Error('CONTROL_RPC_REJECTED')
+    if (kind === 'capture' && method === 'privacy') {
+      const source = resource, media = this.media
+      const authorized = () => {
+        this.require(source.authority); this.require(source.authority, true)
+        if (this.media !== media || !this.media || !this.deps.privacySupported?.() || !source.port.privacy || source.authority.purpose === 'desktop' ||
+            this.resources.get(resourceId) !== source || source.displayId === undefined || !this.admittedDisplay(source.displayId, source.authority))
+          throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
+        if (args[0] === true && (this.session !== this.media.sessionId || !this.deps.arbiter.owns(this.session) ||
+            performance.now() >= this.foregroundUntil || performance.now() - this.healthAt > 2000)) throw Error('DESKTOP_CONTROL_REQUIRED')
+      }
+      if (args.length > 1 || (args.length === 1 && typeof args[0] !== 'boolean')) throw Error('CONTROL_RPC_REJECTED')
+      authorized()
+      const enabled = await source.port.privacy(args[0], authorized)
+      try { authorized() } catch (error) {
+        if (enabled) await source.port.privacy(false)
+        throw error
+      }
+      return enabled
+    }
     if (kind === 'capture' && method === 'start') {
       resource.gaming = args[1] === 'game60'
       if (resource.gaming && (resource.authority.purpose !== 'desktop' || !this.allowGame())) throw Error('DESKTOP_GAME_UNAVAILABLE')
