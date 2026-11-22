@@ -1,3 +1,4 @@
+import { moveWorkAnnotations } from './work-annotation-subscriptions'
 import { createWriteDeleteAction } from './write-workspace-delete-action'
 import { enqueueWriteDocumentOperation, relocateQueuedWriteDocumentOperations } from './write-document-operations'
 import { moveWriteSpreadsheetEditors } from './write-spreadsheet-editor-coordinator'
@@ -542,6 +543,11 @@ export function createWriteFileActions({
         restoreRenameLock()
         if (workspaceIsCurrent(workspaceRoot)) set({ fileError: formatWriteFileActionError(error) })
         return null
+      }
+      if (result.ok) {
+        void moveWorkAnnotations(workspaceRoot, result.previousPath, result.path).catch((error: unknown) => {
+          if (workspaceIsCurrent(workspaceRoot)) set({ fileError: formatWriteFileActionError(error) })
+        })
       }
       if (!workspaceIsCurrent(workspaceRoot)) return null
       if (!result.ok) {

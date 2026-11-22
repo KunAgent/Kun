@@ -1,6 +1,7 @@
 import type { WriteDocumentReviewHandle } from './write-document-editor-handle'
 import type { WriteInlineFormatKind } from '../../write/inline-format'
 import type { WriteBlockType } from '../../write/block-type'
+import type { WordAnnotationAnchor } from '@shared/work-annotation-anchor'
 import type { OfficeDocumentPreviewFormat } from '@shared/office-document'
 
 export type WriteSelectionSourceKind =
@@ -40,6 +41,8 @@ export type WriteSelectionRange = {
 }
 
 export type WriteEditorSelectionState = {
+  annotationAnchor?: WordAnnotationAnchor
+  richRange?: { from: number; to: number; latexRange?: { from: number; to: number } }
   text: string
   ranges: WriteSelectionRange[]
   charCount: number

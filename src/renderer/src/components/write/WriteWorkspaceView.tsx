@@ -1,3 +1,5 @@
+import { useAnnotationReviewOwner } from '../../write/annotations/annotation-review-owner'
+import { annotateWorkSelection, annotationDocumentKey } from '../../write/annotations/selection-target'
 import { clearAbandonedSelectionReview } from '../../write/selection-review-state'
 import { useFrozenSelection } from './selection-menu/use-frozen-selection'
 import { useSelectionEdit } from './selection-menu/use-selection-edit'
@@ -372,6 +374,7 @@ export function WriteWorkspaceView({
     !busy
   )
 
+  const annotationReview = useAnnotationReviewOwner((s) => s.key === annotationDocumentKey(workspaceRoot, activeFilePath ?? ''))
   useWriteWorkspaceLifecycle({
     workspaceRoot,
     activeFilePath,
@@ -386,7 +389,7 @@ export function WriteWorkspaceView({
     reviewActive,
     pendingAgentReview,
     reviewSurfaceKey: previewMode,
-    selectionEditActive: Boolean(selectionEdit.session),
+    selectionEditActive: Boolean(selectionEdit.session) || annotationReview,
     saveTimerRef,
     documentHandleRef,
     flushSave,
@@ -655,6 +658,11 @@ export function WriteWorkspaceView({
           onSetBlockType={applyBlockType}
           quickActions={inlineQuickActions}
           onQuickAction={runQuickAction}
+          onAnnotate={(activeFileIsText && isMarkdown || activeFileIsPdf || selection.sourceKind === 'word')
+            ? () => {
+              if (annotateWorkSelection(workspaceRoot, activeFilePath, selection)) frozen.dismiss()
+              else setFileError(t('writeAnnotationSourceChanged'))
+            } : undefined}
           onQuoteSelection={quoteSelectionToAssistant}
           agentPresets={resolvedAgentPresets}
           activeAgentId={assistantAgentPresetId}

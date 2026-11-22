@@ -1,7 +1,14 @@
 import { useCallback, useState } from 'react'
 import type { WriteEditorSelectionState } from '../write-markdown-editor-types'
 export function selectionSignature(selection: WriteEditorSelectionState): string {
-  return JSON.stringify([selection.ranges.map(({ from, to }) => [from, to]), selection.text, selection.selectedImage?.src])
+  const word = selection.annotationAnchor
+  // Read-only viewers report offsets relative to the quote. Two occurrences
+  // with the same words can still belong to different paragraphs or pages.
+  return JSON.stringify([
+    selection.ranges.map(({ from, to }) => [from, to]), selection.text, selection.selectedImage?.src,
+    word && [word.start, word.end], selection.sourceKind === 'pdf' && [selection.pageStart, selection.rects?.[0]],
+    selection.richRange
+  ])
 }
 export function useFrozenSelection(selection: WriteEditorSelectionState, documentKey: string) {
   const [frozen, setFrozen] = useState<{ key: string; selection: WriteEditorSelectionState } | null>(null)

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { BookOpenText, Expand, MessageSquareQuote, PenLine } from 'lucide-react'
+import { BookOpenText, Expand, MessageSquarePlus, MessageSquareQuote, PenLine } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 /**
@@ -7,15 +7,18 @@ import { useTranslation } from 'react-i18next'
  * (with review), 解释 asks in the session, 引用到会话 quotes it into the
  * composer. Editing moves only appear where the document can be edited.
  */
-export function SelectionActionStrip({ editEnabled, onAskEdit, onAskChat, onQuoteSelection, onDone }: {
+export function SelectionActionStrip({ editEnabled, onAskEdit, onAskChat, onQuoteSelection, onAnnotate, onDone }: {
   editEnabled: boolean
   onAskEdit?: (instruction: string) => void
   onAskChat?: (instruction: string) => void
   onQuoteSelection?: () => void
+  onAnnotate?: () => void
   onDone: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const actions = [
+    { id: 'annotate', show: Boolean(onAnnotate), Icon: MessageSquarePlus, label: t('writeAnnotationAdd'),
+      run: () => onAnnotate?.() },
     { id: 'rewrite', show: editEnabled && Boolean(onAskEdit), Icon: PenLine, label: t('writeSelectionActionRewrite'),
       run: () => onAskEdit?.(t('writeSelectionActionRewritePrompt')) },
     { id: 'expand', show: editEnabled && Boolean(onAskEdit), Icon: Expand, label: t('writeSelectionActionExpand'),

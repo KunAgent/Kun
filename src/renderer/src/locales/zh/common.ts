@@ -1,5 +1,6 @@
 import latex from './common/latex.json'
 import writeSelectionMenu from './common/write-selection-menu.json'
+import workAnnotations from './common/work-annotations.json'
 import browserFloating from './common/browser-floating.json'
 import githubApp from './common/github-app.json'
 import composerSubscriptionQuota from './common/composer-subscription-quota.json'
@@ -107,6 +108,7 @@ const common = {
   ...latex,
   ...browserFloating,
   ...writeSelectionMenu,
+  ...workAnnotations,
   ...githubApp,
   ...composerSubscriptionQuota,
   ...toolApprovalDetails,

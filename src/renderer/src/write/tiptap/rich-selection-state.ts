@@ -224,6 +224,8 @@ export function selectionStateFromEditor(
   const text = ranges.map((range) => range.text).join('\n\n')
   return {
     text,
+    ...(state.selection.ranges.length === 1 && !state.selection.empty
+      ? { richRange: { from: state.selection.from, to: state.selection.to } } : {}),
     ranges,
     charCount: ranges.reduce((total, range) => total + range.charCount, 0),
     blockType: richSelectionBlockType(state),
