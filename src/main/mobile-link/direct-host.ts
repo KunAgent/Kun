@@ -25,6 +25,7 @@ export class DirectHost {
   private generation = 0
   private queue = Promise.resolve()
   private error?: string
+  private virtualSupported = false
   private totalBudget = new RequestBudget()
   constructor(private deps: DirectHostDependencies) {}
   private serial<T>(run: () => Promise<T>): Promise<T> {
@@ -89,12 +90,23 @@ export class DirectHost {
       this.settings.port = (server.address() as { port: number }).port
       await this.deps.write(owner, this.settings)
       if (this.settings.grants.some(grant => grant.expiresAt > Date.now() && grant.scopes.includes('desktop.view')))
-        await this.deps.link.desktop?.configureRemoteAccess?.(true, current).catch(() => {})
+        await this.prepareDesktop(current).catch(() => {})
       if (!current()) { await this.stop(); return }
       this.error = undefined
     } catch (error) {
       this.error = (error as NodeJS.ErrnoException).code === 'EADDRINUSE' ? 'DIRECT_PORT_IN_USE' : 'DIRECT_START_FAILED'
       await this.stop(); throw Error(this.error)
+    }
+  }
+  private async prepareDesktop(current: () => boolean) {
+    const desktop = this.deps.link.desktop
+    const status = await desktop?.configureRemoteAccess?.(true, current)
+    if (!desktop || !status || !current()) return
+    this.virtualSupported = status.virtualSupported === true
+    const allowVirtual = this.settings.allowVirtual === true
+    if (this.virtualSupported && (status.virtualEnabled === true) !== allowVirtual) {
+      const displayTokens = status.displays.filter(item => item.allowed).map(item => item.token)
+      await desktop.configure({ enabled: allowVirtual || displayTokens.length > 0, displayTokens, allowVirtual }, current)
     }
   }
   status(): DirectLinkStatus {
@@ -105,6 +117,7 @@ export class DirectHost {
     }).slice(0, 6) : [directAddress('http://127.0.0.1:' + this.settings.port)]
     return { ready: Boolean(this.ownerId && this.ownerId === this.deps.owner()), enabled: this.settings.enabled, running: Boolean(this.server?.listening), bind: this.settings.bind, port: this.settings.port,
       addresses: this.settings.addresses, localAddresses, hasIceServers: this.settings.iceServers.length > 0,
+      allowVirtual: this.settings.allowVirtual === true, virtualSupported: this.virtualSupported,
       hostId: this.registry?.hostId, error: this.error,
       grants: this.settings.grants.map(({ secret: _secret, deviceId, ...grant }) => ({ ...grant,
         online: [...this.connections].some(connection => connection.grant?.deviceId === deviceId && connection.current()) })) }
@@ -117,7 +130,7 @@ export class DirectHost {
     const link = registry.pair(addresses, scopes)
     if (parseDirectPairing(link).expiresAt <= Date.now()) throw Error('DIRECT_PAIRING_EXPIRED')
     if (scopes === undefined || JSON.stringify(scopes).includes('desktop.view')) {
-      await this.deps.link.desktop?.configureRemoteAccess?.(true, () => this.registry === registry && this.deps.owner() === owner).catch(() => {})
+      await this.prepareDesktop(() => this.registry === registry && this.deps.owner() === owner).catch(() => {})
       if (this.registry !== registry || this.deps.owner() !== owner) throw Error('ACCOUNT_CHANGED')
     }
     return { link, expiresAt: parseDirectPairing(link).expiresAt }
@@ -148,6 +161,8 @@ export class DirectHost {
     if (server?.listening) await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections() })
     await transfers?.stop()
     await this.deps.link.desktop?.stopAll('host_stopped').catch(() => {})
+    if (this.virtualSupported) await this.deps.link.desktop?.configureRemoteAccess?.(false).catch(() => {})
+    this.virtualSupported = false
     await this.deps.link.terminal?.stopAll('host_stopped').catch(() => {})
     await this.deps.link.simulator?.stopAll().catch(() => {})
   }

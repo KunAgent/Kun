@@ -8,12 +8,14 @@ export type DesktopAccessStatus = {
   /** OS permission, independent of sharing enablement and selected displays. */
   screenRecordingReady?: boolean
   inputReady?: boolean
+  virtualSupported?: boolean
+  virtualEnabled?: boolean
   reason?: string
   lastFailure?: string
   displays: Array<DesktopDisplay & { allowed: boolean }>
   active?: { sessionId: string; peer: string; mode: 'view' | 'control' }
 }
-export type DesktopConfiguration = { enabled: boolean; displayTokens: string[] }
+export type DesktopConfiguration = { enabled: boolean; displayTokens: string[]; allowVirtual?: boolean }
 export type CaptureCommand = { id: string; operation: 'start' | 'answer' | 'ice' | 'stop' | 'send' | 'quality'; params: Record<string, unknown> }
 export type CaptureReply = { id: string; value?: unknown; error?: string }
 export type CaptureEvent = { event: 'ice' | 'data' | 'closed' | 'ready' | 'health'; value?: unknown }

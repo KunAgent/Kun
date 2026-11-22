@@ -8,6 +8,7 @@ import { MOBILE_LINK_SCOPES } from '../../shared/mobile-link-scopes'
 import { emptyDirectSettings, type DirectSettings } from './direct-registry'
 
 export const DirectConfiguration = z.object({ enabled: z.boolean(), bind: z.enum(['lan', 'loopback']), port: z.number().int().min(0).max(65535),
+  allowVirtual: z.boolean().optional(),
   addresses: z.array(z.string().min(1).max(2048)).max(6), iceServers: z.array(z.object({
     urls: z.union([z.string(), z.array(z.string()).min(1).max(4)]), username: z.string().max(512).optional(), credential: z.string().max(1024).optional()
   }).strict()).max(8).optional() }).strict()

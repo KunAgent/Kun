@@ -2,8 +2,9 @@ import type { RpcPeer } from '@kun/control-host'
 import type { DesktopAuthority, DesktopEngineDependencies, DesktopInputPort } from '@kun/control-runtime/desktop'
 import type { DesktopCapturePort } from '../remote-desktop/capture-host'
 import type { CaptureEvent } from '../../shared/remote-desktop'
+import { validateDesktopViewport } from '@kun/remote-protocol'
 
-type Resource = { kind: 'capture' | 'input'; port: any; authority: DesktopAuthority; capture?: string }
+type Resource = { kind: 'capture' | 'input' | 'virtual'; port: any; authority: DesktopAuthority; capture?: string; displayId?: number }
 export class DesktopPorts {
   private resources = new Map<string, Resource>()
   private authority?: DesktopAuthority
@@ -18,7 +19,19 @@ export class DesktopPorts {
   private closing = false
   constructor(readonly id: string, readonly deps: DesktopEngineDependencies,
     private rpc: () => RpcPeer | undefined, private context: (id: string) => DesktopAuthority | undefined,
-    private allowedDisplay: (id: number) => boolean, private end: (reason: 'host_user_ended' | 'input_helper_lost') => void) {}
+    private allowedDisplay: (id: number) => boolean, private end: (reason: 'host_user_ended' | 'input_helper_lost' | 'virtual_display_lost') => void,
+    private allowVirtual: () => boolean = () => false) {}
+  /** Capture and input must both stay on the one monitor owned by this authority. */
+  private admittedDisplay(id: number, authority: DesktopAuthority) {
+    const virtual = [...this.resources.values()].find(resource => resource.kind === 'virtual')
+    return virtual ? this.allowVirtual() && virtual.authority === authority && virtual.displayId === id : this.allowedDisplay(id)
+  }
+  relevantDisplay(id: number) {
+    const virtual = [...this.resources.values()].find(resource => resource.kind === 'virtual')
+    if (virtual) return virtual.displayId === id
+    const capture = [...this.resources.values()].find(resource => resource.kind === 'capture')
+    return !capture || capture.displayId === id
+  }
   private emit(id: string, event: CaptureEvent) {
     if (event.event === 'health') {
       const value = event.value as any
@@ -73,6 +86,27 @@ export class DesktopPorts {
     }
     if (typeof resourceId !== 'string' || !/^[a-f0-9-]{36}$/.test(resourceId)) throw Error('CONTROL_RPC_REJECTED')
     const [kind, method] = String(operation).split('.')
+    if (kind === 'virtual') {
+      let resource = this.resources.get(resourceId)
+      if (resource && resource.kind !== 'virtual') throw Error('CONTROL_RPC_REJECTED')
+      if (method === 'stop' && args.length === 0) {
+        await resource?.port.stop(); this.resources.delete(resourceId); return
+      }
+      if (!['open', 'resize'].includes(method) || !Array.isArray(args) || args.length !== 1) throw Error('CONTROL_RPC_REJECTED')
+      const size = validateDesktopViewport(args[0]), authority = this.require(resource?.authority)
+      if (!this.allowVirtual() || authority.purpose === 'desktop' || !this.deps.virtualDisplay) throw Error('DESKTOP_VIRTUAL_UNAVAILABLE')
+      if (method === 'open') {
+        if (this.resources.size || performance.now() >= this.setupUntil) throw Error('DESKTOP_BUSY')
+        resource = { kind, authority, port: this.deps.virtualDisplay(() => this.end('virtual_display_lost')) }
+        this.resources.set(resourceId, resource)
+      } else if (!resource || !this.media || !this.foregroundUntil || performance.now() >= this.foregroundUntil || this.session) throw Error('DESKTOP_AUTHORITY_CHANGED')
+      if (!resource) throw Error('CONTROL_RPC_REJECTED')
+      const result = await resource.port[method](size)
+      this.require(authority)
+      if (this.resources.get(resourceId) !== resource || !this.allowVirtual()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+      resource.displayId = result.id
+      return result
+    }
     const methods = kind === 'capture' ? ['open', 'identity', 'start', 'answer', 'ice', 'send', 'quality', 'stop'] : kind === 'input' ? ['start', 'ready', 'setupLease', 'lease', 'input', 'release', 'stop'] : []
     if (!methods.includes(method) || !Array.isArray(args) || args.length > 5) throw Error('CONTROL_RPC_REJECTED')
     let resource = this.resources.get(resourceId)
@@ -84,11 +118,11 @@ export class DesktopPorts {
       const authority = this.require()
       if (kind === 'capture' && method === 'open') {
         const displayId = value.fields?.displayId
-        if (!this.allowedDisplay(displayId)) throw Error('DESKTOP_SOURCE_CHANGED')
-        resource = { kind, authority, port: this.deps.capture(displayId, event => this.emit(resourceId, event)) }
+        if (!this.admittedDisplay(displayId, authority)) throw Error('DESKTOP_SOURCE_CHANGED')
+        resource = { kind, authority, displayId, port: this.deps.capture(displayId, event => this.emit(resourceId, event)) }
         this.healthSequence = 0; this.healthAt = 0
       } else if (kind === 'input' && method === 'start') {
-        if (!this.allowedDisplay(args[0])) throw Error('DESKTOP_SOURCE_CHANGED')
+        if (!this.admittedDisplay(args[0], authority)) throw Error('DESKTOP_SOURCE_CHANGED')
         const capture = [...this.resources.entries()].find(([, entry]) => entry.kind === 'capture')
         if (!capture) throw Error('DESKTOP_CAPTURE_NOT_ISOLATED')
         const identity = await (capture[1].port as DesktopCapturePort).identity()
@@ -131,12 +165,13 @@ export class DesktopPorts {
   reopen() { this.closing = false }
   async cleanup() {
     this.closing = true
-    const results = await Promise.allSettled([...this.resources.entries()].map(async ([id, resource]) => {
+    const results = await Promise.allSettled([...this.resources.entries()].filter(([, resource]) => resource.kind !== 'virtual').map(async ([id, resource]) => {
       if (resource.kind === 'input') await (resource.port as DesktopInputPort).stop()
       else await (resource.port as DesktopCapturePort).stop()
       this.resources.delete(id)
     }))
     if (results.some(result => result.status === 'rejected')) throw Error('DESKTOP_CLEANUP_UNCONFIRMED')
+    for (const [id, resource] of this.resources) if (resource.kind === 'virtual') { await resource.port.stop(); this.resources.delete(id) }
     if (this.session) await this.deps.arbiter.release(this.session)
     this.session = undefined; this.authority = undefined; this.healthAt = 0; this.media = this.hello = undefined
     this.foregroundUntil = 0; this.challenges.clear(); this.deps.indicator?.hide()

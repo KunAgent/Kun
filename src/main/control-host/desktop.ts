@@ -1,5 +1,5 @@
-import { randomUUID } from 'node:crypto'
-import { DESKTOP_CAPABILITY, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY, DESKTOP_METHODS, validateDesktopParams } from '@kun/remote-protocol'
+import { createHash, randomUUID } from 'node:crypto'
+import { DESKTOP_CAPABILITY, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY, DESKTOP_VIRTUAL_CAPABILITY, DESKTOP_METHODS, validateDesktopParams } from '@kun/remote-protocol'
 import type { RpcPeer } from '@kun/control-host'
 import type { DesktopAuthority, DesktopEngineDependencies, DesktopAccessStatus, DesktopConfiguration } from '@kun/control-runtime/desktop'
 import { DesktopPorts } from './desktop-ports'
@@ -17,13 +17,19 @@ export class ControlDesktop {
   private stopping?: Promise<void>
   private cleanupBlocked = false
   private deviceOrigins = false
+  private virtualCapable = false
+  private virtualEnabled = false
   private admittedStartId?: string
   private admittedHandle?: string
   constructor(readonly deps: DesktopEngineDependencies, private ready: (required: boolean) => Promise<RpcPeer | undefined>) {
     this.ports = new DesktopPorts(this.id, deps, () => this.rpc, id => this.contexts.get(id), id => this.enabled && this.selected.has(id),
-      reason => { void this.stopAll(reason).catch(() => {}) })
+      reason => { void this.stopAll(reason).catch(() => {}) }, () => this.enabled && this.virtualCapable && this.virtualEnabled)
   }
-  private snapshot() { return { supported: this.deps.supported(), displays: this.deps.displays() } }
+  private snapshot() { return { supported: this.deps.supported(), displays: this.deps.displays(), virtualSupported: this.deps.virtualSupported?.() === true } }
+  private selectedIds(status: DesktopAccessStatus) {
+    const allowed = new Set(status.displays.filter(value => value.allowed).map(value => value.revision))
+    return new Set(this.deps.displays().filter(d => allowed.has(createHash('sha256').update(d.fingerprint).digest('hex'))).map(d => d.id))
+  }
   async attach(rpc: RpcPeer) {
     this.rpc = rpc; this.ports.reopen()
     const snapshot = this.snapshot()
@@ -31,9 +37,13 @@ export class ControlDesktop {
     const status = await rpc.call<DesktopAccessStatus>('desktop.command', { id: this.id, method: 'status', snapshot })
     const features = await rpc.call<string[]>('desktop.command', { id: this.id, method: 'capabilities' }).catch(() => [])
     this.deviceOrigins = Array.isArray(features) && (features as string[]).includes(DESKTOP_DEVICE_CAPABILITY)
+    this.virtualCapable = snapshot.virtualSupported && Array.isArray(features) && (features as string[]).includes(DESKTOP_VIRTUAL_CAPABILITY)
+    this.virtualEnabled &&= this.virtualCapable
     if (this.enabled) {
-      const displayTokens = status.displays.filter((_, index) => this.selected.has(snapshot.displays[index]?.id)).map(display => display.token)
-      this.cached = await rpc.call('desktop.command', { id: this.id, method: 'configure', value: { enabled: displayTokens.length > 0, displayTokens }, snapshot })
+      const revisions = new Set(snapshot.displays.filter(d => this.selected.has(d.id)).map(d => createHash('sha256').update(d.fingerprint).digest('hex')))
+      const displayTokens = status.displays.filter(d => revisions.has(d.revision)).map(d => d.token)
+      this.cached = await rpc.call('desktop.command', { id: this.id, method: 'configure', value: { enabled: displayTokens.length > 0 || this.virtualEnabled,
+        displayTokens, ...(this.virtualCapable ? { allowVirtual: this.virtualEnabled } : {}) }, snapshot })
       this.enabled = Boolean(this.cached?.enabled)
     } else this.cached = status
   }
@@ -54,13 +64,15 @@ export class ControlDesktop {
   async status() { this.cached = await this.command<DesktopAccessStatus>('status'); return this.cached }
   async configure(value: DesktopConfiguration, current: () => boolean = () => true) {
     const revision = ++this.revision
-    const known = this.cached ?? await this.status(), displays = this.deps.displays()
+    const known = this.cached ?? await this.status()
     if (!value || typeof value.enabled !== 'boolean' || !Array.isArray(value.displayTokens) || value.displayTokens.some(token => !known.displays.some(item => item.token === token))) throw Error('INVALID_REQUEST')
+    if (value.allowVirtual && !this.virtualCapable) throw Error('DESKTOP_VIRTUAL_UNAVAILABLE')
     this.enabled = false
     this.ports.beginStop()
     const status = await this.command<DesktopAccessStatus>('configure', value)
     if (revision !== this.revision || !current()) { await this.stopAll('authorization_changed'); throw Error('DESKTOP_AUTHORITY_CHANGED') }
-    this.selected = new Set(displays.filter((_, index) => status.displays[index]?.allowed).map(display => display.id))
+    this.selected = this.selectedIds(status)
+    this.virtualEnabled = status.virtualEnabled === true
     this.enabled = status.enabled; this.cached = status; this.ports.reopen(); return status
   }
   async configureRemoteAccess(enabled: boolean, current: () => boolean = () => true) {
@@ -69,18 +81,21 @@ export class ControlDesktop {
     this.ports.beginStop()
     const status = await this.command<DesktopAccessStatus>('configureRemoteAccess', enabled)
     if (revision !== this.revision || !current()) { await this.stopAll('authorization_changed'); throw Error('DESKTOP_AUTHORITY_CHANGED') }
-    this.selected = new Set(this.deps.displays().filter((_, index) => status.displays[index]?.allowed).map(display => display.id))
+    this.selected = this.selectedIds(status)
+    this.virtualEnabled = status.virtualEnabled === true
     this.enabled = status.enabled; this.cached = status; this.ports.reopen(); return status
   }
-  capabilities() { return this.rpc && !this.rpc.closed && this.deps.supported() && this.enabled ? [DESKTOP_CAPABILITY, ...(this.deviceOrigins ? [DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY] : [])] : [] }
+  capabilities() { return this.rpc && !this.rpc.closed && this.deps.supported() && this.enabled ? [DESKTOP_CAPABILITY,
+    ...(this.deviceOrigins ? [DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY] : []), ...(this.virtualCapable && this.virtualEnabled ? [DESKTOP_VIRTUAL_CAPABILITY] : [])] : [] }
   descriptors(scopes: readonly string[]) {
-    return DESKTOP_METHODS.map(operation => ({ operation, schemaVersion: 1, resourceKind: 'desktop', supported: this.deps.supported(), enabled: this.enabled && Boolean(this.rpc && !this.rpc.closed),
+    return DESKTOP_METHODS.filter(operation => !operation.startsWith('desktop.virtual.') || (this.virtualCapable && this.virtualEnabled)).map(operation => ({ operation, schemaVersion: 1, resourceKind: 'desktop', supported: this.deps.supported(), enabled: this.enabled && Boolean(this.rpc && !this.rpc.closed),
       authorized: scopes.includes('desktop.view') && (operation !== 'desktop.control.acquire' || scopes.includes('desktop.control')), online: true, allowedActions: ['read', 'control'] }))
   }
   async invoke(method: string, params: unknown, authority: DesktopAuthority) {
     if (this.stopping || this.cleanupBlocked) throw Error('DESKTOP_CLEANUP_UNCONFIRMED')
     validateDesktopParams(method as any, params)
     if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+    if (method.startsWith('desktop.virtual.') && (authority.purpose === 'desktop' || !this.enabled || !this.virtualCapable || !this.virtualEnabled)) throw Error('DESKTOP_VIRTUAL_UNAVAILABLE')
     if (method === 'desktop.access.get') return {
       capabilities: this.capabilities(), supported: this.deps.supported(), enabled: this.enabled,
       viewAllowed: authority.scopes.includes('desktop.view'),
@@ -92,7 +107,8 @@ export class ControlDesktop {
     if (!handle) { if (this.contexts.size >= 128) throw Error('BACKPRESSURE'); handle = randomUUID() }
     this.contexts.set(handle, authority)
     this.ports.reopen()
-    if (method === 'desktop.session.start') {
+    const starting = method === 'desktop.session.start' || method === 'desktop.virtual.start'
+    if (starting) {
       desktopActivityGate.claim(this.id, 'incoming')
       if (!this.admittedStartId) { this.admittedStartId = (params as {startId: string}).startId; this.admittedHandle = handle }
     }
@@ -103,7 +119,7 @@ export class ControlDesktop {
       if (result?.state === 'ended') this.releaseActivity(result.startId, handle)
       return result
     } catch (error) {
-      if (method === 'desktop.session.start' && !this.ports.busy()) {
+      if (starting && !this.ports.busy()) {
         const status = await this.command<DesktopAccessStatus>('status').catch(() => undefined)
         if (status && !status.active) this.releaseActivity((params as {startId: string}).startId, handle)
       }
@@ -152,7 +168,7 @@ export class ControlDesktop {
     }
   }
   detach() {
-    this.rpc = undefined; this.contexts.clear(); this.deviceOrigins = false
+    this.rpc = undefined; this.contexts.clear(); this.deviceOrigins = false; this.virtualCapable = false
     if (!this.ports.busy()) { this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id) }
   }
 }

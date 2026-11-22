@@ -11,6 +11,7 @@ import { DesktopShareIndicator } from './indicator'
 import { bindDesktopDisplayStops, bindDesktopPrivacyStops } from './host-lifecycle'
 import { logInfo } from '../logger'
 import { stopComputerSessions } from '../computer-access/lifecycle'
+import { NativeMobileDisplay, mobileDisplaySupported, isKunMobileDisplay, expectedMobileDisplayChange } from './virtual-display'
 const engines = new Set<ControlDesktop>()
 export async function stopBuiltinDesktopEngines() {
   try { await stopComputerSessions(); await Promise.all([...engines].map(engine => engine.stopAll('application_quit'))) }
@@ -22,14 +23,16 @@ export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promis
     supported: () => process.platform === 'darwin' && process.arch === 'arm64' && desktopHelperAvailable(),
     permissions: getComputerUsePermissions,
     diagnostic: value => logInfo('remote-desktop', 'Desktop session state.', value),
-    displays: () => screen.getAllDisplays().map(display => ({ id: display.id, primary: display.id === screen.getPrimaryDisplay().id, fingerprint: displayFingerprint(display), label: display.label || `Display ${display.id}`,
+    virtualSupported: mobileDisplaySupported, virtualDisplay: lost => new NativeMobileDisplay(lost),
+    displays: () => screen.getAllDisplays().filter(display => !isKunMobileDisplay(display.id)).map(display => ({ id: display.id, primary: display.id === screen.getPrimaryDisplay().id, fingerprint: displayFingerprint(display), label: display.label || `Display ${display.id}`,
       pixelWidth: Math.round(display.size.width * display.scaleFactor), pixelHeight: Math.round(display.size.height * display.scaleFactor), rotation: display.rotation })),
     capture: (id, receive) => new ElectronDesktopCapture(id, receive, () => controlRuntimeHost().captureDirectory()),
     input: lost => new NativeDesktopInput(lost), ice, authorizeOrigin,
     indicator: new DesktopShareIndicator(),
     now: () => performance.now(), id: randomUUID, arbiter: desktopInputArbiter
   })
-  bindDesktopDisplayStops(screen, reason => service.stopAll(reason), value => logInfo('remote-desktop', 'Desktop display change.', value))
+  bindDesktopDisplayStops(screen, reason => service.stopAll(reason), value => logInfo('remote-desktop', 'Desktop display change.', value),
+    expectedMobileDisplayChange, id => service.ports.relevantDisplay(id))
   bindDesktopPrivacyStops(powerMonitor, reason => service.stopAll(reason))
   engines.add(service)
   return service

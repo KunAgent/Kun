@@ -8,7 +8,9 @@ if (process.platform === 'darwin') {
   mkdirSync(cache, { recursive: true })
   const inputs = ['arm64', 'x86_64'].map(arch => {
     const output = resolve(cache, `remote-desktop-input-${arch}`)
-    execFileSync('xcrun', ['swiftc', '-target', `${arch}-apple-macos13.0`, '-module-cache-path', resolve(cache, arch), '-O', resolve(root, 'native/remote-desktop/macos-input.swift'), '-o', output], { stdio: 'inherit' })
+    const target = `${arch}-apple-macos13.0`, display = resolve(cache, `virtual-display-${arch}.o`)
+    execFileSync('xcrun', ['clang', '-target', target, '-fobjc-arc', '-fmodules', '-O2', '-c', resolve(root, 'native/remote-desktop/macos-virtual-display.m'), '-o', display], { stdio: 'inherit' })
+    execFileSync('xcrun', ['swiftc', '-target', target, '-module-cache-path', resolve(cache, arch), '-O', resolve(root, 'native/remote-desktop/macos-input.swift'), display, '-o', output], { stdio: 'inherit' })
     return output
   })
   // Existing desktop releases also package Intel; the packaging hook thins this resource

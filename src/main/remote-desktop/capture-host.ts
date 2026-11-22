@@ -9,6 +9,7 @@ import { markProtectedWindowContents } from '../protected-window-contents'
 import { logWarn } from '../logger'
 import { captureFailureName, permitsDesktopCapture } from './capture-permissions'
 import { resolveNamedPreloadPath } from '../main-paths'
+import { isKunMobileDisplay } from './virtual-display'
 function bounded(value: unknown, max: number) { try { return Buffer.byteLength(JSON.stringify(value)) <= max } catch { return false } }
 export interface DesktopCapturePort {
   start(iceServers: unknown[], quality: string): Promise<{ type: 'offer'; sdp: string }>
@@ -71,9 +72,14 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
     ses.setDisplayMediaRequestHandler(async (request, callback) => {
       if (this.closing || !request.videoRequested || request.audioRequested || request.frame !== window.webContents.mainFrame || request.frame.url !== this.url) { callback({}); return }
       try {
-        const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
-        const source = sources.find(item => item.display_id === String(this.displayId))
-        if (this.closing || !source) callback({}); else callback({ video: source })
+        const attempts = isKunMobileDisplay(this.displayId) ? 8 : 1
+        for (let attempt = 0; !this.closing && attempt < attempts; attempt++) {
+          const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
+          const source = sources.find(item => item.display_id === String(this.displayId))
+          if (source && !this.closing) { callback({ video: source }); return }
+          if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        callback({})
       } catch { callback({}) }
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))

@@ -4,6 +4,7 @@ import { DIRECT_MOBILE_DEFAULT_SCOPES, mobileLinkScopes, type MobileLinkScope } 
 
 export type DirectGrant = { id: string; secret: string; deviceId: string; name: string; scopes: MobileLinkScope[]; expiresAt: number }
 export type DirectSettings = { enabled: boolean; port: number; bind: 'lan' | 'loopback'; addresses: string[];
+  allowVirtual?: boolean;
   iceServers: { urls: string | string[]; username?: string; credential?: string }[]; grants: DirectGrant[] }
 export const emptyDirectSettings = (): DirectSettings => ({ enabled: false, port: 0, bind: 'lan', addresses: [], iceServers: [], grants: [] })
 

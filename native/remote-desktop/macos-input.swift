@@ -78,6 +78,13 @@ func ownedCapture(_ pid: Int32, _ expected: String) -> Bool {
 }
 let parentBirth = birth(parent)
 let args = Array(CommandLine.arguments.dropFirst())
+@_silgen_name("kun_display_supported") func kunDisplaySupported() -> Int32
+@_silgen_name("kun_display_run") func kunDisplayRun() -> Int32
+if args == ["--virtual-display-probe"] {
+  if kunDisplaySupported() == 0 { exit(2) }
+  print("kun-virtual-display-v1"); exit(0)
+}
+if args == ["--virtual-display"] { exit(kunDisplayRun()) }
 if args.count == 2 && args[0] == "--identity", let pid = Int32(args[1]) {
   let identity = birth(pid)
   guard !identity.isEmpty else { exit(2) }
@@ -155,7 +162,10 @@ while let line = readLine() {
   }
   guard operation == "input", ProcessInfo.processInfo.systemUptime < deadline, AXIsProcessTrusted(), let event=value["event"] as? [String:Any], let type=event["type"] as? String else { reply(id,"INPUT_PERMISSION_REQUIRED"); continue }
   let bounds=CGDisplayBounds(display)
-  if let x=event["x"] as? Double, let y=event["y"] as? Double, x.isFinite, y.isFinite, x>=0, x<=1, y>=0, y<=1 { lastPoint=CGPoint(x:bounds.minX+x*bounds.width,y:bounds.minY+y*bounds.height) }
+  guard CGDisplayIsOnline(display) != 0 && bounds.width >= 1 && bounds.height >= 1 else { reply(id,"DESKTOP_SOURCE_CHANGED"); continue }
+  if let x=event["x"] as? Double, let y=event["y"] as? Double, x.isFinite, y.isFinite, x>=0, x<=1, y>=0, y<=1 {
+    lastPoint=CGPoint(x:bounds.minX+x*(bounds.width-1),y:bounds.minY+y*(bounds.height-1))
+  }
   if type == "pointer.move" || type == "pointer.drag" {
     let button = heldButtons.contains(0) ? 0 : heldButtons.contains(2) ? 2 : 1
     let t: CGEventType = heldButtons.contains(0) ? .leftMouseDragged : heldButtons.contains(2) ? .rightMouseDragged : heldButtons.contains(1) ? .otherMouseDragged : .mouseMoved

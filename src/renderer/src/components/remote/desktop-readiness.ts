@@ -3,7 +3,7 @@ import type { DesktopAccessStatus } from '@shared/remote-desktop'
 export function desktopReadiness(value: DesktopAccessStatus, zh: boolean) {
   if (!value.supported) return { warning: true, label: zh ? '当前电脑暂不支持' : 'Unsupported computer',
     detail: zh ? '首版支持 M 芯片 Mac、macOS 13 及以上，并需要完整的 Kun 安装包。' : 'Requires an Apple Silicon Mac, macOS 13 or later, and a complete Kun installation.' }
-  if (!value.displays.some(display => display.allowed)) return { warning: true, label: zh ? '待选择显示器' : 'Select a display',
+  if (!value.virtualEnabled && !value.displays.some(display => display.allowed)) return { warning: true, label: zh ? '待选择显示器' : 'Select a display',
     detail: zh ? '先勾选下方显示器，再开启内置远控。' : 'Select a display below, then enable built-in remote desktop.' }
   if (!value.enabled) return { warning: true, label: zh ? '内置远控未开启' : 'Built-in desktop is off',
     detail: zh ? '显示器已选择，点击「开启内置远控」。重启 Kun 后需重新开启。' : 'A display is selected. Enable built-in desktop again after restarting Kun.' }
