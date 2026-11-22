@@ -5,16 +5,16 @@ import { desktopHelperAvailable, desktopHelperPath } from './native-input'
 
 type VideoSize = { width: number; height: number }
 let available: boolean | undefined
-export function macPrivacyScreenSupported(): boolean {
-  if (available === undefined) {
-    available = process.platform === 'darwin' && desktopHelperAvailable() &&
-      spawnSync(desktopHelperPath(), ['--privacy-screen-probe'], { encoding: 'utf8', timeout: 2000 })
-        .stdout?.trim() === 'kun-privacy-screen-v1'
-  }
+export function privacyScreenSupported(): boolean {
+  if (available !== undefined) return available
+  if ((process.platform !== 'darwin' && process.platform !== 'win32') || !desktopHelperAvailable()) return available = false
+  const probe = spawnSync(desktopHelperPath(), ['--privacy-screen-probe'], { encoding: 'utf8', timeout: 2000, windowsHide: true })
+  available = probe.status === 0 && probe.stdout?.trim() === 'kun-privacy-screen-v1'
   return available
 }
 
-export class MacPrivacyScreen {
+export class NativePrivacyScreen {
+  readonly replacesVideo: boolean
   visible = false
   private child?: ChildProcess
   private exited?: Promise<void>
@@ -25,15 +25,20 @@ export class MacPrivacyScreen {
   private pending?: { accept(line: string): void; reject(error: Error): void }
   constructor(private readonly displayId: number, private readonly identity: { pid: number; birth: string },
     private readonly virtual: boolean, private readonly frame: (data: Buffer, size: VideoSize) => void,
-    private readonly lost: (localExit: boolean) => void) {}
+    private readonly lost: (localExit: boolean) => void) {
+    this.replacesVideo = process.platform === 'darwin' && !virtual
+  }
 
   async open(): Promise<VideoSize> {
+    const windows = process.platform === 'win32'
     const child = spawn(desktopHelperPath(), ['--privacy-screen', String(this.displayId), String(this.identity.pid),
-      this.identity.birth, this.virtual ? 'virtual' : 'physical'], { stdio: ['pipe', 'pipe', 'ignore', 'pipe'] })
+      this.identity.birth, this.virtual ? 'virtual' : 'physical'], {
+      windowsHide: true, stdio: windows ? ['pipe', 'pipe', 'ignore'] : ['pipe', 'pipe', 'ignore', 'pipe']
+    })
     this.child = child
-    const lines = createInterface({ input: child.stdio[3] as Readable })
+    const lines = createInterface({ input: windows ? child.stdout! : child.stdio[3] as Readable })
     lines.on('line', line => this.pending?.accept(line))
-    child.stdout!.on('data', (chunk: Buffer) => this.pixels(chunk))
+    if (!windows) child.stdout!.on('data', (chunk: Buffer) => this.pixels(chunk))
     child.stdin!.on('error', () => { if (!this.closing) child.kill() })
     this.exited = new Promise<void>(resolve => child.once('close', code => {
       const wasVisible = this.visible
@@ -46,7 +51,7 @@ export class MacPrivacyScreen {
     const match = /^ready (\d+) (\d+)$/.exec(await this.response(4500))
     if (!match) throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
     const width = Number(match[1]), height = Number(match[2])
-    if (this.virtual ? width !== 0 || height !== 0 : width < 2 || height < 2 || width % 2 || height % 2 || width * height > 1920 * 1080)
+    if (!this.replacesVideo ? width !== 0 || height !== 0 : width < 2 || height < 2 || width % 2 || height % 2 || width * height > 1920 * 1080)
       throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
     return this.size = { width, height }
   }

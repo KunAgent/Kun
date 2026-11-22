@@ -92,6 +92,14 @@ func run() int {
 	} // per-monitor V2
 	if len(args) > 0 {
 		switch args[0] {
+		case "--privacy-screen-probe":
+			if len(args) != 1 || !privacyAvailable() {
+				return 2
+			}
+			fmt.Println("kun-privacy-screen-v1")
+			return 0
+		case "--privacy-screen":
+			return runPrivacyScreen(args)
 		case "--identity", "--terminate":
 			if len(args) < 2 {
 				return 2

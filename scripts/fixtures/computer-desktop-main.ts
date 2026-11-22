@@ -7,6 +7,7 @@ import { startControlProcess, type ControlProcess } from '../../src/main/control
 import { app, BrowserWindow, ipcMain, screen } from 'electron'
 import { RemoteDesktopService, type DesktopEngineDependencies } from '@kun/control-runtime/desktop'
 import { ElectronDesktopCapture } from '../../src/main/remote-desktop/capture-host'
+import { createWindowsPrivacyDisplay } from './windows-privacy-display'
 import { createPrivacyDisplay } from './mac-privacy-display'
 import { exerciseViewerGameSwitch } from './computer-viewer-game'
 import { DesktopInputArbiter } from '../../src/main/remote-desktop/input-arbiter'
@@ -35,7 +36,7 @@ async function finish(error?:unknown) {
   app.exit(error?1:0)
 }
 app.whenReady().then(async()=>{
-  if (privacy) privacyDisplay = await createPrivacyDisplay()
+  if (privacy) privacyDisplay = process.platform === 'win32' ? await createWindowsPrivacyDisplay() : await createPrivacyDisplay()
   const deps:DesktopEngineDependencies={supported:()=>true, privacySupported:()=>privacy, gameSupported:()=>gaming, systemAudioAllowed:()=>gaming, permissions:async()=>({screenRecording:'granted',accessibility:'granted'}),
     displays:()=>[{id:privacyDisplay?.id ?? 1,primary:true,fingerprint:'synthetic',label:'Synthetic display',pixelWidth:measureSeconds?1920:320,pixelHeight:measureSeconds?1080:200,rotation:0}],
     id:randomUUID,now:()=>performance.now(),ice:async()=>[],arbiter:new DesktopInputArbiter(),diagnostic:value=>states.push(value),

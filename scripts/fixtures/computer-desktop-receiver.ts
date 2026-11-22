@@ -1,4 +1,4 @@
-import { exercisePrivacy } from './mac-privacy-receiver'
+import { exercisePrivacy } from './desktop-privacy-receiver'
 import { measureMotion } from './stream-performance'
 import { DesktopSessionManager } from '@kun/control-runtime/controller'
 import { BrowserDesktopPeer } from '../../src/renderer/src/computer-viewer/browser-peer'

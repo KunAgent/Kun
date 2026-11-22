@@ -11,7 +11,7 @@ import { captureFailureName, permitsDesktopCapture } from './capture-permissions
 import { resolveNamedPreloadPath } from '../main-paths'
 import type { WaylandSession } from './wayland-session'
 import { SystemOutput } from './system-output'
-import { MacPrivacyScreen, macPrivacyScreenSupported } from './mac-privacy-screen'
+import { NativePrivacyScreen, privacyScreenSupported } from './privacy-screen'
 import { isKunMobileDisplay } from './virtual-display'
 function bounded(value: unknown, max: number) { try { return Buffer.byteLength(JSON.stringify(value)) <= max } catch { return false } }
 export interface DesktopCapturePort {
@@ -35,7 +35,7 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
   private processIdentity?: { pid: number; birth: string }
   private audio?: Pick<SystemOutput, 'start' | 'stop'>
   private loopbackAllowed = false
-  private curtain?: MacPrivacyScreen
+  private curtain?: NativePrivacyScreen
   private privacyChanging = false
   private audioPending = 0
   private nextFrame?: () => void
@@ -161,12 +161,12 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
     await this.command('send', { label, data, remainingMs })
   }
   async privacy(enabled?: boolean, authorize?: () => void): Promise<boolean> {
-    if (this.closing || !this.processIdentity || !macPrivacyScreenSupported()) throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
+    if (this.closing || !this.processIdentity || !privacyScreenSupported()) throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
     if (this.privacyChanging) throw Error('DESKTOP_BUSY')
     if (enabled === undefined || enabled === Boolean(this.curtain?.visible)) return Boolean(this.curtain?.visible)
     this.privacyChanging = true
     const virtual = isKunMobileDisplay(this.displayId)
-    const source = this.curtain ?? new MacPrivacyScreen(this.displayId, this.processIdentity, virtual, (data, size) => {
+    const source = this.curtain ?? new NativePrivacyScreen(this.displayId, this.processIdentity, virtual, (data, size) => {
       if (this.curtain !== source || this.closing || !this.window || this.window.isDestroyed()) return
       this.nextFrame = () => source.requestFrame()
       this.window.webContents.send(channels.sample, { kind: 'video', ...size, data })
@@ -179,7 +179,7 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
       if (enabled) {
         const size = await source.open()
         if (this.closing) throw Error('DESKTOP_CAPTURE_CLOSED')
-        if (!virtual) {
+        if (source.replacesVideo) {
           switching = true
           const replaced = this.command('privacy', { enabled: true, ...size })
           source.requestFrame()
@@ -190,7 +190,7 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
         await source.show()
       } else {
         await source.stop()
-        if (!virtual) await this.command('privacy', { enabled: false })
+        if (source.replacesVideo) await this.command('privacy', { enabled: false })
         this.curtain = undefined
       }
       return enabled

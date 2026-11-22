@@ -55,7 +55,10 @@ func descendant(pid int, parent int) bool {
 	return false
 }
 func captureHandle(pid int, stamp string) (syscall.Handle, error) {
-	h, err := syscall.OpenProcess(queryProcess|synchronize|terminateProcess, false, uint32(pid))
+	return ownedCaptureHandle(pid, stamp, terminateProcess)
+}
+func ownedCaptureHandle(pid int, stamp string, extraAccess uint32) (syscall.Handle, error) {
+	h, err := syscall.OpenProcess(queryProcess|synchronize|extraAccess, false, uint32(pid))
 	if err != nil {
 		return 0, err
 	}
