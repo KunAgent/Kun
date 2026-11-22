@@ -4,7 +4,7 @@ import type { DesktopCapturePort } from '../remote-desktop/capture-host'
 import type { CaptureEvent } from '../../shared/remote-desktop'
 import { validateDesktopViewport } from '@kun/remote-protocol'
 
-type Resource = { kind: 'capture' | 'input' | 'virtual'; port: any; authority: DesktopAuthority; capture?: string; displayId?: number }
+type Resource = { kind: 'capture' | 'input' | 'virtual'; port: any; authority: DesktopAuthority; capture?: string; displayId?: number; gaming?: boolean }
 export class DesktopPorts {
   private resources = new Map<string, Resource>()
   private authority?: DesktopAuthority
@@ -20,7 +20,8 @@ export class DesktopPorts {
   constructor(readonly id: string, readonly deps: DesktopEngineDependencies,
     private rpc: () => RpcPeer | undefined, private context: (id: string) => DesktopAuthority | undefined,
     private allowedDisplay: (id: number) => boolean, private end: (reason: 'host_user_ended' | 'input_helper_lost' | 'virtual_display_lost') => void,
-    private allowVirtual: () => boolean = () => false) {}
+    private allowVirtual: () => boolean = () => false, private allowGame: () => boolean = () => false,
+    private allowSystemAudio: () => boolean = () => false) {}
   /** Capture and input must both stay on the one monitor owned by this authority. */
   private admittedDisplay(id: number, authority: DesktopAuthority) {
     const virtual = [...this.resources.values()].find(resource => resource.kind === 'virtual')
@@ -133,6 +134,14 @@ export class DesktopPorts {
       this.resources.set(resourceId, resource)
     }
     if (resource.kind !== kind) throw Error('CONTROL_RPC_REJECTED')
+    if (kind === 'capture' && method === 'start') {
+      resource.gaming = args[1] === 'game60'
+      if (resource.gaming && (resource.authority.purpose !== 'desktop' || !this.allowGame())) throw Error('DESKTOP_GAME_UNAVAILABLE')
+      args[2] = resource.gaming && this.allowSystemAudio() && args[2] === true
+    }
+    if (kind === 'capture' && method === 'quality' && (args[0] === 'game60') !== Boolean(resource.gaming)) throw Error('DESKTOP_MEDIA_RESTART_REQUIRED')
+    if (kind === 'input' && method === 'input' && ['pointer.relative', 'pointer.gameButton'].includes(args[0]?.type) &&
+        (!this.allowGame() || !resource.capture || !this.resources.get(resource.capture)?.gaming)) throw Error('DESKTOP_GAME_UNAVAILABLE')
     if (kind === 'input') {
       if (method === 'input' || method === 'ready') {
         this.require(resource.authority, true)

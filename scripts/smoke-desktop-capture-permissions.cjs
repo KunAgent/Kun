@@ -8,6 +8,7 @@ const { buildSync } = require('esbuild')
 // Real Electron permission dispatch, using only this fixture's own web contents.
 // It never selects a desktop screen, opens camera/microphone, or loads user data.
 const temporary = mkdtempSync(join(tmpdir(), 'kun-capture-permissions-'))
+app.commandLine.appendSwitch('use-fake-device-for-media-stream')
 app.setPath('userData', join(temporary, 'profile'))
 app.on('window-all-closed', () => {})
 writeFileSync(join(temporary, 'capture.html'), '<!doctype html><title>Kun capture permission fixture</title><body style="background:blue">Synthetic capture fixture</body>')
@@ -15,9 +16,9 @@ buildSync({ entryPoints: [join(__dirname, '../src/main/remote-desktop/capture-pe
   bundle: true, platform: 'node', format: 'cjs', outfile: join(temporary, 'policy.cjs') })
 const { permitsDesktopCapture } = require(join(temporary, 'policy.cjs'))
 
-async function scenario(mode, camera = false) {
+async function scenario(mode, camera = false, microphone = false) {
   const window = new BrowserWindow({ show: false, width: 320, height: 200,
-    webPreferences: { partition: `capture-permission-${mode}-${camera}`, sandbox: true, contextIsolation: true,
+    webPreferences: { partition: `capture-permission-${mode}-${camera}-${microphone}`, sandbox: true, contextIsolation: true,
       nodeIntegration: false, backgroundThrottling: false } })
   const requests = [], checks = []
   let selectedOwnFrame = false
@@ -25,12 +26,12 @@ async function scenario(mode, camera = false) {
   session.setPermissionRequestHandler((contents, permission, callback, details) => {
     requests.push({ permission, mediaTypes: details.mediaTypes })
     callback(contents === window.webContents && (mode === 'old'
-      ? permission === 'display-capture' : permitsDesktopCapture(permission, details, 'request')))
+      ? permission === 'display-capture' : permitsDesktopCapture(permission, details, 'request', mode === 'game')))
   })
   session.setPermissionCheckHandler((contents, permission, _origin, details) => {
     checks.push({ permission, mediaType: details.mediaType })
     return contents === window.webContents && (mode === 'old'
-      ? permission === 'display-capture' : permitsDesktopCapture(permission, details, 'check'))
+      ? permission === 'display-capture' : permitsDesktopCapture(permission, details, 'check', mode === 'game'))
   })
   session.setDisplayMediaRequestHandler((request, callback) => {
     if (request.frame !== window.webContents.mainFrame || request.audioRequested || !request.videoRequested) return callback({})
@@ -41,13 +42,13 @@ async function scenario(mode, camera = false) {
     await window.loadFile(join(temporary, 'capture.html'))
     const result = await window.webContents.executeJavaScript(`(async () => {
       try {
-        const stream = await navigator.mediaDevices.${camera ? 'getUserMedia' : 'getDisplayMedia'}({video:true,audio:false});
-        const track=stream.getVideoTracks()[0]; const live=track.readyState==='live';
+        const stream = await navigator.mediaDevices.${camera || microphone ? 'getUserMedia' : 'getDisplayMedia'}({video:${!microphone},audio:${microphone}});
+        const track=stream.getTracks()[0]; const live=track.readyState==='live';
         for(const t of stream.getTracks())t.stop();
         return {live,ended:track.readyState==='ended'};
       } catch(error) {return {error:error.name};}
     })()`)
-    return { mode, camera, requests, checks, selectedOwnFrame, ...result }
+    return { mode, camera, microphone, requests, checks, selectedOwnFrame, ...result }
   } finally { window.destroy() }
 }
 
@@ -65,7 +66,11 @@ app.whenReady().then(async () => {
     const camera = await scenario('fixed', true)
     assert.equal(camera.error, 'NotAllowedError')
     assert.equal(camera.selectedOwnFrame, false)
-    const evidence = { electron: process.versions.electron, old, fixed, camera }
+    const microphone = await scenario('game', false, true)
+    assert.equal(microphone.error, 'NotAllowedError')
+    assert.equal(microphone.selectedOwnFrame, false)
+    assert.ok(microphone.requests.some(request => request.mediaTypes?.includes('audio')))
+    const evidence = { electron: process.versions.electron, old, fixed, camera, microphone }
     if (process.env.KUN_CAPTURE_PERMISSION_EVIDENCE) writeFileSync(process.env.KUN_CAPTURE_PERMISSION_EVIDENCE, JSON.stringify(evidence, null, 2))
     console.log(JSON.stringify(evidence))
     clearTimeout(timeout); rmSync(temporary, { recursive: true, force: true }); app.exit(0)

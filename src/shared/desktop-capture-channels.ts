@@ -1,1 +1,1 @@
-export const DESKTOP_CAPTURE_CHANNELS = { request: 'desktop-capture:request', response: 'desktop-capture:response', event: 'desktop-capture:event' } as const
+export const DESKTOP_CAPTURE_CHANNELS = { sample: 'desktop-capture:sample', consumed: 'desktop-capture:consumed', request: 'desktop-capture:request', response: 'desktop-capture:response', event: 'desktop-capture:event' } as const

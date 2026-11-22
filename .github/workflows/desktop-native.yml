@@ -1,0 +1,34 @@
+name: Desktop sharing helpers
+on:
+  pull_request:
+    paths:
+      - 'native/remote-desktop/**'
+      - 'src/main/remote-desktop/**'
+      - 'scripts/build-remote-desktop-helper.cjs'
+      - 'scripts/smoke-desktop-process-ownership.cjs'
+      - '.github/workflows/desktop-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        if: runner.os == 'Windows'
+        with:
+          go-version: '1.24'
+          cache: false
+      - run: node scripts/build-remote-desktop-helper.cjs
+      - run: node --test scripts/smoke-desktop-process-ownership.cjs
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xdotool x11-xserver-utils python3-gi gir1.2-gstreamer-1.0 gstreamer1.0-pipewire
+          xvfb-run -a resources/native/linux-desktop/desktop_input.py --probe
+          xvfb-run -a sh -c 'cd native/remote-desktop/linux && /usr/bin/python3 -m unittest discover -p "*_test.py"'

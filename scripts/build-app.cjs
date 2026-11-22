@@ -7,6 +7,8 @@ const { dirname, join, resolve } = require('node:path')
 
 const outputs = ['out', 'kun/dist', 'resources/bundled-extensions',
   ...(process.platform === 'darwin' ? ['resources/native/remote-desktop-input', 'resources/native/pet-activity'] : []),
+  ...(process.platform === 'win32' ? ['resources/native/remote-desktop-input.exe'] : []),
+  ...(process.platform === 'linux' ? ['resources/native/linux-desktop'] : []),
   ...['provider-catalog', 'extension-api', 'extension-react', 'extension-test']
     .map(name => `packages/${name}/dist`)]
 

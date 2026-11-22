@@ -8,6 +8,8 @@ export const COMPUTER_DESKTOP_SCOPES = ['desktop.view', 'desktop.control'] as co
 
 /** Optional server extension. Legacy deployments and phone grants keep their original routes. */
 export class ComputerHostAccess {
+  constructor(private readonly desktopStatus?: () => Promise<{ ready: boolean; inputReady?: boolean; gameEnabled?: boolean } | undefined>) {}
+  private reported?: string
   active = false
   downgraded = false
   private membership?: ComputerMembershipLease
@@ -15,7 +17,7 @@ export class ComputerHostAccess {
   private timer?: ReturnType<typeof setInterval>
   private trigger?: () => void
   reset() {
-    ++this.generation
+    ++this.generation; this.reported = undefined
     clearInterval(this.timer); this.timer = undefined; this.trigger = undefined
     this.active = false; this.downgraded = false
     this.membership?.invalidate(); this.membership = undefined
@@ -25,7 +27,7 @@ export class ComputerHostAccess {
   watch(api: RemoteApi, canPair: (peer: string) => boolean, changed: () => Promise<unknown>, lost?: (downgraded: boolean) => void) {
     clearInterval(this.timer)
     const generation = ++this.generation
-    let pending = false, queued = false
+    let pending = false, queued = false, nextReadinessCheck = 0
     const alive = () => generation === this.generation && this.active && Boolean(this.membership)
     const current = () => generation === this.generation && this.current()
     const poll = async () => {
@@ -37,6 +39,18 @@ export class ComputerHostAccess {
         if (this.membership!.remaining() < 10000) {
           if (!(await this.renew())) { if (generation === this.generation) lost?.(this.downgraded); return }
           if (!hadLease && current()) await changed()
+        }
+        if (!current()) return
+        // Directory metadata is advisory and cannot enable access or renew a grant.
+        const status = this.desktopStatus && Date.now() >= nextReadinessCheck ? await this.desktopStatus().catch(() => undefined) : undefined
+        if (status && current()) {
+          const readiness = !status.ready ? 'permission' : status.gameEnabled && status.inputReady ? 'game' : 'ready'
+          if (this.reported !== readiness) {
+            try {
+              await api.request('/desktop/host', 'PUT', { readiness })
+              if (current()) this.reported = readiness
+            } catch { nextReadinessCheck = Date.now() + 60_000 }
+          }
         }
         if (!current()) return
         const { pairings } = await api.request<{ pairings: MobileLinkStatus['pairings'] }>('/desktop/pairings')

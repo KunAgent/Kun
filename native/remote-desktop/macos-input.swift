@@ -17,13 +17,29 @@ var lastPoint = CGPoint.zero
 var clickTimes: [Int: Double] = [:]
 var clickPoints: [Int: CGPoint] = [:]
 var clickCounts: [Int: Int64] = [:]
-let keyMap: [String: CGKeyCode] = ["KeyA":0,"KeyS":1,"KeyD":2,"KeyF":3,"KeyH":4,"KeyG":5,"KeyZ":6,"KeyX":7,"KeyC":8,"KeyV":9,"KeyB":11,"KeyQ":12,"KeyW":13,"KeyE":14,"KeyR":15,"KeyY":16,"KeyT":17,"Digit1":18,"Digit2":19,"Digit3":20,"Digit4":21,"Digit6":22,"Digit5":23,"Equal":24,"Digit9":25,"Digit7":26,"Minus":27,"Digit8":28,"Digit0":29,"BracketRight":30,"KeyO":31,"KeyU":32,"BracketLeft":33,"KeyI":34,"KeyP":35,"Enter":36,"KeyL":37,"KeyJ":38,"Quote":39,"KeyK":40,"Semicolon":41,"Backslash":42,"Comma":43,"Slash":44,"KeyN":45,"KeyM":46,"Period":47,"Tab":48,"Space":49,"Backquote":50,"Backspace":51,"Escape":53,"MetaLeft":55,"ShiftLeft":56,"AltLeft":58,"ControlLeft":59,"ArrowLeft":123,"ArrowRight":124,"ArrowDown":125,"ArrowUp":126,"Delete":117,"Home":115,"End":119,"PageUp":116,"PageDown":121]
-func flags() -> CGEventFlags {
+let letterKeys: [String: CGKeyCode] = ["KeyA":0,"KeyS":1,"KeyD":2,"KeyF":3,"KeyH":4,"KeyG":5,"KeyZ":6,"KeyX":7,"KeyC":8,"KeyV":9,"KeyB":11,"KeyQ":12,"KeyW":13,"KeyE":14,"KeyR":15,"KeyY":16,"KeyT":17,"Digit1":18,"Digit2":19,"Digit3":20,"Digit4":21,"Digit6":22,"Digit5":23,"Equal":24,"Digit9":25,"Digit7":26,"Minus":27,"Digit8":28,"Digit0":29,"BracketRight":30,"KeyO":31,"KeyU":32,"BracketLeft":33,"KeyI":34,"KeyP":35,"Enter":36,"KeyL":37,"KeyJ":38,"Quote":39,"KeyK":40,"Semicolon":41,"Backslash":42,"Comma":43,"Slash":44,"KeyN":45,"KeyM":46,"Period":47,"Tab":48,"Space":49,"Backquote":50,"Backspace":51,"Escape":53,"MetaLeft":55,"ShiftLeft":56,"AltLeft":58,"ControlLeft":59,"ArrowLeft":123,"ArrowRight":124,"ArrowDown":125,"ArrowUp":126,"Delete":117,"Home":115,"End":119,"PageUp":116,"PageDown":121]
+let keyMap = letterKeys.merging([
+  "Minus":27,"Equal":24,"BracketLeft":33,"BracketRight":30,"Backslash":42,"Semicolon":41,"Quote":39,
+  "Backquote":50,"Comma":43,"Period":47,"Slash":44,"CapsLock":57,"MetaRight":54,"ShiftRight":60,
+  "AltRight":61,"ControlRight":62,"Insert":114,"NumpadDecimal":65,"NumpadMultiply":67,"NumpadAdd":69,
+  "NumpadDivide":75,"NumpadEnter":76,"NumpadSubtract":78,"Numpad0":82,"Numpad1":83,"Numpad2":84,
+  "Numpad3":85,"Numpad4":86,"Numpad5":87,"Numpad6":88,"Numpad7":89,"Numpad8":91,"Numpad9":92,
+  "F1":122,"F2":120,"F3":99,"F4":118,"F5":96,"F6":97,"F7":98,"F8":100,"F9":101,"F10":109,
+  "F11":103,"F12":111,"F13":105,"F14":107,"F15":113,"F16":106,"F17":64,"F18":79,"F19":80,"F20":90
+], uniquingKeysWith: { first, _ in first })
+func interactiveSession() -> Bool {
+  guard let info = CGSessionCopyCurrentDictionary() as? [String: Any],
+    info[kCGSessionOnConsoleKey as String] as? Bool == true,
+    info[kCGSessionLoginDoneKey as String] as? Bool == true else { return false }
+  return info["CGSSessionScreenIsLocked"] as? Bool != true
+}
+func flags(excluding released: CGKeyCode? = nil) -> CGEventFlags {
   var value = CGEventFlags()
-  if heldKeys.contains(55) { value.insert(.maskCommand) }
-  if heldKeys.contains(56) { value.insert(.maskShift) }
-  if heldKeys.contains(58) { value.insert(.maskAlternate) }
-  if heldKeys.contains(59) { value.insert(.maskControl) }
+  let active = heldKeys.filter { $0 != released }
+  if active.contains(55) || active.contains(54) { value.insert(.maskCommand) }
+  if active.contains(56) || active.contains(60) { value.insert(.maskShift) }
+  if active.contains(58) || active.contains(61) { value.insert(.maskAlternate) }
+  if active.contains(59) || active.contains(62) { value.insert(.maskControl) }
   return value
 }
 func postKey(_ code: CGKeyCode, _ down: Bool) {
@@ -39,12 +55,7 @@ func releaseAll() -> Bool {
   guard AXIsProcessTrusted() else { return false }
   for code in Array(heldKeys) {
     guard AXIsProcessTrusted(), let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: false) else { return false }
-    var releasedFlags = flags()
-    if code == 55 { releasedFlags.remove(.maskCommand) }
-    if code == 56 { releasedFlags.remove(.maskShift) }
-    if code == 58 { releasedFlags.remove(.maskAlternate) }
-    if code == 59 { releasedFlags.remove(.maskControl) }
-    event.flags = releasedFlags; event.post(tap: .cghidEventTap)
+    event.flags = flags(excluding: code); event.post(tap: .cghidEventTap)
     heldKeys.remove(code)
   }
   for button in Array(heldButtons) {
@@ -80,6 +91,10 @@ let parentBirth = birth(parent)
 let args = Array(CommandLine.arguments.dropFirst())
 @_silgen_name("kun_display_supported") func kunDisplaySupported() -> Int32
 @_silgen_name("kun_display_run") func kunDisplayRun() -> Int32
+@_silgen_name("kun_system_audio") func kunSystemAudio(_ display: UInt32, _ pid: Int32) -> Int32
+if args.count == 4 && args[0] == "--system-audio", let selected = UInt32(args[1]), let pid = Int32(args[2]), ownedCapture(pid, args[3]) {
+  exit(kunSystemAudio(selected, pid))
+}
 if args == ["--virtual-display-probe"] {
   if kunDisplaySupported() == 0 { exit(2) }
   print("kun-virtual-display-v1"); exit(0)
@@ -138,6 +153,7 @@ while let line = readLine() {
   gate.lock()
   defer { gate.unlock() }
   if operation == "configure" {
+    guard interactiveSession() else { reply(id, "DESKTOP_HOST_INACTIVE"); continue }
     guard let pid=value["capturePid"] as? Int32, pid>1, pid != parent, let expected=value["captureBirth"] as? String, ownedCapture(pid, expected), let selected=value["displayId"] as? UInt32 else { reply(id,"INVALID_REQUEST"); continue }
     capturePid=pid; captureBirth=expected; display=selected; reply(id); continue
   }
@@ -152,7 +168,7 @@ while let line = readLine() {
     deadline=ProcessInfo.processInfo.systemUptime + min(6, max(0, (value["remainingMs"] as? Double ?? 0)/1000)); reply(id); continue
   }
   if operation == "ready" {
-    reply(id, ProcessInfo.processInfo.systemUptime >= deadline ? "DESKTOP_SESSION_EXPIRED" : AXIsProcessTrusted() ? nil : "INPUT_PERMISSION_REQUIRED")
+    reply(id, ProcessInfo.processInfo.systemUptime >= deadline ? "DESKTOP_SESSION_EXPIRED" : interactiveSession() && AXIsProcessTrusted() ? nil : "INPUT_PERMISSION_REQUIRED")
     continue
   }
   if operation == "release" { reply(id, releaseAll() ? nil : "DESKTOP_CLEANUP_UNCONFIRMED"); continue }
@@ -160,18 +176,33 @@ while let line = readLine() {
     guard releaseAll() else { reply(id,"DESKTOP_CLEANUP_UNCONFIRMED"); continue }
     capturePid=0; reply(id); exit(0)
   }
-  guard operation == "input", ProcessInfo.processInfo.systemUptime < deadline, AXIsProcessTrusted(), let event=value["event"] as? [String:Any], let type=event["type"] as? String else { reply(id,"INPUT_PERMISSION_REQUIRED"); continue }
+  guard operation == "input", ProcessInfo.processInfo.systemUptime < deadline, interactiveSession(), AXIsProcessTrusted(), let event=value["event"] as? [String:Any], let type=event["type"] as? String else { reply(id,"INPUT_PERMISSION_REQUIRED"); continue }
   let bounds=CGDisplayBounds(display)
   guard CGDisplayIsOnline(display) != 0 && bounds.width >= 1 && bounds.height >= 1 else { reply(id,"DESKTOP_SOURCE_CHANGED"); continue }
   if let x=event["x"] as? Double, let y=event["y"] as? Double, x.isFinite, y.isFinite, x>=0, x<=1, y>=0, y<=1 {
     lastPoint=CGPoint(x:bounds.minX+x*(bounds.width-1),y:bounds.minY+y*(bounds.height-1))
   }
-  if type == "pointer.move" || type == "pointer.drag" {
+  var relativeX: Double = 0, relativeY: Double = 0
+  if type == "pointer.relative" || type == "pointer.gameButton" {
+    guard let current = CGEvent(source: nil)?.location, bounds.contains(current) else { reply(id,"DESKTOP_SOURCE_CHANGED"); continue }
+    lastPoint = current
+    if type == "pointer.relative" {
+      guard let dx=event["deltaX"] as? Double, let dy=event["deltaY"] as? Double,
+        dx.isFinite, dy.isFinite, abs(dx)<=1200, abs(dy)<=1200 else { reply(id,"INVALID_REQUEST"); continue }
+      relativeX=dx; relativeY=dy
+      lastPoint = CGPoint(x: min(bounds.maxX-1,max(bounds.minX,current.x+dx)), y: min(bounds.maxY-1,max(bounds.minY,current.y+dy)))
+    }
+  }
+  if type == "pointer.move" || type == "pointer.drag" || type == "pointer.relative" {
     let button = heldButtons.contains(0) ? 0 : heldButtons.contains(2) ? 2 : 1
     let t: CGEventType = heldButtons.contains(0) ? .leftMouseDragged : heldButtons.contains(2) ? .rightMouseDragged : heldButtons.contains(1) ? .otherMouseDragged : .mouseMoved
     let move = CGEvent(mouseEventSource:nil,mouseType:t,mouseCursorPosition:lastPoint,mouseButton:mouseButton(button))
+    if type == "pointer.relative" {
+      move?.setIntegerValueField(.mouseEventDeltaX, value: Int64(relativeX.rounded()))
+      move?.setIntegerValueField(.mouseEventDeltaY, value: Int64(relativeY.rounded()))
+    }
     move?.flags = flags(); move?.post(tap:.cghidEventTap)
-  } else if type == "pointer.button", let pressed=event["pressed"] as? Bool {
+  } else if (type == "pointer.button" || type == "pointer.gameButton"), let pressed=event["pressed"] as? Bool {
     let button=(event["button"] as? Int ?? 0)
     guard [0,1,2].contains(button) else { reply(id,"INVALID_REQUEST"); continue }
     if pressed {

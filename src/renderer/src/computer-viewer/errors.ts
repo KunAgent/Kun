@@ -1,13 +1,15 @@
 const messages: Record<string, string> = {
   vip_computer_remote_required: '电脑与电脑远程桌面仅限有效 Max 会员，请升级或续费 Max 后重新连接。',
   ENTITLEMENTS_UNAVAILABLE: '暂时无法确认 Max 会员权益，请刷新会员状态后重试。',
+  DESKTOP_GAME_UNAVAILABLE: '请在被控电脑开启「游戏串流」，并更新两端的 Kun 和控制包。',
+  DESKTOP_AUDIO_UNAVAILABLE: '无法采集系统播放声音，请在被控机检查权限和音频输出。',
   DESKTOP_BUSY: '这台电脑正在进行另一条桌面连接，请先在被控端结束旧会话。',
   DESKTOP_VIEW_REQUIRED: '对端尚未允许查看，请在对端的「允许访问本机」中授权。',
   DESKTOP_CONTROL_REQUIRED: '暂时不能接管，请确认控制许可和画面状态。',
   DESKTOP_DISABLED: '对端未开启内置桌面访问。',
   DESKTOP_SOURCE_CHANGED: '对端显示器发生变化，请结束并重新连接。',
-  SCREEN_PERMISSION_REQUIRED: '请在对端 Mac 的系统设置中允许 Kun 录制屏幕。',
-  INPUT_PERMISSION_REQUIRED: '请在对端 Mac 的系统设置中允许 Kun 使用辅助功能。',
+  SCREEN_PERMISSION_REQUIRED: '请在被控电脑允许 Kun 共享所选屏幕。',
+  INPUT_PERMISSION_REQUIRED: '请在被控电脑允许 Kun 使用键鼠控制。',
   DESKTOP_ICE_UNAVAILABLE: '暂时无法准备远程连接，请稍后重试。',
   DESKTOP_CLEANUP_UNCONFIRMED: '本机已断开，对端停止状态尚未确认，请先核对停止。',
   COMPUTER_SERVER_UPDATE_REQUIRED: '当前服务端尚未开启电脑互控，请更新并配置服务端。',
@@ -21,7 +23,7 @@ const messages: Record<string, string> = {
   AUTHORIZATION_NOT_READY: '对端尚未准备好自动连接，请确认已开启「允许访问本机」且两端 Kun 均已更新，然后重试。',
   DEVICE_OFFLINE: '连接尚未就绪，请确认对端在线后刷新。',
   DESKTOP_WINDOW_INACTIVE: '请回到远程桌面窗口后重新接管。',
-  DESKTOP_UNSUPPORTED: '首版电脑互控支持 Apple Silicon Mac。',
+  DESKTOP_UNSUPPORTED: '当前系统的远控组件不可用，请检查安装包和本机权限。',
   LOGIN_REQUIRED: '请先登录 Kun 账号。',
   vip_mobile_remote_required: '远程访问需要 Plus、Pro 或 Max 会员。'
 }

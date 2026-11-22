@@ -1,6 +1,10 @@
 # Built-in remote desktop
 
-Kun's built-in desktop viewer is an optional alternative to UU Remote. The first host implementation is macOS 13+ on Apple Silicon. Other platforms do not advertise the capability.
+Kun's built-in desktop viewer is an optional alternative to UU Remote. Computer-to-computer access uses separate controller and host checks on Windows x64, macOS arm64/x64 and Linux arm64/x64. A local host switch authorizes the current login session. Game streaming and playback audio are separate opt-ins. The original phone flow is described below.
+
+## Computer hosts
+
+Build the Windows input helper with Go 1.22 or later. The macOS helper builds with Xcode. Linux packages carry the Python helper and use the system X11/XTest or Wayland Portal backend. The active login session must be available through logind. Linux playback capture uses the default output monitor. See the [platform setup and release checks](../../kunserve/docs/desktop-cross-platform.zh-CN.md).
 
 ## Setup
 

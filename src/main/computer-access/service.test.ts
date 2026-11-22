@@ -7,7 +7,7 @@ const host = '11111111-1111-4111-8111-111111111111', controller = '22222222-2222
 const target = '33333333-3333-4333-8333-333333333333', owner = '44444444-4444-4444-8444-444444444444', grant = '55555555-5555-4555-8555-555555555555'
 const alive: ComputerAccessService[] = []
 afterEach(async () => { for (const service of alive.splice(0)) await service.dispose() })
-function fixture(tier = 'max', initiallyPaired = true) {
+function fixture(tier = 'max', initiallyPaired = true, remotePlatform = 'macos') {
   const calls: Array<{path:string; device:string; body:any}> = [], invokes: any[] = []
   const gate = new DesktopActivityGate()
   let online: Socket | undefined, denyStop = false, currentSession: any
@@ -31,7 +31,7 @@ function fixture(tier = 'max', initiallyPaired = true) {
       }
       const payload = path.endsWith('/entitlements') ? {version:1,userId:owner,tier,effectiveTier:tier,status:tier==='free'?'free':'active',expiresAt:null,checkedAt:new Date().toISOString(),revision:1,features:{mobileRemote:tier!=='free',personalAssistant:['pro','max'].includes(tier)}}
         : path.endsWith('/capabilities') ? {desktop:{computerAccess:true}}
-        : path.endsWith('/desktop/devices') ? {devices:[{id:target,installationId:target,name:'Remote Mac',platform:'macos',enabled:true,supported:true,online:true,grantId:paired?grant:null}]}
+        : path.endsWith('/desktop/devices') ? {devices:[{id:target,installationId:target,name:'Remote Mac',platform:remotePlatform,enabled:true,supported:true,online:true,grantId:paired?grant:null}]}
         : path.endsWith('/relay-tickets') ? {ticket:'ticket',url:'wss://api.example.test/api/remote/v1/ws'}
         : {ok:true}
       return Response.json(payload)
@@ -95,6 +95,16 @@ describe('trusted computer controller',()=>{
     await expect(f.service.invoke('desktop.session.start',{startId:'start',origin:{kind:'device',id:host},displayToken:'display',displayRevision:'revision',quality:'balanced'})).rejects.toThrow('DESKTOP_AUTHORITY_CHANGED')
     await expect(f.service.invoke('catalog.get' as any,{})).rejects.toThrow('DESKTOP_UNSUPPORTED')
     await f.service.close();expect(f.gate.busy()).toBe(false)
+  })
+  it.each(['windows','linux'])('opens a %s host and registers the real controller installation platform', async platform => {
+    const f = fixture('max', true, platform)
+    await f.service.refresh()
+    await new Promise(resolve => setTimeout(resolve, 10))
+    await f.service.open(target)
+    const actual = process.platform === 'darwin' ? 'macos' : process.platform === 'win32' ? 'windows' : 'linux'
+    expect(f.calls.find(call => call.path.endsWith('/devices') && call.body?.role === 'host')?.body.platform).toBe(actual)
+    expect(f.service.status().devices[0].platform).toBe(platform)
+    await f.service.close()
   })
   it.each(['REMOTE_SCOPE_REQUIRED','RESULT_UNKNOWN','DEVICE_OFFLINE'])('connects an unpaired computer in one action despite preflight %s', async code=>{
     const f=fixture('max',false)

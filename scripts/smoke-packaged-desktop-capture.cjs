@@ -40,13 +40,13 @@ async function main() { try {
     ...(baseline ? { plugins: [{ name: 'old-capture-path', setup(builder) {
       builder.onLoad({ filter: /\/remote-desktop\/capture-host\.ts$/ }, () => ({ contents: readFileSync(resolve(baseline), 'utf8'), loader: 'ts', resolveDir: join(repository, 'src/main/remote-desktop') }))
     } }] } : {}) })
-  const env = { ...process.env, KUN_CAPTURE_EXPECT_LOAD_FAILURE: baseline ? '1' : '0', KUN_CAPTURE_USE_CONTROL_PROCESS: process.argv.includes('--control-process') ? '1' : '0', ...(controlDirectory ? { KUN_CAPTURE_CONTROL_DIRECTORY: resolve(controlDirectory) } : {}) }
+  const env = { ...process.env, KUN_CAPTURE_EXPECT_LOCKED: process.argv.includes('--expect-locked') ? '1' : '0', KUN_CAPTURE_EXPECT_LOAD_FAILURE: baseline ? '1' : '0', KUN_CAPTURE_USE_CONTROL_PROCESS: process.argv.includes('--control-process') ? '1' : '0', ...(controlDirectory ? { KUN_CAPTURE_CONTROL_DIRECTORY: resolve(controlDirectory) } : {}) }
   delete env.ELECTRON_RUN_AS_NODE; delete env.ELECTRON_RENDERER_URL
   const result = spawnSync(require('electron'), [temporary], { env, encoding: 'utf8', timeout: 40000 })
   process.stdout.write(result.stdout || '')
   process.stderr.write(result.stderr || '')
   if (result.error) throw result.error
   assert.equal(result.status, 0, 'Packaged capture pipeline smoke failed')
-  assert.ok((result.stdout || '').includes(baseline ? '"baselineRejected":true' : '"hostCleanupConfirmed":true'), 'Missing completion evidence')
+  assert.ok((result.stdout || '').includes(baseline ? '"baselineRejected":true' : process.argv.includes('--expect-locked') ? '"lockedHostRejected":true' : '"hostCleanupConfirmed":true'), 'Missing completion evidence')
 } finally { rmSync(temporary, { recursive: true, force: true }) } }
 main().catch(error => { console.error(error.message); process.exitCode = 1 })

@@ -48,7 +48,7 @@ export const PEER_LIST_INTERVAL_MS = 300000
 import type { LinkDependencies } from './service-dependencies'
 export type { LinkDependencies } from './service-dependencies'
 export class MobileLinkService {
-  private computers = new ComputerHostAccess()
+  private computers = new ComputerHostAccess(async () => this.deps.desktop?.status?.())
   private phones = new PhonePairingApproval()
   private computerPairings = new Set<string>()
   private computerAccessOperation = 0

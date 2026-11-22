@@ -1,3 +1,5 @@
+import { desktopHelperAvailable } from '../remote-desktop/native-input'
+import { desktopPlatform } from '../remote-desktop/platform'
 import { controlRuntimeHost } from '../control-host/runtime-host'
 import { registerControlPackage } from '../control-package/register'
 import { registerComputerAccess } from '../computer-access/register'
@@ -100,13 +102,8 @@ export function registerMobileLink(
     origin: 'https://api-kun-server.com',
     name: hostname(),
     appVersion: app.getVersion(),
-    computerAccess: process.platform === 'darwin' && process.arch === 'arm64',
-    platform:
-      process.platform === 'darwin'
-        ? 'macos'
-        : process.platform === 'win32'
-          ? 'windows'
-          : 'linux',
+    computerAccess: desktopHelperAvailable(),
+    platform: desktopPlatform(),
     identity: (owner) => loadIdentity(join(links, owner, 'identity.enc')),
     fetch: (input, init) =>
       net.fetch(

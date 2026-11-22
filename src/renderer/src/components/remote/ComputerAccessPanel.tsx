@@ -68,12 +68,12 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
       </button>
     </div></RemoteGroup> : null}
     {tab === 'connect' ? <>
-      <p className="text-[12px] text-ds-muted">{zh ? '同账号 Apple Silicon Mac 开启「允许访问本机」后即可直接连接，无需在对端再次确认。连接后先查看，再接管键鼠。' : 'Enable access on an Apple Silicon Mac on the same account, then connect without another approval. View first, then take control.'}</p>
+      <p className="text-[12px] text-ds-muted">{zh ? '同账号电脑 开启「允许访问本机」后即可直接连接，无需在对端再次确认。连接后先查看，再接管键鼠。' : 'Enable access on a computer on the same account, then connect without another approval. View first, then take control.'}</p>
       <button type="button" className={`${REMOTE_BUTTON_CLASS} self-start`} disabled={!api || !link.signedIn || !link.computerAllowed || busy} onClick={() => void run(() => api!.refresh())}><RefreshCw size={13} />{zh ? '刷新电脑' : 'Refresh'}</button>
       {value?.devices.map(device => <RemoteGroup key={device.id}><div className="space-y-2 p-3">
         <div className="flex items-center gap-2"><Monitor size={16} /><span className="min-w-0 break-words text-[13px] font-medium text-ds-ink">{device.name}</span></div>
-        <p className="text-[12px] text-ds-muted">{device.platform} · {!device.supported ? zh ? '需要更新对端' : 'Host update needed' : !device.enabled ? zh ? '对端未开启' : 'Access off' : device.online !== true ? zh ? '离线或状态未知' : 'Offline or unknown' : zh ? '在线 · 可连接' : 'Online · Ready to connect'}</p>
-        <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={busy || Boolean(value.active) || !device.supported || !device.enabled || device.online !== true || !link.computerAllowed}
+        <p className="text-[12px] text-ds-muted">{device.platform} · {!device.enabled || !device.supported ? zh ? '对端未开启桌面访问' : 'Host access is off' : device.online !== true ? zh ? '离线或状态未知' : 'Offline or unknown' : device.readiness === 'permission' ? zh ? '需在对端授权屏幕共享' : 'Host permission needed' : device.readiness === 'game' ? zh ? '可连接 · 支持游戏模式' : 'Ready · game streaming available' : zh ? '在线 · 可连接' : 'Online · Ready to connect'}</p>
+        <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={busy || Boolean(value.active) || !device.supported || !device.enabled || device.readiness === 'permission' || device.online !== true || !link.computerAllowed}
           onClick={event => runTrustedUserActivation(event, () => {
             setConnectingId(device.id)
             void run(() => api!.open(device.id)).finally(() => setConnectingId(undefined))
@@ -81,7 +81,7 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
           {connectingId === device.id ? zh ? '连接中…' : 'Connecting…' : zh ? '连接桌面' : 'Open desktop'}
         </button>
       </div></RemoteGroup>)}
-      {value && !value.devices.length ? <p className="text-[12px] text-ds-muted">{zh ? '请在另一台 Mac 登录相同账号，并打开「允许访问本机」。' : 'Sign in on another Mac and enable access there.'}</p> : null}
+      {value && !value.devices.length ? <p className="text-[12px] text-ds-muted">{zh ? '请在另一台电脑 登录相同账号，并打开「允许访问本机」。' : 'Sign in on another computer and enable access there.'}</p> : null}
     </> : <>
       <RemoteGroup><div className="space-y-2 p-3"><div className="flex items-center gap-2"><span className="flex-1 text-[13px] text-ds-ink">{zh ? '允许桌面访问' : 'Allow desktop access'}</span>
         <button type="button" className={REMOTE_BUTTON_CLASS} disabled={!api || !link.signedIn || busy || (!hosting && !link.computerAllowed)} onClick={event => runTrustedUserActivation(event, () => { void run(() => api!.enableHost(!hosting)) })}>{hosting ? zh ? '关闭' : 'Turn off' : zh ? '开启' : 'Turn on'}</button>
@@ -94,7 +94,23 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
             void run(() => link.api!.desktopConfigure!({enabled:true,displayTokens:tokens}))
           }} />{item.label || (zh ? '显示器' : 'Display')} · {item.pixelWidth} × {item.pixelHeight}</label>)}
       </fieldset></RemoteGroup> : null}
-      {desktop.value?.supported && !desktop.value.ready ? <button className={REMOTE_BUTTON_CLASS} onClick={() => desktop.permission('screenRecording')}>{zh ? '检查屏幕录制权限' : 'Check screen recording permission'}</button> : null}
+      {hosting && desktop.value?.enabled && desktop.value.gameSupported ? <RemoteGroup><fieldset disabled={busy} className="space-y-2 p-3 text-[12px]">
+        <legend>{zh ? '游戏串流（预览）' : 'Game streaming (preview)'}</legend>
+        {(['allowGame', 'allowSystemAudio'] as const).map(key => <label key={key} className="flex items-center gap-2">
+          <input type="checkbox" disabled={key === 'allowSystemAudio' && !desktop.value?.gameEnabled}
+            checked={key === 'allowGame' ? desktop.value?.gameEnabled === true : desktop.value?.systemAudioEnabled === true}
+            onChange={event => {
+              const displayTokens = desktop.value!.displays.filter(item => item.allowed).map(item => item.token)
+              void run(() => link.api!.desktopConfigure!({ enabled: true, displayTokens, [key]: event.target.checked }))
+            }} />
+          {key === 'allowGame' ? zh ? '允许 1080p60 和游戏鼠标' : 'Allow 1080p60 and game input' : zh ? '同时共享本机播放的声音' : 'Also share system playback audio'}
+        </label>)}
+      </fieldset></RemoteGroup> : null}
+      {hosting && desktop.value?.supported && !desktop.value.displays.length ? <button type="button" className={REMOTE_BUTTON_CLASS}
+        onClick={event => runTrustedUserActivation(event, () => { void run(() => api!.enableHost(true)) })}>
+        {zh ? '在本机重新选择共享屏幕' : 'Select a shared screen on this computer'}
+      </button> : null}
+      {desktop.value?.supported && !desktop.value.ready && desktop.value.displays.length > 0 ? <button className={REMOTE_BUTTON_CLASS} onClick={() => desktop.permission('screenRecording')}>{zh ? '检查屏幕录制权限' : 'Check screen recording permission'}</button> : null}
       {desktop.value?.supported && !desktop.value.inputReady ? <button className={REMOTE_BUTTON_CLASS} onClick={() => desktop.permission('accessibility')}>{zh ? '检查辅助功能权限' : 'Check accessibility permission'}</button> : null}
       {requests.map(request => <RemoteGroup key={request.id}><div className="space-y-2 p-3 text-[12px]"><p>{request.name} · {zh ? '请求访问本机桌面' : 'Requests desktop access'}</p>
         <label className="flex items-center gap-2"><input type="checkbox" checked={choices[request.id] ?? true} onChange={event => setChoices(old => ({ ...old, [request.id]: event.target.checked }))} />{zh ? '同时允许接管键鼠' : 'Also allow control'}</label>

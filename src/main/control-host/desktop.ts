@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { DESKTOP_CAPABILITY, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY, DESKTOP_VIRTUAL_CAPABILITY, DESKTOP_METHODS, validateDesktopParams } from '@kun/remote-protocol'
+import { DESKTOP_CAPABILITY, DESKTOP_GAME_CAPABILITY, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY, DESKTOP_VIRTUAL_CAPABILITY, DESKTOP_METHODS, validateDesktopParams } from '@kun/remote-protocol'
 import type { RpcPeer } from '@kun/control-host'
 import type { DesktopAuthority, DesktopEngineDependencies, DesktopAccessStatus, DesktopConfiguration } from '@kun/control-runtime/desktop'
 import { DesktopPorts } from './desktop-ports'
@@ -17,15 +17,20 @@ export class ControlDesktop {
   private stopping?: Promise<void>
   private cleanupBlocked = false
   private deviceOrigins = false
+  private gameCapable = false
+  private gameEnabled = false
+  private systemAudio = false
   private virtualCapable = false
   private virtualEnabled = false
+  private admittedGame = false
   private admittedStartId?: string
   private admittedHandle?: string
   constructor(readonly deps: DesktopEngineDependencies, private ready: (required: boolean) => Promise<RpcPeer | undefined>) {
     this.ports = new DesktopPorts(this.id, deps, () => this.rpc, id => this.contexts.get(id), id => this.enabled && this.selected.has(id),
-      reason => { void this.stopAll(reason).catch(() => {}) }, () => this.enabled && this.virtualCapable && this.virtualEnabled)
+      reason => { void this.stopAll(reason).catch(() => {}) }, () => this.enabled && this.virtualCapable && this.virtualEnabled,
+      () => this.enabled && this.gameCapable && this.gameEnabled && this.admittedGame, () => this.systemAudio)
   }
-  private snapshot() { return { supported: this.deps.supported(), displays: this.deps.displays(), virtualSupported: this.deps.virtualSupported?.() === true } }
+  private snapshot() { return { supported: this.deps.supported(), gameSupported: this.gameCapable && this.gameEnabled, systemAudioAllowed: this.systemAudio, displays: this.deps.displays(), virtualSupported: this.deps.virtualSupported?.() === true } }
   private selectedIds(status: DesktopAccessStatus) {
     const allowed = new Set(status.displays.filter(value => value.allowed).map(value => value.revision))
     return new Set(this.deps.displays().filter(d => allowed.has(createHash('sha256').update(d.fingerprint).digest('hex'))).map(d => d.id))
@@ -35,8 +40,9 @@ export class ControlDesktop {
     const snapshot = this.snapshot()
     await rpc.call('desktop.create', { id: this.id, snapshot })
     const status = await rpc.call<DesktopAccessStatus>('desktop.command', { id: this.id, method: 'status', snapshot })
-    const features = await rpc.call<string[]>('desktop.command', { id: this.id, method: 'capabilities' }).catch(() => [])
+    const features = await rpc.call<string[]>('desktop.command', { id: this.id, method: 'capabilities' }).catch((): string[] => [])
     this.deviceOrigins = Array.isArray(features) && (features as string[]).includes(DESKTOP_DEVICE_CAPABILITY)
+    this.gameCapable = this.deps.gameSupported?.() === true && Array.isArray(features) && features.includes(DESKTOP_GAME_CAPABILITY)
     this.virtualCapable = snapshot.virtualSupported && Array.isArray(features) && (features as string[]).includes(DESKTOP_VIRTUAL_CAPABILITY)
     this.virtualEnabled &&= this.virtualCapable
     if (this.enabled) {
@@ -61,29 +67,49 @@ export class ControlDesktop {
     if (this.rpc !== rpc) await this.attach(rpc)
     return rpc.call('desktop.command', { id: this.id, method, value, context, snapshot: this.snapshot() }, 25000)
   }
-  async status() { this.cached = await this.command<DesktopAccessStatus>('status'); return this.cached }
+  private localStatus(status: DesktopAccessStatus) {
+    return this.gameCapable ? { ...status, gameSupported: true, gameEnabled: this.gameEnabled, systemAudioEnabled: this.systemAudio } : status
+  }
+  async status() { this.cached = await this.command<DesktopAccessStatus>('status'); return this.localStatus(this.cached) }
   async configure(value: DesktopConfiguration, current: () => boolean = () => true) {
     const revision = ++this.revision
     const known = this.cached ?? await this.status()
     if (!value || typeof value.enabled !== 'boolean' || !Array.isArray(value.displayTokens) || value.displayTokens.some(token => !known.displays.some(item => item.token === token))) throw Error('INVALID_REQUEST')
     if (value.allowVirtual && !this.virtualCapable) throw Error('DESKTOP_VIRTUAL_UNAVAILABLE')
+    const { allowGame, allowSystemAudio, ...settings } = value
+    if ([allowGame, allowSystemAudio].some(flag => flag !== undefined && typeof flag !== 'boolean')) throw Error('INVALID_REQUEST')
+    const game = value.enabled && (allowGame ?? this.gameEnabled)
+    if (game && !this.gameCapable) throw Error('DESKTOP_GAME_UNAVAILABLE')
+    const audio = game && (allowSystemAudio ?? this.systemAudio)
     this.enabled = false
     this.ports.beginStop()
-    const status = await this.command<DesktopAccessStatus>('configure', value)
+    const status = await this.command<DesktopAccessStatus>('configure', settings)
     if (revision !== this.revision || !current()) { await this.stopAll('authorization_changed'); throw Error('DESKTOP_AUTHORITY_CHANGED') }
+    this.gameEnabled = game; this.systemAudio = audio
     this.selected = this.selectedIds(status)
     this.virtualEnabled = status.virtualEnabled === true
-    this.enabled = status.enabled; this.cached = status; this.ports.reopen(); return status
+    this.enabled = status.enabled; this.cached = status; this.ports.reopen(); return this.localStatus(status)
   }
   async configureRemoteAccess(enabled: boolean, current: () => boolean = () => true) {
     const revision = ++this.revision
     this.enabled = false
     this.ports.beginStop()
-    const status = await this.command<DesktopAccessStatus>('configureRemoteAccess', enabled)
+    this.gameEnabled = false; this.systemAudio = false
+    if (enabled) {
+      await this.deps.prepareHost?.(true)
+      if (revision !== this.revision || !current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
+    }
+    let status: DesktopAccessStatus
+    try { status = await this.command<DesktopAccessStatus>('configureRemoteAccess', enabled) }
+    catch (error) {
+      if (revision === this.revision) await this.deps.prepareHost?.(false)
+      throw error
+    }
     if (revision !== this.revision || !current()) { await this.stopAll('authorization_changed'); throw Error('DESKTOP_AUTHORITY_CHANGED') }
+    if (!enabled) await this.deps.prepareHost?.(false)
     this.selected = this.selectedIds(status)
     this.virtualEnabled = status.virtualEnabled === true
-    this.enabled = status.enabled; this.cached = status; this.ports.reopen(); return status
+    this.enabled = status.enabled; this.cached = status; this.ports.reopen(); return this.localStatus(status)
   }
   capabilities() { return this.rpc && !this.rpc.closed && this.deps.supported() && this.enabled ? [DESKTOP_CAPABILITY,
     ...(this.deviceOrigins ? [DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY] : []), ...(this.virtualCapable && this.virtualEnabled ? [DESKTOP_VIRTUAL_CAPABILITY] : [])] : [] }
@@ -97,7 +123,7 @@ export class ControlDesktop {
     if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
     if (method.startsWith('desktop.virtual.') && (authority.purpose === 'desktop' || !this.enabled || !this.virtualCapable || !this.virtualEnabled)) throw Error('DESKTOP_VIRTUAL_UNAVAILABLE')
     if (method === 'desktop.access.get') return {
-      capabilities: this.capabilities(), supported: this.deps.supported(), enabled: this.enabled,
+      capabilities: [...this.capabilities(), ...(this.enabled && this.gameEnabled && this.gameCapable && authority.purpose === 'desktop' ? [DESKTOP_GAME_CAPABILITY] : [])], supported: this.deps.supported(), enabled: this.enabled,
       viewAllowed: authority.scopes.includes('desktop.view'),
       controlAllowed: authority.scopes.includes('desktop.view') && authority.scopes.includes('desktop.control'), busy: desktopActivityGate.busy()
     }
@@ -109,8 +135,13 @@ export class ControlDesktop {
     this.ports.reopen()
     const starting = method === 'desktop.session.start' || method === 'desktop.virtual.start'
     if (starting) {
+      const start = params as { startId: string; quality: string }
+      const game = start.quality === 'game60'
+      if (game && (!this.enabled || !this.gameCapable || !this.gameEnabled || authority.purpose !== 'desktop')) throw Error('DESKTOP_GAME_UNAVAILABLE')
       desktopActivityGate.claim(this.id, 'incoming')
-      if (!this.admittedStartId) { this.admittedStartId = (params as {startId: string}).startId; this.admittedHandle = handle }
+      if (!this.admittedStartId) {
+        this.admittedStartId = start.startId; this.admittedHandle = handle; this.admittedGame = game
+      }
     }
     try {
       const result = await this.command('invoke', { method, params }, { handle, accountId: authority.accountId, deviceId: authority.deviceId, authorizationId: authority.authorizationId,
@@ -151,8 +182,9 @@ export class ControlDesktop {
         if (stopFailure) throw new AggregateError([error, stopFailure.error], 'DESKTOP_STOP_AND_CLEANUP_FAILED')
         throw error
       }
+      if (['host_inactive', 'host_stopped', 'application_quit', 'account_changed'].includes(reason)) await this.deps.prepareHost?.(false)
       this.contexts.clear(); this.cleanupBlocked = false
-      this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id)
+      this.admittedGame = false; this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id)
       if (stopFailure) throw stopFailure.error
     })().finally(() => { this.stopping = undefined })
     return this.stopping
@@ -164,11 +196,11 @@ export class ControlDesktop {
   }
   private releaseActivity(startId: unknown, handle: string) {
     if (typeof startId === 'string' && startId === this.admittedStartId && handle === this.admittedHandle && !this.ports.busy()) {
-      this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id)
+      this.admittedGame = false; this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id)
     }
   }
   detach() {
     this.rpc = undefined; this.contexts.clear(); this.deviceOrigins = false; this.virtualCapable = false
-    if (!this.ports.busy()) { this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id) }
+    if (!this.ports.busy()) { this.admittedGame = false; this.admittedStartId = this.admittedHandle = undefined; desktopActivityGate.release(this.id) }
   }
 }

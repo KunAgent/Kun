@@ -105,7 +105,7 @@
     "inputRequired": "Input control permission required; viewing is available",
     "inputUnknown": "Input permission is unknown; recheck before controlling",
     "desktopReady": "Viewing and control are ready",
-    "unsupported": "Requires an Apple Silicon Mac, macOS 13 or later",
+    "unsupported": "Requires the Kun desktop-sharing components and an active graphical session",
     "desktopReadError": "Desktop state unavailable. Recheck to retry.",
     "desktopActionError": "The desktop action could not be confirmed. Recheck displays and permissions.",
     "display": "Display",
