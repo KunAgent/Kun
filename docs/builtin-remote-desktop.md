@@ -15,7 +15,7 @@ Build the Windows input helper with Go 1.22 or later. The macOS helper builds wi
 5. Allow Screen Recording for viewing and Accessibility for input in macOS System Settings. The remote panel links to the existing system-permission flow. The native input process independently checks its actual Accessibility trust before control is accepted.
 6. Install a KunApp binary that includes its native WebRTC module, then choose the built-in provider from an existing Code or Agent conversation.
 
-The desktop sharing indicator identifies the display, controller and view/control mode, and provides a local end button. The indicator and capture window are protected from the older LAN workbench IPC mirroring mechanism.
+During a desktop session, the Kun remote desktop icon appears in the menu bar or system tray. Its menu identifies the display, controller and view/control mode and provides a local action to end the session. The capture window is protected from the older LAN workbench IPC mirroring mechanism.
 
 ## Connection and cleanup
 

@@ -1,5 +1,4 @@
 export { DESKTOP_CAPTURE_CHANNELS } from './desktop-capture-channels'
-export { DESKTOP_INDICATOR_CHANNEL } from './desktop-indicator-channels'
 export type DesktopDisplay = { token: string; revision: string; label: string; pixelWidth: number; pixelHeight: number; rotation: number }
 export type DesktopAccessStatus = {
   supported: boolean
