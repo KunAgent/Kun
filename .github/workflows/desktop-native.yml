@@ -53,6 +53,8 @@ jobs:
         run: |
           npm ci --ignore-scripts --no-audit --no-fund
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --workspace @kun/provider-catalog
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           npm run ensure:electron
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           node scripts/smoke-computer-desktop.cjs --privacy --disposable-windows-desktop
