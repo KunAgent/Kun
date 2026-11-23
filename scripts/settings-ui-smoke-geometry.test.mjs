@@ -450,14 +450,15 @@ test('final polish fails for inherited overflow, clipping and small buttons too'
 const currentNavigationSource = readFileSync(new URL('../src/renderer/src/components/settings-navigation.ts', import.meta.url), 'utf8')
 
 for (const platform of ['darwin', 'win32']) {
-  test(`current ${platform} smoke covers Connections, Storage & cleanup, and Pets`, () => {
+  test(`current ${platform} smoke covers Connections, Cloud Compute, Storage & cleanup, and Pets`, () => {
     const categories = settingsCategoryInventory(currentNavigationSource, platform)
     assertCurrentSettingsCategoryInventory(categories, platform)
     assert(categories.includes('connections'))
+    assert(categories.includes('cloudCompute'))
     assert(categories.includes('storageCleanup'))
     assert(categories.includes('pets'))
     assert.equal(categories.includes('storage'), platform === 'win32')
-    for (const added of ['connections', 'storageCleanup', 'pets']) {
+    for (const added of ['connections', 'cloudCompute', 'storageCleanup', 'pets']) {
       assert.throws(() => assertCurrentSettingsCategoryInventory(
         categories.filter(category => category !== added), platform), /must cover every destination/)
     }
