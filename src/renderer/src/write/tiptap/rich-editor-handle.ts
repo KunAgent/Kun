@@ -139,7 +139,7 @@ export function buildRichEditorHandle({ editorRef, readOnlyRef, filePathRef, onD
         },
         isDiffReviewActive: () => reviewSessionRef.current?.isActive() ?? false,
         acceptAllDiff: () => reviewSessionRef.current?.resolveAll('accept'),
-        rejectAllDiff: () => reviewSessionRef.current?.resolveAll('reject'),
+        rejectAllDiff: (options) => reviewSessionRef.current?.resolveAll('reject', options?.preserveDraft),
         beginSelectionReview: (params) => beginRichSelectionReview({ editor: editorRef.current,
           readOnly: readOnlyRef.current, session: reviewSessionRef.current, ctx: workCtxRef.current,
           baseline: lastEmittedValueRef.current ?? '', ...params }),

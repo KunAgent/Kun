@@ -20,6 +20,7 @@ export type SelectionMenuProps = {
   onOpenAgentSettings?: () => void
   /** Adds the current selection to the writing assistant quote tray without sending a message. */
   onQuoteSelection?: () => void
+  onAnnotate?: () => void
   /** Shown only when the image generation provider is configured. Generation
    * is async: the click inserts an animated placeholder and returns. */
   infographicEnabled?: boolean

@@ -49,6 +49,7 @@ import {
   resolveConfiguredHooks
 } from './runtime-factory-dependencies.js'
 import { buildPaperSearchToolProvider, resolvePaperSearchCredentials } from '../adapters/tool/paper-search-tool-provider.js'
+import { buildColabToolProviders } from '../adapters/tool/colab-tool-provider.js'
 import type { CapabilityToolProvider } from '../adapters/tool/capability-registry.js'
 import type { createRuntimeExtensionComposition } from './runtime-composition-extensions.js'
 import { buildHarnessRuntimes } from '../harness/build-harness-runtimes.js'
@@ -324,7 +325,7 @@ export function createRuntimeConfigController(
 	    await pruneUnsentAttachments(nextAttachmentStore)
 	    const nextMemoryStore = createPersistentMemoryStore(nextOptions, nowIso)
             const nextMemoryFeedback = await createReadyPersistentMemoryFeedback(nextOptions, nextMemoryStore)
-	    const nextWebProviders = buildWebToolProviders(nextOptions.capabilities?.web)
+	    const nextWebProviders = buildWebToolProviders(nextOptions.capabilities?.web, { runtimeOptions: () => nextOptions, resolveCredential: resolveCapabilityProviderCredential, nowIso })
 	    const nextImageGenProviders = buildImageGenToolProviders(nextOptions.capabilities?.imageGen, {
 	      attachmentStore: nextAttachmentStore,
 	      nowIso,
@@ -396,6 +397,7 @@ export function createRuntimeConfigController(
 	      ...nextBaseToolProviders,
 	      ...nextComputerUseProviders.providers,
 	      ...nextBrowserUseProviders.providers,
+	      ...buildColabToolProviders(),
 	      builtinProvider('goal', buildGoalLocalTools(threadService)),
 	      ...buildDelegationToolProviders(nextDelegationRuntime, subagentRouter),
 	      ...buildFastContextToolProvider(

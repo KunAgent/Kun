@@ -9,7 +9,8 @@ import { UsageQuotaPanel } from './UsageQuotaPanel'
 
 function usageResponse(
   path: string,
-  modelBucketsOverride?: Array<Record<string, string | number>>
+  modelBucketsOverride?: Array<Record<string, string | number>>,
+  agentBucketsOverride?: Array<Record<string, string | number>>
 ): { ok: boolean; status: number; body: string } {
   if (path.includes('group_by=day')) {
     return {
@@ -61,6 +62,10 @@ function usageResponse(
           { model: 'glm-5.2', input_tokens: 180, output_tokens: 20, total_tokens: 200 },
           { model: 'custom/qwen3-coder', input_tokens: 90, output_tokens: 10, total_tokens: 100 },
           { model: 'glm-4-zero-usage', input_tokens: 0, output_tokens: 0, total_tokens: 0 }
+        ],
+        agents: agentBucketsOverride ?? [
+          { harness_id: 'antigravity', input_tokens: 1500, output_tokens: 300, total_tokens: 1800, turns: 5, thread_count: 2 },
+          { harness_id: 'kun', input_tokens: 1000, output_tokens: 200, total_tokens: 1200, turns: 3, thread_count: 1 }
         ],
         days: [],
         totals: { total_tokens: 3100 }
@@ -292,6 +297,54 @@ describe('UsageQuotaPanel', () => {
     expect(listProviderQuotas).toHaveBeenCalledTimes(2)
     expect(listProviderQuotas).toHaveBeenLastCalledWith({ forceRefresh: true })
     expect(runtimeRequest).not.toHaveBeenCalled()
+    act(() => renderer.unmount())
+  })
+
+  it('toggles between model and agent usage rankings and renders localized agent rows', async () => {
+    const runtimeRequest = vi.fn(async (path: string) => usageResponse(path))
+    const store = stubWindow({ runtimeRequest, listProviderQuotas: vi.fn() }, 'usage')
+
+    let renderer!: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
+    })
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-usage-breakdown': 'agent' }).props.onClick()
+    })
+
+    expect(store.get('kun.usage.rankingView')).toBe('agent')
+    const agentRows = renderer.root.findAll((node) =>
+      node.type === 'li' && typeof node.props['data-usage-agent'] === 'string'
+    )
+    expect(agentRows.map((row) => row.props['data-usage-agent'])).toEqual(['antigravity', 'kun'])
+
+    const output = JSON.stringify(renderer.toJSON())
+    expect(output).toContain('Antigravity')
+    expect(output).toContain('Kun')
+    expect(output).toContain('5 turns')
+    expect(output).toContain('3 turns')
+    expect(output).toContain('1.8k')
+    expect(output).toContain('1.2k')
+
+    act(() => renderer.unmount())
+  })
+
+  it('shows the agent empty state when no agent has usage', async () => {
+    const runtimeRequest = vi.fn(async (path: string) => usageResponse(path, undefined, []))
+    stubWindow({ runtimeRequest, listProviderQuotas: vi.fn() }, 'usage')
+
+    let renderer!: ReturnType<typeof createRenderer>
+    await act(async () => {
+      renderer = createRenderer(createElement(UsageQuotaPanel, { activeThreadId: 'thread-a' }))
+    })
+
+    await act(async () => {
+      renderer.root.findByProps({ 'data-usage-breakdown': 'agent' }).props.onClick()
+    })
+
+    expect(renderer.root.findByProps({ 'data-usage-agent-empty': true })).toBeTruthy()
+    expect(JSON.stringify(renderer.toJSON())).toContain('No Agent usage in this range yet.')
     act(() => renderer.unmount())
   })
 })

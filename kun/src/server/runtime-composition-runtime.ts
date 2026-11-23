@@ -41,6 +41,7 @@ import { settleCleanupSteps } from './runtime-factory-cleanup.js'
 import { shutdownRuntimeExecutionForHost } from './runtime-graph-lifecycle.js'
 import { disposeProxyAgents } from '../adapters/model/proxy-fetch.js'
 import type { ServerRuntime } from './runtime-factory-dependencies.js'
+import { createAcpToolOutputReader } from '../services/acp-tool-output-reader.js'
 import { mutateMcpServer } from './runtime-mcp-mutation.js'
 import { createRuntimeRoomComposition } from './runtime-composition-rooms.js'
 import { CodeWardrobeObserver } from '../rooms/code-wardrobe-observer.js'
@@ -229,6 +230,7 @@ export function createServerRuntimeComposition(
       probeModels: (definition) => services.harnesses.probeModelsInBackground(definition),
       snapshot: () => modelConnections.snapshot(), defaultModel: () => roomComposition.rooms.deps.model() }) })
   return {
+    readAcpToolOutput: createAcpToolOutputReader(threadService, sessionStore, core.delegatedSessions.store),
     threadService,
     gmail: services.gmail,
     githubApp: model.githubApp?.service,

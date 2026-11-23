@@ -4,6 +4,7 @@ import { createServer, type AddressInfo } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import './kun-process'
 import { configureLogger } from './logger'
 import {
   defaultClawSettings,

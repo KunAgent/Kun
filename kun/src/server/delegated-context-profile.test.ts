@@ -59,6 +59,7 @@ describe('delegatedContextProfile', () => {
     const profile = resolve('claude-haiku-4-5', CLAUDE_PROVIDER)
 
     expect(profile.contextWindowTokens).toBe(200_000)
+    expect(profile.contextWindowKnown).toBe(true)
     // Thresholds follow the declared window, not the assumed default window.
     expect(profile.softThresholdTokens).toBeLessThan(DEFAULT_CONTEXT_THRESHOLDS.softThreshold)
     expect(profile.softThresholdTokens).toBe(150_000)
@@ -69,11 +70,13 @@ describe('delegatedContextProfile', () => {
     const profile = resolve('claude-haiku-4-5')
 
     expect(profile.contextWindowTokens).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS)
+    expect(profile.contextWindowKnown).toBe(false)
   })
 
   it('does not leak one provider\'s window into an unrelated provider', () => {
     const profile = resolve('claude-haiku-4-5', 'some-other-provider')
 
     expect(profile.contextWindowTokens).toBe(DEFAULT_CONTEXT_WINDOW_TOKENS)
+    expect(profile.contextWindowKnown).toBe(false)
   })
 })

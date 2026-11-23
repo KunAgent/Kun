@@ -1,4 +1,12 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, test, vi } from 'vitest'
+import type { TurnItem } from '../../contracts/items.js'
+import {
+  DelegatedSessionCoordinator,
+  FileDelegatedSessionBindingStore
+} from '../delegated-session-binding.js'
 import { AgentSdkGatewayUnavailableError, AgentSdkRuntime } from './agent-sdk-runtime.js'
 import { createAgentSdkRuntime } from './agent-sdk-runtime-factory.js'
 import { resolveAgentSdkGatewayEnv } from './agent-sdk-gateway.js'
@@ -348,6 +356,110 @@ describe('kun-gateway loadTurnContext', () => {
     const ctx = await contextOf(runtime)
     expect(ctx?.gateway).toBeDefined()
     expect(ctx?.model).toBe('kun/deepseek/deepseek-chat')
+  })
+
+  test('continues native session across same-provider kun-gateway model switches and rebases on provider switch', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-sdk-gw-'))
+    try {
+      const coordinator = new DelegatedSessionCoordinator(
+        new FileDelegatedSessionBindingStore(dir)
+      )
+      const tokens = new HarnessTokenService()
+      const t1 = gatewayTurn({
+        id: 't1',
+        model: 'kun/anthropic-sub/claude-sonnet-4-6',
+        providerId: 'anthropic-sub'
+      })
+      const items: TurnItem[] = [
+        {
+          id: 'item_t1',
+          turnId: 't1',
+          threadId: 'th',
+          kind: 'user_message',
+          role: 'user',
+          status: 'completed',
+          text: 'turn 1',
+          createdAt: '2026-06-27T00:00:00Z'
+        } as TurnItem
+      ]
+      const thread = threadWith({ turns: [t1] })
+      const runtime = createAgentSdkRuntime(factoryDeps({
+        harnessTokens: tokens,
+        sessionCoordinator: coordinator,
+        agentSdkProviderIds: new Set(['anthropic-sub', 'other-sub']),
+        sessionStore: { loadItems: async () => [...items] } as never,
+        threadStore: { get: async () => thread } as never
+      }))
+
+      const ctx1 = await contextOf(runtime, 'th', 't1')
+      const tok1 = ctx1?.gateway?.token
+      expect(tokens.verifyScope(tok1, 'gateway')?.routes).toEqual([
+        { providerId: 'anthropic-sub', model: 'claude-sonnet-4-6', role: 'main' }
+      ])
+      expect(ctx1?.sessionPreparation).toBeDefined()
+      await coordinator.commit({
+        preparation: ctx1!.sessionPreparation!,
+        committedItems: [...items],
+        lastCommittedTurnId: 't1',
+        nativeSessionId: 'sess_gw_1'
+      })
+
+      const t2 = gatewayTurn({
+        id: 't2',
+        model: 'kun/anthropic-sub/claude-opus-4-6',
+        providerId: 'anthropic-sub'
+      })
+      thread.turns.push(t2)
+      items.push({
+        id: 'item_t2',
+        turnId: 't2',
+        threadId: 'th',
+        kind: 'user_message',
+        role: 'user',
+        status: 'completed',
+        text: 'turn 2',
+        createdAt: '2026-06-27T00:01:00Z'
+      } as TurnItem)
+
+      const ctx2 = await contextOf(runtime, 'th', 't2')
+      const tok2 = ctx2?.gateway?.token
+      expect(tok2).not.toBe(tok1)
+      expect(tokens.verifyScope(tok2, 'gateway')?.routes).toEqual([
+        { providerId: 'anthropic-sub', model: 'claude-opus-4-6', role: 'main' }
+      ])
+      expect(ctx2?.resumeSessionId).toBe('sess_gw_1')
+      expect(ctx2?.claudeConfigDir).toBe(ctx1?.claudeConfigDir)
+      expect(ctx2?.handoffBrief).toBeUndefined()
+      await coordinator.commit({
+        preparation: ctx2!.sessionPreparation!,
+        committedItems: [...items],
+        lastCommittedTurnId: 't2',
+        nativeSessionId: 'sess_gw_1'
+      })
+
+      const t3 = gatewayTurn({
+        id: 't3',
+        model: 'kun/other-sub/claude-opus-4-6',
+        providerId: 'other-sub'
+      })
+      thread.turns.push(t3)
+      items.push({
+        id: 'item_t3',
+        turnId: 't3',
+        threadId: 'th',
+        kind: 'user_message',
+        role: 'user',
+        status: 'completed',
+        text: 'turn 3',
+        createdAt: '2026-06-27T00:02:00Z'
+      } as TurnItem)
+
+      const ctx3 = await contextOf(runtime, 'th', 't3')
+      expect(ctx3?.resumeSessionId).toBeUndefined()
+      expect(ctx3?.sessionPreparation?.rebaseReason).toBe('route_changed')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
   })
 })
 

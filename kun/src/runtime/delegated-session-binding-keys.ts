@@ -18,6 +18,11 @@ export function delegatedRouteKey(route: DelegatedSessionRoute): string {
     providerId: route.providerId,
     credentialIdentity: route.credentialIdentity,
     workspace: route.workspace,
+    // Sorted so reordering the user's directories keeps the same native
+    // session; any added/removed/re-pointed root changes the key.
+    ...(route.additionalWorkspaceRoots?.length
+      ? { additionalWorkspaceRoots: normalizedWorkspaceRoots(route.additionalWorkspaceRoots) }
+      : {}),
     ...(route.modelScope === 'session'
       ? { modelScope: route.model === DEFAULT_DELEGATED_MODEL ? 'session-default' : 'session' }
       : { model: route.model }),
@@ -29,6 +34,22 @@ export function delegatedRouteKey(route: DelegatedSessionRoute): string {
 /** Keep a resumed session in its existing directory without moving or merging user state. */
 export function delegatedProviderStateKey(route: DelegatedSessionRoute): string {
   return route.providerStateKey ?? delegatedRouteKey(route)
+}
+
+/** Canonical root lists are compared/serialized order-insensitively. */
+export function normalizedWorkspaceRoots(
+  roots: readonly string[] | undefined
+): string[] {
+  return [...new Set((roots ?? []).map((root) => root.trim()).filter(Boolean))].sort()
+}
+
+export function sameWorkspaceRoots(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined
+): boolean {
+  const a = normalizedWorkspaceRoots(left)
+  const b = normalizedWorkspaceRoots(right)
+  return a.length === b.length && a.every((root, index) => root === b[index])
 }
 
 export function sha256(value: string): string {

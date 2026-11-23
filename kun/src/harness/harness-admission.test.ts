@@ -15,9 +15,9 @@ import {
   CURSOR_CAPABILITIES,
   KUN_NATIVE_CAPABILITIES
 } from './builtin-harnesses.js'
+import { acpLegacyCapabilities } from '../runtime/acp/acp-runtime-support.js'
 import { agentSdkCapabilities } from '../runtime/agent-sdk/agent-sdk-runtime-stream.js'
 import { cursorSdkCapabilities } from '../runtime/cursor/cursor-sdk-runtime-trace.js'
-import { antigravityCapabilities } from '../runtime/antigravity/antigravity-cli-runtime.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import type {
   HarnessCapabilities,
@@ -264,7 +264,7 @@ describe('rooms equivalence (room-execution matches current room admission)', ()
   } as ThreadRecord
   const roomTurn = { id: 'u1', threadId: 't1' } as Turn
 
-  const router = (runtimeCaps: () => ReturnType<typeof agentSdkCapabilities>, transport: 'agent-sdk' | 'cursor-sdk' | 'antigravity-cli') =>
+  const router = (runtimeCaps: () => ReturnType<typeof agentSdkCapabilities>, transport: 'agent-sdk' | 'cursor-sdk' | 'acp') =>
     new HarnessRouter({
       enabled: () => true,
       catalog: new HarnessCatalog({ custom: () => [], enabledProfiles: () => [
@@ -298,7 +298,7 @@ describe('rooms equivalence (room-execution matches current room admission)', ()
       { ...roomTurn, harnessId: 'cursor', providerId: 'default' } as Turn
     )
     expect(cursor.ok).toBe(false)
-    const antigravity = router(antigravityCapabilities, 'antigravity-cli').resolve(
+    const antigravity = router(acpLegacyCapabilities, 'acp').resolve(
       roomThread,
       { ...roomTurn, harnessId: 'antigravity' } as Turn
     )

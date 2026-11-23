@@ -119,8 +119,8 @@ export function adeHarnessModelGroups(input: {
         ...nativeLoginGroupIdentity(row, profile.providerId, labels),
         modelIds: [...models],
         ...(input.modelInfo ? { modelProfiles: harnessModelProfiles(input.modelInfo, row.definition.id === 'devin') } : {}),
-        ...(input.modelInfo ? { nativeHarnessId: row.definition.id,
-          modelInfo: Object.fromEntries(input.modelInfo.map((entry) => [entry.id, entry])) } : {})
+        ...(input.modelInfo || row.definition.id === 'antigravity' ? { nativeHarnessId: row.definition.id } : {}),
+        ...(input.modelInfo ? { modelInfo: Object.fromEntries(input.modelInfo.map((entry) => [entry.id, entry])) } : {})
       })
       continue
     }

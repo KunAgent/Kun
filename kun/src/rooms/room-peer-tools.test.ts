@@ -14,6 +14,7 @@ import { putRoomDocument, RoomService } from './room-service.js'
 import { RoomPeerStore } from './room-peer-state.js'
 import { peerId, peerMemberId } from './room-peer-inbox.js'
 import { bindRoomPeerStore, roomPeerTools } from './room-peer-tools.js'
+import type { RoomMessage } from '../contracts/rooms.js'
 import type { RoomPeerInboxItem, RoomPeerMemberState, RoomPeerTopic } from './room-peer-types.js'
 
 const cleanups: Array<() => Promise<unknown>> = []
@@ -262,5 +263,43 @@ describe('peer discussion tools', () => {
     expect((result.output as { held?: unknown }).held).toBeUndefined()
     expect(await activation(f)).toMatchObject({ basePublicationRevision: 1 })
     expect((await activation(f)).holds).toBeUndefined()
+  })
+
+  it('does not treat parallel sibling answers as stale in read_room_updates or send_room_message unless mentioned', async () => {
+    const f = await fixture()
+    const now = new Date().toISOString()
+    const baseMsg: Omit<RoomMessage, 'id' | 'authorKind' | 'authorLabelSnapshot' | 'body' | 'mentionMemberIds'> = {
+      roomId: f.room.id, rootRequestId: 'topic', sourceRequestId: 'topic', messageSeq: 1,
+      status: 'final', bodyRevision: 0, replyToMessageId: undefined, attachmentIds: [], createdAt: now
+    }
+    await putRoomDocument(f.store, 'message', 'source', f.room.id, {
+      ...baseMsg, id: 'source', authorKind: 'user', authorLabelSnapshot: 'User', body: 'Everyone report in', mentionMemberIds: []
+    }, null)
+    await putRoomDocument(f.store, 'context', 'context', f.room.id, { replyToMessageId: 'source' }, null)
+    await putRoomDocument(f.store, 'message', 'sibling-reply', f.room.id, {
+      ...baseMsg, id: 'sibling-reply', messageSeq: 2, authorKind: 'member', authorMemberId: 'coordinator',
+      authorLabelSnapshot: 'Coordinator', body: 'Coordinator answer', replyToMessageId: 'source', mentionMemberIds: []
+    }, null)
+    await putRoomDocument(f.store, 'peer_inbox', 'sibling-inbox-1', f.room.id, {
+      ...inboxItem(f, 'sibling-reply'), authorMemberId: 'coordinator'
+    }, null)
+    await f.updateTopic({ publicationRevision: 2 })
+
+    const readParallel = await f.tool('read_room_updates').execute({}, f.context)
+    expect((readParallel.output as { draftIsStale: boolean }).draftIsStale).toBe(false)
+    const stagedParallel = await f.tool('send_room_message').execute({ body: 'Developer answer' }, f.context)
+    expect(stagedParallel.output).toMatchObject({ accepted: true, staged: true })
+    expect((await activation(f)).holds).toBeUndefined()
+
+    const siblingRow = (await f.store.get<RoomMessage>('message', 'sibling-reply'))!
+    await putRoomDocument(f.store, 'message', 'sibling-reply', f.room.id, {
+      ...siblingRow.value, mentionMemberIds: ['developer']
+    }, siblingRow)
+
+    const readMentioned = await f.tool('read_room_updates').execute({}, f.context)
+    expect((readMentioned.output as { draftIsStale: boolean }).draftIsStale).toBe(true)
+    const heldMentioned = await f.tool('send_room_message').execute({ body: 'Developer answer' }, f.context)
+    expect(heldMentioned.output).toMatchObject({ accepted: false, held: true })
+    expect((await activation(f)).holds).toBe(1)
   })
 })

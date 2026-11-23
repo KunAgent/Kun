@@ -379,6 +379,8 @@ export function FloatingComposerSurfaceView({
                             harnessLabel: adeComposer.harnessLabel,
                             rows: adeComposer.rows,
                             loading: adeComposer.rowsLoading,
+                            workspaceRoots: adeComposer.workspaceRoots,
+                            supportsAdditionalRoots: adeComposer.supportsAdditionalRoots,
                             needsConfirm: adeComposer.needsSwitchConfirm,
                             onSelect: selectAgent,
                             onOpen: adeComposer.refreshRows,
@@ -578,6 +580,7 @@ export function FloatingComposerSurfaceView({
                       showProviderInModelLabel={showProviderInModelLabel}
                       canChangeModel={canChangeModel}
                       stretch={stretchModelPicker || showToolbarStartControls}
+                      onOpenChange={externalAgent ? adeComposer?.onModelPickerOpen : undefined}
                       onComposerModelChange={onComposerModelChange}
                       onComposerReasoningEffortChange={onComposerReasoningEffortChange}
                       onComposerFastModeChange={onComposerFastModeChange}

@@ -26,6 +26,7 @@ import {
   OpenCodeGoWebQuotaError,
   type OpenCodeGoWebQuotaResult
 } from '../../kun/src/services/opencode-go-web-quota.js'
+import { probeDevinSubscriptionQuota } from '../../kun/src/services/devin-subscription-quota.js'
 import {
   codexUserAgent,
   parseCodexCredentials,
@@ -187,10 +188,47 @@ export async function runSubscriptionQuotaProbe(
     const credential = await runtime.resolveAntigravityCredential(context)
     if (!credential) {
       throw new ProviderQuotaMissingCredentialError(
-        'Sign in to the official Antigravity app on this computer before refreshing quota.'
+        'Sign in with agy login or the official Antigravity app before refreshing quota.'
       )
     }
-    return probeGoogleCodeAssistQuota(credential, context, 'antigravity')
+    try {
+      return await probeGoogleCodeAssistQuota(credential, context, 'antigravity')
+    } catch (error) {
+      if (!(error instanceof ProviderQuotaAuthorizationError)) throw error
+      const refreshed = await runtime.resolveAntigravityCredential(
+        context,
+        credential.accessToken
+      )
+      if (!refreshed || refreshed.accessToken === credential.accessToken) {
+        throw new ProviderQuotaMissingCredentialError(
+          'The Antigravity login expired. Run agy login or sign in to Antigravity again.'
+        )
+      }
+      return probeGoogleCodeAssistQuota(refreshed, context, 'antigravity')
+    }
+  }
+  if (kind === 'devin-subscription') {
+    const credential = await runtime.resolveDevinCredential(provider)
+    if (!credential) {
+      throw new ProviderQuotaMissingCredentialError(
+        'Sign in with `devin auth login` or set WINDSURF_API_KEY before refreshing quota.'
+      )
+    }
+    try {
+      return await probeDevinSubscriptionQuota(credential, (url, input) =>
+        requestSubscriptionJson(url, input, context)
+      )
+    } catch (error) {
+      if (
+        error instanceof ProviderQuotaAuthorizationError ||
+        (error instanceof Error && error.name === 'DevinQuotaAuthorizationError')
+      ) {
+        throw new ProviderQuotaMissingCredentialError(
+          'The Devin login expired or is unauthorized. Run `devin auth login` again.'
+        )
+      }
+      throw error
+    }
   }
   if (kind === 'opencode-go-local') {
     const tryWeb = async (cookieHeader: string) => {

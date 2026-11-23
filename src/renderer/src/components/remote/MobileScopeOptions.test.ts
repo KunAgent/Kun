@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { MOBILE_REMOTE_SCOPES } from '@shared/mobile-link-scopes'
 import { MobileScopeOptions, selectMobileScope } from './MobileScopeOptions'
 
 describe('trusted desktop advanced mobile permissions', () => {
-  it('starts with every advanced option unchecked and explains the narrower read scopes', () => {
-    const html = renderToStaticMarkup(createElement(MobileScopeOptions, { zh: true, value: ['personal'], onChange: () => {} }))
-    expect(html.match(/type="checkbox"/g)).toHaveLength(9)
-    expect(html).not.toContain('checked=""')
-    expect(html).toContain('默认关闭')
-    expect(html).toContain('桌面自动运行')
-    expect(html).toContain('本次启动')
+  it('checks all advanced options with default mobile scopes and reports narrowed states accurately', () => {
+    const fullHtml = renderToStaticMarkup(createElement(MobileScopeOptions, { zh: true, value: MOBILE_REMOTE_SCOPES, onChange: () => {} }))
+    expect(fullHtml.match(/type="checkbox"/g)).toHaveLength(9)
+    expect(fullHtml.match(/checked=""/g)).toHaveLength(9)
+    expect(fullHtml).toContain('已全部开启')
+    expect(fullHtml).toContain('默认开启')
+    expect(fullHtml).toContain('桌面自动运行')
+    expect(fullHtml).toContain('本次启动')
+    const emptyHtml = renderToStaticMarkup(createElement(MobileScopeOptions, { zh: true, value: ['personal'], onChange: () => {} }))
+    expect(emptyHtml).not.toContain('checked=""')
+    expect(emptyHtml).toContain('未开启')
+    expect(emptyHtml).not.toContain('默认关闭')
   })
   it('selects necessary read access and removes dependent write permissions when read access is unchecked', () => {
     expect(selectMobileScope(['personal'], 'groups.write', true).sort()).toEqual(['personal', 'groups.read', 'groups.write'].sort())

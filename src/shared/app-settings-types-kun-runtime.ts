@@ -16,6 +16,7 @@ import type {
   ApprovalReviewModelSelection
 } from '../../kun/src/contracts/approval-review-config.js'
 import type { KunGitHubMcpSettingsV1 } from './github-mcp-authorization'
+import type { KunColabSettingsV1 } from './app-settings-colab'
 import type { AdeProjectDefaults } from './ade-project-defaults'
 
 import {
@@ -531,6 +532,8 @@ export type KunRuntimeSettingsV1 = {
   graph: KunGraphSettingsV1
   /** Host-owned defaults for executing reviewed GUI plans. */
   planExecution: KunPlanExecutionSettingsV1
+  /** Host-owned Google Colab cloud compute safety & billing preferences. */
+  colab: KunColabSettingsV1
   /** Harness enablement, overrides, and custom ACP harnesses. */
   harnesses: KunHarnessSettingsV1
   /** ADE mode switches; runtime-relevant subset syncs into Kun config. */

@@ -8,6 +8,7 @@ import { COMPUTER_ACCESS_CHANNELS as channels } from '../../shared/computer-acce
 import { loadIdentity, resetIdentity } from '../mobile-link/identity'
 import { MobileLinkSockets } from '../mobile-link/socket'
 import type { MobileLinkService } from '../mobile-link/service'
+import { controllerSupported } from '../remote-desktop/platform'
 import { ComputerAccessService } from './service'
 import { ComputerViewerWindow } from './viewer-window'
 import { registerComputerSession } from './lifecycle'
@@ -16,7 +17,7 @@ export function registerComputerAccess(options: RegisterAppIpcHandlersOptions, a
   const links = join(app.getPath('userData'), 'mobile-link'), sockets = new MobileLinkSockets()
   let viewer: ComputerViewerWindow
   const service = new ComputerAccessService({ account, name: hostname(), origin: 'https://api-kun-server.com',
-    supported: process.platform === 'darwin' && process.arch === 'arm64',
+    supported: controllerSupported(),
     identity: (owner, role) => loadIdentity(join(links, owner, role === 'host' ? 'identity.enc' : 'computer-controller.enc')),
     fetch: (input, init) => net.fetch(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, init),
     socket: (url, headers) => sockets.open(url, headers), event: value => viewer?.event(value) })

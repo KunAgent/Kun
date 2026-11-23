@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { workspaceFileIconKind } from './workspace-file-icons'
 import {
+  isExternalLocalImagePreviewPath,
   isWorkspaceConvertedImagePath,
   isWorkspacePreviewPath,
   isWorkspaceRasterImagePreviewPath,
@@ -20,6 +21,21 @@ describe('isWorkspaceRasterImagePreviewPath', () => {
   it('leaves SVG on the text-backed SVG preview path', () => {
     expect(isWorkspaceRasterImagePreviewPath('/tmp/app/image.svg')).toBe(false)
     expect(isWorkspaceRasterImagePreviewPath('/tmp/app/image.pdf')).toBe(false)
+  })
+
+  it('detects explicit local raster image paths outside the selected workspace without allowing traversal', () => {
+    expect(isExternalLocalImagePreviewPath('/tmp/colab-kun-sidebar.png', '/Users/zxy/codeproject/DeepSeek-GUI')).toBe(true)
+    expect(isExternalLocalImagePreviewPath('~/Desktop/colab-kun-sidebar.png', '/Users/zxy/codeproject/DeepSeek-GUI')).toBe(true)
+    expect(isExternalLocalImagePreviewPath('/repo-other/shot.png', '/repo')).toBe(true)
+    expect(isExternalLocalImagePreviewPath('D:\\Temp\\shot.png', 'C:\\Repo')).toBe(true)
+
+    expect(isExternalLocalImagePreviewPath('img/sample.png', '/repo')).toBe(false)
+    expect(isExternalLocalImagePreviewPath('/repo/img/sample.png', '/repo')).toBe(false)
+    expect(isExternalLocalImagePreviewPath('C:\\Repo\\img\\sample.png', 'c:/repo')).toBe(false)
+    expect(isExternalLocalImagePreviewPath('../outside.png', '/repo')).toBe(false)
+    expect(isExternalLocalImagePreviewPath('/repo/../outside.png', '/repo')).toBe(false)
+    expect(isExternalLocalImagePreviewPath('/tmp/notes.txt', '/repo')).toBe(false)
+    expect(isExternalLocalImagePreviewPath('/tmp/page.html', '/repo')).toBe(false)
   })
 })
 

@@ -11,6 +11,7 @@ import { hasKunAccountSession } from '../../shared/kun-account'
 import { createDesktopEngine } from '../remote-desktop/engine'
 import { createTerminalEngine } from '../remote-terminal/engine'
 import { createRuntimeOriginWorkspace } from './terminal-origin'
+import { createSimulatorEngine } from '../remote-simulator/engine'
 import { logWarn } from '../logger'
 
 export function registerDirectLink(options: RegisterAppIpcHandlersOptions, base: LinkDependencies, root: string) {
@@ -29,11 +30,15 @@ export function registerDirectLink(options: RegisterAppIpcHandlersOptions, base:
     await invoke({ method: `${resource.kind}.history`, params: resource.kind === 'code' ? { threadId: resource.id } : { agentId: resource.id } }, authority)
   })
   const terminal = createTerminalEngine({ invoke, readWorkspace: createRuntimeOriginWorkspace(options) })
+  const simulatorOrigin = createRuntimeOriginWorkspace(options)
+  const simulator = createSimulatorEngine(async (origin, authority) => {
+    if (!await simulatorOrigin(origin, authority)) throw Error('SIMULATOR_ORIGIN_UNAVAILABLE')
+  })
   const store = (id: string) => {
     if (!/^[a-zA-Z0-9_-]{1,128}$/.test(id)) throw Error('INVALID_OWNER')
     return new DirectStore(join(root, id, 'direct.enc'))
   }
-  host = new DirectHost({ root, owner: () => owner, link: { ...base, desktop, terminal },
+  host = new DirectHost({ root, owner: () => owner, link: { ...base, desktop, terminal, simulator },
     read: id => store(id).read(), write: (id, value) => store(id).write(value), revoke: (id, grant) => store(id).revoke(grant), validate: directConfiguration })
   const observe = (state: Awaited<ReturnType<LinkDependencies['account']['getState']>>) => {
     const next = hasKunAccountSession(state) ? state.user?.id ?? null : null

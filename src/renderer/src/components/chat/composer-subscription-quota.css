@@ -100,3 +100,17 @@
 .ds-composer-subscription-trigger:hover { background: var(--ds-surface-hover); color: var(--ds-text); }
 .ds-composer-subscription-trigger:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 2px; }
 .ds-composer-toolbar[data-fit-2] .ds-composer-subscription-trigger-label { display: none; }
+.ds-composer-subscription-group { display: grid; gap: 8px; }
+.ds-composer-subscription-group-title { margin: 0; font-size: 12px; font-weight: 600; color: var(--ds-text); }
+.ds-composer-subscription-group-rows { display: grid; gap: 9px; }
+.ds-composer-subscription-grouped-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ds-composer-subscription-grouped-copy { display: flex; min-width: 0; flex-direction: column; gap: 1px; }
+.ds-composer-subscription-grouped-copy > span { color: var(--ds-text); font-size: 11.5px; }
+.ds-composer-subscription-grouped-value { display: inline-flex; flex-shrink: 0; align-items: center; gap: 7px; }
+.ds-composer-subscription-grouped-value strong { color: var(--ds-text-muted); font-size: 11.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ds-composer-subscription-ring { display: inline-flex; width: 17px; height: 17px; align-items: center; justify-content: center; }
+.ds-composer-subscription-ring svg { width: 17px; height: 17px; transform: rotate(-90deg); }
+.ds-composer-subscription-ring-track { fill: none; stroke: var(--ds-surface-subtle); stroke-width: 2.25; }
+.ds-composer-subscription-ring-fill { fill: none; stroke: #4c9f50; stroke-width: 2.25; stroke-linecap: round; }
+.ds-composer-subscription-window[data-severity='warn'] .ds-composer-subscription-ring-fill { stroke: #d9920f; }
+.ds-composer-subscription-window[data-severity='danger'] .ds-composer-subscription-ring-fill { stroke: #d9544e; }

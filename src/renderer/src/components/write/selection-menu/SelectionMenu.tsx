@@ -42,10 +42,10 @@ export function SelectionMenu(props: SelectionMenuProps): ReactElement {
     { enabled: props.prototypeEnabled, run: props.onGeneratePrototype, label: 'writePrototypeGenerate', icon: AppWindow }
   ].filter((item) => item.enabled && item.run)
   // The four everyday moves sit on top as pills; the menu below keeps formatting and skills.
-  const strip = !typing && !imageMode && (canAsk || props.onQuoteSelection)
+  const strip = !typing && !imageMode && (canAsk || props.onQuoteSelection || props.onAnnotate)
   return <>
     {strip ? <SelectionActionStrip editEnabled={Boolean(editEnabled)} onAskEdit={canAsk ? props.onAskEdit : undefined}
-      onAskChat={canAsk ? props.onAskChat : undefined} onQuoteSelection={props.onQuoteSelection}
+      onAskChat={canAsk ? props.onAskChat : undefined} onQuoteSelection={props.onQuoteSelection} onAnnotate={props.onAnnotate}
       onDone={() => onReleaseSelection?.()} /> : null}
     <div role="menu" aria-label={t('writeSelectionSkills')} onKeyDown={navigateMenu}>
       {!typing && !imageMode && formattingEnabled && <>

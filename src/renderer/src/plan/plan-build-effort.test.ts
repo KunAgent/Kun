@@ -13,6 +13,17 @@ describe('plan build effort choices', () => {
     expect(planBuildEffortChoices(group as never, 'fast', true)).toEqual([])
   })
 
+  it('does not offer plan-build overrides for Antigravity Orchestrators or for an unprobed model', () => {
+    const native = { nativeHarnessId: 'antigravity' }
+    expect(planBuildEffortChoices(native, 'gemini-pro-orchestrator', true, { reasoningEfforts: ['high'] })).toEqual([])
+    expect(planBuildEffortChoices({ kind: 'antigravity-cli' }, 'gemini-pro-orchestrator-argon', false)).toEqual([])
+    expect(planBuildEffortChoices(native, 'unprobed', true)).toEqual([])
+    expect(planBuildEffortChoices(native, 'gemini-4-hydrogen', true, { reasoningEfforts: ['low', 'high', 'xhigh'] }))
+      .toEqual(['auto', 'low', 'high', 'xhigh'])
+    expect(planBuildEffortChoices({ nativeHarnessId: 'custom' }, 'gemini-pro-orchestrator', true, { reasoningEfforts: ['high'] }))
+      .toEqual(['auto', 'high'])
+  })
+
   it('hides the control when no model is chosen', () => {
     expect(planBuildEffortChoices(undefined, '', false)).toEqual([])
   })

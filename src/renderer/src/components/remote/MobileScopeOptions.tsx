@@ -36,12 +36,15 @@ export function MobileScopeOptions({ zh, value, onChange, disabled = false, incl
   const options = OPTIONS.filter(option => (includeDesktop || !option.id.startsWith('desktop.')) && !excludeScopes.includes(option.id))
   const selected = options.filter(option => value.includes(option.id)).length
   const title = includeDesktop ? zh ? '高级访问' : 'Advanced access' : zh ? '其他高级访问' : 'Other advanced access'
+  const statusText = selected === options.length
+    ? zh ? ' · 已全部开启' : ' · all enabled'
+    : selected ? zh ? ' · 已选择 ' + selected + ' 项' : ' · ' + selected + ' selected' : zh ? ' · 未开启' : ' · none enabled'
   return <details className="w-full rounded-lg border border-ds-border px-3 py-2 text-[12px] text-ds-muted">
-    <summary className="cursor-pointer select-none text-ds-ink">{title + (selected ? zh ? ' · 已选择 ' + selected + ' 项' : ' · ' + selected + ' selected' : zh ? '（默认关闭）' : ' (off by default)')}</summary>
-    <p className="mt-2 leading-5">{persistent ? zh ? '基础访问包含个人 Agent 和 Code。直连授权保留至配对过期或被撤销；终端与键鼠操作需要桌面控制权限。'
-      : 'Basic access includes personal Agents and Code. Direct permissions last until the pairing expires or is revoked. Terminals and input require desktop control.'
-      : zh ? '基础访问包含这台电脑的个人 Agent 和 Code。以下权限仅在本次启动中有效，关闭访问或重新授权后清除。'
-      : 'Basic access includes personal Agents and Code on this computer. These choices last until access is stopped or the device is authorized again.'}</p>
+    <summary className="cursor-pointer select-none text-ds-ink">{title + statusText}</summary>
+    <p className="mt-2 leading-5">{persistent ? zh ? '基础访问包含个人 Agent 和 Code，以上高级权限默认开启，可按需取消勾选。直连授权保留至配对过期或被撤销；终端与键鼠操作需要桌面控制权限。'
+      : 'Basic access includes personal Agents and Code. Advanced permissions are enabled by default and can be unchecked as needed. Direct permissions last until the pairing expires or is revoked; terminals and input require desktop control.'
+      : zh ? '基础访问包含这台电脑的个人 Agent 和 Code，以下高级权限默认开启，可按需取消勾选。手动调整在本次启动中有效，关闭访问或重新授权后恢复默认。'
+      : 'Basic access includes personal Agents and Code on this computer. Advanced permissions are enabled by default and can be unchecked as needed. Custom adjustments last for this session and reset when access stops or the device is authorized again.'}</p>
     <div className="mt-2 flex flex-col gap-2">
       {options.map((option) => <label key={option.id} className="flex items-start gap-2">
         <input type="checkbox" checked={value.includes(option.id)} disabled={disabled}
@@ -49,7 +52,7 @@ export function MobileScopeOptions({ zh, value, onChange, disabled = false, incl
         <span>{zh ? option.zh : option.en}</span>
       </label>)}
     </div>
-    <p className="mt-2 leading-5">{zh ? '自动运行包括 Agent 日程和桌面计划任务。插件面板目前仅显示信息，启停须单独授权。'
-      : 'Schedules include Agent and desktop tasks. Plugin panels currently show information; enablement requires separate consent.'}</p>
+    <p className="mt-2 leading-5">{zh ? '自动运行包括 Agent 日程和桌面计划任务；取消勾选插件启停权限可限制为仅查看插件面板信息。'
+      : 'Schedules include Agent and desktop tasks; unchecking plugin enablement restricts access to viewing plugin panel information.'}</p>
   </details>
 }

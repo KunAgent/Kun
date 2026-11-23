@@ -34,6 +34,8 @@ import {
   saveThreadWorktreeRegistry
 } from '../lib/thread-worktree-registry'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
+import { additionalWorkspacesForThread, extraRootsForPrimary, isMultiRootWorktreeBlocked } from '../lib/code-workspace-folder-sets'
+import { folderSetPrimaryForWorkspace } from '../lib/code-workspace-folder-lookup'
 import {
   isInternalTemporaryWorkspace,
   normalizeWorkspaceRoot,
@@ -312,6 +314,18 @@ export function createThreadCreationActions(
           stillCurrent: activationAllowed }) : undefined
       timing.step('project-defaults')
       if (workspaceIntent === null) return null
+      const projectPrimary = folderSetPrimaryForWorkspace(workspaceRoot)
+      const projectExtraRoots = projectPrimary
+        ? extraRootsForPrimary(projectPrimary, creationState.codeWorkspaceFolderSets)
+        : []
+      // A worktree only isolates the main repository. Never hand a worktree
+      // conversation write access to extra source repositories implicitly:
+      // the user must explicitly choose local folders or a single repository.
+      if (isMultiRootWorktreeBlocked(projectExtraRoots.length,
+        workspaceIntent?.isolation ?? (isAdeThread ? creationState.composerIsolation : undefined))) {
+        set({ error: i18n.t('common:codeProjectWorktreeMultiRootBlocked') })
+        return null
+      }
       // Reuse is decided by what the thread actually is, not by whether the
       // project has defaults: an empty, untouched thread of this project and
       // surface is the right landing page for another New click.
@@ -344,6 +358,9 @@ export function createThreadCreationActions(
       const t = await p.createThread({
         workspace: workspaceRoot,
         ...workspaceIntent?.createFields,
+        ...(projectExtraRoots.length > 0
+          ? { additionalWorkspaces: additionalWorkspacesForThread(workspaceRoot, projectExtraRoots) }
+          : {}),
         title: getDefaultThreadTitle(),
         mode: 'agent',
         agentSurface: requestedAgentSurface,

@@ -96,7 +96,20 @@ vi.mock('electron', () => ({
   clipboard: { writeText: electronMock.writeText },
   shell: {
     openPath: electronMock.openPath,
+    openExternal: vi.fn(async () => undefined),
     showItemInFolder: electronMock.showItemInFolder
+  },
+  safeStorage: {
+    isEncryptionAvailable: vi.fn(() => false),
+    encryptString: vi.fn((value: string) => Buffer.from(value, 'utf8')),
+    decryptString: vi.fn((value: Buffer) => value.toString('utf8')),
+    getSelectedStorageBackend: vi.fn(() => 'basic_text')
+  },
+  Notification: class {
+    static isSupported(): boolean {
+      return false
+    }
+    show(): void {}
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (event: unknown, payload?: unknown) => Promise<unknown>) => {

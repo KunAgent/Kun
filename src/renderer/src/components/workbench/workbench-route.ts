@@ -7,6 +7,6 @@ export function normalizeWorkbenchRoute(route: string): string {
   if (route === 'design' || route === 'ade') return 'chat'
   if (route === 'rooms') return 'agent-chat'
   return new Set([
-    'chat', 'agent-chat', 'write', 'papers', 'settings', 'plugins', 'extensions', 'claw', 'board', 'schedule', 'workflow', 'wardrobe', 'artifacts'
+    'chat', 'agent-chat', 'write', 'papers', 'settings', 'plugins', 'extensions', 'claw', 'board', 'schedule', 'workflow', 'wardrobe', 'artifacts', 'colab'
   ]).has(route) ? route : 'chat'
 }

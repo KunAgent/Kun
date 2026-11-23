@@ -4,6 +4,7 @@
  * identity. Revoked/in-flight grants cannot borrow authority from a later turn.
  * Tokens travel only in headers/env; never on argv or in persisted bindings.
  */
+import type { WorkspaceRootSet } from '../workspace-roots.js'
 import type { HarnessId } from '../../contracts/harness.js'
 import {
   HARNESS_TOKEN_PREFIX,
@@ -29,6 +30,7 @@ export type KunToolsMcpProviderDeps = {
 }
 
 export type KunToolsMcpInput = {
+  workspaceRoots?: WorkspaceRootSet
   threadId: string
   turnId: string
   harnessId: HarnessId
@@ -39,6 +41,7 @@ export type KunToolsMcpInput = {
 }
 
 export class KunToolsMcpProvider {
+  private readonly rootsByTurn = new Map<string, { threadId: string; roots: WorkspaceRootSet }>()
   private readonly turnGrants = new Map<string, string[]>()
   private issueCount = 0
 
@@ -52,6 +55,9 @@ export class KunToolsMcpProvider {
   servers(input: KunToolsMcpInput): McpServer[] {
     const baseUrl = this.deps.endpoint()?.trim()
     if (!baseUrl) return []
+    if (input.workspaceRoots) {
+      this.rootsByTurn.set(input.turnId, { threadId: input.threadId, roots: input.workspaceRoots })
+    }
     const url = `${baseUrl.replace(/\/$/, '')}/mcp/kun`
     const token = this.deps.tokens.issue({
       threadId: input.threadId,
@@ -101,8 +107,14 @@ export class KunToolsMcpProvider {
     return Boolean(this.deps.endpoint()?.trim())
   }
 
+  workspaceRootsForTurn(threadId: string, turnId: string): WorkspaceRootSet | undefined {
+    const snapshot = this.rootsByTurn.get(turnId)
+    return snapshot?.threadId === threadId ? snapshot.roots : undefined
+  }
+
   /** Revoke every grant issued for this turn (success, failure, or abort). */
   revokeTurn(turnId: string): void {
+    this.rootsByTurn.delete(turnId)
     const grants = this.turnGrants.get(turnId)
     if (!grants) return
     this.turnGrants.delete(turnId)

@@ -19,7 +19,9 @@ function isDefaultWorkspacePath(normalized: string): boolean {
 export function workspaceRootIdentityKey(path?: string): string {
   const trimmed = path?.trim() ?? ''
   if (!trimmed) return ''
-  const normalized = normalizePathForMatch(trimmed)
+  const platform = typeof window !== 'undefined' ? window.kunGui?.platform : undefined
+  const lexical = workspaceRootScopeKey(trimmed)
+  const normalized = platform === 'linux' ? lexical : lexical.toLowerCase()
   if (isDefaultWorkspacePath(normalized)) {
     return '~/.kun/default_workspace'
   }

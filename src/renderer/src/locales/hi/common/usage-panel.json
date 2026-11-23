@@ -71,5 +71,10 @@
   "usagePanelChartEstimateNote": "इस अवधि में कोई वास्तविक शुल्क नहीं लगा; स्तंभ API संदर्भ मूल्य दिखाते हैं।",
   "usagePanelModelsEmpty": "इस अवधि में किसी मॉडल का उपयोग नहीं",
   "usagePanelShowAllModels": "सभी {{count}} दिखाएँ",
-  "usagePanelShowFewerModels": "कम दिखाएँ"
+  "usagePanelShowFewerModels": "कम दिखाएँ",
+  "usagePanelBreakdownLabel": "उपयोग विवरण",
+  "usagePanelByModel": "मॉडल के अनुसार",
+  "usagePanelByAgent": "Agent के अनुसार",
+  "usagePanelAgentUsage": "Agent उपयोग",
+  "usagePanelAgentsEmpty": "इस अवधि में कोई Agent उपयोग नहीं है।"
 }

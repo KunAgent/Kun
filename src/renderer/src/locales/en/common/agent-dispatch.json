@@ -73,6 +73,24 @@
     "autoStarted": "Started automatically after no reply",
     "routeUpdateFailed": "Couldn't switch: {{message}}",
     "batchTaskHint": "Your notes are appended to every task in this batch.",
+    "group": {
+      "title": "{{count}} Workers",
+      "pending": "{{count}} queued",
+      "working": "{{count}} working",
+      "waiting": "{{count}} waiting",
+      "done": "{{count}} finished",
+      "failed": "{{count}} failed",
+      "cancelled": "{{count}} cancelled",
+      "unknown": "{{count}} unconfirmed",
+      "refused": "{{count}} refused",
+      "skipped": "{{count}} skipped",
+      "elapsed": "Execution wall time (excludes dispatch preparation and later reviews)",
+      "timingUnknown": "Execution timing is not available for this task",
+      "stale": "Task status could not be refreshed. The last known status may be out of date.",
+      "retry": "Retry",
+      "legacy": "Historical card: task titles could not be restored; workers are listed in dispatch order.",
+      "report": { "partial": "Worker reports partial completion", "failed": "Worker reports failure" }
+    },
     "worker": {
       "pending": "Not started",
       "working": "Working",
@@ -84,7 +102,10 @@
       "passed": "Review passed",
       "waived": "Review waived",
       "failed": "Failed",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "unknown": "Status unconfirmed",
+      "refused": "Startup refused",
+      "skipped": "Not started · skipped"
     },
     "waitingReason": {
       "approval": "Waiting for approval",

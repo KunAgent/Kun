@@ -150,6 +150,12 @@ export type AdeHarnessRow = {
   enabled?: boolean
   enabledProfiles?: import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1[]
   readyProfiles?: (import('./app-settings-types-kun-runtime').KunHarnessEnabledProfileV1 & { expiresAt?: string; readiness?: AdeHarnessReadiness })[]
+  /**
+   * Host-derived capability (never read from a custom manifest). When
+   * `additionalRoots` is false the Agent keeps its single-directory scope and
+   * must not be selected for a multi-root thread.
+   */
+  workspaceSupport?: { additionalRoots: boolean }
 }
 
 /** Per-provider model group for `provider`/`kun-gateway` credential modes. */

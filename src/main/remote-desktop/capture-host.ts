@@ -9,9 +9,13 @@ import { markProtectedWindowContents } from '../protected-window-contents'
 import { logWarn } from '../logger'
 import { captureFailureName, permitsDesktopCapture } from './capture-permissions'
 import { resolveNamedPreloadPath } from '../main-paths'
+import type { WaylandSession } from './wayland-session'
+import { SystemOutput } from './system-output'
+import { NativePrivacyScreen, privacyScreenSupported } from './privacy-screen'
+import { isKunMobileDisplay } from './virtual-display'
 function bounded(value: unknown, max: number) { try { return Buffer.byteLength(JSON.stringify(value)) <= max } catch { return false } }
 export interface DesktopCapturePort {
-  start(iceServers: unknown[], quality: string): Promise<{ type: 'offer'; sdp: string }>
+  start(iceServers: unknown[], quality: string, systemAudio?: boolean): Promise<{ type: 'offer'; sdp: string }>
   answer(value: unknown): Promise<void>
   ice(value: unknown[]): Promise<void>
   send(label: string, data: unknown, remainingMs?: number): Promise<void>
@@ -29,7 +33,26 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
   private readonly readyPromise = new Promise<void>(resolve => { this.ready = resolve })
   private url = ''
   private processIdentity?: { pid: number; birth: string }
-  constructor(private readonly displayId: number, private readonly receive: (event: CaptureEvent) => void, private readonly controlDirectory?: () => string) {}
+  private audio?: Pick<SystemOutput, 'start' | 'stop'>
+  private loopbackAllowed = false
+  private curtain?: NativePrivacyScreen
+  private privacyChanging = false
+  private audioPending = 0
+  private nextFrame?: () => void
+  private portalFrame = (frame: Buffer, consumed: () => void) => {
+    const size = this.portal?.selection
+    if (!size || !this.window || this.window.isDestroyed() || this.closing) return
+    this.nextFrame = consumed
+    this.window.webContents.send(channels.sample, { kind: 'video', data: frame, width: size.width, height: size.height })
+  }
+  private onConsumed = (event: IpcMainEvent, kind: string) => {
+    if (!this.trusted(event) || this.closing) return
+    if (kind === 'audio') this.audioPending = Math.max(0, this.audioPending - 1)
+    else if (kind === 'video') { const next = this.nextFrame; this.nextFrame = undefined; next?.() }
+  }
+  constructor(private readonly displayId: number, private readonly receive: (event: CaptureEvent) => void, private readonly controlDirectory?: () => string, private readonly portal?: Pick<WaylandSession, 'selection' | 'video' | 'detach'>,
+    private readonly audioSource = (samples: (data: Uint8Array) => void, lost: () => void): Pick<SystemOutput,'start'|'stop'> => new SystemOutput(samples,lost),
+    private readonly windowsLoopback = process.platform === 'win32') {}
   private trusted(event: IpcMainEvent) {
     const window = this.window
     return !!window && !window.isDestroyed() && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === this.url
@@ -56,29 +79,37 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
     const partition = `kun-desktop-${randomUUID()}`
     const appPath = app.getAppPath()
     const window = new BrowserWindow({ show: false, width: 1, height: 1, webPreferences: { preload: resolveNamedPreloadPath(appPath, 'remote-desktop-capture'), partition,
-      sandbox: true, nodeIntegration: false, contextIsolation: true, backgroundThrottling: false } })
+      sandbox: true, nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } })
     this.window = window
     markProtectedWindowContents(window.webContents)
     this.url = pathToFileURL(join(directory, 'capture/index.html')).href
     const ses = window.webContents.session
     const trustedCapture = (contents: Electron.WebContents | null) => !this.closing && contents === window.webContents && contents.getURL() === this.url
     ses.setPermissionRequestHandler((contents, permission, callback, details) => {
-      callback(trustedCapture(contents) && permitsDesktopCapture(String(permission), details, 'request'))
+      callback(trustedCapture(contents) && permitsDesktopCapture(String(permission), details, 'request', this.loopbackAllowed))
     })
     ses.setPermissionCheckHandler((contents, permission, _origin, details) => {
-      return trustedCapture(contents) && permitsDesktopCapture(String(permission), details, 'check')
+      return trustedCapture(contents) && permitsDesktopCapture(String(permission), details, 'check', this.loopbackAllowed)
     })
     ses.setDisplayMediaRequestHandler(async (request, callback) => {
-      if (this.closing || !request.videoRequested || request.audioRequested || request.frame !== window.webContents.mainFrame || request.frame.url !== this.url) { callback({}); return }
+      if (this.closing || this.portal || !request.videoRequested || (request.audioRequested && !this.loopbackAllowed) || request.frame !== window.webContents.mainFrame || request.frame.url !== this.url) { callback({}); return }
       try {
-        const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
-        const source = sources.find(item => item.display_id === String(this.displayId))
-        if (this.closing || !source) callback({}); else callback({ video: source })
+        const attempts = isKunMobileDisplay(this.displayId) ? 8 : 1
+        for (let attempt = 0; !this.closing && attempt < attempts; attempt++) {
+          const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } })
+          const source = sources.find(item => item.display_id === String(this.displayId)) ??
+            (sources.length === 1 && !sources[0].display_id && screen.getAllDisplays().length === 1 &&
+              screen.getPrimaryDisplay().id === this.displayId ? sources[0] : undefined)
+          if (source && !this.closing) { callback({ video: source, ...(request.audioRequested && this.loopbackAllowed ? { audio: 'loopback' as const } : {}) }); return }
+          if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, 100))
+        }
+        callback({})
       } catch { callback({}) }
     })
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', event => event.preventDefault())
     window.webContents.once('render-process-gone', () => { if (!this.closing) this.receive({ event: 'closed' }) })
+    ipcMain.on(channels.consumed, this.onConsumed)
     ipcMain.on(channels.response, this.onReply); ipcMain.on(channels.event, this.onEvent)
     try { await window.loadURL(this.url) }
     catch {
@@ -104,28 +135,98 @@ export class ElectronDesktopCapture implements DesktopCapturePort {
       this.calls.set(id, { resolve, reject, timer }); window.webContents.send(channels.request, { id, operation, params })
     })
   }
-  async start(iceServers: unknown[], quality: string): Promise<{ type: 'offer'; sdp: string }> {
-    const value = validateDesktopSdp(await this.command('start', { iceServers, quality }), 'offer')
+  async start(iceServers: unknown[], quality: string, systemAudio = false): Promise<{ type: 'offer'; sdp: string }> {
+    const audio = systemAudio && quality === 'game60'
+    this.loopbackAllowed = audio && this.windowsLoopback
+    const size = this.portal?.selection
+    if (this.portal && !size) throw Error('SCREEN_PERMISSION_REQUIRED')
+    if (audio && !this.loopbackAllowed) {
+      if (!this.processIdentity) throw Error('DESKTOP_CAPTURE_NOT_ISOLATED')
+      this.audio = this.audioSource(data => {
+        if (this.closing || this.audioPending >= 6 || !this.window || this.window.isDestroyed()) return
+        this.audioPending++; this.window.webContents.send(channels.sample, { kind: 'audio', data })
+      }, () => { if (!this.closing) this.receive({ event: 'closed' }) })
+      await this.audio.start(this.displayId, this.processIdentity)
+    }
+    const value = validateDesktopSdp(await this.command('start', { iceServers, quality,
+      source: this.portal ? 'portal' : 'display', width: size?.width, height: size?.height,
+      audioSource: this.loopbackAllowed ? 'loopback' : this.audio ? 'pcm' : 'none' }), 'offer')
+    if (this.portal) await this.portal.video(this.portalFrame)
     return { type: 'offer', sdp: value.sdp }
   }
   async answer(answer: unknown) { await this.command('answer', { answer }) }
   async ice(candidates: unknown[]) { await this.command('ice', { candidates }) }
-  async send(label: string, data: unknown, remainingMs = 0) { await this.command('send', { label, data, remainingMs }) }
+  async send(label: string, data: unknown, remainingMs = 0) {
+    if ((data as { type?: string })?.type === 'probe') this.curtain?.lease(remainingMs)
+    await this.command('send', { label, data, remainingMs })
+  }
+  async privacy(enabled?: boolean, authorize?: () => void): Promise<boolean> {
+    if (this.closing || !this.processIdentity || !privacyScreenSupported()) throw Error('DESKTOP_PRIVACY_UNAVAILABLE')
+    if (this.privacyChanging) throw Error('DESKTOP_BUSY')
+    if (enabled === undefined || enabled === Boolean(this.curtain?.visible)) return Boolean(this.curtain?.visible)
+    this.privacyChanging = true
+    const virtual = isKunMobileDisplay(this.displayId)
+    const source = this.curtain ?? new NativePrivacyScreen(this.displayId, this.processIdentity, virtual, (data, size) => {
+      if (this.curtain !== source || this.closing || !this.window || this.window.isDestroyed()) return
+      this.nextFrame = () => source.requestFrame()
+      this.window.webContents.send(channels.sample, { kind: 'video', ...size, data })
+    }, localExit => {
+      if (!this.closing) this.receive({ event: 'closed', value: localExit ? 'host_user_ended' : 'media_closed' })
+    })
+    this.curtain = source
+    let switching = false
+    try {
+      if (enabled) {
+        const size = await source.open()
+        if (this.closing) throw Error('DESKTOP_CAPTURE_CLOSED')
+        if (source.replacesVideo) {
+          switching = true
+          const replaced = this.command('privacy', { enabled: true, ...size })
+          source.requestFrame()
+          await replaced
+        }
+        if (this.closing) throw Error('DESKTOP_CAPTURE_CLOSED')
+        authorize?.()
+        await source.show()
+      } else {
+        await source.stop()
+        if (source.replacesVideo) await this.command('privacy', { enabled: false })
+        this.curtain = undefined
+      }
+      return enabled
+    } catch (error) {
+      await source.stop().catch(failure => {
+        if (!this.closing) this.receive({ event: 'closed' })
+        throw failure
+      })
+      this.curtain = undefined
+      if (!this.closing && switching) {
+        await this.command('privacy', { enabled: false }).catch(() => this.receive({ event: 'closed' }))
+      } else if (!this.closing && !enabled) this.receive({ event: 'closed' })
+      throw error
+    } finally {
+      if (!this.curtain) this.nextFrame = undefined
+      this.privacyChanging = false
+    }
+  }
   async quality(quality: string) { await this.command('quality', { quality }) }
   async stop() {
-    if (this.closing) {
-      if (this.processIdentity) await terminateDesktopProcess(this.processIdentity.pid, this.processIdentity.birth)
-      return
+    this.portal?.detach(this.portalFrame); this.nextFrame = undefined
+    this.loopbackAllowed = false
+    const helpers = Promise.allSettled([this.curtain?.stop(), this.audio?.stop()])
+    if (!this.closing) {
+      this.closing = true
+      await this.command('stop').catch(() => {})
+      const window = this.window; this.window = undefined
+      ipcMain.removeListener(channels.consumed, this.onConsumed)
+      ipcMain.removeListener(channels.response, this.onReply); ipcMain.removeListener(channels.event, this.onEvent)
+      for (const call of this.calls.values()) { clearTimeout(call.timer); call.reject(new Error('DESKTOP_CAPTURE_CLOSED')) }
+      this.calls.clear()
+      if (window && !window.isDestroyed()) window.destroy()
     }
-    this.closing = true
-    await this.command('stop').catch(() => {})
-    const window = this.window; this.window = undefined
-    ipcMain.removeListener(channels.response, this.onReply); ipcMain.removeListener(channels.event, this.onEvent)
-    for (const call of this.calls.values()) { clearTimeout(call.timer); call.reject(new Error('DESKTOP_CAPTURE_CLOSED')) }
-    this.calls.clear()
-    if (window && !window.isDestroyed()) window.destroy()
-    // A renderer acknowledgement/window flag alone is not process-exit proof.
+    // Confirm the renderer and the native window owner have actually exited.
     if (this.processIdentity) await terminateDesktopProcess(this.processIdentity.pid, this.processIdentity.birth)
+    for (const result of await helpers) if (result.status === 'rejected') throw result.reason
   }
 }
 export function displayFingerprint(display: Electron.Display) {

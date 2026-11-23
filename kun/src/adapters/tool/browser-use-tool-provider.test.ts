@@ -555,4 +555,95 @@ describe('buildBrowserUseToolProviders', () => {
       }
     })
   })
+
+  it('charges one budget unit per batch step and forwards the whole batch once', async () => {
+    const browserController = controller({
+      ok: true,
+      code: 'batch_completed',
+      message: 'Completed 2 browser_use steps.'
+    })
+    const awaitApproval = vi.fn(async () => 'allow' as const)
+    const host = localToolHost(browserController)
+    const activeContext = context({
+      approvalPolicy: 'on-request',
+      approvalReviewer: 'user',
+      awaitApproval
+    })
+    const batch = {
+      action: 'batch' as const,
+      steps: [
+        { action: 'type' as const, ref: 'opaque-reference-1234', expectedTarget, text: 'hello' },
+        { action: 'snapshot' as const }
+      ]
+    }
+
+    const first = await host.execute({
+      callId: 'call-batch-1',
+      toolName: 'browser_use',
+      arguments: batch
+    }, activeContext)
+    expect(browserController.execute).toHaveBeenCalledOnce()
+    expect(browserController.execute).toHaveBeenCalledWith(expect.objectContaining({
+      action: batch
+    }))
+    expect(awaitApproval).toHaveBeenCalledOnce()
+    expect(first.item).toMatchObject({ kind: 'tool_result' })
+
+    // The first batch already spent the turn's single interaction unit.
+    const second = await host.execute({
+      callId: 'call-batch-2',
+      toolName: 'browser_use',
+      arguments: batch
+    }, activeContext)
+    expect(second.item).toMatchObject({
+      kind: 'tool_result',
+      isError: true,
+      output: { code: 'action_budget_exhausted' }
+    })
+    expect(browserController.execute).toHaveBeenCalledOnce()
+  })
+
+  it('does not ask for approval for a batch of observations only', async () => {
+    const browserController = controller({
+      ok: true,
+      code: 'batch_completed',
+      message: 'Completed 2 browser_use steps.'
+    })
+    const awaitApproval = vi.fn(async () => 'allow' as const)
+    const host = localToolHost(browserController)
+    const result = await host.execute({
+      callId: 'call-batch-observe',
+      toolName: 'browser_use',
+      arguments: {
+        action: 'batch',
+        steps: [{ action: 'snapshot' }, { action: 'wait', milliseconds: 100 }]
+      }
+    }, context({
+      approvalPolicy: 'on-request',
+      approvalReviewer: 'user',
+      awaitApproval
+    }))
+    expect(awaitApproval).not.toHaveBeenCalled()
+    expect(result.item).toMatchObject({ kind: 'tool_result' })
+    expect(browserController.execute).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a batch that hides a non-batchable action in its steps', async () => {
+    const browserController = controller()
+    const host = localToolHost(browserController)
+    const result = await host.execute({
+      callId: 'call-batch-invalid',
+      toolName: 'browser_use',
+      arguments: {
+        action: 'batch',
+        steps: [{ action: 'close' }]
+      }
+    }, context())
+    expect(result.item).toMatchObject({
+      kind: 'tool_result',
+      isError: true,
+      output: { code: 'invalid_action' }
+    })
+    expect(browserController.execute).not.toHaveBeenCalled()
+  })
 })

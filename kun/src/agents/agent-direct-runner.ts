@@ -15,7 +15,7 @@ import type { RoomRuntimeDeps, RoomRequestState } from '../rooms/room-runtime-ty
 import type { RoomStoredDocument } from '../rooms/room-store.js'
 import { TurnConflictError, ThreadClosingError } from '../services/turn-service.js'
 import { putRoomDocument, type RoomService } from '../rooms/room-service.js'
-import { prepareRoomRun, updateRoomRun, observeRecordedRoomTurn, roomRunId } from '../rooms/room-run-recording.js'
+import { prepareRoomRun, updateRoomRun, observeRecordedRoomTurn, roomRunId, settleTerminalRoomRuns } from '../rooms/room-run-recording.js'
 import { freezeAgentMemoryInput } from './agent-memory-input.js'
 import { agentMainModel, assertAgentModel } from './agent-models.js'
 import { agentStableId } from './agent-identity-service.js'
@@ -163,17 +163,30 @@ export class AgentDirectRunner {
       await this.save(row, { ...request, cancellationRequested: true, error: 'Continuation authorization changed before execution.' })
       return
     }
+    const priorRun = !turn ? await this.deps.store.get<RoomRunRecord>('room_run', roomRunId(request.roomId, identity)) : null
     if (!turn && !request.admissionAttempted) {
       // A run record that already attempted admission means an earlier enqueue lost its
       // receipt; that request must surface as recovery_required rather than steer.
-      const priorRun = await this.deps.store.get<RoomRunRecord>('room_run', roomRunId(request.roomId, identity))
-      if (!priorRun?.value.admissionAttempted) {
+      if (!priorRun?.value.admissionAttempted && !['failed', 'cancelled'].includes(priorRun?.value.status ?? '')) {
         const target = await this.steerTarget(request, thread, member)
         if (target) { await this.admitSteer(row, request, thread, scoped, identity, target); return }
       }
     }
     // Busy lanes still admit steering, but never create a competing turn.
     if (!turn && !allowNewTurn) return
+    if (!turn) {
+      if (priorRun?.value.admissionAttempted || request.admissionAttempted) {
+        return this.save(row, { ...request, privateRunId: priorRun?.id ?? request.privateRunId, status: 'recovery_required' })
+      }
+      if (priorRun && ['failed', 'cancelled'].includes(priorRun.value.status)) {
+        return this.save(row, { ...request, privateRunId: priorRun.id, status: 'failed', error: priorRun.value.error })
+      }
+      // Budget rejection must not leave a queued run that never reached admission.
+      const budget: import('../rooms/room-store.js').RoomStoreCommit = { requestId: agentStableId('private-response-budget', request.id, identity) }
+      await appendAgentResponseBudget(this.deps, budget, { sourceRoomId: request.roomId, rootRequestId: request.rootRequestId ?? request.id,
+        generation: request.continuation ?? 0, agentId: member.participantAgentId, clientRequestId: identity })
+      if (budget.puts?.length) await this.deps.store.commit(budget)
+    }
     // The run snapshot, not its user-facing input preview, owns the exact
     // admitted prompt. Recovery must not retrieve history or memory again.
     const existingInput = await this.deps.store.get<{ prompt: string }>('context', roomRunId(request.roomId, identity) + '-input')
@@ -192,11 +205,6 @@ export class AgentDirectRunner {
         request.privateContinuation?.kind === 'workbench_task' || request.privateContinuation?.kind === 'personal_assistant'),
       ...request.privateModel })
     if (!turn) {
-      if (run.admissionAttempted || request.admissionAttempted) return this.save(row, { ...request, privateRunId: run.id, status: 'recovery_required' })
-      const budget: import('../rooms/room-store.js').RoomStoreCommit = { requestId: agentStableId('private-response-budget', request.id, identity) }
-      await appendAgentResponseBudget(this.deps, budget, { sourceRoomId: request.roomId, rootRequestId: request.rootRequestId ?? request.id,
-        generation: request.continuation ?? 0, agentId: member.participantAgentId, clientRequestId: identity })
-      if (budget.puts?.length) await this.deps.store.commit(budget)
       await updateRoomRun(this.deps.store, run.id, { admissionAttempted: true })
       await this.save(row, { ...request, privateRunId: run.id, admissionAttempted: true, status: 'running' })
       try {
@@ -307,7 +315,14 @@ export class AgentDirectRunner {
       phase: 'conversation', ...request.privateModel })
     const steer = { operationId: agentStableId('private-steer', request.id, String(request.stepAttempt ?? 0)),
       targetTurnId: target.id, targetRunId: roomRunId(request.roomId, target.clientRequestId!) }
-    await this.save(row, { ...request, steer, privateRunId: run.id, admissionAttempted: true, status: 'running' })
+    try {
+      await this.save(row, { ...request, steer, privateRunId: run.id, admissionAttempted: true, status: 'running' })
+    } catch (error) {
+      // No steer call was made, so this preparation failure has no unknown execution.
+      await updateRoomRun(this.deps.store, run.id, { status: 'failed', outcome: 'failed',
+        error: error instanceof Error ? error.message : String(error), endedAt: new Date().toISOString() })
+      throw error
+    }
     const current = await this.deps.store.get<RoomRequestState>('request', request.id)
     if (!current) return
     try {
@@ -317,7 +332,10 @@ export class AgentDirectRunner {
       if (error instanceof TurnConflictError) {
         // The turn stopped accepting steering; the next tick follows the normal queue path.
         this.steerRejected.add(request.id + ':' + steer.targetTurnId)
-        await this.save(current, { ...current.value, steer: undefined, admissionAttempted: false })
+        await updateRoomRun(this.deps.store, run.id, { status: 'cancelled', outcome: 'cancelled',
+          error: error.message, endedAt: new Date().toISOString() })
+        await this.save(current, { ...current.value, steer: undefined, admissionAttempted: false, status: 'pending',
+          stepAttempt: (request.stepAttempt ?? 0) + 1 })
         return
       }
       await this.save(current, { ...current.value, error: error instanceof Error ? error.message : String(error) })
@@ -387,6 +405,7 @@ export class AgentDirectRunner {
     if (JSON.stringify(row.value) !== JSON.stringify(value)) {
       await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
     }
+    if (['failed', 'cancelled'].includes(value.status)) await settleTerminalRoomRuns(this.deps, value.id)
     await settleRoomResultInbox(this.deps.store, value)
   }
 }

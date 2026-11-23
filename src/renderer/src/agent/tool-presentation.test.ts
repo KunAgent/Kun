@@ -151,4 +151,47 @@ describe('shared tool presentation', () => {
     expect(mergeToolPresentations(current, { version: 1, kind: 'execute', state: 'completed', canCancel: false, output: 'OK' }))
       .toMatchObject({ input: { command: 'npm test' }, output: 'OK', state: 'completed', canCancel: false })
   })
+
+  it('prefers rawInput.description when an ACP execute tool stuffs its raw command into title', () => {
+    const longCommand = `set -euo pipefail\nprintf '%s' '${'a'.repeat(7_496)}'`
+    const truncatedWireTitle = `${longCommand.slice(0, 4_093)}...`
+    const qoderCall = block(item('tool_call', {
+      toolName: 'acp:execute',
+      toolKind: 'command_execution',
+      arguments: {
+        title: truncatedWireTitle,
+        kind: 'execute',
+        rawInput: { command: longCommand, description: 'Verify ACP schema boundary' }
+      }
+    }))
+    expect(readToolPresentation(qoderCall)).toMatchObject({
+      source: 'acp',
+      kind: 'execute',
+      title: 'Verify ACP schema boundary',
+      command: longCommand
+    })
+
+    // A genuinely distinct agent-supplied title on execute or non-execute tools stays intact.
+    const explicitTitle = block(item('tool_call', {
+      toolName: 'acp:execute',
+      toolKind: 'command_execution',
+      arguments: {
+        title: 'Custom build step',
+        kind: 'execute',
+        rawInput: { command: 'npm run build', description: 'Internal fallback description' }
+      }
+    }))
+    expect(readToolPresentation(explicitTitle).title).toBe('Custom build step')
+
+    const nonExecute = block(item('tool_call', {
+      toolName: 'acp:other',
+      toolKind: 'tool_call',
+      arguments: {
+        title: 'create_issue',
+        kind: 'other',
+        rawInput: { title: 'Bug', description: 'Detailed multi-line issue body' }
+      }
+    }))
+    expect(readToolPresentation(nonExecute).title).toBe('create_issue')
+  })
 })

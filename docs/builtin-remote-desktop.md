@@ -1,6 +1,10 @@
 # Built-in remote desktop
 
-Kun's built-in desktop viewer is an optional alternative to UU Remote. The first host implementation is macOS 13+ on Apple Silicon. Other platforms do not advertise the capability.
+Kun's built-in desktop viewer is an optional alternative to UU Remote. Computer-to-computer access uses separate controller and host checks on Windows x64, macOS arm64/x64 and Linux arm64/x64. A local host switch authorizes the current login session. Game streaming and playback audio are separate opt-ins. The original phone flow is described below.
+
+## Computer hosts
+
+Build the Windows input helper with Go 1.22 or later. The macOS helper builds with Xcode. Linux packages carry the Python helper and use the system X11/XTest or Wayland Portal backend. The active login session must be available through logind. Linux playback capture uses the default output monitor. See the [platform setup and release checks](../../kunserve/docs/desktop-cross-platform.zh-CN.md).
 
 ## Setup
 
@@ -11,7 +15,13 @@ Kun's built-in desktop viewer is an optional alternative to UU Remote. The first
 5. Allow Screen Recording for viewing and Accessibility for input in macOS System Settings. The remote panel links to the existing system-permission flow. The native input process independently checks its actual Accessibility trust before control is accepted.
 6. Install a KunApp binary that includes its native WebRTC module, then choose the built-in provider from an existing Code or Agent conversation.
 
-The desktop sharing indicator identifies the display, controller and view/control mode, and provides a local end button. The indicator and capture window are protected from the older LAN workbench IPC mirroring mechanism.
+During a desktop session, the Kun remote desktop icon appears in the menu bar or system tray. Its menu identifies the display, controller and view/control mode and provides a local action to end the session. The capture window is protected from the older LAN workbench IPC mirroring mechanism.
+
+### Phone-controlled privacy screen
+
+In KunApp, take control, open **More** in the full-screen remote desktop view and turn on **Computer privacy screen**. The phone continues to operate the approved display while the computer covers its monitors with black panels. Turn the switch off to restore them. Disconnecting also restores the displays, including after a lost heartbeat. At the computer, press **Ctrl + Alt + Shift + P** (**Control + Option + Shift + P** on Mac) to end the session.
+
+The phone, host and control package negotiate `desktop.privacy-screen.v1`. Windows 10 version 2004 (build 19041) and newer Windows x64 desktops use click-through, non-activating Win32 windows. The helper verifies capture exclusion on every monitor before confirming activation. On macOS, ScreenCaptureKit supplies a video stream that excludes the curtain process. An independent virtual Mac display keeps its existing video source. On both platforms the native window owner exits when the host, capture renderer or media lease is lost. [Windows display affinity](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowdisplayaffinity)
 
 ## Connection and cleanup
 
@@ -38,3 +48,7 @@ Ordinary Agent/Code tasks continue when the desktop session ends. Closing the ma
 - `npm run check:built-preload` validates the emitted sandbox preloads. They must not require local CommonJS chunks.
 
 A signed Mac-to-iPhone session, real capture/input permissions, touch/IME accuracy, WAN/TURN quality, native memory use and physical-device disconnect behavior still need their own release evidence. Successful synthetic peer and process smoke tests are not evidence of those device checks.
+
+On macOS 14 or later, `node scripts/smoke-computer-desktop.cjs --privacy` verifies local black pixels and changing WebRTC video on a synthetic secondary monitor. Use `--privacy-drop` to verify restoration after an abrupt peer disconnect.
+
+On a disposable, unlocked Windows x64 test VM with one monitor, run `node scripts/smoke-computer-desktop.cjs --privacy --disposable-windows-desktop` and repeat with `--privacy-drop`. The fixture covers the test desktop, checks the native curtains and mouse hit target, and verifies that the WebRTC receiver sees the underlying window change color while covered.

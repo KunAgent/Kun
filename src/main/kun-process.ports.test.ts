@@ -4,6 +4,7 @@ import { createServer, type AddressInfo } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import './kun-process'
 import { configureLogger } from './logger'
 import {
   defaultClawSettings,
@@ -35,11 +36,10 @@ import {
 } from '../../kun/src/manager/manager-client.js'
 
 vi.mock('electron', () => ({
-  app: {
-    isPackaged: false,
-    getAppPath: () => '/tmp/deepseek-gui-test-app',
-    getPath: () => '/tmp/deepseek-gui-test-user-data'
-  }
+  app: { isPackaged: false, getAppPath: () => '/tmp/deepseek-gui-test-app', getPath: () => '/tmp/deepseek-gui-test-user-data' },
+  safeStorage: { isEncryptionAvailable: () => false, encryptString: (v: string) => Buffer.from(v), decryptString: (v: Buffer) => v.toString('utf8'), getSelectedStorageBackend: () => 'basic_text' },
+  shell: { openExternal: vi.fn(async () => undefined) },
+  Notification: class { static isSupported() { return false }; show() {} }
 }))
 vi.mock('../../kun/src/manager/manager-discovery.js', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../kun/src/manager/manager-discovery.js')>()),
@@ -145,6 +145,7 @@ beforeEach(async () => {
 afterEach(async () => {
   const module = await import('./kun-process')
   await module.stopKunChildAndWait()
+  await (await import('./colab/colab-host')).shutdownColabHost()
   configureLogger({ dir: '', enabled: true, retentionDays: DEFAULT_LOG_RETENTION_DAYS })
   if (tempRoot) {
     rmSync(tempRoot, { recursive: true, force: true })

@@ -14,11 +14,15 @@ import {
   svgPreviewDataUrl
 } from './WorkspaceFilePreviewPanel'
 
-const { openWorkspacePathInEditor } = vi.hoisted(() => ({
-  openWorkspacePathInEditor: vi.fn(async () => ({ ok: true }))
+const { openWorkspacePathInEditor, revealWorkspacePathInFileManager } = vi.hoisted(() => ({
+  openWorkspacePathInEditor: vi.fn(async () => ({ ok: true })),
+  revealWorkspacePathInFileManager: vi.fn(async () => ({ ok: true }))
 }))
 
-vi.mock('../lib/open-workspace-path', () => ({ openWorkspacePathInEditor }))
+vi.mock('../lib/open-workspace-path', () => ({
+  openWorkspacePathInEditor,
+  revealWorkspacePathInFileManager
+}))
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof import('react-i18next')>()
   const labels: Record<string, string> = {
@@ -116,6 +120,7 @@ const openTargets = [
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   openWorkspacePathInEditor.mockClear()
+  revealWorkspacePathInFileManager.mockClear()
   vi.stubGlobal('window', {
     kunGui: { platform: 'linux' },
     innerWidth: 1200,
@@ -500,5 +505,68 @@ describe('SVG workspace preview', () => {
 
     expect(dataUrl).toMatch(/^data:image\/svg\+xml;charset=utf-8,/)
     expect(decodeURIComponent(dataUrl.split(',')[1])).toContain('<text>你好 #1</text>')
+  })
+})
+
+describe('local PNG preview in sidebar', () => {
+  it('reads explicit local PNG files outside the selected workspace while keeping workspace boundaries for relative paths', async () => {
+    const readWorkspaceImage = vi.fn(async (payload: { path: string; workspaceRoot?: string }) => ({
+      ok: true as const,
+      path: payload.path,
+      dataUrl: 'data:image/png;base64,iVBORw==',
+      mimeType: 'image/png',
+      size: 4
+    }))
+    const openWorkspaceFileInSystem = vi.fn(async () => ({ ok: true as const }))
+    const revealWorkspaceFileInFolder = vi.fn(async () => ({ ok: true as const }))
+    vi.stubGlobal('window', {
+      kunGui: {
+        platform: 'darwin',
+        readWorkspaceImage,
+        openWorkspaceFileInSystem,
+        revealWorkspaceFileInFolder
+      },
+      innerWidth: 1200,
+      innerHeight: 800,
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      },
+      cancelAnimationFrame: vi.fn(),
+      clearTimeout,
+      setTimeout
+    })
+
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(WorkspaceFilePreviewPanel, {
+        target: { path: '/tmp/colab-kun-sidebar.png', workspaceRoot: '/repo' },
+        workspaceRoot: '/repo',
+        onClose: () => undefined
+      }))
+    })
+
+    expect(readWorkspaceImage).toHaveBeenCalledWith({ path: '/tmp/colab-kun-sidebar.png' })
+    expect(renderer.root.findByType('img').props.src).toBe('data:image/png;base64,iVBORw==')
+
+    const tab = renderer.root.findByProps({ role: 'tab' })
+    await act(async () => tab.props.onDoubleClick())
+    expect(openWorkspacePathInEditor).toHaveBeenCalledWith(
+      { path: '/tmp/colab-kun-sidebar.png', line: undefined, column: undefined },
+      undefined
+    )
+
+    await act(async () => {
+      renderer.update(createElement(WorkspaceFilePreviewPanel, {
+        target: { path: 'img/inside.png', workspaceRoot: '/repo' },
+        workspaceRoot: '/repo',
+        onClose: () => undefined
+      }))
+    })
+    expect(readWorkspaceImage).toHaveBeenLastCalledWith({
+      path: 'img/inside.png',
+      workspaceRoot: '/repo'
+    })
+    await act(async () => renderer.unmount())
   })
 })

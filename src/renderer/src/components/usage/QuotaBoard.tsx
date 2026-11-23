@@ -109,6 +109,7 @@ export function QuotaBoard({
               variant={variant}
               mode={mode}
               onToggleMode={toggleMode}
+              onChangeMode={setMode}
               now={now}
               locale={locale}
               expanded={expanded.has(entry.providerId)}

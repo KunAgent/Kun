@@ -10,6 +10,7 @@ import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { DelegatedTurnRuntime } from '../runtime/delegated-turn-runtime.js'
 import { checkHarnessAdmission } from './harness-admission.js'
+import { transportSupportsAdditionalRoots } from '../runtime/workspace-roots.js'
 import { effectiveKunTurnIntent, isInternalGraphWorker, unsupportedKunTurnIntent } from './kun-turn-intent.js'
 import {
   effectiveCapabilitiesForRoute,
@@ -129,6 +130,14 @@ export class HarnessRouter {
     if (definition.transport === 'application' || definition.transport === 'terminal') {
       return { ok: false, error: new HarnessAdmissionError('route_unsupported',
         `${definition.displayName} runs through its ${definition.transport === 'terminal' ? 'native terminal' : 'application'} entry in the Agent Center`) }
+    }
+    // Host boundary for every send path (composer, slash command, programmatic):
+    // a transport that cannot enforce extra roots keeps its single-directory
+    // behavior instead of silently running in the first directory.
+    const declaredRoots = (thread.additionalWorkspaces ?? []).map((root) => root.trim()).filter(Boolean)
+    if (declaredRoots.length > 0 && !transportSupportsAdditionalRoots(definition.transport)) {
+      return { ok: false, error: new HarnessAdmissionError('route_unsupported',
+        `${definition.displayName} cannot host a multi-directory workspace yet. Kun and every folder stay selected.`) }
     }
     if (this.deps.catalog.isDisabled?.(harnessId)) {
       return {

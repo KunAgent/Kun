@@ -1,4 +1,6 @@
 import { DispatchParamSchemas } from './dispatch/contracts.js'
+import { CodeChangesParamSchemas } from './changes/contracts.js'
+import { RemoteCodeChanges } from './changes/service.js'
 import { RemoteDispatch } from './dispatch/service.js'
 import { OPERATION_METHODS, OPERATION_READ_METHODS, READ_METHODS, validateOperationParams } from '@kun/remote-protocol'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
@@ -19,6 +21,7 @@ import { RemoteAttachmentAdmissions } from './files/admissions.js'
 import { RemoteArtifacts } from './files/artifacts.js'
 import { RemoteProjectFiles } from './files/projects.js'
 import { RemoteArtifactDirectory } from './files/artifact-directory.js'
+import { RemoteArtifactPreviews } from './files/artifact-preview-service.js'
 import { ProjectFilesParamSchemas } from './files/project-contracts.js'
 import { WorkParamSchemas } from './work/contracts.js'
 import { RemoteWork } from './work/sessions.js'
@@ -54,6 +57,7 @@ const readMethods = new Set<string>([...READ_METHODS, ...OPERATION_READ_METHODS,
 /** Fixed remote use cases over native services; transport admission and receipts stay here. */
 export class RemoteFacade {
   readonly artifacts: RemoteArtifacts
+  readonly previews: RemoteArtifactPreviews
   readonly projectFiles: RemoteProjectFiles
   readonly groups: RemoteGroups
   private readonly dispatches: RemoteDispatch
@@ -82,6 +86,7 @@ export class RemoteFacade {
   constructor(private runtime: ServerRuntime, router: Router) {
     const call = localCaller(router, runtime)
     this.artifacts = new RemoteArtifacts(runtime)
+    this.previews = new RemoteArtifactPreviews(runtime)
     this.receipts = new RemoteReceipts(runtime.rooms!)
     this.approvals = new RemoteApprovals(runtime, call)
     this.conversations = new RemoteAgentConversations(runtime, call)
@@ -177,6 +182,8 @@ export class RemoteFacade {
         this.handlers.set(method, handler)
       }
     }
+    const changes = new RemoteCodeChanges(this.runtime)
+    add(CodeChangesParamSchemas, (scope, p) => changes.dispatch(scope.call.method, p))
     add(DispatchParamSchemas, (scope, p) => scope.call.method === 'dispatch.list'
       ? this.dispatches.list(p.threadId) : scope.call.method === 'dispatch.catalog'
         ? this.dispatches.catalog(p.threadId) : this.dispatches.act(scope, p))
@@ -210,6 +217,9 @@ export class RemoteFacade {
       'agent.directory.list': (scope, p) => remoteAgentDirectory(this.runtime, scope, p),
       'attention.list': (_scope, p) => this.attention.list(p),
       'artifact.list': (_scope, p) => this.artifactDirectory.list(p),
+      'artifact.catalog.list': (scope, p) => this.previews.list(scope, p),
+      'artifact.preview.get': (scope, p) => this.previews.get(scope, p),
+      'artifact.widget.state.update': (scope, p) => this.previews.updateWidgetState(scope, p),
       'execution.stop': (scope, p) => this.stop.stop(scope, p),
       'group.get': (scope, p) => this.groups.get(scope, p),
       'group.list': (scope, p) => this.groups.list(scope, p),

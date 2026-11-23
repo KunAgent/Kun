@@ -17,6 +17,7 @@ vi.mock('@extend-ai/react-docx', () => ({
   setWasmSource: vi.fn(),
   parseDocxForViewer: lib.parse,
   revealDocxSource: lib.reveal,
+  resolveDocxSourceGeometry: vi.fn(),
   useDocxEditor: (options: { document: FakeParsed }) => ({ ...lib.editor, model: options.document.model }),
   DocxEditorViewer: (props: { zoom: unknown }): ReactElement => {
     lib.viewers.push({ zoom: props.zoom })
@@ -95,6 +96,7 @@ describe('WorkspaceDocxPages', () => {
   function props(overrides: Partial<WorkspaceDocxPagesProps> = {}): WorkspaceDocxPagesProps {
     return {
       source: new Uint8Array([1, 2, 3]),
+      sourceVersion: 'fixture-sha256',
       fileName: 'handbook.docx',
       zoom: 'automatic',
       scrollRef: { current: scroller } as RefObject<HTMLDivElement | null>,

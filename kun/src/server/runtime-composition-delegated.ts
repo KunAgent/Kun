@@ -37,7 +37,9 @@ import { buildCodexAppServerDeps } from './runtime-composition-codex.js'
 import { buildPiRpcDeps } from './runtime-composition-pi.js'
 import type { createGraphHarnessSummary } from '../ade/graph-harness-summary.js'
 import { harnessCommandOverride } from '../config/kun-config-harness-providers.js'
+import { acpHarnessBinaryOverride } from '../harness/harness-runtime.js'
 import { claudeCodeSdkExecutable } from '../harness/claude-code-executable.js'
+import type { AcpDesignDeliveryHost } from '../runtime/acp/acp-design-delivery.js'
 
 export type MainDelegatedRuntimeInput = {
   options: KunServeRuntimeOptions
@@ -56,6 +58,8 @@ export type MainDelegatedRuntimeContext = {
   toolHost: LocalToolHost
   providerPool: ReturnType<typeof createProviderPoolAccess>
   graphHarnessSummary: ReturnType<typeof createGraphHarnessSummary>
+  /** Real bridge + event bus: only the main desktop scope publishes to the canvas. */
+  designDelivery: AcpDesignDeliveryHost
 }
 
 export function buildMainDelegatedRuntime(
@@ -154,6 +158,7 @@ export function buildMainDelegatedRuntime(
     turns: turnService,
     events,
     ids,
+    ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     ...(llmDebug ? { debugSink: llmDebug } : {}),
     turnLimits: input.options.runtime?.turnLimits,
     sessionCoordinator: delegatedSessions,
@@ -206,7 +211,7 @@ export function buildMainDelegatedRuntime(
     readiness: services.harnesses.readiness,
     catalog: services.harnesses.catalog,
     onNativeSession: (definition, session) => services.harnesses.acpModels.seed(definition, acpSessionCatalog(definition, session)),
-    binaryPath: (harnessId) => harnessCommandOverride(core.activeOptions.harnesses, harnessId),
+    binaryPath: (harnessId) => acpHarnessBinaryOverride(core.activeOptions.harnesses, core.activeOptions.dataDir, harnessId),
     harnessDefaults: (id) => harnessDefaultsFor(core.activeOptions.harnesses, id),
     resolveSecretEnv: services.harnesses.resolveSecretEnv, threadStore, sessionStore,
     turns: turnService,
@@ -220,6 +225,7 @@ export function buildMainDelegatedRuntime(
     approvalGate, approvalReview: approvalReviewService,
     userInputGate, workerCallbacks: services.workerCallbacks,
     kunToolsMcp: services.kunToolsMcp, credentialEnv: services.acpCredentialEnv,
+    designDelivery: ctx.designDelivery,
     ...(input.attachmentStore ? { attachmentStore: input.attachmentStore } : {}),
     deterministicHandoff: input.options.ade?.deterministicHandoff !== false,
     allowUnattendedFullAccess: input.options.ade?.allowUnattendedFullAccess === true,

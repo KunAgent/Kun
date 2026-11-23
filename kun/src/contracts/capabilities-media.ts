@@ -94,7 +94,7 @@ export const ImageGenCapabilityConfig = CapabilityToggleConfig.extend({
 }).strict()
 export type ImageGenCapabilityConfig = z.infer<typeof ImageGenCapabilityConfig>
 
-export const TextToSpeechProtocol = z.enum(['openai-speech', 'minimax-t2a', 'mimo-tts'])
+export const TextToSpeechProtocol = z.enum(['openai-speech', 'deepseek-tts', 'minimax-t2a', 'mimo-tts'])
 export type TextToSpeechProtocol = z.infer<typeof TextToSpeechProtocol>
 
 export const SpeechGenCapabilityConfig = CapabilityToggleConfig.extend({

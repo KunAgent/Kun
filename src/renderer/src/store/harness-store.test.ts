@@ -281,6 +281,22 @@ describe('harness model cache identity', () => {
     await loadHarnesses(true)
     expect(useHarnessStore.getState().models.codex?.models).toEqual(['cached'])
   })
+
+  it('does not abort an in-flight model load when initial or detecting rows settle', async () => {
+    let resolveModels!: (value: { models: string[]; catalogStatus: { source: 'native'; fetchedAt: string; version: string } }) => void
+    provider.listHarnessModels.mockImplementationOnce(() => new Promise((resolve) => { resolveModels = resolve }))
+    const pendingModels = loadHarnessModels('antigravity')
+    provider.listHarnesses.mockResolvedValueOnce([row('antigravity', { installed: 'unknown', login: 'unknown', detecting: true })])
+    await loadHarnesses(true)
+    expect(useHarnessStore.getState().models.antigravity?.loading).toBe(true)
+
+    provider.listHarnesses.mockResolvedValueOnce([row('antigravity', { version: '1.5.9', resolvedCommand: '/local/bin/agy' })])
+    await loadHarnesses(true)
+    resolveModels({ models: ['gemini-4-carbon', 'claude-opus-5-5'], catalogStatus: { source: 'native', fetchedAt: 'x', version: '1.5.9' } })
+    await pendingModels
+    expect(useHarnessStore.getState().models.antigravity?.models).toEqual(['gemini-4-carbon', 'claude-opus-5-5'])
+    expect(provider.listHarnessModels).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('harnessRowUnavailableCode', () => {
@@ -395,6 +411,36 @@ describe('cold-start catalog seed', () => {
       catalogStatus: { source: 'fallback', fetchedAt: 'y', error: { code: 'timeout' } } })
     await loadHarnessModels('devin')
     expect(useHarnessStore.getState().models.devin).toMatchObject({ models: ['swe-2'], errorCode: 'timeout' })
+  })
+
+  it('hydrates enabled native Agent models on catalog load and persists per-model reasoning details', async () => {
+    provider.listHarnessModels
+      .mockResolvedValueOnce({
+        harnessId: 'antigravity',
+        models: ['gemini-4-carbon', 'claude-opus-5-5'],
+        modelInfo: [{ id: 'gemini-4-carbon', isDefault: true, reasoningEfforts: ['low', 'high'] }, { id: 'claude-opus-5-5' }],
+        catalogStatus: { source: 'native', fetchedAt: 'x', version: '1.5.9' }
+      })
+      .mockResolvedValueOnce({
+        harnessId: 'antigravity',
+        models: ['gemini-4-carbon', 'claude-opus-5-5'],
+        modelInfo: [{ id: 'gemini-4-carbon' }, { id: 'claude-opus-5-5', reasoningEfforts: ['low', 'medium', 'high'] }],
+        catalogStatus: { source: 'native', fetchedAt: 'y', version: '1.5.9' }
+      })
+    await loadHarnessModels('antigravity')
+    await loadHarnessModels('antigravity', false, 'claude-opus-5-5')
+    resetStore()
+
+    provider.listHarnesses.mockResolvedValueOnce([row('antigravity', { version: '1.5.9' })])
+    await loadHarnesses(true)
+    expect(useHarnessStore.getState().models.antigravity).toMatchObject({
+      models: ['gemini-4-carbon', 'claude-opus-5-5'],
+      loading: false,
+      modelInfo: [
+        { id: 'gemini-4-carbon', reasoningEfforts: ['low', 'high'] },
+        { id: 'claude-opus-5-5', reasoningEfforts: ['low', 'medium', 'high'] }
+      ]
+    })
   })
 })
 

@@ -60,7 +60,10 @@ export function mutationFenceForValue(value: unknown): TurnMutationFence | undef
   if (contextual && contextual.threadId === threadId) return contextual
   // Keep a known old generation stale; only a turn without its own lease
   // (queue admission) may use the current thread owner's authority.
-  if (turnId && activeByTurn.has(turnId)) return optionalFence(activeByTurn.get(turnId))
+  const turnLease = turnId ? activeByTurn.get(turnId) : undefined
+  // Forked history preserves turn ids. Its new thread must never borrow the
+  // source thread's lease while that source is still running or settling.
+  if (turnLease?.threadId === threadId) return optionalFence(turnLease)
   return threadId ? optionalFence(activeByThread.get(threadId)) : undefined
 }
 

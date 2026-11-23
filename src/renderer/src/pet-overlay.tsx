@@ -1,6 +1,7 @@
 import { petTypingCutouts, petTypingRig } from './pets/typing/typing-rig'
 import { loadJointTexture } from './pets/joint/assets'
 import type { PetVisit } from '@shared/pets-visits'
+import { defaultPetVisits } from '@shared/pets-visits'
 import { PetReactionStage } from './pets/pet-reaction-stage'
 import { usePetPresence } from './pets/use-pet-presence'
 import { startPetTypingPresence } from './pets/pet-presence-client'
@@ -22,7 +23,7 @@ import { PetContextMenu } from './pets/pet-context-menu'
 import { effectivePetBusinessState, nextDragDirection, resolveOverlayAnimationState, type PetDragDirection } from './pets/pet-overlay-state'
 import { petContextMenuLabels } from './pets/pet-menu-labels'
 import { classifyPointerGesture, nextMascotWidth, overlayKeyAction, pointInsidePetHit, welcomeUntil } from './pets/pet-pointer'
-import { petControlsBridge, petSurfaceLayout } from './pets/pet-layout'
+import { petControlsBridge, petSurfaceLayout, petViewportAnchor } from './pets/pet-layout'
 import { usePetSurfaceSize } from './pets/use-pet-surface-size'
 import { PetVisitStage } from './pets/pet-visit-stage'
 import { usePetVisits } from './pets/use-pet-visits'
@@ -184,8 +185,9 @@ function PetOverlayApp(): React.JSX.Element {
   const notifications = snapshot ? visiblePetNotifications(snapshot, dismissed, now, retained) : []
   const active = notifications[0] ?? null
   const bubblesHidden = bubblesCollapsed || quickChatInteractive || !active
+  const bubblesRevealed = !bubblesHidden && hover
   const controlsSize = usePetSurfaceSize(controlsRef, true, { width: 140, height: 44 })
-  const noticeSize = usePetSurfaceSize(noticeRef, !bubblesHidden, { width: 330, height: 80 })
+  const noticeSize = usePetSurfaceSize(noticeRef, bubblesRevealed, { width: 330, height: 80 })
   const menuSize = usePetSurfaceSize(menuRef, menuOpen, { width: 136, height: 74 })
   const liveVisit = usePetVisits({ bridge, bootstrap, presence: reactions.presence, work: snapshot,
     blocked: dragging || menuOpen || quickChatInteractive || Boolean(editing) })
@@ -197,9 +199,10 @@ function PetOverlayApp(): React.JSX.Element {
   const reactionSize = { width: Math.min(viewport.width - 16, reaction?.input?.kind === 'typing' ? Math.max(180, width * 1.3 + 24) : Math.max(160, width + 32)),
     height: Math.min(viewport.height - 32, width * 208 / 192 + (reaction?.input?.kind === 'typing' ? 36 : 72)) }
   const visitSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(300, viewport.height - 32) }
+  const anchor = petViewportAnchor(nativeLayout ?? { anchorX: viewport.width / 2, anchorY: viewport.height / 2,
+    viewportWidth: viewport.width, viewportHeight: viewport.height }, viewport, width)
   const placement = petSurfaceLayout({
-    anchor: nativeLayout ?? { anchorX: viewport.width / 2, anchorY: viewport.height / 2,
-      viewportWidth: viewport.width, viewportHeight: viewport.height },
+    anchor,
     petWidth: width, ...(visit ? { petSize: visitSize } : reaction ? { petSize: reactionSize } : {}), controls: controlsSize, notification: noticeSize, menu: menuSize
   })
   const business = effectivePetBusinessState({ activeStatus: active?.status ?? null, welcomeUntilMs: welcome, nowMs: now })
@@ -250,7 +253,7 @@ function PetOverlayApp(): React.JSX.Element {
 
   const menuLabels = petContextMenuLabels(window.navigator?.language ?? 'en')
   const onPointerDown = (event: React.PointerEvent<HTMLButtonElement>): void => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || nativeLayout?.nativeWindowDrag) return
     setMenuOpen(false)
     event.currentTarget.setPointerCapture(event.pointerId)
     dragOrigin.current = { x: event.screenX, y: event.screenY }
@@ -329,8 +332,9 @@ function PetOverlayApp(): React.JSX.Element {
 
   return (
     <div className="pet-overlay">
+      {nativeLayout?.nativeWindowDrag ? <div className="pet-native-drag" title="Drag to move window">Move window</div> : null}
       <div className="pet-hit" ref={hitRef}>
-        {!bubblesHidden && placement.notificationMaxHeight >= 48 ? (
+        {bubblesRevealed && placement.notificationMaxHeight >= 48 ? (
           <div className="pet-notification-position" ref={noticeRef} style={{ left: placement.notification.left,
             top: placement.notification.top, width: placement.notification.width }}>
             <PetWorkBubbles
@@ -387,8 +391,8 @@ function PetOverlayApp(): React.JSX.Element {
           <div className="pet-character-stage" style={placement.pet}>
             {visit && bootstrap ? <PetVisitStage visit={visit} pet={bootstrap} pets={bootstrap.ensemblePets ?? []}
               language={window.navigator.language} width={visitSize.width} height={visitSize.height} mascotWidth={width}
-              primaryOrigin={{ x: (nativeLayout?.anchorX ?? viewport.width / 2) - placement.pet.left,
-                y: (nativeLayout?.anchorY ?? viewport.height / 2) - placement.pet.top }}
+              primaryOrigin={{ x: anchor.anchorX - placement.pet.left,
+                y: anchor.anchorY - placement.pet.top }}
               onDismiss={() => void bridge.dismissPetVisit()}
               actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
                 onPointerCancel: (event) => finishPointer(event, true),
@@ -396,8 +400,8 @@ function PetOverlayApp(): React.JSX.Element {
                 onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
               }} /> : reaction && bootstrap ? <PetReactionStage pet={bootstrap}
               typing={reaction.presence.input?.typing} expiresAt={reaction.presence.input?.expiresAt ?? 0}
-              primaryOrigin={{ x: (nativeLayout?.anchorX ?? viewport.width / 2) - placement.pet.left,
-                y: (nativeLayout?.anchorY ?? viewport.height / 2) - placement.pet.top }}
+              primaryOrigin={{ x: anchor.anchorX - placement.pet.left,
+                y: anchor.anchorY - placement.pet.top }}
               eventId={reaction.presence.modelChangedAt} kind={reaction.input?.kind ?? 'typing'} level={reaction.input?.level ?? 0}
               language={window.navigator.language} width={reactionSize.width} height={reactionSize.height} mascotWidth={width} paused={dragging}
               actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
@@ -435,8 +439,12 @@ function PetOverlayApp(): React.JSX.Element {
           <div className="pet-controls-position" ref={controlsRef}
             style={{ left: placement.controls.left, top: placement.controls.top }}>
             <PetQuickChat bridge={bridge} notificationCount={notifications.length} bubblesHidden={bubblesHidden}
-              revealed={controlsRevealed} ensembleActive={Boolean(visit)}
-              onEnsemble={() => { if (visit) void bridge.dismissPetVisit(); else void bridge.requestPetVisit() }}
+              revealed={controlsRevealed} visitsEnabled={(bootstrap?.visits ?? defaultPetVisits()).enabled}
+              onToggleVisits={() => {
+                const current = bootstrap?.visits ?? defaultPetVisits()
+                if (current.enabled && visit) void bridge.dismissPetVisit()
+                void bridge.setPetVisitPreferences({ ...current, enabled: !current.enabled })
+              }}
               onInteractiveChange={setQuickChatInteractive} onToggleBubbles={() => {
                 const collapsed = !bubblesHidden
                 setBubblesCollapsed(collapsed)

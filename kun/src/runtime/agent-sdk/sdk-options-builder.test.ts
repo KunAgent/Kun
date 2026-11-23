@@ -277,4 +277,16 @@ describe('assembleSdkOptions', () => {
     })
     expect(assembleSdkOptions({ ...base, reasoningEffort: 'off' })).not.toHaveProperty('effort')
   })
+
+  test('hands canonical extra roots to the SDK without widening tool approval', () => {
+    const opts = assembleSdkOptions({ ...base, additionalDirectories: ['/work/lib', '/work/web'] })
+    expect(opts.additionalDirectories).toEqual(['/work/lib', '/work/web'])
+    expect(opts.allowedTools).toEqual(base.bridgedToolModelNames)
+    expect(assembleSdkOptions(base)).not.toHaveProperty('additionalDirectories')
+    const readOnly = assembleSdkOptions({
+      ...base, approvalPolicy: 'auto', sandboxMode: 'read-only', additionalDirectories: ['/work/lib']
+    })
+    // read-only never turns extra roots into auto-allowed builtins
+    expect(readOnly.allowedTools).toEqual(base.bridgedToolModelNames)
+  })
 })

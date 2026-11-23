@@ -233,6 +233,7 @@ export abstract class AgentLoopBase {
       ...(opts.receipts ? { receipts: opts.receipts } : {})
     })
     this.turnContextResolver = new TurnContextResolver({
+      taskWorkspaces: opts.taskWorkspaces,
       toolHost: opts.toolHost,
       resolveAttachments: (input) => this.turnAttachments.resolveTurnAttachments(input),
       ...(opts.skillRuntime ? { skillRuntime: opts.skillRuntime } : {}),

@@ -26,6 +26,7 @@ import {
   pageFromDocxNode,
   selectionFromOfficeDom
 } from './workspace-office-selection'
+import { wordAnnotation } from '../write/annotations/word-anchor'
 import { attachDocxDragSelection } from './workspace-docx-drag-selection'
 import { registerDocxPreviewText } from './workspace-docx-text'
 import { subscribeKnowledgeSourceNavigation } from '../lib/knowledge-source-navigation'
@@ -136,12 +137,17 @@ export function WorkspaceDocxPreview({
       const content = contentRef.current
       const selection = window.getSelection()
       if (!content || !selection?.anchorNode || !content.contains(selection.anchorNode)) return
-      onSelectionChange(selectionFromOfficeDom(
+      const snapshot = selectionFromOfficeDom(
         content,
         'word',
         result.sourceFormat,
         (node) => ({ page: pageFromDocxNode(node, content) })
-      ))
+      )
+      if (snapshot.text && selection.rangeCount) {
+        const anchor = wordAnnotation(content, selection.getRangeAt(0), result.sourceSha256, snapshot.text)
+        if (anchor) snapshot.annotationAnchor = anchor
+      }
+      onSelectionChange(snapshot)
     }
     empty()
     document.addEventListener('selectionchange', sync)
@@ -183,6 +189,7 @@ export function WorkspaceDocxPreview({
           <Suspense fallback={<div className="kun-office-state" role="status">{i18n.t('officeDocxOpening')}</div>}>
             <WorkspaceDocxPages
               source={source}
+              sourceVersion={result.sourceSha256}
               fileName={result.name}
               zoom={zoom}
               scrollRef={scrollRef}

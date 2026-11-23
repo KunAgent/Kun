@@ -71,5 +71,10 @@
   "usagePanelChartEstimateNote": "この期間に実際の課金はありません。棒は API 参考価格で表示しています。",
   "usagePanelModelsEmpty": "この期間のモデル使用量はありません",
   "usagePanelShowAllModels": "全 {{count}} 件を表示",
-  "usagePanelShowFewerModels": "折りたたむ"
+  "usagePanelShowFewerModels": "折りたたむ",
+  "usagePanelBreakdownLabel": "使用量の内訳",
+  "usagePanelByModel": "モデル別",
+  "usagePanelByAgent": "Agent 別",
+  "usagePanelAgentUsage": "Agent 別使用量",
+  "usagePanelAgentsEmpty": "この期間の Agent 使用量はありません。"
 }

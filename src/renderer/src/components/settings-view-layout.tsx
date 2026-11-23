@@ -73,6 +73,9 @@ const ClawSettingsSection = lazySection(() =>
 const ConnectionsSettingsSection = lazySection(() =>
   import('./settings-section-connections').then((module) => ({ default: module.ConnectionsSettingsSection }))
 )
+const CloudComputeSettingsSection = lazySection(() =>
+  import('./settings-section-cloud-compute').then((module) => ({ default: module.CloudComputeSettingsSection }))
+)
 const UpdatesSettingsSection = lazySection(() =>
   import('./settings-section-updates').then((module) => ({ default: module.UpdatesSettingsSection }))
 )
@@ -120,6 +123,7 @@ const SECTION_PRELOADERS: Partial<Record<SettingsCategory, () => void>> = {
   easterEgg: EasterEggSettingsSection.preload,
   claw: ClawSettingsSection.preload,
   connections: ConnectionsSettingsSection.preload,
+  cloudCompute: CloudComputeSettingsSection.preload,
   updates: UpdatesSettingsSection.preload,
   terminal: TerminalSettingsSection.preload,
   debug: LlmDebugSettingsSection.preload,
@@ -270,6 +274,7 @@ export function SettingsViewLayout({ view }: { view: Record<string, any> }): Rea
               {category === 'easterEgg' ? <EasterEggSettingsSection ctx={sectionContext} /> : null}
               {category === 'claw' ? <ClawSettingsSection ctx={sectionContext} /> : null}
               {category === 'connections' ? <ConnectionsSettingsSection ctx={sectionContext} /> : null}
+              {category === 'cloudCompute' ? <CloudComputeSettingsSection ctx={sectionContext} /> : null}
               {category === 'updates' ? <UpdatesSettingsSection ctx={sectionContext} /> : null}
               {category === 'terminal' ? <TerminalSettingsSection ctx={sectionContext} /> : null}
               {category === 'debug' ? <LlmDebugSettingsSection ctx={sectionContext} /> : null}

@@ -12,6 +12,7 @@ import { DesktopInputArbiter } from '../../src/main/remote-desktop/input-arbiter
 
 app.setPath('userData', join(app.getAppPath(), 'profile'))
 app.on('window-all-closed', () => {})
+const expectLocked = process.env.KUN_CAPTURE_EXPECT_LOCKED === '1'
 const baseline = process.env.KUN_CAPTURE_EXPECT_LOAD_FAILURE === '1'
 const timeout = setTimeout(() => { console.error('Packaged capture smoke timed out'); app.exit(1) }, 30000)
 let receiver: BrowserWindow | undefined
@@ -123,12 +124,18 @@ app.whenReady().then(async () => {
     console.log(JSON.stringify({ controlProcess: Boolean(controlProcess?.exited), electron: process.versions.electron, capturePageLoaded: true, media, hostCleanupConfirmed: true, states }))
     clearTimeout(timeout); receiver.destroy(); app.exit(0)
   } catch (error) {
-    await service?.stopAll('host_stopped').catch(() => {})
+    let cleaned = false
+    try {
+      await service?.stopAll('host_stopped')
+      cleaned = Boolean(captureWindow?.isDestroyed()) && !controlDesktop?.ports.busy()
+    } catch { /* A rejected cleanup cannot satisfy the locked-host scenario. */ }
     await controlProcess?.stop().catch(() => {})
+    const locked = expectLocked && cleaned && error instanceof Error && error.message === 'DESKTOP_HOST_INACTIVE' &&
+      (!controlProcess || controlProcess.exited)
     const expected = baseline && error instanceof Error && error.message.includes('ERR_FILE_NOT_FOUND')
-    console.log(JSON.stringify({ baselineRejected: expected, error: expected ? 'ERR_FILE_NOT_FOUND' : error instanceof Error ? error.message : 'unknown', states, errors }))
+    console.log(JSON.stringify({ lockedHostRejected: locked, baselineRejected: expected, error: expected ? 'ERR_FILE_NOT_FOUND' : error instanceof Error ? error.message : 'unknown', states, errors }))
     clearTimeout(timeout)
     for (const window of BrowserWindow.getAllWindows()) window.destroy()
-    app.exit(expected ? 0 : 1)
+    app.exit(expected || locked ? 0 : 1)
   }
 })

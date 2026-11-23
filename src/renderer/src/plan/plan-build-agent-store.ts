@@ -1,3 +1,4 @@
+import { isAntigravityOrchestrator } from '@kun/provider-catalog'
 import { create } from 'zustand'
 import type { AgentDispatchAssignmentRoute } from '@shared/agent-dispatch'
 import { MODEL_REASONING_EFFORTS } from '@shared/app-settings-types-provider'
@@ -125,6 +126,7 @@ export function normalizePlanBuildReasoningEffort(value: string | undefined): Pl
 
 /** Effort the turn should request; `auto` and blanks leave it to the Agent. */
 export function planBuildReasoningEffort(route: PlanBuildRoute | undefined): PlanBuildRoute['reasoningEffort'] {
+  if (route?.agentId === 'antigravity' && isAntigravityOrchestrator(route.model)) return undefined
   const effort = normalizePlanBuildReasoningEffort(route?.reasoningEffort)
   return effort && effort !== 'auto' ? effort : undefined
 }
@@ -134,9 +136,14 @@ export function resolvePlanBuildRoute(
   picked: PlanBuildRoute | undefined,
   composer: { harnessId: string; model: string; providerId: string; credentialMode: string; reasoningEffort?: string }
 ): PlanBuildRoute {
-  if (picked) return picked
+  if (picked) {
+    if (picked.agentId !== 'antigravity' || !picked.reasoningEffort || !isAntigravityOrchestrator(picked.model)) return picked
+    const { reasoningEffort: _effort, ...route } = picked
+    return route
+  }
   const credentialMode = composer.credentialMode.trim()
-  const effort = normalizePlanBuildReasoningEffort(composer.reasoningEffort)
+  const managed = composer.harnessId === 'antigravity' && isAntigravityOrchestrator(composer.model)
+  const effort = managed ? undefined : normalizePlanBuildReasoningEffort(composer.reasoningEffort)
   return {
     agentId: composer.harnessId || 'kun',
     ...(composer.model.trim() ? { model: composer.model.trim() } : {}),

@@ -1,8 +1,13 @@
 import { expect, it, vi } from 'vitest'
 import { parseDirectPairing } from '@kun/remote-protocol'
+import { DIRECT_MOBILE_DEFAULT_SCOPES } from '../../shared/mobile-link-scopes'
 import { DirectRegistry, emptyDirectSettings } from './direct-registry'
-it('consumes a pairing once, binds a phone and enforces the selected permissions', async () => {
+it('grants full direct-compatible scopes by default, consumes a pairing once and enforces explicit narrowing', async () => {
   const persist = vi.fn(async () => {}), registry = new DirectRegistry('host', 'Mac', emptyDirectSettings(), persist)
+  const defaultPairing = parseDirectPairing(registry.pair(['http://10.0.0.1']))
+  const defaultGrant = await registry.accept(defaultPairing.id, true, 'default-phone', 'Default Phone')
+  expect(defaultGrant.scopes).toEqual(DIRECT_MOBILE_DEFAULT_SCOPES)
+  await registry.revoke(defaultGrant.id)
   const pairing = parseDirectPairing(registry.pair(['http://10.0.0.1'], ['personal']))
   const result = await Promise.allSettled([registry.accept(pairing.id, true, 'phone', 'Phone'), registry.accept(pairing.id, true, 'other', 'Other')])
   expect(result.filter(value => value.status === 'fulfilled')).toHaveLength(1)

@@ -689,7 +689,7 @@ export function Workbench(): ReactElement {
         worktreeBranch, navigationLocked: designDrawingCreationSubmitting }}
       actions={{ routes: { chat: openCodeMode, 'agent-chat': () => setRoute('agent-chat'), ade: openAdeMode, write: openWriteMode, papers: () => setRoute('papers'), design: openDesignMode, rooms: () => setRoute('rooms'),
         settings: openSettings, plugins: openPluginsView, extensions: openExtensionsView,
-        claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView, wardrobe: () => setRoute('wardrobe'), artifacts: () => setRoute('artifacts') },
+        claw: openClaw, board: openBoardView, schedule: openScheduleView, workflow: openWorkflowView, wardrobe: () => setRoute('wardrobe'), artifacts: () => setRoute('artifacts'), colab: () => setRoute('colab') },
         openSettings, openThread, selectWorkspaceRoot, selectExtension: selectRightRailExtension,
         openCode, setInput, setError, setComposerModel, archiveThread, pinThread }}
       input={input}

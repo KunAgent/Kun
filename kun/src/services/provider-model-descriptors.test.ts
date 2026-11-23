@@ -62,4 +62,58 @@ describe('account model metadata discovery', () => {
     expect((await probeModelDescriptors({ ...input, presetDiscovery: preset! })).source).toBe('preset')
     expect(fetcher).not.toHaveBeenCalled()
   })
+  it('parses DeepSeek /models effort object and chat-completions reasoning protocol', () => {
+    const parsed = parseProviderModelDescriptor({
+      id: 'deepseek-reasoner',
+      context_window: 131_072,
+      max_output_tokens: 65_536,
+      effort: {
+        supported_levels: ['low', 'medium', 'high', 'max'],
+        default_level: 'high'
+      }
+    }, 'openai-chat-completions')
+    expect(parsed).toMatchObject({
+      contextWindowTokens: 131_072,
+      maxOutputTokens: 65_536,
+      supportsReasoning: true,
+      reasoning: {
+        requestProtocol: 'deepseek-chat-completions',
+        supportedEfforts: ['off', 'low', 'medium', 'high', 'max'],
+        defaultEffort: 'high',
+        effortMapping: {
+          off: 'off',
+          low: 'low',
+          medium: 'medium',
+          high: 'high',
+          max: 'max'
+        }
+      },
+      evidence: {
+        reasoning: {
+          fieldPath: 'effort.supported_levels'
+        }
+      }
+    })
+    const flash = parseProviderModelDescriptor({
+      id: 'deepseek-flash',
+      context_window: 131_072,
+      max_output_tokens: 65_536,
+      input_modalities: ['text', 'image'],
+      effort: {
+        supported_levels: ['low', 'medium', 'high'],
+        default_level: 'medium'
+      }
+    }, 'openai-chat-completions')
+    expect(flash).toMatchObject({
+      contextWindowTokens: 131_072,
+      maxOutputTokens: 65_536,
+      inputModalities: ['text', 'image'],
+      supportsReasoning: true,
+      reasoning: {
+        requestProtocol: 'deepseek-chat-completions',
+        supportedEfforts: ['off', 'low', 'medium', 'high'],
+        defaultEffort: 'medium'
+      }
+    })
+  })
 })

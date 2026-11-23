@@ -11,6 +11,11 @@ describe('isolated desktop capture permission compatibility', () => {
     expect(permitsDesktopCapture('display-capture', {}, 'check')).toBe(true)
     expect(permitsDesktopCapture('display-capture', { mediaTypes: ['video', 'audio'] }, 'request')).toBe(false)
   })
+  it('limits system output to a display request granted by the local host', () => {
+    expect(permitsDesktopCapture('display-capture',{mediaTypes:['video','audio']},'request',true)).toBe(true)
+    expect(permitsDesktopCapture('media',{mediaTypes:['audio']},'request',true)).toBe(false)
+    expect(permitsDesktopCapture('display-capture',{isMainFrame:false},'request',true)).toBe(false)
+  })
   it.each(['audio', 'video'])('rejects physical %s device access', mediaType => {
     expect(permitsDesktopCapture('media', { mediaTypes: [mediaType] }, 'request')).toBe(false)
     expect(permitsDesktopCapture('media', { mediaType }, 'check')).toBe(false)

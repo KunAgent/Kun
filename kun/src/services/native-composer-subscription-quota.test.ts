@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { nativeComposerSubscriptionProfile } from './native-composer-subscription-quota.js'
+import { ANTIGRAVITY_DEFINITION } from '../harness/providers/antigravity.js'
 import { CODEX_DEFINITION } from '../harness/providers/codex.js'
 import { CLAUDE_CODE_DEFINITION } from '../harness/providers/claude-code.js'
 import { homedir } from 'node:os'
@@ -116,5 +117,30 @@ describe('spawn-free native subscription identity', () => {
       .toMatchObject({ presetId: 'codex' })
     expect(await nativeComposerSubscriptionProfile({ definition: { ...CODEX_DEFINITION,
       launch: { ...CODEX_DEFINITION.launch!, args: ['app-server', '--profile', 'unused'] } }, baseEnv: { HOME: '/home' }, readText })).toBeUndefined()
+  })
+
+  it('returns native Antigravity subscription profile only when logged in without an API key override', async () => {
+    expect(await nativeComposerSubscriptionProfile({
+      definition: ANTIGRAVITY_DEFINITION,
+      baseEnv: { HOME: '/home', GEMINI_API_KEY: 'AIza-override' },
+      detectAntigravityLogin: async () => ({ configured: true, fingerprint: 'abcdef01234567890000' })
+    })).toBeUndefined()
+    expect(await nativeComposerSubscriptionProfile({
+      definition: ANTIGRAVITY_DEFINITION,
+      baseEnv: { HOME: '/home' },
+      detectAntigravityLogin: async () => ({ configured: false, fingerprint: '' })
+    })).toBeUndefined()
+    expect(await nativeComposerSubscriptionProfile({
+      definition: ANTIGRAVITY_DEFINITION,
+      baseEnv: { HOME: '/home' },
+      detectAntigravityLogin: async () => ({ configured: true, fingerprint: 'abcdef01234567890000' })
+    })).toMatchObject({
+      id: 'native:antigravity',
+      accountId: 'native:abcdef0123456789',
+      presetId: 'gemini-subscription',
+      kind: 'antigravity-cli',
+      authType: 'subscription',
+      configured: true
+    })
   })
 })

@@ -3,6 +3,7 @@ import {
   DocxEditorViewer,
   parseDocxForViewer,
   revealDocxSource,
+  resolveDocxSourceGeometry,
   setWasmSource,
   useDocxEditor,
   type ParsedDocxDocument,
@@ -20,6 +21,7 @@ import {
   type RefObject
 } from 'react'
 import i18n from '../i18n'
+import { registerWordAnchorViewer } from '../write/annotations/word-anchor'
 import { docxBlockIdForParagraph, docxModelText } from './workspace-docx-model'
 
 setWasmSource(wasmUrl)
@@ -40,6 +42,7 @@ export type WorkspaceDocxPagesHandle = {
 
 export type WorkspaceDocxPagesProps = {
   source: Uint8Array
+  sourceVersion: string
   fileName: string
   zoom: ViewerZoomLevel
   /** The pane that scrolls the pages; the viewer virtualizes against it. */
@@ -59,6 +62,7 @@ export type WorkspaceDocxPagesProps = {
  */
 export function WorkspaceDocxPages({
   source,
+  sourceVersion,
   fileName,
   zoom,
   scrollRef,
@@ -68,7 +72,7 @@ export function WorkspaceDocxPages({
   onLoaded,
   onError
 }: WorkspaceDocxPagesProps): ReactElement {
-  const [loaded, setLoaded] = useState<{ parsed: ParsedDocxDocument; generation: number } | null>(null)
+  const [loaded, setLoaded] = useState<{ parsed: ParsedDocxDocument; version: string; generation: number } | null>(null)
   const [failure, setFailure] = useState<string | null>(null)
   const restoreScrollRef = useRef<{ top: number; height: number } | null>(null)
   const callbacksRef = useRef({ onLoaded, onError })
@@ -92,7 +96,7 @@ export function WorkspaceDocxPages({
         ? { top: scroller.scrollTop, height: scroller.scrollHeight }
         : null
       setFailure(null)
-      setLoaded((current) => ({ parsed: next, generation: (current?.generation ?? 0) + 1 }))
+      setLoaded((current) => ({ parsed: next, version: sourceVersion, generation: (current?.generation ?? 0) + 1 }))
     }, (error: unknown) => {
       if (abort.signal.aborted) return
       const message = error instanceof Error && error.message ? error.message : i18n.t('officeDocxRenderError')
@@ -100,7 +104,7 @@ export function WorkspaceDocxPages({
       callbacksRef.current.onError(message)
     })
     return () => abort.abort()
-  }, [fileName, scrollRef, source])
+  }, [fileName, scrollRef, source, sourceVersion])
 
   const parsed = loaded?.parsed ?? null
   useEffect(() => () => parsed?.dispose(), [parsed])
@@ -126,6 +130,7 @@ export function WorkspaceDocxPages({
     <DocxSurface
       key={loaded.generation}
       parsed={parsed}
+      version={loaded.version}
       zoom={zoom}
       scrollRef={scrollRef}
       handleRef={handleRef}
@@ -139,6 +144,7 @@ export function WorkspaceDocxPages({
 
 function DocxSurface({
   parsed,
+  version,
   zoom,
   scrollRef,
   handleRef,
@@ -148,6 +154,7 @@ function DocxSurface({
   onMounted
 }: {
   parsed: ParsedDocxDocument
+  version: string
   zoom: ViewerZoomLevel
   scrollRef: RefObject<HTMLDivElement | null>
   handleRef: Ref<WorkspaceDocxPagesHandle>
@@ -163,6 +170,11 @@ function DocxSurface({
   const [holdHeight] = useState(() => restoreScrollRef.current?.height ?? null)
   const editorRef = useRef(editor)
   editorRef.current = editor
+
+  useLayoutEffect(() => {
+    const root = rootRef.current
+    if (root) return registerWordAnchorViewer(root, version, () => editorRef.current.model, resolveDocxSourceGeometry, revealDocxSource)
+  }, [version])
 
   useEffect(() => {
     onPageInfo(editor.currentPage, editor.totalPages)

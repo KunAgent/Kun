@@ -198,6 +198,8 @@ const writePaperReadingPatchSchema = z.object({
 }).strict()
 
 const writeSettingsPatchSchema = z.object({
+  latex: z.object({ engine: z.enum(['xelatex', 'pdflatex', 'lualatex']).optional(), autoCompile: z.boolean().optional(),
+    texPath: z.string().max(4096).optional(), outDirPolicy: z.literal('cache').optional() }).strict().optional(),
   defaultWorkspaceRoot: defaultPathSchema,
   activeWorkspaceRoot: defaultPathSchema,
   workspaces: z.array(trimmedString(MAX_PATH_LENGTH)).max(256).optional(),

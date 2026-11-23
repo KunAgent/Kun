@@ -36,6 +36,16 @@ function record(delegated: unknown): Record<string, unknown> {
 }
 
 describe('delegated model request trace contract', () => {
+  test('preserves workspace-root rebases emitted by delegated session routing', () => {
+    const value = ModelRequestTraceRecordSchema.parse(record({
+      providerKind: 'codex-app-server', phase: 'rebased', reason: 'workspace_roots_changed',
+      contextManagement: 'sdk-managed', nativeHistory: 'none', capabilities: {
+        nativeResume: true, structuredStreaming: true, kunTools: true, externalApproval: true,
+        liveSteering: false, nativeContextTelemetry: false, fork: false
+      }
+    }))
+    expect(value.delegated?.reason).toBe('workspace_roots_changed')
+  })
   test('accepts the bounded non-secret delegated envelope', () => {
     expect(ModelRequestTraceRecordSchema.parse(record({
       providerKind: 'agent-sdk',

@@ -342,4 +342,37 @@ describe('speech-to-text service', () => {
     )
     expect(result).toMatchObject({ ok: false, message: expect.stringContaining('empty') })
   })
+
+  it('considers deepseek-asr configured without requiring a model name', () => {
+    expect(isSpeechToTextConfigured({
+      enabled: true,
+      protocol: 'deepseek-asr',
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk-ds',
+      model: ''
+    })).toBe(true)
+  })
+
+  it('transcribes via DeepSeek /v1/tools/asr multipart file-only request', async () => {
+    const { fetchImpl, requests } = fakeFetch({ text: '  DeepSeek ASR result  ' })
+    const result = await requestSpeechTranscription(
+      settingsWithSpeech({
+        protocol: 'deepseek-asr',
+        baseUrl: 'https://api.deepseek.com/v1',
+        apiKey: 'sk-ds',
+        model: ''
+      }),
+      { audioBase64: AUDIO_BASE64, mimeType: 'audio/wav' },
+      { fetchImpl }
+    )
+
+    expect(result).toEqual({ ok: true, text: 'DeepSeek ASR result' })
+    expect(requests[0].url).toBe('https://api.deepseek.com/v1/tools/asr')
+    const headers = requests[0].init.headers as Record<string, string>
+    expect(headers.Authorization ?? headers.authorization).toBe('Bearer sk-ds')
+    const form = requests[0].init.body as FormData
+    expect(form).toBeInstanceOf(FormData)
+    expect(form.get('file')).toBeTruthy()
+    expect(form.get('model')).toBeNull()
+  })
 })

@@ -164,7 +164,7 @@ export class ExtensionStateMigrationCoordinator {
           // plus its committed schema if a power loss occurs here.
           journal.phase = 'selection-committed'
           await journalFile.write(journal).catch(() => undefined)
-          await rm(journalFile.path, { force: true }).catch(() => undefined)
+          await journalFile.delete().catch(() => undefined)
         }
       )
     })
@@ -251,7 +251,7 @@ export class ExtensionStateMigrationCoordinator {
       }
       await this.registry.restoreVersionSwitch(journal.registryBefore, journal.target)
       await this.removeUncommittedInstalledTarget(journal)
-      await rm(this.journalFile(journal.extensionId).path, { force: true })
+      await this.journalFile(journal.extensionId).delete()
     } catch (rollbackError) {
       throw extensionError(
         'EXTENSION_VERSION_SWITCH_ROLLBACK_FAILED',
@@ -279,7 +279,7 @@ export class ExtensionStateMigrationCoordinator {
         journal.target
       )
       if (targetSelected && state.schemaVersion === journal.toStateSchema) {
-        await rm(this.journalFile(extensionId).path, { force: true })
+        await this.journalFile(extensionId).delete()
         return
       }
       if (journal.stateExistedBefore) {
@@ -292,7 +292,7 @@ export class ExtensionStateMigrationCoordinator {
       }
       await this.registry.restoreVersionSwitch(journal.registryBefore, journal.target)
       await this.removeUncommittedInstalledTarget(journal)
-      await rm(this.journalFile(extensionId).path, { force: true })
+      await this.journalFile(extensionId).delete()
     })
   }
 

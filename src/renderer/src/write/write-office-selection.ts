@@ -17,6 +17,7 @@ export function writeSelectionFromOffice(
   const line = selection.pageStart ?? selection.slide ?? 1
   return {
     text,
+    ...(selection.annotationAnchor ? { annotationAnchor: selection.annotationAnchor } : {}),
     ranges: [{
       from: 0,
       to: text.length,

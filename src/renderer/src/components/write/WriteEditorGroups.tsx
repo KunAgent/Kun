@@ -291,8 +291,8 @@ export function WriteEditorGroups({
               </div>
             ) : (
               <>
-                {focused && document && document.kind !== 'image' ? focusedToolbar : null}
-                {focused && document ? paperBar : null}
+                {focused && document && document.kind !== 'image' && document.kind !== 'latex' ? focusedToolbar : null}
+                {focused && document && document.kind !== 'latex' ? paperBar : null}
                 <WriteEditorGroupContent
                   document={document}
                   whiteboard={board}
@@ -307,6 +307,7 @@ export function WriteEditorGroups({
                   inlineCompletionApiReady={inlineCompletionApiReady}
                   recentEdits={document?.recentEdits ?? []}
                   focused={focused}
+                  split={splitActive && !expandedGroupId}
                   focusMode={focusMode}
                   richHandleRef={focused ? richHandleRef : undefined}
                   markdownHandleRef={focused ? markdownHandleRef : undefined}
@@ -333,8 +334,13 @@ export function WriteEditorGroups({
                   onSelectionChange={(selection) => {
                     // Editors report selection on load too; only a group the
                     // user is actually in may take editor focus.
-                    if (!focused && groupOwnsDomFocus(group.id)) focusEditorGroup(group.id)
-                    setSelection(selection)
+                    const state = useWriteWorkspaceStore.getState()
+                    if (state.workspaceRoot !== workspaceRoot) return
+                    if (state.editorLayout.focusedGroupId !== group.id) {
+                      if (!groupOwnsDomFocus(group.id)) return
+                      focusEditorGroup(group.id)
+                    }
+                    if (useWriteWorkspaceStore.getState().activeFilePath === path) setSelection(selection)
                   }}
                   onPresentationViewChange={(view, source) => {
                     if (view) setPresentationViewForGroup(group.id, view)
@@ -345,7 +351,10 @@ export function WriteEditorGroups({
                   }}
                   onImagePasteSaved={() => { setFileError(null); void refreshWorkspace(workspaceRoot) }}
                   onImagePasteError={setFileError}
-                  onReviewStateChange={setReviewActive}
+                  onReviewStateChange={(active) => {
+                    const state = useWriteWorkspaceStore.getState()
+                    if (state.workspaceRoot === workspaceRoot && state.activeFilePath === path) setReviewActive(active)
+                  }}
                   onSpreadsheetMutations={setSpreadsheetMutations}
                   onConvertSpreadsheet={(nextPath) => { void convertSpreadsheet(workspaceRoot, nextPath) }}
                   onReloadSpreadsheetConflict={reloadSpreadsheetConflict}

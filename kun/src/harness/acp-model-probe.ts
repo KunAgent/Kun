@@ -56,6 +56,8 @@ export type AcpModelProbeDeps = {
   idleMs?: number
   /** Receives each successful base catalog (no `selectedModel`), e.g. to keep it across restarts. */
   onCatalog?: (definition: HarnessDefinition, catalog: HarnessModelCatalog) => void
+  /** Receives per-model detail lookups so learned reasoning levels survive restarts. */
+  onModelDetails?: (definition: HarnessDefinition, selectedModel: string, catalog: HarnessModelCatalog) => void
 }
 
 export type AcpModelProbeOptions = {
@@ -194,6 +196,7 @@ export class AcpModelProbe {
           if (this.lastGood.size >= 32) this.lastGood.delete(this.lastGood.keys().next().value!)
           this.lastGood.set(this.identityKey(definition, selectedModel), catalog)
           if (!selectedModel) this.deps.onCatalog?.(definition, catalog)
+          else this.deps.onModelDetails?.(definition, selectedModel, catalog)
         }
         return catalog
       })

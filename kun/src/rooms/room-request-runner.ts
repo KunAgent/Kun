@@ -2,7 +2,7 @@ import type { SubagentProfileConfig } from '../contracts/capabilities.js'
 import { taskParticipantRoom, resolveAgentTaskReviewer } from '../agents/agent-task-participants.js'
 import { roomMemberDiscussionPrompt, roomPollInvitationPrompt } from './room-ax-surfaces.js'
 import { roomDiscussionMessageId } from './room-discussion-message.js'
-import { roomTurnRunId } from './room-run-recording.js'
+import { roomTurnRunId, settleTerminalRoomRuns } from './room-run-recording.js'
 import { roomRunSegmentMessageId } from './room-run-segments.js'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -449,5 +449,6 @@ export class RoomRequestRunner {
   }
   private async save(row: RoomStoredDocument<RoomRequestState>, value: RoomRequestState) {
     await putRoomDocument(this.deps.store, 'request', row.id, row.roomId!, value, row)
+    if (['failed', 'cancelled'].includes(value.status)) await settleTerminalRoomRuns(this.deps, value.id)
   }
 }

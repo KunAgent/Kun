@@ -6,11 +6,20 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RequestContextSnapshot } from '../../agent/types'
 import type { ComposerSubscriptionQuotaResult } from '@shared/composer-subscription-quota'
-import { FloatingComposerContextCapacity, calculateContextCapacityPopoverPlacement } from './FloatingComposerContextCapacity'
+import {
+  FloatingComposerContextCapacity,
+  calculateContextCapacityPopoverPlacement,
+  requestContextSnapshotMatchesSelection
+} from './FloatingComposerContextCapacity'
 import i18n from '../../i18n'
 
 const state = vi.hoisted(() => ({
-  chat: { lastContextSnapshot: null as RequestContextSnapshot | null, composerHarnessId: 'codex' },
+  chat: {
+    lastContextSnapshot: null as RequestContextSnapshot | null,
+    composerHarnessId: 'codex',
+    composerProviderId: '',
+    composerGatewayBinding: null as unknown
+  },
   quota: { result: null as ComposerSubscriptionQuotaResult | null, refreshing: false, verifyingIdentity: false, refresh: vi.fn(), revalidate: vi.fn() }
 }))
 vi.mock('../../store/chat-store', () => ({ useChatStore: (selector: (value: typeof state.chat) => unknown) => selector(state.chat) }))
@@ -184,5 +193,73 @@ describe('composer context and subscription popup', () => {
     expect(placement.left).toBeGreaterThanOrEqual(12)
     expect(placement.top).toBeGreaterThanOrEqual(12)
     expect(placement.top + placement.maxHeight).toBeLessThanOrEqual(488)
+  })
+
+  it('renders context capacity on the ade route and matches external Agent snapshots flexibly', async () => {
+    state.chat.composerHarnessId = 'antigravity'
+    state.chat.lastContextSnapshot = {
+      ...snapshot,
+      model: 'gemini-3.6-flash',
+      providerId: 'antigravity-cli',
+      estimatedInputTokens: 12_000
+    }
+    await act(async () => root.render(createElement(FloatingComposerContextCapacity, {
+      compact: false,
+      route: 'ade',
+      activeThreadId: 'thread',
+      selectedModel: 'gemini-3.6-flash-high',
+      selectedProviderId: 'ade-cred:alias:team'
+    })))
+    expect(host.querySelector('[data-composer-capacity-trigger="context"]')).not.toBeNull()
+
+    expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'gemini-3.6-flash', providerId: 'default' },
+      { threadId: 'thread', model: 'models/gemini-3.6-flash-high', providerId: '', harnessId: 'antigravity' }
+    )).toBe(true)
+    expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'cursor-model', providerId: 'cursor-subscription' },
+      { threadId: 'thread', model: 'cursor-model', providerId: '', harnessId: 'cursor' }
+    )).toBe(true)
+    expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'deepseek-chat', providerId: undefined },
+      { threadId: 'thread', model: 'kun/deepseek/deepseek-chat', providerId: 'deepseek', harnessId: 'opencode' }
+    )).toBe(true)
+    expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'claude-sonnet-4-6', providerId: 'default' },
+      { threadId: 'thread', model: 'kun/anthropic/claude-sonnet-4-6', providerId: 'anthropic', harnessId: 'claude-code', gatewayBinding: true }
+    )).toBe(true)
+    expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'claude-sonnet-4-6', providerId: 'claude-work' },
+      { threadId: 'thread', model: 'claude-sonnet-4-6', providerId: 'claude-personal', harnessId: 'claude-code' }
+    )).toBe(false)
+    expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'gemini-4-hydrogen', providerId: 'default' },
+      { threadId: 'thread', model: 'gemini-4-hydrogen-xhigh', providerId: '', harnessId: 'antigravity' }
+    )).toBe(true)
+    expect(requestContextSnapshotMatchesSelection(
+      { ...snapshot, model: 'gemini-3.6-flash', providerId: 'default' },
+      { threadId: 'thread', model: 'claude-sonnet-4-6', providerId: '', harnessId: 'antigravity' }
+    )).toBe(false)
+  })
+
+  it('deduplicates providerName prefix from Antigravity subscription summary', async () => {
+    state.chat.lastContextSnapshot = snapshot
+    state.quota.result = {
+      refreshedAt: '2026-10-11T08:00:00Z',
+      entry: {
+        providerId: 'native:antigravity',
+        providerName: 'Antigravity',
+        status: 'available',
+        summary: 'Antigravity · user@example.com',
+        metrics: [
+          { id: 'pool_gemini_5h', label: 'Gemini Models · 5h limit', unit: 'percent', usedPercent: 0, windowSeconds: 18_000 }
+        ]
+      }
+    }
+    await render()
+    await open()
+    const popup = document.querySelector('[data-context-capacity-popover]')!
+    expect(popup.querySelector('.ds-composer-subscription-account')?.textContent).toBe('Antigravity')
+    expect(popup.querySelector('.ds-composer-subscription-plan')?.textContent).toBe('user@example.com')
   })
 })

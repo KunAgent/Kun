@@ -1,9 +1,10 @@
-export type AntigravityReasoningEffort = 'low' | 'medium' | 'high'
+export const ANTIGRAVITY_CLI_EFFORTS = ['low', 'medium', 'high', 'xhigh'] as const
+export type AntigravityReasoningEffort = typeof ANTIGRAVITY_CLI_EFFORTS[number]
 
 export type AntigravityCatalogModel = {
   id: string
   supportedEfforts: AntigravityReasoningEffort[]
-  defaultEffort: AntigravityReasoningEffort
+  defaultEffort?: AntigravityReasoningEffort
 }
 
 export type AntigravityModelCatalog = {
@@ -12,7 +13,12 @@ export type AntigravityModelCatalog = {
 
 const MODEL_ID_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+)+$/iu
 const MODEL_ID_MAX_LENGTH = 128
-const EFFORT_ORDER: readonly AntigravityReasoningEffort[] = ['low', 'medium', 'high']
+
+/** Orchestrator chooses its own planner/worker budgets; /effort does not apply. */
+export function isAntigravityOrchestrator(model: string | undefined): boolean {
+  const id = model?.trim().replace(/^models\//, '')
+  return id === 'gemini-pro-orchestrator' || id === 'gemini-pro-orchestrator-argon'
+}
 
 /** Parses the bounded, human-readable output of `agy models`. */
 export function parseAntigravityModelCatalog(stdout: string): AntigravityModelCatalog {
@@ -22,23 +28,24 @@ export function parseAntigravityModelCatalog(stdout: string): AntigravityModelCa
     if (!rawModel || rawModel.length > MODEL_ID_MAX_LENGTH || !MODEL_ID_PATTERN.test(rawModel)) {
       continue
     }
-    const effortMatch = rawModel.match(/-(low|medium|high)$/iu)
+    const effortMatch = rawModel.match(/-(low|medium|high|xhigh)$/iu)
     const effort = effortMatch?.[1]?.toLowerCase() as AntigravityReasoningEffort | undefined
     const modelId = effort ? rawModel.slice(0, -(effort.length + 1)) : rawModel
     if (!MODEL_ID_PATTERN.test(modelId)) continue
     const efforts = models.get(modelId) ?? new Set<AntigravityReasoningEffort>()
-    efforts.add(effort ?? 'medium')
+    if (!isAntigravityOrchestrator(modelId)) efforts.add(effort ?? 'medium')
     models.set(modelId, efforts)
   }
   return {
     models: [...models].map(([id, efforts]) => {
-      const supportedEfforts = EFFORT_ORDER.filter((effort) => efforts.has(effort))
+      const supportedEfforts = ANTIGRAVITY_CLI_EFFORTS.filter((effort) => efforts.has(effort))
+      if (!supportedEfforts.length) return { id, supportedEfforts }
       return {
         id,
         supportedEfforts,
         defaultEffort: supportedEfforts.includes('medium')
           ? 'medium'
-          : supportedEfforts.includes('high') ? 'high' : 'low'
+          : supportedEfforts.includes('high') ? 'high' : supportedEfforts[0]
       }
     })
   }

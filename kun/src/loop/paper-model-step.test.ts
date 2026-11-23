@@ -61,6 +61,19 @@ const request = (context = paper()) => ({ prompt: 'What does this show?', client
   model: 'test', providerId: 'api', paperContext: context, agentSurface: 'write' as const })
 
 describe('frozen paper runtime policy', () => {
+  it('runs a Work margin question as a single isolated native model step', async () => {
+    const h = await harness()
+    h.options.model.paperReadOnlyDispatchGuard = () => { throw new Error('Pool is not a fixed paper disclosure route') }
+    const context = paper({ scope: 'work-annotation' })
+    const admitted = await h.turns.startTurn({ threadId: 'paper', request: request(context) })
+    await expect(h.loop.runTurn('paper', admitted.turnId)).resolves.toBe('completed')
+    expect(h.requests).toHaveLength(1)
+    expect(h.requests[0]).toMatchObject({ tools: [], maxRetryAttempts: 0 })
+    expect(h.requests[0].modeInstruction).toContain('document margin conversation')
+    expect(JSON.stringify(h.requests[0].history)).not.toContain('PRIVATE_HISTORY')
+    expect(h.execute).not.toHaveBeenCalled()
+  })
+
   it('persists exactly, replays idempotently, isolates model context and uses one request', async () => {
     const h = await harness(), context = paper(), started = await h.turns.startTurn({ threadId: 'paper', request: request(context) })
     const admitted = await h.turns.getTurn('paper', started.turnId)

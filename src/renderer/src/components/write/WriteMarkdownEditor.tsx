@@ -136,6 +136,7 @@ export function WriteMarkdownEditor({
   const onReviewStateChangeRef = useRef(onReviewStateChange)
   const mergeCompartmentRef = useRef<Compartment | null>(null)
   const reviewActiveRef = useRef(false)
+  const [reviewActive, setReviewActive] = useState(false)
   const valueRef = useRef(value)
   const lastSelectionRef = useRef<WriteEditorSelectionState | null>(null)
   const lastEmittedValueRef = useRef<string | null>(null)
@@ -159,7 +160,10 @@ export function WriteMarkdownEditor({
   onSaveShortcutRef.current = onSaveShortcut
   onImagePasteSavedRef.current = onImagePasteSaved
   onImagePasteErrorRef.current = onImagePasteError
-  onReviewStateChangeRef.current = onReviewStateChange
+  onReviewStateChangeRef.current = (active) => {
+    setReviewActive(active)
+    onReviewStateChange?.(active)
+  }
   valueRef.current = value
 
   useEffect(() => {
@@ -508,7 +512,7 @@ export function WriteMarkdownEditor({
         Math.min(head, nextLength)
       )
     })
-  }, [value])
+  }, [value, reviewActive])
 
   const updateDisplayPreferences = (
     patch: Partial<WriteEditorDisplayPreferences>

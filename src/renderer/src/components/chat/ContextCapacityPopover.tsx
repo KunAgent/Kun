@@ -32,8 +32,9 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
   const agent = agentName?.trim() || t('contextCapacityAgentFallback')
   const occupancyUnknown = capacity.nativeHistoryUnknown || capacity.windowUnknown
   const thresholdRatio = capacity.alertRatio
-  // An Agent's bare total is one figure; only its own split earns category rows.
-  const agentTotalOnly = capacity.agentReported && !capacity.agentBreakdown
+  // An Agent-managed context without an Agent-supplied split is one figure;
+  // never render Kun's internal category rows with zeros for an external Agent.
+  const agentTotalOnly = (capacity.agentManaged || capacity.agentReported) && !capacity.agentBreakdown
   const accent = occupancyUnknown
     ? 'var(--ds-text-muted)'
     : stateColor(capacity.usedRatio, thresholdRatio)
@@ -57,7 +58,9 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
         ? t('contextCapacityNearLimit')
         : capacity.agentReported
           ? t('contextCapacityAgentReported', { agent })
-          : t('contextCapacityShareNote')
+          : capacity.agentManaged
+            ? t('contextCapacitySentTokens')
+            : t('contextCapacityShareNote')
   const thresholdLabel = capacity.agentManaged
     ? t('contextCapacityAgentThresholdLabel', { percent: formatPercent(thresholdRatio), agent })
     : t('contextCapacityThresholdLabel', { percent: formatPercent(thresholdRatio) })
@@ -132,7 +135,9 @@ export function ContextCapacityPopover({ capacity, agentName, style, embedded = 
         {agentTotalOnly ? (
           <div className="grid grid-cols-[13px_1fr_auto_46px] items-center gap-x-2 py-[3px]" data-context-agent-row>
             <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: accent }} />
-            <span className="truncate text-[12.5px] text-ds-muted">{t('contextCapacityAgentUsed', { agent })}</span>
+            <span className="truncate text-[12.5px] text-ds-muted">
+              {capacity.agentReported ? t('contextCapacityAgentUsed', { agent }) : t('contextCapacitySentTokens')}
+            </span>
             <span className="text-[12px] tabular-nums text-ds-ink">{formatCompactNumber(capacity.usedTokens)}</span>
             <span className="text-right text-[12px] tabular-nums text-ds-faint">{occupancyUnknown ? '—' : formatPercent(capacity.usedRatio)}</span>
           </div>

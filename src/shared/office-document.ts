@@ -1,3 +1,4 @@
+import type { WordAnnotationAnchor } from './work-annotation-anchor'
 export const OFFICE_DOCUMENT_FORMATS = ['docx', 'xlsx', 'pptx'] as const
 export type OfficeDocumentFormat = (typeof OFFICE_DOCUMENT_FORMATS)[number]
 
@@ -122,6 +123,7 @@ export type WorkspaceOfficePreviewResult =
   | OfficeDocumentReadFailure
 
 export type WorkspaceOfficeSelection = {
+  annotationAnchor?: WordAnnotationAnchor
   sourceKind: WorkspaceOfficeViewer
   sourceFormat: OfficeDocumentPreviewFormat
   text: string

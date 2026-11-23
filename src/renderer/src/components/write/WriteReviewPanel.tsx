@@ -1,9 +1,14 @@
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { Crosshair } from 'lucide-react'
 import { useWriteEditorBridge, type WriteReviewChunkSummary } from '../../write/write-editor-bridge'
 import { WriteRightPanelEmpty, WriteRightPanelHeader } from './WriteRightPanelHeader'
+import { useWriteWorkspaceStore } from '../../write/write-workspace-store'
+import { latexSessionKey } from '../../write/latex/latex-project-store'
+import { LatexReviewPanel } from './latex/LatexReviewPanel'
+import { useWorkAnnotationReview } from './annotations/work-annotation-view'
+import { WorkAnnotationReviewList } from './annotations/WorkAnnotationReviewList'
 
 const KIND_KEYS: Record<WriteReviewChunkSummary['kind'], string> = {
   added: 'workReviewAdded',
@@ -13,15 +18,24 @@ const KIND_KEYS: Record<WriteReviewChunkSummary['kind'], string> = {
 
 export function WriteReviewPanel({ onCollapse }: { onCollapse: () => void }): ReactElement {
   const { t } = useTranslation('common')
+  const projection = useWorkAnnotationReview((state) => state.current)
+  const [tab, setTab] = useState<'annotations' | 'changes' | null>(null)
+  const latexKey = useWriteWorkspaceStore((state) => state.activeFileKind === 'latex' && state.activeFilePath ? latexSessionKey(state.workspaceRoot, state.activeFilePath) : null)
   const { chunks, commands } = useWriteEditorBridge(useShallow((state) => ({
     chunks: state.reviewChunks,
     commands: state.commands
   })))
 
+  if (latexKey) return <LatexReviewPanel sessionKey={latexKey} onCollapse={onCollapse} />
+  const annotationsVisible = projection && (tab === 'annotations' || (tab === null && chunks.length === 0))
   return (
     <div className="flex h-full min-h-0 flex-col">
       <WriteRightPanelHeader id="review" onCollapse={onCollapse} />
-      {chunks.length === 0 || !commands ? (
+      {projection && <div className="work-annotation-review-tabs" role="group" aria-label={t('workRailReview')}>
+        <button type="button" aria-pressed={!annotationsVisible} onClick={() => setTab('changes')}>{t('writeAnnotationChanges')}</button>
+        <button type="button" aria-pressed={Boolean(annotationsVisible)} onClick={() => setTab('annotations')}>{t('writeAnnotationList')}</button>
+      </div>}
+      {annotationsVisible ? <WorkAnnotationReviewList annotations={projection.annotations} onOpen={projection.onOpen} /> : chunks.length === 0 || !commands ? (
         <WriteRightPanelEmpty>{t('workReviewEmpty')}</WriteRightPanelEmpty>
       ) : (
         <>

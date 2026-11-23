@@ -1,7 +1,9 @@
+import { useNativeModelDetails } from '../../hooks/use-native-model-details'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { normalizePlanBuildReasoningEffort, type PlanBuildRoute } from '../../plan/plan-build-agent-store'
+import { isManagedAntigravityBudget } from '../chat/floating-composer-model-picker-logic'
 import { planBuildEffortChoices } from '../../plan/plan-build-effort'
 import { useChatStore } from '../../store/chat-store'
 import {
@@ -135,14 +137,15 @@ export function usePlanBuildAgentOptions(
     const group = groups.find((entry) => entry.providerId === groupId)
     if (!group?.modelIds.includes(model)) return
     const { accountId: _account, ...next } = selectWorkbenchModel(current, model, groupId, group.accountId)
-    // The level carries over; the menu falls back to auto where the new model lacks it.
-    onChange({ ...routeFromWorkbenchModel(next), ...(route.reasoningEffort ? { reasoningEffort: route.reasoningEffort } : {}) })
+    const keepEffort = route.reasoningEffort && !isManagedAntigravityBudget(group, model)
+    onChange({ ...routeFromWorkbenchModel(next), ...(keepEffort ? { reasoningEffort: route.reasoningEffort } : {}) })
   }
 
   const selectedGroupId = workbenchModelGroup(current)
   const displayModel = workbenchDisplayModel(current)
   const selectedGroup = groups.find((group) => group.providerId === selectedGroupId) ??
     groups.find((group) => group.modelIds.includes(displayModel))
+  useNativeModelDetails(id, displayModel, native, !disabled && selectedGroup?.nativeHarnessId === id)
   const effortChoices = planBuildEffortChoices(selectedGroup, displayModel, external,
     external ? native?.modelInfo?.find((entry) => entry.id === displayModel) : undefined)
   const effort = route.reasoningEffort && effortChoices.includes(route.reasoningEffort) ? route.reasoningEffort : 'auto'

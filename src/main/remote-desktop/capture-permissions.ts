@@ -5,9 +5,9 @@ type CapturePermissionDetails = {
 }
 
 /** Only used in the isolated, approved-display capture renderer's session. */
-export function permitsDesktopCapture(permission: string, details: CapturePermissionDetails, phase: 'request' | 'check'): boolean {
+export function permitsDesktopCapture(permission: string, details: CapturePermissionDetails, phase: 'request' | 'check', systemLoopback = false): boolean {
   if (details.isMainFrame === false) return false
-  if (permission === 'display-capture') return !details.mediaTypes?.includes('audio')
+  if (permission === 'display-capture') return systemLoopback || !details.mediaTypes?.includes('audio')
   if (permission !== 'media') return false
   // Electron 43.1 reports display requests as media + [], and display checks as
   // media + "unknown". Camera/microphone requests have nonempty mediaTypes.

@@ -9,10 +9,12 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import WhatsNewDialog from './WhatsNewDialog'
 import { loadWhatsNewContent, releaseNotesLanguage, type WhatsNewContent } from './whats-new-content'
+import type { WhatsNewResearchDestination } from './WhatsNewResearchHighlights'
 
 const stylesDirectory = dirname(fileURLToPath(import.meta.url))
 const baseStyles = readFileSync(join(stylesDirectory, 'whats-new.css'), 'utf8')
 const workbenchStyles = readFileSync(join(stylesDirectory, 'whats-new-workbench.css'), 'utf8')
+const researchStyles = readFileSync(join(stylesDirectory, 'whats-new-research.css'), 'utf8')
 
 const localeFiles = import.meta.glob<Record<string, string>>('../../locales/*/common/whats-new.json', {
   eager: true,
@@ -27,6 +29,7 @@ let root: Root
 let translations: i18n
 let mounted: boolean
 const onClose = vi.fn()
+const onNavigate = vi.fn<(destination: WhatsNewResearchDestination) => void>()
 const openExternal = vi.fn()
 const scrollIntoView = vi.fn()
 const previousScrollIntoView = HTMLElement.prototype.scrollIntoView
@@ -34,7 +37,7 @@ const previousScrollIntoView = HTMLElement.prototype.scrollIntoView
 async function render(content: WhatsNewContent): Promise<void> {
   await act(async () => {
     root.render(createElement(I18nextProvider, { i18n: translations },
-      createElement(WhatsNewDialog, { content, onClose })))
+      createElement(WhatsNewDialog, { content, onClose, onNavigate })))
   })
 }
 
@@ -74,6 +77,72 @@ afterEach(async () => {
   host.remove()
   HTMLElement.prototype.scrollIntoView = previousScrollIntoView
   vi.unstubAllGlobals()
+})
+
+describe('0.4.6 update announcement', () => {
+  it.each(['zh', 'en', 'hi', 'ja', 'ko', 'ru', 'th'])('renders localized research previews, jump actions, and remaining features in %s', async (language) => {
+    await translations.changeLanguage(language)
+    const content = await release('v0.4.6', '0.4.5')
+    await render(content)
+    const copy = resources[language].common
+    expect(host.querySelector('[data-whats-new-dialog="release"]')).not.toBeNull()
+    expect(host.querySelector('[data-release-layout="research"]')).not.toBeNull()
+    expect(host.querySelector('[data-whats-new-research]')).not.toBeNull()
+    expect(host.querySelector('h2')?.textContent).toBe(copy.whatsNewResearchTitle)
+    expect(host.textContent).toContain(copy.whatsNewResearchNotebookTitle)
+    expect(host.textContent).toContain(copy.whatsNewResearchLatexBody)
+    expect(host.textContent).toContain(copy.whatsNewResearchQuotaBody)
+    expect(host.querySelectorAll('.kun-wn-preview[aria-hidden="true"]')).toHaveLength(3)
+    expect(host.querySelector('.kun-wn-intro')).toBeNull()
+    expect(host.textContent).not.toContain('whatsNewResearch')
+    expect(button('[data-whats-new-primary]')).toBe(document.activeElement)
+
+    const disclosure = button('[data-whats-new-more-features]')
+    const list = document.getElementById(disclosure.getAttribute('aria-controls')!)!
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+    expect(disclosure.querySelector('.kun-wn-count')?.textContent).toBe('5')
+    expect(disclosure.querySelectorAll('.kun-wn-more-pill')).toHaveLength(3)
+    expect(list.hidden).toBe(true)
+    await click('[data-whats-new-more-features]')
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
+    expect(disclosure.querySelector('.kun-wn-more-preview')).toBeNull()
+    expect(list.hidden).toBe(false)
+    const additionalTitles = [...list.querySelectorAll('strong')].map((element) => element.textContent)
+    expect(additionalTitles).toEqual(content.current?.features.slice(3).map((item) => item.title))
+    await click('[data-whats-new-fixes]')
+    expect(host.querySelectorAll('.kun-wn-fixes .kun-wn-fix-list > li')).toHaveLength(6)
+  })
+
+  it('routes card actions to Notebook, Work, and Agent settings while dismissing the dialog', async () => {
+    const content = await release('0.4.6', '0.4.5')
+    for (const destination of ['notebook', 'latex', 'agents'] as const) {
+      await render(content)
+      await click(`[data-whats-new-action="${destination}"]`)
+      expect(onNavigate).toHaveBeenLastCalledWith(destination)
+    }
+    expect(onClose).toHaveBeenCalledTimes(3)
+  })
+
+  it('keeps skipped 0.4.5 notes separate and falls back cleanly on incomplete feed notes', async () => {
+    const style = document.createElement('style')
+    style.textContent = `${baseStyles}\n${workbenchStyles}\n${researchStyles}`
+    document.head.append(style)
+    try {
+      await render(await release('0.4.6', '0.4.4'))
+      expect(host.querySelector('[data-whats-new-dialog="skipped"]')).not.toBeNull()
+      expect(button('.kun-wn-older button').textContent).toContain('0.4.5')
+      const fixesLabel = host.querySelector<HTMLElement>('.kun-wn-fixes .kun-wn-disclosure-label')!
+      expect(getComputedStyle(fixesLabel).flexGrow).toBe('0')
+    } finally {
+      style.remove()
+    }
+    await render({
+      version: '0.4.6', older: [], changelogUrl: '',
+      current: { version: '0.4.6', intro: '', features: [{ title: 'Single item', body: 'Short note.' }], fixes: [] }
+    })
+    expect(host.querySelector('[data-release-layout]')).toBeNull()
+    expect(host.querySelector('.kun-wn-highlights')?.textContent).toContain('Single item')
+  })
 })
 
 describe('0.4.5 update announcement', () => {

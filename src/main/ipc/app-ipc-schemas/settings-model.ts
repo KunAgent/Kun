@@ -5,6 +5,7 @@ import { HarnessProviderOverrideSchema } from '../../../../kun/src/config/kun-co
 import { z } from 'zod'
 import { GatewayMiddlewareSchema } from '../../../../kun/src/contracts/gateway-middleware.js'
 import { routePoolPatchesSchema } from './settings-route-pools'
+import { kunColabPatchSchema } from './settings-colab'
 import { AdeProjectDefaultsMapSchema } from '../../../shared/ade-project-defaults'
 import { ADE_DISPATCH_PREFERENCE_MAX_CHARS } from '../../../shared/ade-collaboration-settings'
 import { dispatchPreferencesSchema } from '../dispatch-preferences-schema'
@@ -596,6 +597,7 @@ export const kunRuntimePatchSchema = z.object({
   planExecution: z.object({
     useWorktreeByDefault: z.boolean().optional()
   }).strict().optional(),
+  colab: kunColabPatchSchema.optional(),
   harnesses: z.object({
     enabledProfiles: z.array(z.object({
       harnessId: z.string().trim().regex(/^[a-z0-9][a-z0-9._-]{0,127}$/),

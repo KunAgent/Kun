@@ -171,7 +171,7 @@ export class WriteReviewSession {
     this.afterResolve()
   }
 
-  resolveAll(action: 'accept' | 'reject'): void {
+  resolveAll(action: 'accept' | 'reject', preserveDraft = false): void {
     if (!this.active) return
     // Rejecting everything restores the pre-review document verbatim; the
     // restore and the cleared chunks go out as one transaction so no render
@@ -184,7 +184,8 @@ export class WriteReviewSession {
     tr.setMeta(writeRichExternalSyncMeta, true)
     tr.setMeta('addToHistory', false)
     this.editor.view.dispatch(tr)
-    this.afterResolve()
+    if (action === 'reject' && this.preReviewCtx) this.setCtx(this.preReviewCtx)
+    this.afterResolve(preserveDraft)
   }
 
   /** Plain-text before/after of each pending chunk for the review panel. */
@@ -216,10 +217,10 @@ export class WriteReviewSession {
     element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
   }
 
-  private afterResolve(): void {
+  private afterResolve(preserveDraft = false): void {
     const remaining = this.chunkCount()
     this.callbacks.onChunksChange(remaining)
-    if (remaining === 0) this.finish()
+    if (remaining === 0) this.finish(preserveDraft)
   }
 
   private parseSide(markdown: string): ParsedSide {
@@ -309,7 +310,7 @@ export class WriteReviewSession {
     return tr
   }
 
-  private finish(): void {
+  private finish(preserveDraft: boolean): void {
     if (!this.active) return
     const editor = this.editor
     const finalDoc = editor.state.doc
@@ -366,7 +367,7 @@ export class WriteReviewSession {
     const markdown = preReview && editor.state.doc.eq(preReview)
       ? this.baseline
       : serializeWorkDocument(editor.state.doc.toJSON(), this.getCtx())
-    this.callbacks.onFinish(markdown)
+    if (!preserveDraft) this.callbacks.onFinish(markdown)
     this.callbacks.onStateChange(false, this.origin)
   }
 }

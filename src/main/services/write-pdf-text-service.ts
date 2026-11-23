@@ -3,6 +3,7 @@ import { open, readFile, stat } from 'node:fs/promises'
 import { extname } from 'node:path'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { WorkspaceFileTarget } from '../../shared/workspace-file'
+import { logWarn } from '../logger'
 import { resolveOpenTargetPath } from './workspace-paths'
 
 const MAX_PDF_TEXT_BYTES = 64 * 1024 * 1024
@@ -32,6 +33,7 @@ export type WritePdfTextResult =
       hasText: boolean
       ocrApplied: boolean
       ocrPageCount: number
+      ocrError?: string
       truncated: boolean
     }
   | {
@@ -273,6 +275,7 @@ async function extractPdfText(
   const ocrCandidates: number[] = []
   let ocrApplied = false
   let ocrPageCount = 0
+  let ocrError: string | undefined
   let truncated = false
 
   try {
@@ -295,7 +298,9 @@ async function extractPdfText(
       let ocrTexts: Map<number, string>
       try {
         ocrTexts = await extractOcrPageTexts(document, pagesToOcr)
-      } catch {
+      } catch (error) {
+        ocrError = error instanceof Error ? error.message : String(error)
+        logWarn('write-pdf-ocr', `OCR fallback failed for ${targetPath}`, ocrError)
         ocrTexts = new Map()
       }
       for (const [pageNumber, text] of ocrTexts) {
@@ -320,6 +325,7 @@ async function extractPdfText(
     hasText: pageResults.pages.some((page) => page.text.trim().length > 0),
     ocrApplied,
     ocrPageCount,
+    ...(ocrError ? { ocrError } : {}),
     truncated: pageResults.truncated
   }
 }

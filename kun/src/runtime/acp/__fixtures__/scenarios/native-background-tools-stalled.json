@@ -1,0 +1,25 @@
+{
+  "sessionId": "native-background-stalled",
+  "newSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [{ "id": "ask", "name": "Ask" }, { "id": "auto", "name": "Auto" }]
+    }
+  },
+  "turns": [
+    {
+      "promptIncludes": "Prepare follow-up run",
+      "steps": [{ "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Ready." } } }],
+      "response": { "stopReason": "end_turn", "usage": { "inputTokens": 1, "outputTokens": 1, "totalTokens": 2 } }
+    },
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "tool_call", "toolCallId": "typecheck", "kind": "execute", "title": "npm run typecheck", "status": "in_progress" } }
+      ],
+      "response": { "stopReason": "end_turn", "usage": { "inputTokens": 10, "outputTokens": 2, "totalTokens": 12 } }
+    },
+    { "response": { "stopReason": "end_turn", "usage": { "inputTokens": 10, "outputTokens": 2, "totalTokens": 12 } } },
+    { "response": { "stopReason": "end_turn", "usage": { "inputTokens": 10, "outputTokens": 2, "totalTokens": 12 } } },
+    { "response": { "stopReason": "end_turn", "usage": { "inputTokens": 10, "outputTokens": 2, "totalTokens": 12 } } }
+  ]
+}

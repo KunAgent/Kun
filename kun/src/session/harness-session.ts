@@ -82,6 +82,8 @@ export type HarnessSessionStartInput = {
   threadId: string
   turnId: string
   workspacePath: string
+  /** Canonical root set (primary first); transports that cannot enforce it are rejected upstream. */
+  workspaceRoots?: readonly string[]
   harnessId: string
   model?: string
   reasoningEffort?: string
@@ -111,6 +113,8 @@ export type HarnessTurnInput = {
   attachmentPaths: readonly string[]
   fileReferences: readonly UserFileReference[]
   workspacePath: string
+  /** Canonical root set handed to transports that can enforce extra roots. */
+  workspaceRoots?: readonly string[]
   model?: string
   reasoningEffort?: string
   /** Deterministic handoff brief when the native session is fresh. */

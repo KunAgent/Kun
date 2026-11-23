@@ -20,7 +20,7 @@ export function acpToolPresentation(item: CoreTurnItemJson): {
     acpInput: side.input ?? args.rawInput,
     acpOutput: side.output,
     acpText: string(side.text) ?? (item.kind === 'tool_result' && typeof item.output === 'string' ? item.output : string(output.text)),
-    acpFileContent: string(side.fileContent), acpDiffs: diffs,
+    acpFileContent: typeof side.fileContent === 'string' ? side.fileContent : undefined, acpDiffs: diffs,
     acpTerminals: Array.isArray(side.terminals) ? side.terminals : undefined,
     acpTruncated: side.truncated,
     command, cwd: string(side.cwd) ?? string(rawInput.cwd),

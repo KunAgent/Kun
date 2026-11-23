@@ -479,6 +479,8 @@ export const ThreadListSummarySchema = ThreadSummarySchema.omit({
 export type ThreadListSummary = z.infer<typeof ThreadListSummarySchema>
 
 export const CreateThreadRequest = z.object({
+  /** A private, tool-free Work discussion shown inside its document. */
+  purpose: z.literal('work-annotation').optional(),
   title: z.string().optional(),
   /** Marks the provided title as an auto/provisional title (see ThreadSchema.titleAuto). */
   titleAuto: z.boolean().optional(),

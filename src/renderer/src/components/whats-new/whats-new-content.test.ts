@@ -107,6 +107,39 @@ describe('loadWhatsNewContent', () => {
     expect(content.older.map((summary) => summary.version)).toEqual(['0.4.4'])
   })
 
+  it.each(['zh', 'en'] as const)('loads bundled 0.4.6 in %s and skips compatibility notes', async (language) => {
+    const changelogUrl = 'https://github.com/KunAgent/Kun/compare/v0.4.5...v0.4.6'
+    const content = await loadWhatsNewContent(
+      { version: 'v0.4.6', previousVersion: 'v0.4.5', changelogUrl },
+      language
+    )
+    expect(content.version).toBe('0.4.6')
+    expect(content.current?.intro).toContain(language === 'zh' ? '0.4.6 把实验训练' : 'Kun 0.4.6 connects')
+    expect(content.current?.features).toHaveLength(8)
+    expect(content.current?.fixes).toHaveLength(6)
+    const highlights = content.current ? pickHighlights(content.current) : null
+    expect(highlights?.highlights.map((item) => item.title)).toEqual(language === 'zh'
+      ? ['Colab 与 Jupyter Notebook', 'LaTeX 论文项目', 'Antigravity ACP 接入与配额看板']
+      : ['Colab and Jupyter Notebooks', 'LaTeX paper projects', 'Antigravity ACP and quota insights'])
+    expect(content.current?.features[7]?.title).toBe(
+      language === 'zh' ? '独立 CLI 候选包与非交互保护' : 'Standalone CLI candidates and noninteractive guards'
+    )
+    expect(content.current?.fixes[0]?.title).toBe(
+      language === 'zh' ? '外部 Agent 审批请求' : 'External Agent approvals'
+    )
+    expect(content.older).toEqual([])
+    expect(content.previousVersion).toBe('0.4.5')
+    expect(content.changelogUrl).toBe(changelogUrl)
+  })
+
+  it('keeps 0.4.5 in the history when upgrading to 0.4.6 from 0.4.4', async () => {
+    const content = await loadWhatsNewContent(
+      { version: '0.4.6', previousVersion: '0.4.4', changelogUrl: '' }, 'zh'
+    )
+    expect(content.current?.version).toBe('0.4.6')
+    expect(content.older.map((summary) => summary.version)).toEqual(['0.4.5'])
+  })
+
   it('maps UI locales to the two release-note languages', () => {
     expect(releaseNotesLanguage('zh')).toBe('zh')
     expect(releaseNotesLanguage('zh-CN')).toBe('zh')

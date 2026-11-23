@@ -6,6 +6,7 @@ import {
 } from '../cache/cache-diagnostics.js'
 import { analyzeCacheRegression, cacheRegressionSeverityRank } from '../cache/cache-regression.js'
 import type {
+  AgentUsageBucket,
   DailyUsageBucket,
   DailyUsageCounters,
   DailyUsageResponse,
@@ -78,6 +79,11 @@ export type ThreadUsageAccumulator = ThreadUsageBucket & {
 export type ModelUsageAccumulator = ModelUsageBucket & {
   threadIds: Set<string>
   harnessIds: Set<string>
+  hasCacheTelemetry: boolean
+}
+
+export type AgentUsageAccumulator = AgentUsageBucket & {
+  threadIds: Set<string>
   hasCacheTelemetry: boolean
 }
 
