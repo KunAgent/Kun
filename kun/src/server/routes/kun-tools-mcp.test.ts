@@ -22,6 +22,7 @@ import type { ApprovalRequest } from '../../domain/approval.js'
 const NOW = '2026-01-01T00:00:00.000Z'
 
 type FixtureOptions = {
+  harnessId?: string
   runningTurn?: boolean
   workerThread?: boolean
   catalog?: CapabilityToolSpec[]
@@ -107,7 +108,7 @@ function makeFixture(options: FixtureOptions = {}) {
   const tokens = new HarnessTokenService()
   const token = tokens.issue({
     threadId: thread.id,
-    harnessId: 'devin',
+    harnessId: options.harnessId ?? 'devin',
     credentialIdentity: 'cred:test',
     scopes: ['kun-tools']
   })
@@ -263,6 +264,54 @@ describe('kun tools MCP route', () => {
     expect(tool.inputSchema).not.toHaveProperty('oneOf')
     expect(tool.inputSchema.type).toBe('object')
     expect(tool.inputSchema.required).toEqual(['action'])
+  })
+
+  it.each(['antigravity', 'devin'])('projects %s tools/list using the authenticated harness and keeps numeric call arguments', async (harnessId) => {
+    const schema = { type: 'object', properties: { duration: { type: 'integer', enum: [6, 10] } } }
+    const execute = vi.fn(async (call: { arguments: Record<string, unknown> }) => ({ item: { kind: 'tool_result', output: call.arguments }, approved: false }))
+    const { runtime, token } = makeFixture({ harnessId, execute: execute as never,
+      catalog: [{ name: 'generate_video', description: 'Generate video', inputSchema: schema }] as unknown as CapabilityToolSpec[] })
+    const listed = await post(runtime, rpc('tools/list', { harnessId: harnessId === 'antigravity' ? 'devin' : 'antigravity' }), token)
+    const duration = (await listed.json()).result.tools[0].inputSchema.properties.duration
+    if (harnessId === 'antigravity') {
+      expect(duration).toEqual({ type: 'integer', minimum: 6, maximum: 10, description: 'Allowed values: 6, 10.' })
+    } else expect(duration).toEqual({ type: 'integer', enum: [6, 10] })
+    expect(schema.properties.duration.enum).toEqual([6, 10])
+    await post(runtime, rpc('tools/call', { name: 'generate_video', arguments: { duration: 10 } }), token)
+    expect(execute.mock.calls[0]?.[0].arguments).toEqual({ duration: 10 })
+  })
+
+  it('marks Antigravity eager MCP tools with _meta alwaysLoad when name fits Gemini limits and leaves external MCP tools lazy', async () => {
+    const longName = 'tool_name_exceeding_fifty_characters_for_gemini_limit'
+    const catalog = [
+      { name: 'design_open', description: 'Design canvas', inputSchema: { type: 'object', properties: {} } },
+      { name: longName, description: 'Too long', inputSchema: { type: 'object', properties: {} } },
+      {
+        name: 'mcp_kun_canvas_canvas_create',
+        description: 'External canvas tool',
+        providerId: 'mcp:kun_canvas',
+        providerKind: 'mcp',
+        inputSchema: { type: 'object', properties: {} }
+      }
+    ] as unknown as CapabilityToolSpec[]
+
+    const antigravity = makeFixture({ harnessId: 'antigravity', catalog })
+    const agyListed = await post(antigravity.runtime, rpc('tools/list', undefined, 'agy-1'), antigravity.token)
+    const agyTools = (await agyListed.json()).result.tools as Array<{ name: string; _meta?: Record<string, unknown> }>
+    expect(agyTools).toEqual([
+      expect.objectContaining({ name: 'design_open', _meta: { 'antigravity/alwaysLoad': true } }),
+      expect.not.objectContaining({ _meta: expect.anything() }),
+      expect.not.objectContaining({ _meta: expect.anything() })
+    ])
+    expect(agyTools[1]?.name).toBe(longName)
+    expect(agyTools[1]?._meta).toBeUndefined()
+    expect(agyTools[2]?.name).toBe('mcp_kun_canvas_canvas_create')
+    expect(agyTools[2]?._meta).toBeUndefined()
+
+    const devin = makeFixture({ harnessId: 'devin', catalog })
+    const devinListed = await post(devin.runtime, rpc('tools/list', undefined, 'devin-1'), devin.token)
+    const devinTools = (await devinListed.json()).result.tools as Array<{ name: string; _meta?: Record<string, unknown> }>
+    expect(devinTools[0]?._meta).toBeUndefined()
   })
 
   it('returns a tool error when no turn is running', async () => {

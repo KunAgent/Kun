@@ -21,6 +21,7 @@ import { probeAcpHandshake } from '../../harness/acp-handshake-probe.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 import { cursorHarnessModelInfo } from '../../harness/cursor-subscription-catalog.js'
+import { harnessWorkspaceSupport } from '../../runtime/workspace-roots.js'
 
 /**
  * `GET /v1/harnesses` — definitions plus detection status. With `wait_ms`
@@ -58,9 +59,12 @@ export async function listHarnesses(
         return status?.detecting === true || harnesses.detector.detecting(definition.id)
       })
       .map((definition) => harnesses.detector.status(definition.id).catch(() => undefined))
-    if (pending.length > 0) {
+    const warming = harnesses.readiness?.waitForWarming
+      ? [harnesses.readiness.waitForWarming(list.map((definition) => definition.id), waitMs)]
+      : []
+    if (pending.length > 0 || warming.length > 0) {
       await Promise.race([
-        Promise.allSettled(pending),
+        Promise.allSettled([...pending, ...warming]),
         new Promise((resolve) => setTimeout(resolve, waitMs))
       ])
       for (const definition of list) {
@@ -92,7 +96,9 @@ export async function listHarnesses(
       // Warming already started for every row above; only report its state.
       // A background refresh of a valid proof is not "detecting" (the Agent stays usable).
       if (harnesses.readiness?.verifying(definition.id)) status.detecting = true
-      const row: Record<string, unknown> = { definition, status, enabled: !harnesses.catalog.isDisabled(definition.id), enabledProfiles, readyProfiles }
+      const row: Record<string, unknown> = { definition, status, enabled: !harnesses.catalog.isDisabled(definition.id), enabledProfiles, readyProfiles,
+        // Host-derived from the transport; a custom manifest cannot claim it.
+        workspaceSupport: harnessWorkspaceSupport(definition.transport) }
       if (usage && runtime.harnessAdmission && status) {
         row.admission = await runtime
           .harnessAdmission({ definition, status, usage })
@@ -329,9 +335,11 @@ export async function listHarnessModels(
       if (definition.transport === 'acp' && harnesses.acpModels?.probeCatalog) {
         if (selectedModelParam && selectedModelParam.length > 1024) return ERRORS.validation('invalid model id')
         // A catalog from a previous Runtime is useful until the Agent changes.
-        // An explicit refresh and a per-model detail lookup still ask the Agent.
-        const kept = !refresh && !selectedModelParam ? harnesses.modelCatalogs?.get(definition) : undefined
-        if (kept) return reply({ harnessId: definition.id, ...kept.catalog }, 'cache', kept.fetchedAt)
+        // An explicit refresh and an unlearned per-model detail lookup still ask the Agent.
+        const kept = !refresh ? harnesses.modelCatalogs?.get(definition) : undefined
+        if (kept && (!selectedModelParam || kept.catalog.modelInfo?.find((entry) => entry.id === selectedModelParam)?.reasoningEfforts !== undefined)) {
+          return reply({ harnessId: definition.id, ...kept.catalog }, 'cache', kept.fetchedAt)
+        }
         return replyCatalog(await harnesses.acpModels.probeCatalog(definition, selectedModelParam))
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {

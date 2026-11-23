@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import type { ProviderQuotaMetric } from '@shared/provider-quota'
 import {
+  formatCompoundResetIn,
   formatPercent,
   quotaCountText,
   quotaFillPercent,
@@ -188,5 +189,84 @@ export function QuotaRingMeter({ metric, mode, now, locale, onToggleMode }: Mete
         <span className="kq-ring-name">{short}</span>
       )}
     </button>
+  )
+}
+
+const INLINE_RING_RADIUS = 7
+const INLINE_RING_LENGTH = 2 * Math.PI * INLINE_RING_RADIUS
+
+export function QuotaGroupedRowMeter({
+  metric,
+  windowTitle,
+  mode,
+  now,
+  onToggleMode,
+  onChangeMode
+}: MeterProps & { windowTitle: string; onChangeMode?: (mode: QuotaDisplayMode) => void }): ReactElement {
+  const { t } = useTranslation('common')
+  let explicitUsedMode = false
+  try {
+    explicitUsedMode = typeof window !== 'undefined' &&
+      window.localStorage?.getItem('kun.quota.displayMode') === 'used'
+  } catch {
+    explicitUsedMode = false
+  }
+  const effectiveMode: QuotaDisplayMode = mode === 'left' || !explicitUsedMode ? 'left' : 'used'
+  const used = quotaUsedPercent(metric) ?? 0
+  const fill = quotaFillPercent(used, effectiveMode)
+  const shareText = `${formatPercent(fill)} ${effectiveMode === 'left' ? 'left' : 'used'}`
+  const reset = metric.resetsAt ? formatCompoundResetIn(metric.resetsAt, now) : undefined
+  const handleToggle = (): void => {
+    if (onChangeMode) {
+      onChangeMode(effectiveMode === 'left' ? 'used' : 'left')
+      return
+    }
+    onToggleMode()
+  }
+  return (
+    <div
+      className="kq-meter kq-grouped-row"
+      data-quota-metric={metric.id}
+      data-severity={quotaSeverity(used)}
+    >
+      <div className="kq-grouped-row-main">
+        <div className="kq-grouped-row-copy">
+          <span className="kq-meter-name">{windowTitle}</span>
+          {reset ? (
+            <p className="kq-reset">
+              <span>{reset}</span>
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="kq-meter-value kq-grouped-row-value"
+          onClick={handleToggle}
+          title={`${shareText}\n${modeToggleTitle(effectiveMode, t)}`}
+        >
+          <span>{shareText}</span>
+          <span
+            className="kq-inline-ring"
+            role="progressbar"
+            aria-label={metric.label}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.round(fill)}
+            aria-valuetext={shareText}
+          >
+            <svg viewBox="0 0 20 20" aria-hidden="true">
+              <circle className="kq-inline-ring-track" cx="10" cy="10" r={INLINE_RING_RADIUS} />
+              <circle
+                className="kq-inline-ring-fill"
+                cx="10"
+                cy="10"
+                r={INLINE_RING_RADIUS}
+                strokeDasharray={`${(fill / 100) * INLINE_RING_LENGTH} ${INLINE_RING_LENGTH}`}
+              />
+            </svg>
+          </span>
+        </button>
+      </div>
+    </div>
   )
 }

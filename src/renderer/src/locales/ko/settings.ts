@@ -24,6 +24,7 @@ import assistantMailboxSettings from './settings/assistant-mailbox.json'
 import terminalDock from './settings/terminal-dock.json'
 import storageCleanup from './settings/storage-cleanup.json'
 import pets from './settings/pets.json'
+import colab from './settings/colab.json'
 
 const settings = {
   ...providerConfiguration,
@@ -51,7 +52,8 @@ const settings = {
   ...assistantMailboxSettings,
   ...terminalDock,
   ...storageCleanup,
-  ...pets
+  ...pets,
+  ...colab
 }
 
 export default settings

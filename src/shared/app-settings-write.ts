@@ -1,3 +1,4 @@
+import { normalizeLatexSettings } from './latex-project'
 import {
   DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL,
   DEFAULT_WRITE_INLINE_COMPLETION_DEBOUNCE_MS,
@@ -336,6 +337,7 @@ export function normalizeWritePaperReadingSettings(
 
 export function defaultWriteSettings(): WriteSettingsV1 {
   return {
+    latex: normalizeLatexSettings(),
     defaultWorkspaceRoot: DEFAULT_WRITE_WORKSPACE_ROOT,
     activeWorkspaceRoot: DEFAULT_WRITE_WORKSPACE_ROOT,
     workspaces: [DEFAULT_WRITE_WORKSPACE_ROOT],
@@ -536,6 +538,7 @@ export function normalizeWriteSettings(input: WriteSettingsPatchV1 | undefined):
   ])
   const autoSaveDelayMs = Number(source.autoSaveDelayMs)
   return {
+    latex: normalizeLatexSettings(source.latex),
     defaultWorkspaceRoot,
     activeWorkspaceRoot,
     workspaces: workspaces.length > 0 ? workspaces : [defaultWorkspaceRoot],
@@ -591,6 +594,7 @@ export function mergeWriteSettings(
   return normalizeWriteSettings({
     ...current,
     ...(patch ?? {}),
+    latex: { ...current.latex, ...patch?.latex },
     inlineCompletion: nextInlineCompletion,
     selectionAssist: nextSelectionAssist,
     typography: nextTypography,

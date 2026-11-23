@@ -166,11 +166,10 @@ export const CUSTOM_SPEECH_TO_TEXT_PROVIDER_ID = 'custom'
 
 export const SPEECH_TO_TEXT_PROTOCOLS = [
   'openai-transcriptions',
+  'deepseek-asr',
   'mimo-asr',
   'xai-stt',
-  'gemini-audio',
-  'gemini-cli-audio',
-  'local-whisper'
+  'gemini-audio', 'gemini-cli-audio', 'local-whisper'
 ] as const
 
 export type SpeechToTextProtocol = (typeof SPEECH_TO_TEXT_PROTOCOLS)[number]
@@ -179,7 +178,7 @@ export const DEFAULT_SPEECH_TO_TEXT_PROTOCOL: SpeechToTextProtocol = 'openai-tra
 
 export const CUSTOM_TEXT_TO_SPEECH_PROVIDER_ID = 'custom'
 
-export const TEXT_TO_SPEECH_PROTOCOLS = ['openai-speech', 'minimax-t2a', 'mimo-tts'] as const
+export const TEXT_TO_SPEECH_PROTOCOLS = ['openai-speech', 'deepseek-tts', 'minimax-t2a', 'mimo-tts'] as const
 
 export type TextToSpeechProtocol = (typeof TEXT_TO_SPEECH_PROTOCOLS)[number]
 

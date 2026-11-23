@@ -14,6 +14,8 @@ import { Extension, InputRule } from '@tiptap/core'
 import { Plugin, TextSelection } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import i18n from '../../i18n'
+import { annotateWorkSelection } from '../annotations/selection-target'
 import { bodyZoom, toLayoutPx } from '../../lib/body-zoom'
 
 type MathKind = 'block' | 'inline'
@@ -53,10 +55,12 @@ function renderKatexPreview(preview: HTMLElement, latex: string, displayMode: bo
 
 // The math extensions' `onClick` option only receives (node, pos); the
 // editor reference is stashed when the extension instance is created.
-let mathEditorRef: Editor | null = null
+const mathEditors = new Set<Editor>()
 
 export function mathEditorFor(node: PmNode, pos: number, kind: MathKind): void {
-  if (mathEditorRef) openMathEditor(mathEditorRef, node, pos, kind)
+  const owner = [...mathEditors].find((editor) =>
+    !editor.isDestroyed && pos <= editor.state.doc.content.size && editor.state.doc.nodeAt(pos) === node)
+  if (owner) openMathEditor(owner, node, pos, kind)
 }
 
 export function openMathEditor(editor: Editor, node: PmNode, pos: number, kind: MathKind): void {
@@ -116,10 +120,38 @@ export function openMathEditor(editor: Editor, node: PmNode, pos: number, kind: 
       editor.commands.focus()
     }
   })
-  textarea.addEventListener('blur', () => {
-    // Blur fires when clicking inside the preview box is impossible, so any
-    // blur means the editor lost focus — save like the plan specifies.
-    save()
+  const pane = host.closest<HTMLElement>('[data-work-annotation-file]')
+  const file = pane?.dataset.workAnnotationFile, workspace = pane?.dataset.workAnnotationRoot
+  if (workspace && file) {
+    const annotate = document.createElement('button')
+    annotate.type = 'button'
+    annotate.className = 'write-review-button self-start'
+    annotate.textContent = i18n.t('common:writePaperReaderComment')
+    annotate.addEventListener('mousedown', (event) => event.preventDefault())
+    annotate.addEventListener('click', () => {
+      const { selectionStart: from, selectionEnd: to, value } = textarea
+      const part = to > from && to - from < value.length ? { from, to } : undefined
+      const text = part ? value.slice(from, to) : value
+      if (!text.trim()) return
+      if (value === node.attrs.latex) close()
+      else save()
+      window.requestAnimationFrame(() => {
+        if (editor.isDestroyed || !host.isConnected || editor.state.doc.nodeAt(pos)?.attrs.latex !== value) return
+        const dom = editor.view.nodeDOM(pos)
+        const rect = dom instanceof Element ? dom.getBoundingClientRect() : undefined
+        annotateWorkSelection(workspace, file, {
+          text, charCount: text.length, ranges: [], anchorRect: rect,
+          richRange: { from: pos, to: pos + node.nodeSize, ...(part ? { latexRange: part } : {}) }
+        })
+      })
+    })
+    box.append(annotate)
+  }
+  box.addEventListener('focusout', (event) => {
+    if (!(event.relatedTarget instanceof Node) || !box.contains(event.relatedTarget)) save()
+  })
+  textarea.addEventListener('blur', (event) => {
+    if (!(event.relatedTarget instanceof Node) || !box.contains(event.relatedTarget)) save()
   })
   overlay.addEventListener('mousedown', (event) => {
     if (event.target === overlay) {
@@ -153,11 +185,11 @@ export const WriteMathInput = Extension.create({
   },
 
   onCreate() {
-    mathEditorRef = this.editor
+    mathEditors.add(this.editor)
   },
 
   onDestroy() {
-    if (mathEditorRef === this.editor) mathEditorRef = null
+    mathEditors.delete(this.editor)
   },
 
   addKeyboardShortcuts() {

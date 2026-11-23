@@ -12,6 +12,7 @@
 .pet-toolbar button:disabled { color: #a3a3ad; cursor: default; }
 .pet-toolbar button:focus-visible, .pet-quick-composer button:focus-visible { outline: 2px solid #a58be5; outline-offset: 2px; }
 .pet-toolbar svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pet-toolbar button[data-enabled='true'] { background: #e9e2f8; color: #6f51c0; }
 .pet-toolbar button[data-recording='true'] { color: #db3a52; background: #fff0f2; }
 .pet-toolbar button[data-recording='true'] svg { animation: pet-voice-pulse .8s ease-in-out infinite alternate; }
 .pet-toolbar-count { position: absolute; top: -9px; right: -4px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; border: 2px solid #fff; background: #a47ce8; color: #fff; font: 600 10px/14px system-ui, sans-serif; }

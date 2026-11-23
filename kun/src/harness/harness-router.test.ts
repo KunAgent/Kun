@@ -53,6 +53,29 @@ describe('HarnessRouter', () => {
     } } })
     expect(router.resolve(thread(), turn({ harnessId: 'opencode', credentialMode: 'native-login', providerId: undefined })).ok).toBe(false)
   })
+  it('rejects extra workspace roots on transports that cannot enforce them', () => {
+    const router = makeRouter({ runtimes: () => ({
+      acp: stubRuntime(),
+      'cursor-sdk': stubRuntime(),
+      'agent-sdk': stubRuntime({ capabilities: () => agentSdkCapabilities() })
+    }) })
+    for (const harnessId of ['opencode2', 'cursor']) {
+      const result = router.resolve(
+        thread({ additionalWorkspaces: ['/repo/api'] }),
+        turn({ harnessId, credentialMode: 'native-login', providerId: undefined })
+      )
+      expect(result).toMatchObject({ ok: false, error: { code: 'route_unsupported' } })
+    }
+    // Claude and the native loop keep multi-directory support.
+    expect(router.resolve(
+      thread({ additionalWorkspaces: ['/repo/api'] }),
+      turn({ harnessId: 'claude-code', credentialMode: 'native-login', providerId: undefined })
+    ).ok).toBe(true)
+    expect(router.resolve(
+      thread({ additionalWorkspaces: ['/repo/api'] }), turn({ providerId: 'default' })
+    ).ok).toBe(true)
+  })
+
   it('blocks Kun canvas and Graph lead intent even when the external engine has Kun tools', () => {
     const router = makeRouter({ runtimes: () => ({
       'agent-sdk': stubRuntime({ capabilities: () => agentSdkCapabilities() })

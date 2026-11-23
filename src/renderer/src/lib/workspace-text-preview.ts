@@ -91,6 +91,56 @@ export function isWorkspacePreviewPath(path: string): boolean {
   return Boolean(basename(path))
 }
 
+const EXPLICIT_LOCAL_PATH_RE = /^(?:\/|~[\\/]|[A-Za-z]:[\\/]|\\\\|\/\/[^\\/]+[\\/][^\\/]+)/
+
+function trimWorkspaceRootForCompare(workspaceRoot: string): string {
+  const normalized = workspaceRoot.trim().replaceAll('\\', '/')
+  if (!normalized) return ''
+  if (normalized === '/') return '/'
+  if (/^[A-Za-z]:\/+$/.test(normalized)) return `${normalized.slice(0, 2)}/`
+  return normalized.replace(/\/+$/, '')
+}
+
+function isCaseInsensitivePreviewPath(path: string, workspaceRoot: string): boolean {
+  if (typeof window !== 'undefined' && window.kunGui?.platform === 'win32') return true
+  return (
+    /^[A-Za-z]:\//.test(path) ||
+    /^[A-Za-z]:\//.test(workspaceRoot) ||
+    path.startsWith('//') ||
+    workspaceRoot.startsWith('//')
+  )
+}
+
+/**
+ * True when `path` is an explicit absolute/home raster image path outside
+ * `workspaceRoot` without `..` traversal segments, so image preview can read
+ * the local image without weakening workspace-relative or symlink checks.
+ */
+export function isExternalLocalImagePreviewPath(path: string, workspaceRoot?: string): boolean {
+  const trimmed = path.trim()
+  if (!trimmed || !isWorkspaceRasterImagePreviewPath(trimmed) || !EXPLICIT_LOCAL_PATH_RE.test(trimmed)) {
+    return false
+  }
+  const normalizedPath = trimmed.replaceAll('\\', '/')
+  if (normalizedPath.split('/').some((segment) => segment === '..')) {
+    return false
+  }
+  const normalizedRoot = trimWorkspaceRootForCompare(workspaceRoot ?? '')
+  if (!normalizedRoot) return true
+  const caseInsensitive = isCaseInsensitivePreviewPath(normalizedPath, normalizedRoot)
+  const comparablePath = caseInsensitive ? normalizedPath.toLowerCase() : normalizedPath
+  const comparableRoot = caseInsensitive ? normalizedRoot.toLowerCase() : normalizedRoot
+  if (comparableRoot.endsWith('/')) {
+    const bareRoot = comparableRoot.slice(0, -1)
+    if (comparablePath === bareRoot || comparablePath.startsWith(comparableRoot)) return false
+    return true
+  }
+  if (comparablePath === comparableRoot || comparablePath.startsWith(`${comparableRoot}/`)) {
+    return false
+  }
+  return true
+}
+
 /** Text-backed kinds that go through `readWorkspaceFile`. */
 export function isWorkspaceTextBackedPreviewKind(kind: WorkspaceFilePreviewKind): boolean {
   return kind === 'text' || kind === 'markdown' || kind === 'json' || kind === 'html' || kind === 'svg' || kind === 'table'

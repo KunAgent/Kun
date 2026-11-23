@@ -1,11 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createAccountTransport } from './transport'
-import { KUN_ACCOUNT_SUPABASE } from './config'
+import { KUN_ACCOUNT_ISSUER } from './config'
 
-function fixture() {
+function fixture(supabaseUrl = KUN_ACCOUNT_ISSUER) {
   const fetcher = vi.fn(async (input: URL | RequestInfo, _options?: RequestInit): Promise<Response> => {
     const url = String(input)
-    if (url.endsWith('/auth/config')) return Response.json({ supabase_url: KUN_ACCOUNT_SUPABASE, publishable_key: 'sb_publishable_test', oauth_enabled: true, providers: { email: true, google: false } })
+    const discovery = new URL(url)
+    if (discovery.pathname === '/auth/config') {
+      return Response.json({
+        supabase_url: discovery.searchParams.get('transport') === 'gateway' ? supabaseUrl : 'https://legacy.supabase.co',
+        publishable_key: 'sb_publishable_test', oauth_enabled: true,
+        providers: { email: true, google: true, github: true }
+      })
+    }
     if (url.endsWith('/oauth/token')) return Response.json({ access_token: 'access', refresh_token: 'refresh', expires_in: 3600, token_type: 'bearer' })
     if (url.endsWith('/oauth/userinfo')) return Response.json({ sub: 'user-id', email: 'test@example.test', name: 'Name' })
     if (url.endsWith('/api/me')) return Response.json({ id: 'user-id', display_name: 'Display', avatar_url: 'javascript:alert(1)' })
@@ -15,18 +22,26 @@ function fixture() {
   return { fetcher, transport: createAccountTransport(fetcher, 'desktop-client', () => 1000) }
 }
 describe('Kun desktop OAuth transport', () => {
-  it('uses application token exchange and verifies UserInfo against the RLS profile', async () => {
+  it('selects the gateway when default discovery advertises a legacy transport', async () => {
     const f = fixture()
     const tokens = await f.transport.exchange({ grant_type: 'authorization_code', code: 'c', code_verifier: 'v' })
     expect(tokens.expiresAt).toBe(3601000)
+    expect(String(f.fetcher.mock.calls[0][0])).toBe(`${KUN_ACCOUNT_ISSUER}/auth/config?transport=gateway`)
     const call = f.fetcher.mock.calls.find(([url]) => String(url).endsWith('/oauth/token'))!
+    expect(String(call[0])).toBe(`${KUN_ACCOUNT_ISSUER}/auth/v1/oauth/token`)
     const fields = new URLSearchParams(String(call[1]?.body))
     expect(fields.get('client_id')).toBe('desktop-client')
     expect(fields.has('client_secret')).toBe(false)
     expect(call[1]?.redirect).toBe('error')
     expect(await f.transport.user('access')).toEqual({ id: 'user-id', email: 'test@example.test', name: 'Display', avatarUrl: null })
+    const userinfoCall = f.fetcher.mock.calls.find(([url]) => String(url).endsWith('/oauth/userinfo'))!
+    expect(String(userinfoCall[0])).toBe(`${KUN_ACCOUNT_ISSUER}/auth/v1/oauth/userinfo`)
+    const original = f.fetcher.getMockImplementation()!
+    f.fetcher.mockImplementation((url, options) => String(url).endsWith('/oauth/userinfo') ? Promise.resolve(Response.json({ sub: 'user-id', name: 'GitHub User' })) : original(url, options))
+    expect(await f.transport.user('access')).toEqual({ id: 'user-id', email: '', name: 'Display', avatarUrl: null })
+    f.fetcher.mockImplementation(original)
     await f.transport.logout('access')
-    expect(String(f.fetcher.mock.calls.at(-1)?.[0])).toContain('/logout?scope=local')
+    expect(String(f.fetcher.mock.calls.at(-1)?.[0])).toBe(`${KUN_ACCOUNT_ISSUER}/auth/v1/logout?scope=local`)
   })
   it('does not send credentials to an untrusted discovery origin', async () => {
     const f = fixture()
@@ -34,12 +49,15 @@ describe('Kun desktop OAuth transport', () => {
     await expect(f.transport.exchange({ grant_type: 'refresh_token', refresh_token: 'private' })).rejects.toMatchObject({ code: 'configuration' })
     expect(f.fetcher).toHaveBeenCalledOnce()
   })
-  it('rejects identity mismatches and never exposes upstream error details', async () => {
+  it('rejects identity mismatches and treats invalid_grant or invalid_token as expired without exposing upstream details', async () => {
     const f = fixture()
     const original = f.fetcher.getMockImplementation()!
     f.fetcher.mockImplementation((url, options) => String(url).endsWith('/api/me') ? Promise.resolve(Response.json({ id: 'someone-else' })) : original(url, options))
     await expect(f.transport.user('access')).rejects.toMatchObject({ code: 'expired' })
-    f.fetcher.mockResolvedValueOnce(Response.json({ error: 'invalid_grant', error_description: 'private upstream detail' }, { status: 400 }))
-    await expect(f.transport.exchange({ grant_type: 'refresh_token', refresh_token: 'private' })).rejects.toMatchObject({ message: 'expired' })
+    for (const error of ['invalid_grant', 'invalid_token']) {
+      f.fetcher.mockImplementation(original)
+      f.fetcher.mockResolvedValueOnce(Response.json({ error, error_description: 'private upstream detail' }, { status: 400 }))
+      await expect(f.transport.exchange({ grant_type: 'refresh_token', refresh_token: 'private' })).rejects.toMatchObject({ code: 'expired', message: 'expired' })
+    }
   })
 })

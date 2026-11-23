@@ -90,13 +90,19 @@ describe('orphaned application Manager recovery', () => {
     expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
   })
 
-  it.each([false, true])('stops orphaned Runtimes before the Manager (stuck Runtime: %s)', async (ignoreTerm) => {
+  it.each([
+    { ignoreTerm: false, missingDiscovery: false },
+    { ignoreTerm: true, missingDiscovery: false },
+    { ignoreTerm: false, missingDiscovery: true },
+    { ignoreTerm: true, missingDiscovery: true }
+  ])('stops orphaned Runtimes before the Manager (stuck Runtime: $ignoreTerm, unpublished Manager: $missingDiscovery)', async ({ ignoreTerm, missingDiscovery }) => {
     const f = await fixture()
     const runtime = await childProcess(ignoreTerm)
     const otherRuntime = await childProcess()
     const unrelated = await childProcess()
     await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
     await f.reservation.recordProcess({ pid: otherRuntime.pid!, instanceId: 'other-runtime-instance' })
+    if (missingDiscovery) await rm(join(f.profile.controlDir, 'manager.json'))
     const kill = process.kill.bind(process)
     const signals: Array<{ pid: number; signal: string | number | undefined }> = []
     vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
@@ -122,6 +128,54 @@ describe('orphaned application Manager recovery', () => {
       ownerProcessIdentity: identity.requireRuntimeProcessIdentity()
     } })
     await next.release()
+  })
+
+  it('escalates a recorded Manager stuck after unpublishing discovery', async () => {
+    const f = await fixture({ ignoreTerm: true })
+    await rm(join(f.profile.controlDir, 'manager.json'))
+    await f.recover()
+    expect(f.child.signalCode).toBe('SIGKILL')
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(false)
+  })
+
+  it('rejects an invalid discovery record instead of treating it as an unpublished Manager', async () => {
+    const f = await fixture()
+    await writeFile(join(f.profile.controlDir, 'manager.json'), '{"pid":')
+    await expect(f.recover()).rejects.toThrow('invalid Kun Service Manager discovery record')
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+  })
+
+  it('requires matching Manager participants in every claim even after discovery is unpublished', async () => {
+    const f = await fixture()
+    await rm(join(f.profile.controlDir, 'manager.json'))
+    await rm(join(f.claims[0]!, 'process-manager-1.json'))
+    await expect(f.recover()).rejects.toThrow('do not match all profile reservations')
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+  })
+
+  it('requires a verified Manager birth identity even after discovery is unpublished', async () => {
+    const f = await fixture()
+    await rm(join(f.profile.controlDir, 'manager.json'))
+    vi.spyOn(identity, 'requireRuntimeProcessIdentity').mockImplementation(() => { throw new Error('identity unavailable') })
+    await expect(f.recover()).rejects.toThrow('identity unavailable')
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
+  })
+
+  it('stops recovery if a Manager discovery appears during Runtime cleanup', async () => {
+    const f = await fixture()
+    const runtime = await childProcess()
+    await f.reservation.recordProcess({ pid: runtime.pid!, instanceId: 'runtime-instance' })
+    const discoveryPath = join(f.profile.controlDir, 'manager.json')
+    await rm(discoveryPath)
+    const kill = process.kill.bind(process)
+    vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
+      if (pid === runtime.pid && signal === 'SIGTERM') {
+        writeFileSync(discoveryPath, JSON.stringify(f.manager))
+      }
+      return kill(pid, signal)
+    })
+    await expect(f.recover()).rejects.toThrow('Manager identity changed during recovery')
+    expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
   })
 
   it('recovers a Runtime after its Manager already exited and unpublished discovery', async () => {
@@ -202,8 +256,9 @@ describe('orphaned application Manager recovery', () => {
     expect(await readFile(join(f.profile.dataDir, 'history.json'), 'utf8')).toBe('saved conversations')
   })
 
-  it('does not signal a recycled participant PID', async () => {
+  it.each([false, true])('does not signal a recycled participant PID (unpublished Manager: %s)', async (missingDiscovery) => {
     const f = await fixture()
+    if (missingDiscovery) await rm(join(f.profile.controlDir, 'manager.json'))
     for (const path of f.claims) {
       const file = join(path, 'process-manager-1.json')
       const participant = JSON.parse(await readFile(file, 'utf8'))
@@ -211,7 +266,7 @@ describe('orphaned application Manager recovery', () => {
     }
     await f.recover()
     expect(identity.runtimeProcessIsAlive(f.child.pid!)).toBe(true)
-    expect(await readManagerHandoffDiscoveryStrict(f.profile.controlDir)).not.toBeNull()
+    expect(Boolean(await readManagerHandoffDiscoveryStrict(f.profile.controlDir))).toBe(!missingDiscovery)
   })
 
   it('requires a positive process identity before signalling despite fail-closed liveness', async () => {

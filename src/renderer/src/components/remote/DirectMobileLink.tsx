@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { QRCodeSVG } from 'qrcode.react'
 import { Network } from 'lucide-react'
 import type { DirectLinkStatus } from '@shared/direct-link'
-import type { MobileLinkScope } from '@shared/mobile-link-scopes'
+import { DIRECT_MOBILE_DEFAULT_SCOPES, type MobileLinkScope } from '@shared/mobile-link-scopes'
 import { MobileScopeOptions } from './MobileScopeOptions'
 import { REMOTE_BUTTON_CLASS, RemoteCopyButton, RemoteGroup, RemoteSwitch } from './remote-panel-ui'
 import { RemoteCompactRow } from './remote-compact-ui'
@@ -14,8 +14,9 @@ export function DirectMobileLink({ onRunningChange }: { onRunningChange?(running
   const api = window.kunGui?.mobileLink?.direct
   const [state, setState] = useState<DirectLinkStatus>(), [busy, setBusy] = useState(false), [error, setError] = useState('')
   const [open, setOpen] = useState(false), [port, setPort] = useState('0'), [bind, setBind] = useState<'lan' | 'loopback'>('lan')
+  const [allowVirtual, setAllowVirtual] = useState(false)
   const [addresses, setAddresses] = useState(''), [ice, setIce] = useState(''), [pairing, setPairing] = useState<{ link: string; expiresAt: number }>()
-  const [scopes, setScopes] = useState<MobileLinkScope[]>(['personal']), [now, setNow] = useState(Date.now())
+  const [scopes, setScopes] = useState<MobileLinkScope[]>(DIRECT_MOBILE_DEFAULT_SCOPES), [now, setNow] = useState(Date.now())
   const alive = useRef(true), operation = useRef(0)
   const confirmedRunning = state?.running
   useEffect(() => { if (confirmedRunning !== undefined) onRunningChange?.(confirmedRunning) }, [confirmedRunning, onRunningChange])
@@ -44,7 +45,7 @@ export function DirectMobileLink({ onRunningChange }: { onRunningChange?(running
     } finally { if (alive.current && version === operation.current) setBusy(false) }
   }
   function edit() {
-    if (!open && state) { setPort(String(state.port)); setBind(state.bind); setAddresses(state.addresses.join('\n')); setIce('') }
+    if (!open && state) { setPort(String(state.port)); setBind(state.bind); setAddresses(state.addresses.join('\n')); setIce(''); setAllowVirtual(state.allowVirtual === true) }
     setOpen(!open)
   }
   const label = text('局域网与自建连接', 'Local network and private connections')
@@ -67,6 +68,8 @@ export function DirectMobileLink({ onRunningChange }: { onRunningChange?(running
       </select></label>
       <label className="block space-y-1"><span>{text('端口（0 为自动选择）', 'Port (0 selects automatically)')}</span><input className={field} inputMode="numeric" value={port} disabled={busy} onChange={event => setPort(event.target.value)} /></label>
       <label className="block space-y-1"><span>{text('Tailscale 或隧道地址，每行一个', 'Tailscale or tunnel addresses, one per line')}</span><textarea className={field} rows={2} value={addresses} disabled={busy} onChange={event => setAddresses(event.target.value)} placeholder="https://computer.example.ts.net" /></label>
+      {state?.virtualSupported || state?.allowVirtual ? <label className="flex items-center gap-2"><input type="checkbox" checked={allowVirtual} disabled={busy} onChange={event => setAllowVirtual(event.target.checked)} />
+        {text('允许已获桌面授权的直连手机创建专用显示器', 'Allow paired phones with desktop access to create a mobile display')}</label> : null}
       <details><summary className="cursor-pointer">{text('自建 TURN（可选，仅远程桌面视频需要）', 'Own TURN (optional, for desktop video)')}</summary>
         <p className="my-2">{text(state?.hasIceServers ? '已有配置。留空保留，填写 [] 清除。' : '局域网可直接传画面；跨网络可填写自己的 ICE servers JSON。', state?.hasIceServers ? 'Configured. Leave blank to keep, or enter [] to clear.' : 'LAN video can connect directly. For other networks, enter your own ICE servers JSON.')}</p>
         <textarea aria-label="ICE servers JSON" className={field} rows={3} value={ice} onChange={event => setIce(event.target.value)} />
@@ -74,7 +77,7 @@ export function DirectMobileLink({ onRunningChange }: { onRunningChange?(running
       <button className={REMOTE_BUTTON_CLASS} disabled={busy || !state?.ready} onClick={() => void run(async () => {
         setPairing(undefined)
         return api!.configure({ enabled: state?.running === true, bind, port: Number(port), addresses: addresses.split('\n').map(value => value.trim()).filter(Boolean),
-          ...(ice.trim() ? { iceServers: JSON.parse(ice) } : {}) })
+          ...(state?.virtualSupported || state?.allowVirtual ? { allowVirtual } : {}), ...(ice.trim() ? { iceServers: JSON.parse(ice) } : {}) })
       })}>{text('保存连接设置', 'Save connection settings')}</button>
       <p>{text('修改端口或监听范围会重建连接，请同步更新手机保存的地址。', 'Changing the port or interface reconnects clients. Update the saved address on your phone.')}</p>
       {state?.running ? <>

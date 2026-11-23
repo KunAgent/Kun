@@ -349,6 +349,9 @@ function collectApprovalTargets(
       })}`
     })
   }
+  if (input.toolName === 'browser_use' && Array.isArray(args.steps)) {
+    add({ kind: 'resource', value: browserUseBatchTarget(args.steps) })
+  }
   if (input.providerKind === 'mcp') {
     add({
       kind: 'mcp',
@@ -362,6 +365,23 @@ function collectApprovalTargets(
     })
   }
   return targets
+}
+
+// A batch is approved as one unit, so reviewers get one bounded summary target
+// instead of every step's target: expanding steps could exceed the
+// distinct-target cap on a legitimate ten-step batch.
+function browserUseBatchTarget(steps: readonly unknown[]): string {
+  const counts = new Map<string, number>()
+  for (const step of steps) {
+    if (!isPlainRecord(step)) continue
+    const name = typeof step.action === 'string' && step.action ? step.action : 'unknown'
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  const summary = [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, count]) => `${name}x${count}`)
+    .join(' ')
+  return boundedText(`browser-batch ${steps.length} steps${summary ? ` ${summary}` : ''}`, 256)
 }
 
 function exactApprovalTargetString(value: unknown, label: string): string {

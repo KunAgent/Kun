@@ -35,11 +35,13 @@ afterEach(() => vi.restoreAllMocks())
 
 async function launched(test: ReturnType<typeof fixture>, elevated = false) {
   await vi.waitFor(() => expect(test.spawn).toHaveBeenCalledOnce(), { interval: 1 })
-  const call = test.spawn.mock.calls[0] as unknown as [string, string[], { detached: boolean }]
+  const call = test.spawn.mock.calls[0] as unknown as [string, string[], { detached: boolean; env: NodeJS.ProcessEnv }]
   const bootstrap = call[1].at(-1)!
-  const encoded = bootstrap.match(/'-EncodedCommand','([^']+)'/)![1]
-  expect(bootstrap.includes('-Verb RunAs')).toBe(elevated)
-  return { call, bootstrap, command: Buffer.from(encoded, 'base64').toString('utf16le') }
+  const relay = call[2].env.KUN_UPDATE_ROLLBACK_RELAY!
+  const encoded = relay.match(/'-EncodedCommand','([^']+)'/)![1]
+  expect(bootstrap).not.toContain('-Verb RunAs')
+  expect(relay.includes('-Verb RunAs')).toBe(elevated)
+  return { call, bootstrap, relay, command: Buffer.from(encoded, 'base64').toString('utf16le') }
 }
 
 async function acknowledge(command: string, stale = false) {
@@ -75,21 +77,31 @@ describe('one-shot update helper deadlines', () => {
     let ready = false
     const scheduled = scheduleBoundedUpdateRollback('C:\\Kun\\recover.ps1', environment, 123, test.spawnHelper)
     scheduled.then(() => { ready = true })
-    const { call, command, bootstrap } = await launched(test)
+    const { call, command, bootstrap, relay } = await launched(test)
     expect(call[0]).toMatch(/WindowsPowerShell\\v1\.0\\powershell\.exe$/u)
     expect(bootstrap).toContain('-WindowStyle Hidden -PassThru')
-    expect(bootstrap).toContain('$coordinator.WaitForExit()')
-    expect(bootstrap).toContain('$null=$coordinator.Handle')
-    expect(bootstrap).toContain('if ($null -eq $exitCode) { exit 1 }')
-    expect(bootstrap).toContain('exit $exitCode')
+    expect(bootstrap).toContain('$relay.WaitForExit()')
+    expect(bootstrap).toContain('$null=$relay.Handle')
+    expect(bootstrap).toContain('exit $relay.ExitCode')
     expect(bootstrap).not.toContain('-NoNewWindow')
+    expect(bootstrap).not.toContain('Start-Process -FilePath $exe')
+    const relayEntry = Buffer.from(bootstrap.match(/'-EncodedCommand','([^']+)'/)![1], 'base64').toString('utf16le')
+    expect(relayEntry).toContain('$relayScript=$env:KUN_UPDATE_ROLLBACK_RELAY')
+    expect(relayEntry.indexOf('Remove-Item Env:KUN_UPDATE_ROLLBACK_RELAY'))
+      .toBeLessThan(relayEntry.indexOf('[ScriptBlock]::Create($relayScript)'))
+    expect(relay).toContain('$coordinator.WaitForExit()')
+    expect(relay).toContain('$null=$coordinator.Handle')
+    expect(relay).toContain('if ($null -eq $exitCode) { exit 1 }')
     expect(command).toContain('$gui=[Diagnostics.Process]::GetProcessById($waitPid)')
     expect(command).toContain('$null=$gui.Handle')
     expect(command).toContain('$gui.WaitForExit(90000)')
     expect(command).toContain('finally { $gui.Dispose() }')
     expect(command.indexOf('$null=$gui.Handle')).toBeLessThan(command.indexOf("WriteLine('ready:"))
     expect(command).not.toContain('Wait-Process -Id $waitPid')
-    expect(command).toContain('Start-Process -FilePath $exe -ErrorAction Stop; exit 0')
+    expect(command).not.toContain('Start-Process -FilePath $exe')
+    expect(command).toContain('[IO.File]::WriteAllText($relaunchPath, $exe, [Text.Encoding]::Unicode)')
+    expect(relay).toContain('Start-Process -FilePath $exe -ErrorAction Stop')
+    expect(relay.indexOf('$coordinator.WaitForExit()')).toBeLessThan(relay.indexOf('Start-Process -FilePath $exe'))
     expect(command).toContain('[KunOneShotDeadline]::Start(300000, $false)')
     expect(command.indexOf('-Action ValidateUpdateRollback')).toBeLessThan(command.indexOf("WriteLine('ready:"))
     expect(command.indexOf("WriteLine('armed:")).toBeLessThan(command.indexOf('$gui.WaitForExit(90000)'))
@@ -102,6 +114,21 @@ describe('one-shot update helper deadlines', () => {
     await scheduled
     expect(test.child.unref).toHaveBeenCalledOnce()
     expect(test.child.kill).not.toHaveBeenCalled()
+  })
+
+  it('keeps all-users relaunch in the independent original-token relay', async () => {
+    const test = fixture()
+    const scheduled = scheduleBoundedUpdateRollback('C:\\Kun\\recover.ps1', { ...environment, KUN_INSTALLER_INSTALL_MODE: 'all' }, 123, test.spawnHelper)
+    const { command, relay } = await launched(test, true)
+    try {
+      expect(command).not.toContain('Start-Process -FilePath $exe')
+      expect(relay).toContain('if ($exitCode -eq 0)')
+      expect(relay).toContain('[IO.File]::ReadAllText($relaunchPath, [Text.Encoding]::Unicode)')
+      expect(relay).toContain('Start-Process -FilePath $exe -ErrorAction Stop')
+      expect(relay).toContain('finally { Remove-Item -LiteralPath $relaunchPath')
+      const relaunch = relay.slice(relay.indexOf('try {'))
+      expect(relaunch).not.toContain('-Verb RunAs')
+    } finally { await acknowledge(command); await scheduled }
   })
 
   it('isolates every migration exit and reads the executable from its Unicode result file', async () => {
@@ -159,9 +186,10 @@ describe('one-shot update helper deadlines', () => {
   it('also bounds the elevation launcher and rejects an OS spawn error', async () => {
     const test = fixture()
     const scheduled = scheduleBoundedUpdateRollback('C:\\Kun\\recover.ps1', { ...environment, KUN_INSTALLER_INSTALL_MODE: 'all' }, 123, test.spawnHelper)
-    const { call } = await launched(test, true)
-    expect(call[1].at(-1)).toContain('[KunOneShotDeadline]::Start(300000, $false)')
-    expect(call[1].at(-1)).toContain('-Verb RunAs')
+    const { bootstrap, relay } = await launched(test, true)
+    expect(bootstrap).toContain('[KunOneShotDeadline]::Start(300000, $false)')
+    expect(relay).toContain('[KunOneShotDeadline]::Start(300000, $false)')
+    expect(relay).toContain('-Verb RunAs')
     test.child.emit('error', new Error('spawn unavailable'))
     await expect(scheduled).rejects.toThrow('spawn unavailable')
     expect(test.child.unref).not.toHaveBeenCalled()

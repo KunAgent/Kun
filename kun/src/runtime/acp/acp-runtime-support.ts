@@ -1,4 +1,5 @@
 import { providerModule } from '../../harness/providers/registry.js'
+import type { TurnService } from '../../services/turn-service.js'
 import type { HarnessGatewayBinding } from '../../contracts/harness-gateway-binding.js'
 /**
  * AcpRuntime support: delegated trace records (same shape as the other
@@ -19,7 +20,7 @@ import {
   type HarnessCapabilities
 } from '../../contracts/harness-capabilities.js'
 import { ACP_DEFAULT_CAPABILITIES } from '../../harness/builtin-harnesses.js'
-import { AcpError, type McpServer } from './acp-schema.js'
+import { AcpError, sanitizeAcpErrorDetails, type McpServer } from './acp-schema.js'
 import { isAcpAuthenticationRequired } from './acp-authentication.js'
 import {
   finishDelegatedTrace,
@@ -99,20 +100,52 @@ export function mapAcpFailure(
   error: unknown,
   startup: boolean,
   harnessId?: string
-): { code: string; message: string } {
+): { code: string; message: string; details?: unknown } {
   const mapped = mapAcpFailureCode(error, startup, harnessId)
   if (mapped.code === 'harness_not_ready' && isAcpAuthenticationRequired(error)) return mapped
   // The engine may know what a crash or opaque error really means (OpenCode's
   // shared database, hidden service failures); keep the stable code.
   const explained = providerModule(harnessId)?.explainFailure?.(mapped.message, false)
-  return explained && !explained.authRequired ? { code: mapped.code, message: explained.detail } : mapped
+  return explained && !explained.authRequired ? { ...mapped, message: explained.detail } : mapped
+}
+
+export async function failAcpTurn(
+  turns: Pick<TurnService, 'finishTurn'>,
+  threadId: string,
+  turnId: string,
+  error: string,
+  code?: string,
+  details?: unknown
+): Promise<'failed'> {
+  await turns.finishTurn({
+    threadId,
+    turnId,
+    status: 'failed',
+    error,
+    ...(code ? { code } : {}),
+    ...(details !== undefined ? { details } : {}),
+    severity: 'error'
+  })
+  return 'failed'
+}
+
+export async function failAcpTurnFromError(
+  turns: Pick<TurnService, 'finishTurn'>,
+  threadId: string,
+  turnId: string,
+  error: unknown,
+  startup: boolean,
+  harnessId?: string
+): Promise<void> {
+  const mapped = mapAcpFailure(error, startup, harnessId)
+  await failAcpTurn(turns, threadId, turnId, mapped.message, mapped.code, mapped.details)
 }
 
 function mapAcpFailureCode(
   error: unknown,
   startup: boolean,
   harnessId?: string
-): { code: string; message: string } {
+): { code: string; message: string; details?: unknown } {
   if (error instanceof AcpError) {
     if (isAcpAuthenticationRequired(error)) {
       return {
@@ -120,26 +153,35 @@ function mapAcpFailureCode(
         message: loginGuidance(harnessId) ?? 'The agent requires login. Open Agent settings, sign in with its CLI, and retry.'
       }
     }
+    const details = sanitizeAcpErrorDetails(
+      error.rpcCode !== undefined
+        ? error.data !== undefined
+          ? { rpcCode: error.rpcCode, data: error.data }
+          : { rpcCode: error.rpcCode }
+        : error.data
+    )
+    const extra = details !== undefined ? { details } : {}
     switch (error.code) {
       case 'request_timeout':
         return startup
           ? {
               code: 'harness_not_ready',
-              message: 'ACP agent did not complete startup in time'
+              message: 'ACP agent did not complete startup in time',
+              ...extra
             }
-          : { code: 'request_timeout', message: sanitize(error.message) }
+          : { code: 'request_timeout', message: sanitize(error.message), ...extra }
       case 'harness_protocol_error':
-        return { code: 'harness_protocol_error', message: sanitize(error.message) }
+        return { code: 'harness_protocol_error', message: sanitize(error.message), ...extra }
       case 'harness_crashed':
       case 'connection_closed':
-        return { code: 'harness_crashed', message: sanitize(error.message) }
+        return { code: 'harness_crashed', message: sanitize(error.message), ...extra }
       case 'policy_denied':
-        return { code: 'policy_denied', message: sanitize(error.message) }
+        return { code: 'policy_denied', message: sanitize(error.message), ...extra }
       case 'request_aborted':
-        return { code: 'request_aborted', message: sanitize(error.message) }
+        return { code: 'request_aborted', message: sanitize(error.message), ...extra }
       case 'agent_error':
       default:
-        return { code: 'agent_error', message: sanitize(error.message) }
+        return { code: 'agent_error', message: sanitize(error.message), ...extra }
     }
   }
   const errno = error as NodeJS.ErrnoException
@@ -201,6 +243,6 @@ export type AcpCredentialEnvInput = DelegatedCredentialEnvInput
 export function resolveAcpCredentialContext(
   resolve: ((input: AcpCredentialEnvInput) => Promise<Record<string, string>>) | undefined,
   input: Parameters<typeof resolveDelegatedCredentialContext>[1]
-): Promise<{ credentialIdentity: string; env: Record<string, string> }> {
+): ReturnType<typeof resolveDelegatedCredentialContext> {
   return resolveDelegatedCredentialContext(resolve, input)
 }

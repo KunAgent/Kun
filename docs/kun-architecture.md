@@ -626,7 +626,7 @@ agent。
 
 ## 桌面应用发布约束
 
-从 0.3.8 起，Stable 和 Daily 只分发桌面应用，不再构建独立 TUI 压缩包或推进
+从 0.3.8 起，Stable 和 Daily 的既有发布线只分发桌面应用，不再构建独立 TUI 压缩包或推进
 独立 TUI 更新清单。GUI 包仍通过 `electron-builder` 内置 `kun/dist` 和平台
 启动器，`kun` / `kun tui` 及共享 Runtime 保留，随 GUI 一起更新。
 
@@ -636,7 +636,7 @@ agent。
 
 历史独立 TUI 包及其旧更新清单不在本次变更中删除。旧独立客户端不会收到 0.3.8
 独立包；需要安装桌面应用才能获得后续版本。TUI 的只读用量、provider 额度和上下文
-命令继续复用已有协议，不增加 GUI Runtime 诊断或控制入口。
+命令继续复用已有协议；新增的[独立 npm 候选渠道](./kun-standalone-npm.md)复用同一 Runtime，不恢复 archive feed。
 
 ## ADE：总管与 worker
 

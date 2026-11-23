@@ -106,6 +106,16 @@ app.whenReady().then(()=>{const win=new BrowserWindow({width:1100,height:920,sho
   await hasText('project notes'); await hasText('doc-1')
   checks.push('fetch status and named MCP input/output')
 
+  await scenario('acp-git')
+  for (const text of ['git_inspect · Check git status and branch', 'kun-tools / git_inspect', '$ git status --short --branch', '## recorded-branch']) await hasText(text)
+  await page.getByText('Input', { exact: true }).click()
+  await hasText('"operation": "status"')
+  checks.push('saved Antigravity MCP row shows its identity, original arguments and recovered command output')
+  await page.evaluate(() => window.toolFixture.language('zh'))
+  await hasText('退出码 0')
+  await page.locator('.tool-fixture-content').screenshot({ path: join(evidence, 'acp-git.png') })
+  await page.evaluate(() => window.toolFixture.language('en'))
+
   await scenario('rich')
   await hasText('Retained resource text.')
   assert.equal(await page.locator('img[src^="data:image/png"]').count(), 1)

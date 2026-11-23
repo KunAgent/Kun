@@ -3,7 +3,10 @@ import type { KunCapabilitiesConfig, WebCapabilityConfig } from '../../contracts
 import type { WebFetchResult, WebProvider, WebSearchResult } from '../../ports/web-provider.js'
 import { sourceIdFor, UnavailableWebProvider } from '../../ports/web-provider.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
+import { resolveDeepSeekWebProvider } from './deepseek-web-provider.js'
+import type { ProviderCredentialResolver } from './image-gen-tool-provider.js'
 import { LocalToolHost } from './local-tool-host.js'
+import type { KunServeRuntimeOptions } from '../../server/runtime-factory-types.js'
 import {
   WebFetchPolicyError,
   awaitWithAbort,
@@ -79,6 +82,8 @@ export type WebToolProviderBuildResult = {
 export type WebToolProviderOptions = {
   provider?: WebProvider
   nowIso?: () => string
+  runtimeOptions?: () => KunServeRuntimeOptions | undefined
+  resolveCredential?: ProviderCredentialResolver
 }
 
 export function buildWebToolProviders(
@@ -95,14 +100,24 @@ export function buildWebToolProviders(
     }
   }
 
-  const provider: WebProvider = options.provider ?? (web.fetchEnabled ? new FetchWebProvider(web, {
-    nowIso: options.nowIso
-  }) : new UnavailableWebProvider(web.provider))
+  const fallbackFetch = web.fetchEnabled
+    ? new FetchWebProvider(web, { nowIso: options.nowIso })
+    : undefined
+  const deepSeekProvider = !options.provider && (web.fetchEnabled || web.searchEnabled)
+    ? resolveDeepSeekWebProvider({
+        runtimeOptions: options.runtimeOptions,
+        resolveCredential: options.resolveCredential,
+        fallbackFetch,
+        nowIso: options.nowIso,
+        preferredProvider: web.provider
+      })
+    : undefined
+  const provider: WebProvider = options.provider ?? deepSeekProvider ?? fallbackFetch ?? new UnavailableWebProvider(web.provider)
   const tools = []
   if (web.fetchEnabled) {
     tools.push(createFetchTool(web, provider))
   }
-  if (web.searchEnabled) {
+  if (web.searchEnabled && (Boolean(provider.search) || !web.fetchEnabled || Boolean(options.provider))) {
     tools.push(createSearchTool(web, provider))
   }
   const fetchAvailable = Boolean(web.fetchEnabled && provider.fetch)

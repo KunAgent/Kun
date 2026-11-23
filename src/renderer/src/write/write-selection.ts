@@ -83,6 +83,11 @@ export function writeSelectionStatesEqual(
 ): boolean {
   if (a === b) return true
   if (a.charCount !== b.charCount || a.text !== b.text) return false
+  if (a.richRange?.from !== b.richRange?.from || a.richRange?.to !== b.richRange?.to ||
+      a.richRange?.latexRange?.from !== b.richRange?.latexRange?.from ||
+      a.richRange?.latexRange?.to !== b.richRange?.latexRange?.to) return false
+  if (a.annotationAnchor !== b.annotationAnchor &&
+      JSON.stringify(a.annotationAnchor) !== JSON.stringify(b.annotationAnchor)) return false
   if (a.blockType !== b.blockType) return false
   if ((a.activeFormats ?? []).join(',') !== (b.activeFormats ?? []).join(',')) return false
   if (

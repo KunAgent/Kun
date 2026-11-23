@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { petSurfaceLayout } from './pet-layout'
+import { petSurfaceLayout, petViewportAnchor } from './pet-layout'
 
 const input = {
   anchor: { anchorX: 210, anchorY: 320, viewportWidth: 420, viewportHeight: 640 },
@@ -7,6 +7,21 @@ const input = {
 }
 
 describe('surfaces around the pet anchor', () => {
+  it('uses the renderer viewport after a delayed Wayland compositor resize', () => {
+    const stale = { ...input.anchor, nativeWindowDrag: true, anchorX: 350, anchorY: 550 }
+    const anchor = petViewportAnchor(stale, { width: 260, height: 300 }, 112)
+    const layout = petSurfaceLayout({ ...input, anchor })
+    expect(anchor.viewportWidth).toBe(260)
+    expect(anchor.viewportHeight).toBe(300)
+    for (const rect of [layout.pet, layout.controls, layout.notification, layout.menu]) {
+      expect(rect.left).toBeGreaterThanOrEqual(0)
+      expect(rect.top).toBeGreaterThanOrEqual(0)
+      expect(rect.left + rect.width).toBeLessThanOrEqual(260)
+      expect(rect.top + rect.height).toBeLessThanOrEqual(300)
+    }
+    expect(petViewportAnchor(input.anchor, { width: 260, height: 300 }, 112)).toBe(input.anchor)
+  })
+
   it('keeps the pet fixed when the composer replaces the toolbar or notifications expand', () => {
     const baseline = petSurfaceLayout(input)
     const composing = petSurfaceLayout({ ...input, controls: { width: 330, height: 90 } })

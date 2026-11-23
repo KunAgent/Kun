@@ -15,8 +15,9 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
     const bootstrapIndex = commandArgs.indexOf('-Command') + 1
     if (bootstrapIndex === 0) throw new Error('Expected a coordinator bootstrap command.')
     const bootstrap = commandArgs[bootstrapIndex]!
-    const encoded = bootstrap.match(/'-EncodedCommand','([^']+)'/u)?.[1]
-    if (!encoded) throw new Error('Encoded coordinator command is missing from the bootstrap.')
+    const relay = options?.env?.KUN_UPDATE_ROLLBACK_RELAY
+    const encoded = relay?.match(/'-EncodedCommand','([^']+)'/u)?.[1]
+    if (!relay || !encoded) throw new Error('Encoded coordinator command is missing from the relay.')
     const command = Buffer.from(encoded, 'base64').toString('utf16le')
     const validation = '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action ValidateUpdateRollback -Bounded'
     if (!command.includes(validation)) throw new Error('Coordinator validation probe location is missing.')
@@ -39,7 +40,6 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
       .replace(/(\$writer\.WriteLine\('armed:[^']+'\))/u, '$1; ' + marker('armed-sent'))
       .replace('$pipe.Dispose()', '$pipe.Dispose(); ' + marker('pipe-disposed'))
       .replace(waitForGui, marker('before-gui-wait') + '; ' + waitForGui + '; ' + marker('after-gui-wait'))
-      .replace('Start-Process -FilePath $exe -ErrorAction Stop; exit 0', 'Start-Process -FilePath $exe -ErrorAction Stop; ' + marker('completed') + '; exit 0')
     const instrumented = [
       trace,
       'try {',
@@ -50,13 +50,18 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
       '}'
     ].join('\n')
     const instrumentedArgs = [...commandArgs]
+    let instrumentedRelay = relay
     if (instrument) {
       instrumentedArgs[bootstrapIndex] = trace.replace(marker('entry'), marker('bootstrap-entry')) + '\n' + bootstrap
+        .replace('$relay.WaitForExit()', marker('bootstrap-waiting') + '\n$relay.WaitForExit()')
+      instrumentedRelay = trace.replace(marker('entry'), marker('relay-entry')) + '\n' + relay
         .replace(encoded, encodePowershellCommand(instrumented))
-        .replace('$coordinator.WaitForExit()', marker('bootstrap-waiting') + '\n$coordinator.WaitForExit()')
+        .replace('$coordinator.WaitForExit()', marker('relay-waiting') + '\n$coordinator.WaitForExit()')
+        .replace('Start-Process -FilePath $exe -ErrorAction Stop', 'Start-Process -FilePath $exe -ErrorAction Stop; ' + marker('completed'))
     }
     const recovery = dirname(diagnostic)
     writeFileSync(join(recovery, 'result-bootstrap-command.txt'), bootstrap)
+    writeFileSync(join(recovery, 'result-relay-command.txt'), relay)
     writeFileSync(join(recovery, 'result-coordinator-command.txt'), command)
     writeFileSync(join(recovery, 'result-coordinator-instrumented.txt'), instrumented)
     const where = spawnSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'where.exe'),
@@ -71,7 +76,10 @@ export function createRollbackCoordinatorProbe(diagnostic: string, guiParent?: C
       instrumentedArgumentCharacters: instrumentedArgs.join(' ').length,
       cwd: process.cwd()
     } }, null, 2))
-    const launchOptions = { ...options, stdio: ['ignore', 'pipe', 'pipe'] as const }
+    const launchOptions = {
+      ...options, env: { ...options?.env, KUN_UPDATE_ROLLBACK_RELAY: instrumentedRelay },
+      stdio: ['ignore', 'pipe', 'pipe'] as const
+    }
     if (guiParent) {
       child = guiParent
       guiParent.send!({ executable, args: instrumentedArgs, options: launchOptions })

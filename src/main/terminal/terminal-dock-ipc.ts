@@ -27,7 +27,7 @@ export function systemTerminalCommands(cwd: string, platform: NodeJS.Platform = 
     ]
   }
   return [
-    { file: 'x-terminal-emulator', args: ['--working-directory', cwd] },
+    { file: 'x-terminal-emulator', args: [] },
     { file: 'gnome-terminal', args: ['--working-directory', cwd] },
     { file: 'konsole', args: ['--workdir', cwd] },
     { file: 'xterm', args: [] }
@@ -36,15 +36,31 @@ export function systemTerminalCommands(cwd: string, platform: NodeJS.Platform = 
 
 function launchDetached(command: SystemTerminalCommand, cwd: string): Promise<boolean> {
   return new Promise((resolve) => {
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let settled = false
+    const finish = (success: boolean): void => {
+      if (settled) return
+      settled = true
+      if (timer) clearTimeout(timer)
+      resolve(success)
+    }
     try {
-      const child = spawn(command.file, command.args, { cwd, detached: true, stdio: 'ignore', windowsHide: false })
-      child.once('error', () => resolve(false))
-      child.once('spawn', () => {
-        child.unref()
-        resolve(true)
+      const child = spawn(command.file, command.args, { cwd, env: process.env, detached: true, stdio: 'ignore', windowsHide: false })
+      child.once('error', (error) => {
+        console.warn(`[terminal] ${command.file} failed to start: ${error.message}`)
+        finish(false)
       })
-    } catch {
-      resolve(false)
+      child.once('exit', (code, signal) => {
+        if (code !== 0) console.warn(`[terminal] ${command.file} exited during startup (${code ?? signal})`)
+        finish(code === 0)
+      })
+      child.once('spawn', () => {
+        // A successful spawn can immediately reject unsupported arguments.
+        timer = setTimeout(() => { child.unref(); finish(true) }, 1_000)
+      })
+    } catch (error) {
+      console.warn(`[terminal] ${command.file} failed to start`, error)
+      finish(false)
     }
   })
 }

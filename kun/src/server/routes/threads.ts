@@ -101,7 +101,9 @@ export async function createThread(
     return validationError('invalid create thread body', parsed.error.issues)
   }
   try {
-    const thread = await service.create(parsed.data)
+    const thread = parsed.data.purpose === 'work-annotation'
+      ? await service.create({ ...parsed.data, agentSurface: 'write', harnessId: 'kun', sandboxMode: 'read-only' }, { relation: 'side' })
+      : await service.create(parsed.data)
     return jsonResponse(ThreadSchema.parse(projectPublicThreadRecord(thread)), 201)
   } catch (error) {
     if (error instanceof ProjectDefaultsStaleError) {

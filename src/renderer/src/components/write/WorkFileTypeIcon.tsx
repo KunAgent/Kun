@@ -9,8 +9,10 @@ export type WorkFileKind =
   | 'image'
   | 'whiteboard'
   | 'code'
+  | 'latex'
 
 const EXTENSION_KINDS: Record<string, WorkFileKind> = {
+  tex: 'latex', ltx: 'latex', bib: 'latex', cls: 'latex', sty: 'latex',
   md: 'markdown', markdown: 'markdown', mdx: 'markdown', txt: 'markdown', rtf: 'markdown',
   doc: 'word', docx: 'word', odt: 'word', pages: 'word',
   xls: 'sheet', xlsx: 'sheet', csv: 'sheet', tsv: 'sheet', ods: 'sheet', numbers: 'sheet',
@@ -27,7 +29,8 @@ const TILE_COLORS: Record<WorkFileKind, string> = {
   pdf: '#d6493f',
   image: '#8a63d2',
   whiteboard: '#0f9c98',
-  code: '#4b5563'
+  code: '#4b5563',
+  latex: '#567768'
 }
 
 export function workFileKindForName(name: string, fallback: WorkFileKind = 'markdown'): WorkFileKind {
@@ -38,6 +41,8 @@ export function workFileKindForName(name: string, fallback: WorkFileKind = 'mark
 function Glyph({ kind }: { kind: WorkFileKind }): ReactElement {
   const stroke = { stroke: '#fff', fill: 'none', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
   switch (kind) {
+    case 'latex':
+      return <path d="M4 5h8M8 5v7M6 12h4" strokeWidth={1.3} {...stroke} />
     case 'sheet':
       return <path d="M4.5 4.5h7v7h-7zM4.5 8h7M8 4.5v7" strokeWidth={1.2} {...stroke} />
     case 'slide':

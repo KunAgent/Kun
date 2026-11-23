@@ -200,6 +200,12 @@ export class InterruptedTurnCoordinator {
         ...(recoveryRequestId ? { clientRequestId: recoveryRequestId } : {}),
         interruptedResume: { sourceTurnId },
         mode: 'agent',
+        // Freeze the permission snapshot the interrupted turn was admitted
+        // under. Without it, admission falls back to the thread record, which
+        // an HTTP client can widen while the turn is running.
+        ...(lastTurn?.approvalPolicy ? { approvalPolicy: lastTurn.approvalPolicy } : {}),
+        ...(lastTurn?.sandboxMode ? { sandboxMode: lastTurn.sandboxMode } : {}),
+        ...(lastTurn?.approvalReviewer ? { approvalReviewer: lastTurn.approvalReviewer } : {}),
         ...(lastTurn ? { clientSurface: resolveTurnClientSurface(lastTurn) } : {}),
         ...(lastTurn?.agentSurface ? { agentSurface: lastTurn.agentSurface } : {}),
         ...(lastTurn?.agentSurface === 'design'

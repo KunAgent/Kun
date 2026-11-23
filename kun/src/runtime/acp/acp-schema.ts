@@ -9,6 +9,16 @@
  */
 import { z } from 'zod'
 import { AcpPermissionOptionsSchema } from './acp-permission-options.js'
+import {
+  ACP_RPC_ERROR,
+  AcpError,
+  acpValidationError,
+  formatAcpZodIssues,
+  sanitizeAcpErrorDetails,
+  truncateAcpDisplayText,
+  type AcpErrorCode,
+  type AcpValidationIssue
+} from './acp-validation.js'
 import type {
   AgentCapabilities,
   AvailableCommand,
@@ -130,50 +140,15 @@ export const ACP_CLIENT_METHODS = {
   sessionUpdate: 'session/update'
 } as const
 
-/** Standard JSON-RPC 2.0 error codes plus Kun's policy denial code. */
-export const ACP_RPC_ERROR = {
-  parseError: -32700,
-  invalidRequest: -32600,
-  methodNotFound: -32601,
-  invalidParams: -32602,
-  internalError: -32603,
-  /** Kun policy rejected a client-mediated action (write/command). */
-  policyDenied: -32001,
-  /** The sessionId has no live host context (turn ended or unknown). */
-  sessionUnavailable: -32002
-} as const
-
-// ---- Errors -----------------------------------------------------------------
-
-export type AcpErrorCode =
-  /** Malformed frame, oversized line, or missing/invalid required field. */
-  | 'harness_protocol_error'
-  /** Process died while requests were outstanding. */
-  | 'harness_crashed'
-  /** Agent returned a JSON-RPC error object for the request. */
-  | 'agent_error'
-  /** Kun policy rejected an agent-requested client action. */
-  | 'policy_denied'
-  | 'request_timeout'
-  | 'request_aborted'
-  | 'connection_closed'
-
-export class AcpError extends Error {
-  readonly code: AcpErrorCode
-  readonly rpcCode?: number
-  readonly data?: unknown
-
-  constructor(
-    code: AcpErrorCode,
-    message: string,
-    options: { rpcCode?: number; data?: unknown; cause?: unknown } = {}
-  ) {
-    super(message, options.cause !== undefined ? { cause: options.cause } : undefined)
-    this.name = 'AcpError'
-    this.code = code
-    if (options.rpcCode !== undefined) this.rpcCode = options.rpcCode
-    if (options.data !== undefined) this.data = options.data
-  }
+export {
+  ACP_RPC_ERROR,
+  AcpError,
+  acpValidationError,
+  formatAcpZodIssues,
+  sanitizeAcpErrorDetails,
+  truncateAcpDisplayText,
+  type AcpErrorCode,
+  type AcpValidationIssue
 }
 
 // ---- JSON-RPC envelope ------------------------------------------------------
@@ -460,6 +435,7 @@ const AcpToolKindSchema = z.enum([
 ])
 
 const ToolCallSharedFields = {
+  toolCallId: z.string().min(1).max(1_024),
   kind: AcpToolKindSchema.nullish(),
   status: AcpToolCallStatusSchema.nullish(),
   content: z.array(ToolCallContentItemSchema).nullish(),
@@ -468,17 +444,21 @@ const ToolCallSharedFields = {
   rawOutput: z.unknown().optional()
 }
 
+export const MAX_TOOL_TITLE_CHARS = 4_096
+const MAX_TERMINAL_COMMAND_CHARS = 256 * 1024
+const ToolDisplayTitleSchema = z.string().transform((title) =>
+  truncateAcpDisplayText(title, MAX_TOOL_TITLE_CHARS)
+)
+
 export const AcpToolCallSchema = MetaSchema.extend({
   sessionUpdate: z.literal('tool_call'),
-  toolCallId: z.string().min(1).max(1_024),
-  title: z.string().max(4_096),
+  title: ToolDisplayTitleSchema,
   ...ToolCallSharedFields
 })
 
 export const AcpToolCallUpdateWireSchema = MetaSchema.extend({
   sessionUpdate: z.literal('tool_call_update'),
-  toolCallId: z.string().min(1).max(1_024),
-  title: z.string().max(4_096).nullish(),
+  title: ToolDisplayTitleSchema.nullish(),
   ...ToolCallSharedFields
 })
 
@@ -498,8 +478,8 @@ export const AcpAvailableCommandsUpdateSchema = MetaSchema.extend({
   availableCommands: z.array(
     MetaSchema.extend({
       name: z.string().min(1).max(256),
-      description: z.string().max(4_096),
-      input: MetaSchema.extend({ hint: z.string().max(4_096) }).nullish()
+      description: ToolDisplayTitleSchema.nullish().transform((value) => value ?? ''),
+      input: MetaSchema.extend({ hint: ToolDisplayTitleSchema.nullish() }).nullish()
     })
   )
 })
@@ -516,7 +496,7 @@ export const AcpConfigOptionUpdateSchema = MetaSchema.extend({
 
 export const AcpSessionInfoUpdateSchema = MetaSchema.extend({
   sessionUpdate: z.literal('session_info_update'),
-  title: z.string().max(4_096).nullish(),
+  title: ToolDisplayTitleSchema.nullish(),
   updatedAt: z.string().max(128).nullish()
 })
 
@@ -538,7 +518,7 @@ const MessageChunkBase = {
 /**
  * Parse one `session/update` payload. Unknown variants parse into
  * `{ sessionUpdate: <name> }` marked objects so the mapper can ignore them
- * with a debug note; known variants fail closed on missing required fields.
+ * with a debug note; known variants fail closed with field-level diagnostics.
  */
 export function parseAcpSessionUpdate(update: unknown):
   | SessionUpdate
@@ -547,7 +527,8 @@ export function parseAcpSessionUpdate(update: unknown):
   if (!variant.success) {
     throw new AcpError(
       'harness_protocol_error',
-      'session/update payload is not an object with a sessionUpdate tag'
+      'session/update payload is not an object with a sessionUpdate tag',
+      { data: { issues: formatAcpZodIssues(variant.error) } }
     )
   }
   const schema = SESSION_UPDATE_SCHEMAS[variant.data.sessionUpdate]
@@ -556,11 +537,7 @@ export function parseAcpSessionUpdate(update: unknown):
   }
   const parsed = schema.safeParse(update)
   if (!parsed.success) {
-    throw new AcpError(
-      'harness_protocol_error',
-      `session/update ${variant.data.sessionUpdate} is missing required fields`,
-      { data: { issues: parsed.error.issues.slice(0, 8).map((issue) => issue.message) } }
-    )
+    throw acpValidationError(`session/update ${variant.data.sessionUpdate}`, parsed.error)
   }
   return parsed.data as SessionUpdate
 }
@@ -605,10 +582,7 @@ export type AcpParsedSessionNotification = {
 export function parseAcpSessionNotification(params: unknown): AcpParsedSessionNotification {
   const parsed = AcpSessionNotificationSchema.safeParse(params)
   if (!parsed.success) {
-    throw new AcpError(
-      'harness_protocol_error',
-      'session/update notification is missing its sessionId or update'
-    )
+    throw acpValidationError('session/update notification', parsed.error)
   }
   return {
     sessionId: parsed.data.sessionId,
@@ -621,14 +595,8 @@ export function parseAcpSessionNotification(params: unknown): AcpParsedSessionNo
 export const AcpRequestPermissionParamsSchema = MetaSchema.extend({
   sessionId: z.string().min(1).max(1_024),
   toolCall: MetaSchema.extend({
-    toolCallId: z.string().min(1).max(1_024),
-    title: z.string().max(4_096).nullish(),
-    kind: AcpToolKindSchema.nullish(),
-    status: AcpToolCallStatusSchema.nullish(),
-    content: z.array(ToolCallContentItemSchema).nullish(),
-    locations: z.array(ToolCallLocationSchema).nullish(),
-    rawInput: z.unknown().optional(),
-    rawOutput: z.unknown().optional()
+    title: ToolDisplayTitleSchema.nullish(),
+    ...ToolCallSharedFields
   }),
   options: AcpPermissionOptionsSchema
 })
@@ -654,8 +622,8 @@ const EnvVariableSchema = MetaSchema.extend({
 
 export const AcpTerminalCreateParamsSchema = MetaSchema.extend({
   sessionId: z.string().min(1).max(1_024),
-  command: z.string().min(1).max(4_096),
-  args: z.array(z.string().max(4_096)).max(256).nullish(),
+  command: z.string().min(1).max(MAX_TERMINAL_COMMAND_CHARS),
+  args: z.array(z.string().max(MAX_TERMINAL_COMMAND_CHARS)).max(256).nullish(),
   env: z.array(EnvVariableSchema).max(256).nullish(),
   cwd: z.string().max(16_384).nullish(),
   outputByteLimit: z.number().int().min(1).max(64 * 1024 * 1024).nullish()
@@ -681,15 +649,26 @@ export const AcpCreateElicitationParamsSchema = MetaSchema.extend({
 /** Narrow + cast: params that fail validation surface as JSON-RPC -32602. */
 export function parseAcpParams<S extends z.ZodType<unknown>>(
   schema: S,
-  params: unknown
+  params: unknown,
+  method?: string
 ): z.infer<S> {
   const parsed = schema.safeParse(params)
   if (!parsed.success) {
-    throw new AcpError('harness_protocol_error', 'request params are invalid', {
+    throw acpValidationError(method ?? 'request', parsed.error, {
       rpcCode: ACP_RPC_ERROR.invalidParams,
-      data: { issues: parsed.error.issues.slice(0, 8).map((issue) => issue.message) }
+      prefix: method ? `${method} params are invalid` : 'request params are invalid'
     })
   }
+  return parsed.data as z.infer<S>
+}
+
+export function parseAcpResponse<S extends z.ZodType<unknown>>(
+  subject: string,
+  schema: S,
+  raw: unknown
+): z.infer<S> {
+  const parsed = schema.safeParse(raw)
+  if (!parsed.success) throw acpValidationError(subject, parsed.error)
   return parsed.data as z.infer<S>
 }
 

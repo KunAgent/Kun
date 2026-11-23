@@ -1,39 +1,46 @@
-import { app, BrowserWindow, ipcMain, screen, type IpcMainEvent } from 'electron'
-import { resolveNamedPreloadPath } from '../main-paths'
-import { DESKTOP_INDICATOR_CHANNEL } from '../../shared/remote-desktop'
-import { DESKTOP_INDICATOR_STATUS } from '../../shared/desktop-indicator-channels'
-import { markProtectedWindowContents } from '../protected-window-contents'
-type IndicatorStatus = { peer: string; display: string; mode: 'view' | 'control' }
-export interface DesktopIndicatorPort { show(value: IndicatorStatus, end: () => void): void; update(value: IndicatorStatus): void; hide(): void }
+import { app, Menu, Tray } from 'electron'
+import trayIcon from '../../asset/img/remote-desktop-tray.png?url'
+import trayIconRetina from '../../asset/img/remote-desktop-tray@2x.png?url'
+import { createMultiScaleIcon, prepareTrayIcon } from '../app-icon'
+import type { DesktopEngineDependencies } from './session-service'
+
+type DesktopIndicatorPort = NonNullable<DesktopEngineDependencies['indicator']>
+type IndicatorStatus = Parameters<DesktopIndicatorPort['show']>[0]
+
 export class DesktopShareIndicator implements DesktopIndicatorPort {
-  private window?: BrowserWindow
-  private url = ''
-  private end?: () => void
-  private status?: IndicatorStatus
-  constructor() { ipcMain.on(DESKTOP_INDICATOR_CHANNEL, this.onEnd) }
-  private onEnd = (event: IpcMainEvent) => {
-    if (this.window && !this.window.isDestroyed() && event.sender === this.window.webContents && event.senderFrame === this.window.webContents.mainFrame && event.senderFrame.url === this.url) this.end?.()
+  private active?: { tray: Tray; end: () => void }
+
+  show(value: IndicatorStatus, end: () => void): void {
+    this.hide()
+    const tray = new Tray(prepareTrayIcon(createMultiScaleIcon(trayIcon, trayIconRetina)))
+    this.active = { tray, end }
+    if (process.platform === 'win32') tray.on('click', () => tray.popUpContextMenu())
+    try {
+      this.update(value)
+    } catch (error) {
+      this.hide()
+      throw error
+    }
   }
-  show(value: IndicatorStatus, end: () => void) {
-    this.hide(); this.end = end
-    this.status = value
-    const area = screen.getPrimaryDisplay().workArea
-    const window = new BrowserWindow({ width: 540, height: 56, x: area.x + Math.round((area.width - 540) / 2), y: area.y + 12,
-      frame: false, resizable: false, alwaysOnTop: true, skipTaskbar: true, webPreferences: { preload: resolveNamedPreloadPath(app.getAppPath(), 'remote-desktop-indicator'), sandbox: true, nodeIntegration: false, contextIsolation: true } })
-    this.window = window
-    markProtectedWindowContents(window.webContents)
-    const html = '<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; script-src \'none\'"><title>Kun remote desktop sharing</title><style>body{margin:0;font:13px system-ui;background:#202124;color:#fff;display:flex;align-items:center;gap:12px;padding:12px;-webkit-app-region:drag}span{white-space:nowrap;text-overflow:ellipsis;overflow:hidden}button{margin-left:auto;flex-shrink:0;min-height:32px;color:white;background:#c73337;border:0;border-radius:6px;padding:0 12px;-webkit-app-region:no-drag}</style><span id="status">Kun · Desktop sharing</span><button id="end">End session</button>'
-    this.url = 'data:text/html;charset=utf-8,' + encodeURIComponent(html)
-    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
-    window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
-    window.webContents.on('will-navigate', event => event.preventDefault())
-    window.webContents.on('did-finish-load', () => { if (this.status) this.update(this.status) })
-    window.on('close', event => { if (this.window === window) { event.preventDefault(); this.end?.() } })
-    void window.loadURL(this.url)
+
+  update(value: IndicatorStatus): void {
+    const active = this.active
+    if (!active) return
+    const labels = app.getLocale().toLowerCase().startsWith('zh')
+      ? { title: 'Kun · 远程桌面', view: '正在查看', control: '正在控制', end: '结束远控' }
+      : { title: 'Kun · Remote desktop', view: 'Viewing', control: 'Controlling', end: 'End remote session' }
+    const status = `${labels[value.mode]} · ${value.display.slice(0, 80)} · ${value.peer.slice(0, 8)}`
+    active.tray.setToolTip(labels.title)
+    active.tray.setContextMenu(Menu.buildFromTemplate([
+      { label: status, enabled: false },
+      { type: 'separator' },
+      { label: labels.end, click: () => { if (this.active === active) active.end() } }
+    ]))
   }
-  update(value: IndicatorStatus) {
-    this.status = value
-    if (this.window && !this.window.isDestroyed()) this.window.webContents.send(DESKTOP_INDICATOR_STATUS, { ...value, display: value.display.slice(0, 80), zh: app.getLocale().toLowerCase().startsWith('zh') })
+
+  hide(): void {
+    const active = this.active
+    this.active = undefined
+    active?.tray.destroy()
   }
-  hide() { const window = this.window; this.window = undefined; this.end = undefined; this.status = undefined; if (window && !window.isDestroyed()) window.destroy() }
 }

@@ -450,3 +450,100 @@
   font-size: 11px;
   line-height: 15px;
 }
+
+.kq-quota-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 2px;
+}
+
+.kq-quota-group {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.kq-quota-group-title {
+  margin: 0;
+  color: var(--kq-text);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 17px;
+}
+
+.kq-quota-group-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kq-grouped-row {
+  gap: 2px;
+}
+
+.kq-grouped-row-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.kq-grouped-row-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.kq-grouped-row .kq-meter-name {
+  color: var(--kq-text);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.kq-grouped-row-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--kq-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.kq-inline-ring {
+  display: inline-flex;
+  width: 17px;
+  height: 17px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.kq-inline-ring svg {
+  width: 17px;
+  height: 17px;
+  transform: rotate(-90deg);
+}
+
+.kq-inline-ring-track {
+  fill: none;
+  stroke: var(--kq-track);
+  stroke-width: 2.25;
+}
+
+.kq-inline-ring-fill {
+  fill: none;
+  stroke: #4c9f50;
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  transition: stroke-dasharray 240ms ease;
+}
+
+.kq-grouped-row[data-severity='warn'] .kq-inline-ring-fill {
+  stroke: var(--kq-warn);
+}
+
+.kq-grouped-row[data-severity='danger'] .kq-inline-ring-fill {
+  stroke: var(--kq-danger);
+}

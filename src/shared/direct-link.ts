@@ -1,8 +1,10 @@
 import type { MobileLinkScope } from './mobile-link-scopes'
 export type DirectLinkConfiguration = { enabled: boolean; bind: 'lan' | 'loopback'; port: number; addresses: string[];
+  allowVirtual?: boolean;
   iceServers?: { urls: string | string[]; username?: string; credential?: string }[] }
 export type DirectLinkStatus = Omit<DirectLinkConfiguration, 'iceServers'> & {
   ready: boolean; running: boolean; error?: string; hostId?: string; localAddresses: string[]; hasIceServers: boolean
+  virtualSupported?: boolean
   grants: { id: string; name: string; scopes: MobileLinkScope[]; online: boolean; expiresAt: number }[]
 }
 export type DirectLinkApi = {

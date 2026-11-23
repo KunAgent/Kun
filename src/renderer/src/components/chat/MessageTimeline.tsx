@@ -41,18 +41,16 @@ import {
   DeclarativeResultPreviews
 } from '../../extensions/ControlledContributionSurfaces'
 import { resolveActiveExtensionWorkspaceRoot } from '../../extensions/active-extension-workspace'
+import { toLayoutPx } from '../../lib/body-zoom'
 import type { JsonValue } from '@kun/extension-api'
 import { selectGraphPlanningCorrectionDraft, useGraphStore } from '../../graph/graph-store'
 import {
   TimelineJumpPreviewTitle,
-  activeTimelineTurnKey,
   blockScrollStamp,
   resultPreviewSourcesForTurn,
   timelineBottomPaddingClass,
   timelineJumpPreviewMetadata,
   timelineJumpPreviewTop,
-  timelineJumpRailLeft,
-  timelineJumpRailPreviewLeft,
   timelineJumpWaveDistance,
   turnPreview,
   turnResponsePreview
@@ -249,6 +247,7 @@ export function MessageTimeline({
   )
   const visibleTurnAnchors = useMemo(
     () => {
+      if (surface === 'mobile') return []
       const anchors: Array<{
         key: string
         index: number
@@ -278,7 +277,7 @@ export function MessageTimeline({
       })
       return anchors
     },
-    [hiddenTurnCount, t, turns, visibleTurns]
+    [hiddenTurnCount, surface, t, turns, visibleTurns]
   )
   const forkedFromTitle = activeThread?.forkedFromTitle?.trim() ?? ''
   const forkPointIndex = timelineForkPointIndex(turns, activeThread, threadHasMoreHistory)
@@ -314,7 +313,7 @@ export function MessageTimeline({
       prompt: anchor.prompt || anchor.title,
       fileLabels: anchor.fileLabels,
       hasCommit: anchor.hasCommit,
-      top: timelineJumpPreviewTop(nodeRect.top, nodeRect.height, railAnchorTop)
+      top: toLayoutPx(timelineJumpPreviewTop(nodeRect.top, nodeRect.height, railAnchorTop))
     })
   }
 
@@ -335,7 +334,7 @@ export function MessageTimeline({
     <InjectedMemoryLookupProvider workspaceRoot={workspaceRoot} enabled={!activeThreadId || threadLoadingId !== activeThreadId}>
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <div ref={containerRef} className="ds-no-drag relative flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
-      {visibleTurnAnchors.length > 2 && jumpRailLayout ? (
+      {visibleTurnAnchors.length > 0 && jumpRailLayout ? (
         <div className="timeline-jump-rail-anchor">
           <nav
             aria-label={t('timelineJumpRailLabel')}
@@ -363,7 +362,7 @@ export function MessageTimeline({
               )
             })}
           </nav>
-          {jumpRailPreview ? (
+          {jumpRailPreview && jumpRailHoveredIndex >= 0 ? (
             <div
               className="timeline-jump-rail-preview"
               style={{

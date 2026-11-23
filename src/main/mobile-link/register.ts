@@ -1,3 +1,5 @@
+import { desktopHelperAvailable } from '../remote-desktop/native-input'
+import { desktopPlatform } from '../remote-desktop/platform'
 import { controlRuntimeHost } from '../control-host/runtime-host'
 import { registerControlPackage } from '../control-package/register'
 import { registerComputerAccess } from '../computer-access/register'
@@ -17,6 +19,7 @@ import { MobileLinkService, type LinkDependencies } from './service'
 import { transferFiles } from './files'
 import { MobileLinkRecovery } from './recovery'
 import { createRuntimeOriginWorkspace } from './terminal-origin'
+import { createSimulatorEngine } from '../remote-simulator/engine'
 import { RelayPreference } from './relay-preference'
 import { MobileRelayResume } from './relay-resume'
 import { logInfo, logWarn } from '../logger'
@@ -63,10 +66,6 @@ export function registerMobileLink(
     diagnostic: value => (value.event === 'ice_ready' ? logInfo : logWarn)('remote-desktop', 'Desktop ICE request.', value)
   })
   const desktop = createDesktopEngine(authority => desktopIce.request(authority), async (authority, resource) => {
-    if (resource.kind === 'device') {
-      if (authority.purpose !== 'desktop' || resource.id !== authority.hostId || !authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
-      return
-    }
     const lease = await options.acquireRuntimeRequestLease()
     if (!authority.current()) throw Error('DESKTOP_AUTHORITY_CHANGED')
     const response = await lease.request('/v1/remote/invoke', 'POST', JSON.stringify({ accountId: authority.accountId,
@@ -86,21 +85,21 @@ export function registerMobileLink(
     },
     readWorkspace: createRuntimeOriginWorkspace(options)
   })
+  const simulatorOrigin = createRuntimeOriginWorkspace(options)
+  const simulator = createSimulatorEngine(async (origin, authority) => {
+    if (!await simulatorOrigin(origin, authority)) throw Error('SIMULATOR_ORIGIN_UNAVAILABLE')
+  })
   registerControlPackage(options)
   const serviceDependencies: LinkDependencies = {
+    simulator,
     createClient: deps => controlRuntimeHost().relay(deps),
     account,
     requireMembership: (owner) => requireAccountFeature(account, (input, init) => net.fetch(String(input), init), 'mobileRemote', owner),
     origin: 'https://api-kun-server.com',
     name: hostname(),
     appVersion: app.getVersion(),
-    computerAccess: process.platform === 'darwin' && process.arch === 'arm64',
-    platform:
-      process.platform === 'darwin'
-        ? 'macos'
-        : process.platform === 'win32'
-          ? 'windows'
-          : 'linux',
+    computerAccess: desktopHelperAvailable(),
+    platform: desktopPlatform(),
     identity: (owner) => loadIdentity(join(links, owner, 'identity.enc')),
     fetch: (input, init) =>
       net.fetch(

@@ -12,7 +12,12 @@ const mock = vi.hoisted(() => ({
   trusted: vi.fn(), info: vi.fn(), warn: vi.fn()
 }))
 vi.mock('electron', () => ({
-  app: { getVersion: () => '2.3.4', getPath: () => '/tmp/mobile-link-test', once: (_event: string, callback: () => void) => { mock.quit = callback } },
+  app: {
+    getVersion: () => '2.3.4',
+    getPath: () => '/tmp/mobile-link-test',
+    getAppPath: () => '/tmp/mobile-link-test/app',
+    once: (_event: string, callback: () => void) => { mock.quit = callback }
+  },
   ipcMain: { handle: (channel: string, callback: (...args: any[]) => any) => mock.handlers.set(channel, callback) },
   net: { isOnline: () => mock.online, fetch: vi.fn() },
   powerMonitor: {

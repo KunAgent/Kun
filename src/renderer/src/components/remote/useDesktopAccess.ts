@@ -61,8 +61,13 @@ export function useDesktopAccess(link: MobileLink) {
   function permission(kind: 'screenRecording' | 'accessibility') {
     void action(async () => { await window.kunGui.requestComputerUsePermission(kind) })
   }
+  function setVirtual(allowVirtual: boolean) {
+    if (!api?.desktopConfigure || !value?.virtualSupported || !link.state?.desktopAccess || !link.enabled) return
+    const displayTokens = value.displays.filter(d => d.allowed).map(d => d.token)
+    void action(() => api.desktopConfigure!({ enabled: allowVirtual || displayTokens.length > 0, displayTokens, allowVirtual }))
+  }
   return {
-    value, error, busy, refresh, permission,
+    value, error, busy, refresh, permission, setVirtual,
     stop: () => api?.desktopStop && void action(() => api.desktopStop!())
   }
 }

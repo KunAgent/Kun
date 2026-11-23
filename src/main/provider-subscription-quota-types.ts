@@ -39,6 +39,7 @@ import {
   type GrokOAuthCredentials
 } from './grok-auth'
 
+import type { DevinQuotaCredential } from '../../kun/src/services/devin-subscription-quota.js'
 import {
   resolveAntigravityCredential,
   resolveClaudeToken,
@@ -53,6 +54,7 @@ export type SubscriptionQuotaProbeKind =
   | 'grok-subscription'
   | 'cursor-subscription'
   | 'antigravity-subscription'
+  | 'devin-subscription'
   | 'gemini-cli-subscription'
   | 'opencode-go-local'
 
@@ -100,8 +102,12 @@ export type SubscriptionQuotaRuntime = {
   ): Promise<GrokQuotaCredential | undefined>
   resolveCursorSession(): Promise<CursorQuotaSession | undefined>
   resolveAntigravityCredential(
-    context: SubscriptionProbeContext
+    context: SubscriptionProbeContext,
+    rejectedAccessToken?: string
   ): Promise<GoogleQuotaCredential | undefined>
+  resolveDevinCredential(
+    provider: ModelProviderProfileV1
+  ): Promise<DevinQuotaCredential | undefined>
   resolveGeminiCliToken(context: SubscriptionProbeContext): Promise<string | undefined>
   resolveOpenCodeGoQuota(): Promise<OpenCodeGoLocalQuotaResult | undefined>
   resolveOpenCodeGoCookie(): Promise<string | undefined>

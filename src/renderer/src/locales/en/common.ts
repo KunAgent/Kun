@@ -1,4 +1,6 @@
+import latex from './common/latex.json'
 import writeSelectionMenu from './common/write-selection-menu.json'
+import workAnnotations from './common/work-annotations.json'
 import browserFloating from './common/browser-floating.json'
 import githubApp from './common/github-app.json'
 import composerSubscriptionQuota from './common/composer-subscription-quota.json'
@@ -47,6 +49,7 @@ import workConversations from './common/work-conversations.json'
 import projectBoard from './common/project-board.json'
 import speak from './common/speak.json'
 import remoteAccess from './common/remote-access.json'
+import codeProjects from './common/code-projects.json'
 
 import paper from './common/paper.json'
 import paperWorkspace from './common/paper-workspace.json'
@@ -98,10 +101,14 @@ import composerApproval from './common/composer-approval.json'
 import composerRecords from './common/composer-records.json'
 import toast from './common/toast.json'
 import workTabMenu from './common/work-tab-menu.json'
+import colab from './common/colab.json'
+import colabNotebook from './common/colab-notebook.json'
 
 const common = {
+  ...latex,
   ...browserFloating,
   ...writeSelectionMenu,
+  ...workAnnotations,
   ...githubApp,
   ...composerSubscriptionQuota,
   ...toolApprovalDetails,
@@ -155,6 +162,7 @@ const common = {
   ...projectBoard,
   ...speak,
   ...remoteAccess,
+  ...codeProjects,
   ...paper,
   ...paperWorkspace,
   ...paperSpace,
@@ -204,7 +212,9 @@ const common = {
   ...composerApproval,
   ...composerRecords,
   ...toast,
-  ...workTabMenu
+  ...workTabMenu,
+  ...colab,
+  ...colabNotebook
 }
 
 export default common

@@ -13,6 +13,7 @@ import {
   providerModelImportEntryKey,
   providerModelImportResult
 } from './provider-model-import'
+import { applyProviderModelImport } from './use-provider-probe-operations'
 
 // These fixture rows represent exact provider catalog matches unless overridden.
 function enrichProviderModelProfiles(...args: Parameters<typeof enrichProfiles>) {
@@ -499,5 +500,52 @@ describe('models.dev profile enrichment', () => {
     )
 
     expect(providerModelImportResult(entries, new Set()).catalogModels).toHaveLength(1)
+  })
+
+  it('surfaces deepseek-asr and deepseek-tts from live DeepSeek API pull and configures capabilities', () => {
+    const deepseek = provider({
+      id: 'deepseek',
+      name: 'DeepSeek',
+      presetSource: { presetId: 'deepseek', mode: 'api' },
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk-ds',
+      models: []
+    })
+    const entries = buildProviderModelImportEntries(
+      deepseek,
+      ['deepseek-chat', 'deepseek-reasoner', 'deepseek-flash'],
+      catalog([])
+    )
+
+    expect(entries.find((entry) => entry.kind === 'speech' && entry.modelId === 'deepseek-asr')).toMatchObject({
+      kind: 'speech',
+      modelId: 'deepseek-asr',
+      sources: ['provider-api']
+    })
+    expect(entries.find((entry) => entry.kind === 'tts' && entry.modelId === 'deepseek-tts')).toMatchObject({
+      kind: 'tts',
+      modelId: 'deepseek-tts',
+      sources: ['provider-api']
+    })
+
+    const picked = providerModelImportResult(
+      entries,
+      new Set(entries.map((entry) => providerModelImportEntryKey(entry.kind, entry.modelId)))
+    )
+    expect(picked.chat).toEqual(['deepseek-chat', 'deepseek-reasoner', 'deepseek-flash'])
+    expect(picked.speech).toEqual(['deepseek-asr'])
+    expect(picked.tts).toEqual(['deepseek-tts'])
+
+    const updated = applyProviderModelImport(deepseek, picked, true)
+    expect(updated.speech).toMatchObject({
+      protocol: 'deepseek-asr',
+      models: ['deepseek-asr'],
+      baseUrl: 'https://api.deepseek.com'
+    })
+    expect(updated.textToSpeech).toMatchObject({
+      protocol: 'deepseek-tts',
+      models: ['deepseek-tts'],
+      baseUrl: 'https://api.deepseek.com'
+    })
   })
 })

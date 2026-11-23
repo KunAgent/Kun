@@ -163,6 +163,7 @@ export function normalizeKunSpeechToTextSettings(
 
 export function normalizeKunSpeechToTextProtocol(value: unknown): SpeechToTextProtocol {
   if (value === 'local-whisper') return 'local-whisper'
+  if (value === 'deepseek-asr') return 'deepseek-asr'
   if (value === 'mimo-asr') return 'mimo-asr'
   if (value === 'xai-stt') return 'xai-stt'
   if (value === 'gemini-audio') return 'gemini-audio'
@@ -211,7 +212,7 @@ export function normalizeKunTextToSpeechSettings(
 }
 
 export function normalizeKunTextToSpeechProtocol(value: unknown): TextToSpeechProtocol {
-  return value === 'minimax-t2a' || value === 'mimo-tts'
+  return value === 'deepseek-tts' || value === 'minimax-t2a' || value === 'mimo-tts'
     ? value
     : DEFAULT_TEXT_TO_SPEECH_PROTOCOL
 }

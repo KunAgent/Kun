@@ -337,7 +337,7 @@ export async function createRuntimeServices(
 	    ...(core.activeOptions.roles?.codeReviewAccountId ? { roleAccountId: core.activeOptions.roles.codeReviewAccountId } : {})
 	  }
 	  const reviewService = new ReviewService(reviewDeps)
-	  let webProviders = buildWebToolProviders(core.activeOptions.capabilities?.web)
+	  let webProviders = buildWebToolProviders(core.activeOptions.capabilities?.web, { runtimeOptions: () => core.activeOptions, resolveCredential: resolveCapabilityProviderCredential, nowIso })
 	  attachmentStore = createPersistentAttachmentStore(core.activeOptions, nowIso)
   const prepareUsageCarryover = () => seedUsageCarryover({
     threadStore, sessionStore, usageService

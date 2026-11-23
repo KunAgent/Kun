@@ -37,7 +37,11 @@ export function useSideComposerControls(input: SideComposerConfig & {
   const isExternalAgent = harnessId !== 'kun'
   const fingerprint = harnessModelFingerprint(row)
   const refreshRows = useCallback(() => {
-    void loadHarnesses()
+    const hasPendingEnabled = useHarnessStore.getState().rows.some(
+      (entry) => entry.definition.id !== 'kun' && entry.enabled === true && readyHarnessProfiles(entry).length === 0
+    )
+    if (hasPendingEnabled) void loadHarnesses(true, { waitMs: 3_000 })
+    else void loadHarnesses()
     if (harnessId !== 'kun') {
       void loadHarnessModels(harnessId, true)
       void loadHarnessProviderGroups(harnessId, true)

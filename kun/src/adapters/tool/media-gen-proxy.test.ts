@@ -218,6 +218,53 @@ describe('media generation proxy fetch wiring', () => {
 
     expect(createProxyFetchMock).toHaveBeenCalledWith('http://proxy.lan:8080')
   })
+
+  it('builds and invokes deepseek-tts against /v1/tools/tts without requiring model', async () => {
+    const { available, diagnostics } = buildSpeechGenToolProviders({
+      enabled: true,
+      protocol: 'deepseek-tts',
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk-ds',
+      model: '',
+      format: 'wav',
+      timeoutMs: 30_000
+    })
+    expect(available).toBe(true)
+    expect(diagnostics[0]?.reason).toBeUndefined()
+
+    const recorded: Array<{ url: string; init: RequestInit }> = []
+    createProxyFetchMock.mockReturnValue(async (url: RequestInfo | URL, init?: RequestInit) => {
+      recorded.push({ url: String(url), init: init ?? {} })
+      return new Response(Uint8Array.from([0x52, 0x49, 0x46, 0x46]), {
+        status: 200,
+        headers: { 'content-type': 'audio/wav' }
+      })
+    })
+    const client = createSpeechGenClient({
+      protocol: 'deepseek-tts',
+      baseUrl: 'https://api.deepseek.com/v1',
+      apiKey: 'sk-ds',
+      proxyUrl: 'http://proxy.lan:8080'
+    })
+    const audio = await client.generate({
+      text: 'Hello DeepSeek',
+      model: 'deepseek-tts',
+      voice: 'stella',
+      format: 'wav',
+      timeoutMs: 30_000,
+      signal: new AbortController().signal
+    })
+    expect(recorded).toHaveLength(1)
+    expect(recorded[0].url).toBe('https://api.deepseek.com/v1/tools/tts')
+    expect(JSON.parse(String(recorded[0].init.body))).toEqual({
+      text: 'Hello DeepSeek',
+      voice_id: 'stella',
+      format: 'wav',
+      filter_markdown: true
+    })
+    expect(audio.mimeType).toBe('audio/wav')
+    expect(Array.from(audio.data)).toEqual([0x52, 0x49, 0x46, 0x46])
+  })
 })
 
 function minimalContext(): Parameters<

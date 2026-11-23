@@ -3,16 +3,13 @@ import { after, before, test } from 'node:test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createRequire } from 'node:module'
-import { build } from 'esbuild'
+import { loadMemorySmokeBackend } from './fixtures/load-memory-smoke-backend.mjs'
 
-const require = createRequire(import.meta.url)
 let temporary, createBackend
 before(async () => {
   temporary = await mkdtemp(join(tmpdir(), 'kun-native-memory-service-tests-'))
-  const output = join(temporary, 'backend.cjs')
-  await build({ entryPoints: [resolve('scripts/fixtures/memory-lifecycle-backend.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: output })
-  createBackend = require(output).createMemorySmokeBackend
+  const backend = await loadMemorySmokeBackend(resolve('scripts/fixtures/memory-lifecycle-backend.ts'), temporary)
+  createBackend = backend.createMemorySmokeBackend
 })
 after(async () => { await rm(temporary, { recursive: true, force: true }) })
 async function fixture(name, work) {

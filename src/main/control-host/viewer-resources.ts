@@ -14,12 +14,15 @@ export function controlViewerEntry(directory: string, release: Manifest): string
   return join(directory, release.entrypoints.viewer)
 }
 
-export function secureControlViewer(window: BrowserWindow, entry: string) {
+export function secureControlViewer(window: BrowserWindow, entry: string, canLock: () => boolean = () => false) {
   const url = pathToFileURL(entry)
   const allowed = new Set([url.href, new URL('viewer.js', url).href, new URL('viewer.css', url).href])
   const session = window.webContents.session
-  session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false))
-  session.setPermissionCheckHandler(() => false)
+  const allowPointer = (contents: Electron.WebContents | null, permission: string) =>
+    permission === 'pointerLock' && canLock() && contents === window.webContents && contents.getURL() === url.href && window.isFocused()
+  session.setPermissionRequestHandler((contents, permission, callback, details) => callback(
+    details.isMainFrame === true && allowPointer(contents, permission)))
+  session.setPermissionCheckHandler((contents, permission) => allowPointer(contents, permission))
   session.setDisplayMediaRequestHandler((_request, callback) => callback({}))
   session.webRequest.onBeforeRequest((details, callback) => callback({ cancel: !allowed.has(details.url) }))
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))

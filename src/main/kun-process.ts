@@ -484,6 +484,9 @@ async function prepareKunLaunch(
   const computerUseBridge = runtime.computerUse.enabled
     ? await prepareComputerUseHostForKunLaunch()
     : undefined
+  const [{ KUN_COLAB_BRIDGE_TOKEN_ENV, KUN_COLAB_BRIDGE_URL_ENV }, { prepareColabHostForKunLaunch }] =
+    await Promise.all([import('./colab/colab-bridge-server'), import('./colab/colab-host')])
+  const colabBridge = await prepareColabHostForKunLaunch(settings)
   const paperSearch = normalizeWritePaperModeSettings(settings.write?.paperMode)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
@@ -517,7 +520,9 @@ async function prepareKunLaunch(
           [KUN_COMPUTER_USE_BRIDGE_URL_ENV]: computerUseBridge.url,
           [KUN_COMPUTER_USE_BRIDGE_TOKEN_ENV]: computerUseBridge.token
         }
-      : {})
+      : {}),
+    [KUN_COLAB_BRIDGE_URL_ENV]: colabBridge.url,
+    [KUN_COLAB_BRIDGE_TOKEN_ENV]: colabBridge.token
   }
   if (!browserUseBridge) {
     delete env[KUN_BROWSER_USE_BRIDGE_URL_ENV]

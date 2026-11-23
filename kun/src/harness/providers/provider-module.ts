@@ -74,6 +74,8 @@ export type ProviderInstallation = {
   readonly bundledPathMarkers?: readonly string[]
   /** Native self-updating installer layout: versions under the canonical home, launcher under home. */
   native?(homes: { home: string; canonicalHome: string }): { versionsDir: string; launcher: string; owner: string }
+  /** Known standalone executables that support their own in-place updater. */
+  nativePaths?(homes: { home: string; canonicalHome: string; dataDir?: string }): readonly string[]
   /** Look for a newer local installation next to the configured one. */
   readonly localCandidates?: boolean
 }
@@ -116,8 +118,29 @@ export type AcpSessionUsageSource = {
   collect(mark: unknown, input: AcpSessionUsageInput): Promise<AcpSessionUsageSample[]>
 }
 
+/** Projected MCP `tools/list` entry handed to engine-specific `_meta` hooks. */
+export type AcpMcpListedTool = {
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+  providerId?: string
+  providerKind?: string
+}
+
 /** ACP session behaviour that differs per engine. */
 export type ProviderAcpHooks = {
+  /** Wire-only MCP schema adaptation; canonical ToolHost validation stays unchanged. */
+  projectToolInputSchema?(schema: Record<string, unknown>): Record<string, unknown>
+  /**
+   * Extra `_meta` attached to MCP `tools/list` entries for this engine.
+   * Receives the full projected list so engines with an eager schema budget
+   * can prioritize core tools without overflowing their cap.
+   */
+  mcpToolListMeta?(tools: readonly AcpMcpListedTool[]): ReadonlyArray<Record<string, unknown> | undefined>
+  /** A normal prompt may finish before native async tools; settle them before the Kun turn ends. */
+  readonly continuePendingTools?: boolean
+  /** Stable instructions for this engine's session behavior. */
+  readonly turnInstructions?: readonly string[]
   /** Permission-dependent startup flags; session metadata must still confirm the mode. */
   launchArgs?(args: string[], permissionMode: string | undefined): string[]
   /** Usage from the engine's session log when the protocol carries none. */
@@ -142,6 +165,8 @@ export type ProviderAcpHooks = {
   modelCategory?(value: string): NonNullable<HarnessModelInfo['category']>
   /** Report a known-empty reasoning list when no thought_level option exists. */
   readonly emptyEffortsWithoutThoughtLevel?: boolean
+  /** Models that assign their own reasoning budget, even with a stale session selector. */
+  managesReasoningBudget?(model: string | undefined): boolean
   /**
    * A `session/prompt` sent while another is running joins that run: the
    * engine records the new user message and answers it before the run ends,
@@ -179,6 +204,8 @@ export type AgentProviderModule = {
   readonly binaryEnv?: string
   /** Executable shipped with Kun; `undefined` when unavailable. */
   bundled?(): { version?: string; command?: string } | undefined
+  /** Executable installed into Kun's `dataDir` when no explicit override or `binaryEnv` is set. */
+  managedExecutable?(dataDir: string): string | undefined
   /** Resolve the executable when the definition's command alone is not enough. */
   resolveExecutable?(): Promise<string>
   /**

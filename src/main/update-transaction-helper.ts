@@ -1,5 +1,7 @@
 import { app } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
+import { tmpdir } from 'node:os'
 import { openUpdateRollbackReadiness, powershellCaptureGuiProcess, powershellRollbackReadiness, powershellWaitForGuiExit } from './update-rollback-readiness'
 import { access, readFile } from 'node:fs/promises'
 import { join, win32 } from 'node:path'
@@ -65,12 +67,15 @@ export async function scheduleBoundedUpdateRollback(
   try {
     await readiness.listening
     const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64')
+    const relaunchPath = win32.join(tmpdir(), `kun-update-relaunch-${randomUUID()}.txt`)
+    const relaunchAssignment = `$relaunchPath=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(relaunchPath)}'))`
     const assignments = Object.entries(environment).map(([key, value]) =>
       `$env:${key}=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(value)}'))`
     )
     const command = `${powershellHelperDeadline()}\n` + [
       `$script=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('${encode(scriptPath)}'))`,
       `$waitPid=${pid}`,
+      relaunchAssignment,
       "$powershell=Join-Path $PSHOME 'powershell.exe'",
       ...assignments,
       // Actions use exit, so each runs in a native child:
@@ -93,31 +98,56 @@ export async function scheduleBoundedUpdateRollback(
       'if ([string]::IsNullOrWhiteSpace($exe)) { exit 1 }',
       '& $powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File $script -Action FinalizeUpdateTransaction -Bounded',
       'if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }',
-      'Start-Process -FilePath $exe -ErrorAction Stop',
+      // The elevated coordinator only publishes the validated recovery path.
+      '[IO.File]::WriteAllText($relaunchPath, $exe, [Text.Encoding]::Unicode)',
       'exit 0'
     ].join('; ')
     const encoded = encodePowershellCommand(command)
     const elevated = environment.KUN_INSTALLER_INSTALL_MODE?.toLowerCase() === 'all'
     const powershell = win32.join(process.env.SystemRoot ?? 'C:\\Windows',
       'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-    // libuv's detached flag uses DETACHED_PROCESS, which makes Windows
-    // PowerShell exit before executing its command (nodejs/node#51018).
-    // Start-Process supplies an independent hidden console instead. Its child
-    // survives this short-lived bootstrap and the GUI; only readiness permits quit.
-    const bootstrap = `${powershellHelperDeadline()}\n` + [
+    const relay = `${powershellHelperDeadline()}\n` + [
       `$coordinator=Start-Process -FilePath '${powershell.replace(/'/gu, "''")}'${elevated ? ' -Verb RunAs' : ''} -WindowStyle Hidden -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}' -ErrorAction Stop`,
       '$null=$coordinator.Handle',
       '$coordinator.WaitForExit()',
       '$exitCode=$coordinator.ExitCode',
       'if ($null -eq $exitCode) { exit 1 }',
+      relaunchAssignment,
+      'try {',
+      '  if ($exitCode -eq 0) {',
+      '    $exe=[IO.File]::ReadAllText($relaunchPath, [Text.Encoding]::Unicode).Trim()',
+      '    if ([string]::IsNullOrWhiteSpace($exe)) { throw "Recovery executable is missing." }',
+      // This relay retains the original GUI user's token, even after the GUI exits.
+      '    Start-Process -FilePath $exe -ErrorAction Stop',
+      '  }',
+      '} finally { Remove-Item -LiteralPath $relaunchPath -Force -ErrorAction SilentlyContinue }',
       'exit $exitCode'
     ].join('\n')
+    // The GUI's libuv job can terminate its direct child on exit. Start the
+    // original-token relay in an independent hidden console before arming rollback.
+    // Pass its body through the environment to keep nested commands below the
+    // Windows command-line length limit.
+    const relayEntry = encodePowershellCommand([
+      '$relayScript=$env:KUN_UPDATE_ROLLBACK_RELAY',
+      'if ([string]::IsNullOrWhiteSpace($relayScript)) { exit 1 }',
+      'Remove-Item Env:KUN_UPDATE_ROLLBACK_RELAY',
+      '& ([ScriptBlock]::Create($relayScript))'
+    ].join('\n'))
+    const bootstrap = `${powershellHelperDeadline()}\n` + [
+      `$relay=Start-Process -FilePath '${powershell.replace(/'/gu, "''")}' -WindowStyle Hidden -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${relayEntry}' -ErrorAction Stop`,
+      '$null=$relay.Handle',
+      '$relay.WaitForExit()',
+      'if ($null -eq $relay.ExitCode) { exit 1 }',
+      'exit $relay.ExitCode'
+    ].join('\n')
     const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', bootstrap]
-    child = spawnHelper(powershell, args, { detached: false, stdio: 'ignore', windowsHide: true })
+    child = spawnHelper(powershell, args, {
+      detached: false, stdio: 'ignore', windowsHide: true,
+      env: { ...process.env, KUN_UPDATE_ROLLBACK_RELAY: relay }
+    })
     child.once('error', readiness.cancel)
     child.once('exit', (code) => {
-      // The bootstrap waits for the actual coordinator, including after UAC.
-      // Even exit zero cannot replace that coordinator's readiness handshake.
+      // The exit code cannot replace the coordinator's readiness handshake.
       readiness.cancel(new Error(`Update rollback launcher exited with ${code} before readiness.`))
     })
     await readiness.ready

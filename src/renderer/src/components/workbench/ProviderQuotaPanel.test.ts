@@ -270,4 +270,75 @@ describe('ProviderQuotaPanel', () => {
     expect(renderer.root.findAllByProps({ role: 'progressbar' })).toHaveLength(2)
     act(() => renderer.unmount())
   })
+
+  it('renders Antigravity Gemini Models and Claude and GPT models with Weekly/5h limits and circular progress rings', async () => {
+    const antigravityResult: ProviderQuotaListResult = {
+      refreshedAt: '2027-01-15T08:00:00.000Z',
+      entries: [
+        {
+          providerId: 'native:antigravity',
+          providerName: 'Antigravity',
+          presetId: 'gemini-subscription',
+          status: 'available',
+          summary: 'Google AI Pro · user@gmail.com',
+          metrics: [
+            {
+              id: 'gemini-weekly',
+              label: 'Gemini Models · Weekly limit',
+              unit: 'percent',
+              usedPercent: 10,
+              windowSeconds: 604_800,
+              resetsAt: '2027-01-21T14:00:00.000Z'
+            },
+            {
+              id: 'gemini-5h',
+              label: 'Gemini Models · 5h limit',
+              unit: 'percent',
+              usedPercent: 2,
+              windowSeconds: 18_000,
+              resetsAt: '2027-01-15T12:25:00.000Z'
+            },
+            {
+              id: '3p-weekly',
+              label: 'Claude and GPT models · Weekly limit',
+              unit: 'percent',
+              usedPercent: 0,
+              windowSeconds: 604_800
+            },
+            {
+              id: '3p-5h',
+              label: 'Claude and GPT models · 5h limit',
+              unit: 'percent',
+              usedPercent: 0,
+              windowSeconds: 18_000
+            }
+          ]
+        }
+      ]
+    }
+    stubWindow(vi.fn(async () => antigravityResult))
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(ProviderQuotaPanel))
+    })
+
+    const html = text(renderer)
+    expect(html).toContain('Gemini Models')
+    expect(html).toContain('Claude and GPT models')
+    expect(html).toContain('Weekly limit')
+    expect(html).toContain('5h limit')
+    expect(html).toContain('Resets in 6d 6h')
+    expect(html).toContain('Resets in 4h 25m')
+    expect(html).toContain('90% left')
+    expect(html).toContain('98% left')
+    expect(html).toContain('100% left')
+    expect(renderer.root.findAllByProps({ role: 'progressbar' })).toHaveLength(4)
+
+    // Clicking a grouped row toggles immediately to 'used' on the very first click.
+    const firstRowButton = renderer.root.findAllByProps({ className: 'kq-meter-value kq-grouped-row-value' })[0]!
+    await act(async () => firstRowButton.props.onClick())
+    expect(text(renderer)).toContain('10% used')
+    expect(text(renderer)).toContain('2% used')
+    act(() => renderer.unmount())
+  })
 })

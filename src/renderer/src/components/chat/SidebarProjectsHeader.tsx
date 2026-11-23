@@ -5,7 +5,6 @@ import { SidebarIconButton } from '../sidebar/SidebarPrimitives'
 type Props = {
   allGroupsCollapsed: boolean
   searchVisible: boolean
-  workspaceRoot: string
   onToggle: () => void
   onToggleSearch: () => void
   onPickWorkspace: () => void
@@ -16,7 +15,6 @@ type Props = {
 export function SidebarProjectsHeader({
   allGroupsCollapsed,
   searchVisible,
-  workspaceRoot,
   onToggle,
   onToggleSearch,
   onPickWorkspace,
@@ -49,8 +47,8 @@ export function SidebarProjectsHeader({
         <SidebarIconButton
           onClick={onPickWorkspace}
           className="h-6 w-6"
-          title={workspaceRoot ? t('changeWorkspace') : t('selectWorkspace')}
-          ariaLabel={workspaceRoot ? t('changeWorkspace') : t('selectWorkspace')}
+          title={t('codeProjectCreateTitle')}
+          ariaLabel={t('codeProjectCreateTitle')}
         >
           <FolderPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
         </SidebarIconButton>

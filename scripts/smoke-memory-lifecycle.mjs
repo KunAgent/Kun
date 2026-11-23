@@ -11,6 +11,7 @@ import autoprefixer from 'autoprefixer'
 import tailwindConfig from '../tailwind.config.js'
 import { inspectCjkFonts } from './memory-cjk-fonts.mjs'
 import { smokeUrlAssets, writeSmokeAssets } from './smoke-url-assets.mjs'
+import { loadMemorySmokeBackend } from './fixtures/load-memory-smoke-backend.mjs'
 import { chromium, _electron } from 'playwright-core'
 
 // Production memory components/styles and real stores; isolated synthetic data only.
@@ -28,9 +29,8 @@ let browser, electron, page, backend
 const errors = [], results = []
 let status = 'failed'
 try {
-  const backendPath = join(temporary, 'backend.cjs')
-  await build({ entryPoints: [join(root, 'scripts/fixtures/memory-lifecycle-backend.ts')], bundle: true, platform: 'node', format: 'cjs', outfile: backendPath })
-  backend = await require(backendPath).createMemorySmokeBackend(join(temporary, 'data'))
+  const { createMemorySmokeBackend } = await loadMemorySmokeBackend(join(root, 'scripts/fixtures/memory-lifecycle-backend.ts'), temporary)
+  backend = await createMemorySmokeBackend(join(temporary, 'data'))
   const metadata = await backend.bootstrap()
   const compiled = await build({ entryPoints: [join(root, 'scripts/fixtures/memory-lifecycle.tsx')], bundle: true,
     format: 'esm', platform: 'browser', jsx: 'automatic', write: false, outdir: temporary,

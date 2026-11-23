@@ -41,6 +41,11 @@ import { defaultRuntime, probeGoogleCodeAssistQuota, probeGrokSubscriptionQuota,
 import { grpcWebDataFrames, looksLikeProtobufPayload, mergeProtobufScan, type ProtobufScan, requestCodexSubscriptionQuota, requestJson, sameNumberPath, scanProtobuf, startsWithNumberPath } from './provider-subscription-quota-transport.js'
 import { codexAdditionalLimitLabel, codexWindowMetric, cursorMoneyMetric, firstUsageRecord, googleQuotaMetric, percentageMetric, percentageWindowMetric } from './provider-subscription-quota-metrics.js'
 import { clearOpenCodeGoCookieCache, getOpenCodeGoCookieFailureReason, OPENCODE_GO_KEYCHAIN_MESSAGE, OPENCODE_GO_SIGN_IN_MESSAGE, resolveOpenCodeGoCookie } from './provider-subscription-quota-opencode-cookie.js'
+import {
+  probeDevinSubscriptionQuota,
+  type DevinQuotaCredential
+} from './devin-subscription-quota.js'
+import { parseAntigravityQuotaSummary } from './antigravity-quota-pools.js'
 import { clampPercentage, isoDateValue, numberValue, optionalRecord, requireRecord, stringValue } from './provider-subscription-quota-support.js'
 
 export const execFileAsync = promisify(execFile)
@@ -83,6 +88,7 @@ export type SubscriptionQuotaProbeKind =
   | 'grok-subscription'
   | 'cursor-subscription'
   | 'antigravity-subscription'
+  | 'devin-subscription'
   | 'gemini-cli-subscription'
   | 'opencode-go-local'
 
@@ -129,7 +135,13 @@ export type SubscriptionQuotaRuntime = {
     context?: ProbeContext
   ): Promise<GrokCredential | undefined>
   resolveCursorSession(): Promise<CursorSession | undefined>
-  resolveAntigravityCredential(context: ProbeContext): Promise<GoogleCredential | undefined>
+  resolveAntigravityCredential(
+    context: ProbeContext,
+    rejectedAccessToken?: string
+  ): Promise<GoogleCredential | undefined>
+  resolveDevinCredential(
+    provider: ProviderQuotaProbeProfile
+  ): Promise<DevinQuotaCredential | undefined>
   resolveGeminiCliToken(context: ProbeContext): Promise<string | undefined>
   resolveOpenCodeGoQuota(): Promise<OpenCodeGoLocalQuotaResult | undefined>
   resolveOpenCodeGoCookie(): Promise<string | undefined>
@@ -255,10 +267,47 @@ export async function runSubscriptionQuotaProbe(
     const credential = await runtime.resolveAntigravityCredential(context)
     if (!credential) {
       throw new ProviderQuotaMissingCredentialError(
-        'Sign in to the official Antigravity app before refreshing quota.'
+        'Sign in with agy login or the official Antigravity app before refreshing quota.'
       )
     }
-    return probeGoogleCodeAssistQuota(credential, context, 'antigravity')
+    try {
+      return await probeGoogleCodeAssistQuota(credential, context, 'antigravity')
+    } catch (error) {
+      if (!(error instanceof ProviderQuotaAuthorizationError)) throw error
+      const refreshed = await runtime.resolveAntigravityCredential(
+        context,
+        credential.accessToken
+      )
+      if (!refreshed || refreshed.accessToken === credential.accessToken) {
+        throw new ProviderQuotaMissingCredentialError(
+          'The Antigravity login expired. Run agy login or sign in to Antigravity again.'
+        )
+      }
+      return probeGoogleCodeAssistQuota(refreshed, context, 'antigravity')
+    }
+  }
+  if (kind === 'devin-subscription') {
+    const credential = await runtime.resolveDevinCredential(provider)
+    if (!credential) {
+      throw new ProviderQuotaMissingCredentialError(
+        'Sign in with `devin auth login` or set WINDSURF_API_KEY before refreshing quota.'
+      )
+    }
+    try {
+      return await probeDevinSubscriptionQuota(credential, (url, input) =>
+        requestJson(url, input, context)
+      )
+    } catch (error) {
+      if (
+        error instanceof ProviderQuotaAuthorizationError ||
+        (error instanceof Error && error.name === 'DevinQuotaAuthorizationError')
+      ) {
+        throw new ProviderQuotaMissingCredentialError(
+          'The Devin login expired or is unauthorized. Run `devin auth login` again.'
+        )
+      }
+      throw error
+    }
   }
   if (kind === 'opencode-go-local') {
     return probeOpenCodeGoLocalQuota(runtime, context)
@@ -528,6 +577,10 @@ export function parseGoogleCodeAssistQuota(payload: unknown): ProviderQuotaMetri
       ))
     })
   }
-  if (!metrics.length) throw new Error('Google Code Assist did not return a recognized model quota.')
+  if (!metrics.length) {
+    const summary = parseAntigravityQuotaSummary(root)
+    if (summary.length > 0) return summary
+    throw new Error('Google Code Assist did not return a recognized model quota.')
+  }
   return metrics
 }

@@ -43,24 +43,24 @@ export function useTimelineJumpRail({ containerRef, turnRefMap, visibleTurnAncho
 
   useEffect(() => {
     const container = containerRef.current
-    if (!container || visibleTurnAnchors.length <= 2) {
+    if (!container || visibleTurnAnchors.length === 0) {
       setJumpRailLayout(null)
       return
     }
     const update = (): void => {
-      const rect = container.getBoundingClientRect()
-      const railLeft = timelineJumpRailLeft(rect.width)
+      const width = container.clientWidth
+      const railLeft = timelineJumpRailLeft(width)
       setJumpRailLayout({
         railLeft,
-        previewLeft: timelineJumpRailPreviewLeft(railLeft, rect.width)
+        previewLeft: timelineJumpRailPreviewLeft(railLeft, width)
       })
     }
     update()
-    const observer = new ResizeObserver(update)
-    observer.observe(container)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    observer?.observe(container)
     window.addEventListener('resize', update)
     return () => {
-      observer.disconnect()
+      observer?.disconnect()
       window.removeEventListener('resize', update)
     }
   }, [visibleTurnAnchors.length, containerRef, setJumpRailLayout])

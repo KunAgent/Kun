@@ -1,8 +1,8 @@
 import { useState, type ReactElement } from 'react'
 import { Smartphone } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type { MobileLinkScope } from '@shared/mobile-link-scopes'
-import { MobileScopeOptions, PERSONAL_SCOPES } from './MobileScopeOptions'
+import { MOBILE_DEFAULT_SCOPES, type MobileLinkScope } from '@shared/mobile-link-scopes'
+import { MobileScopeOptions } from './MobileScopeOptions'
 import { MobileGrantRow } from './MobileGrantRow'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
@@ -10,7 +10,7 @@ import { RemoteCompactRow, REMOTE_FOCUS } from './remote-compact-ui'
 import { mobileRequirement } from './remote-access-state'
 import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS, RemoteSwitch } from './remote-panel-ui'
 
-/** Requests remain mounted across detail navigation; advanced consent is opt-in. */
+/** Requests remain mounted across detail navigation; full mobile access is enabled by default and can be narrowed. */
 export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElement | null {
   const { t } = useTranslation('common')
   const { zh, enabled, state, busy, confirm } = link
@@ -22,7 +22,7 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
         <Smartphone size={17} className="shrink-0 text-ds-muted" aria-hidden />
         <span className="min-w-0 flex-1 text-[13px] font-medium text-ds-ink">{t('remoteCompact.pairRequest', { name: pairing.name })}</span>
         <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={Boolean(busy) || !link.mobileAllowed}
-          onClick={event => runTrustedUserActivation(event, () => confirm(pairing.id, choices[pairing.id] ?? PERSONAL_SCOPES))}>
+          onClick={event => runTrustedUserActivation(event, () => confirm(pairing.id, choices[pairing.id] ?? MOBILE_DEFAULT_SCOPES))}>
           {t('remoteCompact.allow')}
         </button>
       </div>
@@ -30,7 +30,7 @@ export function MobilePairingRequests({ link }: { link: MobileLink }): ReactElem
       {!link.mobileAllowed ? <p className="mt-1 text-[12px] text-ds-muted">{mobileRequirement(link, t)}</p> : null}
       <details className="mt-1 text-[12px] text-ds-muted">
         <summary className={`cursor-pointer rounded-md py-1 ${REMOTE_FOCUS}`}>{t('remoteCompact.adjustPermissions')}</summary>
-        <MobileScopeOptions zh={zh} includeDesktop={false} disabled={Boolean(busy) || !link.mobileAllowed} value={choices[pairing.id] ?? PERSONAL_SCOPES}
+        <MobileScopeOptions zh={zh} includeDesktop={false} disabled={Boolean(busy) || !link.mobileAllowed} value={choices[pairing.id] ?? MOBILE_DEFAULT_SCOPES}
           onChange={value => setChoices(current => ({ ...current, [pairing.id]: value }))} />
       </details>
     </div>)}

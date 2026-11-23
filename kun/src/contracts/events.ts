@@ -473,6 +473,7 @@ export const DelegatedRuntimeEvent = RuntimeEventBase.extend({
     'route_changed',
     'capabilities_changed',
     'history_changed',
+    'workspace_roots_changed',
     'native_state_unavailable'
   ]).optional(),
   capabilities: DelegatedRuntimeCapabilitiesSchema,

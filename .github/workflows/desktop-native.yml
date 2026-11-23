@@ -1,0 +1,68 @@
+name: Desktop sharing helpers
+on:
+  pull_request:
+    paths:
+      - 'native/remote-desktop/**'
+      - 'src/main/remote-desktop/**'
+      - 'scripts/build-remote-desktop-helper.cjs'
+      - 'scripts/smoke-computer-desktop.cjs'
+      - 'scripts/fixtures/*privacy*'
+      - 'scripts/fixtures/computer-desktop-*.ts'
+      - 'scripts/smoke-desktop-process-ownership.cjs'
+      - '.github/workflows/desktop-native.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-24.04, ubuntu-24.04-arm, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        if: runner.os == 'Windows'
+        with:
+          go-version: '1.24'
+          cache: false
+      - run: node scripts/build-remote-desktop-helper.cjs
+      - run: node --test scripts/smoke-desktop-process-ownership.cjs
+      - name: Test Windows curtain composition and monitor changes
+        id: privacy
+        if: runner.os == 'Windows'
+        working-directory: native/remote-desktop/windows
+        shell: pwsh
+        run: |
+          $log = Join-Path $env:RUNNER_TEMP 'kun-windows-privacy-tests.jsonl'
+          go test -json -count=1 ./... | Tee-Object -FilePath $log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $passed = Get-Content $log | ForEach-Object { $_ | ConvertFrom-Json } | Where-Object { $_.Test -eq 'TestPrivacyCurtainsFollowMonitorBounds' -and $_.Action -eq 'pass' }
+          if ($passed) {
+            'interactive=true' >> $env:GITHUB_OUTPUT
+          } else {
+            'Windows WebRTC privacy tests need an unlocked graphical test desktop and were skipped on this runner.' >> $env:GITHUB_STEP_SUMMARY
+          }
+      - uses: actions/setup-node@v4
+        if: steps.privacy.outputs.interactive == 'true'
+        with:
+          node-version: '24'
+      - name: Verify Windows privacy over WebRTC, including an abrupt disconnect
+        if: steps.privacy.outputs.interactive == 'true'
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run build --workspace @kun/provider-catalog
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npm run ensure:electron
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/smoke-computer-desktop.cjs --privacy --disposable-windows-desktop
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          node scripts/smoke-computer-desktop.cjs --privacy-drop --disposable-windows-desktop
+      - if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb xdotool x11-xserver-utils python3-gi gir1.2-gstreamer-1.0 gstreamer1.0-pipewire
+          xvfb-run -a resources/native/linux-desktop/desktop_input.py --probe
+          xvfb-run -a sh -c 'cd native/remote-desktop/linux && /usr/bin/python3 -m unittest discover -p "*_test.py"'

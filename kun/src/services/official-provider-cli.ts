@@ -45,44 +45,44 @@ type AntigravityAsset = {
   binaryName: string
 }
 
-export const ANTIGRAVITY_CLI_VERSION = '1.1.8'
+export const ANTIGRAVITY_CLI_VERSION = '1.5.9'
 const ANTIGRAVITY_RELEASE_BASE =
   `https://github.com/google-antigravity/antigravity-cli/releases/download/${ANTIGRAVITY_CLI_VERSION}`
 
 const ANTIGRAVITY_ASSETS: Record<string, AntigravityAsset> = {
   'linux-arm64': {
     name: 'agy_cli_linux_arm64.tar.gz',
-    sha256: 'e75cebb03fce0fcad7d3bb682eb84c356a3c50ff8fb3dc4a89d2051f34fca0ab',
+    sha256: '3a18c238c7ee6661e43df7e824a7d4c1bed78aeeda09430921a0f1dbfe825bca',
     archiveKind: 'tar.gz',
     binaryName: 'antigravity'
   },
   'linux-x64': {
     name: 'agy_cli_linux_x64.tar.gz',
-    sha256: 'e92e6215532b3ce84455e341944067753ad90f6d24cebcec8002ce137e5162ce',
+    sha256: '8b1f5e56779f2434a0af36f1b715a8392a084de550f8c68bc79821f95fabf3fa',
     archiveKind: 'tar.gz',
     binaryName: 'antigravity'
   },
   'darwin-arm64': {
     name: 'agy_cli_mac_arm64.tar.gz',
-    sha256: '622d85db88bcfbf060aa4cbeaadcf2a287420f31236c1efb287409a949ccab25',
+    sha256: '51fb8eb7e18c53d4665f0043b761f04f4d0d4b2eb046bac6c2dcbe32473b5b2e',
     archiveKind: 'tar.gz',
     binaryName: 'antigravity'
   },
   'darwin-x64': {
     name: 'agy_cli_mac_x64.tar.gz',
-    sha256: '76afe4622132596f68557ef4531ec2e2dcd40e8025f6fb4435a273ce2eec0027',
+    sha256: 'd0fb8e28c233fadbe612fa273d06b6c189932a33f1c16f0d2c1cb6732123d6c3',
     archiveKind: 'tar.gz',
     binaryName: 'antigravity'
   },
   'win32-arm64': {
     name: 'agy_cli_windows_arm64.zip',
-    sha256: '2e5c5a5b67b4d2a197bc9eb5608f61e6a2f7d602b1012beb7e6b3c158e2a909c',
+    sha256: '9e54f3dc7b89856d8d1d019fd4b1928b69d6b4c5c4628407461ceab0e8404f06',
     archiveKind: 'zip',
     binaryName: 'antigravity.exe'
   },
   'win32-x64': {
     name: 'agy_cli_windows_x64.zip',
-    sha256: 'e234c850e3d835d278bb9b4aa202c34d53e399eeebc3d9d1a575576896cdecee',
+    sha256: '14066ebc90e6350ee8922960e561c4831b37700b1827415d63480eef6d1e470b',
     archiveKind: 'zip',
     binaryName: 'antigravity.exe'
   }

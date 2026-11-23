@@ -10,6 +10,26 @@ it('lets agy choose its native default model without passing a literal default I
   expect(args).toContain('plan')
 })
 
+it.each(['gemini-pro-orchestrator', 'models/gemini-pro-orchestrator-argon'])('omits a saved effort for %s in print mode', (model) => {
+  const args = buildAntigravityArgs({ prompt: 'hello', model, effort: 'max', timeoutMs: 10000,
+    planMode: true, approvalPolicy: 'never', sandboxMode: 'read-only' })
+  expect(args[args.indexOf('--model') + 1]).toBe(model.replace(/^models\//, ''))
+  expect(args).not.toContain('--effort')
+  expect(args).toContain('--sandbox')
+})
+
+it.each([
+  ['gemini-4-hydrogen', 'xhigh', 'xhigh'],
+  ['gemini-4-hydrogen-xhigh', undefined, 'xhigh'],
+  ['models/gemini-4-hydrogen-xhigh', 'auto', 'xhigh'],
+  ['gemini-4-hydrogen-xhigh', 'low', 'low']
+] as const)('passes the selected Hydrogen level for %s / %s in print mode', (model, effort, expected) => {
+  const args = buildAntigravityArgs({ prompt: 'hello', model, effort, timeoutMs: 10000,
+    planMode: false, approvalPolicy: 'never', sandboxMode: 'read-only' })
+  expect(args[args.indexOf('--model') + 1]).toBe('gemini-4-hydrogen')
+  expect(args[args.indexOf('--effort') + 1]).toBe(expected)
+})
+
 it('accepts the explicit native harness without borrowing unrelated model providers', () => {
   const runtime = new AntigravityCliRuntime({ providerConfigs: {}, providerIds: new Set(['native-account']),
     defaultIsAntigravity: false } as never)

@@ -15,8 +15,8 @@ import type {
   TurnUsageResponse,
   UsageSnapshot
 } from '../contracts/usage.js'
-import { addUtcDays, assertValidTimezone, type DailyUsageAccumulator, type DailyUsageQuery, dateString, formatDateInTimezone, inclusiveDayCount, type ModelUsageAccumulator, type ModelUsageQuery, parseDateString, relationMatchesScope, type ThreadUsageAccumulator, type ThreadUsageRecord, type TurnUsageQuery } from './usage-service-query.js'
-import { addUsageCounters, emptyCounters, emptyDailyBucket, emptyModelBucket, emptyThreadBucket, finalizeCacheRate, finalizeDailyBucket, finalizeModelBucket, finalizeThreadBucket } from './usage-service-aggregation.js'
+import { addUtcDays, assertValidTimezone, type AgentUsageAccumulator, type DailyUsageAccumulator, type DailyUsageQuery, dateString, formatDateInTimezone, inclusiveDayCount, type ModelUsageAccumulator, type ModelUsageQuery, parseDateString, relationMatchesScope, type ThreadUsageAccumulator, type ThreadUsageRecord, type TurnUsageQuery } from './usage-service-query.js'
+import { addUsageCounters, emptyAgentBucket, emptyCounters, emptyDailyBucket, emptyModelBucket, emptyThreadBucket, finalizeAgentBucket, finalizeCacheRate, finalizeDailyBucket, finalizeModelBucket, finalizeThreadBucket } from './usage-service-aggregation.js'
 
 type SummedCounters = Pick<DailyUsageResponse['totals'],
   | 'input_tokens' | 'output_tokens' | 'reasoning_tokens' | 'cached_tokens' | 'cache_write_tokens' | 'cache_miss_tokens'
@@ -119,6 +119,7 @@ export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], q
   const start = parseDateString(query.from, 'from')
   const dayBuckets = new Map<string, DailyUsageAccumulator>()
   const modelBuckets = new Map<string, ModelUsageAccumulator>()
+  const agentBuckets = new Map<string, AgentUsageAccumulator>()
   for (let offset = 0; offset < days; offset += 1) dayBuckets.set(dateString(addUtcDays(start, offset)), emptyDailyBucket(dateString(addUtcDays(start, offset))))
   for (const record of records) {
     if (!relationMatchesScope(scope, record.relation)) continue
@@ -127,9 +128,11 @@ export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], q
     if (!dayBucket) continue
     const model = resolveUsageModel(record)
     const providerId = resolveUsageProviderId(record)
+    const harnessId = record.harnessId?.trim() || 'kun'
     const modelBucket = modelBuckets.get(model) ?? emptyModelBucket(model)
+    const agentBucket = agentBuckets.get(harnessId) ?? emptyAgentBucket(harnessId)
     if (record.harnessId && record.harnessId !== 'kun') modelBucket.harnessIds.add(record.harnessId)
-    for (const bucket of [dayBucket, modelBucket]) {
+    for (const bucket of [dayBucket, modelBucket, agentBucket]) {
       const added = addUsageCounters(
         bucket, record.usage, model, record.completedAt, providerId
       )
@@ -138,10 +141,13 @@ export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], q
       bucket.hasCacheTelemetry ||= added.hasCacheTelemetry
     }
     modelBuckets.set(model, modelBucket)
+    agentBuckets.set(harnessId, agentBucket)
   }
   const finalizedDays = [...dayBuckets.values()].map(finalizeDailyBucket)
   const finalizedModels = [...modelBuckets.values()].map(finalizeModelBucket)
     .sort((a, b) => b.total_tokens - a.total_tokens || a.model.localeCompare(b.model))
+  const finalizedAgents = [...agentBuckets.values()].map(finalizeAgentBucket)
+    .sort((a, b) => b.total_tokens - a.total_tokens || a.harness_id.localeCompare(b.harness_id))
   const totalsBase = { ...emptyCounters(), days, active_days: 0 }
   for (const bucket of finalizedDays) {
     addFinalCounters(totalsBase, bucket)
@@ -150,7 +156,7 @@ export function buildModelUsageResponse(records: readonly ThreadUsageRecord[], q
   const ids = new Set<string>()
   for (const bucket of modelBuckets.values()) for (const id of bucket.threadIds) ids.add(id)
   totalsBase.thread_count = ids.size
-  return { group_by: 'model', scope, from: query.from, to: query.to, timezone: query.timezone, buckets: finalizedModels, days: finalizedDays, totals: finalizeCacheRate(totalsBase, [...modelBuckets.values()].some((bucket) => bucket.hasCacheTelemetry)) }
+  return { group_by: 'model', scope, from: query.from, to: query.to, timezone: query.timezone, buckets: finalizedModels, agents: finalizedAgents, days: finalizedDays, totals: finalizeCacheRate(totalsBase, [...modelBuckets.values()].some((bucket) => bucket.hasCacheTelemetry)) }
 }
 
 /**

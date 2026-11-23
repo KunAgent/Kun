@@ -13,7 +13,7 @@ import { spawnCaptured } from './harness-detector.js'
 
 export type InstallationDetails = HarnessInstallation & { prefix?: string }
 export async function describeHarnessInstallation(id: string, status: HarnessStatus,
-  home = homedir()): Promise<InstallationDetails> {
+  home = homedir(), dataDir?: string): Promise<InstallationDetails> {
   const path = status.resolvedCommand
   const base = { path, version: status.version, fingerprint: harnessExecutableIdentity(path) }
   const installation = providerModule(id)?.installation
@@ -37,6 +37,9 @@ export async function describeHarnessInstallation(id: string, status: HarnessSta
   const native = installation?.native?.({ home, canonicalHome })
   if (native && target.startsWith(native.versionsDir + sep) && resolve(path) === native.launcher) {
     return { ...base, source: 'native', owner: native.owner }
+  }
+  if (installation?.nativePaths?.({ home, canonicalHome, dataDir }).some((candidate) => resolve(path) === resolve(candidate))) {
+    return { ...base, source: 'native', owner: providerModule(id)?.definition.displayName }
   }
   // Match the actual package and npm prefix; never update whichever npm happens to own PATH.
   if (recipe?.packageName) {

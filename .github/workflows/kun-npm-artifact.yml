@@ -1,0 +1,477 @@
+name: Kun npm native artifact matrix
+
+on:
+  workflow_dispatch:
+    inputs:
+      registry_only:
+        description: Install the accepted exact prerelease from npm without publishing or changing tags
+        type: boolean
+        default: false
+      registry_receipts_run_id:
+        description: Collect a completed registry matrix without repeating its installations (use with registry_only)
+        type: string
+        default: ''
+      desktop_data_only:
+        description: Verify sequential data reuse with a disposable ad-hoc CI desktop
+        type: boolean
+        default: false
+      global_checks_only:
+        description: Validate source typechecks, build and related tests against an immutable candidate
+        type: boolean
+        default: false
+      windows_probe_only:
+        description: Diagnose terminal behavior from an existing immutable candidate
+        type: boolean
+        default: false
+      reuse_candidate_run_id:
+        description: Reuse immutable candidate bytes from a previous accepted run
+        type: string
+        default: ''
+      candidate_run_id:
+        description: Original candidate run id for terminal diagnostics
+        type: string
+        default: ''
+
+# Read-only acceptance of local candidates or the published exact prerelease.
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: kun-npm-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-payload:
+    if: ${{ !inputs.registry_only && !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only && inputs.reuse_candidate_run_id == '' }}
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - name: Install only the locked helper build tools and dependencies
+        run: npm --prefix kun ci --ignore-scripts --no-audit --no-fund
+      - name: Build ownership helpers on their native target
+        run: npm run build:kun:npm-windows
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kun-npm-windows-payload
+          path: kun/dist/native/win32-x64/
+          if-no-files-found: error
+          retention-days: 7
+
+  candidate:
+    if: ${{ always() && !inputs.registry_only && !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only && (inputs.reuse_candidate_run_id != '' || needs.windows-payload.result == 'success') }}
+    needs: windows-payload
+    outputs:
+      source_commit: ${{ steps.identity.outputs.source_commit }}
+      sha256: ${{ steps.identity.outputs.sha256 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-windows-payload
+          path: .cache/kun-npm-windows-payload
+        if: ${{ inputs.reuse_candidate_run_id == '' }}
+      - uses: actions/download-artifact@v4
+        if: ${{ inputs.reuse_candidate_run_id != '' }}
+        with:
+          name: kun-npm-candidate
+          path: .cache/kun-npm/artifacts
+          run-id: ${{ inputs.reuse_candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Build one canonical candidate for every installation target
+        if: ${{ inputs.reuse_candidate_run_id == '' }}
+        run: npm run pack:kun:npm -- --windows-payload .cache/kun-npm-windows-payload
+      - name: Verify and export immutable candidate identity
+        id: identity
+        run: node scripts/verify-kun-npm-candidate.mjs .cache/kun-npm/artifacts
+      - name: Packaging contract tests
+        run: npm run test:kun:npm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: .cache/kun-npm/artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  install:
+    if: ${{ always() && !inputs.registry_only && !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only && needs.candidate.result == 'success' }}
+    needs: candidate
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['26.4.0', '26.12.0']
+        target:
+          - {id: darwin-arm64, runner: macos-15}
+          - {id: darwin-x64, runner: macos-15-intel}
+          - {id: win32-x64, runner: windows-2025}
+          - {id: linux-arm64, runner: ubuntu-24.04-arm}
+          - {id: linux-x64, runner: ubuntu-24.04}
+    runs-on: ${{ matrix.target.runner }}
+    env:
+      KUN_NPM_EXPECTED_TARGET: ${{ matrix.target.id }}
+      KUN_NPM_EXPECTED_NODE: ${{ matrix.node }}
+      KUN_NPM_CANDIDATE_SOURCE: ${{ needs.candidate.outputs.source_commit }}
+      KUN_NPM_CANDIDATE_SHA256: ${{ needs.candidate.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: drivers-checkout
+          # Only independent test drivers are available, never Runtime sources.
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/smoke-kun-npm.mjs
+            /scripts/probe-kun-npm-terminal.mjs
+            /scripts/run-kun-npm-artifact-smoke.mjs
+            /scripts/export-kun-npm-test-driver.mjs
+            /scripts/lib/kun-npm-smoke-*
+            /scripts/lib/kun-npm-artifact-*
+            /scripts/lib/kun-npm-registry-install.mjs
+            /scripts/fixtures/kun-npm/**
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Export test-only files
+        shell: bash
+        working-directory: drivers-checkout
+        run: |
+          node scripts/export-kun-npm-test-driver.mjs "$RUNNER_TEMP/kun-npm-driver"
+      - name: Remove checkout and Git history after the exporter has exited
+        shell: bash
+        run: node -e 'require("node:fs").rmSync("drivers-checkout",{recursive:true,force:true,maxRetries:10,retryDelay:100})'
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: candidate
+      - name: Install and exercise the actual candidate
+        shell: bash
+        env:
+          KUN_NPM_SMOKE_ROOT: ${{ runner.temp }}/kun-npm-consumer
+        run: node "$RUNNER_TEMP/kun-npm-driver/scripts/run-kun-npm-artifact-smoke.mjs" candidate receipt.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-receipt-${{ matrix.target.id }}-${{ matrix.node }}
+          path: receipt.json
+          if-no-files-found: error
+          retention-days: 7
+
+  evidence:
+    needs: install
+    if: ${{ always() && !inputs.registry_only && !inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/check-kun-npm-matrix.mjs
+            /kun/npm/release.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kun-npm-receipt-*
+          path: receipts
+      - name: Check matrix smoke coverage
+        run: node scripts/check-kun-npm-matrix.mjs receipts --smoke-only
+      - name: Record remaining complete Gate A requirements
+        run: node scripts/check-kun-npm-matrix.mjs receipts --report-only
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-matrix-evidence
+          path: |
+            receipts/
+            artifact-readiness.json
+          retention-days: 7
+
+  windows-terminal-probe:
+    if: ${{ !inputs.registry_only && inputs.windows_probe_only && !inputs.global_checks_only && !inputs.desktop_data_only }}
+    runs-on: windows-2025
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['26.4.0', '26.12.0']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Diagnose the real terminal against frozen candidate bytes
+        run: node scripts/probe-kun-npm-terminal.mjs candidate terminal-probe.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-terminal-probe-${{ matrix.node }}
+          path: terminal-probe.json
+          if-no-files-found: error
+
+  build-validation:
+    if: ${{ !inputs.registry_only && inputs.global_checks_only && !inputs.desktop_data_only }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: validation/candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Record typecheck, build and related test evidence for the exact candidate
+        run: node scripts/run-kun-npm-build-validation.mjs validation/candidate validation/build-validation.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-build-validation
+          path: |
+            validation/*.json
+            validation/*.log
+          if-no-files-found: error
+          retention-days: 90
+
+  desktop-data:
+    if: ${{ !inputs.registry_only && inputs.desktop_data_only }}
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      NODE_OPTIONS: --max-old-space-size=6144
+      KUN_MAC_ALLOW_ADHOC: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - run: npm ci
+      - name: Build a disposable CI desktop, without installing or publishing
+        run: npm run dist -- --mac dir --arm64 --config.directories.output=.cache/kun-npm-ci-data/desktop
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: validation/candidate
+          run-id: ${{ inputs.candidate_run_id }}
+          github-token: ${{ github.token }}
+      - name: Fetch the pinned genuine historical producer
+        run: |
+          node --input-type=module - <<'JS'
+          import {readFile,mkdir,appendFile} from 'node:fs/promises'
+          import {resolve} from 'node:path'
+          import {tarEntries} from './scripts/smoke-kun-npm.mjs'
+          import {describeHistoricalRelease} from './scripts/lib/kun-npm-artifact-historical-release.mjs'
+          import {smokeEnvironment} from './scripts/lib/kun-npm-smoke-process.mjs'
+          const root=resolve('validation/historical');await mkdir(root,{recursive:true})
+          const m=JSON.parse(await readFile('validation/candidate/manifest.json','utf8'))
+          const p=JSON.parse(tarEntries(await readFile('validation/candidate/'+m.artifact.filename)).find(e=>e.name==='package/package.json').content)
+          const historical=await describeHistoricalRelease({root,manifest:p,env:smokeEnvironment(process.execPath,root)})
+          await appendFile(process.env.GITHUB_ENV,'HISTORICAL_RESOURCES='+historical.resources+'\nCANDIDATE_TARBALL='+resolve('validation/candidate',m.artifact.filename)+'\n')
+          JS
+      - name: Verify genuine historical to npm to desktop data reuse and npm uninstall
+        run: >-
+          node scripts/smoke-kun-npm-compatibility.mjs --tarball "$CANDIDATE_TARBALL"
+          --output validation/desktop-data.json --only history --ci-data-desktop
+          --historical-resources "$HISTORICAL_RESOURCES"
+          --desktop-resources .cache/kun-npm-ci-data/desktop/mac-arm64/Kun.app/Contents/Resources
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-desktop-data
+          path: validation/desktop-data.json
+          if-no-files-found: error
+          retention-days: 90
+
+  registry-selection:
+    if: ${{ inputs.registry_only }}
+    runs-on: ubuntu-24.04
+    outputs:
+      run_id: ${{ steps.accepted.outputs.run_id }}
+      source_commit: ${{ steps.accepted.outputs.source_commit }}
+      sha256: ${{ steps.accepted.outputs.sha256 }}
+      windows_sha256: ${{ steps.accepted.outputs.windows_sha256 }}
+      stable_tags: ${{ steps.accepted.outputs.stable_tags }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /kun/npm/publish.json
+            /kun/npm/release.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - name: Select only the already accepted original candidate
+        id: accepted
+        run: |
+          node --input-type=module - <<'JS'
+          import assert from 'node:assert/strict'
+          import {readFile,appendFile} from 'node:fs/promises'
+          const {acceptedCandidate:c,initialLatestAcknowledgement:a,registryStableTags:s={}}=JSON.parse(await readFile('kun/npm/publish.json','utf8'))
+          const r=JSON.parse(await readFile('kun/npm/release.json','utf8'))
+          assert.equal(c.name,r.name);assert.equal(c.version,r.version);assert.equal(c.windowsPackage,r.windowsPackage)
+          assert(/^\d+$/.test(c.runId));assert(/^[a-f0-9]{40}$/.test(c.sourceCommit))
+          for(const digest of [c.sha256,c.windowsSha256])assert(/^[a-f0-9]{64}$/.test(digest))
+          const tags=Object.fromEntries([c.name,c.windowsPackage].map(name=>[name,Object.hasOwn(s,name)?s[name]:a?.version===c.version&&a.packages?.includes(name)?c.version:null]))
+          await appendFile(process.env.GITHUB_OUTPUT,'run_id='+c.runId+'\nsource_commit='+c.sourceCommit+'\nsha256='+c.sha256+'\nwindows_sha256='+c.windowsSha256+'\nstable_tags='+JSON.stringify(tags)+'\n')
+          JS
+
+  registry-install:
+    needs: registry-selection
+    if: ${{ inputs.registry_only && inputs.registry_receipts_run_id == '' }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['26.4.0', '26.12.0']
+        target:
+          - {id: darwin-arm64, runner: macos-15}
+          - {id: darwin-x64, runner: macos-15-intel}
+          - {id: win32-x64, runner: windows-2025}
+          - {id: linux-arm64, runner: ubuntu-24.04-arm}
+          - {id: linux-x64, runner: ubuntu-24.04}
+    runs-on: ${{ matrix.target.runner }}
+    env:
+      KUN_NPM_EXPECTED_TARGET: ${{ matrix.target.id }}
+      KUN_NPM_EXPECTED_NODE: ${{ matrix.node }}
+      KUN_NPM_CANDIDATE_SOURCE: ${{ needs.registry-selection.outputs.source_commit }}
+      KUN_NPM_CANDIDATE_SHA256: ${{ needs.registry-selection.outputs.sha256 }}
+      KUN_NPM_CANDIDATE_WINDOWS_SHA256: ${{ needs.registry-selection.outputs.windows_sha256 }}
+      KUN_NPM_REGISTRY_ACCEPTANCE: 'true'
+      KUN_NPM_REGISTRY_STABLE_TAGS: ${{ needs.registry-selection.outputs.stable_tags }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: drivers-checkout
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/smoke-kun-npm.mjs
+            /scripts/probe-kun-npm-terminal.mjs
+            /scripts/run-kun-npm-artifact-smoke.mjs
+            /scripts/export-kun-npm-test-driver.mjs
+            /scripts/lib/kun-npm-smoke-*
+            /scripts/lib/kun-npm-artifact-*
+            /scripts/lib/kun-npm-registry-install.mjs
+            /scripts/fixtures/kun-npm/**
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Export independent test drivers
+        shell: bash
+        working-directory: drivers-checkout
+        run: node scripts/export-kun-npm-test-driver.mjs "$RUNNER_TEMP/kun-npm-driver"
+      - name: Remove the entire checkout and Git history before installation
+        shell: bash
+        run: node -e 'require("node:fs").rmSync("drivers-checkout",{recursive:true,force:true,maxRetries:10,retryDelay:100})'
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: candidate
+          run-id: ${{ needs.registry-selection.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Install exact registry version into fresh project and global prefixes
+        shell: bash
+        env:
+          KUN_NPM_SMOKE_ROOT: ${{ runner.temp }}/kun-npm-registry-consumer
+        run: node "$RUNNER_TEMP/kun-npm-driver/scripts/run-kun-npm-artifact-smoke.mjs" candidate receipt.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-registry-receipt-${{ matrix.target.id }}-${{ matrix.node }}
+          path: receipt.json
+          if-no-files-found: error
+          retention-days: 90
+
+  registry-evidence:
+    needs: [registry-selection, registry-install]
+    if: ${{ always() && inputs.registry_only && needs.registry-selection.result == 'success' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            /scripts/check-kun-npm-matrix.mjs
+            /scripts/check-kun-npm-registry.mjs
+            /scripts/lib/kun-npm-registry-receipts.mjs
+            /kun/npm/release.json
+            /kun/npm/publish.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.12.0'
+      - name: Select each receipt from its latest creation time, preserving prior attempts
+        id: receipt-selection
+        uses: actions/github-script@v7
+        env:
+          RECEIPT_RUN_ID: ${{ inputs.registry_receipts_run_id }}
+        with:
+          script: |
+            const assert = require('node:assert/strict')
+            const {readFile,writeFile} = require('node:fs/promises')
+            const {pathToFileURL} = require('node:url')
+            const {resolve} = require('node:path')
+            const {selectRegistryReceiptArtifacts,verifyRegistryJobs,materializeRegistryReceipt} = await import(pathToFileURL(resolve('scripts/lib/kun-npm-registry-receipts.mjs')).href)
+            const id=process.env.RECEIPT_RUN_ID || String(context.runId)
+            assert(/^\d+$/.test(id))
+            const params={...context.repo,run_id:Number(id),per_page:100}
+            const {data:run}=await github.rest.actions.getWorkflowRun(params)
+            assert.equal(run.head_repository.full_name,process.env.GITHUB_REPOSITORY)
+            assert.equal(run.path,'.github/workflows/kun-npm-artifact.yml')
+            const release=JSON.parse(await readFile('kun/npm/release.json','utf8'))
+            const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRun,{...params,filter:'latest'})
+            const verifiedJobs=verifyRegistryJobs(jobs,release)
+            const artifacts=await github.paginate(github.rest.actions.listWorkflowRunArtifacts,params)
+            const selection={...selectRegistryReceiptArtifacts(artifacts,release,id,run.head_sha),runAttempt:run.run_attempt,jobs:verifiedJobs}
+            await writeFile('registry-receipt-selection.json',JSON.stringify(selection,null,2)+'\n')
+            for(const artifact of selection.selected) {
+              const archive=await github.rest.actions.downloadArtifact({...context.repo,artifact_id:artifact.id,archive_format:'zip'})
+              await materializeRegistryReceipt(Buffer.from(archive.data),artifact,'receipts')
+              core.info('Verified receipt '+artifact.name+' ID '+artifact.id+' '+artifact.digest)
+            }
+            core.setOutput('artifact_ids',selection.selected.map(item=>item.id).join(','))
+            core.setOutput('run_id',id)
+            core.setOutput('driver_commit',run.head_sha)
+      - uses: actions/download-artifact@v4
+        with:
+          name: kun-npm-candidate
+          path: candidate
+          run-id: ${{ needs.registry-selection.outputs.run_id }}
+          github-token: ${{ github.token }}
+      - name: Require all ten registry installations and unchanged stable tags
+        env:
+          KUN_NPM_EXPECTED_DRIVER_COMMIT: ${{ steps.receipt-selection.outputs.driver_commit }}
+        run: node scripts/check-kun-npm-registry.mjs receipts candidate/manifest.json registry-readiness.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kun-npm-registry-evidence
+          path: |
+            receipts/
+            registry-readiness.json
+            registry-receipt-selection.json
+          if-no-files-found: error
+          retention-days: 90

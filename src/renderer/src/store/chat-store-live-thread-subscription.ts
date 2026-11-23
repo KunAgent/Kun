@@ -12,7 +12,6 @@ import { copyLiveProjection, emptyLiveProjection, restoredLiveProjection } from 
 import { isPendingQueuedMessage, queuedMessagesForThread, reconcileQueuedMessages, saveQueuedMessagesForThread } from './queued-message-persistence'
 import { subscribeThreadEventsWithRecovery } from './chat-store-thread-action-helpers'
 import { threadTodosForProjection } from './thread-todo-projection'
-import { syncThreadAdditionalWorkspaces } from './chat-store-workspace-folder-sync'
 
 export function createLiveThreadSubscription(
   context: StoreActionContext,
@@ -149,14 +148,6 @@ export function createLiveThreadSubscription(
       if (busy) armBusyWatchdog(set, get)
       if (!busy && queuedMessages.some(isPendingQueuedMessage)) {
         void get().drainQueuedMessages()
-      }
-      if (!busy) {
-        void syncThreadAdditionalWorkspaces({
-          set,
-          get,
-          threadId: targetThreadId,
-          mergeExtras: additionalWorkspaces
-        })
       }
     } catch (e) {
       if (ac.signal.aborted || get().activeThreadId !== targetThreadId) return

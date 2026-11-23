@@ -113,6 +113,17 @@ describe('shared structured tool evidence', () => {
     expect(container.textContent).toContain('partial-result')
   })
 
+  it('distinguishes missing ACP output from waiting and preserves an actual zero result', async () => {
+    await render(presentation({ source: 'acp', state: 'completed', output: '', input: { operation: 'status' } }))
+    expect(container.textContent).toContain('toolDetails.acpNoOutput')
+    expect(container.textContent).not.toContain('toolDetails.output')
+    await render(presentation({ source: 'acp', state: 'running' }))
+    expect(container.textContent).toContain('toolDetails.waiting')
+    await render(presentation({ source: 'acp', state: 'completed', output: 0 }))
+    expect(container.textContent).toContain('toolDetails.output')
+    expect(container.textContent).not.toContain('toolDetails.acpNoOutput')
+  })
+
   it('keeps cancellation reasons neutral and represents an empty read as a real file', async () => {
     await render(presentation({ state: 'canceled', error: 'Stopped by the user' }))
     expect(container.querySelector('[data-tool-payload="error"]')).toBeNull()

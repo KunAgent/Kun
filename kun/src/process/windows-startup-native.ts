@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readNpmDistribution, type NpmDistribution } from '../cli/npm-distribution.js'
 
 export type WindowsProcessInspection = {
   state: 'alive' | 'dead' | 'unknown'
@@ -34,6 +35,19 @@ export class WindowsStartupIntegrityError extends Error {
   }
 }
 
+export function npmWindowsStartupDirectory(
+  distribution: NpmDistribution,
+  resolvePackage: (name: string) => string = createRequire(import.meta.url).resolve
+): string {
+  try {
+    if (!distribution.windowsPackage) throw new Error('missing platform package name')
+    const manifestPath = resolvePackage(`${distribution.windowsPackage}/package.json`)
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as { name?: string; version?: string }
+    if (manifest.name !== distribution.windowsPackage || manifest.version !== distribution.version) throw new Error('platform package version')
+    return dirname(manifestPath)
+  } catch { throw new WindowsStartupIntegrityError() }
+}
+
 /** Never compile or search PATH at runtime. Packaged processes use only their own resources. */
 export function windowsStartupDirectory(): string {
   if (directory) return directory
@@ -44,7 +58,8 @@ export function windowsStartupDirectory(): string {
   const developmentMainDirectory = basename(moduleDirectory) === 'chunks' &&
     basename(dirname(moduleDirectory)) === 'main' && basename(dirname(dirname(moduleDirectory))) === 'out'
     ? dirname(moduleDirectory) : moduleDirectory
-  const candidates = resources && existsSync(join(resources, 'app.asar'))
+  const npm = readNpmDistribution()
+  const candidates = npm ? [npmWindowsStartupDirectory(npm)] : resources && existsSync(join(resources, 'app.asar'))
     ? [join(resources, 'app.asar.unpacked', 'kun', 'dist', 'native', folder)]
     : [join(moduleDirectory, '..', 'native', folder),
       join(moduleDirectory, '..', '..', 'dist', 'native', folder),

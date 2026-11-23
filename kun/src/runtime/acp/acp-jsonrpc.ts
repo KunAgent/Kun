@@ -33,6 +33,7 @@ import {
   makeAcpNotification,
   makeAcpRequest,
   makeAcpResultResponse,
+  sanitizeAcpErrorDetails,
   type AcpJsonRpcId
 } from './acp-schema.js'
 
@@ -333,8 +334,24 @@ export class AcpJsonRpc {
         error instanceof AcpError
           ? error.message
           : 'internal error'
+      const data =
+        error instanceof AcpError
+          ? sanitizeAcpErrorDetails(error.data)
+          : undefined
+      this.io.debug?.({
+        direction: 'note',
+        summary: `client request ${method} failed (${rpcCode}): ${acpDiagnosticText(
+          error instanceof Error ? error.message : String(error),
+          512
+        )}`
+      })
       await this.enqueue(
-        makeAcpErrorResponse(id, rpcCode, redactApprovalSensitiveText(message).slice(0, 1_024))
+        makeAcpErrorResponse(
+          id,
+          rpcCode,
+          redactApprovalSensitiveText(message).slice(0, 1_024),
+          data
+        )
       ).catch(() => undefined)
     }
   }

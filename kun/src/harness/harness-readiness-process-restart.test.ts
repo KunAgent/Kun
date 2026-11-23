@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -72,4 +72,45 @@ it('changes the network identity when the proxy changes, but not between process
   expect(network.nativeAgentNetworkIdentity(definition, {})).toBe(first)
   expect(network.nativeAgentNetworkIdentity(definition, { HTTPS_PROXY: 'http://127.0.0.1:7890' })).not.toBe(first)
   expect(network.nativeAgentNetworkStatus(definition, {}).networkFingerprint).not.toBe(first)
+})
+
+it('keeps native Antigravity proofs across a restart when agy settings.json or Kun main model changes', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'kun-agy-restart-')); dirs.push(dir)
+  vi.stubEnv('HOME', dir)
+  try {
+    const agyDir = join(dir, '.gemini', 'antigravity-cli')
+    await mkdir(agyDir, { recursive: true })
+    await writeFile(join(agyDir, 'antigravity-oauth-token'), JSON.stringify({ refresh_token: 'durable-refresh', access_token: 'token-1' }))
+    await writeFile(join(agyDir, 'settings.json'), JSON.stringify({ modelSelection: 'gemini-4-carbon' }))
+    const command = join(dir, 'agy'); await writeFile(command, '#!/bin/sh\nexit 0\n', { mode: 0o755 })
+    const proofStorePath = join(dir, 'harness-readiness.json')
+    const handshake = vi.fn<NonNullable<HarnessReadinessDeps['handshake']>>(async () => ({ ok: true, supported: true, protocol: 'acp' }))
+    const detector = { status: vi.fn(async (): Promise<HarnessStatus> => ({ harnessId: 'antigravity', installed: 'yes' as const,
+      login: 'unknown' as const, ready: 'yes' as const, version: '1.5.9', versionSupported: true, resolvedCommand: command, checkedAt: '2026-11-19T00:00:00.000Z' })) }
+    const start = async (kunModel: string) => {
+      const modules = await freshProcess()
+      const options = { model: kunModel, apiKey: `key-for-${kunModel}`, harnesses: modules.HarnessesConfigSchema.parse({
+        providers: { antigravity: { command } },
+        enabledProfiles: [{ harnessId: 'antigravity', credentialMode: 'native-login' }] }) }
+      const catalog = new modules.HarnessCatalog({ providers: () => options.harnesses.providers, enabledProfiles: () => options.harnesses.enabledProfiles })
+      return new modules.HarnessReadinessService({ options: () => options, catalog, detector, handshake, revision: () => 1, proofStorePath })
+    }
+
+    const first = await start('deepseek-chat')
+    first.warmProfiles('antigravity')
+    await vi.waitFor(() => expect(first.checking('antigravity')).toBe(false))
+    await vi.waitFor(async () => expect(JSON.parse(await readFile(proofStorePath, 'utf8')).proofs).toHaveLength(1), { timeout: 3_000 })
+    expect(handshake).toHaveBeenCalledTimes(1)
+
+    // Simulate agy rewriting settings.json + refreshing access_token and user switching Kun's own model.
+    await writeFile(join(agyDir, 'settings.json'), JSON.stringify({ modelSelection: 'claude-opus-5-5' }))
+    await writeFile(join(agyDir, 'antigravity-oauth-token'), JSON.stringify({ refresh_token: 'durable-refresh', access_token: 'token-2' }))
+    const restarted = await start('deepseek-reasoner')
+    expect(await restarted.readyProfiles('antigravity')).toHaveLength(1)
+    restarted.warmProfiles('antigravity')
+    await vi.waitFor(() => expect(restarted.checking('antigravity')).toBe(false))
+    expect(handshake).toHaveBeenCalledTimes(1)
+  } finally {
+    vi.unstubAllEnvs()
+  }
 })

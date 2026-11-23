@@ -1,3 +1,4 @@
+import { assertIsolatedWorkspaceRoots, resolveWorkspaceRoots, type WorkspaceIsolationLookup, type WorkspaceRootSet } from '../runtime/workspace-roots.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
@@ -76,6 +77,7 @@ export type TurnContextResolverInput = {
 }
 
 export type TurnContextResolverDeps = {
+  taskWorkspaces?: WorkspaceIsolationLookup
   toolHost: Pick<ToolHost, 'listTools'>
   resolveAttachments: (input: {
     attachmentIds: readonly string[]
@@ -111,10 +113,33 @@ export type TurnContextResolverDeps = {
  * event, or persists a turn mutation.
  */
 export class TurnContextResolver {
+  private readonly rootsByTurn = new Map<string, Promise<WorkspaceRootSet>>()
+
   constructor(private readonly deps: TurnContextResolverDeps) {}
 
+  releaseTurn(threadId: string, turnId: string): void {
+    this.rootsByTurn.delete(`${threadId} ${turnId}`)
+  }
+
   async resolve(input: TurnContextResolverInput): Promise<PreparedTurnContext> {
-    const workspace = input.thread.workspace
+    const key = `${input.threadId} ${input.turnId}`
+    let resolution = this.rootsByTurn.get(key)
+    if (!resolution) {
+      resolution = resolveWorkspaceRoots({
+        workspace: input.thread.workspace,
+        additionalWorkspaces: input.thread.additionalWorkspaces
+      }).then((roots) => {
+        assertIsolatedWorkspaceRoots(
+          input.thread.executionUnit?.taskWorkspaceId ?? input.thread.taskWorkspaceId,
+          roots.extras,
+          this.deps.taskWorkspaces
+        )
+        return roots
+      })
+      this.rootsByTurn.set(key, resolution)
+    }
+    const workspaceRoots = await resolution
+    const workspace = workspaceRoots.primary
     const clientSurface = resolveTurnClientSurface(input.turn)
     const approvalPolicy = normalizeApprovalPolicy(
       input.thread.roomContext ? input.thread.approvalPolicy : input.turn.approvalPolicy ?? input.thread.approvalPolicy
@@ -198,7 +223,7 @@ export class TurnContextResolver {
       orchestration: input.turn.orchestration,
       ...(input.turn.messageSource ? { messageSource: input.turn.messageSource } : {}),
       ...(input.turn.subagentResume ? { subagentResume: input.turn.subagentResume } : {}),
-      additionalWorkspaces: input.thread.additionalWorkspaces,
+      additionalWorkspaces: workspaceRoots.extras.length ? workspaceRoots.extras : undefined,
       knowledgeBases: input.thread.knowledgeBases,
       clientSurface,
       attachmentAliases: input.turn.attachmentAliases,
@@ -267,7 +292,7 @@ export class TurnContextResolver {
       orchestration: input.turn.orchestration,
       ...(input.turn.messageSource ? { messageSource: input.turn.messageSource } : {}),
       ...(input.turn.subagentResume ? { subagentResume: input.turn.subagentResume } : {}),
-      additionalWorkspaces: input.thread.additionalWorkspaces,
+      additionalWorkspaces: workspaceRoots.extras.length ? workspaceRoots.extras : undefined,
       knowledgeBases: input.thread.knowledgeBases,
       model: input.model,
       actingModelRoute: input.actingModelRoute,

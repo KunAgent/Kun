@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PetOverlayBridge } from '@shared/pets'
@@ -29,19 +29,23 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-async function mount(available = false, revealed = true) {
+type QuickChatProps = ComponentProps<typeof PetQuickChat>
+
+async function mount(available = false, revealed = true, extra: Partial<QuickChatProps> = {}) {
   const startChat = vi.fn(async (_prompt: string) => ({ ok: true as boolean, message: '' }))
   const toggle = vi.fn()
   const bridge = {
     startChat, getVoiceInputAvailable: async () => available,
     onMainWindowFocused: () => () => undefined, transcribeSpeech: vi.fn()
   } as unknown as PetOverlayBridge
-  const props = {
+  const props: QuickChatProps = {
     bridge, notificationCount: 2, bubblesHidden: true,
-    revealed, onToggleBubbles: toggle, onInteractiveChange: vi.fn()
+    revealed, onToggleBubbles: toggle, onInteractiveChange: vi.fn(), ...extra
   }
   await act(async () => { renderer = create(createElement(PetQuickChat, props)) })
-  return { startChat, toggle, reveal: (value: boolean) => renderer!.update(createElement(PetQuickChat, { ...props, revealed: value })) }
+  return { startChat, toggle,
+    reveal: (value: boolean) => renderer!.update(createElement(PetQuickChat, { ...props, revealed: value })),
+    update: (next: Partial<QuickChatProps>) => renderer!.update(createElement(PetQuickChat, { ...props, ...next })) }
 }
 const button = (label: string) => renderer!.root.findAllByType('button').find((node) => node.props['aria-label'] === label)!
 const input = () => renderer!.root.findByType('input')
@@ -69,6 +73,17 @@ describe('pet toolbar and quick composer', () => {
     expect(button('展开通知 (2)')).toBeDefined()
     act(() => button('展开通知 (2)').props.onClick())
     expect(toggle).toHaveBeenCalledOnce()
+  })
+
+  it('toggles companion visits instead of starting an interaction and reflects the current preference', async () => {
+    const onToggleVisits = vi.fn()
+    const { update } = await mount(false, true, { visitsEnabled: true, onToggleVisits })
+    const disable = button('关闭伙伴来互动')
+    expect(disable.props['aria-pressed']).toBe(true)
+    act(() => disable.props.onClick())
+    expect(onToggleVisits).toHaveBeenCalledOnce()
+    act(() => update({ visitsEnabled: false }))
+    expect(button('开启伙伴来互动').props['aria-pressed']).toBe(false)
   })
 
   it('offers configured voice input and inserts the transcript for review before sending', async () => {

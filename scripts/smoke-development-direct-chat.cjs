@@ -15,6 +15,7 @@ const { exerciseAgentChatWorkbench, openAgentPrivateChat, openCodeConversation }
 const { exerciseAgentChatManagement } = require('./smoke-agent-chat-manage.cjs')
 const { exerciseLayeredAvatarControls } = require('./smoke-layered-avatar-controls.cjs')
 const { exerciseWardrobeDrops } = require('./smoke-wardrobe-drops.cjs')
+const { exerciseWorkAnnotations } = require('./smoke-work-annotations.cjs')
 const { exerciseWorkSelectionMenu } = require('./smoke-work-selection-menu.cjs')
 const { exerciseWorkLayout } = require('./smoke-work-layout.cjs')
 const { exerciseWorkTabMenu } = require('./smoke-work-tab-menu.cjs')
@@ -105,6 +106,7 @@ async function main() {
       home, appData, localAppData, temporaryDirectory
     }), { rendererPort, temporaryRoot })
     isolatedEnvironment.NODE_ENV = 'development'
+    if (process.argv.includes('--work-annotations-only')) isolatedEnvironment.KUN_STARTUP_TIMEOUT_MS = String(timeoutMs)
     // The wardrobe smoke needs a full shelf to exercise a real ten-pull.
     if (process.argv.includes('--wardrobe-only')) isolatedEnvironment.KUN_WARDROBE_SEED_BOTTLES = '11'
     // Development builds fake an upgrade from this version to show the post-update dialog.
@@ -203,6 +205,7 @@ async function main() {
       : process.argv.includes('--wardrobe-only') ? exerciseWardrobeDrops
       : process.argv.includes('--workbench-only') ? exerciseAgentChatWorkbench
       : process.argv.includes('--manage-only') ? exerciseAgentChatManagement
+      : process.argv.includes('--work-annotations-only') ? exerciseWorkAnnotations
       : process.argv.includes('--work-selection-only') ? exerciseWorkSelectionMenu
       : process.argv.includes('--work-only') ? exerciseWorkLayout
       : process.argv.includes('--work-tab-menu-only') ? exerciseWorkTabMenu

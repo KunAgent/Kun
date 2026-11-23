@@ -218,6 +218,8 @@
     "continueLocalSession": "ローカルセッションを続行",
     "nextTurnHint": "次のターンから適用されます。Code スレッドは常に Kun を使います。",
     "switchConfirmTitle": "{{name}} に切り替えますか?",
+    "workspaceScope": "作業範囲は変わりません · {{total}} 個のフォルダー",
+    "workspaceUnsupported": "{{name}} は複数フォルダーの作業範囲にまだ対応していません。Kun とすべてのフォルダーは選択されたままです。",
     "switchConfirmBody": "次のターンは新しいハーネスで新しいセッションを開始し、引き継ぎ要約を引き継ぎます。以前のターンは元のハーネスのままです。",
     "switchConfirmYes": "ハーネスを切り替える"
   },

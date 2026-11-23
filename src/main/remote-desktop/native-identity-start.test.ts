@@ -8,7 +8,8 @@ import { desktopProcessBirth } from './native-input'
 
 it.skipIf(process.platform === 'win32')('allows bounded first-launch trust evaluation without changing the input lease', async () => {
   fixture.root = await mkdtemp(join(tmpdir(), 'kun-native-identity-'))
-  const directory = join(fixture.root, 'resources/native'), helper = join(directory, 'remote-desktop-input')
+  const directory = join(fixture.root, 'resources/native', process.platform === 'linux' ? 'linux-desktop' : '')
+  const helper = join(directory, process.platform === 'linux' ? 'desktop_input.py' : 'remote-desktop-input')
   try {
     await mkdir(directory, { recursive: true })
     await writeFile(helper, '#!/bin/sh\nsleep 2\nprintf "123:456\\n"\n')

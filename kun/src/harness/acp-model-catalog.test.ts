@@ -21,6 +21,17 @@ it('preserves native order, display names and per-model image facts without addi
   expect(result.modelInfo[2]).toMatchObject({ category: 'fusion' })
 })
 
+it('distinguishes managed budgets from unprobed Antigravity models, including in a stale catalog', () => {
+  const ids = ['gemini-pro-orchestrator', 'gemini-pro-orchestrator-argon', 'gemini-4-carbon', 'gemini-4-hydrogen']
+  const selector = { ...configOptions[0], currentValue: ids[2], options: ids.map((id) => ({ value: id, name: id })) } as AcpConfigOption
+  const levels = (options: AcpConfigOption[]) => acpModelCatalog({ harnessId: 'antigravity', configOptions: options }).modelInfo
+  expect(levels([selector, configOptions[1]]).map((row) => row.reasoningEfforts)).toEqual([[], [], ['medium', 'high', 'max'], undefined])
+  expect(levels([selector])[2].reasoningEfforts).toEqual([])
+  const stale = levels([{ ...selector, currentValue: ids[0] } as AcpConfigOption, configOptions[1]])[0]
+  expect(stale.reasoningEfforts).toEqual([])
+  expect(stale.defaultReasoningEffort).toBeUndefined()
+})
+
 it('retains legacy labels when there is no modern selector and drops malformed entries', () => {
   expect(acpModelCatalog({ harnessId: 'other', models: { currentModelId: 'legacy',
     availableModels: [null, {}, { modelId: ' ' }, { modelId: 'legacy', name: 'Legacy Model' }] } }))

@@ -1,0 +1,109 @@
+.latex-toolchain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: #0003;
+  backdrop-filter: blur(3px);
+}
+
+.latex-toolchain-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 610px;
+  max-width: 100%;
+  max-height: min(840px, 90vh);
+  color: var(--ds-text);
+  background: var(--ds-surface-card);
+  border: 1px solid var(--ds-border);
+  border-radius: 20px;
+  box-shadow: 0 20px 80px #0002;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.latex-toolchain-dialog header,
+.latex-toolchain-dialog footer {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 24px;
+}
+
+.latex-toolchain-dialog header { border-bottom: 1px solid var(--ds-border); }
+.latex-toolchain-heading { display: flex; align-items: center; gap: 12px; }
+.latex-toolchain-dialog h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.02em; }
+.latex-toolchain-dialog p { margin: 3px 0 0; color: var(--ds-text-muted, #777); }
+.latex-toolchain-heading p { font-size: 11px; }
+.latex-toolchain-close { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; }
+.latex-toolchain-close:hover { background: var(--ds-surface-hover); }
+.latex-toolchain-body { overflow: auto; padding: 22px 24px; }
+.latex-toolchain-status { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+.latex-toolchain-status > svg { flex: none; color: var(--ds-text-muted, #777); }
+.latex-toolchain-status.is-ready > svg { color: #628c74; }
+.latex-toolchain-status strong { font-size: 13px; font-weight: 600; }
+.latex-toolchain-status p { font-size: 11px; }
+
+.latex-toolchain-recommendation {
+  padding: 18px;
+  margin-bottom: 20px;
+  background: color-mix(in srgb, #5b78ff 4%, var(--ds-surface-card));
+  border: 1px solid color-mix(in srgb, #5b78ff 22%, var(--ds-border));
+  border-radius: 13px;
+}
+
+.latex-toolchain-recommendation-title { display: flex; align-items: center; gap: 9px; margin-bottom: 7px; }
+.latex-toolchain-recommendation-title strong { font-size: 15px; font-weight: 600; }
+.latex-toolchain-recommendation-title span { padding: 1px 6px; border-radius: 4px; font-size: 10px; background: #5b78ff12; color: #5b78ff; }
+.latex-toolchain-recommendation ul { display: flex; flex-wrap: wrap; gap: 6px 15px; padding: 0; margin: 12px 0 16px; list-style: none; }
+.latex-toolchain-recommendation li { display: flex; align-items: center; gap: 5px; font-size: 11px; }
+.latex-toolchain-recommendation li svg { color: #628c74; }
+.latex-toolchain-dialog button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; cursor: pointer; }
+.latex-toolchain-dialog button:disabled { opacity: .45; cursor: default; }
+.latex-toolchain-dialog button:focus-visible,
+.latex-toolchain-dialog summary:focus-visible { outline: 2px solid #5b78ff; outline-offset: 3px; }
+.latex-toolchain-dialog .latex-toolchain-primary { padding: 7px 13px; border: 0; border-radius: 999px; background: var(--ds-text); color: var(--ds-surface-card); font-size: 12px; }
+.latex-toolchain-progress { margin: -4px 0 22px; }
+.latex-toolchain-progress progress { display: block; width: 100%; height: 5px; appearance: none; border: 0; border-radius: 99px; overflow: hidden; background: var(--ds-border); accent-color: #5b78ff; }
+.latex-toolchain-progress progress::-webkit-progress-bar { background: var(--ds-border); border-radius: 99px; }
+.latex-toolchain-progress progress::-webkit-progress-value { background: #5b78ff; border-radius: 99px; }
+.latex-toolchain-progress progress::-moz-progress-bar { background: #5b78ff; border-radius: 99px; }
+.latex-toolchain-progress > div { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; color: var(--ds-text-muted, #777); font-size: 10px; }
+.latex-toolchain-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.latex-toolchain-section-title strong { font-size: 12px; font-weight: 550; }
+.latex-toolchain-section-title button { font-size: 11px; color: var(--ds-text-muted, #777); }
+.latex-toolchain-detection dl { margin: 10px 0; padding: 0; }
+.latex-toolchain-detection dl > div { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 12px; padding: 6px 0; }
+.latex-toolchain-detection dt { font: 11px/1.8 ui-monospace, monospace; }
+.latex-toolchain-detection dd { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; color: var(--ds-text-muted, #777); font-size: 11px; }
+.latex-toolchain-detection dd > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.latex-toolchain-detection dd > svg { flex: none; color: #628c74; }
+.latex-toolchain-directory { width: 100%; padding: 10px 0; margin-bottom: 10px; border-top: 1px solid var(--ds-border); }
+.latex-toolchain-directory span { flex: 1; text-align: left; }
+.latex-toolchain-reset { margin-bottom: 10px; color: var(--ds-text-muted, #777); font-size: 11px; }
+.latex-toolchain-details { margin-top: 8px; color: var(--ds-text-muted, #777); font-size: 11px; }
+.latex-toolchain-details summary { cursor: pointer; }
+.latex-toolchain-details p { padding-top: 4px; font-size: 10px; overflow-wrap: anywhere; }
+.latex-toolchain-details pre { max-height: 190px; padding: 10px; margin-top: 8px; overflow: auto; border: 1px solid var(--ds-border); border-radius: 8px; font: 10px/1.8 ui-monospace, monospace; }
+.latex-toolchain-links { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 18px; color: var(--ds-text-muted, #777); font-size: 11px; }
+.latex-toolchain-links button:hover { color: var(--ds-text); }
+.latex-toolchain-error { margin-bottom: 16px; padding: 11px 13px; border-radius: 8px; background: #d94d4d08; color: #c74c4c; overflow-wrap: anywhere; }
+.latex-toolchain-error p { color: inherit; font-size: 11px; }
+.latex-toolchain-muted { margin-bottom: 12px !important; font-size: 11px; }
+.latex-toolchain-dialog footer { padding: 14px 24px; border-top: 1px solid var(--ds-border); }
+.latex-toolchain-dialog footer > span { font-size: 10px; color: var(--ds-text-muted, #777); }
+.latex-toolchain-dialog footer > div { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 14px; }
+
+@media (max-width: 540px) {
+  .latex-toolchain-overlay { padding: 12px; }
+  .latex-toolchain-dialog { max-height: 95vh; border-radius: 14px; }
+  .latex-toolchain-dialog header, .latex-toolchain-body { padding: 18px; }
+  .latex-toolchain-dialog footer { padding: 14px 18px; }
+  .latex-toolchain-dialog footer > span { display: none; }
+  .latex-toolchain-dialog footer > div { flex: 1; }
+}

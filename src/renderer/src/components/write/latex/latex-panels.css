@@ -1,0 +1,176 @@
+.latex-reference-search {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 7px;
+  margin: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--ds-border);
+  border-radius: 9px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-reference-search input {
+  width: 100%;
+  min-width: 0;
+  font-size: 12px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--ds-text);
+}
+
+.latex-reference-list {
+  flex: 1;
+  overflow: auto;
+  padding: 0 14px 18px;
+  font-size: 12px;
+}
+
+.latex-reference-heading {
+  color: var(--ds-text-muted,#777);
+  font-size: 11px;
+  margin: 8px 0;
+}
+
+.latex-missing-cites {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border-radius: 10px;
+  color: #ce5050;
+  background: #d94d4d0a;
+}
+
+.latex-missing-cites strong {
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.latex-missing-cites button {
+  font: 11px ui-monospace,monospace;
+  text-align: left;
+}
+
+.latex-reference-entry {
+  border-bottom: 1px solid var(--ds-border);
+  padding: 13px 0;
+}
+
+.latex-reference-title {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  text-align: left;
+}
+
+.latex-reference-title code {
+  font-size: 10.5px;
+  color: #5b78ff;
+  overflow-wrap: anywhere;
+}
+
+.latex-reference-title strong {
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.6;
+}
+
+.latex-reference-title small {
+  font-size: 10.5px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-reference-entry>div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-reference-entry>div>button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--ds-border);
+  border-radius: 50%;
+}
+
+.latex-review-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.latex-review-list>p {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--ds-text-muted,#777);
+  margin: 0 0 12px;
+}
+
+.latex-review-card {
+  border: 1px solid var(--ds-border);
+  border-radius: 12px;
+  margin-bottom: 14px;
+  overflow: hidden;
+}
+
+.latex-review-file {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--ds-border);
+  font-size: 12px!important;
+  font-weight: 550!important;
+}
+
+.latex-review-card pre {
+  font: 11px/1.8 ui-monospace,monospace;
+  overflow: auto;
+  max-height: 330px;
+  margin: 0;
+  padding: 10px 0;
+}
+
+.latex-review-card pre span {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 0 12px;
+}
+
+.latex-review-card .is-added {
+  background: #44936b12;
+  color: #33885f;
+}
+
+.latex-review-card .is-removed {
+  background: #d7545412;
+  color: #c95656;
+  text-decoration: line-through;
+}
+
+.latex-review-card .is-context {
+  color: var(--ds-text-muted,#777);
+}
+
+.latex-review-card footer,.latex-review-footer {
+  display: flex;
+  flex: none;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--ds-border);
+  font-size: 12px;
+}

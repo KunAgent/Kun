@@ -382,7 +382,13 @@ function useComposerContextCapacity({
   selectedProviderId
 }: Props): ContextCapacity | null {
   const snapshot = useChatStore((state) => state.lastContextSnapshot)
-  const enabled = !compact && route === 'chat' && Boolean(activeThreadId)
+  const composerHarnessId = useChatStore((state) => state.composerHarnessId)
+  const rawProviderId = useChatStore((state) => state.composerProviderId)
+  const gatewayBinding = useChatStore((state) => state.composerGatewayBinding)
+  const enabled = !compact && (route === 'chat' || route === 'ade') && Boolean(activeThreadId)
+  const effectiveProviderId = selectedProviderId?.startsWith('ade-cred:')
+    ? rawProviderId
+    : selectedProviderId
   return useMemo(() => {
     if (
       !enabled ||
@@ -390,17 +396,35 @@ function useComposerContextCapacity({
       !requestContextSnapshotMatchesSelection(snapshot, {
         threadId: activeThreadId,
         model: selectedModel,
-        providerId: selectedProviderId
+        providerId: effectiveProviderId,
+        harnessId: composerHarnessId,
+        gatewayBinding: Boolean(gatewayBinding)
       })
     ) {
       return null
     }
     return buildContextCapacity(snapshot)
-  }, [activeThreadId, enabled, selectedModel, selectedProviderId, snapshot])
+  }, [
+    activeThreadId,
+    composerHarnessId,
+    effectiveProviderId,
+    enabled,
+    gatewayBinding,
+    selectedModel,
+    snapshot
+  ])
 }
 
 function normalizedSelection(value: string | null | undefined): string {
   return value?.trim().toLowerCase() ?? ''
+}
+
+const AGENT_DEFAULT_PROVIDERS = new Set(['', 'default', 'antigravity-cli', 'cursor-subscription'])
+
+function normalizeSdkModelSelection(value: string, stripEffortSuffix: boolean): string {
+  let normalized = value.replace(/^kun\/[^/]+\//u, '').replace(/^models\//u, '')
+  if (stripEffortSuffix) normalized = normalized.replace(/-(?:low|medium|high|xhigh|max)$/u, '')
+  return normalized
 }
 
 export function requestContextSnapshotMatchesSelection(
@@ -409,14 +433,36 @@ export function requestContextSnapshotMatchesSelection(
     threadId: string | null
     model: string
     providerId?: string
+    harnessId?: string
+    gatewayBinding?: boolean
   }
 ): boolean {
   if (!selection.threadId || snapshot.threadId !== selection.threadId) return false
   const selectedModel = normalizedSelection(selection.model)
   const snapshotModel = normalizedSelection(snapshot.model)
-  if (selectedModel && selectedModel !== 'auto' && selectedModel !== snapshotModel) return false
-  const selectedProvider = normalizedSelection(selection.providerId)
-  const snapshotProvider = normalizedSelection(snapshot.providerId)
-  return (selectedProvider === 'default' ? '' : selectedProvider) ===
-    (snapshotProvider === 'default' ? '' : snapshotProvider)
+  const selectedProviderRaw = normalizedSelection(selection.providerId)
+  const snapshotProviderRaw = normalizedSelection(snapshot.providerId)
+  if (snapshot.contextManagement !== 'sdk-managed') {
+    if (selectedModel && selectedModel !== 'auto' && selectedModel !== snapshotModel) return false
+    return (selectedProviderRaw === 'default' ? '' : selectedProviderRaw) ===
+      (snapshotProviderRaw === 'default' ? '' : snapshotProviderRaw)
+  }
+  const stripEffort =
+    normalizedSelection(selection.harnessId) === 'antigravity' ||
+    snapshotProviderRaw === 'antigravity-cli'
+  if (selectedModel && selectedModel !== 'auto' && selectedModel !== 'default') {
+    if (
+      normalizeSdkModelSelection(selectedModel, stripEffort) !==
+      normalizeSdkModelSelection(snapshotModel, stripEffort)
+    ) {
+      return false
+    }
+  }
+  const selectedProvider = selectedProviderRaw.startsWith('ade-cred:') ? '' : selectedProviderRaw
+  if (!snapshotProviderRaw) return true
+  if (selection.gatewayBinding && AGENT_DEFAULT_PROVIDERS.has(snapshotProviderRaw)) return true
+  if (AGENT_DEFAULT_PROVIDERS.has(selectedProvider) && AGENT_DEFAULT_PROVIDERS.has(snapshotProviderRaw)) {
+    return true
+  }
+  return selectedProvider === snapshotProviderRaw
 }

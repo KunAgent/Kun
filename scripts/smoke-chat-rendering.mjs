@@ -107,6 +107,27 @@ app.on('window-all-closed',()=>app.quit());`)
   await settle()
   assert.equal(await page.locator('[data-timeline-block-id^="chat-b-"]').count(), 0)
 
+  // A narrow desktop window must keep its single-turn rail and fit the preview
+  // beside the marker, even with a scaled UI.
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(420, 820))
+  await page.waitForFunction(() => matchMedia('(max-width: 720px)').matches)
+  await page.evaluate(() => document.documentElement.style.setProperty('--ds-ui-scale', '1.2'))
+  const mark = page.locator('.timeline-jump-rail-button')
+  const preview = page.locator('.timeline-jump-rail-preview')
+  await mark.hover()
+  await preview.waitFor()
+  assert.match(await preview.innerText(), /Inspect a long background task.+verified background result/s)
+  const markerBox = await mark.boundingBox(), previewBox = await preview.boundingBox(), scrollBox = await scroll.boundingBox()
+  assert.ok(markerBox && previewBox && scrollBox)
+  assert.ok(previewBox.x >= markerBox.x + markerBox.width && previewBox.x + previewBox.width <= scrollBox.x + scrollBox.width + 1,
+    'The preview must fit beside the rail without clipping in the conversation viewport')
+  assert.ok(Math.abs(previewBox.y + previewBox.height / 2 - markerBox.y - markerBox.height / 2) < 2,
+    'The preview must remain centered on the marker at the current UI scale')
+  await mark.click()
+  await page.waitForFunction(() => document.querySelector('.fixture-stage .overflow-y-auto').scrollTop < 100)
+  metrics.push({ scenario: 'narrow-desktop-turn-rail', passed: true })
+  await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1040, 820))
+
   // Keep the same mounted list when changing zoom, then verify coverage at
   // both the middle and tail. Scroll extent alone misses blank virtual rows.
   for (const scale of [0.82, 1, 1.2]) {

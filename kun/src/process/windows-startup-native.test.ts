@@ -28,6 +28,18 @@ afterEach(() => {
   else delete (process as NodeJS.Process & { resourcesPath?: string }).resourcesPath
 })
 describe('packaged startup integrity', () => {
+  it('resolves a matching npm optional platform package', async () => {
+    const { npmWindowsStartupDirectory } = await import('./windows-startup-native.js')
+    files.set('/npm/platform/package.json', JSON.stringify({ name: '@fixture/windows', version: '1.0.0' }))
+    expect(npmWindowsStartupDirectory({ name: '@fixture/kun', version: '1.0.0', windowsPackage: '@fixture/windows' },
+      () => '/npm/platform/package.json')).toBe('/npm/platform')
+  })
+  it('rejects an npm payload with a different version rather than falling back to desktop resources', async () => {
+    const { npmWindowsStartupDirectory } = await import('./windows-startup-native.js')
+    files.set('/npm/platform/package.json', JSON.stringify({ name: '@fixture/windows', version: '0.9.0' }))
+    expect(() => npmWindowsStartupDirectory({ name: '@fixture/kun', version: '1.0.0', windowsPackage: '@fixture/windows' },
+      () => '/npm/platform/package.json')).toThrow('Repair or reinstall')
+  })
   it('resolves only bundled resources, without a temporary compiler cache', async () => {
     const { windowsOwnedLauncherPath } = await import('./windows-startup-native.js')
     expect(windowsOwnedLauncherPath().replaceAll('\\', '/')).toBe(`${root}/kun-owned-launcher.exe`)

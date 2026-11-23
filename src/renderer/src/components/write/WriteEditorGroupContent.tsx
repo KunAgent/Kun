@@ -1,3 +1,4 @@
+import { WorkAnnotationHost } from './annotations/WorkAnnotationHost'
 import { useMemo, useRef, type MutableRefObject, type ReactElement, type RefObject } from 'react'
 import type { WriteInlineCompletionSettingsV1 } from '@shared/app-settings'
 import type {
@@ -22,6 +23,7 @@ import { WorkWhiteboardSurface } from './WorkWhiteboardSurface'
 import { WorkWhiteboardUnavailable } from './WorkWhiteboardUnavailable'
 import { isMarkdownFile } from './write-workspace-view-utils'
 import { boardIdFromWriteTabKey } from '../../write/work-whiteboard'
+import { LatexDocumentPane } from './latex/LatexDocumentPane'
 
 type Props = {
   document: WriteDocumentSession | undefined
@@ -39,6 +41,7 @@ type Props = {
   inlineCompletionApiReady: boolean
   recentEdits: WriteRecentEdit[]
   focused: boolean
+  split?: boolean
   focusMode: boolean
   richHandleRef?: MutableRefObject<WriteRichEditorHandle | null>
   markdownHandleRef?: MutableRefObject<WriteMarkdownEditorHandle | null>
@@ -94,6 +97,7 @@ export function WriteEditorGroupContent({
   inlineCompletionApiReady,
   recentEdits,
   focused,
+  split = false,
   focusMode,
   richHandleRef,
   markdownHandleRef,
@@ -123,6 +127,7 @@ export function WriteEditorGroupContent({
   workspaceLoading
 }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const annotationPane = useRef<HTMLDivElement | null>(null)
   const localRichRef = useRef<WriteRichEditorHandle | null>(null)
   const localMarkdownRef = useRef<WriteMarkdownEditorHandle | null>(null)
   const localEditorPaneRef = useRef<HTMLDivElement | null>(null)
@@ -191,8 +196,17 @@ export function WriteEditorGroupContent({
     )
   }
 
+  if (kind === 'latex' && path) {
+    return <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
+      <LatexDocumentPane workspaceRoot={workspaceRoot} path={path} focused={focused} onSelectionChange={onSelectionChange} onAskAssistant={onAskAssistant} />
+    </div>
+  }
+
+  const annotationKind = kind === 'text' && markdown ? 'markdown'
+    : kind === 'pdf' && !pdfView ? 'pdf'
+    : kind === 'office' && document?.officePreview?.viewer === 'word' ? 'word' : null
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" onPointerDown={onFocus}>
+    <div ref={annotationPane} data-annotation-split={split || undefined} className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${annotationKind ? 'work-annotation-pane' : ''}`} onPointerDown={onFocus}>
       <WriteWorkspaceDocumentPane
         activeFilePath={path}
         documentEpoch={document?.documentEpoch ?? 0}
@@ -270,6 +284,13 @@ export function WriteEditorGroupContent({
           ? (decision) => onResolveSpreadsheetConflict(path, decision)
           : undefined}
       />
+      {focused && document && path && annotationKind && !document.fileLoading && (
+        <WorkAnnotationHost key={JSON.stringify([workspaceRoot, path, surface, document.documentEpoch])}
+          workspaceRoot={workspaceRoot} filePath={path} kind={annotationKind}
+          markdown={content} sourceVersion={document.officePreview?.sourceSha256 ?? ''}
+          pdfData={document.pdfDataBase64} pane={annotationPane} rich={resolvedRichRef} plain={resolvedMarkdownRef}
+          readOnly={effectiveReadOnly || annotationKind !== 'markdown'} />
+      )}
     </div>
   )
 }

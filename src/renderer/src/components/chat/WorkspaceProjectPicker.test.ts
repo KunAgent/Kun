@@ -174,4 +174,21 @@ describe('buildWorkspaceProjectPickerOptions', () => {
     expect(result.currentRoot).toBe('')
     expect(result.options.map((option) => option.root)).toEqual(['/Users/zxy/project-b'])
   })
+
+  it('labels projects with their stored name and folder count', () => {
+    const result = buildWorkspaceProjectPickerOptions({
+      currentWorkspaceRoot: '/Users/zxy/Code/app',
+      workspaceRoots: ['/Users/zxy/Code/app', '/Users/zxy/Code/legacy'],
+      folderSets: {
+        version: 1,
+        sets: [
+          { primary: '/Users/zxy/Code/app', extraRoots: ['/Users/zxy/Code/api'], displayName: 'Storefront' }
+        ]
+      }
+    })
+    expect(result.options).toEqual(expect.arrayContaining([
+      expect.objectContaining({ root: '/Users/zxy/Code/app', projectName: 'Storefront', folderCount: 2 }),
+      expect.objectContaining({ root: '/Users/zxy/Code/legacy', projectName: 'legacy', folderCount: 1 })
+    ]))
+  })
 })

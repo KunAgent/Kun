@@ -1,5 +1,6 @@
 import { defaultPetGlobalActivity, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
 import { PetGlobalActivity, PET_GLOBAL_SENDER_ID } from './pet-global-activity'
+import { isNativeWaylandSession } from './pet-platform'
 import { PetBottleGate } from './pet-bottle-gate'
 import type { PetBottleDrop } from '../../shared/pets-bottle'
 import { defaultPetVisits, type PetVisitPreferences, type PetVisitRequest } from '../../shared/pets-visits'
@@ -125,6 +126,7 @@ class DesktopPetRuntime implements DesktopPets {
     bindPetAssetReader({ lookup: (id) => this.store.assetPath(id), libraryRoot: this.store.libraryRoot() })
     this.controller = new PetWindowController({
       platform: process.platform,
+      nativeWayland: isNativeWaylandSession(process.platform, app.commandLine.getSwitchValue('ozone-platform'), process.env),
       forwardMouseEvents: process.platform !== 'linux' || process.env.KUN_PET_FORWARD_MOUSE === '1',
       createWindow: () => this.createWindow(),
       displays: () => screen.getAllDisplays().map((display) => ({

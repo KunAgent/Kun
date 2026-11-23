@@ -25,6 +25,16 @@ import { ExtensionAgentProviderSource } from './extension-agent-providers.js'
 import { HarnessModelCatalogStore, harnessModelCatalogIdentity } from './harness-model-catalog-store.js'
 import { clearCursorSubscriptionCatalog, loadCursorSubscriptionCatalog, type CursorSubscriptionCatalogSource } from './cursor-subscription-catalog.js'
 
+/** Executable override from settings, `binaryEnv`, or Kun's managed CLI install directory. */
+export function acpHarnessBinaryOverride(
+  harnesses: KunServeRuntimeOptions['harnesses'],
+  dataDir: string | undefined,
+  id: string
+): string | undefined {
+  return harnessCommandOverride(harnesses, id) ?? binaryEnvOverride(id) ??
+    (dataDir ? providerModule(id)?.managedExecutable?.(dataDir) : undefined)
+}
+
 /** Executable override from the engine's environment variable (e.g. a dev build). */
 function binaryEnvOverride(id: string): string | undefined {
   const key = providerModule(id)?.binaryEnv
@@ -138,7 +148,8 @@ export function createHarnessComposition(
   const catalogExecutables = (definition: HarnessDefinition): Array<string | undefined> => {
     const override = harnessCommandOverride(options().harnesses, definition.id)
     const engine = providerModule(definition.id)
-    return [override, engine?.sdkExecutable?.(override), engine?.bundled?.()?.command, binaryEnvOverride(definition.id),
+    return [override, acpHarnessBinaryOverride(options().harnesses, options().dataDir, definition.id),
+      engine?.sdkExecutable?.(override), engine?.bundled?.()?.command, binaryEnvOverride(definition.id),
       definition.launch?.command, definition.detect?.command]
   }
   const modelCatalogs = new HarnessModelCatalogStore({
@@ -148,8 +159,9 @@ export function createHarnessComposition(
   const onCatalog = (definition: HarnessDefinition, catalog: HarnessModelCatalog): void =>
     modelCatalogs.record(definition, catalog)
   const acpModels = new AcpModelProbe({
-    binaryPath: (id) => harnessCommandOverride(options().harnesses, id),
-    resolveSecretEnv: deps.resolveSecretEnv, onCatalog
+    binaryPath: (id) => acpHarnessBinaryOverride(options().harnesses, options().dataDir, id),
+    resolveSecretEnv: deps.resolveSecretEnv, onCatalog,
+    onModelDetails: (definition, selectedModel, catalog) => modelCatalogs.recordModelDetails(definition, selectedModel, catalog)
   })
   const agentSdkModels = new AgentSdkModelProbe({
     onCatalog,
@@ -229,6 +241,7 @@ export function createHarnessComposition(
     else if (transport === 'cursor-sdk') clearCursorSubscriptionCatalog()
   }
   const updates = new HarnessUpdates({
+    dataDir: options().dataDir,
     definition: (id) => catalog.get(id), detect: (id) => detector.status(id, { force: true }),
     currentStatus: (id) => {
       const status = detector.cachedStatus(id)

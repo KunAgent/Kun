@@ -2,9 +2,14 @@ import {
   BrowserUseActionInput,
   BROWSER_USE_ACTIONS,
   BROWSER_USE_ACTION_FIELDS,
+  BROWSER_USE_BATCH_MAX_SNAPSHOTS,
+  BROWSER_USE_BATCH_MAX_STEPS,
+  BROWSER_USE_BATCH_STEP_ACTIONS,
   isBrowserUseApprovalBoundaryAction,
   normalizeBrowserUseActionInput,
   summarizeBrowserUseActionValidation,
+  type BrowserUseActionInput as BrowserUseAction,
+  type BrowserUseActionName,
   type BrowserUseToolResult
 } from '../../contracts/browser-use.js'
 import type { KunCapabilitiesConfig } from '../../contracts/capabilities.js'
@@ -115,23 +120,55 @@ const FIELD_SCHEMAS = {
   tabId: { type: 'string' }
 } as const
 
+function actionShape(action: BrowserUseActionName): Record<string, unknown> {
+  const shape = BROWSER_USE_ACTION_FIELDS[action]
+  return {
+    type: 'object',
+    properties: Object.fromEntries(shape.allowed.map((field) => [
+      field,
+      field === 'action'
+        ? { type: 'string', const: action }
+        : FIELD_SCHEMAS[field as keyof typeof FIELD_SCHEMAS]
+    ])),
+    required: [...shape.required],
+    additionalProperties: false
+  }
+}
+
+// Batch steps reuse the ordinary single-action shapes, so the advertised
+// contract cannot drift from what Main actually accepts.
+const STEPS_SCHEMA = {
+  type: 'array',
+  minItems: 1,
+  maxItems: BROWSER_USE_BATCH_MAX_STEPS,
+  items: {
+    oneOf: BROWSER_USE_BATCH_STEP_ACTIONS.map((action) => actionShape(action))
+  },
+  description: `For batch only. Ordered steps, each one the ordinary arguments for that action. Forbidden inside a batch: close, screenshot, or a nested batch. At most ${BROWSER_USE_BATCH_MAX_SNAPSHOTS} snapshot steps per batch.`
+} as const
+
 const INPUT_SCHEMA = {
   type: 'object',
-  properties: FIELD_SCHEMAS,
+  properties: {
+    ...FIELD_SCHEMAS,
+    steps: STEPS_SCHEMA
+  },
   required: ['action'],
   additionalProperties: false,
-  oneOf: BROWSER_USE_ACTIONS.map((action) => {
-    const shape = BROWSER_USE_ACTION_FIELDS[action]
-    return {
+  oneOf: [
+    ...BROWSER_USE_BATCH_STEP_ACTIONS.map((action) => actionShape(action)),
+    actionShape('screenshot'),
+    actionShape('close'),
+    {
       type: 'object',
-      properties: Object.fromEntries(shape.allowed.map((field) => [
-        field,
-        field === 'action' ? { type: 'string', const: action } : FIELD_SCHEMAS[field as keyof typeof FIELD_SCHEMAS]
-      ])),
-      required: [...shape.required],
+      properties: {
+        action: { type: 'string', const: 'batch' },
+        steps: STEPS_SCHEMA
+      },
+      required: ['action', 'steps'],
       additionalProperties: false
     }
-  })
+  ]
 } as const
 
 const TOOL_DESCRIPTION = [
@@ -144,7 +181,8 @@ const TOOL_DESCRIPTION = [
   'Main compares expectedTarget with the live ref immediately before execution; navigation, target changes, or manual takeover make refs stale.',
   'Validated low-risk public interactions may execute automatically; local or strict policy can require a live allow-once decision.',
   'Credentials, payment, MFA, CAPTCHA, upload/download, clipboard, cookies/storage, scripts, selectors, and CDP are unavailable.',
-  'Take a new snapshot after every interaction and stop when the requested browsing task is complete.'
+  'Take a new snapshot after every interaction and stop when the requested browsing task is complete.',
+  'When several steps share one page and one snapshot, send them as one batch: {"action":"batch","steps":[{"action":"type",...},{"action":"click",...}]}. Steps run in order, every step is validated before the first one runs, at most three may be snapshots, and the batch stops at the first failure without replaying.'
 ].join(' ')
 
 export function buildBrowserUseToolProviders(
@@ -242,21 +280,30 @@ export function buildBrowserUseToolProviders(
           'browser_use did not receive a matching one-call Kun approval grant'
         )
       }
-      const interaction = ['click', 'type', 'select', 'press'].includes(action.action)
-      const budget = interaction ? interactionsByTurn : observationsByTurn
       const key = `${context.threadId}:${context.turnId}`
-      const used = budget.get(key) ?? 0
-      const limit = interaction
-        ? config.maxInteractionActionsPerTurn
-        : config.maxObservationActionsPerTurn
-      if (action.action !== 'close' && used >= limit) {
+      // A batch spends one budget unit per step, so a single call cannot
+      // outrun the per-turn interaction and observation limits.
+      const cost = countActionBudget(action)
+      const usedInteractions = interactionsByTurn.get(key) ?? 0
+      const usedObservations = observationsByTurn.get(key) ?? 0
+      const overInteraction =
+        usedInteractions + cost.interaction > config.maxInteractionActionsPerTurn
+      const overObservation =
+        usedObservations + cost.observation > config.maxObservationActionsPerTurn
+      if (action.action !== 'close' && (overInteraction || overObservation)) {
+        const kind = overInteraction ? 'interaction' : 'observation'
+        const limit = overInteraction
+          ? config.maxInteractionActionsPerTurn
+          : config.maxObservationActionsPerTurn
         return toolError(
           'action_budget_exhausted',
-          `browser_use ${interaction ? 'interaction' : 'observation'} limit (${limit}) reached for this turn`
+          `browser_use ${kind} limit (${limit}) reached for this turn`
         )
       }
-      if (action.action !== 'close') budget.set(key, used + 1)
-      evictOldTurns(budget, key)
+      if (cost.interaction > 0) interactionsByTurn.set(key, usedInteractions + cost.interaction)
+      if (cost.observation > 0) observationsByTurn.set(key, usedObservations + cost.observation)
+      evictOldTurns(interactionsByTurn, key)
+      evictOldTurns(observationsByTurn, key)
       if (context.abortSignal.aborted) {
         return toolError('aborted', 'browser_use was cancelled before execution')
       }
@@ -342,6 +389,23 @@ function projectResult(result: BrowserUseToolResult): {
     },
     ...(!result.ok ? { isError: true as const } : {})
   }
+}
+
+function countActionBudget(
+  action: BrowserUseAction
+): { interaction: number; observation: number } {
+  if (action.action === 'close') return { interaction: 0, observation: 0 }
+  const steps: ReadonlyArray<{ action: string }> =
+    action.action === 'batch' ? action.steps : [action]
+  const interaction = steps.filter(isInteractionStep).length
+  return { interaction, observation: steps.length - interaction }
+}
+
+function isInteractionStep(action: { action: string }): boolean {
+  return action.action === 'click' ||
+    action.action === 'type' ||
+    action.action === 'select' ||
+    action.action === 'press'
 }
 
 function toolError(

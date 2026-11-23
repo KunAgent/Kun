@@ -120,6 +120,14 @@ async function startDirectModel({ real = false } = {}) {
         if (outgoing) tool = { id: 'call_' + stats.calls, type: 'function', function: { name: outgoing.name, arguments: JSON.stringify(outgoing.args) } }
       }
       if (wrote && !review && !memory) content = /denied|not allowed/i.test(JSON.stringify(messages.findLast((item) => item.role === 'tool')?.content)) ? '这一步已被拒绝，未修改文件。' : '文件已完成，并保存在当前工作目录。'
+      if (messages.some((item) => item.role === 'user' && JSON.stringify(item.content).includes('解释公式中最后一个 x 从哪里来'))) {
+        assert.equal(body.tools?.length ?? 0, 0, 'Page comments run without mutation tools')
+        tool = undefined
+        content = JSON.stringify({
+          text: '可以在这段后面补一句，让读者把文字和公式对应起来。',
+          suggestion: { kind: 'insertAfter', text: '公式中最后一个 x 就是这一层的原始输入。' }
+        })
+      }
       if (body.stream === false) {
         response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ choices: [{ message: { role: 'assistant', content, ...(tool ? { tool_calls: [tool] } : {}) }, finish_reason: tool ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 20, completion_tokens: 10 } })); return
       }
