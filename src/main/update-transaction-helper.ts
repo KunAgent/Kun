@@ -106,11 +106,7 @@ export async function scheduleBoundedUpdateRollback(
     const elevated = environment.KUN_INSTALLER_INSTALL_MODE?.toLowerCase() === 'all'
     const powershell = win32.join(process.env.SystemRoot ?? 'C:\\Windows',
       'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
-    // libuv's detached flag uses DETACHED_PROCESS, which makes Windows
-    // PowerShell exit before executing its command (nodejs/node#51018).
-    // Start-Process supplies an independent hidden console instead. Its child
-    // survives this short-lived bootstrap and the GUI; only readiness permits quit.
-    const bootstrap = `${powershellHelperDeadline()}\n` + [
+    const relay = `${powershellHelperDeadline()}\n` + [
       `$coordinator=Start-Process -FilePath '${powershell.replace(/'/gu, "''")}'${elevated ? ' -Verb RunAs' : ''} -WindowStyle Hidden -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${encoded}' -ErrorAction Stop`,
       '$null=$coordinator.Handle',
       '$coordinator.WaitForExit()',
@@ -121,18 +117,37 @@ export async function scheduleBoundedUpdateRollback(
       '  if ($exitCode -eq 0) {',
       '    $exe=[IO.File]::ReadAllText($relaunchPath, [Text.Encoding]::Unicode).Trim()',
       '    if ([string]::IsNullOrWhiteSpace($exe)) { throw "Recovery executable is missing." }',
-      // This bootstrap retains the original GUI user's token; never launch from the elevated coordinator.
+      // This relay retains the original GUI user's token, even after the GUI exits.
       '    Start-Process -FilePath $exe -ErrorAction Stop',
       '  }',
       '} finally { Remove-Item -LiteralPath $relaunchPath -Force -ErrorAction SilentlyContinue }',
       'exit $exitCode'
     ].join('\n')
+    // The GUI's libuv job can terminate its direct child on exit. Start the
+    // original-token relay in an independent hidden console before arming rollback.
+    // Pass its body through the environment to keep nested commands below the
+    // Windows command-line length limit.
+    const relayEntry = encodePowershellCommand([
+      '$relayScript=$env:KUN_UPDATE_ROLLBACK_RELAY',
+      'if ([string]::IsNullOrWhiteSpace($relayScript)) { exit 1 }',
+      'Remove-Item Env:KUN_UPDATE_ROLLBACK_RELAY',
+      '& ([ScriptBlock]::Create($relayScript))'
+    ].join('\n'))
+    const bootstrap = `${powershellHelperDeadline()}\n` + [
+      `$relay=Start-Process -FilePath '${powershell.replace(/'/gu, "''")}' -WindowStyle Hidden -PassThru -ArgumentList '-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand','${relayEntry}' -ErrorAction Stop`,
+      '$null=$relay.Handle',
+      '$relay.WaitForExit()',
+      'if ($null -eq $relay.ExitCode) { exit 1 }',
+      'exit $relay.ExitCode'
+    ].join('\n')
     const args = ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', bootstrap]
-    child = spawnHelper(powershell, args, { detached: false, stdio: 'ignore', windowsHide: true })
+    child = spawnHelper(powershell, args, {
+      detached: false, stdio: 'ignore', windowsHide: true,
+      env: { ...process.env, KUN_UPDATE_ROLLBACK_RELAY: relay }
+    })
     child.once('error', readiness.cancel)
     child.once('exit', (code) => {
-      // The bootstrap waits for the actual coordinator, including after UAC.
-      // Even exit zero cannot replace that coordinator's readiness handshake.
+      // The exit code cannot replace the coordinator's readiness handshake.
       readiness.cancel(new Error(`Update rollback launcher exited with ${code} before readiness.`))
     })
     await readiness.ready
