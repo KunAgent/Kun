@@ -252,9 +252,13 @@ app.on('window-all-closed', () => app.quit())
           zoomFactor: window.webContents.getZoomFactor(), displayScaleFactor: display.scaleFactor,
           workArea: display.workArea }
       })
+      assert.equal(native.zoomFactor, zoom, 'The requested native zoom was applied')
+      // The renderer can receive a resize after the native content bounds change.
+      await page.waitForFunction(({ width, height, zoom }) =>
+        Math.abs(innerWidth - width / zoom) <= 1 && Math.abs(innerHeight - height / zoom) <= 1,
+      { width: native.content.width, height: native.content.height, zoom }, { timeout: 5_000 })
       const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight,
         scrollWidth: document.documentElement.scrollWidth }))
-      assert.equal(native.zoomFactor, zoom, 'The requested native zoom was applied')
       assert.ok(Math.abs(viewport.width - native.content.width / zoom) <= 1 &&
         Math.abs(viewport.height - native.content.height / zoom) <= 1,
       'Reported CSS viewport matches the actual native content size and zoom')

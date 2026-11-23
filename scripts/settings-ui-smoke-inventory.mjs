@@ -12,8 +12,8 @@ export function settingsCategoryInventory(source, platform) {
 
 /** Keep the current fixture's coverage count independent of parsed/rendered navigation. */
 export function assertCurrentSettingsCategoryInventory(categories, platform) {
-  // Connections, Storage & cleanup, and Pets are separate desktop destinations.
-  assert.equal(new Set(categories).size, platform === 'win32' ? 36 : 35,
+  // Connections, Cloud Compute, Storage & cleanup, and Pets are separate desktop destinations.
+  assert.equal(new Set(categories).size, platform === 'win32' ? 37 : 36,
     'Current settings smoke must cover every destination')
   assert(!categories.includes('integrations'), 'Retired integrations must not appear in settings navigation')
 }

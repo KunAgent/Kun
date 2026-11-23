@@ -9,6 +9,7 @@ on:
       - 'scripts/smoke-url-assets.test.mjs'
       - 'scripts/fixtures/memory-lifecycle.tsx'
       - 'scripts/fixtures/memory-lifecycle-backend.ts'
+      - 'scripts/fixtures/load-memory-smoke-backend.mjs'
       - 'scripts/memory-lifecycle-backend.test.mjs'
       - 'scripts/memory-cjk-fonts.mjs'
       - 'scripts/memory-cjk-fonts.test.mjs'
