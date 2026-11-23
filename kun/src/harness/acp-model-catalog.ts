@@ -101,6 +101,12 @@ export function acpModelCatalog(input: {
       current.reasoningEfforts = []
     }
   }
+  for (const row of rows.values()) {
+    if (acp?.managesReasoningBudget?.(row.id)) {
+      row.reasoningEfforts = []
+      delete row.defaultReasoningEffort
+    }
+  }
   const defaultRow = rows.get(input.defaultModel ?? selected ?? '')
   if (defaultRow) defaultRow.isDefault = true
   return { models: [...rows.keys()], modelInfo: [...rows.values()] }

@@ -33,7 +33,8 @@ describe('resolveDelegatedCredentialContext', () => {
     expect(result.env).toEqual({ KUN_GATEWAY_TOKEN: 'tok' })
     expect(result.wireModel).toBe('kun/deepseek/deepseek-chat')
     expect(result.credentialIdentity).toContain('scrypt-v1:')
-    // Same route → same identity (pool reuse); different model → different.
+    // Same route → same identity (pool reuse); different model → different credentialIdentity,
+    // but same sessionCredentialIdentity within the same provider.
     const other = await resolveDelegatedCredentialContext(resolve, {
       ...baseInput,
       credentialMode: 'kun-gateway',
@@ -41,6 +42,17 @@ describe('resolveDelegatedCredentialContext', () => {
       model: 'deepseek-reasoner'
     })
     expect(other.credentialIdentity).not.toBe(result.credentialIdentity)
+    expect(other.sessionCredentialIdentity).toBe(result.sessionCredentialIdentity)
+
+    // Switching providerId changes both credentialIdentity and sessionCredentialIdentity.
+    const otherProvider = await resolveDelegatedCredentialContext(resolve, {
+      ...baseInput,
+      credentialMode: 'kun-gateway',
+      providerId: 'openai',
+      model: 'gpt-5'
+    })
+    expect(otherProvider.credentialIdentity).not.toBe(result.credentialIdentity)
+    expect(otherProvider.sessionCredentialIdentity).not.toBe(result.sessionCredentialIdentity)
   })
 
   it('does not double-wrap a model already in kun/ form', async () => {

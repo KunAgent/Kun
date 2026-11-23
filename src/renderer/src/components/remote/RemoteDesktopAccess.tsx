@@ -1,6 +1,7 @@
 import { RefreshCw } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { REMOTE_BUTTON_CLASS, RemoteGroup } from './remote-panel-ui'
+import { REMOTE_BUTTON_CLASS, RemoteGroup, RemoteSwitch } from './remote-panel-ui'
+import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import { RemoteCompactRow, RemoteDetailHeader, REMOTE_DETAIL_TEXT } from './remote-compact-ui'
 import { desktopSummary, mobileRequirement } from './remote-access-state'
 import { desktopFailureMessage } from './desktop-readiness'
@@ -23,6 +24,12 @@ export function RemoteDesktopAccess({ link, desktop, onBack }: {
       <RemoteCompactRow title={t('remoteCompact.display')}>
         <span className="min-w-0 text-right text-[12px] text-ds-muted">{value.displays.filter(d => d.allowed).map(d => d.label).join(', ') || t('remoteCompact.defaultDisplay')}</span>
       </RemoteCompactRow>
+      {value.virtualSupported && link.enabled && link.state?.desktopAccess ? <RemoteCompactRow title={link.zh ? '允许手机专用桌面' : 'Allow a mobile display'}
+        subtitle={value.active ? link.zh ? '更改共享设置将结束当前远控。' : 'Changing this sharing setting ends the current session.' :
+          link.zh ? '连接时创建独立显示器，断开时收回。可把 Mac 窗口移到 Kun Mobile。' : 'A separate display exists for the connection. Move Mac windows to Kun Mobile.'}>
+        <RemoteSwitch checked={value.virtualEnabled === true} disabled={busy} label={link.zh ? '允许手机专用桌面' : 'Allow a mobile display'}
+          onToggle={event => runTrustedUserActivation(event, () => desktop.setVirtual(!value.virtualEnabled))} />
+      </RemoteCompactRow> : null}
       <RemoteCompactRow title={t('remoteCompact.screenRecording')}>
         {screenGranted ? <span className="text-[12px] text-ds-muted">{t('remoteCompact.granted')}</span>
           : <button type="button" className={REMOTE_BUTTON_CLASS} disabled={busy} onClick={() => desktop.permission('screenRecording')}>{t('remoteCompact.grant')}</button>}

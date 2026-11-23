@@ -1,4 +1,5 @@
 import { DispatchParamSchemas } from './dispatch/contracts.js'
+import { CodeChangesParamSchemas } from './changes/contracts.js'
 import { z } from 'zod'
 import { REMOTE_SCOPES } from '@kun/remote-protocol'
 import { REMOTE_METHOD_ORDER } from './method-order.js'
@@ -23,6 +24,7 @@ import { RequestParamSchemas } from './requests/contracts.js'
 import { ApprovalParamSchemas } from './approvals/contracts.js'
 export const RemoteId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
 const schemas = {
+  ...CodeChangesParamSchemas,
   ...DispatchParamSchemas,
   ...CodeManagementParamSchemas,
   ...CodeTaskParamSchemas,

@@ -15,7 +15,7 @@ import {
 import { approvalChoiceIsValid } from '../../contracts/approval-choice.js'
 import { validAcpPermissionMenu } from './acp-permission-options.js'
 import type { ApprovalActionEnvelope } from '../../contracts/approvals.js'
-import type { AcpRequestPermissionParams } from './acp-schema.js'
+import { ACP_RPC_ERROR, AcpError, type AcpRequestPermissionParams } from './acp-schema.js'
 
 export type AcpPermissionOption = {
   optionId: string
@@ -174,34 +174,43 @@ export function approvalRequestFromAcp(input: {
       typeof location?.path === 'string' && location.path.length > 0
   )
   const execution = acpExecutionDetail(toolCall)
-  let action: ApprovalActionEnvelope = createApprovalActionEnvelope({
-    toolName,
-    providerKind: 'delegation',
-    toolKind,
-    effects: {
-      network: actionKind === 'network',
-      externalWrite: actionKind === 'file' && kind !== 'read',
-      processExecution: actionKind === 'command',
-      guiAutomation: false
-    },
-    arguments: {
-      ...(toolCall.title ? { title: toolCall.title } : {}),
-      kind,
-      ...(execution.command ? { command: execution.command } : {}),
-      ...(execution.cwd ? { cwd: execution.cwd } : {}),
-      ...(locations.length
-        ? { locations: locations.map((l) => ({ path: l.path, ...(l.line ? { line: l.line } : {}) })) }
-        : {}),
-      ...(toolCall.rawInput !== undefined
-        ? { rawInput: truncateForApproval(toolCall.rawInput) }
-        : {}),
-      ...(toolCall.content?.some((item) => item.type === 'diff') ? {
-        changes: toolCall.content.filter((item) => item.type === 'diff')
-      } : {})
-    },
-    workspace: input.workspace,
-    reason: toolCall.title ?? `ACP agent requested permission for ${toolName}`
-  })
+  let action: ApprovalActionEnvelope
+  try {
+    action = createApprovalActionEnvelope({
+      toolName,
+      providerKind: 'delegation',
+      toolKind,
+      effects: {
+        network: actionKind === 'network',
+        externalWrite: actionKind === 'file' && kind !== 'read',
+        processExecution: actionKind === 'command',
+        guiAutomation: false
+      },
+      arguments: {
+        ...(toolCall.title ? { title: toolCall.title } : {}),
+        kind,
+        ...(execution.command ? { command: execution.command } : {}),
+        ...(execution.cwd ? { cwd: execution.cwd } : {}),
+        ...(locations.length
+          ? { locations: locations.map((l) => ({ path: l.path, ...(l.line ? { line: l.line } : {}) })) }
+          : {}),
+        ...(toolCall.rawInput !== undefined
+          ? { rawInput: truncateForApproval(toolCall.rawInput) }
+          : {}),
+        ...(toolCall.content?.some((item) => item.type === 'diff') ? {
+          changes: toolCall.content.filter((item) => item.type === 'diff')
+        } : {})
+      },
+      workspace: input.workspace,
+      reason: toolCall.title ?? `ACP agent requested permission for ${toolName}`
+    })
+  } catch (error) {
+    throw new AcpError(
+      'policy_denied',
+      error instanceof Error ? error.message : String(error),
+      { rpcCode: ACP_RPC_ERROR.policyDenied, cause: error }
+    )
+  }
   if (input.params.options.length) {
     action = Object.freeze({ ...action, permissionOptions: input.params.options.map(({ optionId, kind, name }) => ({ optionId, kind, name })) })
   }

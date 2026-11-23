@@ -187,6 +187,10 @@ export function appStateDbPath(app: 'Cursor' | 'Antigravity'): string {
   if (process.platform === 'darwin') {
     return join(homedir(), 'Library', 'Application Support', app, 'User', 'globalStorage', 'state.vscdb')
   }
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA?.trim() || join(homedir(), 'AppData', 'Roaming')
+    return join(appData, app, 'User', 'globalStorage', 'state.vscdb')
+  }
   if (process.platform === 'linux') {
     return join(homedir(), '.config', app, 'User', 'globalStorage', 'state.vscdb')
   }

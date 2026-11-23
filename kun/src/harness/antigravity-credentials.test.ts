@@ -38,6 +38,8 @@ describe('Antigravity native credential evidence', () => {
     const first = await antigravityCredentialEvidence({ HOME: root }, deps)
     expect(first.configured).toBe(true)
     expect(JSON.stringify(first)).not.toContain('private')
+    await writeFile(path, JSON.stringify({ refresh_token: 'first-private', access_token: 'hourly-token', expiry_date: 2 }))
+    expect((await antigravityCredentialEvidence({ HOME: root }, deps)).fingerprint).toBe(first.fingerprint)
     await writeFile(path, JSON.stringify({ refresh_token: 'second-private' }))
     expect((await antigravityCredentialEvidence({ HOME: root }, deps)).fingerprint).not.toBe(first.fingerprint)
     await rm(path); await symlink(join(root, 'missing'), path)

@@ -24,6 +24,12 @@ export default defineConfig({
       '@shared': resolve(repositoryRoot, 'src', 'shared')
     }
   },
+  // As in the desktop renderer, serve the Word ESM package directly so the
+  // module worker URL resolves beside the parser rather than in Vite's cache.
+  optimizeDeps: {
+    exclude: ['@extend-ai/react-docx'],
+    include: ['react-dom', 'react-dom/server', '@extend-ai/react-docx > utif', '@extend-ai/react-docx > fast-png']
+  },
   server: {
     host: '127.0.0.1',
     port: requestedPort,

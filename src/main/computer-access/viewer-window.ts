@@ -1,4 +1,6 @@
 import { app, BrowserWindow, ipcMain, powerMonitor, type IpcMainInvokeEvent, type IpcMainEvent } from 'electron'
+import { spawn, type ChildProcess } from 'node:child_process'
+import { desktopHelperPath } from '../remote-desktop/native-input'
 import { pathToFileURL } from 'node:url'
 import { randomUUID } from 'node:crypto'
 import type { ComputerViewerEvent } from '../../shared/computer-access'
@@ -19,14 +21,24 @@ export class ComputerViewerWindow {
   private disposed = false
   private opening = false
   private generation = 0
+  private gameSession = false
+  private controlling = false
+  private privacyWatch?: ChildProcess
   private releasePackage?: () => void
   constructor(private readonly service: ComputerAccessService) {
     ipcMain.handle(channels.configuration, event => { this.require(event); return service.configuration() })
-    ipcMain.handle(channels.invoke, (event, method, params) => {
+    ipcMain.handle(channels.invoke, async (event, method, params) => {
       this.require(event)
       if (method === 'desktop.control.acquire' && !this.window?.isFocused()) throw Error('DESKTOP_WINDOW_INACTIVE')
       if (typeof method !== 'string' || Buffer.byteLength(JSON.stringify(params ?? null)) > 100000) throw Error('INVALID_REQUEST')
-      return service.invoke(method as any, params)
+      if (method === 'desktop.control.release' || method === 'desktop.session.stop') this.controlling = false
+      const window = this.window
+      const result = await service.invoke(method as any, params)
+      if (window === this.window) {
+        if (method === 'desktop.session.start') this.gameSession = params.quality === 'game60'
+        if (method === 'desktop.control.acquire') this.controlling = 'mode' in result && result.mode === 'control'
+      }
+      return result
     })
     ipcMain.handle(channels.ice, event => { this.require(event); return service.ice() })
     ipcMain.handle(channels.restart, event => { this.require(event); return this.restart() })
@@ -73,6 +85,8 @@ export class ComputerViewerWindow {
     const window = this.window
     if (window && !window.isDestroyed()) window.webContents.send(channels.event, value)
     if (value.type === 'close') {
+      this.controlling = this.gameSession = false
+      const watch = this.privacyWatch; this.privacyWatch = undefined; watch?.stdin?.end()
       ++this.generation
       clearInterval(this.timer); this.timer = undefined; this.window = undefined
       if (window && !window.isDestroyed()) window.destroy()
@@ -99,13 +113,19 @@ export class ComputerViewerWindow {
       const appPath = app.getAppPath()
       const window = new BrowserWindow({ title: `${configuration.name} — Kun`, width: 1180, height: 780, minWidth: 640, minHeight: 460, show: false,
         webPreferences: { preload: resolveNamedPreloadPath(appPath, 'remote-desktop-viewer'), partition: 'kun-viewer-' + randomUUID(),
-          sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } })
+          sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } })
       this.window = window
+      if (process.platform === 'linux') {
+        const watch = spawn(desktopHelperPath(), ['--watch-session'], { stdio: ['pipe', 'ignore', 'ignore'] })
+        this.privacyWatch = watch
+        const inactive = () => { if (this.privacyWatch === watch) this.inactive() }
+        watch.once('error', inactive); watch.once('exit', inactive)
+      }
       markProtectedWindowContents(window.webContents)
       this.url = pathToFileURL(resource.entry).href
-      secureControlViewer(window, resource.entry)
+      secureControlViewer(window, resource.entry, () => this.gameSession && this.controlling)
       window.webContents.once('render-process-gone', () => { void this.close('viewer_crashed') })
-      window.on('blur', () => this.service.release())
+      window.on('blur', () => { this.controlling = false; this.service.release() })
       window.on('minimize', () => { void this.close('window_minimized') })
       window.on('hide', () => { void this.close('window_hidden') })
       window.on('close', event => { event.preventDefault(); void this.close('window_closed') })
@@ -124,6 +144,8 @@ export class ComputerViewerWindow {
     return this.service.status()
   }
   async close(reason = 'user_ended') {
+    this.gameSession = this.controlling = false
+    const watch = this.privacyWatch; this.privacyWatch = undefined; watch?.stdin?.end()
     ++this.generation
     // A delayed stop reply must not release a newer window's package reservation.
     const releasePackage = this.releasePackage

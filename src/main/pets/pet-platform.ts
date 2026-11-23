@@ -1,3 +1,8 @@
+export function isNativeWaylandSession(platform: NodeJS.Platform, ozonePlatform: string, env: NodeJS.ProcessEnv): boolean {
+  if (platform !== 'linux' || ozonePlatform === 'x11') return false
+  return ozonePlatform === 'wayland' || env.XDG_SESSION_TYPE === 'wayland' || Boolean(env.WAYLAND_DISPLAY)
+}
+
 export type PetInteractionMode = 'passthrough' | 'bounded'
 
 export type PetPlatformPolicy = {

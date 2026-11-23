@@ -18,7 +18,7 @@ function delay(ms: number, signal: AbortSignal) {
 }
 /** One opt-in-capability subscription per current enable session, independent of phone foreground WSS. */
 export class MobileNotifications {
-  private active?: { api: RemoteApi; control: AbortController }
+  private active?: { api: RemoteApi; control: AbortController; capabilities?: (value: any) => void; checkedAt: number; checking: boolean }
   private cursor?: string
   private seen = new Set<string>()
   constructor(private deps: { lease(): Promise<ProtectedRuntimeRequestLease>; fetch: typeof fetch;
@@ -27,10 +27,19 @@ export class MobileNotifications {
     this.active?.control.abort(); this.active = undefined
     this.cursor = undefined; this.seen.clear()
   }
-  start(api: RemoteApi, eligible: () => boolean) {
-    if (this.active?.api === api) return
+  start(api: RemoteApi, eligible: () => boolean, capabilities?: (value: any) => void) {
+    if (this.active?.api === api) {
+      const active = this.active; active.capabilities = capabilities
+      if (capabilities && !active.checking && Date.now() - active.checkedAt > 300000) {
+        active.checking = true
+        void api.request('/capabilities', 'GET', undefined, false, active.control.signal).then(value => {
+          if (this.active === active && eligible()) { active.checkedAt = Date.now(); active.capabilities?.(value) }
+        }).catch(() => {}).finally(() => { active.checking = false })
+      }
+      return
+    }
     this.stop()
-    const active = { api, control: new AbortController() }
+    const active = { api, control: new AbortController(), capabilities, checkedAt: Date.now(), checking: false }
     this.active = active
     const current = () => this.active === active && !active.control.signal.aborted && eligible()
     void this.run(api, active.control.signal, current).catch(() => {
@@ -44,6 +53,7 @@ export class MobileNotifications {
       let capabilities: any
       try { capabilities = await api.request('/capabilities', 'GET', undefined, false, signal) } catch { capabilities = undefined }
       if (!current()) return
+      if (capabilities && this.active?.api === api) { this.active.checkedAt = Date.now(); this.active.capabilities?.(capabilities) }
       if (capabilities?.notifications?.available === true) break
       await delay(capabilities ? 600000 : Math.min(300000, 5000 * 2 ** Math.min(check, 6)), signal)
       if (!current()) return

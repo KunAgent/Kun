@@ -258,6 +258,29 @@ describe('CodexSession', () => {
     expect(await run).toEqual({ status: 'completed' })
   })
 
+  it('grants every canonical root in workspace-write and none in read-only', async () => {
+    const expectPolicy = async (sandboxMode: string, expected: unknown): Promise<void> => {
+      const { writes, emit, session } = setup()
+      const run = session.runTurn(
+        turnInput({ sandboxMode, workspaceRoots: ['/repo', '/lib', '/lib'] }),
+        makeSink().sink,
+        new AbortController().signal
+      )
+      respondToLast(writes, emit, { turn: { id: 'cx-turn-1', status: 'inProgress', items: [] } })
+      await new Promise((resolve) => setImmediate(resolve))
+      const start = writes.at(-1) as { params: { sandboxPolicy: unknown } }
+      expect(start.params.sandboxPolicy).toEqual(expected)
+      emit({ method: 'turn/completed', params: COMPLETED_TURN })
+      expect(await run).toEqual({ status: 'completed' })
+    }
+    await expectPolicy('workspace-write', {
+      type: 'workspaceWrite',
+      writableRoots: ['/repo', '/lib']
+    })
+    // Read-only keeps its posture: extra roots never become write grants.
+    await expectPolicy('read-only', { type: 'readOnly' })
+  })
+
   it('maps assistant deltas into timeline drafts', async () => {
     const { writes, emit, session } = setup()
     const { sink, drafts } = makeSink()

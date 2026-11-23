@@ -270,6 +270,8 @@ module.exports = {
   extraResources: [
     ...(process.platform === 'darwin' ? [{ from: 'resources/native/remote-desktop-input', to: 'native/remote-desktop-input' },
       { from: 'resources/native/pet-activity', to: 'native/pet-activity' }] : []),
+    ...(process.platform === 'win32' ? [{ from: 'resources/native/remote-desktop-input.exe', to: 'native/remote-desktop-input.exe' }] : []),
+    ...(process.platform === 'linux' ? [{ from: 'resources/native/linux-desktop', to: 'native/linux-desktop' }] : []),
     {
       // Ship third-party prompt attribution with packaged applications, not
       // only in source checkouts.
@@ -358,6 +360,7 @@ module.exports = {
     entitlementsInherit: 'build/entitlements.mac.inherit.plist',
     extendInfo: {
       // 语音输入：渲染进程通过 getUserMedia 录音做语音转文字。
+      NSAudioCaptureUsageDescription: 'Share system playback when you enable game audio for a remote desktop session.',
       NSMicrophoneUsageDescription: 'Kun uses the microphone for voice-to-text input.'
     },
     // macOS 不会自动套圆角遮罩,图标文件本身需要是「圆角方块 + 透明边距」
@@ -447,6 +450,8 @@ module.exports = {
     executableArgs: ['--disable-setuid-sandbox', '--no-first-run']
   },
   deb: {
+    recommends: ['libappindicator3-1', 'python3-gi', 'libxtst6', 'x11-xserver-utils', 'xdotool', 'libpulse0',
+      'gir1.2-gstreamer-1.0', 'gstreamer1.0-pipewire', 'gstreamer1.0-plugins-base', 'xdg-desktop-portal'],
     // Ubuntu 24.04+ denies unprivileged user namespaces, which Chromium's sandbox
     // needs, to any program without an AppArmor profile that grants them. The stock
     // profile only covers the launcher script; this one covers the renamed binary too.

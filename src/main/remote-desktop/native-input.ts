@@ -1,21 +1,33 @@
-import { execFile, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { execFile, spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { promisify } from 'node:util'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { release as osRelease } from 'node:os'
-import { app } from 'electron'
+import { app, screen } from 'electron'
+import { controllerSupported } from './platform'
 
 export function desktopHelperPath() {
-  return app.isPackaged ? join(process.resourcesPath, 'native/remote-desktop-input') : join(app.getAppPath(), 'resources/native/remote-desktop-input')
+  const name = process.platform === 'win32' ? 'remote-desktop-input.exe' :
+    process.platform === 'linux' ? 'linux-desktop/desktop_input.py' : 'remote-desktop-input'
+  return join(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), 'native', name)
 }
-export const desktopHelperAvailable = () => process.platform === 'darwin' && process.arch === 'arm64' && Number.parseInt(osRelease(), 10) >= 22 && existsSync(desktopHelperPath())
+let linuxReady: boolean | undefined
+export function desktopHelperAvailable() {
+  if (!controllerSupported() || !existsSync(desktopHelperPath())) return false
+  if (process.platform === 'darwin') return Number.parseInt(osRelease(), 10) >= 22
+  if (process.platform === 'linux') {
+    linuxReady ??= spawnSync(desktopHelperPath(), ['--probe'], { encoding: 'utf8', timeout: 2500, maxBuffer: 1024 }).stdout?.trim() === 'kun-linux-desktop-v1'
+    return linuxReady
+  }
+  return true
+}
 const exec = promisify(execFile)
 // A freshly signed/notarized helper can spend several seconds in macOS trust
 // evaluation on its first launch. This is a startup-only probe, before input.
 const IDENTITY_START_TIMEOUT_MS = 5000
 export async function desktopProcessBirth(pid: number) {
   if (!Number.isSafeInteger(pid) || pid <= 1) throw new Error('DESKTOP_CAPTURE_NOT_ISOLATED')
-  const { stdout } = await exec(desktopHelperPath(), ['--identity', String(pid)], { timeout: IDENTITY_START_TIMEOUT_MS, maxBuffer: 4096 })
+  const { stdout } = await exec(desktopHelperPath(), ['--identity', String(pid)], { windowsHide: true, timeout: IDENTITY_START_TIMEOUT_MS, maxBuffer: 4096 })
     .catch(() => { throw new Error('DESKTOP_CAPTURE_NOT_ISOLATED') })
   const value = stdout.trim()
   if (!/^\d+:\d+$/.test(value)) throw new Error('DESKTOP_CAPTURE_NOT_ISOLATED')
@@ -23,7 +35,7 @@ export async function desktopProcessBirth(pid: number) {
 }
 export async function terminateDesktopProcess(pid: number, birth: string) {
   if (!Number.isSafeInteger(pid) || pid <= 1 || !/^\d+:\d+$/.test(birth)) throw new Error('DESKTOP_CAPTURE_NOT_ISOLATED')
-  await exec(desktopHelperPath(), ['--terminate', String(pid), birth], { timeout: 2000, maxBuffer: 4096 })
+  await exec(desktopHelperPath(), ['--terminate', String(pid), birth], { windowsHide: true, timeout: 2000, maxBuffer: 4096 })
     .catch(() => { throw new Error('DESKTOP_CLEANUP_UNCONFIRMED') })
 }
 /** NDJSON only; credentials and input text are never passed in process arguments or logs. */
@@ -43,7 +55,7 @@ export class NativeDesktopInput {
     if (generation !== this.generation || this.stopping) throw new Error('DESKTOP_INPUT_LOST')
     if (this.process) throw new Error('DESKTOP_BUSY')
     if (!desktopHelperAvailable()) throw new Error('DESKTOP_UNSUPPORTED')
-    const child = spawn(this.path, [], { stdio: ['pipe', 'pipe', 'pipe'] })
+    const child = spawn(this.path, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] })
     this.process = child
     let buffer = ''
     child.stdout.setEncoding('utf8')
@@ -65,7 +77,11 @@ export class NativeDesktopInput {
     child.stderr.resume()
     child.once('error', () => this.closed(child))
     child.once('exit', () => this.closed(child))
-    await this.command('configure', { displayId, capturePid, captureBirth })
+    const display = process.platform === 'darwin' ? undefined : screen.getAllDisplays().find(item => item.id === displayId)
+    const origin = display && screen.dipToScreenPoint({ x: display.bounds.x, y: display.bounds.y })
+    const geometry = display && origin ? { label: display.label, bounds: { ...origin,
+      width: Math.round(display.size.width * display.scaleFactor), height: Math.round(display.size.height * display.scaleFactor) } } : {}
+    await this.command('configure', { displayId, capturePid, captureBirth, ...geometry })
   }
   private closed(child: ChildProcessWithoutNullStreams) {
     if (this.process !== child) return
@@ -94,12 +110,12 @@ export class NativeDesktopInput {
   lease(ms: number) { return this.command('lease', { remainingMs: Math.min(6000, Math.max(0, ms)) }) }
   ready() { return this.command('ready') }
   input(event: Record<string, unknown>) {
-    const normalized = event.type === 'pointer.button' ? { ...event, button: event.button === 'right' ? 2 : event.button === 'middle' ? 1 : 0 } : event
+    const normalized = ['pointer.button', 'pointer.gameButton'].includes(String(event.type)) ? { ...event, button: event.button === 'right' ? 2 : event.button === 'middle' ? 1 : 0 } : event
     if (normalized.type === 'key' && normalized.pressed === true && typeof normalized.code === 'string') this.keys.add(normalized.code)
-    if (normalized.type === 'pointer.button' && normalized.pressed === true) this.buttons.add(normalized.button as number)
+    if (['pointer.button', 'pointer.gameButton'].includes(String(normalized.type)) && normalized.pressed === true) this.buttons.add(normalized.button as number)
     return this.command('input', { event: normalized }).then(() => {
       if (normalized.type === 'key' && normalized.pressed === false) this.keys.delete(normalized.code as string)
-      if (normalized.type === 'pointer.button' && normalized.pressed === false) this.buttons.delete(normalized.button as number)
+      if (['pointer.button', 'pointer.gameButton'].includes(String(normalized.type)) && normalized.pressed === false) this.buttons.delete(normalized.button as number)
     })
   }
   release() { return this.command('release').then(() => { this.keys.clear(); this.buttons.clear() }) }
@@ -107,7 +123,7 @@ export class NativeDesktopInput {
     if (!this.keys.size && !this.buttons.size) return
     const payload = JSON.stringify({ keys: [...this.keys], buttons: [...this.buttons] }) + '\n'
     await new Promise<void>((resolve, reject) => {
-      const child = spawn(this.path, ['--release-only'], { stdio: ['pipe', 'ignore', 'ignore'] })
+      const child = spawn(this.path, ['--release-only'], { windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'] })
       const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new Error('DESKTOP_CLEANUP_UNCONFIRMED')) }, 1500)
       child.once('error', () => { clearTimeout(timer); reject(new Error('DESKTOP_CLEANUP_UNCONFIRMED')) })
       child.once('exit', code => { clearTimeout(timer); if (code === 0) resolve(); else reject(new Error('DESKTOP_CLEANUP_UNCONFIRMED')) })

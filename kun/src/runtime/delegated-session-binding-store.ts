@@ -23,6 +23,11 @@ export class FileDelegatedSessionBindingStore implements DelegatedSessionBinding
     this.stateDir = join(rootDir, 'provider-state')
   }
 
+  async peek(threadId: string): Promise<DelegatedSessionBinding | null> {
+    const binding = await this.bindingFile(threadId).read(() => null).catch(() => null)
+    return binding?.threadId === threadId ? binding : null
+  }
+
   async load(threadId: string): Promise<DelegatedSessionBinding | null> {
     const file = this.bindingFile(threadId)
     const binding = await file.read(() => null).catch(async () => {
@@ -168,6 +173,7 @@ function parseBinding(value: unknown): DelegatedSessionBinding | null {
     !boundedString(record.providerId) ||
     !boundedString(record.credentialIdentity) ||
     !boundedString(record.workspace, 16_384) ||
+    !validWorkspaceRoots(record.additionalWorkspaceRoots) ||
     !boundedString(record.model) ||
     !hexDigest(record.capabilityFingerprint) ||
     (record.providerStateKey !== undefined && !hexDigest(record.providerStateKey)) ||
@@ -220,6 +226,7 @@ function isParkedSession(value: unknown): value is ParkedSession {
     boundedString(record.providerId) &&
     boundedString(record.credentialIdentity) &&
     boundedString(record.workspace, 16_384) &&
+    validWorkspaceRoots(record.additionalWorkspaceRoots) &&
     boundedString(record.model) &&
     hexDigest(record.capabilityFingerprint) &&
     hexDigest(record.synchronizedHistoryDigest) &&
@@ -246,4 +253,16 @@ function boundedString(value: unknown, max = MAX_IDENTITY_LENGTH): value is stri
 
 function hexDigest(value: unknown): value is string {
   return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
+}
+
+/**
+ * Canonical additional roots persisted with a binding. Absent is the
+ * single-directory identity; present must be a bounded, non-empty path list.
+ */
+function validWorkspaceRoots(value: unknown): boolean {
+  return value === undefined || (
+    Array.isArray(value) &&
+    value.length <= 32 &&
+    value.every((root) => boundedString(root, 16_384))
+  )
 }

@@ -131,6 +131,14 @@ import {
   mergeKunHarnessSettings,
   mergeKunWorktreeSettings
 } from './app-settings-kun-harness'
+import { mergeKunColabSettings } from './app-settings-colab'
+import {
+  OPTIONAL_MODEL_SLOT_KEYS,
+  OPTIONAL_REASONING_SLOT_KEYS,
+  mergeOptionalModelSlot,
+  mergeOptionalReasoningSlot
+} from './app-settings-kun-slots'
+export * from './app-settings-kun-slots'
 
 export function mergeKunRuntimeSettings(
   current: KunRuntimeSettingsV1,
@@ -352,6 +360,7 @@ export function mergeKunRuntimeSettings(
       ?? current.planExecution?.useWorktreeByDefault
       ?? true
   }
+  const nextColab = mergeKunColabSettings(current.colab, patch?.colab)
   // Do not let the nested partial patch leak through the broad object spread;
   // `nextSubagents` below is the fully materialized authoritative value.
   // Primary `model` is handled separately: empty strings must not wipe the
@@ -361,6 +370,7 @@ export function mergeKunRuntimeSettings(
     projectConfig: _projectConfigPatch,
     graph: _graphPatch,
     planExecution: _planExecutionPatch,
+    colab: _colabPatch,
     llmDebug: _llmDebugPatch,
     lab: _labPatch,
     harnesses: _harnessesPatch,
@@ -373,6 +383,7 @@ export function mergeKunRuntimeSettings(
   void _projectConfigPatch
   void _graphPatch
   void _planExecutionPatch
+  void _colabPatch
   void _llmDebugPatch
   void _labPatch
   void _harnessesPatch
@@ -430,6 +441,7 @@ export function mergeKunRuntimeSettings(
     quality: nextQuality,
     graph: nextGraph,
     planExecution: nextPlanExecution,
+    colab: nextColab,
     harnesses: nextHarnesses,
     ade: nextAde,
     worktrees: nextWorktrees,
@@ -625,71 +637,4 @@ export function stringOrFallback(value: string | undefined, fallback: string): s
 
 export function isModelReasoningEffortValue(value: unknown): value is ModelReasoningEffort {
   return typeof value === 'string' && MODEL_REASONING_EFFORTS.includes(value as ModelReasoningEffort)
-}
-
-export const OPTIONAL_MODEL_SLOT_KEYS = [
-  'smallModel',
-  'smallModelProviderId',
-  'smallModelAccountId',
-  'titleModel',
-  'titleProviderId',
-  'titleAccountId',
-  'summaryModel',
-  'summaryProviderId',
-  'summaryAccountId',
-  'codeReviewModel',
-  'codeReviewProviderId',
-  'codeReviewAccountId',
-  'planModel',
-  'planProviderId',
-  'planAccountId'
-] as const
-
-export type OptionalModelSlotKey = (typeof OPTIONAL_MODEL_SLOT_KEYS)[number]
-
-export function mergeOptionalModelSlot(
-  current: KunRuntimeSettingsV1,
-  patch: KunRuntimeSettingsPatchV1 | undefined
-): Partial<Record<OptionalModelSlotKey, string>> {
-  const out: Partial<Record<OptionalModelSlotKey, string>> = {}
-  for (const key of OPTIONAL_MODEL_SLOT_KEYS) {
-    const source = patch && key in patch ? patch[key] : current[key]
-    const trimmed = typeof source === 'string' ? source.trim() : ''
-    if (trimmed) out[key] = trimmed
-  }
-  return out
-}
-
-// Per-role reasoning-depth slots (agents.kun.*ReasoningEffort). Validated against
-// the ModelReasoningEffort enum; default 'off' is omitted so the field stays absent
-// unless the user opts into a deeper level. Must be stripped + re-applied exactly
-// like the model slots to avoid settings-sync round-trip drift.
-export const OPTIONAL_REASONING_SLOT_KEYS = [
-  'titleReasoningEffort',
-  'summaryReasoningEffort',
-  'codeReviewReasoningEffort'
-] as const
-
-export type OptionalReasoningSlotKey = (typeof OPTIONAL_REASONING_SLOT_KEYS)[number]
-
-export function mergeOptionalReasoningSlot(
-  current: KunRuntimeSettingsV1,
-  patch: KunRuntimeSettingsPatchV1 | undefined
-): Partial<Record<OptionalReasoningSlotKey, ModelReasoningEffort>> {
-  const out: Partial<Record<OptionalReasoningSlotKey, ModelReasoningEffort>> = {}
-  for (const key of OPTIONAL_REASONING_SLOT_KEYS) {
-    const source = patch && key in patch ? patch[key] : current[key]
-    const normalized = normalizeReasoningEffortOrUndefined(source)
-    // Omit 'off' (the default) and undefined so the field stays absent.
-    if (normalized && normalized !== 'off') out[key] = normalized
-  }
-  return out
-}
-
-export function normalizeReasoningEffortOrUndefined(
-  value: unknown
-): ModelReasoningEffort | undefined {
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim() as ModelReasoningEffort
-  return MODEL_REASONING_EFFORTS.includes(trimmed) ? trimmed : undefined
 }

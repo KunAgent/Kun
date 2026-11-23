@@ -1,11 +1,47 @@
 import { describe, expect, it, vi } from 'vitest'
 import { petStopConflict, validatePetStop } from './pet-actions'
 import { clampPetBounds, dragBounds, petOverlayFrame, placementFromDip, restorePetBounds } from './pet-geometry'
-import { applyPetPlatformPolicy, petPlatformPolicy } from './pet-platform'
+import { applyPetPlatformPolicy, isNativeWaylandSession, petPlatformPolicy } from './pet-platform'
+import { petSurfaceLayout } from '../../renderer/src/pets/pet-layout'
 import { PetWindowController, type PetWindowLike } from './pet-window'
 import type { PetActivitySnapshot } from '../../shared/pets'
 
 describe('pet window policy', () => {
+  it('detects native Wayland without changing explicit X11 or other platforms', () => {
+    expect(isNativeWaylandSession('linux', '', { XDG_SESSION_TYPE: 'wayland' })).toBe(true)
+    expect(isNativeWaylandSession('linux', 'wayland', {})).toBe(true)
+    expect(isNativeWaylandSession('linux', 'x11', { WAYLAND_DISPLAY: 'wayland-0' })).toBe(false)
+    expect(isNativeWaylandSession('linux', '', { XDG_SESSION_TYPE: 'x11' })).toBe(false)
+    expect(isNativeWaylandSession('darwin', '', { WAYLAND_DISPLAY: 'wayland-0' })).toBe(false)
+  })
+
+  it('keeps the pet inside a Wayland window reporting zero global origin and ignores global drags', async () => {
+    const window = new FakeWindow()
+    window.getBounds = () => ({ ...window.bounds, x: 0, y: 0 })
+    const persist = vi.fn(async () => undefined)
+    const controller = new PetWindowController({
+      platform: 'linux', nativeWayland: true, forwardMouseEvents: false,
+      createWindow: () => window,
+      displays: () => [{ id: 'primary', scaleFactor: 1, workArea: { x: 0, y: 0, width: 1920, height: 1080 } }],
+      cursor: () => ({ x: 0, y: 0 }), load: async () => undefined, onDisplayChange: () => () => undefined
+    }, persist)
+    await controller.open()
+    const before = controller.layout()
+    expect(before.nativeWindowDrag).toBe(true)
+    const { pet } = petSurfaceLayout({ anchor: before, petWidth: 112,
+      controls: { width: 100, height: 30 }, notification: { width: 200, height: 100 }, menu: { width: 100, height: 100 } })
+    expect(pet.left).toBeGreaterThanOrEqual(0)
+    expect(pet.top).toBeGreaterThanOrEqual(0)
+    expect(pet.left + pet.width).toBeLessThanOrEqual(before.viewportWidth)
+    expect(pet.top + pet.height).toBeLessThanOrEqual(before.viewportHeight)
+    controller.beginDrag({ x: 5, y: 5 })
+    controller.moveDrag({ x: 2000, y: 2000 })
+    expect(controller.endDrag({ x: 2000, y: 2000 })).toBe('cancel')
+    expect(controller.layout()).toEqual(before)
+    expect(persist).not.toHaveBeenCalled()
+    controller.close()
+  })
+
   it('shows one inactive window, skips the taskbar, and keeps macOS workspace calls off other platforms', async () => {
     const windows: FakeWindow[] = []
     const controller = controllerFor('darwin', true, windows)

@@ -200,7 +200,11 @@
     StrCpy $R0 "$KunInstallerHelperOutput"
     ${if} ${FileExists} "$R0"
       DetailPrint "Restarting the preserved ${PRODUCT_NAME} application after automatic-update failure."
-      Exec '"$R0"'
+      ; Do not pass the elevated installer's token to the restored GUI.
+      ${StdUtils.ExecShellAsUser} $R1 "$R0" "open" ""
+      ${if} $R1 != "ok"
+        DetailPrint "The preserved ${PRODUCT_NAME} application could not be restarted as the current user."
+      ${endif}
     ${else}
       DetailPrint "The preserved ${PRODUCT_NAME} executable is unavailable after automatic-update failure."
     ${endif}

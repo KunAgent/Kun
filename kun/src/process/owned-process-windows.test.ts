@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { windowsStartupDirectory } from './windows-startup-native.js'
 import { inspectRuntimeProcess } from '../server/runtime-process-identity.js'
-import { resolveWindowsExecutablePath } from './owned-process-windows.js'
+import { resolveWindowsExecutablePath, windowsCommandLine } from './owned-process-windows.js'
 import { quoteWindowsArgument, spawnWindowsOwnedProcess, stopWindowsOwnedProcess, shutdownWindowsOwnedProcesses, resumeWindowsOwnedProcessAdmission } from './owned-process-windows.js'
 
 function alive(pid: number): boolean {
@@ -24,6 +24,26 @@ async function waitUntil(predicate: () => boolean | Promise<boolean>, timeoutMs:
 }
 
 describe('Windows executable argument encoding', () => {
+  it.each([
+    'type "my file.txt"',
+    '"C:\\Program Files\\tool.exe" "inner value"',
+    'echo "quoted value" > "my file.txt" && type "my file.txt"'
+  ])('preserves explicit cmd shell source: %s', (command) => {
+    expect(windowsCommandLine('C:\\Windows\\System32\\cmd.exe', ['/d', '/s', '/c', command]))
+      .toBe(`C:\\Windows\\System32\\cmd.exe /d /s /c "${command}"`)
+  })
+
+  it('preserves path, whitespace, empty arguments and trailing slashes in cmd argument form', () => {
+    expect(windowsCommandLine('cmd.exe', ['/d', '/s', '/c', 'C:\\Program Files\\fixture.cmd', 'two words', '', 'C:\\my dir\\']))
+      .toBe('cmd.exe /d /s /c ""C:\\Program Files\\fixture.cmd" "two words" "" "C:\\my dir\\""')
+    expect(() => windowsCommandLine('cmd.exe', ['/c', 'echo', 'unsafe&value']))
+      .toThrow('single explicit shell command')
+  })
+
+  it('keeps ordinary exe arguments on CommandLineToArgvW rules', () => {
+    expect(windowsCommandLine('tool.exe', ['a"b', 'C:\\some path\\']))
+      .toBe(['tool.exe', 'a"b', 'C:\\some path\\'].map(quoteWindowsArgument).join(' '))
+  })
   it('uses the same case-insensitive PATH and command suffix lookup for detection and launch', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'kun-windows-command-'))
     try {
@@ -72,6 +92,43 @@ describe('Windows executable argument encoding', () => {
 })
 
 describe.skipIf(process.platform !== 'win32')('Windows owned Job integration', () => {
+  it('preserves argv boundaries for both explicit cmd and direct batch launches', async () => {
+    resumeWindowsOwnedProcessAdmission()
+    const directory = await mkdtemp(join(tmpdir(), 'kun-batch args-'))
+    const batch = join(directory, 'fixture script.cmd')
+    try {
+      await writeFile(batch, '@echo off\r\n>args.txt echo [%~1][%~2][%~3]\r\n')
+      for (const [file, args] of [
+        [process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', batch, 'two words', '', 'last']],
+        [batch, ['two words', '', 'last']]
+      ] as const) {
+        const child = await spawnWindowsOwnedProcess(file, args, { cwd: directory, stdio: 'pipe' })
+        await new Promise<void>((resolve, reject) => {
+          child.once('error', reject)
+          child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`batch exited ${code}`)))
+        })
+        expect((await readFile(join(directory, 'args.txt'), 'utf8')).trim()).toBe('[two words][][last]')
+        await stopWindowsOwnedProcess(child, { timeoutMs: 5000 })
+      }
+    } finally { await rm(directory, { recursive: true, force: true }) }
+  }, 30_000)
+
+  it('runs quoted file paths, redirection, and command chaining through cmd', async () => {
+    resumeWindowsOwnedProcessAdmission()
+    const directory = await mkdtemp(join(tmpdir(), 'kun-cmd-quotes-'))
+    try {
+      await writeFile(join(directory, 'my file.txt'), 'original')
+      const child = await spawnWindowsOwnedProcess(process.env.ComSpec ?? 'cmd.exe',
+        ['/d', '/s', '/c', 'type "my file.txt" > "copy file.txt" && echo done>>"copy file.txt"'],
+        { cwd: directory, stdio: 'pipe' })
+      await new Promise<void>((resolve, reject) => {
+        child.once('error', reject)
+        child.once('exit', (code) => code === 0 ? resolve() : reject(new Error(`cmd exited ${code}`)))
+      })
+      expect(await readFile(join(directory, 'copy file.txt'), 'utf8')).toContain('originaldone')
+      await stopWindowsOwnedProcess(child, { timeoutMs: 5000 })
+    } finally { await rm(directory, { recursive: true, force: true }) }
+  }, 30_000)
   it('preserves Node IPC and waits for the target Job to exit', async () => {
     resumeWindowsOwnedProcessAdmission()
     const child = await spawnWindowsOwnedProcess(process.execPath, ['-e',

@@ -17,7 +17,7 @@ describe('antigravityStreamSignal', () => {
     expect(text.length).toBeGreaterThan(40)
     expect(text[0]).toEqual({ kind: 'text', text: '自行车的' })
     // The final step carries the last piece with the usage; the result event adds nothing.
-    expect(all.at(-2)).toEqual({ kind: 'text', text: '的动态平衡。\n' })
+    expect(all.at(-2)).toEqual({ kind: 'text', text: '的动态平衡。\n', inputTokens: 12010 })
     expect(all.at(-1)).toBeUndefined()
   })
 
@@ -25,10 +25,10 @@ describe('antigravityStreamSignal', () => {
     expect(signals('agy-stream-tool')).toEqual([
       { kind: 'prompt-accepted' },
       { kind: 'prompt-accepted' },
-      undefined, // model step that only decided to call a tool: no text
+      { kind: 'response-usage', inputTokens: 11996 },
       { kind: 'tool-started' },
       { kind: 'tool-finished' },
-      { kind: 'text', text: '该命令的输出为 `kun-probe`。\n' },
+      { kind: 'text', text: '该命令的输出为 `kun-probe`。\n', inputTokens: 12374 },
       undefined
     ])
   })

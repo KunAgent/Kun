@@ -210,6 +210,33 @@ for (const { name, probe, def } of probes) {
     })
   })
 }
+
+it('returns the ACP timeout reason within the check budget remaining after detection', async () => {
+  const child = fixture({ silent: true })
+  spawn.mockResolvedValue(child.process)
+  let now = 0
+  const service = new HarnessReadinessService({
+    options: () => ({}), catalog, nowMs: () => now,
+    detector: { status: async () => {
+      now += 750
+      return { harnessId: 'opencode', installed: 'yes', login: 'unknown', resolvedCommand: 'fixture', checkedAt: '' }
+    } }
+  })
+  const result = await service.test(catalog.get('opencode')!, {
+    level: 'handshake', credentialMode: 'native-login', timeoutMs: 1_000
+  })
+  expect(result).toMatchObject({ ok: false, handshake: { ok: false, detail: expect.stringContaining('did not answer the ACP handshake') } })
+  expect(result.readiness?.detail).toBeUndefined()
+  expect(child.requests.map((request) => request.method)).toEqual(['initialize'])
+  expect(child.stop).toHaveBeenCalledOnce()
+})
+
+it('keeps the timeout diagnosis when the ACP deadline expires before the launcher returns', async () => {
+  spawn.mockImplementation(() => new Promise(() => {}))
+  expect(await probeAcpHandshake(catalog.get('opencode')!, 'fixture', { timeoutMs: 20 }))
+    .toMatchObject({ ok: false, detail: expect.stringContaining('did not answer the ACP handshake') })
+})
+
 describe('Codex account evidence', () => {
   it.each([
     [{ account: { type: 'chatgpt', email: 'private@example.test', planType: 'plus' }, requiresOpenaiAuth: true }, 'verified', false],

@@ -172,6 +172,12 @@ export class AcpEventMapper {
     return this.withSubagents(this.messages.flush())
   }
 
+  /** Native work that must settle before an engine can finish a normal turn. */
+  pendingTools(): Array<{ id: string; title: string }> {
+    return [...this.toolCalls].flatMap(([id, state]) => state.phase === 'finished'
+      ? [] : [{ id, title: state.call.title ?? state.call.kind ?? 'tool' }])
+  }
+
   private flushTurn(): RuntimeEventDraft[] {
     const drafts = this.messages.flush()
     for (const [callId, state] of this.toolCalls) {

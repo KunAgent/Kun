@@ -1,3 +1,4 @@
+import { providerPresetScopeMatches } from '@kun/provider-catalog'
 import { withModelObservation } from '../../../../kun/src/services/model-metadata-resolver.js'
 import { metadataEvidence } from '../../../../kun/src/contracts/model-metadata-evidence.js'
 import type {
@@ -22,6 +23,7 @@ import type {
   WriteInlineCompletionSettingsV1
 } from '@shared/app-settings'
 import {
+  DEFAULT_DEEPSEEK_BASE_URL,
   DEFAULT_IMAGE_GENERATION_PROTOCOL,
   DEFAULT_MODEL_PROVIDER_ID,
   DEFAULT_MUSIC_GENERATION_PROTOCOL,
@@ -64,6 +66,7 @@ export const IMAGE_GENERATION_PROTOCOL_LABEL_KEYS: Record<ImageGenerationProtoco
 
 export const SPEECH_TO_TEXT_PROTOCOL_LABEL_KEYS: Partial<Record<SpeechToTextProtocol, string>> = {
   'openai-transcriptions': 'speechProtocolOpenAi',
+  'deepseek-asr': 'speechProtocolDeepSeekAsr',
   'mimo-asr': 'speechProtocolMimoAsr',
   'xai-stt': 'speechProtocolXaiStt',
   'gemini-audio': 'speechProtocolGeminiAudio',
@@ -72,6 +75,7 @@ export const SPEECH_TO_TEXT_PROTOCOL_LABEL_KEYS: Partial<Record<SpeechToTextProt
 
 export const TEXT_TO_SPEECH_PROTOCOL_LABEL_KEYS: Record<TextToSpeechProtocol, string> = {
   'openai-speech': 'textToSpeechProtocolOpenAi',
+  'deepseek-tts': 'textToSpeechProtocolDeepSeek',
   'minimax-t2a': 'textToSpeechProtocolMiniMax',
   'mimo-tts': 'textToSpeechProtocolMimo'
 }
@@ -104,8 +108,9 @@ export function antigravityProviderCatalogPatch(
     } satisfies ModelProviderModelProfileV1
     modelProfiles[model.id] = withModelObservation(existing, {
       id: 'antigravity-official-cli', source: 'provider', match: 'exact', observedAt: new Date().toISOString(),
-      values: { supportsReasoning: true, reasoning: { supportedEfforts: [...model.supportedEfforts],
-        defaultEffort: model.defaultEffort, requestProtocol: 'none' } }
+      // A managed model can reason, but leaves the budget entirely to the Agent.
+      values: { supportsReasoning: true, reasoning: { supportedEfforts: model.supportedEfforts.length ? [...model.supportedEfforts] : ['auto'],
+        defaultEffort: model.defaultEffort ?? 'auto', requestProtocol: 'none' } }
     })
   }
   return { models, modelProfiles }
@@ -485,10 +490,38 @@ export function cursorProviderNeedsMetadataRepair(provider: ModelProviderProfile
 
 export function presetProfileForProvider(provider: ModelProviderProfileV1): ModelProviderProfileV1 | null {
   const source = resolveModelProviderPresetSource(provider)
-  if (!source) return null
-  return source.mode === 'token-plan'
-    ? modelProviderTokenPlanProfile(source.preset, '', provider.baseUrl)
-    : modelProviderPresetProfile(source.preset)
+  if (source) {
+    return source.mode === 'token-plan'
+      ? modelProviderTokenPlanProfile(source.preset, '', provider.baseUrl)
+      : modelProviderPresetProfile(source.preset)
+  }
+  if (
+    provider.id === DEFAULT_MODEL_PROVIDER_ID &&
+    providerPresetScopeMatches({
+      id: provider.id,
+      presetSource: provider.presetSource?.presetId,
+      presetMode: provider.presetSource?.mode,
+      baseUrl: provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL,
+      endpointFormat: provider.endpointFormat,
+      endpoints: provider.endpoints,
+      kind: provider.kind
+    })
+  ) {
+    return {
+      ...provider,
+      speech: {
+        protocol: 'deepseek-asr',
+        baseUrl: DEFAULT_DEEPSEEK_BASE_URL,
+        models: ['deepseek-asr']
+      },
+      textToSpeech: {
+        protocol: 'deepseek-tts',
+        baseUrl: DEFAULT_DEEPSEEK_BASE_URL,
+        models: ['deepseek-tts']
+      }
+    }
+  }
+  return null
 }
 
 export function presetImageCapability(provider: ModelProviderProfileV1): ModelProviderImageCapabilityV1 | null {

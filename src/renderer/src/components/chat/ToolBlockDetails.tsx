@@ -8,29 +8,33 @@ import type { ToolPresentation } from '@shared/tool-presentation'
 import { readToolPresentation } from '../../agent/tool-presentation'
 import { useTimelineFilePreviewWorkspaceRoot } from './timeline-file-preview-workspace'
 import { ToolDetailsContent } from './ToolDetailsContent'
+import { useAcpToolOutput } from './use-acp-tool-output'
 import { GmailToolCard, gmailToolThread } from './gmail-tool-card'
+import { ColabToolCard, colabToolData } from '../../colab/ColabShortcuts'
 
 export function ToolBlockDetails({ block }: { block: ToolBlock }): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useTimelineFilePreviewWorkspaceRoot()
-  const presentation = readToolPresentation(block)
+  const { presentation, loadingOutput } = useAcpToolOutput(block, readToolPresentation(block))
   const [expanded, setExpanded] = useState(false)
   const githubThread = githubToolThread(presentation)
   if (githubThread) return <GitHubToolCard threadId={githubThread} presentation={presentation} />
   const gmailThread = gmailToolThread(presentation)
   if (gmailThread) return <GmailToolCard threadId={gmailThread} presentation={presentation} />
+  const colabMarker = colabToolData(presentation)
+  if (colabMarker) return <ColabToolCard marker={colabMarker} />
   return <div className="min-w-0" data-tool-block-details>
     <div className="mb-2 flex justify-end">
       <button type="button" className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-ds-muted hover:bg-ds-hover hover:text-ds-ink"
         onClick={() => setExpanded(true)}><Maximize2 size={12} />{t('toolDetails.expand')}</button>
     </div>
-    <ToolDetailsContent presentation={presentation} workspaceRoot={workspaceRoot} />
-    {expanded ? <ToolDetailsViewer presentation={presentation} workspaceRoot={workspaceRoot} onClose={() => setExpanded(false)} /> : null}
+    <ToolDetailsContent presentation={presentation} workspaceRoot={workspaceRoot} loadingOutput={loadingOutput} />
+    {expanded ? <ToolDetailsViewer presentation={presentation} workspaceRoot={workspaceRoot} loadingOutput={loadingOutput} onClose={() => setExpanded(false)} /> : null}
   </div>
 }
 
-function ToolDetailsViewer({ presentation, workspaceRoot, onClose }: {
-  presentation: ToolPresentation; workspaceRoot: string; onClose: () => void
+function ToolDetailsViewer({ presentation, workspaceRoot, loadingOutput, onClose }: {
+  presentation: ToolPresentation; workspaceRoot: string; loadingOutput: boolean; onClose: () => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const ref = useRef<HTMLDialogElement>(null)
@@ -49,6 +53,6 @@ function ToolDetailsViewer({ presentation, workspaceRoot, onClose }: {
         <h2 className="min-w-0 truncate text-sm font-semibold">{presentation.title ?? presentation.name ?? t('toolDetails.title')}</h2>
         <button type="button" className="rounded-md p-1.5 hover:bg-ds-hover" aria-label={t('toolDetails.close')} onClick={onClose}><X size={18} /></button>
       </header>
-      <div className="max-h-[calc(90vh-60px)] overflow-auto p-5"><ToolDetailsContent presentation={presentation} workspaceRoot={workspaceRoot} expanded /></div>
+      <div className="max-h-[calc(90vh-60px)] overflow-auto p-5"><ToolDetailsContent presentation={presentation} workspaceRoot={workspaceRoot} loadingOutput={loadingOutput} expanded /></div>
     </dialog>, document.body)
 }

@@ -309,6 +309,7 @@
 .usage-card-head {
   display: flex;
   min-width: 0;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
@@ -318,11 +319,13 @@
   color: var(--ds-text);
   font-size: 12.5px;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .usage-card-sub {
   color: var(--ds-text-faint);
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .usage-select select {
@@ -498,6 +501,28 @@
   margin-left: 5px;
   color: var(--ds-text-faint);
   font-size: 11px;
+}
+
+.usage-agent-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.usage-agent-name small {
+  flex: none;
+  margin-left: 0;
+}
+
+.usage-agent-icon {
+  flex: none;
+}
+
+.usage-agent-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .usage-model-figure {

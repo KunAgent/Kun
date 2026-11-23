@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const PAPER_CONTEXT_MAX_CHARS = 80_000
 export const PaperTurnContextSchema = z.object({
   version: z.literal(1),
-  scope: z.enum(['selected-passage', 'current-paper', 'multi-paper']),
+  scope: z.enum(['selected-passage', 'current-paper', 'multi-paper', 'work-annotation']),
   privacy: z.enum(['local-only', 'model-provider']),
   purpose: z.string().trim().min(1).max(2_000),
   providerId: z.string().trim().min(1).max(256),
@@ -25,7 +25,7 @@ export const PaperTurnContextSchema = z.object({
   if (value.scope !== 'multi-paper' && papers.size !== 1) {
     ctx.addIssue({ code: 'custom', path: ['sources'], message: 'This scope permits exactly one paper' })
   }
-  if (value.scope === 'selected-passage' && value.sources.length !== 1) {
+  if ((value.scope === 'selected-passage' || value.scope === 'work-annotation') && value.sources.length !== 1) {
     ctx.addIssue({ code: 'custom', path: ['sources'], message: 'Selected passage permits exactly one source excerpt' })
   }
 })

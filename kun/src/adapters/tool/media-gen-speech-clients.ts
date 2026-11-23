@@ -9,6 +9,7 @@ import {
   createMediaFetch,
   requestJson,
   requestResponse,
+  trimTrailingSlashes,
   withTimeout
 } from './media-gen-client-support.js'
 import type { MiniMaxBaseResponse } from './media-gen-client-support.js'
@@ -37,6 +38,7 @@ export function createSpeechGenClient(config: {
 }): SpeechGenClient {
   // Media generation shares the provider-level model proxy with chat requests.
   const fetchImpl = createMediaFetch(config.proxyUrl)
+  if (config.protocol === 'deepseek-tts') return new DeepSeekSpeechClient(config.baseUrl!, config.apiKey!, fetchImpl)
   if (config.protocol === 'minimax-t2a') return new MiniMaxSpeechClient(config.baseUrl!, config.apiKey!, fetchImpl)
   if (config.protocol === 'mimo-tts') return new MimoSpeechClient(config.baseUrl!, config.apiKey!, fetchImpl)
   return new OpenAiCompatSpeechClient(config.baseUrl!, config.apiKey!, fetchImpl)
@@ -85,6 +87,48 @@ export class OpenAiCompatSpeechClient implements SpeechGenClient {
       data: Buffer.from(await response.arrayBuffer()),
       mimeType,
       extension: audioExtension(request.format)
+    }
+  }
+}
+
+export class DeepSeekSpeechClient implements SpeechGenClient {
+  readonly id = 'deepseek-tts'
+  private readonly endpointUrl: string
+
+  constructor(
+    baseUrl: string,
+    private readonly apiKey: string,
+    private readonly fetchImpl: typeof fetch = fetch
+  ) {
+    const normalizedRoot = trimTrailingSlashes(baseUrl.trim()).replace(/\/beta$/i, '')
+    this.endpointUrl = apiUrl(normalizedRoot, '/v1/tools/tts')
+  }
+
+  async generate(request: SpeechGenRequest): Promise<GeneratedMedia> {
+    const outFormat = request.format === 'pcm' || request.format === 'pcm16' ? 'pcm' : 'wav'
+    const rawVoice = request.voice?.trim().toLowerCase()
+    const voiceId = rawVoice === 'stella' || rawVoice === 'tide' ? rawVoice : 'stella'
+    const response = await requestResponse(this.endpointUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        text: request.text,
+        voice_id: voiceId,
+        format: outFormat,
+        filter_markdown: true
+      }),
+      signal: withTimeout(request.signal, request.timeoutMs)
+    }, request, this.fetchImpl)
+    if (!response.ok) throw new ImageGenHttpError(response.status, await response.text())
+    const data = Buffer.from(await response.arrayBuffer())
+    if (data.byteLength === 0) throw new Error('DeepSeek speech provider returned no audio data')
+    return {
+      data,
+      mimeType: outFormat === 'pcm' ? 'audio/L16' : 'audio/wav',
+      extension: outFormat
     }
   }
 }

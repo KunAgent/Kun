@@ -24,6 +24,7 @@ import { readToolPresentation } from '../../agent/tool-presentation'
 import { GmailGlyph } from '../rooms/gmail-brand'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { previewWorkspaceFile } from '../../lib/workspace-file-preview'
+import { isExternalLocalImagePreviewPath } from '../../lib/workspace-text-preview'
 import {
   blockHasPendingRuntimeWork,
   isBackgroundShellNoticeBlock,
@@ -314,7 +315,10 @@ export function ProcessFileReference({
   const openInEditor = (event: ReactMouseEvent<HTMLButtonElement>): void => {
     event.preventDefault()
     event.stopPropagation()
-    void openWorkspacePathInEditor({ path }, workspaceRoot).then((result) => {
+    const editorWorkspaceRoot = isExternalLocalImagePreviewPath(path, workspaceRoot)
+      ? undefined
+      : workspaceRoot
+    void openWorkspacePathInEditor({ path }, editorWorkspaceRoot).then((result) => {
       if (!result.ok) {
         void window.kunGui?.logError?.('editor-open', 'Failed to open process file reference', {
           message: result.message,

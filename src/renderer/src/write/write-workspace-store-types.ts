@@ -20,7 +20,7 @@ import type { CanvasEngine } from '../whiteboard/canvas-engine'
 
 export type WritePreviewMode = 'rich' | 'plain'
 export type WriteSaveStatus = 'saved' | 'dirty' | 'saving' | 'error'
-export type WriteActiveFileKind = 'text' | 'code' | 'image' | 'pdf' | 'office'
+export type WriteActiveFileKind = 'text' | 'code' | 'image' | 'pdf' | 'office' | 'latex'
 export type WriteEditorGroupId = 'primary' | 'secondary'
 export type WriteEditorLayoutOrientation = 'single' | 'horizontal' | 'vertical'
 
@@ -116,6 +116,7 @@ export type WriteEditorLayoutV1 = {
 
 export type WriteDocumentSession = {
   path: string
+  latexTitle?: string
   kind: WriteActiveFileKind
   fileContent: string
   imageDataUrl: string

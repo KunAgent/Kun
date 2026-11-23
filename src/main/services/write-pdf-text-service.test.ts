@@ -1,9 +1,18 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { createCanvas } from '@napi-rs/canvas'
+import { dirname, join, resolve } from 'node:path'
+import { createCanvas, GlobalFonts } from '@napi-rs/canvas'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearWritePdfTextCache, readLocalPdfText, readWritePdfText } from './write-pdf-text-service'
+
+const require = createRequire(import.meta.url)
+const TEST_OCR_FONT_FAMILY = 'KunTestLiberationSans'
+const BUNDLED_LIBERATION_SANS_PATH = resolve(
+  dirname(require.resolve('pdfjs-dist/legacy/build/pdf.mjs')),
+  '../../standard_fonts/LiberationSans-Regular.ttf'
+)
+GlobalFonts.registerFromPath(BUNDLED_LIBERATION_SANS_PATH, TEST_OCR_FONT_FAMILY)
 
 function escapePdfText(text: string): string {
   return text.replaceAll('\\', '\\\\').replaceAll('(', '\\(').replaceAll(')', '\\)')
@@ -47,10 +56,16 @@ function createImageOnlyPdf(text: string): Buffer {
   context.fillStyle = '#fff'
   context.fillRect(0, 0, width, height)
   context.fillStyle = '#111'
-  context.font = '76px Arial'
+  context.font = `76px "${TEST_OCR_FONT_FAMILY}"`
   context.fillText(text, 72, 155)
-  context.font = '44px Arial'
+  context.font = `44px "${TEST_OCR_FONT_FAMILY}"`
   context.fillText('This page has no PDF text layer.', 72, 245)
+  const pixels = context.getImageData(0, 0, width, height).data
+  let darkPixels = 0
+  for (let i = 0; i < pixels.length; i += 4) {
+    if (pixels[i] < 200) darkPixels += 1
+  }
+  expect(darkPixels).toBeGreaterThan(1000)
   const jpeg = canvas.toBuffer('image/jpeg', 95)
 
   const chunks: Buffer[] = []
@@ -118,6 +133,7 @@ describe('write PDF text service', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.pageCount).toBe(1)
+    expect(result.ocrError).toBeUndefined()
     expect(result.hasText).toBe(true)
     expect(result.pages[0]).toMatchObject({
       page: 1,
@@ -136,6 +152,7 @@ describe('write PDF text service', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.pageCount).toBe(1)
+    expect(result.ocrError).toBeUndefined()
     expect(result.hasText).toBe(true)
     expect(result.pages[0]?.text).toContain('Local PDF attachment text')
   }, 15_000)
@@ -161,6 +178,7 @@ describe('write PDF text service', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.pageCount).toBe(1)
+    expect(result.ocrError).toBeUndefined()
     expect(result.hasText).toBe(true)
     expect(result.ocrApplied).toBe(true)
     expect(result.ocrPageCount).toBe(1)
@@ -200,6 +218,7 @@ describe('write PDF text service', () => {
       expect(result.pages).toEqual([])
       expect(result.ocrApplied).toBe(false)
       expect(result.ocrPageCount).toBe(0)
+      expect(result.ocrError).toContain('OCR worker unavailable')
       expect(result.truncated).toBe(false)
       service.clearWritePdfTextCache()
     } finally {

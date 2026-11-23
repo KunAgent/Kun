@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import '../../i18n'
 import { useChatStore } from '../../store/chat-store'
+import { useCodeProjectEditorStore } from '../../store/code-workspace-project-editor'
 import { useReviewStore } from '../../store/review-store'
 import { AdeWorkspaceProjectPicker } from './AdeWorkspaceProjectPicker'
 
@@ -21,6 +22,7 @@ beforeEach(() => {
     chooseAdeWorkspace: vi.fn(async () => '/repo/new')
   })
   useReviewStore.setState({ bindings: {} })
+  useCodeProjectEditorStore.getState().close()
 })
 
 afterEach(async () => {
@@ -29,6 +31,7 @@ afterEach(async () => {
   document.body.innerHTML = ''
   useChatStore.setState(original)
   useReviewStore.setState({ bindings: {} })
+  useCodeProjectEditorStore.getState().close()
 })
 
 async function renderPicker(props: Partial<Parameters<typeof AdeWorkspaceProjectPicker>[0]> = {}): Promise<void> {
@@ -63,14 +66,16 @@ describe('AdeWorkspaceProjectPicker', () => {
     expect(useChatStore.getState().selectAdeWorkspaceRoot).not.toHaveBeenCalled()
   })
 
-  it('keeps the menu open after a canceled directory dialog', async () => {
-    const choose = vi.fn(async () => null)
-    useChatStore.setState({ chooseAdeWorkspace: choose })
+  it('opens the project creation dialog for ADE and closes the menu when browsing', async () => {
     await renderPicker()
     const menu = await openMenu()
     await act(async () => menu.querySelector<HTMLButtonElement>('[data-ade-project-browse]')!.click())
-    expect(choose).toHaveBeenCalledTimes(1)
-    expect(document.body.querySelector('[data-ade-workspace-menu]')).toBeTruthy()
+    expect(useCodeProjectEditorStore.getState().request).toEqual({
+      mode: 'create',
+      seedFolder: '/repo/alpha',
+      selectAfterSave: 'ade'
+    })
+    expect(document.body.querySelector('[data-ade-workspace-menu]')).toBeNull()
   })
 
   it('shows a bound worktree source and actual execution path, but blocks switching while queued', async () => {

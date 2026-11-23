@@ -159,6 +159,7 @@ export type PetOverlayBootstrap = {
 }
 
 export type PetOverlayLayout = {
+  nativeWindowDrag?: boolean
   anchorX: number
   anchorY: number
   viewportWidth: number

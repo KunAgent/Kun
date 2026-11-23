@@ -1,3 +1,4 @@
+import { isAntigravityOrchestrator } from '@kun/provider-catalog'
 import { resolveModelMetadata } from '../../../../../kun/src/services/model-metadata-resolver.js'
 import {
   MODEL_REASONING_EFFORTS,
@@ -48,6 +49,7 @@ export type FloatingSubmenuAnchorRect = Pick<DOMRect, 'bottom' | 'left' | 'right
 export type FloatingReasoningPopoverAnchorRect = Pick<DOMRect, 'bottom' | 'left' | 'right' | 'top'>
 
 export type ComposerModelMenuGroup = {
+  kind?: ModelProviderModelGroup['kind']
   providerId: string
   presetSource?: string
   label: string
@@ -568,6 +570,16 @@ export type ComposerReasoningSelection = {
   availability: 'supported' | 'unsupported' | 'unknown'
 }
 
+/** Hide fixed native budgets even when restoring a catalog saved by an older Kun. */
+export function reportedReasoningChoices(levels: readonly string[] | undefined): ComposerReasoningEffort[] {
+  const choices = REASONING_OPTIONS.filter(({ id }) => id !== 'auto' && levels?.includes(id)).map(({ id }) => id)
+  return choices.length ? ['auto', ...choices] : []
+}
+
+export function isManagedAntigravityBudget(group: Pick<ComposerModelMenuGroup, 'kind' | 'nativeHarnessId'> | undefined, model: string): boolean {
+  return (group?.nativeHarnessId === 'antigravity' || group?.kind === 'antigravity-cli') && isAntigravityOrchestrator(model)
+}
+
 /** One model/connection owns its levels; task cards never invent unreported controls. */
 export function resolveComposerReasoningSelection(input: {
   groups: readonly ComposerModelMenuGroup[]
@@ -578,17 +590,16 @@ export function resolveComposerReasoningSelection(input: {
   requireReportedLevels?: boolean
 }): ComposerReasoningSelection {
   const group = input.groups.find((entry) => entry.providerId === input.providerId)
+  if (isManagedAntigravityBudget(group, input.model)) return { options: [], current: 'auto', availability: 'unsupported' }
   const profile = modelProfileForSelection(input.groups, input.model, input.providerId)
   const nativeHarnessId = group?.nativeHarnessId
   const nativeModel = nativeHarnessId ? group.modelInfo?.[input.model] : undefined
   const declared = nativeHarnessId ? nativeModel?.reasoningEfforts : profile?.reasoning?.supportedEfforts
   const availability = (!nativeHarnessId && profile?.supportsReasoning === false) || declared?.length === 0 ? 'unsupported'
     : declared ? 'supported' : 'unknown'
-  const nativeChoices = nativeHarnessId && nativeHarnessId !== 'devin'
-    ? input.requireReportedLevels && declared
-      ? ['auto', ...REASONING_OPTIONS.filter((option) => option.id !== 'auto' && declared.includes(option.id)).map((option) => option.id)]
-      : agentModelReasoningChoices(nativeModel)
-    : undefined
+  const reportedOnly = nativeHarnessId === 'antigravity' || (input.requireReportedLevels && declared !== undefined)
+  const nativeChoices = !nativeHarnessId || nativeHarnessId === 'devin' ? undefined
+    : reportedOnly ? reportedReasoningChoices(declared) : agentModelReasoningChoices(nativeModel)
   const adapterChoices = nativeChoices !== undefined || (nativeHarnessId === 'devin' && nativeModel?.reasoningEfforts !== undefined) ||
     (!profile?.reasoning && profile?.supportsReasoning !== false && input.allowedEfforts !== undefined)
   const candidates = adapterChoices ? REASONING_OPTIONS : reasoningOptionsForModel(profile)

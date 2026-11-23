@@ -102,9 +102,23 @@ describe('needsHandoff', () => {
     expect(needsHandoff(preparation(), [])).toBeNull()
   })
 
-  test('maps route changes to harness-switch and other rebases to rebase', () => {
+  test('maps route changes to harness-switch unless same Agent, and other rebases to rebase', () => {
     expect(needsHandoff(preparation({ rebaseReason: 'route_changed' }), prior))
       .toEqual({ mode: 'full', reason: 'harness-switch' })
+    expect(needsHandoff(
+      preparation({
+        rebaseReason: 'route_changed',
+        rebasedFrom: { providerKind: 'cursor-sdk', providerId: 'cursor-subscription', model: 'auto' }
+      }),
+      prior
+    )).toEqual({ mode: 'full', reason: 'harness-switch' })
+    expect(needsHandoff(
+      preparation({
+        rebaseReason: 'route_changed',
+        rebasedFrom: { providerKind: 'agent-sdk', providerId: 'claude-subscription', model: 'claude-opus-4-6' }
+      }),
+      prior
+    )).toEqual({ mode: 'full', reason: 'rebase' })
     expect(needsHandoff(preparation({ rebaseReason: 'capabilities_changed' }), prior))
       .toEqual({ mode: 'full', reason: 'rebase' })
   })
@@ -152,6 +166,27 @@ describe('buildTurnHandoff', () => {
       from: { harnessName: 'Cursor' },
       to: { harnessName: 'Claude Code', model: 'claude-sonnet-4-6' },
       briefDigest: handoff!.brief.digest
+    })
+  })
+
+  test('records reason rebase when route_changed keeps the same Agent', () => {
+    const handoff = buildTurnHandoff({
+      items,
+      currentTurnId: 't2',
+      preparation: preparation({
+        rebaseReason: 'route_changed',
+        rebasedFrom: {
+          providerKind: 'agent-sdk',
+          providerId: 'claude-subscription',
+          model: 'claude-opus-4-6'
+        }
+      }),
+      workspacePath: '/ws'
+    })
+    expect(handoff?.event).toMatchObject({
+      kind: 'handoff_injected',
+      reason: 'rebase',
+      mode: 'full'
     })
   })
 

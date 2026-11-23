@@ -1,0 +1,33 @@
+{
+  "sessionId": "native-background-session",
+  "newSession": {
+    "modes": {
+      "currentModeId": "ask",
+      "availableModes": [{ "id": "ask", "name": "Ask" }, { "id": "auto", "name": "Auto" }]
+    }
+  },
+  "turns": [
+    {
+      "promptIncludes": "Prepare follow-up run",
+      "steps": [{ "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Ready." } } }],
+      "response": { "stopReason": "end_turn", "usage": { "inputTokens": 1, "outputTokens": 1, "totalTokens": 2 } }
+    },
+    {
+      "steps": [
+        { "update": { "sessionUpdate": "tool_call", "toolCallId": "typecheck", "kind": "execute", "title": "npm run typecheck", "status": "in_progress", "rawInput": { "CommandLine": "npm run typecheck", "WaitMsBeforeAsync": 10000 } } },
+        { "update": { "sessionUpdate": "tool_call", "toolCallId": "timer", "kind": "other", "title": "Run schedule", "status": "in_progress", "rawInput": { "DurationSeconds": 90, "Prompt": "Check typecheck task result." } } },
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Typecheck is running; I will continue automatically." } } }
+      ],
+      "response": { "stopReason": "end_turn", "usage": { "inputTokens": 10, "outputTokens": 2, "totalTokens": 12 } }
+    },
+    {
+      "promptIncludes": "Your last ACP prompt ended",
+      "steps": [
+        { "update": { "sessionUpdate": "tool_call_update", "toolCallId": "typecheck", "status": "completed", "rawOutput": { "exit_code": 0, "output": "Typecheck passed" } } },
+        { "update": { "sessionUpdate": "tool_call_update", "toolCallId": "timer", "status": "completed" } },
+        { "update": { "sessionUpdate": "agent_message_chunk", "content": { "type": "text", "text": "Typecheck passed. Remaining work finished." } } }
+      ],
+      "response": { "stopReason": "end_turn", "usage": { "inputTokens": 20, "outputTokens": 3, "totalTokens": 23 } }
+    }
+  ]
+}

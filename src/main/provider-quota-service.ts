@@ -138,6 +138,17 @@ export function classifyProviderQuotaProbe(
     }
   }
   const hostname = exactHostname(provider.baseUrl)
+  if (
+    stableId === 'devin-subscription' &&
+    isHttpQuotaPresetKind(provider.kind) &&
+    (hostname === 'server.codeium.com' || hostname === 'server-beta.codeium.com')
+  ) {
+    return {
+      kind: 'devin-subscription',
+      source: 'Devin subscription quota API',
+      dashboardUrl: 'https://app.devin.ai/settings/usage'
+    }
+  }
 
   if (
     stableId === 'opencode-go' &&
@@ -370,6 +381,7 @@ export function isSubscriptionQuotaProbe(
     kind === 'grok-subscription' ||
     kind === 'cursor-subscription' ||
     kind === 'antigravity-subscription' ||
+    kind === 'devin-subscription' ||
     kind === 'gemini-cli-subscription' ||
     kind === 'opencode-go-local'
 }

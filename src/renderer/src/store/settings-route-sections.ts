@@ -46,3 +46,4 @@ export type SettingsRouteSection =
   | 'storage'
   | 'storageCleanup'
   | 'dataMigration'
+  | 'cloudCompute'

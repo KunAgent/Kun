@@ -46,7 +46,7 @@ export function useWriteEditorGroupFileWatches({ workspaceRoot, editorLayout }: 
     const paths = [...new Set(state.editorLayout.groups.map((group) => group.activePath).filter((path): path is string => Boolean(path)))]
     const cleanups = paths.flatMap((path) => {
       const document = state.documentsByPath[writeDocumentKey(path)]
-      if (!document || document.kind === 'pdf') return []
+      if (!document || document.kind === 'pdf' || document.kind === 'latex') return []
       if (document.kind === 'office') {
         const identity: OfficeWatchIdentity = {
           workspaceRoot, documentEpoch: document.documentEpoch, sourceSha256: document.spreadsheetSourceSha256

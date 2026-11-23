@@ -347,6 +347,7 @@ export type WritePaperReadingSettingsV1 = {
 }
 
 export type WriteSettingsV1 = {
+  latex: import('./latex-project').WriteLatexSettings
   defaultWorkspaceRoot: string
   activeWorkspaceRoot: string
   workspaces: string[]
@@ -377,7 +378,8 @@ export type ScheduleSettingsPatchV1 = Partial<
   tasks?: Array<Partial<ScheduledTaskV1>>
 }
 
-export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets' | 'paperReading' | 'paperMode'>> & {
+export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'latex' | 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets' | 'paperReading' | 'paperMode'>> & {
+  latex?: Partial<import('./latex-project').WriteLatexSettings>
   inlineCompletion?: Partial<WriteInlineCompletionSettingsV1>
   selectionAssist?: Partial<Omit<WriteSelectionAssistSettingsV1, 'quickActions'>> & {
     /** Replaced wholesale when present. */

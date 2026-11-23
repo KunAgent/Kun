@@ -21,6 +21,17 @@ function makeProvider(endpoint: string | undefined = 'http://127.0.0.1:18899') {
 }
 
 describe('KunToolsMcpProvider', () => {
+  it('pins canonical launch roots to the exact thread/turn grant and clears them on revoke', () => {
+    const { provider } = makeProvider()
+    const roots = { primary: '/repo', extras: ['/extra'], roots: ['/repo', '/extra'], identity: '["/repo","/extra"]' }
+    provider.servers({ ...CTX, workspaceRoots: roots, mcpCapabilities: { http: true } })
+    expect(provider.workspaceRootsForTurn(CTX.threadId, CTX.turnId)).toEqual(roots)
+    expect(provider.workspaceRootsForTurn('other-thread', CTX.turnId)).toBeUndefined()
+    expect(provider.workspaceRootsForTurn(CTX.threadId, 'other-turn')).toBeUndefined()
+    provider.revokeTurn(CTX.turnId)
+    expect(provider.workspaceRootsForTurn(CTX.threadId, CTX.turnId)).toBeUndefined()
+  })
+
   it('emits an http descriptor when the agent advertises http MCP', () => {
     const { tokens, provider } = makeProvider()
     const servers = provider.servers({

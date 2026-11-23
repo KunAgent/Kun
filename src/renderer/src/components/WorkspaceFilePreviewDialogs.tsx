@@ -8,6 +8,8 @@ import {
 import { createPortal } from 'react-dom'
 import { Copy, FolderSearch, Pin, PinOff, X } from 'lucide-react'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
+import { revealWorkspacePathInFileManager } from '../lib/open-workspace-path'
+import { isExternalLocalImagePreviewPath, workspaceFilePreviewKind } from '../lib/workspace-text-preview'
 import { KunContextMenu, type KunContextMenuEntry, type KunContextMenuPoint } from './context-menu/KunContextMenu'
 import type { FilePreviewCloseScope } from './workbench/file-preview-close-scope'
 import {
@@ -20,7 +22,7 @@ type Translate = (key: string, values?: Record<string, unknown>) => string
 type TabMenu = { target: WorkspaceFileTarget; point: KunContextMenuPoint }
 
 function isAbsolutePath(path: string): boolean {
-  return /^([a-zA-Z]:[\\/]|[\\/])/.test(path)
+  return /^([a-zA-Z]:[\\/]|~[\\/]|[\\/])/.test(path)
 }
 
 /** Absolute and root-relative forms of a preview target's path. */
@@ -118,7 +120,14 @@ export function WorkspaceFilePreviewDialogs(props: WorkspaceFilePreviewDialogsPr
         id: 'reveal',
         label: window.kunGui?.platform === 'darwin' ? t('fileTreeRevealInFinder') : t('fileTreeRevealInFileManager'),
         icon: <FolderSearch aria-hidden />,
-        onSelect: () => void window.kunGui?.revealWorkspaceFileInFolder?.({ ...target, workspaceRoot: target.workspaceRoot ?? workspaceRoot })
+        onSelect: () => {
+          const targetRoot = target.workspaceRoot ?? workspaceRoot
+          if (workspaceFilePreviewKind(target.path) === 'image' && isExternalLocalImagePreviewPath(target.path, targetRoot)) {
+            void revealWorkspacePathInFileManager(target.path)
+            return
+          }
+          void window.kunGui?.revealWorkspaceFileInFolder?.({ ...target, workspaceRoot: targetRoot })
+        }
       }
     ]
   }

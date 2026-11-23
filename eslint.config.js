@@ -16,7 +16,8 @@ export default tseslint.config(
       '**/coverage/**',
       '.cache/**',
       'artifacts/**',
-      '.claude/**'
+      '.claude/**',
+      'promo/**'
     ]
   },
   js.configs.recommended,

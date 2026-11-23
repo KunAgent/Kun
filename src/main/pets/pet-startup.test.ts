@@ -13,7 +13,7 @@ const host = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => unknown>()
 }))
 vi.mock('electron', () => ({
-  app: { isPackaged: false, getPath: () => path.join(host.root, 'profile'), getAppPath: () => host.root },
+  app: { isPackaged: false, getPath: () => path.join(host.root, 'profile'), getAppPath: () => host.root, commandLine: { getSwitchValue: () => '' } },
   BrowserWindow: vi.fn(), screen: {}, shell: {}, powerMonitor: { on: (name: string, fn: () => void) => host.power.set(name, fn), off: (name: string) => host.power.delete(name) },
   ipcMain: {
     on: (channel: string, handler: (...args: unknown[]) => unknown) => host.handlers.set(channel, handler),

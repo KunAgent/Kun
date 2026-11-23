@@ -33,7 +33,7 @@ export class ControlRuntimeHost {
   constructor() {
     this.manager = new ControlPackageManager({ home: join(app.getPath('userData'), 'control-packages'),
       trust: UPDATE_TRUST,
-      host: { platform: process.platform, arch: process.arch, hostApi: 1, minimumVersion: '0.1.6', buildId: `kun-control-host-${CONTROL_HOST_BUILD_GENERATION}-electron${process.versions.electron}-node${process.versions.node}` },
+      host: { platform: process.platform, arch: process.arch, hostApi: 1, minimumVersion: '0.2.0', buildId: `kun-control-host-${CONTROL_HOST_BUILD_GENERATION}-electron${process.versions.electron}-node${process.versions.node}` },
       fetch: (input, init) => net.fetch(String(input), init),
       driver: { probe: (path, release) => this.probe(path, release), activate: (path, release) => this.activate(path, release),
         drain: () => this.drain(), resume: async () => { if (!this.stopping) resumeControlAdmission() }, stop: () => this.stopProcess() } })

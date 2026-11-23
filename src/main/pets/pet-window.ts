@@ -29,6 +29,7 @@ export type PetWindowLike = {
 export type PetWindowHost = {
   platform: NodeJS.Platform
   forwardMouseEvents: boolean
+  nativeWayland?: boolean
   createWindow(): PetWindowLike
   displays(): PetDisplay[]
   cursor(): ScreenPoint
@@ -44,6 +45,7 @@ export class PetWindowController {
   private window: PetWindowLike | null = null
   private loading: Promise<void> | null = null
   private drag: DragSession | null = null
+  private requestedFrame: Rect | null = null
   private spriteWidth = 112
   private petCenter: ScreenPoint = { x: 0, y: 0 }
   private unsubscribe: (() => void) | null = null
@@ -51,7 +53,7 @@ export class PetWindowController {
   navigationDenied: string[] = []
 
   constructor(private readonly host: PetWindowHost, private readonly persist: (placement: ReturnType<typeof placementFromDip>) => Promise<void>) {
-    this.policy = petPlatformPolicy({ platform: host.platform, forwardMouseEvents: host.forwardMouseEvents })
+    this.policy = petPlatformPolicy({ platform: host.platform, forwardMouseEvents: !host.nativeWayland && host.forwardMouseEvents })
   }
 
   isOpen(): boolean {
@@ -102,7 +104,8 @@ export class PetWindowController {
       } : { x: area.x + area.width - 24 - this.spriteWidth / 2, y: area.y + area.height - 24 - height / 2 }
       this.petCenter = clampPetCenter(stored && Number.isFinite(stored.x) && Number.isFinite(stored.y) ? stored : fallback,
         this.spriteWidth, area)
-      window.setBounds(petOverlayFrame(this.petCenter, area))
+      this.requestedFrame = petOverlayFrame(this.petCenter, area)
+      window.setBounds(this.requestedFrame)
       this.loading = this.host.load(window)
       await this.loading
     } catch (error) {
@@ -121,9 +124,18 @@ export class PetWindowController {
   }
 
   layout(): PetOverlayLayout {
-    const frame = this.window?.getBounds() ?? { x: 0, y: 0, width: 420, height: 640 }
-    return { anchorX: this.petCenter.x - frame.x, anchorY: this.petCenter.y - frame.y,
-      viewportWidth: frame.width, viewportHeight: frame.height }
+    const bounds = this.window?.getBounds() ?? { x: 0, y: 0, width: 420, height: 640 }
+    if (this.host.nativeWayland) {
+      // Wayland owns global placement; only the requested frame defines our local anchor.
+      const frame = this.requestedFrame ?? bounds
+      const height = this.spriteWidth * 208 / 192
+      return { nativeWindowDrag: true,
+        anchorX: Math.max(this.spriteWidth / 2, Math.min(bounds.width - this.spriteWidth / 2, this.petCenter.x - frame.x)),
+        anchorY: Math.max(height / 2, Math.min(bounds.height - height / 2, this.petCenter.y - frame.y)),
+        viewportWidth: bounds.width, viewportHeight: bounds.height }
+    }
+    return { anchorX: this.petCenter.x - bounds.x, anchorY: this.petCenter.y - bounds.y,
+      viewportWidth: bounds.width, viewportHeight: bounds.height }
   }
 
   close(): void {
@@ -133,6 +145,7 @@ export class PetWindowController {
     const window = this.window
     this.window = null
     this.loading = null
+    this.requestedFrame = null
     if (window && !window.isDestroyed()) window.destroy()
   }
 
@@ -142,7 +155,7 @@ export class PetWindowController {
   }
 
   beginDrag(point: ScreenPoint): void {
-    if (!this.isOpen()) return
+    if (!this.isOpen() || this.host.nativeWayland) return
     this.drag = { origin: this.window!.getBounds(), cursor: point, moved: false, petCenter: { ...this.petCenter } }
   }
 
@@ -210,6 +223,7 @@ export class PetWindowController {
   private applyFrame(display: PetDisplay): void {
     if (!this.isOpen()) return
     const next = petOverlayFrame(this.petCenter, display.workArea)
+    this.requestedFrame = next
     if (!sameRect(this.window!.getBounds(), next)) this.window!.setBounds(next)
     this.host.layoutChanged?.(this.layout())
   }
@@ -218,7 +232,7 @@ export class PetWindowController {
     const display = this.displayFor(this.petCenter)
     await this.persist(placementFromDip({
       display,
-      bounds,
+      bounds: this.host.nativeWayland ? this.requestedFrame ?? bounds : bounds,
       petCenter: this.petCenter,
       mascotWidthPx: clampMascotWidth(mascotWidthPx),
       updatedAt: new Date().toISOString()

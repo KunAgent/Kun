@@ -46,6 +46,18 @@ describe('source selection review', () => {
     expect(h.view.state.doc.toString()).toBe(original)
     expect(undo(h.view)).toBe(false)
   })
+  it('preserves original CRLF bytes when a margin suggestion is rejected or accepted', () => {
+    const original = 'Before\r\n\r\nOld passage.\r\n'
+    const nextDoc = original + '\r\nA proposed addition.\r\n'
+    const h = harness(original)
+    const proposal = { original, nextDoc, origin: 'selection' as const }
+    expect(h.review.beginDiffReview(proposal)).toBe(true)
+    h.review.rejectAllDiff()
+    expect(h.emitted).toEqual([original])
+    expect(h.review.beginDiffReview(proposal)).toBe(true)
+    h.review.acceptAllDiff()
+    expect(h.emitted).toEqual([original, nextDoc])
+  })
   it('refuses stale, out-of-bounds, read-only and concurrent proposals', () => {
     const h = harness(), params = { range: h.range, original: 'Old passage.', replacement: 'New.', instruction: 'Edit' }
     expect(h.review.beginSelectionReview({ ...params, original: 'wrong' })).toBeNull()

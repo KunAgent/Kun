@@ -1,5 +1,7 @@
 import type { AcpConnection } from './acp-connection.js'
-import { ACP_AGENT_METHODS, ACP_RPC_ERROR, AcpError, acpConfigOptionValues, type AcpConfigOption } from './acp-schema.js'
+import { ACP_AGENT_METHODS, ACP_RPC_ERROR, AcpError, AcpConfigOptionSchema, acpConfigOptionValues, type AcpConfigOption } from './acp-schema.js'
+
+const configOptionsSchema = AcpConfigOptionSchema.array()
 
 /** Compatibility surface from the official ACP v0.9.1 unstable schema. */
 export type AcpLegacyModels = {
@@ -68,25 +70,58 @@ export function echoedConfigOptionValue(
   return undefined
 }
 
+const LEGACY_EFFORT_SUFFIX = /^(.*)-(low|medium|high|xhigh|max)$/i
+
+/**
+ * Resolve a requested model id against an ACP `model` select option. Exact
+ * offered values always win (preserving ids like `gpt-oss-120b-medium`);
+ * legacy Antigravity ids (`models/gemini-3.8-flash-high`) fall back to the
+ * offered base model and surface the trailing effort when needed.
+ */
+export function resolveAcpConfigModelSelection(
+  option: AcpConfigOption,
+  modelId: string | undefined
+): { modelId: string; inferredEffort?: string } | undefined {
+  if (!modelId || option.type !== 'select') return undefined
+  const offered = acpConfigOptionValues(option)
+  if (offered.includes(modelId)) return { modelId }
+  const withoutPrefix = modelId.replace(/^models\//, '')
+  if (withoutPrefix && offered.includes(withoutPrefix)) return { modelId: withoutPrefix }
+  const suffixMatch = withoutPrefix.match(LEGACY_EFFORT_SUFFIX)
+  const base = suffixMatch?.[1]?.trim()
+  const inferredEffort = suffixMatch?.[2]?.toLowerCase()
+  if (base && offered.includes(base)) {
+    return { modelId: base, ...(inferredEffort ? { inferredEffort } : {}) }
+  }
+  return undefined
+}
+
 /** Explicit model selections must be accepted by the authoritative selector. */
 export async function applyAcpSessionModel(
   conn: AcpConnection,
   session: { sessionId: string; models?: AcpLegacyModels; configOptions?: AcpConfigOption[] | null },
   modelId: string | undefined
-): Promise<void> {
-  if (!modelId) return
+): Promise<{ inferredEffort?: string } | undefined> {
+  if (!modelId) return undefined
   const option = session.configOptions?.find((entry) => entry.category === 'model')
-  if (!option) return applyAcpLegacyModel(conn, session, modelId)
-  if (option.type !== 'select' || !acpConfigOptionValues(option).includes(modelId)) {
+  if (!option) {
+    await applyAcpLegacyModel(conn, session, modelId)
+    return undefined
+  }
+  const resolved = resolveAcpConfigModelSelection(option, modelId)
+  if (!resolved) {
     throw new AcpModelSelectionError(
       `The agent's model selector does not offer '${modelId}'. Refresh its model list or choose Agent default; no prompt was sent.`
     )
   }
-  if (option.currentValue === modelId) return
+  const targetModelId = resolved.modelId
+  if (option.currentValue === targetModelId) {
+    return resolved.inferredEffort ? { inferredEffort: resolved.inferredEffort } : undefined
+  }
   let result: unknown
   try {
     result = await conn.rpc.request(ACP_AGENT_METHODS.sessionSetConfigOption, {
-      sessionId: session.sessionId, configId: option.id, value: modelId
+      sessionId: session.sessionId, configId: option.id, value: targetModelId
     })
   } catch (error) {
     if (error instanceof AcpError && error.rpcCode === ACP_RPC_ERROR.methodNotFound) {
@@ -97,12 +132,18 @@ export async function applyAcpSessionModel(
   // An agent that echoes its selector must report the model this turn will use;
   // otherwise the durable route would claim a model the session never adopted.
   const echoed = echoedConfigOptionValue(result, option.id)
-  if (echoed !== undefined && echoed !== modelId) {
+  if (echoed !== undefined && echoed !== targetModelId) {
     throw new AcpModelSelectionError(
-      `The agent kept model '${echoed}' instead of '${modelId}'. Refresh its model list or choose Agent default; no prompt was sent.`
+      `The agent kept model '${echoed}' instead of '${targetModelId}'. Refresh its model list or choose Agent default; no prompt was sent.`
     )
   }
-  option.currentValue = modelId
+  // A model switch can add or remove the reasoning selector. The response
+  // carries the complete replacement; a separate update notification is optional.
+  const next = result && typeof result === 'object' && 'configOptions' in result
+    ? configOptionsSchema.safeParse(result.configOptions) : undefined
+  if (next?.success) session.configOptions = next.data
+  else option.currentValue = targetModelId
+  return resolved.inferredEffort ? { inferredEffort: resolved.inferredEffort } : undefined
 }
 
 /**

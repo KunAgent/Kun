@@ -5,6 +5,7 @@ import { ToolBlockDetails } from './ToolBlockDetails'
 import { SourceHistoryReadDetail } from '../../history-reference/SourceHistoryReadDetail'
 import type { ReactElement } from 'react'
 import type { ChatBlock, ToolBlock } from '../../agent/types'
+import { displayedAcpToolKind, readToolPresentation } from '../../agent/tool-presentation'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { MessageBubble } from './message-timeline-bubbles'
@@ -32,10 +33,12 @@ import {
 import { HandoffBriefDetail } from './message-timeline-handoff-entry'
 
 export function toolNameForBlock(block: ToolBlock): string {
-  if (typeof block.meta?.acpKind === 'string') {
+  const acpKind = displayedAcpToolKind(block)
+  if (acpKind) {
     const names: Record<string, string> = { read: 'read_file', search: 'search_files', execute: 'shell', edit: 'edit_file',
       delete: 'edit_file', move: 'edit_file', 'fs.write': 'write_file', fetch: 'fetch' }
-    if (typeof names[block.meta.acpKind] === 'string') return names[block.meta.acpKind]
+    if (typeof names[acpKind] === 'string') return names[acpKind]
+    return `acp:${acpKind}`
   }
   const rawSummary = block.summary?.trim() ?? ''
   return (extractToolName(rawSummary) || readMetaString(block.meta, 'toolName') || '').toLowerCase()
@@ -280,8 +283,17 @@ export function summarizeToolBlock(
 ): string {
   const rawSummary = block.summary?.trim() ?? ''
   const toolName = toolNameForBlock(block)
-  if (block.meta?.acpKind && toolName.startsWith('acp:')) {
-    return readMetaString(block.meta, 'acpTitle') || t('toolActionTool')
+  if (block.meta?.acpKind || rawSummary.startsWith('acp:') || (block.meta?.toolPresentation as { source?: string } | undefined)?.source === 'acp') {
+    const p = readToolPresentation(block)
+    const target = p.kind === 'execute' ? p.command : p.kind === 'search' ? p.query : p.filePath
+    const action = builtInToolLabel(toolName, t)
+    if (action && target) return `${action} ${summarizeProcessText(target)}`
+    const name = p.name && !p.name.startsWith('acp:') ? p.name : undefined
+    const title = p.title && !p.title.startsWith('acp:') ? summarizeProcessText(p.title) : undefined
+    if (p.kind === 'mcp' && name) {
+      return title && title !== name && !title.startsWith('Run mcp_') ? `${name} · ${title}` : name
+    }
+    return title || name || action || t('toolActionTool')
   }
   const paperTool = paperToolName(toolName)
   if (paperTool) return summarizePaperToolBlock(block, paperTool, t)

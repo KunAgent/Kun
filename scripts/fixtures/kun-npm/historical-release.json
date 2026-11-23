@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "repository": "KunAgent/Kun",
+  "tag": "v0.4.4",
+  "releaseCommit": "0d8406128e2cede3bb5085c2d28fb90ab9e91f69",
+  "appVersion": "0.4.4",
+  "assets": {
+    "darwin-arm64": {
+      "name": "Kun-0.4.4-mac-arm64.zip",
+      "url": "https://github.com/KunAgent/Kun/releases/download/v0.4.4/Kun-0.4.4-mac-arm64.zip",
+      "size": 298307232,
+      "digest": "sha256:e99bf4832ee36afae7c335b1492653f77a44cf900ed7b516142c8cc1cacdc9e8"
+    },
+    "darwin-x64": {
+      "name": "Kun-0.4.4-mac-x64.zip",
+      "url": "https://github.com/KunAgent/Kun/releases/download/v0.4.4/Kun-0.4.4-mac-x64.zip",
+      "size": 307937072,
+      "digest": "sha256:1892d163631123e8681702bdae26667c5889e6de1e442ebc144fc2add39a6c04"
+    },
+    "win32-x64": {
+      "name": "Kun-0.4.4-win-x64.exe",
+      "url": "https://github.com/KunAgent/Kun/releases/download/v0.4.4/Kun-0.4.4-win-x64.exe",
+      "size": 264516021,
+      "digest": "sha256:49a8dd4945199f39ffe5ec4e5264dbc15c8a30593bc7c35a7d66aab0df365d16"
+    },
+    "linux-arm64": {
+      "name": "Kun-0.4.4-linux-arm64.deb",
+      "url": "https://github.com/KunAgent/Kun/releases/download/v0.4.4/Kun-0.4.4-linux-arm64.deb",
+      "size": 249188140,
+      "digest": "sha256:233c1514cbd92a28870daeb9f57ab5e75ef153a08d3025396fbdae891aca69e0"
+    },
+    "linux-x64": {
+      "name": "Kun-0.4.4-linux-amd64.deb",
+      "url": "https://github.com/KunAgent/Kun/releases/download/v0.4.4/Kun-0.4.4-linux-amd64.deb",
+      "size": 259419928,
+      "digest": "sha256:d189ba060e79f5caae9ddcd04daf769a5610832dac938a399a4095e1d401c4a7"
+    }
+  }
+}

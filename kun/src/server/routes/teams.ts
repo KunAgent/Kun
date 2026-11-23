@@ -6,6 +6,7 @@ import {
   RaceDecideRequestSchema,
   RaceDiscardRequestSchema,
   RunChecksInputSchema,
+  TeamOverviewDispatchIdsSchema,
   WorkerDispatchRequestSchema,
   WorkerNoticeHoldRequestSchema
 } from '../../contracts/ade.js'
@@ -87,9 +88,20 @@ function controlResultResponse(result: {
 /** GET /v1/teams/by-manager/:threadId — roster + recent dispatches/questions. */
 export async function teamOverviewResponse(
   manager: ManagerRuntime,
-  managerThreadId: string
+  managerThreadId: string,
+  request?: Request
 ): Promise<JsonResponse> {
-  const overview = await manager.teamControls.teamOverview(managerThreadId)
+  const values = request ? new URL(request.url).searchParams.getAll('dispatchIds') : []
+  if (values.length > 1) return ERRORS.validation('dispatchIds must occur once')
+  let dispatchIds: string[] | undefined
+  if (values.length) {
+    let value: unknown
+    try { value = JSON.parse(values[0]) } catch { return ERRORS.validation('dispatchIds must be a JSON array') }
+    const parsed = TeamOverviewDispatchIdsSchema.safeParse(value)
+    if (!parsed.success) return ERRORS.validation('invalid dispatchIds', parsed.error.issues)
+    dispatchIds = [...new Set(parsed.data)]
+  }
+  const overview = await manager.teamControls.teamOverview(managerThreadId, dispatchIds)
   if (!overview) return ERRORS.notFound(`no ade team for ${managerThreadId}`)
   return jsonResponse(overview)
 }

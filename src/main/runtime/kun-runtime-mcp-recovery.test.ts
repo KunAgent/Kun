@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import '../kun-process'
 import { defaultKunRuntimeSettings } from '../../shared/app-settings'
 import { configureLogger } from '../logger'
 import { configureManagerAtomicJsonClient } from '../../../kun/src/extensions/atomic-json.js'

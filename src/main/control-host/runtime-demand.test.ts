@@ -47,7 +47,9 @@ it('starts without a baseline and does not download for status, disabled desktop
   expect((await desktop.status()).enabled).toBe(false)
   await desktop.configureRemoteAccess(false)
   await host.packageOperation('check')
-  await vi.advanceTimersByTimeAsync(24 * 3600000)
+  // Advance the idle heartbeat synchronously, then drain pending package work.
+  vi.advanceTimersByTime(24 * 3600000)
+  await vi.advanceTimersByTimeAsync(0)
   expect(h.manager.install).not.toHaveBeenCalled()
   expect(h.processes).toHaveLength(0)
 })

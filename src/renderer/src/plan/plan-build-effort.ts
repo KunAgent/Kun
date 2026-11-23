@@ -3,8 +3,10 @@ import {
   LEGACY_REASONING_EFFORTS,
   REASONING_OPTIONS,
   agentModelReasoningChoices,
+  isManagedAntigravityBudget,
   modelProfileForModel,
-  reasoningOptionsForModel
+  reasoningOptionsForModel,
+  reportedReasoningChoices
 } from '../components/chat/floating-composer-model-picker-logic'
 
 /**
@@ -14,13 +16,14 @@ import {
  * without levels gets none. An empty list hides the control.
  */
 export function planBuildEffortChoices(
-  group: Pick<ModelProviderModelGroup, 'modelProfiles'> | undefined,
+  group: Pick<ModelProviderModelGroup, 'modelProfiles' | 'nativeHarnessId' | 'kind'> | undefined,
   model: string,
   external: boolean,
   /** The Agent's own catalog entry, the same source the composer reads. */
   nativeInfo?: { reasoningEfforts?: readonly string[] }
 ): string[] {
-  if (!model.trim()) return []
+  if (!model.trim() || isManagedAntigravityBudget(group, model)) return []
+  if (group?.nativeHarnessId === 'antigravity') return reportedReasoningChoices(nativeInfo?.reasoningEfforts)
   const profile = modelProfileForModel(group, model)
   const levels: string[] = nativeInfo ? agentModelReasoningChoices(nativeInfo)
     : external ? profile ? (profile.reasoning?.supportedEfforts ?? []) : LEGACY_REASONING_EFFORTS

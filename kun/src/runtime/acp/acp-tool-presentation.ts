@@ -4,6 +4,7 @@ import type { ToolPresentation } from '../../contracts/tool-presentation.js'
 import { boundedToolPresentationContent } from '../../contracts/tool-presentation-content.js'
 import { toolPresentationFields } from '../../contracts/tool-presentation-fields.js'
 import { boundCompleteToolPresentation } from '../../contracts/tool-presentation-bounds.js'
+import { acpToolTargets } from '../../contracts/acp-tool-display.js'
 
 const LIMIT = 64 * 1024
 export type AcpToolEvidence = {
@@ -89,7 +90,7 @@ export function acpToolPresentation(call: AcpToolCallWire, evidence?: AcpToolEvi
   }
   if (detail.fileContent) detail.fileContent = bound(detail.fileContent)
   if (truncated || rich.truncated || terminals?.some((terminal) => terminal.truncated)) detail.truncated = true
-  return boundCompleteToolPresentation(detail)
+  return boundCompleteToolPresentation(acpToolTargets(detail))
 }
 
 function record(value: unknown): Record<string, unknown> {

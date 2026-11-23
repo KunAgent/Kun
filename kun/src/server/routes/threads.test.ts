@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  createThread,
   forkThread,
   getThread,
   getThreadState,
@@ -31,6 +32,18 @@ function serviceWith(threadId: string): ThreadService {
     get: async (id: string) => (id === threadId ? record : null)
   } as unknown as ThreadService
 }
+
+it('creates an independent hidden read-only thread for a Work annotation', async () => {
+  const record = createThreadRecord({ id: 'thr_annotation', title: 'Passage', workspace: '/work', model: 'test' })
+  const create = vi.fn(async () => record)
+  const request = new Request('http://localhost/v1/threads', { method: 'POST', body: JSON.stringify({
+    title: 'Passage', workspace: '/work', model: 'test', purpose: 'work-annotation'
+  }) })
+  const response = await createThread({ create } as unknown as ThreadService, request)
+  expect(response.status).toBe(201)
+  expect(create).toHaveBeenCalledWith(expect.objectContaining({ agentSurface: 'write', harnessId: 'kun',
+    sandboxMode: 'read-only' }), { relation: 'side' })
+})
 
 describe('getThread pendingUserInputIds (#606)', () => {
   it('reports request ids the user-input gate is still awaiting for the thread', async () => {

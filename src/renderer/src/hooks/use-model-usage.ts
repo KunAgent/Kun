@@ -14,6 +14,10 @@ export type ModelUsageBucket = Omit<DailyUsageBucket, 'date'> & {
   harnessIds?: string[]
 }
 
+export type AgentUsageBucket = Omit<DailyUsageBucket, 'date'> & {
+  harnessId: string
+}
+
 export type ModelUsageScope = 'all' | 'primary' | 'side'
 
 export type ModelUsageSummary = {
@@ -23,6 +27,7 @@ export type ModelUsageSummary = {
   to: string
   timezone: string
   buckets: ModelUsageBucket[]
+  agents?: AgentUsageBucket[]
   days: DailyUsageBucket[]
   totals: Omit<DailyUsageBucket, 'date'> & {
     days: number
@@ -63,6 +68,10 @@ type RawModelUsageBucket = RawUsageCounters & {
   harness_ids?: unknown
 }
 
+type RawAgentUsageBucket = RawUsageCounters & {
+  harness_id?: unknown
+}
+
 type RawModelUsageDayBucket = RawUsageCounters & {
   date?: unknown
 }
@@ -74,6 +83,7 @@ type RawModelUsageResponse = {
   to?: unknown
   timezone?: unknown
   buckets?: unknown
+  agents?: unknown
   days?: unknown
   totals?: unknown
 }
@@ -130,6 +140,14 @@ function normalizeModelBucket(raw: RawModelUsageBucket): ModelUsageBucket {
   }
 }
 
+function normalizeAgentBucket(raw: RawAgentUsageBucket): AgentUsageBucket {
+  const harnessId = typeof raw.harness_id === 'string' && raw.harness_id.trim() ? raw.harness_id.trim() : 'unknown'
+  return {
+    harnessId,
+    ...normalizeCounters(raw)
+  }
+}
+
 function normalizeDayBucket(raw: RawModelUsageDayBucket): DailyUsageBucket {
   return {
     date: typeof raw.date === 'string' ? raw.date : '',
@@ -163,6 +181,9 @@ export function normalizeModelUsageResponse(raw: RawModelUsageResponse): ModelUs
   const buckets = Array.isArray(raw.buckets)
     ? raw.buckets.map((item) => normalizeModelBucket((item ?? {}) as RawModelUsageBucket))
     : []
+  const agents = Array.isArray(raw.agents)
+    ? raw.agents.map((item) => normalizeAgentBucket((item ?? {}) as RawAgentUsageBucket))
+    : []
   const days = Array.isArray(raw.days)
     ? raw.days
         .map((item) => normalizeDayBucket((item ?? {}) as RawModelUsageDayBucket))
@@ -175,6 +196,7 @@ export function normalizeModelUsageResponse(raw: RawModelUsageResponse): ModelUs
     to: typeof raw.to === 'string' ? raw.to : days[days.length - 1]?.date ?? '',
     timezone: typeof raw.timezone === 'string' && raw.timezone.trim() ? raw.timezone : '',
     buckets,
+    agents,
     days,
     totals: normalizeTotals((raw.totals ?? {}) as RawUsageCounters & { days?: unknown; active_days?: unknown })
   }

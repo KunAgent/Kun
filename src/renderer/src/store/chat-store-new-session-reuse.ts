@@ -8,6 +8,8 @@ import type { AgentProvider } from '../agent/types'
 import type { ChatState, ChatStoreSet } from './chat-store-types'
 import { findReusableEmptyThreadId } from './chat-store-runtime-helpers'
 import { isCodeThread } from './chat-store-runtime'
+import { extraRootsForWorkspace } from '../lib/code-workspace-folder-lookup'
+import { additionalWorkspacesEqual, additionalWorkspacesForThread } from '../lib/code-workspace-folder-sets'
 import { readDesignThreadRegistry, isDesignThreadId } from '../design/design-thread-registry'
 import {
   composerReasoningEffortForSelection,
@@ -54,6 +56,8 @@ export async function reuseEmptySessionForNewTask(
   input: NewSessionReuseInput
 ): Promise<string | null> {
   const { get, set } = input
+  const additionalWorkspaces = additionalWorkspacesForThread(input.workspaceRoot,
+    extraRootsForWorkspace(input.workspaceRoot, get().codeWorkspaceFolderSets))
   const personaCompatible = (thread: ChatState['threads'][number]): boolean =>
     threadMatchesCreationIntent({
       thread,
@@ -70,6 +74,7 @@ export async function reuseEmptySessionForNewTask(
           isCodeThread(thread, get().clawChannels) &&
           !isDesignThreadId(thread.id, readDesignThreadRegistry()) &&
           (thread.agentSurface ?? 'code') === input.requestedAgentSurface &&
+          additionalWorkspacesEqual(thread.additionalWorkspaces, additionalWorkspaces) &&
           personaCompatible(thread)
       )
   // A worktree task never reuses a main-checkout thread, but re-clicking New

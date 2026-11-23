@@ -25,8 +25,9 @@ export function createMarkdownReview(deps: Params): WriteDocumentReviewHandle & 
     onReviewStateChangeRef, mergeCompartment, editableCompartment } = deps
   let before: EditorState | null = null
   let origin: WriteReviewOrigin = 'agent'
+  let selectionSources: { original: string; nextDoc: string } | null = null
   const listeners = new Set<() => void>()
-  const finish = (reject = false): void => {
+  const finish = (reject = false, preserveDraft = false): void => {
     const view = viewRef.current
     if (!view || !before || !reviewActiveRef.current) return
     const finalDoc = reject ? before.doc.toString() : view.state.doc.toString()
@@ -40,8 +41,14 @@ export function createMarkdownReview(deps: Params): WriteDocumentReviewHandle & 
     })
     reviewActiveRef.current = false
     delete view.dom.dataset.reviewOrigin
-    lastEmittedValueRef.current = finalDoc
-    onChangeRef.current(finalDoc)
+    // CodeMirror normalizes CRLF in its Text representation. A selection review
+    // has exactly two possible outcomes, so publish the original source bytes.
+    const output = selectionSources ? (reject ? selectionSources.original : selectionSources.nextDoc) : finalDoc
+    selectionSources = null
+    if (!preserveDraft) {
+      lastEmittedValueRef.current = output
+      onChangeRef.current(output)
+    }
     onReviewStateChangeRef.current?.(false)
     for (const cb of listeners) cb()
   }
@@ -80,6 +87,7 @@ export function createMarkdownReview(deps: Params): WriteDocumentReviewHandle & 
     if (!view || readOnlyRef.current || params.original === params.nextDoc) return false
     if (!reviewActiveRef.current) before = view.state
     origin = params.origin ?? 'agent'
+    selectionSources = origin === 'selection' ? { original: params.original, nextDoc: params.nextDoc } : null
     reviewActiveRef.current = true
     view.dom.dataset.reviewOrigin = origin
     view.dispatch({
@@ -111,7 +119,7 @@ export function createMarkdownReview(deps: Params): WriteDocumentReviewHandle & 
     },
     isDiffReviewActive: () => reviewActiveRef.current,
     acceptAllDiff: () => resolveAll('accept'),
-    rejectAllDiff: () => resolveAll('reject'),
+    rejectAllDiff: (options) => finish(true, options?.preserveDraft),
     finish,
     getReviewAnchorRect: () => {
       const view = viewRef.current, chunks = view && getChunks(view.state)?.chunks

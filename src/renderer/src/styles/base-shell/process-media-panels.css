@@ -435,12 +435,19 @@ body.ds-workbench-resizing webview {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-text) 10%, transparent);
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .timeline-jump-rail-button::before {
+    transition: none;
+  }
+}
+
 .timeline-jump-rail-preview {
   position: absolute;
   top: 0;
+  right: 1rem;
   z-index: 45;
   box-sizing: border-box;
-  width: min(26rem, calc(100% - 2rem));
+  max-width: 26rem;
   max-height: min(15rem, calc(100vh - 2rem));
   overflow: hidden;
   transform: translateY(-50%);
@@ -574,14 +581,6 @@ body.ds-workbench-resizing webview {
 }
 
 @media (max-width: 720px) {
-  .timeline-jump-rail {
-    display: none;
-  }
-
-  .timeline-jump-rail-preview {
-    display: none;
-  }
-
   .ds-plan-panel-overlay {
     padding: 0.5rem;
   }

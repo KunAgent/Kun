@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, realpath, rename, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, normalize } from 'node:path'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { resolveWorkspacePath } from './builtin-tool-utils.js'
@@ -352,6 +352,15 @@ export async function executeCreatePlanTool(
   return { output }
 }
 
+async function planWorkspaceMatches(actual: string, expected: string): Promise<boolean> {
+  if (guiPlanWorkspaceMatches(actual, expected)) return true
+  const [actualReal, expectedReal] = await Promise.all([
+    realpath(actual).catch(() => null),
+    realpath(expected).catch(() => null)
+  ])
+  return Boolean(actualReal && expectedReal && guiPlanWorkspaceMatches(actualReal, expectedReal))
+}
+
 /**
  * Host-owned resolution for turns carrying a reserved GUI plan context.
  * Model routing hints cannot select another plan or block saving the active
@@ -366,7 +375,7 @@ async function resolveReservedTarget(
   if (!contextPlan) {
     return { error: 'create_plan requires an active reserved plan context' }
   }
-  if (!guiPlanWorkspaceMatches(context.workspace, contextPlan.workspaceRoot)) {
+  if (!contextPlan.workspaceRoot || !(await planWorkspaceMatches(context.workspace, contextPlan.workspaceRoot))) {
     return { error: 'tool workspace does not match the active plan workspace' }
   }
   const reservedRelativePath = toRelativePath(contextPlan.relativePath)

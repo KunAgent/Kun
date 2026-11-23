@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import {
-  RemoteApi, RemoteClient, DESKTOP_METHODS, DESKTOP_STOP_METHODS, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY,
+  RemoteApi, RemoteClient, DESKTOP_METHODS, DESKTOP_STOP_METHODS, DESKTOP_GAME_CAPABILITY, DESKTOP_DEVICE_CAPABILITY, DESKTOP_SCOPED_CAPABILITY,
   validateDesktopParams, validateDesktopResult, validateDesktopEvent,
   type DeviceIdentity, type Socket, type DesktopMethod, type DesktopParams, type DesktopResults, type DesktopSession
 } from '@kun/remote-protocol'
@@ -8,6 +8,7 @@ import type { ArtAccountAccess } from '../art-assets/account-access'
 import { hasKunAccountSession } from '../../shared/kun-account'
 import type { ComputerAccessStatus, ComputerDevice, ComputerViewerEvent, DesktopIceConfiguration } from '../../shared/computer-access'
 import { DesktopActivityGate, desktopActivityGate } from '../remote-desktop/activity-gate'
+import { desktopPlatform, isDesktopPlatform } from '../remote-desktop/platform'
 import { registerMobileHost } from '../mobile-link/device-registration'
 import { ComputerMembershipLease } from './membership'
 import { readAccountEntitlements } from '../account-entitlements'
@@ -19,7 +20,7 @@ type Dependencies = {
   gate?: DesktopActivityGate
   event?(value: ComputerViewerEvent): void
 }
-type Active = { hostId: string; name: string; phase: 'opening' | 'connected' | 'closing' | 'unconfirmed'; startId?: string; session?: DesktopSession; generation: number }
+type Active = { hostId: string; name: string; phase: 'opening' | 'connected' | 'closing' | 'unconfirmed'; pairing?: boolean; gameSupported?: boolean; startId?: string; session?: DesktopSession; generation: number }
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
 
 /** The trusted controller owns credentials and the stop record even after its viewer is destroyed. */
@@ -64,7 +65,7 @@ export class ComputerAccessService {
   }
   configuration() {
     if (!this.active || this.active.phase === 'closing' || this.active.phase === 'unconfirmed') throw Error('DESKTOP_SESSION_EXPIRED')
-    return { hostId: this.active.hostId, name: this.active.name }
+    return { hostId: this.active.hostId, name: this.active.name, ...(process.env.KUN_DESKTOP_FORCE_TURN === '1' ? { forceRelay: true } : {}), ...(this.active.gameSupported ? { gameSupported: true } : {}) }
   }
   private current(generation: number) {
     if (generation !== this.generation || this.ending || this.owner && this.observedOwner !== undefined && this.observedOwner !== this.owner) throw Error('ACCOUNT_CHANGED')
@@ -86,7 +87,7 @@ export class ComputerAccessService {
       const controller = await this.deps.identity(owner, 'controller'); this.current(generation)
       const token = async () => { const value = await this.deps.account.accessToken(); this.current(generation); return value }
       const hostApi = new RemoteApi({ origin: this.deps.origin, fetch: this.deps.fetch, token, identity: async () => host })
-      await registerMobileHost(hostApi, this.deps.name, 'macos'); this.current(generation)
+      await registerMobileHost(hostApi, this.deps.name, desktopPlatform()); this.current(generation)
       const capabilities = await hostApi.request('/capabilities'); this.current(generation)
       if (capabilities.desktop?.computerAccess !== true) throw Error('COMPUTER_SERVER_UPDATE_REQUIRED')
       await hostApi.request('/desktop/controller', 'POST', { deviceId: controller.id, credential: controller.credential }); this.current(generation)
@@ -98,12 +99,12 @@ export class ComputerAccessService {
         state: (online, reason) => {
           if (generation !== this.generation) return
           this.error = online ? undefined : reason
-          if (!online && this.active && !['closing', 'unconfirmed'].includes(this.active.phase)) void this.close('signaling_lost')
+          if (!online && this.active && !this.active.pairing && !['closing', 'unconfirmed'].includes(this.active.phase)) void this.close('signaling_lost')
         },
         frame: frame => {
           const active = this.active
           if (generation !== this.generation || !active || frame.src !== active.hostId) return
-          if (frame.kind === 'resync_required') { void this.close('authorization_changed'); return }
+          if (frame.kind === 'resync_required') { if (!active.pairing) void this.close('authorization_changed'); return }
           if (frame.kind !== 'event') return
           try {
             const value = validateDesktopEvent(frame.payload)
@@ -126,20 +127,25 @@ export class ComputerAccessService {
     this.devices = value.devices.map((device: ComputerDevice) => {
       if (!uuid(device.id) || !uuid(device.installationId) || typeof device.name !== 'string' || device.name.length > 80 ||
           typeof device.enabled !== 'boolean' || typeof device.supported !== 'boolean' ||
-          !['macos', 'windows', 'linux'].includes(device.platform) || ![true, false, null].includes(device.online) ||
+          !isDesktopPlatform(device.platform) || ![true, false, null].includes(device.online) ||
           device.grantId !== null && !uuid(device.grantId)) throw Error('INVALID_COMPUTER_DIRECTORY')
       return { id: device.id, installationId: device.installationId, name: device.name, platform: device.platform,
+        ...(device.readiness && ['permission','ready','game'].includes(device.readiness) ? { readiness: device.readiness } : {}),
         enabled: device.enabled, supported: device.supported, online: device.online, grantId: device.grantId }
     })
     // A successful authenticated directory read proves repaired membership/device access.
     // Socket replacement remains terminal until an explicit application restart.
-    if (!this.client?.online && ['AUTHORIZATION_REJECTED', 'VIP_REQUIRED'].includes(this.error ?? '')) this.client?.start()
+    if (!this.client?.online) {
+      if (this.error === 'VIP_REQUIRED' || this.error === 'AUTHORIZATION_REJECTED' && this.devices.some(device => Boolean(device.grantId)))
+        this.client?.start()
+      else if (this.error !== 'SOCKET_CLOSED_4409') this.client?.resume()
+    }
     return this.status()
   }
   private device(id: string) {
     if (!uuid(id)) throw Error('INVALID_REQUEST')
     const device = this.devices.find(item => item.id === id)
-    if (!device || device.platform !== 'macos' || !device.supported) throw Error('COMPUTER_HOST_UPDATE_REQUIRED')
+    if (!device || !isDesktopPlatform(device.platform) || !device.supported) throw Error('COMPUTER_HOST_UPDATE_REQUIRED')
     if (!device.enabled || device.online !== true) throw Error('DEVICE_OFFLINE')
     return device
   }
@@ -154,10 +160,8 @@ export class ComputerAccessService {
     await this.requireMax(true)
     if (this.active) throw Error(this.active.phase === 'unconfirmed' ? 'DESKTOP_CLEANUP_UNCONFIRMED' : 'DESKTOP_BUSY')
     const device = this.device(hostId)
-    if (!device.grantId) throw Error('AUTHORIZATION_REQUIRED')
-    if (!this.client?.online) throw Error('DEVICE_OFFLINE')
     this.gate.claim(this.gateKey, 'outgoing')
-    const active: Active = { hostId, name: device.name, phase: 'opening', generation: this.generation }
+    const active: Active = { hostId, name: device.name, phase: 'opening', pairing: !device.grantId, generation: this.generation }
     this.active = active; this.closing = undefined
     this.membershipTimer = setInterval(() => {
       if (!this.active || ['closing', 'unconfirmed'].includes(this.active.phase)) return
@@ -166,15 +170,51 @@ export class ComputerAccessService {
     }, 1000)
     this.membershipTimer.unref?.()
     try {
-      const access = await this.invoke('desktop.access.get', {})
+      let validated: DesktopResults['desktop.access.get'] | undefined
+      if (active.pairing) {
+        await this.api!.request('/desktop/pairings', 'POST', { hostId })
+        // Grant creation rotates relay authority. Wait for both hosts to observe it, without
+        // replaying any session start or input; only this read-only preflight may be retried.
+        const deadline = Date.now() + 20000
+        for (;;) {
+          this.current(active.generation)
+          if (this.active !== active || active.phase !== 'opening') throw Error('DESKTOP_SESSION_EXPIRED')
+          await this.refresh()
+          if (this.devices.find(item => item.id === hostId)?.grantId && this.client?.online) {
+            try {
+              const probe = await this.invoke('desktop.access.get', {}, Math.max(500, Math.min(2000, deadline - Date.now())))
+              if (probe.viewAllowed) { validated = probe; break }
+            } catch (error) {
+              const code = error instanceof Error ? error.message : ''
+              if (!['REMOTE_SCOPE_REQUIRED', 'DESKTOP_SESSION_EXPIRED', 'DEVICE_OFFLINE', 'RESULT_UNKNOWN', 'REQUEST_TIMEOUT'].includes(code)) throw error
+            }
+          }
+          if (Date.now() >= deadline) throw Error('AUTHORIZATION_NOT_READY')
+          await new Promise(resolve => setTimeout(resolve, 250))
+        }
+        active.pairing = false
+        if (!this.client?.online) throw Error('DEVICE_OFFLINE')
+      } else if (!this.client?.online) {
+        if (this.error === 'SOCKET_CLOSED_4409') throw Error('DEVICE_OFFLINE')
+        this.client?.resume()
+        const deadline = Date.now() + 5000
+        while (!this.client?.online) {
+          this.current(active.generation)
+          if (this.active !== active || active.phase !== 'opening') throw Error('DESKTOP_SESSION_EXPIRED')
+          if (Date.now() >= deadline) throw Error('DEVICE_OFFLINE')
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      }
+      const access = validated ?? await this.invoke('desktop.access.get', {})
       if (!access.capabilities.includes(DESKTOP_DEVICE_CAPABILITY) || !access.capabilities.includes(DESKTOP_SCOPED_CAPABILITY)) throw Error('COMPUTER_HOST_UPDATE_REQUIRED')
       if (!access.enabled) throw Error('DESKTOP_DISABLED')
       if (!access.viewAllowed) throw Error('DESKTOP_VIEW_REQUIRED')
       if (access.busy) throw Error('DESKTOP_BUSY')
+      active.gameSupported = access.capabilities.includes(DESKTOP_GAME_CAPABILITY)
       return this.configuration()
     } catch (error) { if (!active.startId) this.finished(active); throw error }
   }
-  async invoke<M extends DesktopMethod>(method: M, params: DesktopParams[M]): Promise<DesktopResults[M]> {
+  async invoke<M extends DesktopMethod>(method: M, params: DesktopParams[M], timeoutMs?: number): Promise<DesktopResults[M]> {
     if (!(DESKTOP_METHODS as readonly string[]).includes(method)) throw Error('DESKTOP_UNSUPPORTED')
     validateDesktopParams(method, params)
     const active = this.active, client = this.client
@@ -192,11 +232,12 @@ export class ComputerAccessService {
     if (method === 'desktop.session.cancel' && !active.startId) active.startId = value.startId
     if (value.sessionId && value.sessionId !== active.session?.sessionId ||
         value.startId && active.startId && value.startId !== active.startId) throw Error('DESKTOP_AUTHORITY_CHANGED')
+    const timeout = timeoutMs ?? (cleanup ? 2000 : 15000)
     this.pending++
     try {
       const result = validateDesktopResult(method, await client.invoke(active.hostId, {
-        method, params, requestId: randomUUID(), expiresAt: Date.now() + 15000
-      }, cleanup ? 2000 : 15000))
+        method, params, requestId: randomUUID(), expiresAt: Date.now() + timeout
+      }, timeout))
       if (this.active !== active || active.generation !== this.generation) throw Error('DESKTOP_AUTHORITY_CHANGED')
       if ('session' in result) {
         if (result.session.origin.kind !== 'device' || result.session.origin.id !== active.hostId || result.session.startId !== active.startId) throw Error('DESKTOP_AUTHORITY_CHANGED')

@@ -541,6 +541,10 @@ export const KUN_THREAD_TOOL_CANCEL_TEMPLATE =
 export function kunThreadToolCancelPath(threadId: string, turnId: string, callId: string): string {
   return `${kunThreadTurnPath(threadId, turnId)}/tool-calls/${encodeURIComponent(callId)}/cancel`
 }
+export const KUN_THREAD_TOOL_OUTPUT_TEMPLATE = '/v1/threads/{id}/turns/{turn}/tool-calls/{id}/output'
+export function kunThreadToolOutputPath(threadId: string, turnId: string, callId: string): string {
+  return `${kunThreadTurnPath(threadId, turnId)}/tool-calls/${encodeURIComponent(callId)}/output`
+}
 
 export const KUN_THREAD_EVENTS_TEMPLATE = '/v1/threads/{id}/events'
 export function kunThreadEventsPath(threadId: string): string {

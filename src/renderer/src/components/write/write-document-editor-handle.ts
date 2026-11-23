@@ -14,7 +14,8 @@ export type WriteDocumentReviewHandle = {
   beginSelectionReview: (params: WriteSelectionReview) => { hunks: number } | null
   isDiffReviewActive: () => boolean
   acceptAllDiff: () => void
-  rejectAllDiff: () => void
+  /** A transient preview may be discarded after another editor has published a newer draft. */
+  rejectAllDiff: (options?: { preserveDraft?: boolean }) => void
   getReviewAnchorRect: () => WriteSelectionAnchorRect | null
   subscribeReviewLayout: (listener: () => void) => () => void
   setSelectionHold: (range: { from: number; to: number } | null) => void

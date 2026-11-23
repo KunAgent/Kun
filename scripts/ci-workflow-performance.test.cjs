@@ -9,6 +9,20 @@ const workflow = name => parse(readFileSync(join(__dirname, '../.github/workflow
 const pr = workflow('pr-checks.yml')
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor
 
+test('develop pushes verify the integrated SHA without PR-only provenance requirements', () => {
+  const develop = workflow('develop-checks.yml')
+  assert.deepEqual(develop.on.push.branches, ['develop'])
+  assert.equal(develop.permissions.contents, 'read')
+  assert.equal(develop.concurrency['cancel-in-progress'], false)
+  assert.equal(develop.jobs.tests.uses, './.github/workflows/ci-tests.yml')
+  const steps = develop.jobs.quality.steps
+  assert.ok(steps.some(step => step.uses === 'actions/checkout@v4' && !step.with?.ref))
+  for (const run of ['npm ci', 'npm run typecheck', 'npm run lint', 'npm run build']) {
+    assert.ok(steps.some(step => step.run === run), run)
+  }
+  assert.ok(!JSON.stringify(develop).includes('pull_request'))
+})
+
 async function changes(files, count = files.length) {
   let output
   const script = pr.jobs.changes.steps[0].with.script

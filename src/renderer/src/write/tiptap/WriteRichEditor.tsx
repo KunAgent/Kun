@@ -278,7 +278,7 @@ export function WriteRichEditor({
     })) {
       lastEmittedValueRef.current = value
     }
-  }, [value, fileKey, mountedEditor])
+  }, [value, fileKey, mountedEditor, reviewUi.active])
 
   useEffect(() => {
     if (!hostRef.current || editorRef.current || !boot) return
@@ -532,7 +532,9 @@ export function WriteRichEditor({
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden"
+      data-work-annotation-file={publishToPanels ? filePath : undefined}
+      data-work-annotation-root={publishToPanels ? workspaceRoot : undefined}>
       {reviewUi.active && reviewUi.origin === 'agent' ? (
         <WriteDocumentReviewBar
           total={reviewUi.total}

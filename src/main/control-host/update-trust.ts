@@ -1,5 +1,5 @@
 // Public signing root and origin are pinned in the signed host, independent of downloaded code.
-export const CONTROL_HOST_BUILD_GENERATION = 2
+export const CONTROL_HOST_BUILD_GENERATION = 3
 export const UPDATE_TRUST = {
   "origin": "https://api-kun-server.com",
   "root": {

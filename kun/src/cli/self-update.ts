@@ -42,6 +42,7 @@ import {
   writeStandaloneReleasePointer
 } from './self-update-layout.js'
 import { scheduleWindowsGarbageCollection } from './self-update-windows.js'
+import { isNpmDistribution, readNpmDistribution, npmUpdateGuidance } from './npm-distribution.js'
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1_000
 const FETCH_TIMEOUT_MS = 15_000
 const DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1_000
@@ -167,6 +168,7 @@ export function parseTuiUpdateManifest(
 export async function readStandaloneTuiRelease(
   env: Record<string, string | undefined> = process.env
 ): Promise<{ root: string; metadata: StandaloneTuiReleaseMetadata } | null> {
+  if (isNpmDistribution()) return null
   const configuredRoot = env.KUN_STANDALONE_ROOT?.trim()
   if (!configuredRoot) return null
   const base = resolve(configuredRoot)
@@ -258,6 +260,16 @@ export async function runSelfUpdateCommand(
   argv: readonly string[],
   io: UpdateIo
 ): Promise<number> {
+  const npm = readNpmDistribution()
+  if (npm) {
+    const unknown = argv.find(argument => !['--help', '-h', '--check', '--yes'].includes(argument))
+    if (unknown || (argv.includes('--check') && argv.includes('--yes'))) {
+      io.stderr.write(`kun update: ${unknown ? `unknown option ${unknown}` : '--check and --yes are mutually exclusive'}\n`)
+      return 64
+    }
+    io.stdout.write(npmUpdateGuidance(npm))
+    return 0
+  }
   if (argv.includes('--help') || argv.includes('-h')) {
     io.stdout.write(KUN_UPDATE_USAGE)
     return 0

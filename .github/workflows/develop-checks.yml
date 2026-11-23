@@ -1,0 +1,38 @@
+name: Develop Checks
+
+on:
+  push:
+    branches:
+      - develop
+
+permissions:
+  contents: read
+
+concurrency:
+  group: develop-checks-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Integrated commit tests
+    uses: ./.github/workflows/ci-tests.yml
+
+  quality:
+    name: Integrated commit quality and build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            kun/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+        env:
+          NODE_OPTIONS: --max-old-space-size=6144
+      - run: npm run lint
+      - run: npm run build

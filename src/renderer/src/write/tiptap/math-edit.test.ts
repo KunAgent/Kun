@@ -2,12 +2,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Editor } from '@tiptap/core'
 import type { Node as PmNode } from '@tiptap/pm/model'
+import { annotationDocumentKey, registerAnnotationSelection } from '../annotations/selection-target'
 import { openMathEditor, preserveMathPointerTarget } from './math-edit'
 
 afterEach(() => { document.body.replaceChildren() })
 
-function fixture(kind: 'block' | 'inline') {
+function fixture(kind: 'block' | 'inline', work = false) {
   const host = document.createElement('div')
+  if (work) { host.dataset.workAnnotationFile = '/draft.md'; host.dataset.workAnnotationRoot = '/' }
   const dom = document.createElement('div')
   host.append(dom)
   document.body.append(host)
@@ -16,13 +18,14 @@ function fixture(kind: 'block' | 'inline') {
     updateInlineMath: vi.fn(),
     focus: vi.fn()
   }
+  const node = { attrs: { latex: 'x^2' }, nodeSize: 1 } as unknown as PmNode
   const editor = {
     isEditable: true,
-    view: { dom, coordsAtPos: () => ({ left: 0, bottom: 20 }) },
-    state: { doc: { content: { size: 20 } } },
+    view: { dom, nodeDOM: () => dom, coordsAtPos: () => ({ left: 0, bottom: 20 }) },
+    state: { doc: { nodeAt: () => node, content: { size: 20 } } },
     commands
   } as unknown as Editor
-  openMathEditor(editor, { attrs: { latex: 'x^2' } } as unknown as PmNode, 4, kind)
+  openMathEditor(editor, node, 4, kind)
   const input = host.querySelector('textarea')!
   return { commands, input, host }
 }
@@ -45,6 +48,21 @@ describe.each(['block', 'inline'] as const)('%s math editing', (kind) => {
     input.dispatchEvent(new Event('blur'))
     const save = kind === 'block' ? commands.updateBlockMath : commands.updateInlineMath
     expect(save).toHaveBeenCalledExactlyOnceWith({ pos: 4, latex: 'y^3' })
+  })
+
+  it('starts a Work annotation for the highlighted part of the original formula', async () => {
+    const selected = vi.fn(() => true)
+    const release = registerAnnotationSelection(annotationDocumentKey('/', '/draft.md'), selected)
+    try {
+      const { commands, input, host } = fixture(kind, true)
+      input.setSelectionRange(2, 3)
+      host.querySelector('button')!.click()
+      await vi.waitFor(() => expect(selected).toHaveBeenCalledWith(expect.objectContaining({
+        text: '2', richRange: { from: 4, to: 5, latexRange: { from: 2, to: 3 } }
+      })))
+      expect(commands.updateBlockMath).not.toHaveBeenCalled()
+      expect(commands.updateInlineMath).not.toHaveBeenCalled()
+    } finally { release() }
   })
 
   it('cancels without allowing the ensuing blur to save', () => {

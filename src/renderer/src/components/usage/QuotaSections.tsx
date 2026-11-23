@@ -9,9 +9,16 @@ import type {
 import { quotaResetReminders } from '@shared/provider-quota-reminders'
 import { ProviderIcon } from '../provider-icon'
 import { formatProviderLocalCostAmount } from '../provider-local-cost-summary'
-import { QuotaBarMeter, QuotaRingMeter, quotaResetText, quotaWindowLabel } from './QuotaMeter'
+import {
+  QuotaBarMeter,
+  QuotaGroupedRowMeter,
+  QuotaRingMeter,
+  quotaResetText,
+  quotaWindowLabel
+} from './QuotaMeter'
 import {
   formatQuotaAmount,
+  groupQuotaMetrics,
   isMeterMetric,
   primaryBalance,
   quotaAccountLabel,
@@ -26,6 +33,7 @@ const COLLAPSED_METERS: Record<QuotaCardVariant, number> = { bars: 4, rings: 3 }
 type CardContext = {
   mode: QuotaDisplayMode
   onToggleMode: () => void
+  onChangeMode?: (mode: QuotaDisplayMode) => void
   now: number
   locale?: string
 }
@@ -68,7 +76,7 @@ function CardHead({
   trailing?: ReactElement | null
 }): ReactElement {
   const { t } = useTranslation('common')
-  const plan = quotaPlanLabel(entry.summary)
+  const plan = quotaPlanLabel(entry.summary, entry.providerName)
   const account = quotaAccountLabel(entry.summary)
   return (
     <div className="kq-card-head" title={entry.source}>
@@ -143,12 +151,13 @@ export function QuotaAllowanceCard({
   const { t } = useTranslation('common')
   const meters = entry.metrics.filter(isMeterMetric)
   const details = entry.metrics.filter((metric) => !isMeterMetric(metric))
+  const groups = groupQuotaMetrics(meters)
   const limit = COLLAPSED_METERS[variant]
-  const shown = expanded ? meters : meters.slice(0, limit)
-  const hidden = meters.length - shown.length
+  const shown = groups || expanded ? meters : meters.slice(0, limit)
+  const hidden = groups ? 0 : meters.length - shown.length
   const reminders = quotaResetReminders(meters, context.now)
   const Meter = variant === 'rings' ? QuotaRingMeter : QuotaBarMeter
-  const moreButton = meters.length > limit ? (
+  const moreButton = !groups && meters.length > limit ? (
     <button
       type="button"
       className="kq-text-button"
@@ -162,7 +171,25 @@ export function QuotaAllowanceCard({
   return (
     <article className="kq-card" data-variant={variant} data-quota-provider={entry.providerId}>
       <CardHead entry={entry} onOpenDashboard={onOpenDashboard} />
-      {variant === 'rings' ? (
+      {groups ? (
+        <div className="kq-quota-groups">
+          {groups.map((group) => (
+            <section key={group.title} className="kq-quota-group" data-quota-group={group.title}>
+              <h4 className="kq-quota-group-title">{group.title}</h4>
+              <div className="kq-quota-group-rows">
+                {group.items.map((item) => (
+                  <QuotaGroupedRowMeter
+                    key={item.metric.id}
+                    metric={item.metric}
+                    windowTitle={item.windowTitle}
+                    {...context}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      ) : variant === 'rings' ? (
         <div className="kq-rings-row">
           <p className="kq-rings-reset">
             {shown.map((metric) => quotaResetText(metric, context.now, t, context.locale)).filter(Boolean)[0] ??

@@ -127,6 +127,31 @@ function outputJson(): string {
   return JSON.stringify(activeRenderer.toJSON())
 }
 
+describe('SidebarProjectsSection project header', () => {
+  it('swaps directory metadata for in-flow actions on hover and focus', async () => {
+    const workspacePath = '/projects/project-a'
+    await renderSidebar({ workspaceRoot: workspacePath, workspaceRoots: [workspacePath] })
+
+    const row = activeRenderer!.root.find((node) =>
+      node.type === 'div' && node.props.title === workspacePath
+    )
+    const projectButton = row.findByProps({ 'aria-label': workspacePath })
+    for (const text of ['codeProjectFolderCount', 'projects']) {
+      const label = projectButton.find((node) => node.type === 'span' && node.children.includes(text))
+      const classes = label.props.className.split(' ')
+      expect(classes).not.toContain('hidden')
+      expect(classes).toEqual(expect.arrayContaining(['group-hover:hidden', 'group-focus-within:hidden']))
+    }
+
+    const actionGroup = row.find((node) => node.type === 'div' && node.parent === row)
+    const classes = actionGroup.props.className.split(' ')
+    expect(classes).not.toContain('absolute')
+    expect(classes).toEqual(expect.arrayContaining(['hidden', 'group-hover:flex', 'group-focus-within:flex']))
+    expect(actionGroup.findAllByType('button').map((node) => node.props['aria-label']))
+      .toEqual(['sidebarFolderCreate', 'sidebarWorkspaceNewThread'])
+  })
+})
+
 describe('SidebarProjectsSection project page auto-load', () => {
   const unknownCursor = {
     '/users/zxy/cindy': {

@@ -23,10 +23,12 @@ import { worktreePreloadApi } from './worktree-bridge'
 import { gitTurnUndoPreloadApi } from './git-turn-undo-api'
 import { sanottsSpeechBridge } from './sanotts-speech-bridge'
 import { writeBridge } from './write-bridge'
+import { latexApi } from './latex-api'
 import { onIpcEvent } from './ipc-event'
 import { paperApi } from './paper-api'
 import { petsPreloadApi } from './pets-bridge'
 import { marketApi } from './market-api'
+import { colabApi } from './colab-api'
 import { gitCommitApi } from './git-commit-api'
 import { terminalDockApi } from './terminal-dock-api'
 import { kunAccountApi } from './kun-account'
@@ -316,6 +318,7 @@ const api = {
     return () => ipcRenderer.removeListener('file:workspace-changed', wrapped)
   },
   ...writeBridge,
+  ...latexApi,
   exportConversation: (payload) =>
     ipcRenderer.invoke('conversation:export', payload),
   exportConversationBatch: (payload) =>
@@ -676,6 +679,7 @@ const api = {
   },
   ...paperApi,
   ...marketApi,
+  ...colabApi,
   ...gitCommitApi,
   ...terminalDockApi,
   ...appSandboxPreloadApi,

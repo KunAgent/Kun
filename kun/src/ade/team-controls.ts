@@ -66,7 +66,7 @@ export class TeamControls {
   }
 
   /** `GET /v1/teams/by-manager/:threadId`: roster + recent work + races. */
-  async teamOverview(managerThreadId: string): Promise<{
+  async teamOverview(managerThreadId: string, dispatchIds?: readonly string[]): Promise<{
     team: TeamRecord
     dispatches: DispatchRecord[]
     questions: QuestionRecord[]
@@ -76,9 +76,11 @@ export class TeamControls {
   } | null> {
     const team = await this.deps.teams.get(managerThreadId)
     if (!team) return null
+    const dispatches = await this.deps.dispatches.list(team.teamId)
+    const wanted = dispatchIds === undefined ? undefined : new Set(dispatchIds)
     return {
       team,
-      dispatches: (await this.deps.dispatches.list(managerThreadId)).slice(-50),
+      dispatches: wanted ? dispatches.filter((entry) => wanted.has(entry.dispatchId)) : dispatches.slice(-50),
       questions: (await this.deps.questions.list(managerThreadId)).slice(-50),
       races: this.deps.races ? (await this.deps.races.list(managerThreadId)).slice(-50) : [],
       ...(this.deps.usage

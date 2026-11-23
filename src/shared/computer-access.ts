@@ -1,7 +1,7 @@
 import type { MobileLinkStatus } from './mobile-link'
 export type { ComputerViewerBridge, ComputerViewerConfiguration, ComputerViewerEvent, DesktopIceConfiguration } from '@kun/control-runtime/viewer'
 
-export type ComputerDevice = { id: string; installationId: string; name: string; platform: string; enabled: boolean; supported: boolean; online: boolean | null; grantId: string | null }
+export type ComputerDevice = { id: string; installationId: string; name: string; platform: string; readiness?: 'permission' | 'ready' | 'game'; enabled: boolean; supported: boolean; online: boolean | null; grantId: string | null }
 export type ComputerAccessStatus = {
   supported: boolean; online: boolean; devices: ComputerDevice[]; error?: string
   active?: { hostId: string; name: string; phase: 'opening' | 'connected' | 'closing' | 'unconfirmed' }

@@ -85,6 +85,7 @@ export function formatTransferRate(bytesPerSecond: number | undefined, pendingLa
 }
 
 export function speechProtocolLabel(t: (key: string) => string, protocol: string): string {
+  if (protocol === 'deepseek-asr') return t('speechProtocolDeepSeekAsr')
   if (protocol === 'mimo-asr') return t('speechProtocolMimoAsr')
   if (protocol === 'xai-stt') return t('speechProtocolXaiStt')
   if (protocol === 'gemini-audio') return t('speechProtocolGeminiAudio')

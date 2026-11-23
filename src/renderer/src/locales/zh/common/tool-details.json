@@ -9,6 +9,8 @@
     "command": "命令", "exit": "退出码 {{code}}", "signal": "信号 {{signal}}",
     "query": "查询", "matches": "搜索结果", "status": "HTTP {{code}}",
     "waiting": "正在等待工具输出…", "empty": "工具没有返回输出。",
+    "acpNoOutput": "这次调用没有可显示的输出记录。",
+    "loadingOutput": "正在读取这次调用的输出…",
     "summaryOnly": "Agent 只返回了摘要，没有返回文件内容。",
     "truncated": "当前显示较长结果中已保留的部分。",
     "contentOmitted": "此附件未保存在会话中。",

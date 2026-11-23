@@ -94,6 +94,9 @@ export async function requestSpeechTranscription(
       case 'local-whisper':
         text = await (options.localWhisperTranscriber ?? transcribeViaLocalWhisper)(request, speechToText)
         break
+      case 'deepseek-asr':
+        text = await transcribeViaDeepSeekAsr(speechToText, request, fetchImpl)
+        break
       case 'mimo-asr':
         text = await transcribeViaMimoAsr(speechToText, request, fetchImpl)
         break
@@ -124,6 +127,7 @@ function describeSpeechConfigurationIssue(
   if (!speechToText.enabled) return 'speech-to-text is disabled'
   if (
     speechToText.protocol !== 'xai-stt' &&
+    speechToText.protocol !== 'deepseek-asr' &&
     !speechToText.model.trim()
   ) return 'speech-to-text model is not configured'
   if (
@@ -292,6 +296,42 @@ async function transcribeViaGeminiAudio(
     .join('')
   if (typeof text !== 'string') throw new Error('Gemini speech response has no transcript text')
   return text
+}
+
+export function resolveDeepSeekAsrEndpointUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, '')
+  const lower = trimmed.toLowerCase()
+  if (lower.endsWith('/v1/tools/asr') || lower.endsWith('/tools/asr')) return trimmed
+  const root = trimmed.replace(/\/(?:v1|beta)$/i, '')
+  return `${root}/v1/tools/asr`
+}
+
+/**
+ * DeepSeek ASR accepts multipart audio (`file` field only, no `model`) at
+ * `/v1/tools/asr` in WAV (16-bit PCM) or Ogg Opus format.
+ */
+async function transcribeViaDeepSeekAsr(
+  speechToText: KunSpeechToTextSettingsV1,
+  request: SpeechTranscriptionRequest,
+  fetchImpl: typeof fetch
+): Promise<string> {
+  const url = resolveDeepSeekAsrEndpointUrl(speechToText.baseUrl)
+  const audio = Buffer.from(request.audioBase64, 'base64')
+  const mimeType = request.mimeType.trim() || 'audio/wav'
+  const extension = FILE_EXTENSION_BY_MIME[mimeType.toLowerCase()] ?? 'wav'
+  const form = new FormData()
+  form.append('file', new Blob([new Uint8Array(audio)], { type: mimeType }), `recording.${extension}`)
+  const response = await fetchImpl(url, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${speechToText.apiKey}` },
+    body: form,
+    signal: AbortSignal.timeout(speechToText.timeoutMs)
+  })
+  const body = await response.text()
+  if (!response.ok) throw new SpeechHttpError(response.status, body)
+  const parsed = JSON.parse(body) as { text?: unknown }
+  if (typeof parsed.text !== 'string') throw new Error('DeepSeek speech response has no transcript text')
+  return parsed.text
 }
 
 /** Standard OpenAI-style multipart upload to {baseUrl}/audio/transcriptions. */

@@ -48,6 +48,9 @@ const WardrobePageView = lazy(() =>
 const ArtifactsPage = lazy(() =>
   import('../../artifacts/ArtifactsPage').then((module) => ({ default: module.ArtifactsPage }))
 )
+const ColabNotebookView = lazy(() =>
+  import('../../colab/notebook/ColabNotebookView').then((module) => ({ default: module.ColabNotebookView }))
+)
 const PapersSurface = lazy(() =>
   import('../paper/PapersSurface').then((module) => ({ default: module.PapersSurface }))
 )
@@ -238,6 +241,14 @@ export function WorkbenchStageRouter({
         ) : normalizedRoute === 'artifacts' ? (
           <Suspense fallback={<WorkbenchPaneFallback />}>
             <ArtifactsPage leftSidebarCollapsed={leftSidebarCollapsed} onToggleLeftSidebar={onToggleLeftSidebar} chat={conversation.chat} />
+          </Suspense>
+        ) : normalizedRoute === 'colab' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            <ColabNotebookView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+              chat={conversation.chat}
+            />
           </Suspense>
         ) : (
           <WorkbenchConversationStage {...conversation} route={normalizedRoute} />

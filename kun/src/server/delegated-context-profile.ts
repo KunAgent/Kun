@@ -4,11 +4,13 @@ import {
   type ModelContextThresholds
 } from '../loop/model-context-profile.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import { capabilityFieldKnown } from '../contracts/model-metadata-evidence.js'
 import { providerScopedModelCapabilities } from './runtime-factory-model.js'
 import type { KunServeRuntimeOptions } from './runtime-factory-types.js'
 
 export type DelegatedContextProfile = {
   contextWindowTokens: number
+  contextWindowKnown?: boolean
   softThresholdTokens: number
   hardThresholdTokens: number
 }
@@ -44,6 +46,7 @@ export function delegatedContextProfile(input: {
   return {
     contextWindowTokens: capabilities.contextWindowTokens ??
       Math.max(thresholds.softThreshold, thresholds.hardThreshold),
+    contextWindowKnown: capabilityFieldKnown(capabilities, 'contextWindowTokens'),
     softThresholdTokens: thresholds.softThreshold,
     hardThresholdTokens: thresholds.hardThreshold
   }

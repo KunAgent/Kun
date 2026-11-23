@@ -2,10 +2,11 @@ import { spawn, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { existsSync, realpathSync } from 'node:fs'
 import { chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { electronHostForNativeModules } from '../process/host-node.js'
+import { isNpmDistribution } from '../cli/npm-distribution.js'
 
 /**
  * The terminal renderer (opentui) drives a native Zig core through Node's
@@ -144,7 +145,8 @@ export async function downloadTuiNode(
   const expected = (await sumsResponse.text()).split('\n')
     .find((line) => line.trim().endsWith(`  ${target.archive}`))?.split(/\s+/u)[0]
   if (!expected) throw new Error(`no published checksum for ${target.archive}`)
-  const staging = await mkdtemp(join(tmpdir(), 'kun-tui-node-'))
+  // Keep the final rename on the destination filesystem (tmpdir may be another mount).
+  const staging = await mkdtemp(join(root, '.install-'))
   try {
     const archivePath = join(staging, target.archive)
     await writeFile(archivePath, new Uint8Array(await archiveResponse.arrayBuffer()))
@@ -153,17 +155,34 @@ export async function downloadTuiNode(
       ? spawnSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe'), ['-xf', archivePath, '-C', staging], { windowsHide: true })
       : spawnSync('tar', ['-xzf', archivePath, '-C', staging])
     if (extract.status !== 0) throw new Error('could not extract the Node.js archive')
+    const stagedBinary = join(staging, target.binary)
+    if (process.platform !== 'win32') await chmod(stagedBinary, 0o755)
+    const version = probeVersion(stagedBinary)
+    if (!version || compareNodeVersions(version, MINIMUM_TUI_RENDERER_NODE_VERSION) < 0) {
+      throw new Error('the downloaded Node.js interpreter did not start or is too old')
+    }
     const destination = join(root, target.dir)
-    await rm(destination, { recursive: true, force: true })
-    await rename(join(staging, target.dir), destination)
-    if (process.platform !== 'win32') await chmod(join(root, target.binary), 0o755)
+    const previous = join(staging, 'previous')
+    const replacing = existsSync(destination)
+    if (replacing) await rename(destination, previous)
+    try {
+      await rename(join(staging, target.dir), destination)
+    } catch (error) {
+      // Do not remove the backup if restoration itself fails.
+      if (replacing) {
+        try { await rename(previous, destination) } catch (restoreError) {
+          throw new Error(`Could not restore Node.js from ${previous}`, { cause: restoreError })
+        }
+      }
+      throw error
+    }
+    return { path: join(root, target.binary), source: 'cache', version }
   } finally {
-    await rm(staging, { recursive: true, force: true })
+    // A failed restoration must leave the previous working interpreter available.
+    if (!existsSync(join(staging, 'previous')) || existsSync(join(root, target.dir))) {
+      await rm(staging, { recursive: true, force: true })
+    }
   }
-  const path = join(root, target.binary)
-  const version = probeVersion(path)
-  if (!version) throw new Error('the downloaded Node.js interpreter did not start')
-  return { path, source: 'cache', version }
 }
 
 /**
@@ -181,7 +200,7 @@ export function tuiHandoffEnv(
   if (process.versions.electron) {
     if (!next.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim()) next.KUN_PACKAGED_RUNTIME_EXECUTABLE = process.execPath
   } else if (!next.KUN_PACKAGED_RUNTIME_EXECUTABLE?.trim() && !next.KUN_HOST_NODE_EXECUTABLE?.trim()) {
-    const electron = electronHost()
+    const electron = isNpmDistribution() ? null : electronHost()
     if (electron) next.KUN_PACKAGED_RUNTIME_EXECUTABLE = electron
     else next.KUN_HOST_NODE_EXECUTABLE = process.execPath
   }

@@ -106,10 +106,40 @@ export class HarnessModelCatalogStore {
     if (catalog.models.length === 0) return
     const identity = this.identity(definition, true)
     if (!identity) return
+    const previous = this.entries.get(definition.id)
+    const previousInfo = previous?.identity === identity ? previous.catalog.modelInfo : undefined
     const { error: _error, ...kept } = catalog
+    const modelInfo = kept.modelInfo.map((entry) => {
+      if (entry.reasoningEfforts !== undefined) return entry
+      const old = previousInfo?.find((item) => item.id === entry.id)
+      return old?.reasoningEfforts !== undefined
+        ? { ...entry, reasoningEfforts: old.reasoningEfforts, ...(old.defaultReasoningEffort !== undefined ? { defaultReasoningEffort: old.defaultReasoningEffort } : {}) }
+        : entry
+    })
     this.entries.delete(definition.id)
-    this.entries.set(definition.id, { harnessId: definition.id, identity, fetchedAt: this.now(), catalog: kept })
+    this.entries.set(definition.id, { harnessId: definition.id, identity, fetchedAt: this.now(), catalog: { ...kept, modelInfo } })
     while (this.entries.size > MAX_ENTRIES) this.entries.delete(this.entries.keys().next().value!)
+    this.schedule()
+  }
+
+  /** Merge per-model reasoning levels learned from a detail lookup into the base catalog. */
+  recordModelDetails(definition: HarnessDefinition, selectedModel: string, catalog: HarnessModelCatalog): void {
+    const existing = this.entries.get(definition.id)
+    if (!existing || existing.identity !== this.identity(definition)) return
+    const detail = catalog.modelInfo.find((entry) => entry.id === selectedModel)
+    if (detail?.reasoningEfforts === undefined) return
+    let changed = false
+    const modelInfo = existing.catalog.modelInfo.map((entry) => {
+      if (entry.id !== selectedModel) return entry
+      changed = true
+      return {
+        ...entry,
+        reasoningEfforts: detail.reasoningEfforts,
+        ...(detail.defaultReasoningEffort !== undefined ? { defaultReasoningEffort: detail.defaultReasoningEffort } : {})
+      }
+    })
+    if (!changed) return
+    existing.catalog = { ...existing.catalog, modelInfo }
     this.schedule()
   }
 
