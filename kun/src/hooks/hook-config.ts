@@ -79,8 +79,15 @@ function buildWorkflowHookRun(entry: HookWorkflowConfig): (invocation: HookInvoc
       })
       data = (await response.json()) as Record<string, unknown>
     } catch (error) {
-      // Fail open: a transport error must not block the agent.
-      return { message: `workflow hook error: ${error instanceof Error ? error.message : String(error)}` }
+      const message = `workflow hook error: ${error instanceof Error ? error.message : String(error)}`
+      // observe/rewrite are advisory, but a block hook is an authorization
+      // decision: a transport error means no verdict, so fail closed.
+      if (mode === 'block') {
+        return invocation.phase === 'PostToolUse'
+          ? { isError: true, message }
+          : { decision: 'deny', message }
+      }
+      return { message }
     }
     if (!data || data.skipped) return
     const output = typeof data.output === 'string' ? data.output : ''
