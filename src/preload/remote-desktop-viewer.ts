@@ -15,6 +15,6 @@ const bridge: ComputerViewerBridge = {
   },
   heartbeat: () => ipcRenderer.send(channels.heartbeat),
   close: () => ipcRenderer.invoke(channels.close),
-  fullscreen: () => ipcRenderer.invoke(channels.fullscreen)
+  fullscreen: (active?: boolean) => ipcRenderer.invoke(channels.fullscreen, active)
 }
 contextBridge.exposeInMainWorld('kunComputerViewer', bridge)

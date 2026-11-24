@@ -10,6 +10,9 @@ import { ElectronDesktopCapture } from '../../src/main/remote-desktop/capture-ho
 import { createWindowsPrivacyDisplay } from './windows-privacy-display'
 import { createPrivacyDisplay } from './mac-privacy-display'
 import { exerciseViewerGameSwitch } from './computer-viewer-game'
+import { exerciseViewerSession } from './computer-viewer-session'
+import { bindViewerFullscreen } from '../../src/main/computer-access/fullscreen'
+import { COMPUTER_VIEWER_CHANNELS as viewer } from '../../src/shared/computer-viewer-channels'
 import { DesktopInputArbiter } from '../../src/main/remote-desktop/input-arbiter'
 
 app.setPath('userData',join(app.getAppPath(),'profile'))
@@ -22,9 +25,15 @@ const privacy = process.env.KUN_FIXTURE_PRIVACY === '1'
 let privacyDisplay: Awaited<ReturnType<typeof createPrivacyDisplay>> | undefined
 const gaming=process.env.KUN_FIXTURE_GAME==='1'
 const measureSeconds=Number(process.env.KUN_FIXTURE_SECONDS)||0
+const turnPort = Number(process.env.KUN_FIXTURE_TURN_PORT) || 0
+const testViewer = process.env.KUN_FIXTURE_VIEWER === '1'
+const iceServers = turnPort ? [{urls:'turn:127.0.0.1:' + turnPort,username:'fixture',credential:'loopback-test'}] : []
 const authority={accountId:'fixture-owner',deviceId:'fixture-controller',hostId:'fixture-host',...(privacy ? {} : {purpose:'desktop' as const}),
   authorizationId:'fixture-authority',scopes:['desktop.view','desktop.control'],current:()=>true,
-  emit:(value:unknown)=>{if(privacy && (value as any).event !== 'desktop.signal.ice') states.push(value); if(receiver&&!receiver.isDestroyed())receiver.webContents.send('fixture:event',value)}}
+  emit:(value:unknown)=>{
+    if(privacy && (value as any).event !== 'desktop.signal.ice') states.push(value)
+    if(receiver&&!receiver.isDestroyed()) receiver.webContents.send(testViewer ? viewer.event : 'fixture:event', testViewer ? {type:'desktop',value} : value)
+  }}
 const timeout=setTimeout(()=>finish(Error('computer smoke timed out')),measureSeconds*1000+(process.env.KUN_FIXTURE_VIEWER==='1'?55000:30000))
 async function finish(error?:unknown) {
   clearTimeout(timeout)
@@ -39,7 +48,7 @@ app.whenReady().then(async()=>{
   if (privacy) privacyDisplay = process.platform === 'win32' ? await createWindowsPrivacyDisplay() : await createPrivacyDisplay()
   const deps:DesktopEngineDependencies={supported:()=>true, privacySupported:()=>privacy, gameSupported:()=>gaming, systemAudioAllowed:()=>gaming, permissions:async()=>({screenRecording:'granted',accessibility:'granted'}),
     displays:()=>[{id:privacyDisplay?.id ?? 1,primary:true,fingerprint:'synthetic',label:'Synthetic display',pixelWidth:measureSeconds?1920:320,pixelHeight:measureSeconds?1080:200,rotation:0}],
-    id:randomUUID,now:()=>performance.now(),ice:async()=>[],arbiter:new DesktopInputArbiter(),diagnostic:value=>states.push(value),
+    id:randomUUID,now:()=>performance.now(),ice:async()=>iceServers,arbiter:new DesktopInputArbiter(),diagnostic:value=>states.push(value),
     authorizeOrigin:async(actor,origin)=>{assert.equal(actor.purpose,privacy ? undefined : 'desktop');assert.deepEqual(origin,privacy ? {kind:'code',id:'fixture-thread'} : {kind:'device',id:'fixture-host'})},
     input:()=>({start:async()=>{},ready:async()=>{},setupLease:async()=>{},lease:async()=>{},
       input:async value=>{assert.ok(['key','text.commit','pointer.relative','pointer.gameButton'].includes(String(value.type)));inputCount++;if(privacyDisplay) await privacyDisplay.green()},release:async()=>{releases++},stop:async()=>{releases++}}),
@@ -127,11 +136,12 @@ app.whenReady().then(async()=>{
     service = host
   } else service=new RemoteDesktopService(deps)
   await service.configureRemoteAccess(true)
-  receiver=new BrowserWindow({show:false,webPreferences:{partition:'computer-fixture-receiver',preload:join(app.getAppPath(),'receiver-preload.cjs'),sandbox:true,nodeIntegration:false,contextIsolation:true,backgroundThrottling:false,autoplayPolicy:'no-user-gesture-required'}})
+  const testFullscreen = process.env.KUN_FIXTURE_FULLSCREEN === '1'
+  receiver=new BrowserWindow({show:testFullscreen,webPreferences:{partition:'computer-fixture-receiver',preload:join(app.getAppPath(),'receiver-preload.cjs'),sandbox:true,nodeIntegration:false,contextIsolation:true,backgroundThrottling:false,autoplayPolicy:'no-user-gesture-required'}})
   receiver.webContents.session.setPermissionRequestHandler((_contents,_permission,callback)=>callback(false))
   receiver.webContents.session.setPermissionCheckHandler(()=>false)
   receiver.webContents.session.setDisplayMediaRequestHandler((_request,callback)=>callback({}))
-  ipcMain.handle('fixture:invoke',(event,method,params)=>{assert.equal(event.sender,receiver.webContents);return service.invoke(method,params,authority)})
+  ipcMain.handle(testViewer ? viewer.invoke : 'fixture:invoke',(event,method,params)=>{assert.equal(event.sender,receiver.webContents);return service.invoke(method,params,authority)})
   ipcMain.handle('fixture:local-color', (event, kind) => { assert.equal(event.sender,receiver.webContents); return privacyDisplay!.requireColor(kind) })
   ipcMain.handle('fixture:stats',()=>({inputCount,releases}))
   ipcMain.handle('fixture:sender-stats', async()=>!captureWindow || captureWindow.isDestroyed() ? null : captureWindow.webContents.executeJavaScript(`(async()=>{
@@ -165,12 +175,23 @@ app.whenReady().then(async()=>{
       await finish()
     } catch(error){await finish(error)}
   })
-  if(process.env.KUN_FIXTURE_VIEWER==='1'){
-    ipcMain.on('fixture:heartbeat',event=>event.sender.send('fixture:lease'))
-    ipcMain.handle('fixture:restart',async()=>{assert.equal((await service.status()).active,undefined)})
+  if(testViewer){
+    const testRelay = process.env.KUN_FIXTURE_RELAY === '1'
+    const config = {hostId:'fixture-host', name:'Test computer', gameSupported:true, fullscreen:false}
+    let firstIceFailure = testFullscreen || testRelay
+    const toggle = bindViewerFullscreen(receiver, active => receiver.webContents.send(viewer.event, {type:'fullscreen',active}))
+    ipcMain.handle(viewer.fullscreen, (_event, active) => toggle(active))
+    ipcMain.handle(viewer.configuration, () => config)
+    ipcMain.handle(viewer.ice, () => {
+      if (firstIceFailure) { firstIceFailure = false; throw Error('DESKTOP_ICE_UNAVAILABLE') }
+      return {schemaVersion:1, iceServers, expiresAt:Date.now()+600000}
+    })
+    ipcMain.on(viewer.heartbeat, event => event.sender.send(viewer.event, {type:'lease',validForMs:1500}))
+    ipcMain.handle(viewer.restart,async()=>{assert.equal((await service.status()).active,undefined);return config})
     await receiver.loadFile(join(app.getAppPath(),'control/viewer/index.html'))
+    if (testFullscreen || testRelay) await exerciseViewerSession(receiver, testFullscreen, testRelay ? () => service.stopAll('connection_failed') : undefined)
     await exerciseViewerGameSwitch(receiver)
-    console.log(JSON.stringify({computerDesktop:true,viewerGameSwitch:true,gameAudio:true,returnedToOffice:true}))
+    console.log(JSON.stringify({computerDesktop:true,viewerGameSwitch:true,gameAudio:true,returnedToOffice:true,fullscreenAndRetry:testFullscreen,relayRetry:testRelay}))
     await finish()
   }else await receiver.loadFile(join(app.getAppPath(),'receiver.html'))
 }).catch(finish)

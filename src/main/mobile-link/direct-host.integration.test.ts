@@ -10,13 +10,17 @@ import { registerRemoteRoutes } from '../../../kun/src/remote/routes'
 import { ThreadActivityRegistry } from '../../../kun/src/services/thread-activity-registry'
 import { startNodeHttpServer } from '../../../kun/src/server/node-http-server'
 import { DirectHost } from './direct-host'
-import { emptyDirectSettings } from './direct-registry'
+import { emptyDirectSettings, type DirectSettings } from './direct-registry'
+import { directOwner, LOCAL_DIRECT_OWNER } from './direct-owner'
 import type { LinkDependencies } from './service-dependencies'
+import type { MobileLinkScope } from '../../shared/mobile-link-scopes'
 
 const hostId = '11111111-1111-4111-8111-111111111111', phone = '22222222-2222-4222-8222-222222222222'
 const socket = (url: string) => { const ws = new WebSocket(url); ws.on('error', () => {}); return ws as unknown as Socket }
 
-async function fixture() {
+async function fixture({ initialOwner = 'owner', scopes = ['personal'], iceServers = [] }: {
+  initialOwner?: string; scopes?: MobileLinkScope[]; iceServers?: DirectSettings['iceServers']
+} = {}) {
   const root = await mkdtemp(join(tmpdir(), 'kun-direct-test-')), runtime = await remoteFixture()
   const activity = new ThreadActivityRegistry(); runtime.runtime.threadActivity = activity; runtime.h.events.addObserver(activity)
   registerRemoteRoutes(runtime.router, runtime.runtime)
@@ -46,12 +50,13 @@ async function fixture() {
       const response = await fetch(baseUrl + path, { method, body, headers: { Authorization: 'Bearer token', 'Content-Type': 'application/json' } })
       return { ok: response.ok, status: response.status, body: await response.text() }
     } }) } as LinkDependencies
-  let owner: string | null = 'owner', persisted = emptyDirectSettings()
-  const direct = new DirectHost({ root, owner: () => owner, link: deps, read: async () => persisted,
-    write: async (_owner, value) => { persisted = structuredClone(value) }, validate: input => input as any })
-  await direct.configure({ enabled: true, bind: 'loopback', port: 0, addresses: [] })
+  let owner: string | null = initialOwner
+  const stores = new Map<string, DirectSettings>()
+  const direct = new DirectHost({ root, owner: () => owner, link: deps, read: async id => structuredClone(stores.get(id) ?? emptyDirectSettings()),
+    write: async (id, value) => { stores.set(id, structuredClone(value)) }, validate: input => input as any })
+  await direct.configure({ enabled: true, bind: 'loopback', port: 0, addresses: [], iceServers })
   await direct.configure({ enabled: true, bind: 'loopback', port: direct.status().port, addresses: direct.status().localAddresses })
-  const pairing = parseDirectPairing((await direct.pair(['personal'])).link)
+  const pairing = parseDirectPairing((await direct.pair(scopes)).link)
   const profile = await pairDirect(pairing, phone, socket, { name: 'Test phone' })
   const api = new DirectApi(profile, { socket })
   const frames: Frame[] = []
@@ -65,6 +70,7 @@ async function fixture() {
 it('pairs once, uses real encrypted sockets for catalog/history and pushes, and revokes the live phone without cloud calls', async () => {
   const f = await fixture()
   try {
+    await expect(f.api.request('/desktop/ice', 'POST')).rejects.toThrow()
     await expect(pairDirect(f.pairing, 'other-phone', socket)).rejects.toThrow()
     const catalog = await f.invoke('catalog.get')
     expect(catalog.capabilities).toContain(DIRECTORY_LIVE_CAPABILITY)
@@ -81,6 +87,34 @@ it('pairs once, uses real encrypted sockets for catalog/history and pushes, and 
     expect(f.cloud).not.toHaveBeenCalled()
     expect(f.direct.status().grants).toEqual([])
     expect(f.terminal.authorityChanged).toHaveBeenCalledWith(phone)
+  } finally { await f.close() }
+}, 20000)
+
+it('runs Code and Work for a guest and isolates its live connection and grants across desktop sign-in', async () => {
+  expect(directOwner({ status: 'loading', error: null, user: null })).toBeNull()
+  const guest = directOwner({ status: 'anonymous', error: null, user: null })
+  expect(guest).toBe(LOCAL_DIRECT_OWNER)
+  const iceServers = [{ urls: 'turns:turn.example.org:5349', username: 'test-phone', credential: 'test-only' }]
+  const f = await fixture({ initialOwner: guest!, scopes: ['personal', 'desktop.view'], iceServers })
+  try {
+    const code = await f.code('Guest code')
+    const work = await f.h.threads.create({ workspace: f.root, title: 'Guest work', model: 'fake', agentSurface: 'write', mode: 'agent' })
+    expect((await f.invoke('code.list')).threads.map((thread: { id: string }) => thread.id)).toContain(code.id)
+    const { spaces } = await f.invoke('work.spaces.list')
+    const { threads } = await f.invoke('work.sessions.list', { spaceId: spaces[0].id })
+    expect(threads.map((thread: { id: string }) => thread.id)).toContain(work.id)
+    const created = await f.invoke('code.create', { projectId: spaces[0].id, title: 'Paired phone draft', surface: 'work' })
+    expect(created.thread ?? created.receipt?.result?.thread).toMatchObject({ agentSurface: 'write' })
+    expect(await f.api.request('/desktop/ice', 'POST')).toMatchObject({ schemaVersion: 1, iceServers })
+    const account = directOwner({ status: 'authenticated', error: null, user: { id: 'account', name: '', email: '', avatarUrl: null } })
+    f.owner(account)
+    await f.direct.endSession(); await f.direct.restore()
+    await vi.waitFor(() => expect(f.client.online).toBe(false))
+    expect(f.direct.status()).toMatchObject({ ready: true, running: false, grants: [] })
+    f.owner(guest)
+    await f.direct.endSession(); await f.direct.restore()
+    expect(f.direct.status()).toMatchObject({ running: true, grants: [{ id: f.profile.id }] })
+    expect(f.cloud).not.toHaveBeenCalled()
   } finally { await f.close() }
 }, 20000)
 

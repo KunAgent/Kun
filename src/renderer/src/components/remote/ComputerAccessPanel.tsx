@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Monitor, RefreshCw } from 'lucide-react'
-import type { ComputerAccessStatus } from '@shared/computer-access'
+import type { ComputerAccessStatus, ComputerDevice } from '@shared/computer-access'
 import type { MobileLinkScope } from '@shared/mobile-link-scopes'
 import type { MobileLink } from './useMobileLink'
 import type { DesktopAccess } from './useDesktopAccess'
@@ -9,6 +9,17 @@ import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS, RemoteGroup } from '.
 import { computerError } from '../../computer-viewer/errors'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 
+const platformNames: Record<string, string> = { macos: 'macOS', windows: 'Windows', linux: 'Linux' }
+function deviceStatus(device: ComputerDevice, zh: boolean) {
+  if (!device.supported) return zh ? '需更新对端 Kun' : 'Host update needed'
+  if (!device.enabled) return zh ? '对端未开启桌面访问' : 'Host access is off'
+  if (device.readiness === 'permission') return zh ? '需在对端允许屏幕共享' : 'Screen permission needed'
+  if (device.online === false) return zh ? '离线' : 'Offline'
+  if (device.online === null) return zh ? '在线状态待确认' : 'Presence unknown'
+  if (device.readiness === 'game') return zh ? '在线 · 支持游戏串流' : 'Online · game streaming'
+  return zh ? '在线' : 'Online'
+}
+
 export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLink; desktop: DesktopAccess; onBack(): void }) {
   const api = link.api?.computers, zh = link.zh, owner = link.account.state.user?.id
   const [tab, setTab] = useState<'connect' | 'host'>('connect')
@@ -16,15 +27,21 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
   const [error, setError] = useState(''), [notice, setNotice] = useState(''), [busy, setBusy] = useState(false)
   const [connectingId, setConnectingId] = useState<string>()
   const [choices, setChoices] = useState<Record<string, boolean>>({})
-  const generation = useRef(0), inFlight = useRef(false)
+  const generation = useRef(0), inFlight = useRef(false), actionVersion = useRef(0)
   useEffect(() => {
     const current = ++generation.current
-    setValue(undefined); setError(''); setNotice('')
+    setValue(undefined); setError(''); setNotice(''); setBusy(false); setConnectingId(undefined)
     if (!api || !link.signedIn) return
+    let polling = false
     const refresh = async () => {
-      if (inFlight.current) return
-      try { const next = await (link.computerAllowed ? api.refresh() : api.status()); if (generation.current === current) { setValue(next); setError('') } }
-      catch (failure) { if (generation.current === current) setError(computerError(failure, zh)) }
+      if (inFlight.current || polling) return
+      polling = true
+      const version = actionVersion.current
+      try {
+        const next = await (link.computerAllowed ? api.refresh() : api.status())
+        if (generation.current === current && actionVersion.current === version) { setValue(next); setError('') }
+      } catch (failure) { if (generation.current === current && actionVersion.current === version) setError(computerError(failure, zh)) }
+      finally { polling = false }
     }
     void refresh()
     const timer = setInterval(() => void refresh(), 5000)
@@ -33,7 +50,7 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
   async function run(action: () => Promise<unknown>, message = '') {
     if (inFlight.current) return
     const current = generation.current
-    inFlight.current = true; setBusy(true); setError(''); setNotice('')
+    ++actionVersion.current; inFlight.current = true; setBusy(true); setError(''); setNotice('')
     try {
       await action()
       if (api) { const next = await api.status(); if (current === generation.current) setValue(next) }
@@ -68,20 +85,26 @@ export function ComputerAccessPanel({ link, desktop, onBack }: { link: MobileLin
       </button>
     </div></RemoteGroup> : null}
     {tab === 'connect' ? <>
-      <p className="text-[12px] text-ds-muted">{zh ? '同账号电脑 开启「允许访问本机」后即可直接连接，无需在对端再次确认。连接后先查看，再接管键鼠。' : 'Enable access on a computer on the same account, then connect without another approval. View first, then take control.'}</p>
-      <button type="button" className={`${REMOTE_BUTTON_CLASS} self-start`} disabled={!api || !link.signedIn || !link.computerAllowed || busy} onClick={() => void run(() => api!.refresh())}><RefreshCw size={13} />{zh ? '刷新电脑' : 'Refresh'}</button>
-      {value?.devices.map(device => <RemoteGroup key={device.id}><div className="space-y-2 p-3">
-        <div className="flex items-center gap-2"><Monitor size={16} /><span className="min-w-0 break-words text-[13px] font-medium text-ds-ink">{device.name}</span></div>
-        <p className="text-[12px] text-ds-muted">{device.platform} · {!device.enabled || !device.supported ? zh ? '对端未开启桌面访问' : 'Host access is off' : device.online !== true ? zh ? '离线或状态未知' : 'Offline or unknown' : device.readiness === 'permission' ? zh ? '需在对端授权屏幕共享' : 'Host permission needed' : device.readiness === 'game' ? zh ? '可连接 · 支持游戏模式' : 'Ready · game streaming available' : zh ? '在线 · 可连接' : 'Online · Ready to connect'}</p>
-        <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={busy || Boolean(value.active) || !device.supported || !device.enabled || device.readiness === 'permission' || device.online !== true || !link.computerAllowed}
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[13px] font-medium text-ds-ink">{zh ? '同账号电脑' : 'Your computers'}</span>
+        <button type="button" className={REMOTE_BUTTON_CLASS} disabled={!api || !link.signedIn || !link.computerAllowed || busy} onClick={() => void run(() => api!.refresh())}><RefreshCw size={13} />{zh ? '刷新' : 'Refresh'}</button>
+      </div>
+      {!value && link.signedIn && link.computerAllowed && !error ? <p role="status" className="text-[12px] text-ds-muted">{zh ? '正在查找电脑…' : 'Finding computers…'}</p> : null}
+      {value?.devices.map(device => <RemoteGroup key={device.id}><div className="flex flex-wrap items-center gap-3 p-3">
+        <Monitor size={19} aria-hidden="true" className="shrink-0 text-ds-muted" />
+        <div className="min-w-0 flex-1">
+          <div className="break-words text-[13px] font-medium text-ds-ink">{device.name}</div>
+          <p className="text-[12px] text-ds-muted">{platformNames[device.platform] ?? device.platform} · {deviceStatus(device, zh)}</p>
+        </div>
+        <button type="button" className={REMOTE_PRIMARY_BUTTON_CLASS} disabled={busy || Boolean(value.active) || !device.supported || !device.enabled || device.readiness === 'permission' || device.online === false || !link.computerAllowed}
           onClick={event => runTrustedUserActivation(event, () => {
             setConnectingId(device.id)
             void run(() => api!.open(device.id)).finally(() => setConnectingId(undefined))
           })}>
-          {connectingId === device.id ? zh ? '连接中…' : 'Connecting…' : zh ? '连接桌面' : 'Open desktop'}
+          {connectingId === device.id ? zh ? '连接中…' : 'Connecting…' : device.online === null ? zh ? '尝试连接' : 'Try connection' : zh ? '连接桌面' : 'Open desktop'}
         </button>
       </div></RemoteGroup>)}
-      {value && !value.devices.length ? <p className="text-[12px] text-ds-muted">{zh ? '请在另一台电脑 登录相同账号，并打开「允许访问本机」。' : 'Sign in on another computer and enable access there.'}</p> : null}
+      {value && !value.devices.length && link.computerAllowed ? <p className="text-[12px] text-ds-muted">{zh ? '请在另一台电脑登录同一账号，并开启「允许访问本机」。' : 'Sign in on another computer and enable access there.'}</p> : null}
     </> : <>
       <RemoteGroup><div className="space-y-2 p-3"><div className="flex items-center gap-2"><span className="flex-1 text-[13px] text-ds-ink">{zh ? '允许桌面访问' : 'Allow desktop access'}</span>
         <button type="button" className={REMOTE_BUTTON_CLASS} disabled={!api || !link.signedIn || busy || (!hosting && !link.computerAllowed)} onClick={event => runTrustedUserActivation(event, () => { void run(() => api!.enableHost(!hosting)) })}>{hosting ? zh ? '关闭' : 'Turn off' : zh ? '开启' : 'Turn on'}</button>

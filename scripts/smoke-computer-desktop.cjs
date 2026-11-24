@@ -14,6 +14,13 @@ const privacy = dropConnection || process.argv.includes('--privacy')
 const windowsPrivacy = privacy && process.platform === 'win32'
 if (windowsPrivacy) assert.ok(process.argv.includes('--disposable-windows-desktop'), 'The Windows display smoke needs a dedicated disposable desktop')
 const requireGameTarget = process.argv.includes('--require-game-target')
+const testFullscreen = process.argv.includes('--viewer-fullscreen')
+const testRelay = process.argv.includes('--viewer-relay')
+const testViewer = testFullscreen || testRelay || process.argv.includes('--viewer')
+const controlIndex = process.argv.indexOf('--control-dir')
+const turnPort = Number(process.env.KUN_FIXTURE_TURN_PORT || 0)
+assert.ok(Number.isInteger(turnPort) && turnPort >= 0 && turnPort <= 65535, 'Invalid local TURN fixture port')
+if (testRelay) assert.ok(turnPort, 'Set KUN_FIXTURE_TURN_PORT to the loopback test relay port')
 if (requireGameTarget && duration !== 600) throw Error('The presentation gate requires --measure-seconds 600')
 const root = resolve(__dirname, '..'), temporary = mkdtempSync(join(tmpdir(), 'kun-computer-desktop-'))
 async function main() {
@@ -28,7 +35,8 @@ async function main() {
       const preloads = windowsPrivacy ? ['remote-desktop-capture'] : ['remote-desktop-capture', 'remote-desktop-indicator']
       for (const name of preloads) copyFileSync(join(root,'out/preload',name+'.cjs'),join(temporary,'out/preload',name+'.cjs'))
     }
-    cpSync(join(root,'node_modules/@kun/control-runtime/baselines',process.platform+'-'+process.arch),join(temporary,'control'),{recursive:true})
+    const control = controlIndex < 0 ? join(root,'node_modules/@kun/control-runtime/baselines',process.platform+'-'+process.arch) : resolve(process.argv[controlIndex + 1])
+    cpSync(control, join(temporary,'control'), { recursive: true })
     const helper = process.platform === 'linux' ? 'linux-desktop' : process.platform === 'win32' ? 'remote-desktop-input.exe' : 'remote-desktop-input'
     cpSync(join(root,'resources/native',helper),join(temporary,'resources/native',helper),{recursive:true})
     if (windowsPrivacy) {
@@ -53,29 +61,18 @@ async function main() {
     }
     writeFileSync(join(temporary,'package.json'),JSON.stringify({name:'kun-computer-desktop-fixture',version:'1.0.0',main:'main.cjs'}))
     writeFileSync(join(temporary,'receiver.html'),'<!doctype html><meta charset="utf-8"><title>Computer desktop fixture</title><video autoplay muted width="640" height="400"></video><script src="receiver.js"></script>')
-    writeFileSync(join(temporary,'receiver-preload.cjs'), `const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('fixture',{
+    if (testViewer) {
+      copyFileSync(join(root, 'out/preload/remote-desktop-viewer.cjs'), join(temporary, 'receiver-preload.cjs'))
+    } else writeFileSync(join(temporary,'receiver-preload.cjs'), `const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('fixture',{
       invoke:(method,params)=>ipcRenderer.invoke('fixture:invoke',method,params),
       events:listener=>{const f=(_,value)=>listener(value);ipcRenderer.on('fixture:event',f);return()=>ipcRenderer.removeListener('fixture:event',f)},
       privacy:${privacy},dropConnection:${dropConnection},localColor:value=>ipcRenderer.invoke('fixture:local-color',value),
       measureSeconds:${duration},gaming:${Boolean(duration || process.argv.includes('--game'))},senderStats:()=>ipcRenderer.invoke('fixture:sender-stats'),stats:()=>ipcRenderer.invoke('fixture:stats'),complete:value=>ipcRenderer.send('fixture:complete',value),fail:value=>ipcRenderer.send('fixture:fail',value)
     })`)
-    if (process.argv.includes('--viewer')) {
-      const { appendFileSync } = require('node:fs')
-      appendFileSync(join(temporary,'receiver-preload.cjs'), `
-        const config={hostId:'fixture-host',name:'Test computer',gameSupported:true};
-        contextBridge.exposeInMainWorld('kunComputerViewer',{
-          configuration:async()=>config,ready:()=>{},ice:async()=>({schemaVersion:1,iceServers:[],expiresAt:Date.now()+600000}),
-          invoke:(method,params)=>ipcRenderer.invoke('fixture:invoke',method,params),
-          restart:async()=>{await ipcRenderer.invoke('fixture:restart');return config},
-          onEvent:listener=>{ipcRenderer.on('fixture:event',(_,value)=>listener({type:'desktop',value}));
-            ipcRenderer.on('fixture:lease',()=>listener({type:'lease',validForMs:1500}));return()=>{}},
-          heartbeat:()=>ipcRenderer.send('fixture:heartbeat'),close:async()=>{},fullscreen:async()=>false
-        })`)
-    }
     await build({entryPoints:[join(__dirname,'fixtures/computer-desktop-main.ts')],bundle:true,platform:'node',format:'cjs',external:['electron'],outfile:join(temporary,'main.cjs')})
     await build({entryPoints:[join(__dirname,'fixtures/computer-desktop-receiver.ts')],bundle:true,platform:'browser',format:'iife',target:'chrome128',outfile:join(temporary,'receiver.js')})
-    const env={...process.env,KUN_FIXTURE_DISPOSABLE_WINDOWS:windowsPrivacy?'1':'0',KUN_FIXTURE_PRIVACY:privacy?'1':'0',KUN_FIXTURE_SECONDS:String(duration),KUN_FIXTURE_VIEWER:process.argv.includes('--viewer')?'1':'0',KUN_FIXTURE_GAME:(duration||process.argv.includes('--viewer')||process.argv.includes('--game'))?'1':'0',KUN_FIXTURE_PORTAL:process.argv.includes('--portal')?'1':'0'};delete env.ELECTRON_RUN_AS_NODE;delete env.ELECTRON_RENDERER_URL
-    const result=spawnSync(require('electron'),[temporary],{env,encoding:'utf8',timeout:duration*1000+(process.argv.includes('--viewer')?60000:40000)})
+    const env={...process.env,KUN_FIXTURE_DISPOSABLE_WINDOWS:windowsPrivacy?'1':'0',KUN_FIXTURE_PRIVACY:privacy?'1':'0',KUN_FIXTURE_SECONDS:String(duration),KUN_FIXTURE_VIEWER:testViewer?'1':'0',KUN_FIXTURE_FULLSCREEN:testFullscreen?'1':'0',KUN_FIXTURE_RELAY:testRelay?'1':'0',KUN_FIXTURE_GAME:(duration||testViewer||process.argv.includes('--game'))?'1':'0',KUN_FIXTURE_PORTAL:process.argv.includes('--portal')?'1':'0'};delete env.ELECTRON_RUN_AS_NODE;delete env.ELECTRON_RENDERER_URL
+    const result=spawnSync(require('electron'),[temporary],{env,encoding:'utf8',timeout:duration*1000+(testViewer?60000:40000)})
     process.stdout.write(result.stdout||'');process.stderr.write(result.stderr||'')
     if(result.error)throw result.error
     assert.equal(result.status,0,'Computer desktop media/control smoke failed')

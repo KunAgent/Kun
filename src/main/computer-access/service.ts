@@ -20,7 +20,7 @@ type Dependencies = {
   gate?: DesktopActivityGate
   event?(value: ComputerViewerEvent): void
 }
-type Active = { hostId: string; name: string; phase: 'opening' | 'connected' | 'closing' | 'unconfirmed'; pairing?: boolean; gameSupported?: boolean; startId?: string; session?: DesktopSession; generation: number }
+type Active = { hostId: string; name: string; phase: 'opening' | 'connected' | 'closing' | 'unconfirmed'; pairing?: boolean; preflight?: boolean; gameSupported?: boolean; startId?: string; session?: DesktopSession; generation: number }
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(value)
 
 /** The trusted controller owns credentials and the stop record even after its viewer is destroyed. */
@@ -99,7 +99,7 @@ export class ComputerAccessService {
         state: (online, reason) => {
           if (generation !== this.generation) return
           this.error = online ? undefined : reason
-          if (!online && this.active && !this.active.pairing && !['closing', 'unconfirmed'].includes(this.active.phase)) void this.close('signaling_lost')
+          if (!online && this.active && !this.active.preflight && !['closing', 'unconfirmed'].includes(this.active.phase)) void this.close('signaling_lost')
         },
         frame: frame => {
           const active = this.active
@@ -136,9 +136,10 @@ export class ComputerAccessService {
     // A successful authenticated directory read proves repaired membership/device access.
     // Socket replacement remains terminal until an explicit application restart.
     if (!this.client?.online) {
-      if (this.error === 'VIP_REQUIRED' || this.error === 'AUTHORIZATION_REJECTED' && this.devices.some(device => Boolean(device.grantId)))
+      if (this.error === 'VIP_REQUIRED' || this.error === 'AUTHORIZATION_REJECTED' && this.devices.some(device => Boolean(device.grantId))) {
+        this.error = undefined
         this.client?.start()
-      else if (this.error !== 'SOCKET_CLOSED_4409') this.client?.resume()
+      } else if (this.error !== 'SOCKET_CLOSED_4409') this.client?.resume()
     }
     return this.status()
   }
@@ -146,7 +147,8 @@ export class ComputerAccessService {
     if (!uuid(id)) throw Error('INVALID_REQUEST')
     const device = this.devices.find(item => item.id === id)
     if (!device || !isDesktopPlatform(device.platform) || !device.supported) throw Error('COMPUTER_HOST_UPDATE_REQUIRED')
-    if (!device.enabled || device.online !== true) throw Error('DEVICE_OFFLINE')
+    if (!device.enabled) throw Error('DESKTOP_DISABLED')
+    if (device.online === false) throw Error('DEVICE_OFFLINE')
     return device
   }
   async pair(hostId: string) {
@@ -155,13 +157,51 @@ export class ComputerAccessService {
     await this.api!.request('/desktop/pairings', 'POST', { hostId })
     return this.refresh()
   }
+  private async waitForAccess(active: Active) {
+    const waitingForGrant = active.pairing === true
+    const deadline = Date.now() + 20000
+    let grantReady = !waitingForGrant, checkedRejectedTicket = false, delay = 250
+    if (waitingForGrant) await this.api!.request('/desktop/pairings', 'POST', { hostId: active.hostId })
+    // Only retry discovery and the read-only capability probe. Session creation and input
+    // have their own explicit authorization and never get replayed here.
+    for (;;) {
+      this.current(active.generation)
+      if (this.active !== active || active.phase !== 'opening') throw Error('DESKTOP_SESSION_EXPIRED')
+      if (this.error === 'SOCKET_CLOSED_4409') throw Error('DESKTOP_CONTROLLER_REPLACED')
+      if (!grantReady) {
+        await this.refresh()
+        grantReady = Boolean(this.devices.find(device => device.id === active.hostId)?.grantId)
+      } else if (!this.client?.online && this.error === 'AUTHORIZATION_REJECTED') {
+        // A ticket requested before pairing can be denied after the grant first appears.
+        if (checkedRejectedTicket) throw Error('AUTHORIZATION_REQUIRED')
+        checkedRejectedTicket = true
+        const status = await this.refresh()
+        if (!status.devices.find(device => device.id === active.hostId)?.grantId) throw Error('AUTHORIZATION_REQUIRED')
+      }
+      if (this.active !== active) throw Error('DESKTOP_SESSION_EXPIRED')
+      const remaining = deadline - Date.now()
+      if (remaining <= 0) throw Error(waitingForGrant ? 'AUTHORIZATION_NOT_READY' : 'DEVICE_OFFLINE')
+      if (grantReady && this.client?.online) {
+        try {
+          const access = await this.invoke('desktop.access.get', {}, Math.min(4000, remaining))
+          if (!waitingForGrant || access.viewAllowed) return access
+        } catch (error) {
+          const code = error instanceof Error ? error.message : ''
+          if (!(waitingForGrant && code === 'REMOTE_SCOPE_REQUIRED') &&
+              !['DEVICE_OFFLINE', 'RESULT_UNKNOWN', 'REQUEST_TIMEOUT', 'DESKTOP_SESSION_EXPIRED'].includes(code)) throw error
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, Math.min(delay, deadline - Date.now()))))
+      delay = Math.min(1500, delay * 2)
+    }
+  }
   async open(hostId: string) {
     await this.refresh()
     await this.requireMax(true)
     if (this.active) throw Error(this.active.phase === 'unconfirmed' ? 'DESKTOP_CLEANUP_UNCONFIRMED' : 'DESKTOP_BUSY')
     const device = this.device(hostId)
     this.gate.claim(this.gateKey, 'outgoing')
-    const active: Active = { hostId, name: device.name, phase: 'opening', pairing: !device.grantId, generation: this.generation }
+    const active: Active = { hostId, name: device.name, phase: 'opening', pairing: !device.grantId, preflight: true, generation: this.generation }
     this.active = active; this.closing = undefined
     this.membershipTimer = setInterval(() => {
       if (!this.active || ['closing', 'unconfirmed'].includes(this.active.phase)) return
@@ -170,42 +210,9 @@ export class ComputerAccessService {
     }, 1000)
     this.membershipTimer.unref?.()
     try {
-      let validated: DesktopResults['desktop.access.get'] | undefined
-      if (active.pairing) {
-        await this.api!.request('/desktop/pairings', 'POST', { hostId })
-        // Grant creation rotates relay authority. Wait for both hosts to observe it, without
-        // replaying any session start or input; only this read-only preflight may be retried.
-        const deadline = Date.now() + 20000
-        for (;;) {
-          this.current(active.generation)
-          if (this.active !== active || active.phase !== 'opening') throw Error('DESKTOP_SESSION_EXPIRED')
-          await this.refresh()
-          if (this.devices.find(item => item.id === hostId)?.grantId && this.client?.online) {
-            try {
-              const probe = await this.invoke('desktop.access.get', {}, Math.max(500, Math.min(2000, deadline - Date.now())))
-              if (probe.viewAllowed) { validated = probe; break }
-            } catch (error) {
-              const code = error instanceof Error ? error.message : ''
-              if (!['REMOTE_SCOPE_REQUIRED', 'DESKTOP_SESSION_EXPIRED', 'DEVICE_OFFLINE', 'RESULT_UNKNOWN', 'REQUEST_TIMEOUT'].includes(code)) throw error
-            }
-          }
-          if (Date.now() >= deadline) throw Error('AUTHORIZATION_NOT_READY')
-          await new Promise(resolve => setTimeout(resolve, 250))
-        }
-        active.pairing = false
-        if (!this.client?.online) throw Error('DEVICE_OFFLINE')
-      } else if (!this.client?.online) {
-        if (this.error === 'SOCKET_CLOSED_4409') throw Error('DEVICE_OFFLINE')
-        this.client?.resume()
-        const deadline = Date.now() + 5000
-        while (!this.client?.online) {
-          this.current(active.generation)
-          if (this.active !== active || active.phase !== 'opening') throw Error('DESKTOP_SESSION_EXPIRED')
-          if (Date.now() >= deadline) throw Error('DEVICE_OFFLINE')
-          await new Promise(resolve => setTimeout(resolve, 100))
-        }
-      }
-      const access = validated ?? await this.invoke('desktop.access.get', {})
+      const access = await this.waitForAccess(active)
+      if (this.active !== active || !this.client?.online) throw Error('DEVICE_OFFLINE')
+      active.pairing = active.preflight = false
       if (!access.capabilities.includes(DESKTOP_DEVICE_CAPABILITY) || !access.capabilities.includes(DESKTOP_SCOPED_CAPABILITY)) throw Error('COMPUTER_HOST_UPDATE_REQUIRED')
       if (!access.enabled) throw Error('DESKTOP_DISABLED')
       if (!access.viewAllowed) throw Error('DESKTOP_VIEW_REQUIRED')

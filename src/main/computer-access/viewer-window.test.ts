@@ -6,9 +6,12 @@ vi.mock('electron', async () => {
   class Window extends EventEmitter {
     webContents = Object.assign(new EventEmitter(), {send: vi.fn(), mainFrame: {url: 'file:///verified/release/viewer/index.html'}})
     destroyed = false
+    full = false
+    setFullScreen = vi.fn()
     constructor() { super(); h.windows.push(this) }
     destroy() { this.destroyed = true; this.emit('closed') }
     isDestroyed() { return this.destroyed }
+    isFullScreen() { return this.full }
     show() {}
   }
   return { app: {getAppPath: () => '/app'}, BrowserWindow: Window,
@@ -56,6 +59,36 @@ it('releases the package after an unexpected native window destruction even with
   await viewer!.open('host')
   h.windows[0].destroy()
   await vi.waitFor(() => expect(pauseControlAdmission()).toBe(true))
+})
+it('waits for native fullscreen, coalesces clicks and follows an exit performed through system controls', async () => {
+  fixture(); await viewer!.open('host')
+  const window = h.windows[0], contents = window.webContents
+  const toggle = (active?: boolean) => h.handlers.get('computer-viewer:fullscreen')!({sender:contents,senderFrame:contents.mainFrame}, active)
+  const enter = toggle(true)
+  expect(toggle(true)).toBe(enter)
+  expect(window.setFullScreen).toHaveBeenCalledExactlyOnceWith(true)
+  window.full = true; window.emit('enter-full-screen')
+  await expect(enter).resolves.toBe(true)
+  window.full = false; window.emit('leave-full-screen')
+  expect(contents.send).toHaveBeenLastCalledWith('computer-viewer:event', {type:'fullscreen',active:false})
+  const again = toggle()
+  expect(window.setFullScreen).toHaveBeenLastCalledWith(true)
+  window.destroy()
+  await expect(again).rejects.toThrow('DESKTOP_CANCELLED')
+})
+it('reports a native fullscreen transition that never completed and allows another request', async () => {
+  fixture(); await viewer!.open('host')
+  const window = h.windows[0], contents = window.webContents
+  vi.useFakeTimers()
+  try {
+    const finished = h.handlers.get('computer-viewer:fullscreen')!({sender:contents,senderFrame:contents.mainFrame}, true)
+    const rejected = expect(finished).rejects.toThrow('DESKTOP_FULLSCREEN_FAILED')
+    await vi.advanceTimersByTimeAsync(4500)
+    await rejected
+    const retry = h.handlers.get('computer-viewer:fullscreen')!({sender:contents,senderFrame:contents.mainFrame}, true)
+    window.full = true; window.emit('enter-full-screen')
+    await expect(retry).resolves.toBe(true)
+  } finally { vi.useRealTimers() }
 })
 it.each(['window_close', 'authority_close'])('fences a pending display restart after %s before releasing the package', async reason => {
   const service = fixture()

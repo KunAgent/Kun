@@ -23,6 +23,7 @@ export class DirectHost {
   private settings = emptyDirectSettings()
   private ownerId?: string
   private generation = 0
+  private session = 0
   private queue = Promise.resolve()
   private error?: string
   private virtualSupported = false
@@ -31,30 +32,36 @@ export class DirectHost {
   private serial<T>(run: () => Promise<T>): Promise<T> {
     const task = this.queue.then(run); this.queue = task.then(() => {}, () => {}); return task
   }
-  restore() { return this.serial(async () => {
-    const owner = this.deps.owner()
-    if (!owner || owner === this.ownerId) return
-    await this.stop()
-    const value = await this.deps.read(owner)
-    if (this.deps.owner() !== owner) return
-    this.ownerId = owner; this.settings = value
-    if (value.enabled) await this.start(owner)
-  }) }
-  configure(input: unknown) {
-    const requestedOwner = this.deps.owner()
+  restore() {
+    const owner = this.deps.owner(), session = this.session
     return this.serial(async () => {
-    if (requestedOwner !== this.deps.owner()) throw Error('ACCOUNT_CHANGED')
-    const value = this.deps.validate(input), owner = requestedOwner
-    if (!owner) throw Error('LOGIN_REQUIRED')
-    if (owner !== this.ownerId) { await this.stop(); this.settings = await this.deps.read(owner); this.ownerId = owner }
-    if (this.deps.owner() !== owner) throw Error('ACCOUNT_CHANGED')
-    await this.stop()
-    this.settings = { ...this.settings, ...value, iceServers: value.iceServers ?? this.settings.iceServers }
-    await this.deps.write(owner, this.settings)
-    if (this.deps.owner() !== owner) throw Error('ACCOUNT_CHANGED')
-    if (value.enabled) await this.start(owner)
-    return this.status()
-  }) }
+      if (!owner || session !== this.session || owner !== this.deps.owner() || owner === this.ownerId) return
+      await this.stop()
+      const value = await this.deps.read(owner)
+      if (session !== this.session || this.deps.owner() !== owner) return
+      this.ownerId = owner; this.settings = value
+      if (value.enabled) await this.start(owner)
+    })
+  }
+  configure(input: unknown) {
+    const owner = this.deps.owner(), session = this.session
+    const assertSession = () => { if (session !== this.session || owner !== this.deps.owner()) throw Error('ACCOUNT_CHANGED') }
+    return this.serial(async () => {
+      assertSession()
+      const value = this.deps.validate(input)
+      if (!owner) throw Error('DIRECT_PROFILE_UNAVAILABLE')
+      await this.stop()
+      assertSession()
+      const settings = owner === this.ownerId ? this.settings : await this.deps.read(owner)
+      assertSession()
+      const next = { ...settings, ...value, iceServers: value.iceServers ?? settings.iceServers }
+      await this.deps.write(owner, next)
+      assertSession()
+      this.settings = next; this.ownerId = owner
+      if (value.enabled) await this.start(owner)
+      return this.status()
+    })
+  }
   private async start(owner: string) {
     const generation = ++this.generation
     const identity = await this.deps.link.identity(owner)
@@ -126,7 +133,8 @@ export class DirectHost {
     const registry = this.registry, owner = this.ownerId
     if (!registry || !this.server?.listening || owner !== this.deps.owner()) throw Error('DIRECT_NOT_RUNNING')
     if (this.settings.bind === 'loopback' && !this.settings.addresses.length) throw Error('DIRECT_ADDRESS_REQUIRED')
-    const addresses = [...new Set([...this.settings.addresses, ...this.status().localAddresses])].slice(0, 6)
+    const local = this.settings.bind === 'lan' ? this.status().localAddresses : []
+    const addresses = [...new Set([...this.settings.addresses, ...local])].slice(0, 6)
     const link = registry.pair(addresses, scopes)
     if (parseDirectPairing(link).expiresAt <= Date.now()) throw Error('DIRECT_PAIRING_EXPIRED')
     if (scopes === undefined || JSON.stringify(scopes).includes('desktop.view')) {
@@ -166,5 +174,10 @@ export class DirectHost {
     await this.deps.link.terminal?.stopAll('host_stopped').catch(() => {})
     await this.deps.link.simulator?.stopAll().catch(() => {})
   }
-  async endSession() { this.ownerId = undefined; await this.stop(); this.settings = emptyDirectSettings() }
+  endSession() {
+    ++this.session
+    ++this.generation
+    this.ownerId = undefined
+    return this.serial(async () => { await this.stop(); this.settings = emptyDirectSettings() })
+  }
 }

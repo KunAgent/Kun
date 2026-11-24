@@ -1,4 +1,5 @@
 const messages: Record<string, string> = {
+  DESKTOP_CONTROLLER_REPLACED: '本机的连接已被另一个 Kun 实例替换。请关闭多余的实例后重新打开 Kun。',
   vip_computer_remote_required: '电脑与电脑远程桌面仅限有效 Max 会员，请升级或续费 Max 后重新连接。',
   ENTITLEMENTS_UNAVAILABLE: '暂时无法确认 Max 会员权益，请刷新会员状态后重试。',
   DESKTOP_GAME_UNAVAILABLE: '请在被控电脑开启「游戏串流」，并更新两端的 Kun 和控制包。',

@@ -15,8 +15,8 @@ beforeEach(async()=>{
 })
 afterEach(async()=>{await act(async()=>root.unmount());container.remove()})
 const button=(text:string)=>[...container.querySelectorAll('button')].find(b=>b.textContent===text)!
-async function render(allowed:boolean,hosting=false,paired=true){
-  const device={...pc,grantId:paired?pc.grantId:null}
+async function render(allowed:boolean,hosting=false,paired=true,online:boolean|null=true){
+  const device={...pc,online,grantId:paired?pc.grantId:null}
   const api={status:vi.fn(async()=>({supported:true,online:true,devices:[device]})),refresh:vi.fn(async()=>({supported:true,online:true,devices:[device]})),open:vi.fn(),pair:vi.fn(),enableHost:vi.fn(),close:vi.fn(),confirmClosed:vi.fn()}
   const link={api:{computers:api,confirm:vi.fn(),setScopes:vi.fn(),revoke:vi.fn()},zh:false,signedIn:true,account:{state:{user:{id:'owner'}}},mobileAllowed:true,computerAllowed:allowed,
     computerMembershipState:allowed?'active':'maxRequired',refreshMembership:vi.fn(),state:{computerAccess:hosting,pairings:[],grants:[]}} as unknown as MobileLink
@@ -32,7 +32,7 @@ it('Plus/Pro phone eligibility never unlocks computer discovery or connection',a
 })
 it('unpaired computers connect directly with progress instead of a request-and-approve step',async()=>{
   const api=await render(true,false,false)
-  expect(container.textContent).toContain('Ready to connect')
+  expect(container.textContent).toContain('macOS · Online')
   expect(container.textContent).not.toContain('Request access')
   let resolve!:()=>void
   api.open.mockImplementation(()=>new Promise<void>(done=>{resolve=done}))
@@ -43,6 +43,13 @@ it('unpaired computers connect directly with progress instead of a request-and-a
   await act(async()=>resolve())
   expect(button('Open desktop').disabled).toBe(false)
   expect(container.textContent).not.toContain('Request sent')
+})
+it('offers a reachability check for unknown presence and disables confirmed offline devices',async()=>{
+  const api=await render(true,false,true,null)
+  await act(async()=>button('Try connection').click())
+  expect(api.open).toHaveBeenCalledExactlyOnceWith('mac')
+  await render(true,false,true,false)
+  expect(button('Open desktop').disabled).toBe(true)
 })
 it('Max can connect, while losing Max still permits turning existing hosting off',async()=>{
   const api=await render(true)

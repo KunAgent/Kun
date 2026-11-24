@@ -10,6 +10,7 @@ import { markProtectedWindowContents } from '../protected-window-contents'
 import type { ComputerAccessService } from './service'
 import { controlRuntimeHost } from '../control-host/runtime-host'
 import { loadControlViewer, secureControlViewer } from '../control-host/viewer-resources'
+import { bindViewerFullscreen } from './fullscreen'
 
 /** No workbench bridge, account credentials, permission grants or arbitrary navigation. */
 export class ComputerViewerWindow {
@@ -25,8 +26,12 @@ export class ComputerViewerWindow {
   private controlling = false
   private privacyWatch?: ChildProcess
   private releasePackage?: () => void
+  private toggleFullscreen?: (active?: boolean) => Promise<boolean>
   constructor(private readonly service: ComputerAccessService) {
-    ipcMain.handle(channels.configuration, event => { this.require(event); return service.configuration() })
+    ipcMain.handle(channels.configuration, event => {
+      this.require(event)
+      return { ...service.configuration(), fullscreen: this.window!.isFullScreen() }
+    })
     ipcMain.handle(channels.invoke, async (event, method, params) => {
       this.require(event)
       if (method === 'desktop.control.acquire' && !this.window?.isFocused()) throw Error('DESKTOP_WINDOW_INACTIVE')
@@ -43,8 +48,10 @@ export class ComputerViewerWindow {
     ipcMain.handle(channels.ice, event => { this.require(event); return service.ice() })
     ipcMain.handle(channels.restart, event => { this.require(event); return this.restart() })
     ipcMain.handle(channels.close, event => { this.require(event); return this.close('user_ended') })
-    ipcMain.handle(channels.fullscreen, event => {
-      this.require(event); const window = this.window!; window.setFullScreen(!window.isFullScreen()); return window.isFullScreen()
+    ipcMain.handle(channels.fullscreen, (event, active?: boolean) => {
+      this.require(event)
+      if (active !== undefined && typeof active !== 'boolean') throw Error('INVALID_REQUEST')
+      return this.toggleFullscreen!(active)
     })
     ipcMain.on(channels.heartbeat, this.heartbeat)
     powerMonitor.on('lock-screen', this.inactive)
@@ -88,7 +95,7 @@ export class ComputerViewerWindow {
       this.controlling = this.gameSession = false
       const watch = this.privacyWatch; this.privacyWatch = undefined; watch?.stdin?.end()
       ++this.generation
-      clearInterval(this.timer); this.timer = undefined; this.window = undefined
+      clearInterval(this.timer); this.timer = undefined; this.window = undefined; this.toggleFullscreen = undefined
       if (window && !window.isDestroyed()) window.destroy()
       if (!this.opening) { this.releasePackage?.(); this.releasePackage = undefined }
     }
@@ -97,7 +104,7 @@ export class ComputerViewerWindow {
     if (this.disposed || this.opening) throw Error('DESKTOP_BUSY')
     if (this.window && !this.window.isDestroyed()) {
       if (this.service.status().active) throw Error('DESKTOP_BUSY')
-      const ended = this.window; this.window = undefined
+      const ended = this.window; this.window = undefined; this.toggleFullscreen = undefined
       clearInterval(this.timer); this.timer = undefined; ended.destroy()
       this.releasePackage?.(); this.releasePackage = undefined
     }
@@ -115,6 +122,9 @@ export class ComputerViewerWindow {
         webPreferences: { preload: resolveNamedPreloadPath(appPath, 'remote-desktop-viewer'), partition: 'kun-viewer-' + randomUUID(),
           sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false, autoplayPolicy: 'no-user-gesture-required' } })
       this.window = window
+      this.toggleFullscreen = bindViewerFullscreen(window, active => {
+        if (this.window === window && !window.isDestroyed()) window.webContents.send(channels.event, { type: 'fullscreen', active })
+      })
       if (process.platform === 'linux') {
         const watch = spawn(desktopHelperPath(), ['--watch-session'], { stdio: ['pipe', 'ignore', 'ignore'] })
         this.privacyWatch = watch
@@ -151,7 +161,7 @@ export class ComputerViewerWindow {
     const releasePackage = this.releasePackage
     clearInterval(this.timer); this.timer = undefined
     const stopping = this.service.close(reason)
-    const window = this.window; this.window = undefined
+    const window = this.window; this.window = undefined; this.toggleFullscreen = undefined
     if (window && !window.isDestroyed()) window.destroy()
     await stopping
     if (!this.opening && this.releasePackage === releasePackage) { releasePackage?.(); this.releasePackage = undefined }

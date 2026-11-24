@@ -7,7 +7,7 @@ import type { LinkDependencies } from './service-dependencies'
 import type { RegisterAppIpcHandlersOptions } from '../ipc/app-ipc-handler-options'
 import { assertTrustedWorkbenchSender } from '../ipc/app-ipc-handler-utils'
 import { DIRECT_LINK_CHANNELS as channels } from '../../shared/direct-link'
-import { hasKunAccountSession } from '../../shared/kun-account'
+import { directOwner } from './direct-owner'
 import { createDesktopEngine } from '../remote-desktop/engine'
 import { createTerminalEngine } from '../remote-terminal/engine'
 import { createRuntimeOriginWorkspace } from './terminal-origin'
@@ -40,20 +40,25 @@ export function registerDirectLink(options: RegisterAppIpcHandlersOptions, base:
   }
   host = new DirectHost({ root, owner: () => owner, link: { ...base, desktop, terminal, simulator },
     read: id => store(id).read(), write: (id, value) => store(id).write(value), revoke: (id, grant) => store(id).revoke(grant), validate: directConfiguration })
-  const observe = (state: Awaited<ReturnType<LinkDependencies['account']['getState']>>) => {
-    const next = hasKunAccountSession(state) ? state.user?.id ?? null : null
+  const switchOwner = async (next: string | null) => {
     if (next === owner) return
     owner = next
-    void host.endSession().then(() => host.restore()).catch(() => logWarn('mobile-link', 'DIRECT_RESTORE_FAILED'))
+    await host.endSession()
+    if (next && owner === next) await host.restore()
+  }
+  let observed = false
+  const observe = (state: Awaited<ReturnType<LinkDependencies['account']['getState']>>) => {
+    observed = true
+    void switchOwner(directOwner(state)).catch(() => logWarn('mobile-link', 'DIRECT_RESTORE_FAILED'))
   }
   const release = base.account.onState(observe)
-  const ending = base.account.onSessionEnding?.(async () => { owner = null; await host.endSession() })
-  void base.account.getState().then(observe).catch(() => {})
+  const ending = base.account.onSessionEnding?.(() => { observed = true; return switchOwner(null) })
+  void base.account.getState().then(state => { if (!observed) observe(state) }).catch(() => {})
   ipcMain.handle(channels.status, event => { assertTrustedWorkbenchSender(event, options.getMainWindow); return host.status() })
   ipcMain.handle(channels.retry, async event => { assertTrustedWorkbenchSender(event, options.getMainWindow); await host.restore(); return host.status() })
   ipcMain.handle(channels.configure, (event, value) => { assertTrustedWorkbenchSender(event, options.getMainWindow); return host.configure(value) })
   ipcMain.handle(channels.pair, (event, scopes) => { assertTrustedWorkbenchSender(event, options.getMainWindow); return host.pair(scopes) })
   ipcMain.handle(channels.revoke, (event, id) => { assertTrustedWorkbenchSender(event, options.getMainWindow); return host.revoke(id) })
-  app.once('before-quit', () => { release(); ending?.(); owner = null; void host.endSession() })
+  app.once('before-quit', () => { observed = true; release(); ending?.(); owner = null; void host.endSession() })
   return host
 }
