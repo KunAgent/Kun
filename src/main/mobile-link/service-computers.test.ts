@@ -56,6 +56,9 @@ function fixture() {
   }
   const service = new MobileLinkService(deps); services.push(service)
   return { service, deps, calls, sent, configureRemoteAccess, authorityChanged, desktopInvoke, phoneGrant,
+    snapshot: (pending: ('workbench'|'desktop')[] | undefined) => transport.pairingSnapshot(pending),
+    hint: (purpose: 'workbench'|'desktop') => transport.relay({ relay: 'pairing', purpose }),
+    connection: (online: boolean) => transport.state(online),
     request: () => { pending = true },
     setTier: (value: string) => { tier = value },
     failEntitlements: (value: boolean) => { entitlementsDown = value },
@@ -64,6 +67,32 @@ function fixture() {
     confirms: () => calls.filter(call => call.path.endsWith('/confirm')) }
 }
 describe('computer host consent lifecycle', () => {
+  it('uses lease coverage for idle hosts, fetches only the notified purpose and reconciles on reconnect', async () => {
+    vi.useFakeTimers()
+    const f = fixture()
+    await f.service.enable(true, true)
+    await f.service.enableComputerAccess(true)
+    await vi.advanceTimersByTimeAsync(0)
+    f.snapshot([])
+    f.calls.length = 0
+    for (let i = 0; i < 6; i++) {
+      await vi.advanceTimersByTimeAsync(5000)
+      await f.service.status(true)
+    }
+    expect(f.calls.some(call => call.path.endsWith('/pairings') || call.path.endsWith('/grants'))).toBe(false)
+    expect(f.calls.some(call => call.path.endsWith('/entitlements'))).toBe(true)
+    f.hint('workbench')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.calls.filter(call => call.path.endsWith('/pairings')).map(call => call.path)).toEqual(['/pairings'])
+    f.request()
+    f.snapshot(['desktop'])
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.confirms()).toHaveLength(1)
+    f.calls.length = 0
+    f.connection(false); f.connection(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(f.calls.map(call=>call.path)).toEqual(expect.arrayContaining(['/pairings','/desktop/pairings']))
+  })
   it('requires the computer host switch even when phone desktop access is on', async () => {
     const f = fixture()
     const status = await f.service.enable(true, true, true)

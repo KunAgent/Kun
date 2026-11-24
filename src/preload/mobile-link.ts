@@ -28,7 +28,7 @@ export const mobileLink: MobileLinkApi = {
   },
   reconnect: () => ipcRenderer.invoke(channels.reconnect),
   entitlements: () => ipcRenderer.invoke(channels.entitlements),
-  status: () => ipcRenderer.invoke(channels.status),
+  status: (passive?: boolean) => ipcRenderer.invoke(channels.status, passive),
   enable: (value) => ipcRenderer.invoke(channels.enable, value),
   resetIdentity: () => ipcRenderer.invoke(channels.resetIdentity),
   confirm: (id, scopes) => ipcRenderer.invoke(channels.confirm, id, scopes),

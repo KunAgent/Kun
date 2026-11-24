@@ -18,6 +18,7 @@ export class EngagementSync {
   private guest?:GuestSession
   private retryAt=0
   private failures=0
+  private issueBlocked?: { actor: string; until: number; attempts: number; rejectedKey?: string }
   private initialized=false
   private disposed=false
   private unsubscribe?:()=>void
@@ -43,6 +44,7 @@ export class EngagementSync {
       this.epoch++;this.identity=null;this.initialized=false;this.leaseAt=0
     }
     this.retryAt=0
+    this.issueBlocked=undefined
     // Clear the prior actor promptly even when a previous network request is still in flight.
     void this.runtime('/actor',{actor:this.identity?.actor??null}).catch(()=>undefined)
     void this.sync()
@@ -55,7 +57,9 @@ export class EngagementSync {
   async sync():Promise<void> {
     if(this.disposed || Date.now()<this.retryAt)return
     if(this.busy)return this.busy
-    this.busy=this.tick().then(()=>{this.failures=0}).catch(async error=>{
+    const epoch=this.epoch
+    this.busy=this.tick().then(()=>{if(this.epoch===epoch)this.failures=0}).catch(async error=>{
+      if(this.epoch!==epoch || this.disposed)return
       this.retryAt=Date.now()+Math.min(60000,2000*2**Math.min(5,this.failures++))
       if(error instanceof EngagementHttpError && error.status===401 && this.identity?.actor.startsWith('g:')) {
         this.epoch++;this.identity=null;this.guest=undefined;this.leaseAt=0
@@ -92,12 +96,17 @@ export class EngagementSync {
     // Issue live activities first. Terminal activities only ever look up a previously issued ticket.
     for(const entry of entries.sort((a,b)=>Number(Boolean(a.status))-Number(Boolean(b.status)))) {
       if(this.epoch!==epoch || this.disposed)return
+      if(!entry.ticketId && !entry.status && this.issueBlocked?.actor===identity.actor &&
+        Date.now()<this.issueBlocked.until)continue
       try { await this.process(entry,identity,epoch) } catch(error) {
-        if(error instanceof EngagementHttpError && [400,404,409,410,426].includes(error.status)) {
+        if(this.epoch!==epoch || this.disposed)return
+        if(error instanceof EngagementHttpError && error.code==='engagement_pending_limit') {
+          const attempts=this.issueBlocked?.actor===identity.actor ? this.issueBlocked.attempts+1 : 1
+          const delay=Math.min(60_000,5000*2**Math.min(attempts-1,4))*(0.8+Math.random()*0.2)
+          this.issueBlocked={actor:identity.actor,until:Date.now()+delay,attempts,rejectedKey:entry.key}
+        } else if(error instanceof EngagementHttpError && [400,404,409,410,426].includes(error.status)) {
           await this.runtime('/ticket',{actor:identity.actor,key:entry.key,ticket:null})
           this.deps.log('retired_'+error.status)
-        } else if(error instanceof EngagementHttpError && error.code==='engagement_pending_limit') {
-          continue // Completing an existing ticket may free a pending slot.
         } else throw error
       }
     }
@@ -110,15 +119,19 @@ export class EngagementSync {
     let result:Record<string,unknown>|undefined
     if(!ticket) {
       // A restart/lost response can leave an issue in flight. Lookup is safe in every lifecycle state.
-      if(entry.phase==='issuing') {
+      const refused = this.issueBlocked?.actor===identity.actor && this.issueBlocked.rejectedKey===entry.key
+      if(entry.phase==='issuing' && (entry.status || !refused)) {
         result=await this.request('/api/engagement/tickets?runId='+encodeURIComponent(entry.serverRunId),'GET',undefined,identity)
         ticket=result.ticket as Ticket|null
       }
       if(!ticket && !entry.status) {
         const claimed=await this.runtime('/claim',base) as EngagementEntry|null
         if(claimed && this.epoch===epoch) {
+          // A new attempt can lose its response even if the previous attempt was explicitly refused.
+          if(refused && this.issueBlocked)this.issueBlocked.rejectedKey=undefined
           result=await this.request('/api/engagement/tickets','POST',{runId:entry.serverRunId,source:entry.source},identity)
           ticket=result.ticket as Ticket|null
+          if(ticket && this.epoch===epoch)this.issueBlocked=undefined
         }
       }
       if(ticket) await this.runtime('/ticket',{...base,ticket:{ticketId:ticket.ticketId,expiresAt:ticket.expiresAt}})
@@ -133,6 +146,10 @@ export class EngagementSync {
     if(!current?.status)return
     result=await this.request('/api/engagement/tickets/'+ticket.ticketId+'/complete','POST',{status:current.status},identity)
     if(this.epoch!==epoch)return
+    if(result.replayed===false && this.issueBlocked?.actor===identity.actor) {
+      this.issueBlocked.until=0
+      this.issueBlocked.attempts=0
+    }
     await this.runtime('/receipt',{...base,receipt:result.receipt,serverRevision:result.revision,...(result.wardrobe?{wardrobe:{...(result.wardrobe as object),progress:result.progress}}:{})})
   }
   dispose() {this.disposed=true;this.epoch++;clearInterval(this.timer);this.unsubscribe?.()}

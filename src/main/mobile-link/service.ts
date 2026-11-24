@@ -1,5 +1,6 @@
 import { dispatchMobileInvoke } from './invoke-dispatch'
 import { ComputerHostAccess, COMPUTER_DESKTOP_SCOPES } from './computer-host-access'
+import { HostDirectory } from './host-directory'
 import { PhonePairingApproval, visiblePairings } from './phone-pairing-approval'
 import { requireComputerRemote } from '../computer-access/membership'
 import { appendHostMetadata } from './catalog-metadata'
@@ -30,7 +31,7 @@ import type { MobileLinkStatus } from '../../shared/mobile-link'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
 import { MobileSubscriptions, type SubscriptionAuthority } from './subscriptions'
 import { refreshAfterWrite } from './write-refresh'
-import { disableHost, sessionOperation } from './lifecycle'
+import { disableHost, notifyReconnectedPeers, sessionOperation } from './lifecycle'
 import { registerMobileHost } from './device-registration'
 // Kun refuses these before any receipt or mutation, so the phone may treat them as not applied.
 const CERTAIN_REJECTIONS = new Set([
@@ -93,7 +94,8 @@ export class MobileLinkService {
   private unsubscribe: () => void
   private unsubscribeEnding: () => void
   private disconnecting: Promise<void> = Promise.resolve()
-  private statusRequest?: { generation: number; version: number; task: Promise<MobileLinkStatus> }
+  private directory = new HostDirectory()
+  private leaseChecksPairings = false
   constructor(private deps: LinkDependencies) {
     this.workboard = new MobileWorkboard(deps)
     this.notifications = new MobileNotifications(deps)
@@ -149,7 +151,8 @@ export class MobileLinkService {
     ++this.transportEpoch
     clearTimeout(this.authorizationTimer)
     this.authorizationTimer = undefined
-    this.statusRequest = undefined
+    this.directory.invalidate()
+    this.leaseChecksPairings = false
     this.suspended = false
     this.connectionAbort?.abort()
     this.connectionAbort = undefined
@@ -259,38 +262,31 @@ export class MobileLinkService {
   private relayNotice(notice: RelayNotice, refresh: () => Promise<void>) {
     if (notice.relay === 'presence') {
       for (const peer of notice.peers) if (!peer.online) { this.subscriptions.clear(peer.deviceId); this.deps.desktop?.authorityChanged(peer.deviceId); this.deps.terminal?.peerGone(peer.deviceId) }
+    } else if (notice.relay === 'pairing') {
+      this.pairingHint(notice.purpose)
     } else if (notice.relay === 'authorization') {
+      this.directory.invalidate()
       void refresh().catch(() => this.deps.diagnostic?.('PEER_METADATA_REFRESH_FAILED'))
     }
   }
-  private notifyReconnected() {
-    // The phone may miss a sub-second host presence gap while its own WSS
-    // remains open. Rebuild lost subscriptions; never replay business calls.
-    for (const peer of [...this.peers].slice(0, 16)) {
-      if (!this.online) break
-      try {
-        this.client?.send({ kind: 'resync_required', id: randomUUID(), dst: peer,
-          payload: { reason: 'host_reconnected' } })
-      } catch {
-        this.deps.diagnostic?.('PEER_RESYNC_FAILED')
-      }
-    }
+  private pairingHint(purpose: 'workbench' | 'desktop') {
+    this.directory.invalidate()
+    if (purpose === 'desktop') this.computers.poke()
+    else this.phones.poke()
   }
-  status(): Promise<MobileLinkStatus> {
-    if (this.statusRequest?.generation === this.generation && this.statusRequest.version === this.grantsVersion)
-      return this.statusRequest.task
-    const generation = this.generation, task = this.loadStatus()
-    this.statusRequest = { generation, version: this.grantsVersion, task }
-    void task.finally(() => {
-      if (this.statusRequest?.task === task) this.statusRequest = undefined
-    }).catch(() => {})
-    return task
+  status(passive = false): Promise<MobileLinkStatus> {
+    const generation = this.generation, version = this.grantsVersion
+    const maxAge = passive ? (this.leaseChecksPairings ? 60_000 : 10_000) : 0
+    const present = (lists?: Pick<MobileLinkStatus,'pairings'|'grants'>): MobileLinkStatus => ({
+      enabled: this.enabled && this.phoneAccess, desktopAccess: this.desktopAccess, computerAccess: this.computers.active,
+      starting: this.enabling && !this.enabled, online: this.online, error: this.error, deviceId: this.identity?.id,
+      pairings: generation === this.generation && lists ? lists.pairings : [], grants: generation === this.generation && lists ? lists.grants : []
+    })
+    return this.directory.read(generation, version, maxAge, () => this.loadDirectory().then(present), present)
   }
-  private async loadStatus(): Promise<MobileLinkStatus> {
+  private async loadDirectory() {
     const generation = this.generation
     const grantsVersion = this.grantsVersion
-    let pairings: MobileLinkStatus['pairings'] = [],
-      grants: MobileLinkStatus['grants'] = []
     if (this.api) {
       try {
         const [p, g] = await Promise.all([
@@ -299,29 +295,19 @@ export class MobileLinkService {
         ])
         if (generation === this.generation && grantsVersion === this.grantsVersion) {
           const visible = p.pairings.filter(item => this.phoneAccess || item.purpose === 'desktop')
-          grants = g.grants.filter(item => this.phoneAccess || item.purpose === 'desktop')
+          const grants = g.grants.filter(item => this.phoneAccess || item.purpose === 'desktop')
           this.pairingPeers = new Map(visible.map(pairing => [pairing.id, pairing.controllerId]))
           this.computerPairings = new Set(visible.filter(pairing => pairing.purpose === 'desktop').map(pairing => pairing.id))
           if (this.computers.active && visible.some(item => item.purpose === 'desktop' && !this.deniedPeers.has(item.controllerId))) this.computers.poke()
-          pairings = visiblePairings(visible, this.computers.active, this.phoneAccess, this.deniedPeers)
+          const pairings = visiblePairings(visible, this.computers.active, this.phoneAccess, this.deniedPeers)
           this.updateGrants(grants)
           if (!['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? '')) this.error = undefined
+          return { pairings, grants: grants.map(grant => ({ ...grant, scopes: this.authorities.scopes(grant.controllerId, grant.id) })) }
         }
       } catch {
         if (generation === this.generation && grantsVersion === this.grantsVersion && !['VIP_REQUIRED', 'ENTITLEMENTS_UNAVAILABLE'].includes(this.error ?? ''))
           this.error = 'CONNECTION_UNAVAILABLE'
       }
-    }
-    return {
-      enabled: this.enabled && this.phoneAccess,
-      desktopAccess: this.desktopAccess,
-      computerAccess: this.computers.active,
-      starting: this.enabling && !this.enabled,
-      online: this.online,
-      error: this.error,
-      deviceId: this.identity?.id,
-      pairings,
-      grants: grants.map((grant) => ({ ...grant, scopes: this.authorities.scopes(grant.controllerId, grant.id) }))
     }
   }
   async retryMembership() {
@@ -465,7 +451,7 @@ export class MobileLinkService {
     if (this.phoneAccess) this.shared.start({ api, ownerAccountId: owner, hostDeviceId: identity.id,
       current: () => this.enabled && generation === this.generation && !this.sessionEnding })
     if (this.phoneAccess) this.phones.watch(api, peer => !this.deniedPeers.has(peer), async () => {
-      this.statusRequest = undefined
+      this.directory.invalidate()
       return this.status()
     })
     let peersListedAt = -Infinity
@@ -488,10 +474,11 @@ export class MobileLinkService {
         this.authorizeUntil(started + 60000)
         return ticket
       },
-      renew: async (signal?: AbortSignal) => {
+      renew: async (signal?: AbortSignal, pairingHints?: boolean) => {
         const started = Date.now(), epoch = this.transportEpoch
         // Lease renewal must never wait behind noncritical grants/UI metadata.
-        const result = await api.request('/relay-lease', 'POST', undefined, false, signal)
+        const checkPairing = pairingHints && (this.phoneAccess || this.computers.active)
+        const result = await api.renew(signal, checkPairing)
         this.transportCurrent(generation, epoch, signal)
         // The transport reports the server's membership-capped expiry through leaseChanged.
         if (Date.now() - peersListedAt < PEER_LIST_INTERVAL_MS) return result
@@ -502,11 +489,18 @@ export class MobileLinkService {
         })
         return result
       },
+      pairingSnapshot: (pending: readonly ('desktop' | 'workbench')[] | undefined) => {
+        if (generation !== this.generation) return
+        this.leaseChecksPairings = pending !== undefined
+        this.phones.setCovered(this.leaseChecksPairings)
+        this.computers.setCovered(this.leaseChecksPairings)
+        for (const purpose of pending ?? []) this.pairingHint(purpose)
+      },
       socket: this.deps.socket,
       budget: this.requestBudget,
       leaseChanged: (expiresAt: number) => {
         if (generation === this.generation && this.online) this.authorizeUntil(expiresAt)
-        if (generation === this.generation && this.computers.active) void this.computers.renew().then(allowed => {
+        if (generation === this.generation && this.computers.active) void this.computers.renewIfDue().then(allowed => {
           if (!allowed && generation === this.generation) this.fenceComputerMembership(this.computers.downgraded)
         })
       },
@@ -516,11 +510,15 @@ export class MobileLinkService {
       state: (online: boolean, reason?: string) => {
         if (generation === this.generation) {
           this.online = online
+          this.directory.invalidate()
+          this.leaseChecksPairings = false
+          this.phones.setCovered(false); this.computers.setCovered(false)
           if (reason === 'VIP_REQUIRED') this.error = 'VIP_REQUIRED'
           if (online) this.error = undefined
           if (online) {
             this.authorizationId = randomUUID()
-            this.notifyReconnected()
+            this.phones.reconnect(); this.computers.reconnect()
+            notifyReconnectedPeers(this.peers, this.client, this.deps.diagnostic)
           }
           else {
             this.fenceTransport()
@@ -596,7 +594,7 @@ export class MobileLinkService {
     this.deps.desktop?.authorityChanged(peer)
     this.deps.terminal?.authorityChanged(peer)
     ++this.grantsVersion
-    this.statusRequest = undefined
+    this.directory.invalidate()
     this.subscriptions.clear(peer)
     if (this.online && this.peers.has(peer)) {
       try { this.client?.send({ kind: 'resync_required', id: randomUUID(), dst: peer, payload: { reason: 'permissions_changed' } }) }
@@ -686,13 +684,13 @@ export class MobileLinkService {
     if (generation !== this.generation) throw Error('ACCOUNT_CHANGED')
     if (enabled) this.computers.watch(api, peer => !this.deniedPeers.has(peer), async () => {
       if (!this.online) this.client?.resume()
-      ++this.grantsVersion; this.statusRequest = undefined
+      ++this.grantsVersion; this.directory.invalidate()
       return this.status()
     }, downgraded => { if (generation === this.generation) this.fenceComputerMembership(downgraded) })
     if (!enabled) for (const [id, peer] of this.grantPeers) if (this.authorities.purpose(peer, id) === 'desktop') {
       this.authorities.remove(peer); this.peers.delete(peer)
     }
-    ++this.grantsVersion; this.statusRequest = undefined
+    ++this.grantsVersion; this.directory.invalidate()
     if (!enabled && !this.phoneAccess) return this.enable(false)
     return this.status()
   }
