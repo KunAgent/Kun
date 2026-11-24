@@ -1,4 +1,5 @@
-import { RemoteApi, type DeviceIdentity } from '@kun/remote-protocol'
+import { randomUUID } from 'node:crypto'
+import { RemoteApi, type RemoteClient, type DeviceIdentity } from '@kun/remote-protocol'
 
 /** Rejects cancelled or stalled work even when its transport ignores abort. */
 export async function sessionOperation<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
@@ -52,5 +53,18 @@ export async function disableHost(deps: {
   } finally {
     clearTimeout(timer)
     control.abort()
+  }
+}
+
+/** A peer can miss a short presence gap. Ask it to rebuild subscriptions after reconnect. */
+export function notifyReconnectedPeers(peers: ReadonlySet<string>, client: Pick<RemoteClient, 'online' | 'send'> | undefined,
+  diagnostic?: (code: string) => void) {
+  for (const peer of [...peers].slice(0, 16)) {
+    if (!client?.online) break
+    try {
+      client.send({ kind: 'resync_required', id: randomUUID(), dst: peer, payload: { reason: 'host_reconnected' } })
+    } catch {
+      diagnostic?.('PEER_RESYNC_FAILED')
+    }
   }
 }

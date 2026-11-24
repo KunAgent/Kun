@@ -19,7 +19,7 @@ export type MobileLinkApi = {
   direct?: import('./direct-link').DirectLinkApi
   reconnect(): Promise<MobileLinkStatus>
   entitlements(): Promise<AccountEntitlements>
-  status(): Promise<MobileLinkStatus>
+  status(passive?: boolean): Promise<MobileLinkStatus>
   enable(enabled: boolean): Promise<MobileLinkStatus>
   resetIdentity(): Promise<MobileLinkStatus>
   confirm(id: string, scopes?: MobileLinkScope[]): Promise<MobileLinkStatus>

@@ -148,9 +148,9 @@ export function registerMobileLink(
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     return readAccountEntitlements(account, (input, init) => net.fetch(String(input), init))
   })
-  ipcMain.handle(channels.status, (event) => {
+  ipcMain.handle(channels.status, (event, passive?: boolean) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
-    return service.status()
+    return service.status(passive === true)
   })
   ipcMain.handle(channels.enable, (event, value) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

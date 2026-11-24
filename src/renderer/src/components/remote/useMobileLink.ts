@@ -60,7 +60,7 @@ export function useMobileLink() {
     async function refresh() {
       const current = operation.current
       try {
-        const next = await api!.status()
+        const next = await api!.status(true)
         if (active && current === operation.current) setState(next)
       } catch { /* keep the last known status */ }
     }
