@@ -64,10 +64,18 @@ export function useDesktopAccess(link: MobileLink) {
   function setVirtual(allowVirtual: boolean) {
     if (!api?.desktopConfigure || !value?.virtualSupported || !link.state?.desktopAccess || !link.enabled) return
     const displayTokens = value.displays.filter(d => d.allowed).map(d => d.token)
-    void action(() => api.desktopConfigure!({ enabled: allowVirtual || displayTokens.length > 0, displayTokens, allowVirtual }))
+    void action(() => api.desktopConfigure!({ enabled: allowVirtual || displayTokens.length > 0, displayTokens, allowVirtual,
+      ...(value.unlockSupported ? { allowUnlock: value.unlockEnabled !== false } : {}) }))
+  }
+  function setUnlock(allowUnlock: boolean) {
+    if (!api?.desktopConfigure || !value?.unlockSupported || !link.state?.desktopAccess || !link.enabled) return
+    const displayTokens = value.displays.filter(d => d.allowed).map(d => d.token)
+    const allowVirtual = value.virtualSupported ? value.virtualEnabled === true : undefined
+    void action(() => api.desktopConfigure!({ enabled: Boolean(allowVirtual) || displayTokens.length > 0, displayTokens,
+      ...(allowVirtual !== undefined ? { allowVirtual } : {}), allowUnlock }))
   }
   return {
-    value, error, busy, refresh, permission, setVirtual,
+    value, error, busy, refresh, permission, setVirtual, setUnlock,
     stop: () => api?.desktopStop && void action(() => api.desktopStop!())
   }
 }

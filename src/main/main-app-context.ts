@@ -126,6 +126,7 @@ import {
   normalizeRendererPathname
 } from './renderer-trust-policy'
 import { mainBundleDirectory } from './main-bundle-path'
+import { widgetAppFromArg } from '../shared/widget-apps'
 
 export const __dirname = mainBundleDirectory(import.meta.url)
 
@@ -348,6 +349,7 @@ export const mainState = {
   appBehavior: normalizeAppBehaviorSettings() as AppBehaviorConfigV1,
   tray: null as Tray | null,
   trayAvailable: false,
+  openDailyNotes: null as (() => Promise<void>) | null,
   trayMenu: null as Menu | null,
   trayMenuOpenPromise: null as Promise<void> | null,
   trayQuotaWindow: null as BrowserWindow | null,
@@ -389,7 +391,9 @@ export const trayIcon = process.platform === 'darwin'
   ? createMultiScaleIcon(kunTrayMacPng, kunTrayMacRetinaPng)
   : createAppIcon(kunTrayPng)
 traceStartup('app icon loaded', { source: appIconSource.startsWith('data:') ? 'data-url' : 'path' })
-export const gotSingleInstanceLock = runningClawScheduleMcpServer || app.requestSingleInstanceLock()
+const widgetLaunchUrl = process.argv.find(argument => widgetAppFromArg(argument))
+export const gotSingleInstanceLock = runningClawScheduleMcpServer ||
+  app.requestSingleInstanceLock(widgetLaunchUrl ? { widgetLaunchUrl } : {})
 traceStartup('single instance lock checked', {
   gotSingleInstanceLock,
   skippedForClawScheduleMcpServer: runningClawScheduleMcpServer

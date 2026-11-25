@@ -17,6 +17,7 @@ export type NamedPreloadName =
   | 'storage-relocation-recovery'
   | 'runtime-data-recovery'
   | 'tray-quota'
+  | 'daily-notes'
   | 'pet-overlay'
   | 'protected-room-dialog'
   | 'app-sandbox-shell'

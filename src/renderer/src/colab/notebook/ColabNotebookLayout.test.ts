@@ -3,11 +3,13 @@ import { act, create, type ReactTestInstance } from 'react-test-renderer'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { useChatStore } from '../../store/chat-store'
+import { useColabStore } from '../colab-store'
 import { createCell } from './ipynb-format'
 import { ColabNotebookCell } from './ColabNotebookCell'
 import { ColabNotebookView } from './ColabNotebookView'
 import { ColabSidebarContent } from './ColabSidebarContent'
 import { NotebookKunDiffCard } from './NotebookKunDiffCard'
+import { useColabDriveStore } from './colab-drive-store'
 import { useColabNotebookStore } from './colab-notebook-store'
 import { useJupyterStore } from './jupyter-store'
 
@@ -36,6 +38,11 @@ beforeAll(async () => {
 
 afterEach(() => {
   useJupyterStore.getState().setSnapshot({ servers: [], sessions: [] })
+  useColabDriveStore.setState({
+    states: {},
+    probedSessions: {},
+    autoMountAttemptedSessions: {}
+  })
   useColabNotebookStore.setState({
     runningCellId: null,
     runningExecId: null,
@@ -212,6 +219,198 @@ describe('Notebook layout redesign', () => {
       expect(onUndo).toHaveBeenCalledTimes(1)
       expect(onKeep).toHaveBeenCalledTimes(1)
     } finally {
+      if (renderer) await act(async () => renderer?.unmount())
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('mounts Google Drive in the Files tab, expands MyDrive, and saves the active notebook to Drive', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const workspaceRoot = '/tmp/demo'
+    const colabMount = vi.fn(async () => ({
+      ok: true as const,
+      state: {
+        sessionId: 'sess-drive',
+        status: 'needs_auth' as const,
+        authUrl: 'https://accounts.google.com/auth',
+        expiresAt: Date.now() + 60_000
+      }
+    }))
+    const colabCompleteAuth = vi.fn(async () => ({
+      ok: true as const,
+      state: {
+        sessionId: 'sess-drive',
+        status: 'mounted' as const,
+        mountPath: '/content/drive/MyDrive'
+      }
+    }))
+    const colabUpload = vi.fn(async () => ({ ok: true, uploadedCount: 1 }))
+    const colabListFiles = vi.fn(async ({ path }: { sessionId: string; path: string }) => {
+      if (path === '/content') {
+        return {
+          ok: true as const,
+          path,
+          entries: [{ name: 'drive', path: '/content/drive', isDir: true, size: 0 }]
+        }
+      }
+      if (path === '/content/drive') {
+        return {
+          ok: true as const,
+          path,
+          entries: [{ name: 'MyDrive', path: '/content/drive/MyDrive', isDir: true, size: 0 }]
+        }
+      }
+      if (path === '/content/drive/MyDrive') {
+        return {
+          ok: true as const,
+          path,
+          entries: [
+            {
+              name: 'Colab Notebooks',
+              path: '/content/drive/MyDrive/Colab Notebooks',
+              isDir: true,
+              size: 0
+            }
+          ]
+        }
+      }
+      return {
+        ok: true as const,
+        path,
+        entries: [
+          {
+            name: 'Qwen35_GSPO.ipynb',
+            path: '/content/drive/MyDrive/Colab Notebooks/Qwen35_GSPO.ipynb',
+            isDir: false,
+            size: 2048
+          }
+        ]
+      }
+    })
+
+    const prevGui = window.kunGui
+    Object.assign(window.kunGui, {
+      colabDriveGetMountState: vi.fn(async () => ({ sessionId: 'sess-drive', status: 'unmounted' as const })),
+      colabDriveMount: colabMount,
+      colabDriveCompleteMountAuth: colabCompleteAuth,
+      colabUploadToSession: colabUpload,
+      onColabUploadProgress: vi.fn(() => () => undefined),
+      colabNotebookListFiles: colabListFiles
+    })
+
+    useChatStore.setState({ workspaceRoot })
+    useColabStore.setState({
+      snapshot: {
+        ...useColabStore.getState().snapshot,
+        connections: [
+          {
+            id: 'conn-1',
+            name: 'Account',
+            email: 'user@gmail.com',
+            avatarColor: '#4f6bed',
+            status: 'connected',
+            planLabel: 'Colab Pro',
+            balanceCu: 100,
+            burnRateCuPerHour: 0.1,
+            createdAt: '',
+            updatedAt: '',
+            activeSessions: []
+          }
+        ],
+        sessions: [
+          {
+            id: 'sess-drive',
+            sessionName: 'kun-nb',
+            connectionId: 'conn-1',
+            connectionName: 'Account',
+            connectionEmail: 'user@gmail.com',
+            connectionAvatarColor: '#4f6bed',
+            workspaceRoot,
+            entryCommand: 'kun-notebook',
+            accelerator: 'CPU',
+            phase: 'running',
+            provisioningStep: 'start',
+            startedAt: '2026-11-25T10:00:00Z',
+            elapsedSeconds: 30,
+            burnRateCuPerHour: 0.1,
+            consumedCu: 0,
+            estimatedTotalCu: 0.2,
+            ramGb: 12.7,
+            vramGb: null,
+            gpuUtilizationPct: null,
+            vramUsedGb: null,
+            uploadTransferredBytes: 0,
+            uploadTotalBytes: 0,
+            gpuHistory: [],
+            maxRuntimeHours: 2,
+            autoStop: true,
+            mountDrive: false,
+            syncPaths: [],
+            outputRemoteDir: '',
+            outputLocalDir: '',
+            artifacts: [],
+            metrics: {},
+            logTail: []
+          }
+        ]
+      }
+    })
+    useColabNotebookStore.setState({
+      workspaceRoot,
+      notebooks: ['Qwen35_GSPO.ipynb'],
+      activePath: 'Qwen35_GSPO.ipynb',
+      cells: [createCell('code', 'import torch')],
+      dirty: false,
+      sidePanelOpen: true,
+      sidePanelTab: 'files'
+    })
+
+    let renderer: ReturnType<typeof create> | undefined
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(ColabNotebookView, {
+            leftSidebarCollapsed: false,
+            onToggleLeftSidebar: () => undefined
+          })
+        )
+      })
+      const root = renderer!.root
+      expect(useColabNotebookStore.getState().launchOptions.mountDrive).toBe(true)
+      expect(root.findByProps({ 'data-colab-drive-unmounted-callout': true })).toBeDefined()
+      const mountBtn = root.findByProps({ 'data-colab-mount-drive': true })
+      await act(async () => {
+        await mountBtn.props.onClick()
+      })
+      expect(colabMount).toHaveBeenCalledWith({ sessionId: 'sess-drive', forceRemount: undefined })
+
+      const confirmBtn = root.findByProps({ 'data-colab-drive-auth-confirm': true })
+      await act(async () => {
+        await confirmBtn.props.onClick()
+      })
+      expect(colabCompleteAuth).toHaveBeenCalledWith({ sessionId: 'sess-drive' })
+      expect(root.findByProps({ 'data-colab-drive-mounted': true })).toBeDefined()
+      expect(root.findByProps({ 'data-colab-copy-ckpt-path': true })).toBeDefined()
+      expect(collectText(root.findByProps({ 'data-colab-drive-status-bar': true }))).toContain(
+        '/content/drive/MyDrive'
+      )
+
+      const saveDriveBtn = root.findByProps({ 'data-colab-save-to-drive': true })
+      await act(async () => {
+        await saveDriveBtn.props.onClick()
+      })
+      expect(colabUpload).toHaveBeenCalledWith({
+        sessionId: 'sess-drive',
+        workspaceNotebook: 'Qwen35_GSPO.ipynb',
+        targetRemoteDir: '/content/drive/MyDrive/Colab Notebooks'
+      })
+
+      colabMount.mockClear()
+      useColabDriveStore.getState().autoMountSession('sess-auto-once')
+      useColabDriveStore.getState().autoMountSession('sess-auto-once')
+      expect(colabMount).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.assign(window.kunGui, prevGui)
       if (renderer) await act(async () => renderer?.unmount())
       vi.unstubAllGlobals()
     }

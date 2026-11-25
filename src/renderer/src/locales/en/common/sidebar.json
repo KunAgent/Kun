@@ -1,4 +1,21 @@
 {
+  "dailyNotes": {
+    "title": "Daily notes & to-dos",
+    "pin": "Keep on top",
+    "unpin": "Unpin window",
+    "chooseDate": "Choose a note date",
+    "today": "Today",
+    "addTask": "Add a task",
+    "task": "Task",
+    "placeholder": "Write a note…",
+    "saving": "Saving…",
+    "saved": "Saved on this device",
+    "saveFailed": "Couldn’t save this note.",
+    "loadFailed": "Couldn’t load notes.",
+    "openFailed": "Couldn’t open daily notes.",
+    "pinFailed": "Couldn’t change the window pin.",
+    "retry": "Retry"
+  },
   "mobileInputCollapse": "Minimize",
   "mobileInputAnswer": "Your answer",
   "mobileInputAnswerPlaceholder": "Type your answer…",

@@ -1,5 +1,6 @@
 import { app, protocol } from 'electron'
 import { registerAppSchemes } from './privileged-schemes'
+import { acceptWidgetAppLaunch } from './widget-apps/activation'
 import {
   appendUpdateHealthProgress,
   UPDATE_HEALTH_INTERNAL_TIMEOUT_MS,
@@ -8,6 +9,10 @@ import {
 } from './update-health-bootstrap'
 
 registerAppSchemes(protocol)
+// Launch Services may deliver a cold URL while the desktop entry is still importing.
+app.on('open-url', (event, url) => {
+  if (acceptWidgetAppLaunch(url)) event.preventDefault()
+})
 
 const HEALTH_PATH_ARG = '--kun-update-health-check='
 const HEALTH_TOKEN_ARG = '--kun-update-health-token='

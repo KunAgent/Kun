@@ -1,4 +1,21 @@
 {
+  "dailyNotes": {
+    "title": "デイリーノートとタスク",
+    "pin": "常に手前に表示",
+    "unpin": "最前面表示を解除",
+    "chooseDate": "ノートの日付を選択",
+    "today": "今日",
+    "addTask": "タスクを追加",
+    "task": "タスク",
+    "placeholder": "ノートを書く…",
+    "saving": "保存中…",
+    "saved": "この端末に保存済み",
+    "saveFailed": "ノートを保存できませんでした。",
+    "loadFailed": "ノートを読み込めませんでした。",
+    "openFailed": "デイリーノートを開けませんでした。",
+    "pinFailed": "最前面表示を変更できませんでした。",
+    "retry": "再試行"
+  },
   "threadRefreshing": "更新中…",
   "sidebarWorkspaceLoading": "スレッドを読み込み中…",
   "sidebarWorkspaceLoadMore": "さらに読み込む",

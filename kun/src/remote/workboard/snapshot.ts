@@ -12,7 +12,11 @@ const valid = (id: string) => /^[A-Za-z0-9_-]{1,128}$/.test(id)
 const timestamp = (value: string | undefined, fallback: number) => value && Number.isFinite(Date.parse(value)) ? Date.parse(value) : fallback
 
 /** Only durable metadata is projected; no session item history or message text is loaded. */
-export async function workboardSnapshot(runtime: ServerRuntime, now = Date.now()): Promise<WorkboardHostSnapshot> {
+export async function workboardSnapshot(
+  runtime: ServerRuntime,
+  now = Date.now(),
+  attention: Readonly<Record<string, 'completed' | 'failed'>> = {}
+): Promise<WorkboardHostSnapshot> {
   const sessions: WorkboardSession[] = []
   let complete = true
   const summaries = await runtime.threadService.list({ includeArchived: false, includeSide: false, limit: 1001 })
@@ -25,12 +29,20 @@ export async function workboardSnapshot(runtime: ServerRuntime, now = Date.now()
     if (!turn || !valid(turn.id)) continue
     const active = ['running', 'queued'].includes(turn.status) || thread.goal?.status === 'active'
     const updatedAt = timestamp(turn.finishedAt ?? turn.startedAt ?? thread.updatedAt, now)
-    if (!active && turn.status !== 'failed' && updatedAt < now - 600000) continue
     const approval = runtime.approvalGate.pending(thread.id).some(gate => gate.turnId === turn.id) && turn.approvalReviewer !== 'agent'
     const input = runtime.userInputGate.pending(thread.id).some(gate => gate.turnId === turn.id)
     const phase = turn.status === 'failed' ? 'failed' : active ? approval ? 'approval' : input ? 'input' : 'running' :
       turn.status === 'completed' ? 'completed' : 'stopped'
-    sessions.push({ id: thread.id, kind: 'code', runId: turn.id, phase, updatedAt })
+    const unread = ['completed', 'failed'].includes(phase) && attention[thread.id] === phase
+    if (!active && turn.status !== 'failed' && !unread && updatedAt < now - 600000) continue
+    sessions.push({
+      id: thread.id,
+      kind: 'code',
+      runId: turn.id,
+      phase,
+      updatedAt,
+      ...(['completed', 'failed'].includes(phase) ? { unread } : {})
+    })
   }
   if (runtime.rooms) {
     const rooms = runtime.rooms
@@ -69,9 +81,11 @@ export async function workboardSnapshot(runtime: ServerRuntime, now = Date.now()
   }
   // An incomplete inventory must never be interpreted as "all finished".
   if (sessions.length > LIMIT) complete = false
-  sessions.sort((a, b) => Number(['completed', 'stopped'].includes(a.phase)) - Number(['completed', 'stopped'].includes(b.phase)) || b.updatedAt - a.updatedAt)
+  sessions.sort((a, b) =>
+    Number(['completed', 'stopped'].includes(a.phase) && a.unread !== true) -
+      Number(['completed', 'stopped'].includes(b.phase) && b.unread !== true) || b.updatedAt - a.updatedAt)
   const unique = [...new Map(sessions.map(session => [session.kind + ':' + session.id, session])).values()]
-  const result: WorkboardHostSnapshot = { schemaVersion: 1, observedAt: now, complete, sessions: unique.slice(0, LIMIT) }
+  const result: WorkboardHostSnapshot = { schemaVersion: 2, observedAt: now, complete, sessions: unique.slice(0, LIMIT) }
   // Leave space for JSONB's whitespace and the publisher envelope at the API boundary.
   while (Buffer.byteLength(JSON.stringify(result)) > 56000) { result.sessions.pop(); result.complete = false }
   return result

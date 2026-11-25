@@ -1,4 +1,21 @@
 {
+  "dailyNotes": {
+    "title": "每日待办与笔记",
+    "pin": "窗口置顶",
+    "unpin": "取消窗口置顶",
+    "chooseDate": "选择笔记日期",
+    "today": "今天",
+    "addTask": "添加待办",
+    "task": "待办事项",
+    "placeholder": "记下想法或反馈…",
+    "saving": "正在保存…",
+    "saved": "已保存到本机",
+    "saveFailed": "笔记保存失败。",
+    "loadFailed": "读取笔记失败。",
+    "openFailed": "无法打开每日笔记。",
+    "pinFailed": "无法更改窗口置顶状态。",
+    "retry": "重试"
+  },
   "mobileInputCollapse": "收起",
   "mobileInputAnswer": "你的回答",
   "mobileInputAnswerPlaceholder": "输入你的回答…",

@@ -2,6 +2,7 @@ import { ipcRenderer, type IpcRendererEvent } from 'electron'
 import type { ColabStateSnapshot } from '../shared/colab/colab-types'
 import type { RuntimeUploadEvent } from '../shared/colab/runtime-upload'
 import type {
+  ColabDriveMountState,
   ColabNotebookAgentRequest,
   ColabNotebookExecEvent,
   ColabPortForwardView,
@@ -63,6 +64,19 @@ export const colabApi: KunGuiColabApi = {
   colabDriveOpenAuth: (input) => ipcRenderer.invoke('colab:drive:open-auth', input),
   colabDriveClosePull: (input) => ipcRenderer.invoke('colab:drive:close-pull', input),
   colabDriveImportNotebook: (input) => ipcRenderer.invoke('colab:drive:import-notebook', input),
+  colabDriveGetMountState: (input) => ipcRenderer.invoke('colab:drive:mount-state', input),
+  colabDriveMount: (input) => ipcRenderer.invoke('colab:drive:mount', input),
+  colabDriveCompleteMountAuth: (input) => ipcRenderer.invoke('colab:drive:complete-mount-auth', input),
+  colabDriveOpenMountAuth: (input) => ipcRenderer.invoke('colab:drive:open-mount-auth', input),
+  colabDriveCancelMount: (input) => ipcRenderer.invoke('colab:drive:cancel-mount', input),
+  colabDriveUnmount: (input) => ipcRenderer.invoke('colab:drive:unmount', input),
+  onColabDriveMountChanged: (handler) => {
+    const wrapped = (_event: IpcRendererEvent, state: ColabDriveMountState): void => {
+      handler(state)
+    }
+    ipcRenderer.on('colab:drive:mount-changed', wrapped)
+    return () => ipcRenderer.removeListener('colab:drive:mount-changed', wrapped)
+  },
   colabImportLocalNotebooks: (input) => ipcRenderer.invoke('colab:notebook:import-local', input),
   colabNotebookAssist: (input) => ipcRenderer.invoke('colab:notebook:assist', input),
   onColabNotebookEvent: (handler) => {

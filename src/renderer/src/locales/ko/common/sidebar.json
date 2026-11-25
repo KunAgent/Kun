@@ -1,4 +1,21 @@
 {
+  "dailyNotes": {
+    "title": "일일 노트와 할 일",
+    "pin": "항상 위에 표시",
+    "unpin": "항상 위에 표시 해제",
+    "chooseDate": "노트 날짜 선택",
+    "today": "오늘",
+    "addTask": "할 일 추가",
+    "task": "할 일",
+    "placeholder": "메모를 작성하세요…",
+    "saving": "저장 중…",
+    "saved": "이 기기에 저장됨",
+    "saveFailed": "노트를 저장하지 못했습니다.",
+    "loadFailed": "노트를 불러오지 못했습니다.",
+    "openFailed": "일일 노트를 열지 못했습니다.",
+    "pinFailed": "창 고정 상태를 변경하지 못했습니다.",
+    "retry": "다시 시도"
+  },
   "threadRefreshing": "새로고침 중…",
   "sidebarWorkspaceLoading": "스레드 불러오는 중…",
   "sidebarWorkspaceLoadMore": "더 불러오기",

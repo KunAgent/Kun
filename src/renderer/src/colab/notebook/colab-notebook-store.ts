@@ -29,6 +29,7 @@ export type NotebookSidePanelTab = 'kun' | 'variables' | 'files' | 'ports' | 're
 export type NotebookColabLaunchOptions = {
   highMem: boolean
   requireA10080Gb: boolean
+  mountDrive: boolean
   maxRuntimeHours: number
   idleAutoStopMinutes: number
   maxSpendCu: number | null
@@ -137,6 +138,7 @@ type NotebookActions = {
   resetKernelState: () => void
   restartKernel: (sessionId: string) => Promise<void>
   loadRemoteDir: (sessionId: string, path: string) => Promise<void>
+  revealRemotePaths: (sessionId: string, paths: string[]) => Promise<void>
   toggleRemoteDir: (sessionId: string, path: string) => void
   loadVariables: (sessionId: string) => Promise<void>
 }
@@ -154,6 +156,7 @@ const initialState: NotebookState = {
   launchOptions: {
     highMem: false,
     requireA10080Gb: false,
+    mountDrive: true,
     maxRuntimeHours: 2,
     idleAutoStopMinutes: 30,
     maxSpendCu: null,
@@ -599,7 +602,8 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
       if (runningExecId) await window.kunGui.colabNotebookInterrupt({ execId: runningExecId })
     },
 
-    resetKernelState: () => set({ execCounter: 0, queue: [], remoteDirs: {}, variables: [] }),
+    resetKernelState: () =>
+      set({ execCounter: 0, queue: [], remoteDirs: {}, expandedDirs: [], variables: [] }),
 
     restartKernel: async (sessionId) => {
       await get().interrupt()
@@ -630,6 +634,28 @@ export const useColabNotebookStore = create<NotebookState & NotebookActions>((se
             : { status: 'error', entries: [], error: res.message }
         }
       }))
+    },
+
+    revealRemotePaths: async (sessionId, paths) => {
+      const all: string[] = []
+      for (const raw of paths) {
+        const cleaned = raw.trim().replace(/\/+$/, '') || '/'
+        if (cleaned.startsWith('/content/')) {
+          const segs = cleaned.split('/').filter(Boolean)
+          let cur = ''
+          for (const seg of segs) {
+            cur += `/${seg}`
+            all.push(cur)
+          }
+        } else {
+          all.push(cleaned)
+        }
+      }
+      const unique = [...new Set(all.filter(Boolean))]
+      set((state) => ({
+        expandedDirs: [...new Set([...state.expandedDirs, ...unique])]
+      }))
+      await Promise.all(unique.map((p) => get().loadRemoteDir(sessionId, p)))
     },
 
     toggleRemoteDir: (sessionId, path) => {

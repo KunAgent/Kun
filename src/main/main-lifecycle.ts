@@ -67,6 +67,7 @@ import {
 } from './extensions/extension-webview-security'
 import { probeRuntimeApi } from './main-runtime-health'
 import { createAppSandboxWebviewGuard } from './app-sandbox/app-sandbox-guards'
+import { widgetAppForContents } from './widget-apps/activation'
 import { appSandboxRegistry, notifyAppSandboxClosed, registerAppSandboxShellRelay } from './app-sandbox/app-sandbox-host'
 import {
   beginBrowserUseHostShutdown,
@@ -353,7 +354,8 @@ export function installDevPreviewWebviewGuards(options: {
       registry: appSandboxRegistry,
       preloadPath: resolveNamedPreloadPath(app.getAppPath(), 'app-sandbox-shell'),
       isTrustedWorkbench: (contents) => Boolean(
-        mainState.mainWindow && !mainState.mainWindow.isDestroyed() && contents.id === mainState.mainWindow.webContents.id
+        widgetAppForContents(contents) ||
+        (mainState.mainWindow && !mainState.mainWindow.isDestroyed() && contents.id === mainState.mainWindow.webContents.id)
       ),
       onGuestGone: (instanceId, reason) => notifyAppSandboxClosed(instanceId, reason)
     }),

@@ -1,4 +1,10 @@
 {
+  "widgetAppInstall": "앱으로 설치",
+  "widgetAppOpen": "앱 열기",
+  "widgetAppsTitle": "설치된 앱",
+  "widgetAppRemoveConfirm": "“{{title}}” 앱을 제거할까요?",
+  "widgetAppOpening": "앱 여는 중…",
+  "widgetAppUnavailable": "이 앱은 더 이상 사용할 수 없습니다.",
   "appSurfaceDesktopOnly": "인터랙티브 페이지는 Kun 데스크톱 앱에서 사용할 수 있습니다.",
   "appSurfaceRetry": "다시 시도",
   "appSurfacePageError": "페이지 오류: {{message}}",

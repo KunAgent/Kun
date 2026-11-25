@@ -4,10 +4,10 @@ import { MOBILE_DEFAULT_SCOPES, type MobileLinkScope } from '@shared/mobile-link
 import type { MobileLinkStatus } from '@shared/mobile-link'
 import { runTrustedUserActivation } from '../../extensions/protected-user-activation'
 import type { MobileLink } from './useMobileLink'
-import { MobileScopeOptions } from './MobileScopeOptions'
+import { MobileScopeOptions, selectMobileScope } from './MobileScopeOptions'
 import { desktopConsent, mobileRequirement } from './remote-access-state'
-import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS, RemoteGroup } from './remote-panel-ui'
-import { REMOTE_FOCUS } from './remote-compact-ui'
+import { REMOTE_BUTTON_CLASS, REMOTE_PRIMARY_BUTTON_CLASS, RemoteGroup, RemoteSwitch } from './remote-panel-ui'
+import { RemoteCompactRow, REMOTE_FOCUS } from './remote-compact-ui'
 
 const scopeKey = (scopes: MobileLinkScope[]) => [...scopes].sort().join(',')
 
@@ -46,6 +46,12 @@ export function MobileGrantRow({ link, grant, onDirtyChange }: {
         <span className="font-medium text-ds-ink">{t('remoteCompact.desktop')}</span>
         <span className="text-[12px] text-ds-muted">{t(savedLevel === 'control' ? 'remoteCompact.desktopIncluded' : savedLevel === 'view' ? 'remoteCompact.savedView' : 'remoteCompact.masterEnablesDesktop')}</span>
       </div>
+      {draft.includes('desktop.control') ? <RemoteCompactRow title={zh ? '锁屏时手动输密码解锁' : 'Manual lock-screen unlock'}
+        subtitle={zh ? '每次手输 Mac 登录密码，不保存' : 'Manual password entry each time; never saved'}>
+        <RemoteSwitch checked={draft.includes('desktop.unlock')} disabled={Boolean(busy) || !link.mobileAllowed}
+          label={zh ? '锁屏时手动输密码解锁' : 'Manual lock-screen unlock'}
+          onToggle={() => change(selectMobileScope(draft, 'desktop.unlock', !draft.includes('desktop.unlock')))} />
+      </RemoteCompactRow> : null}
       <MobileScopeOptions zh={zh} value={draft} onChange={change} disabled={Boolean(busy) || !link.mobileAllowed} includeDesktop={false} />
     </RemoteGroup>
     {saveFailed ? <p role="alert" className="text-[12px] text-ds-danger">{zh ? '权限未保存，请重试；手机仍按原权限连接。' : 'Permissions were not saved. The phone still uses its previous permissions.'}</p> : null}

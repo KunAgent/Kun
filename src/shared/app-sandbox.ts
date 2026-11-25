@@ -48,6 +48,7 @@ export type AppSandboxTheme = {
 }
 
 export type AppSandboxCreateGenUiRequest = {
+  appId?: string
   threadId: string
   widgetId: string
   theme: AppSandboxTheme
@@ -89,6 +90,7 @@ export type AppSandboxClosedEvent = {
 }
 
 export type KunGuiAppSandboxApi = {
+  widgetApps: import('./widget-apps').WidgetAppsApi
   appSandbox: {
     createGenUi: (request: AppSandboxCreateGenUiRequest) => Promise<AppSandboxCreateResult>
     createMcpApp: (request: AppSandboxCreateMcpAppRequest) => Promise<AppSandboxCreateResult>

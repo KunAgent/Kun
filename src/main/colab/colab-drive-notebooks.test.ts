@@ -189,4 +189,30 @@ describe('Colab Drive pulls', () => {
       })
     }
   })
+
+  it('preserves Drive notebook list when background OAuth polling completes before user clicks Confirm', async () => {
+    const { manager, helpers } = harness
+    const start = manager.startPull({
+      pullId,
+      workspaceRoot,
+      connectionId: accountId,
+      runtime: { sessionId: 'editor' }
+    })
+    await vi.waitFor(() => expect(helpers).toHaveLength(1))
+    const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
+    helpers[0].marker('DRV_AUTH', JSON.stringify({ uri: authUrl }))
+    expect(await start).toMatchObject({ ok: true, status: 'needs_auth', authUrl })
+
+    // Simulate background 3s poll completing Drive mount & scan while user is still switching back from browser
+    helpers[0].marker('DRV_AUTH_OK', '1')
+    helpers[0].marker('DRV_LIST', JSON.stringify([entry]))
+    helpers[0].finish()
+    await new Promise((r) => setTimeout(r, 10))
+
+    expect(await manager.completeAuth({ pullId })).toEqual({
+      ok: true,
+      status: 'ready',
+      entries: [entry]
+    })
+  })
 })

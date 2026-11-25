@@ -18,6 +18,10 @@ import { LocalToolHost } from './local-tool-host.js'
 const inputSchema = {
   type: 'object',
   properties: {
+    appKey: {
+      type: 'string', maxLength: 120,
+      description: 'Stable name for this tool within the conversation. Reuse the same key on revisions, including renames. For an older widget without a key, reuse its original title.'
+    },
     title: {
       type: 'string',
       maxLength: 120,
@@ -47,6 +51,7 @@ const inputSchema = {
 
 const description = [
   'Render an interactive HTML widget (Gen UI) inline in the current desktop conversation.',
+  'Users can install a widget as a desktop app from its card. Use a stable appKey for a personal tool they want to keep.',
   'Use it when the user benefits from seeing or manipulating something: parameter explorers, simulations,',
   'algorithm step-throughs, interactive charts, calculators, or UI mockups with design alternatives.',
   'Do not use it for plain tables (Markdown), static diagrams (Mermaid), simple structured charts (render_chart when available),',
@@ -121,12 +126,17 @@ export function buildGenUiToolProvider(
           const stored = await target.putWidget(fragment)
           const genUi: GenUiWidgetRef = {
             ...stored,
+            ...(parsed.data.appKey ? { appKey: parsed.data.appKey } : {}),
             title: parsed.data.title,
             mode: parsed.data.mode ?? 'inline'
           }
+          const updateError = await target.apps?.revise({ threadId: context.threadId, widgetId: stored.widgetId,
+            title: genUi.title, appKey: genUi.appKey }).catch((error: unknown) =>
+              error instanceof Error ? error.message : 'The installed app could not be updated.')
           return {
             output: {
               status: 'completed',
+              ...(updateError ? { installedAppUpdateError: updateError } : {}),
               summary: `Displayed the interactive widget "${parsed.data.title}" to the user.`
             },
             // UI-only sideband consumed by the desktop; never projected to the model.

@@ -42,6 +42,7 @@ function isMissing(error: unknown): boolean {
  * only the runtime writes it and every write replaces one entry atomically.
  */
 export class GenUiStore {
+  apps?: import('./widget-app-service.js').WidgetAppService
   private readonly widgetsDir: string
   private readonly stateDir: string
   private readonly stateQueues = new Map<string, Promise<unknown>>()

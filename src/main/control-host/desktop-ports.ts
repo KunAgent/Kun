@@ -1,5 +1,5 @@
 import type { RpcPeer } from '@kun/control-host'
-import type { DesktopAuthority, DesktopEngineDependencies, DesktopInputPort } from '@kun/control-runtime/desktop'
+import type { DesktopAuthority, DesktopEngineDependencies, DesktopInputPort } from '../remote-desktop/session-service'
 import type { DesktopCapturePort } from '../remote-desktop/capture-host'
 import type { CaptureEvent } from '../../shared/remote-desktop'
 import { validateDesktopViewport } from '@kun/remote-protocol'

@@ -39,6 +39,8 @@ export function ColabKernelSection({
   const { t } = useTranslation('common')
   const accelerator = useColabNotebookStore((s) => s.accelerator)
   const setAccelerator = useColabNotebookStore((s) => s.setAccelerator)
+  const mountDriveOpt = useColabNotebookStore((s) => s.launchOptions.mountDrive)
+  const patchLaunchOptions = useColabNotebookStore((s) => s.patchLaunchOptions)
   const kunBusy = useColabNotebookStore((s) => s.kunBusy)
 
   const snapshot = useColabStore((s) => s.snapshot)
@@ -315,6 +317,28 @@ export function ColabKernelSection({
                         )
                       })}
                     </div>
+
+                    <label
+                      data-colab-launch-mount-drive
+                      className="mt-2 flex cursor-pointer items-center justify-between gap-2 rounded-[9px] border border-ds-border/80 bg-ds-main/50 px-2.5 py-1.5 text-[11.5px] hover:bg-ds-hover/60"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium text-ds-ink">
+                          {t('colabNb.autoMountDriveLabel')}
+                        </span>
+                        <span className="block truncate text-[10.5px] text-ds-muted">
+                          {t('colabNb.autoMountDriveHint')}
+                        </span>
+                      </span>
+                      <input
+                        type="checkbox"
+                        data-colab-guard-mount-drive
+                        disabled={Boolean(colabLive)}
+                        checked={mountDriveOpt}
+                        onChange={(e) => patchLaunchOptions({ mountDrive: e.target.checked })}
+                        className="shrink-0 accent-accent"
+                      />
+                    </label>
 
                     <KernelLaunchGuardControls accelerator={pickedGpu} disabled={Boolean(colabLive)} />
 

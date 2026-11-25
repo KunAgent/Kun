@@ -14,8 +14,13 @@ function base(id: string, turnId: string, role: TurnItem['role'], status: ItemSt
 }
 
 export const fixtureItems = {
-  user(id: string, turnId: string, text: string): ItemOf<'user_message'> {
-    return { ...base(id, turnId, 'user', 'completed'), kind: 'user_message', text } as ItemOf<'user_message'>
+  user(id: string, turnId: string, text: string, attachmentIds?: string[]): ItemOf<'user_message'> {
+    return {
+      ...base(id, turnId, 'user', 'completed'),
+      kind: 'user_message',
+      text,
+      ...(attachmentIds ? { attachmentIds } : {})
+    } as ItemOf<'user_message'>
   },
   text(id: string, turnId: string, text: string, status: ItemStatus = 'completed'): ItemOf<'assistant_text'> {
     return { ...base(id, turnId, 'assistant', status), kind: 'assistant_text', text }
@@ -32,7 +37,9 @@ export const fixtureItems = {
 }
 
 /** A thread with one turn per entry of `turns`; the last turn may still run. */
-export function fixtureProjection(turns: Array<{ id: string; items: TurnItem[]; running?: boolean }>): ThreadProjection {
+export function fixtureProjection(
+  turns: Array<{ id: string; items: TurnItem[]; running?: boolean; attachmentIds?: string[] }>
+): ThreadProjection {
   const thread = ThreadSchema.parse({
     id: FIXTURE_THREAD_ID, title: 'Fixture thread', workspace: '/tmp/project', model: 'model-a',
     mode: 'agent', status: turns.some((turn) => turn.running) ? 'running' : 'idle',
@@ -54,7 +61,7 @@ export function fixtureProjection(turns: Array<{ id: string; items: TurnItem[]; 
       startedAt: CREATED_AT,
       ...(turn.running ? {} : { finishedAt: CREATED_AT }),
       items: turn.items,
-      attachmentIds: [],
+      attachmentIds: turn.attachmentIds ?? [],
       activeSkillIds: [],
       injectedMemoryIds: [],
       injectedMemorySummaries: [],

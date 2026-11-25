@@ -6,6 +6,7 @@ import {
   Cpu,
   Download,
   ExternalLink,
+  HardDrive,
   Loader2,
   MoreHorizontal,
   Save,
@@ -19,6 +20,7 @@ import { useChatStore } from '../../store/chat-store'
 import { useColabDismiss } from '../use-colab-dismiss'
 import { KernelPickerPopover } from './KernelPickerPopover'
 import { NotebookImportMenu } from './NotebookImportMenu'
+import { useColabDriveStore } from './colab-drive-store'
 import { useColabNotebookStore } from './colab-notebook-store'
 import { useNotebookPullStore } from './notebook-pull-store'
 import type { ColabNotebookRuntime } from './use-colab-notebook-runtime'
@@ -47,7 +49,11 @@ export function NotebookTopbar({
   const sidePanelOpen = useColabNotebookStore((s) => s.sidePanelOpen)
   const saveNotebook = useColabNotebookStore((s) => s.saveNotebook)
   const setSidePanelOpen = useColabNotebookStore((s) => s.setSidePanelOpen)
+  const setSidePanelTab = useColabNotebookStore((s) => s.setSidePanelTab)
   const setKernelPickerOpen = useColabNotebookStore((s) => s.setKernelPickerOpen)
+  const driveState = useColabDriveStore((s) =>
+    runtime.session ? s.states[runtime.session.id] : undefined
+  )
 
   const [moreOpen, setMoreOpen] = useState(false)
   const moreRef = useRef<HTMLDivElement>(null)
@@ -172,6 +178,40 @@ export function NotebookTopbar({
                   >
                     <Download className="h-3.5 w-3.5 shrink-0 text-ds-muted" />
                     <span className="truncate">{t('colabNb.jupyterImportFromThis')}</span>
+                  </button>
+                ) : null}
+                {!usingJupyter && runtime.session ? (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setMoreOpen(false)
+                      setSidePanelTab('files')
+                      if (driveState?.status === 'mounted') {
+                        void useColabNotebookStore
+                          .getState()
+                          .revealRemotePaths(runtime.session!.id, [
+                            runtime.remoteRoot,
+                            driveState.mountPath
+                          ])
+                      } else if (
+                        driveState?.status !== 'mounting' &&
+                        driveState?.status !== 'needs_auth' &&
+                        driveState?.status !== 'unmounting'
+                      ) {
+                        void useColabDriveStore.getState().mount(runtime.session!.id)
+                      }
+                    }}
+                    className="mx-1.5 flex w-[calc(100%-0.75rem)] items-center gap-2 rounded-[8px] px-2.5 py-1.5 text-left text-ds-ink hover:bg-ds-hover"
+                  >
+                    <HardDrive className="h-3.5 w-3.5 shrink-0 text-ds-muted" />
+                    <span className="truncate">
+                      {t(
+                        driveState?.status === 'mounted'
+                          ? 'colabNb.openMountedDriveMenu'
+                          : 'colabNb.mountDriveMenu'
+                      )}
+                    </span>
                   </button>
                 ) : null}
                 {!usingJupyter && (runtime.session || runtime.connection) ? (

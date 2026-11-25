@@ -37,6 +37,7 @@ import {
 } from './runtime-factory-dependencies.js'
 import type { createRuntimeAgentComposition } from './runtime-composition-agent.js'
 import { ExtensionRoomsService } from '../services/extension-rooms-service.js'
+import { WidgetAppService } from '../gen-ui/widget-app-service.js'
 import type { RoomRuntime } from '../rooms/room-runtime.js'
 
 export async function createRuntimeExtensionComposition(
@@ -92,6 +93,7 @@ export async function createRuntimeExtensionComposition(
 	    extensionValidation
 	  )
 	  const extensionState = new ExtensionStateStore(extensionPaths)
+    core.genUiStore.apps = new WidgetAppService(core.genUiStore, extensionRegistry, extensionPackageManager, extensionState)
 	  const extensionConfiguration = new ExtensionConfigurationService(extensionState)
 	  const extensionMediaHandles = new ExtensionMediaHandleService({ dataDir: core.activeOptions.dataDir })
 	  const extensionMediaProcesses = new ExtensionMediaProcessService({

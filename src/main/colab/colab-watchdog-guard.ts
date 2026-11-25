@@ -48,9 +48,59 @@ def find_runtime_addr(cfg):
             continue
     return None
 
+def flush_drive():
+    try:
+        os.sync()
+    except Exception:
+        pass
+    cands = ["/content/drive"]
+    try:
+        mp_cfg = "/root/.config/Google/DriveFS/mount_point"
+        if os.path.isfile(mp_cfg):
+            p = open(mp_cfg, "r", encoding="utf-8", errors="ignore").read().strip()
+            if p and p not in cands:
+                cands.append(p)
+    except OSError:
+        pass
+    try:
+        with open("/proc/mounts", "r", encoding="utf-8", errors="ignore") as mf:
+            for ln in mf:
+                ps = ln.split()
+                if len(ps) >= 3 and (ps[2].startswith("fuse") or ps[0] == "drive"):
+                    mp = ps[1].replace("\\\\040", " ")
+                    if mp not in cands:
+                        cands.append(mp)
+    except OSError:
+        pass
+    mounted = False
+    for mp in cands:
+        mp = mp.rstrip("/") or "/"
+        if mp == "/":
+            continue
+        try:
+            pdev = os.stat(os.path.dirname(mp) or "/").st_dev
+            for root in (mp + "/MyDrive", mp + "/My Drive"):
+                if os.path.isdir(root) and (os.path.ismount(mp) or os.stat(root).st_dev != pdev):
+                    mounted = True
+                    break
+            if mounted:
+                break
+        except OSError:
+            continue
+    if mounted:
+        try:
+            subprocess.run(
+                [sys.executable, "-c", "from google.colab import drive; drive.flush_and_unmount()"],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                timeout=120,
+            )
+        except Exception:
+            pass
+
 def unassign(addr):
     if not addr:
         return False
+    flush_drive()
     url = f"http://{addr}/unassign"
     for _ in range(3):
         try:

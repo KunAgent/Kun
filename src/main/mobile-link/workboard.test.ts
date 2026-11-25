@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RemoteApi } from '@kun/remote-protocol'
-import { MobileWorkboard } from './workboard'
+import { MobileWorkboard, applyCompletionAttention } from './workboard'
 afterEach(() => vi.useRealTimers())
 function fixture() {
   const now = Date.now(), request = vi.fn(async (path: string, _method?: string, _body?: unknown) => path === '/workboard/publisher' ? { epoch: 'epoch' } : { ok: true })
@@ -14,9 +14,9 @@ it('publishes one bounded metadata stream, reuses its epoch and stops completely
   try {
     f.publisher.start(f.api, () => true); f.publisher.start(f.api, () => true)
     await vi.advanceTimersByTimeAsync(0)
-    expect(f.read).toHaveBeenCalledWith('/v1/remote/workboard', 'GET')
+    expect(f.read).toHaveBeenCalledWith('/v1/remote/workboard', 'POST', JSON.stringify({ attention: {} }))
     expect(f.request.mock.calls.map(call => call[0])).toEqual(['/workboard/publisher', '/workboard/snapshot'])
-    expect(f.request.mock.calls[1][2]).toMatchObject({ epoch: 'epoch', sequence: 1, snapshot: f.snapshot })
+    expect(f.request.mock.calls[1][2]).toMatchObject({ epoch: 'epoch', sequence: 1, snapshot: { ...f.snapshot, schemaVersion: 2 } })
     await vi.advanceTimersByTimeAsync(15000)
     expect(f.request.mock.calls.filter(call => call[0] === '/workboard/publisher')).toHaveLength(1)
     f.publisher.stop(); const count = f.request.mock.calls.length
@@ -35,4 +35,26 @@ it('a revoked host cannot publish a late runtime read; unallowlisted private fie
   g.read.mockResolvedValue({ ok: true, status: 200, body: JSON.stringify({ ...g.snapshot, title: 'private' }) })
   try { g.publisher.start(g.api, () => true); await vi.advanceTimersByTimeAsync(0); expect(g.request.mock.calls.filter(call => call[0] === '/workboard/snapshot')).toHaveLength(0) }
   finally { g.publisher.stop() }
+})
+
+it('marks only matching terminal outcomes unread and keeps them beyond the completed-row window', () => {
+  const now = Date.now()
+  const snapshot = {
+    schemaVersion: 1 as const,
+    complete: true,
+    observedAt: now,
+    sessions: [
+      { kind: 'code' as const, id: 'unread', runId: 'turn-a', phase: 'completed' as const, updatedAt: now - 3600000 },
+      { kind: 'code' as const, id: 'read', runId: 'turn-b', phase: 'completed' as const, updatedAt: now - 3600000 },
+      { kind: 'code' as const, id: 'failure', runId: 'turn-c', phase: 'failed' as const, updatedAt: now },
+      { kind: 'code' as const, id: 'mismatch', runId: 'turn-d', phase: 'completed' as const, updatedAt: now },
+      { kind: 'agent' as const, id: 'agent', runId: 'request', phase: 'completed' as const, updatedAt: now - 3600000 }
+    ]
+  }
+  const result = applyCompletionAttention(snapshot, { unread: 'completed', failure: 'failed', mismatch: 'failed' })
+  expect(result.schemaVersion).toBe(2)
+  expect(result.sessions.find(row => row.id === 'unread')).toMatchObject({ unread: true })
+  expect(result.sessions.find(row => row.id === 'failure')).toMatchObject({ unread: true })
+  expect(result.sessions.find(row => row.id === 'mismatch')).toMatchObject({ unread: false })
+  expect(result.sessions.some(row => row.id === 'read' || row.id === 'agent')).toBe(false)
 })

@@ -1,4 +1,10 @@
 {
+  "widgetAppInstall": "ऐप के रूप में इंस्टॉल करें",
+  "widgetAppOpen": "ऐप खोलें",
+  "widgetAppsTitle": "इंस्टॉल किए गए ऐप",
+  "widgetAppRemoveConfirm": "“{{title}}” को अनइंस्टॉल करें?",
+  "widgetAppOpening": "ऐप खुल रहा है…",
+  "widgetAppUnavailable": "यह ऐप अब उपलब्ध नहीं है।",
   "appSurfaceDesktopOnly": "इंटरैक्टिव पेज Kun डेस्कटॉप ऐप में उपलब्ध हैं।",
   "appSurfaceRetry": "फिर से कोशिश करें",
   "appSurfacePageError": "पेज त्रुटि: {{message}}",

@@ -8,6 +8,7 @@ import type {
 } from '../../shared/app-sandbox'
 import type { RuntimeRequestResult } from '../../shared/kun-gui-api-contracts'
 import { isGenUiWidgetId } from '../../../kun/src/contracts/gen-ui'
+import type { WidgetApp } from '../../../kun/src/contracts/widget-app'
 import {
   isMcpAppHtmlMimeType,
   MCP_APP_HTML_MAX_BYTES,
@@ -97,6 +98,13 @@ export class AppSandboxService {
     if (!THREAD_ID_PATTERN.test(request.threadId) || !isGenUiWidgetId(request.widgetId)) {
       return failure('APP_SANDBOX_INVALID_REQUEST', 'Invalid widget reference.')
     }
+    if (request.appId) {
+      const response = await this.options.runtimeRequest('/v1/gen-ui/apps/' + request.appId + '/page', 'GET')
+      const page = parseJson(response) as { app?: WidgetApp; html?: unknown; state?: unknown } | null
+      if (!response.ok || typeof page?.html !== 'string' || page.app?.widgetId !== request.widgetId ||
+        page.app.threadId !== request.threadId) return failure('GEN_UI_APP_UNAVAILABLE', 'This app has changed. Reopen it to continue.')
+      return this.registerWidget(ownerWebContentsId, request, page.html, page.app.title, page.state)
+    }
     const widgetResponse = await this.options.runtimeRequest(`/v1/gen-ui/widgets/${request.widgetId}`, 'GET')
     if (!widgetResponse.ok) {
       return failure('GEN_UI_WIDGET_UNAVAILABLE', errorMessage(widgetResponse, 'The widget is no longer available.'))
@@ -111,13 +119,18 @@ export class AppSandboxService {
       ? (parseJson(stateResponse) as { entries?: Array<{ widgetId?: unknown; state?: unknown }> } | null)?.entries
       : undefined
     const widgetState = entries?.find((entry) => entry.widgetId === request.widgetId)?.state ?? null
+    return this.registerWidget(ownerWebContentsId, request, widget.html, typeof widget.title === 'string' ? widget.title : 'Widget', widgetState)
+  }
+
+  private registerWidget(ownerWebContentsId: number, request: AppSandboxCreateGenUiRequest,
+    fragment: string, title: string, widgetState: unknown): AppSandboxCreateResult {
     return this.register(ownerWebContentsId, { kind: 'gen-ui', threadId: request.threadId }, (record) => {
       const csp = buildGenUiCsp(shellOrigin(record))
       return {
         csp,
         html: buildGenUiDocument({
-          fragment: widget.html as string,
-          title: typeof widget.title === 'string' ? widget.title : 'Widget',
+          fragment,
+          title,
           csp,
           theme: request.theme,
           widgetState

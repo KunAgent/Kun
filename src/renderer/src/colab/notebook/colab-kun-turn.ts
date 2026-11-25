@@ -30,6 +30,7 @@ export function buildColabKunTurnPrompt(input: {
   includeNotebook: boolean
   session: ColabSessionView | null
   jupyterSession?: JupyterSessionView | null
+  driveMountPath?: string | null
 }): string {
   const lines: string[] = [input.request.trim()]
   const contextParts: string[] = []
@@ -43,7 +44,12 @@ export function buildColabKunTurnPrompt(input: {
       `Connected Jupyter server: \`${input.jupyterSession.serverName}\` (${input.jupyterSession.baseUrl}, kernel \`${input.jupyterSession.kernelName}\`). Code runs on that server, so relative file paths resolve on the server, not in the local workspace.`
     )
   } else if (input.session) {
-    contextParts.push(`Connected Colab runtime: ${input.session.accelerator} (files under /content).`)
+    const driveNote = input.driveMountPath
+      ? `; Google Drive mounted at \`${input.driveMountPath}\` — store large model weights & training checkpoints (\`output_dir\`) under \`${input.driveMountPath}/...\` instead of ephemeral \`/content\``
+      : '; `/content` is wiped when the runtime stops — mount Google Drive at `/content/drive` via `from google.colab import drive; drive.mount("/content/drive")` (or the Files tab) and store large model weights & training checkpoints (`output_dir`) under `/content/drive/MyDrive/...`'
+    contextParts.push(
+      `Connected Colab runtime: ${input.session.accelerator} (working dir /content${driveNote}).`
+    )
   } else {
     contextParts.push('Notebook runtime: currently disconnected. Ask the user to connect one in the Runtime tab before running cells.')
   }
@@ -80,6 +86,7 @@ export async function sendColabKunTurn(input: {
   includeNotebook: boolean
   session: ColabSessionView | null
   jupyterSession?: JupyterSessionView | null
+  driveMountPath?: string | null
   fileReferences: ComposerFileReference[]
   mode?: 'plan' | 'agent' | 'auto'
   /** Called with the target thread before the turn starts, so the pane can claim it while it streams. */
@@ -121,7 +128,8 @@ export async function sendColabKunTurn(input: {
     selectedCellNumber: input.selectedCellNumber,
     includeNotebook: input.includeNotebook,
     session: input.session,
-    jupyterSession: input.jupyterSession
+    jupyterSession: input.jupyterSession,
+    driveMountPath: input.driveMountPath
   })
   if (input.fileReferences.length > 0 && input.workspaceRoot) {
     const t = (key: string, options?: Record<string, unknown>): string => String(i18n.t(key, options))

@@ -104,6 +104,7 @@ export class ColabService {
       cli: this.cli,
       credentials: this.credentials,
       isolation: this.isolation,
+      openExternal: options.openExternal,
       getSession: (id) => this.sessions.get(id),
       patchSession: (id, patch) => this.patchSession(id, patch),
       appendLog: (id, line, metricPattern) => {
@@ -478,16 +479,12 @@ export class ColabService {
     return { ok: true }
   }
 
-  async uploadToSession(
-    sessionId: string,
-    localPaths: string[],
-    transfer: UploadOptions
-  ): Promise<RuntimeUploadResult> {
+  async uploadToSession(sessionId: string, localPaths: string[], transfer: UploadOptions, targetRemoteDir?: string): Promise<RuntimeUploadResult> {
     const s = this.sessions.get(sessionId)
     if (!s || s.phase !== 'running') return { ok: false, uploadedCount: 0, message: '运行时未连接。' }
     const res = await uploadFilesToColabSession({
       session: s,
-      localPaths, transfer,
+      localPaths, targetRemoteDir, transfer,
       cli: this.cli,
       credentials: this.credentials,
       isolation: this.isolation

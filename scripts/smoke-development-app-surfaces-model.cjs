@@ -67,7 +67,15 @@ async function startAppSurfacesModelFixture(model) {
     let message = { role: 'assistant', content: 'Done.' }
     const turnKey = (text.match(/\[(gen-ui-smoke|canvas-smoke|canvas-edit-smoke)-(\d+)\]/u) ?? [])
     if (turnKey[1] === 'gen-ui-smoke' && tools.includes('render_widget') && !toolResult(`gen-ui-${turnKey[2]}`)) {
-      message = call(`gen-ui-${turnKey[2]}`, 'render_widget', { title: 'Amplitude explorer', html: WIDGET_HTML })
+      const html = turnKey[2] === '2' ? WIDGET_HTML + `<p id="revision-two">Updated controls</p><script>
+        window.addEventListener('load', () => {
+          const saved = window.kun.widgetState
+          if (saved?.privateContent?.recordNextLaunch) setTimeout(() => window.kun.setWidgetState({
+            modelContent: saved.modelContent, privateContent: { reopenedValue: document.getElementById('amp').value }
+          }), 300)
+        })
+      </script>` : WIDGET_HTML
+      message = call(`gen-ui-${turnKey[2]}`, 'render_widget', { title: 'Amplitude explorer', html })
     } else if (turnKey[1] === 'canvas-smoke' && tools.includes('mcp_kun_canvas_canvas_create') && !toolResult(`canvas-${turnKey[2]}`)) {
       message = call(`canvas-${turnKey[2]}`, 'mcp_kun_canvas_canvas_create', {
         title: 'API cache database',

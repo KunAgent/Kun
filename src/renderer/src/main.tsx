@@ -24,7 +24,8 @@ import './styles/workflow-canvas.css'
 import './styles/graph-workbench.css'
 import './styles/neutral-polish.css'
 import './styles/provider-quota-panel.css'
-import { applyCursorSpotlight, initializeStartupTheme } from './lib/apply-theme'
+import { applyCursorSpotlight, applyDocumentLocale, initializeStartupTheme } from './lib/apply-theme'
+import { isAppLocale } from '@shared/app-locales'
 import { applyCachedColorPalette } from './lib/color-palettes'
 import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
@@ -38,7 +39,8 @@ document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 document.documentElement.dataset.desktopTitleBar = window.kunGui?.desktopTitleBarMode
   ?? resolveDesktopTitleBarMode(window.kunGui?.platform ?? 'unknown', false)
 if (window.kunGui?.isRemoteWeb === true) document.documentElement.dataset.remoteWeb = 'true'
-void whenDesktopStartupReady()
+const widgetAppId = new URLSearchParams(window.location.search).get('widgetApp')
+if (!widgetAppId) void whenDesktopStartupReady()
   .then(() => import('./components/rooms/art-asset-store'))
   .then(({ startArtUpdates }) => startArtUpdates())
   .catch((error: unknown) => console.warn('[kun-gui] art updates unavailable:', error))
@@ -49,10 +51,15 @@ installCursorSpotlightTracking()
 const storageRelocationMode = new URLSearchParams(window.location.search).get('storageRelocation') === '1'
 const runtimeMigrationRecoveryMode = new URLSearchParams(window.location.search).get('runtimeMigrationRecovery') === '1'
 const missionControlPopoutMode = new URLSearchParams(window.location.search).get('popout') === '1'
-if (!storageRelocationMode && !runtimeMigrationRecoveryMode && !missionControlPopoutMode) {
+if (!storageRelocationMode && !runtimeMigrationRecoveryMode && !missionControlPopoutMode && !widgetAppId) {
   installDataMigrationRendererRpc()
+  window.kunGui?.widgetApps?.onCompose?.(request => {
+    void import('./app-surfaces/widget-apps/widget-app-follow-up')
+      .then(({ sendWidgetAppFollowUp }) => sendWidgetAppFollowUp(request)).catch(() => false)
+      .then(sent => window.kunGui.widgetApps.composed(request.requestId, sent))
+  })
 }
-if (!missionControlPopoutMode) {
+if (!missionControlPopoutMode && !widgetAppId) {
   installProviderMutationFlushHandler()
   // The popout owns no chat thread, so it must not claim activity foreground.
   startActivityForegroundReporting()
@@ -71,7 +78,17 @@ void bootstrap().catch((error: unknown) => {
 })
 
 async function bootstrap(): Promise<void> {
-  await import('./i18n')
+  const { default: i18n } = await import('./i18n')
+  if (widgetAppId) {
+    const locale = new URLSearchParams(window.location.search).get('lang')
+    if (isAppLocale(locale)) {
+      await i18n.changeLanguage(locale)
+      applyDocumentLocale(locale)
+    }
+    const { WidgetAppWindow } = await import('./app-surfaces/widget-apps/WidgetAppWindow')
+    reactRoot.render(<WidgetAppWindow id={widgetAppId} />)
+    return
+  }
   if (missionControlPopoutMode) {
     const { MissionControlPopoutView } = await import(
       './components/mission-control/MissionControlPopoutView'

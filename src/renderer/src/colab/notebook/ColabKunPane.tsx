@@ -19,6 +19,7 @@ import { useChatStore } from '../../store/chat-store'
 import { useWorkComposerReferences } from '../../write/work-composer-references'
 import { NotebookKunDiffCard } from './NotebookKunDiffCard'
 import { readColabKunThreadIds, rememberColabKunThread } from './colab-kun-threads'
+import { useColabDriveStore } from './colab-drive-store'
 import { sendColabKunTurn } from './colab-kun-turn'
 import { useColabNotebookStore } from './colab-notebook-store'
 import type { ColabNotebookRuntime } from './use-colab-notebook-runtime'
@@ -194,6 +195,9 @@ export function ColabKunPane({
     const sentRefs = referenceProps.fileReferences
     if (sentRefs.length > 0) useWorkComposerReferences.getState().consume(sentRefs)
     composer.setInput('')
+    const driveState = runtime.session
+      ? useColabDriveStore.getState().states[runtime.session.id]
+      : undefined
     const res = await sendColabKunTurn({
       workspaceRoot: runtime.wsKey,
       threadId: effectiveThreadId,
@@ -204,6 +208,7 @@ export function ColabKunPane({
       includeNotebook: Boolean(activePath && !notebookChipDetached),
       session: runtime.session,
       jupyterSession: runtime.jupyterSession,
+      driveMountPath: driveState?.status === 'mounted' ? driveState.mountPath : null,
       fileReferences: sentRefs,
       mode: composer.mode,
       onThreadReady: (threadId) => {

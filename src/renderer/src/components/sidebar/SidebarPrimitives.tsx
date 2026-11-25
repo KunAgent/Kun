@@ -5,7 +5,9 @@ import type {
   ReactElement,
   ReactNode
 } from 'react'
-import { ChevronRight, Command, PanelLeft, Search, X } from 'lucide-react'
+import { ChevronRight, Command, ListTodo, PanelLeft, Search, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { useToastStore } from '../../toast/toast-store'
 import './sidebar-lean-rows.css'
 
 function cx(...parts: Array<string | false | null | undefined>): string {
@@ -55,6 +57,9 @@ export function SidebarFrame({
   onCollapse,
   className
 }: SidebarFrameProps): ReactElement {
+  const { t } = useTranslation('common')
+  const desktopNotes = typeof window !== 'undefined' && typeof window.kunGui?.openDailyNotes === 'function' &&
+    !window.kunGui.isRemoteWeb
   return (
     <aside
       className={cx(
@@ -80,6 +85,14 @@ export function SidebarFrame({
 
       {footer ? (
         <div className="ds-sidebar-footer ds-no-drag mt-2 border-t border-[var(--ds-sidebar-divider)] px-1 pt-3">
+          {desktopNotes && <SidebarCommandRow
+            icon={<ListTodo className="h-4 w-4" strokeWidth={1.75} />}
+            label={t('dailyNotes.title')}
+            onClick={() => void window.kunGui.openDailyNotes().catch(() => useToastStore.getState().publish({
+              id: 'daily-notes-open', tone: 'error', title: t('dailyNotes.openFailed')
+            }))}
+            variant="footer"
+          />}
           {footer}
         </div>
       ) : null}

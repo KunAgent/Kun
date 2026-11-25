@@ -1,15 +1,20 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import type { DesktopEngineDependencies } from './session-service'
 
-const f = vi.hoisted(() => ({
-  screenEvents: new Map<string, (...args: any[]) => void>(),
-  powerEvents: new Map<string, (...args: any[]) => void>(),
-  stop: vi.fn(async () => {})
-}))
+const f = vi.hoisted(() => {
+  const stop = vi.fn(async () => {})
+  return {
+    screenEvents: new Map<string, (...args: any[]) => void>(),
+    powerEvents: new Map<string, (...args: any[]) => void>(),
+    stop,
+    desktop: vi.fn((_deps: DesktopEngineDependencies) => ({ stopAll: stop }))
+  }
+})
 vi.mock('electron', () => ({
   screen: { on: (name: string, handler: (...args: any[]) => void) => f.screenEvents.set(name, handler) },
   powerMonitor: { on: (name: string, handler: (...args: any[]) => void) => f.powerEvents.set(name, handler) }
 }))
-vi.mock('../control-host/runtime-host', () => ({ controlRuntimeHost: () => ({ desktop: () => ({ stopAll: f.stop }) }), stopControlRuntimeHost: vi.fn() }))
+vi.mock('../control-host/runtime-host', () => ({ controlRuntimeHost: () => ({ desktop: f.desktop }), stopControlRuntimeHost: vi.fn() }))
 vi.mock('./capture-host', () => ({ ElectronDesktopCapture: vi.fn(), displayFingerprint: vi.fn() }))
 vi.mock('./native-input', () => ({ NativeDesktopInput: vi.fn(), desktopHelperAvailable: () => true }))
 vi.mock('../services/computer-use-permissions', () => ({ getComputerUsePermissions: vi.fn() }))
@@ -22,6 +27,17 @@ import { logInfo } from '../logger'
 beforeEach(() => {
   f.screenEvents.clear(); f.powerEvents.clear(); f.stop.mockClear(); vi.mocked(logInfo).mockReset()
   createDesktopEngine(async () => [], async () => {})
+})
+it.each(['win32', 'linux', 'darwin'] as const)('uses the macOS lock-state preflight only on its native platform (%s)', platform => {
+  const original = Object.getOwnPropertyDescriptor(process, 'platform')!
+  try {
+    Object.defineProperty(process, 'platform', { value: platform })
+    createDesktopEngine(async () => [], async () => {})
+    const deps = f.desktop.mock.lastCall![0]
+    expect(typeof deps.lockState === 'function').toBe(platform === 'darwin')
+    f.powerEvents.get('lock-screen')!()
+    expect(f.stop).toHaveBeenCalledExactlyOnceWith('host_inactive')
+  } finally { Object.defineProperty(process, 'platform', original) }
 })
 it('keeps an incoming desktop session alive when only the available work area changes', () => {
   f.screenEvents.get('display-metrics-changed')!({}, {}, ['workArea'])

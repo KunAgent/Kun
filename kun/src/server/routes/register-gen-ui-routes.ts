@@ -5,6 +5,7 @@ import type { Router } from '../router.js'
 import { authorize } from './route-auth.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
+import { registerWidgetAppRoutes } from './widget-apps.js'
 
 const STATE_BODY_LIMIT = GEN_UI_STATE_MAX_BYTES * 2 + 1_024
 
@@ -13,6 +14,7 @@ const STATE_BODY_LIMIT = GEN_UI_STATE_MAX_BYTES * 2 + 1_024
  * and per-thread widget state written by pages through the workbench.
  */
 export function registerGenUiRoutes(router: Router, runtime: ServerRuntime): void {
+  registerWidgetAppRoutes(router, runtime)
   const unavailable = () => ERRORS.unavailable('generated UI is not available')
 
   router.add('GET', '/v1/gen-ui/widgets/:widgetId', async (request, ctx) => {

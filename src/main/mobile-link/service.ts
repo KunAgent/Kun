@@ -193,6 +193,9 @@ export class MobileLinkService {
     this.unsubscribe()
     this.unsubscribeEnding()
   }
+  workboardAttentionChanged() {
+    this.workboard.nudge()
+  }
   suspend() {
     if (!this.enabled || this.suspended) return
     this.suspended = true
@@ -538,7 +541,7 @@ export class MobileLinkService {
   }
   async confirm(id: string, rawScopes?: unknown) {
     const computer = this.computerPairings.has(id)
-    const chosen = computer ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes ?? MOBILE_DEFAULT_SCOPES)
+    const chosen = computer ? computerDesktopScopes(rawScopes) : mobileLinkScopes(rawScopes ?? (this.desktopAccess ? MOBILE_REMOTE_SCOPES : MOBILE_DEFAULT_SCOPES))
     const scopes = !computer && this.desktopAccess ? mobileLinkScopes([...new Set([...chosen, ...COMPUTER_DESKTOP_SCOPES])]) : chosen
     if (!/^[a-f0-9-]{36}$/.test(id) || !this.api) throw new Error('INVALID_PAIRING')
     const generation = this.generation, peer = this.pairingPeers.get(id)

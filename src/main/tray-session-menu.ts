@@ -12,6 +12,7 @@ export type TrayThreadSummary = {
 type TrayMenuActions = {
   openThread: (threadId: string) => void
   newChat: () => void
+  openDailyNotes: () => void
   openApp: () => void
   quit: () => void
 }
@@ -66,6 +67,7 @@ export function buildTrayMenuTemplate(input: {
   if (template.length > 0) template.push({ type: 'separator' })
   template.push(
     { label: labels.newChat, click: input.actions.newChat },
+    { label: labels.dailyNotes, click: input.actions.openDailyNotes },
     { type: 'separator' },
     { label: labels.openApp, click: input.actions.openApp },
     { type: 'separator' },
@@ -115,6 +117,7 @@ function traySessionLabels(locale: AppSettingsV1['locale']): {
   recent: string
   more: string
   newChat: string
+  dailyNotes: string
   openApp: string
   quit: string
 } {
@@ -124,6 +127,7 @@ function traySessionLabels(locale: AppSettingsV1['locale']): {
         recent: '最近会话',
         more: '更多',
         newChat: '新建会话',
+        dailyNotes: '每日待办与笔记',
         openApp: '打开 Kun',
         quit: '退出'
       }
@@ -132,6 +136,7 @@ function traySessionLabels(locale: AppSettingsV1['locale']): {
         recent: 'Recent',
         more: 'More',
         newChat: 'New Chat',
+        dailyNotes: 'Daily notes & to-dos',
         openApp: 'Open Kun',
         quit: 'Exit'
       }

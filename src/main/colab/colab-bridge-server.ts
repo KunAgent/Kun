@@ -194,7 +194,7 @@ export class ColabBridgeServer {
           outputLocalDir: typeof body.outputLocalDir === 'string' ? body.outputLocalDir : './outputs',
           maxRuntimeHours: typeof body.maxRuntimeHours === 'number' ? body.maxRuntimeHours : 3,
           autoStop: typeof body.autoStop === 'boolean' ? body.autoStop : true,
-          mountDrive: Boolean(body.mountDrive)
+          mountDrive: typeof body.mountDrive === 'boolean' ? body.mountDrive : true
         })
         this.sendJson(res, started.ok ? 200 : 400, started)
         return

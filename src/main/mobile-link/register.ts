@@ -11,8 +11,13 @@ import { hostname, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import type { ArtAccountAccess } from '../art-assets/account-access'
 import type { RegisterAppIpcHandlersOptions } from '../ipc/app-ipc-handler-options'
-import { assertTrustedWorkbenchSender } from '../ipc/app-ipc-handler-utils'
+import { assertTrustedWorkbenchSender, parseIpcPayload } from '../ipc/app-ipc-handler-utils'
 import { MOBILE_LINK_CHANNELS as channels } from '../../shared/mobile-link'
+import {
+  WORKBOARD_COMPLETION_ATTENTION_CHANNEL,
+  workboardCompletionAttentionSchema,
+  type WorkboardCompletionAttention
+} from '../../shared/workboard-attention'
 import { hasKunAccountSession } from '../../shared/kun-account'
 import { loadIdentity, resetIdentity } from './identity'
 import { MobileLinkService, type LinkDependencies } from './service'
@@ -90,6 +95,7 @@ export function registerMobileLink(
     if (!await simulatorOrigin(origin, authority)) throw Error('SIMULATOR_ORIGIN_UNAVAILABLE')
   })
   registerControlPackage(options)
+  let completionAttention: WorkboardCompletionAttention = {}
   const serviceDependencies: LinkDependencies = {
     simulator,
     createClient: deps => controlRuntimeHost().relay(deps),
@@ -112,6 +118,7 @@ export function registerMobileLink(
       ),
     socket: (url, headers) => sockets.open(url, headers),
     lease: options.acquireRuntimeRequestLease,
+    completionAttention: () => completionAttention,
     diagnostic,
     desktop,
     terminal,
@@ -120,6 +127,16 @@ export function registerMobileLink(
     files: transferFiles
   }
   const service = new MobileLinkService(serviceDependencies)
+  ipcMain.handle(WORKBOARD_COMPLETION_ATTENTION_CHANNEL, (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    completionAttention = parseIpcPayload(
+      WORKBOARD_COMPLETION_ATTENTION_CHANNEL,
+      workboardCompletionAttentionSchema,
+      payload
+    )
+    service.workboardAttentionChanged()
+    return { applied: true }
+  })
   const computers = registerComputerAccess(options, account, service)
   registerDirectLink(options, serviceDependencies, links)
   const resume = new MobileRelayResume({ account, relay: service, preference: new RelayPreference(links), diagnostic })

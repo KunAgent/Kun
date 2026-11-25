@@ -512,8 +512,12 @@ export class JupyterServerManager {
     }
   }
 
-  uploadFiles(sessionId: string, localPaths: string[], transfer: UploadOptions): Promise<RuntimeUploadResult> {
-    return uploadRuntimeFiles(localPaths.map((localPath) => ({ localPath, remotePath: basename(localPath) })), async () => {
+  uploadFiles(sessionId: string, localPaths: string[], transfer: UploadOptions, targetRemoteDir?: string): Promise<RuntimeUploadResult> {
+    const cleaned = (targetRemoteDir ?? '').trim().replace(/^\/+|\/+$/g, '')
+    if (cleaned && (cleaned.includes('\\') || [...cleaned].some((ch) => ch.charCodeAt(0) < 32) || cleaned.split('/').some((seg) => !seg || seg === '.' || seg === '..'))) {
+      return Promise.resolve({ ok: false, uploadedCount: 0, message: 'Invalid Jupyter upload destination.' })
+    }
+    return uploadRuntimeFiles(localPaths.map((localPath) => ({ localPath, remotePath: cleaned ? posix.join(cleaned, basename(localPath)) : basename(localPath) })), async () => {
       const active = this.sessions.get(sessionId)
       if (!active) throw new Error('Jupyter session not connected.')
       return { baseUrl: active.view.baseUrl, headers: active.headers }

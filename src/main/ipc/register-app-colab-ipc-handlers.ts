@@ -11,6 +11,7 @@ import {
   setColabNotebookAgentRelay
 } from '../colab/colab-host'
 import { ColabNotebookAgentRelay } from '../colab/colab-notebook-agent-relay'
+import { ColabDriveMountManager } from '../colab/colab-drive-mount'
 import { ColabDriveNotebookManager } from '../colab/colab-drive-notebooks'
 import { ColabPortForwardManager } from '../colab/colab-port-forward-manager'
 import { isJupyterSessionId, JupyterServerManager } from '../colab/jupyter-server-manager'
@@ -138,7 +139,8 @@ const portForwardStopSchema = z.object({ forwardId: z.string().min(1).max(128) }
 const uploadSchema = z
   .object({
     sessionId: z.string().min(1).max(128),
-    workspaceNotebook: z.string().min(1).max(4096).regex(/\.ipynb$/i).optional()
+    workspaceNotebook: z.string().min(1).max(4096).regex(/\.ipynb$/i).optional(),
+    targetRemoteDir: z.string().min(1).max(1024).optional()
   })
   .strict()
 const downloadSchema = z
@@ -180,6 +182,8 @@ const drivePullStartSchema = pullIdSchema.extend({
   runtime: z.union([sessionIdSchema, z.object({ temporaryCpu: z.literal(true) }).strict()])
 })
 const driveImportSchema = pullIdSchema.extend({ remotePath: z.string().min(1).max(2048) })
+const driveMountStateSchema = sessionIdSchema.extend({ probe: z.boolean().optional() })
+const driveMountSchema = sessionIdSchema.extend({ forceRemount: z.boolean().optional() })
 const jupyterConnectSchema = z
   .object({
     workspaceRoot: z.string().max(4096),
@@ -337,7 +341,12 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
     const win = options.getMainWindow()
     if (win && !win.isDestroyed()) win.webContents.send('colab:notebook:event', event)
   }
-  const notebookKernel = new ColabNotebookKernel(service, sendNotebookEvent)
+  const driveMount = new ColabDriveMountManager(service)
+  driveMount.subscribe((state) => {
+    const win = options.getMainWindow()
+    if (win && !win.isDestroyed()) win.webContents.send('colab:drive:mount-changed', state)
+  })
+  const notebookKernel = new ColabNotebookKernel(service, sendNotebookEvent, driveMount)
   const jupyterManager = new JupyterServerManager({
     colabRootDir: join(app.getPath('userData'), 'colab'),
     credentials: service.credentials,
@@ -366,6 +375,7 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
   registerColabSubsystemShutdown(async () => {
     for (const upload of uploads.values()) upload.controller.abort()
     notebookKernel.shutdown()
+    driveMount.shutdown()
     portForwards.shutdown()
     await Promise.all([driveNotebooks.shutdown(), jupyterManager.shutdown()])
   })
@@ -384,7 +394,7 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
   })
 
   ipcMain.handle('colab:session:upload', async ({ sender }, payload: unknown): Promise<RuntimeUploadResult> => {
-    const { sessionId, workspaceNotebook } = parseIpcPayload('colab:session:upload', uploadSchema, payload)
+    const { sessionId, workspaceNotebook, targetRemoteDir } = parseIpcPayload('colab:session:upload', uploadSchema, payload)
     if (uploads.has(sessionId)) return { ok: false, uploadedCount: 0, message: 'An upload is already in progress.' }
     const controller = new AbortController()
     const abort = (): void => controller.abort()
@@ -412,7 +422,7 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
       const transfer = { signal: controller.signal, onProgress: (progress: RuntimeUploadProgress) => {
         if (!sender.isDestroyed()) sender.send('colab:session:upload-progress', { ...progress, sessionId })
       } }
-      return await (jupyter ? jupyterManager.uploadFiles(sessionId, paths, transfer) : service.uploadToSession(sessionId, paths, transfer))
+      return await (jupyter ? jupyterManager.uploadFiles(sessionId, paths, transfer, targetRemoteDir) : service.uploadToSession(sessionId, paths, transfer, targetRemoteDir))
     } catch (error) {
       return controller.signal.aborted ? { ok: false, canceled: true, uploadedCount: 0 }
         : { ok: false, uploadedCount: 0, message: error instanceof Error ? error.message : 'Upload failed.' }
@@ -493,6 +503,20 @@ export function registerAppColabIpcHandlers(options: RegisterAppIpcHandlersOptio
     driveNotebooks.closePull(parseIpcPayload('colab:drive:close-pull', pullIdSchema, payload).pullId))
   ipcMain.handle('colab:drive:import-notebook', async (_, payload: unknown) =>
     driveNotebooks.importDriveNotebook(parseIpcPayload('colab:drive:import-notebook', driveImportSchema, payload)))
+  ipcMain.handle('colab:drive:mount-state', async (_, payload: unknown) => {
+    const req = parseIpcPayload('colab:drive:mount-state', driveMountStateSchema, payload)
+    return driveMount.getState(req.sessionId, { probe: req.probe })
+  })
+  ipcMain.handle('colab:drive:mount', async (_, payload: unknown) =>
+    driveMount.mount(parseIpcPayload('colab:drive:mount', driveMountSchema, payload)))
+  ipcMain.handle('colab:drive:complete-mount-auth', async (_, payload: unknown) =>
+    driveMount.completeMountAuth(parseIpcPayload('colab:drive:complete-mount-auth', sessionIdSchema, payload)))
+  ipcMain.handle('colab:drive:open-mount-auth', async (_, payload: unknown) =>
+    driveMount.openMountAuth(parseIpcPayload('colab:drive:open-mount-auth', sessionIdSchema, payload)))
+  ipcMain.handle('colab:drive:cancel-mount', async (_, payload: unknown) =>
+    driveMount.cancelMount(parseIpcPayload('colab:drive:cancel-mount', sessionIdSchema, payload)))
+  ipcMain.handle('colab:drive:unmount', async (_, payload: unknown) =>
+    driveMount.unmount(parseIpcPayload('colab:drive:unmount', sessionIdSchema, payload)))
   ipcMain.handle('jupyter:get-snapshot', async () => jupyterManager.getSnapshot())
   ipcMain.handle('jupyter:save-server', async (_, payload: unknown) =>
     jupyterManager.saveServer(parseIpcPayload('jupyter:save-server', jupyterSaveServerSchema, payload)))

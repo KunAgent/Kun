@@ -12,12 +12,14 @@ export type DesktopAccessStatus = {
   systemAudioEnabled?: boolean
   virtualSupported?: boolean
   virtualEnabled?: boolean
+  unlockSupported?: boolean
+  unlockEnabled?: boolean
   reason?: string
   lastFailure?: string
   displays: Array<DesktopDisplay & { allowed: boolean }>
   active?: { sessionId: string; peer: string; mode: 'view' | 'control' }
 }
-export type DesktopConfiguration = { enabled: boolean; displayTokens: string[]; allowVirtual?: boolean; allowGame?: boolean; allowSystemAudio?: boolean }
+export type DesktopConfiguration = { enabled: boolean; displayTokens: string[]; allowVirtual?: boolean; allowGame?: boolean; allowSystemAudio?: boolean; allowUnlock?: boolean }
 export type CaptureCommand = { id: string; operation: 'start' | 'answer' | 'ice' | 'stop' | 'send' | 'quality' | 'privacy'; params: Record<string, unknown> }
 export type CaptureReply = { id: string; value?: unknown; error?: string }
 export type CaptureEvent = { event: 'ice' | 'data' | 'closed' | 'ready' | 'health'; value?: unknown }

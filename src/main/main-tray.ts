@@ -124,6 +124,10 @@ function createTrayMenu(settings: AppSettingsV1, threads: TrayThreadSummary[]): 
     actions: {
       openThread: (threadId) => dispatchTrayAction({ type: 'open-thread', threadId }),
       newChat: () => dispatchTrayAction({ type: 'new-chat' }),
+      openDailyNotes: () => {
+        void mainState.openDailyNotes?.().catch(error =>
+          logWarn('daily-notes', 'Failed to open notes', { message: String(error) }))
+      },
       openApp: revealMainWindow,
       quit: quitFromTray
     }
@@ -283,13 +287,20 @@ function showTrayMenu(): void {
   if (!mainState.tray || mainState.trayMenuOpenPromise) return
   hideTrayQuotaPopover()
   const currentTray = mainState.tray
+  if (!mainState.store) {
+    if (mainState.trayMenu) currentTray.popUpContextMenu(mainState.trayMenu)
+    return
+  }
   mainState.trayMenuOpenPromise = (async () => {
     const settings = await mainState.store.load()
     const threads = await loadTrayThreads(settings)
     if (currentTray.isDestroyed()) return
     mainState.trayMenu = createTrayMenu(settings, threads)
     currentTray.popUpContextMenu(mainState.trayMenu)
-  })().finally(() => {
+  })().catch(error => {
+    logWarn('tray', 'Could not refresh tray sessions', { message: String(error) })
+    if (!currentTray.isDestroyed() && mainState.trayMenu) currentTray.popUpContextMenu(mainState.trayMenu)
+  }).finally(() => {
     mainState.trayMenuOpenPromise = null
   })
 }

@@ -71,6 +71,28 @@ export type ColabDriveNotebooksListResult =
   | { ok: true; status: 'needs_auth'; authUrl: string; expiresAt: number }
   | { ok: false; message: string; code?: 'auth_expired' | 'auth_incomplete' | 'canceled' }
 
+export type ColabDriveMountState =
+  | { sessionId: string; status: 'unmounted' }
+  | { sessionId: string; status: 'mounting' }
+  | { sessionId: string; status: 'needs_auth'; authUrl: string; expiresAt: number }
+  | { sessionId: string; status: 'mounted'; mountPath: string }
+  | { sessionId: string; status: 'unmounting' }
+  | {
+      sessionId: string
+      status: 'error'
+      message: string
+      code?: 'auth_expired' | 'auth_incomplete' | 'canceled'
+    }
+
+export type ColabDriveMountResult =
+  | { ok: true; state: ColabDriveMountState }
+  | {
+      ok: false
+      message: string
+      code?: 'auth_expired' | 'auth_incomplete' | 'canceled'
+      state?: ColabDriveMountState
+    }
+
 export type ColabNotebookImportResult =
   | { ok: true; relativePaths: string[] }
   | { ok: false; canceled?: boolean; message?: string }

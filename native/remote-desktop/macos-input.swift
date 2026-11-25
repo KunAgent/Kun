@@ -1,6 +1,9 @@
 import Foundation
 import CoreGraphics
 import ApplicationServices
+import Carbon.HIToolbox
+import IOKit.pwr_mgt
+import OpenDirectory
 import Darwin
 
 // Owned by one Main session. stdin EOF, lost parent or a nonrenewed lease releases input.
@@ -27,11 +30,133 @@ let keyMap = letterKeys.merging([
   "F1":122,"F2":120,"F3":99,"F4":118,"F5":96,"F6":97,"F7":98,"F8":100,"F9":101,"F10":109,
   "F11":103,"F12":111,"F13":105,"F14":107,"F15":113,"F16":106,"F17":64,"F18":79,"F19":80,"F20":90
 ], uniquingKeysWith: { first, _ in first })
-func interactiveSession() -> Bool {
+func currentLockState() -> String {
   guard let info = CGSessionCopyCurrentDictionary() as? [String: Any],
     info[kCGSessionOnConsoleKey as String] as? Bool == true,
-    info[kCGSessionLoginDoneKey as String] as? Bool == true else { return false }
-  return info["CGSSessionScreenIsLocked"] as? Bool != true
+    info[kCGSessionLoginDoneKey as String] as? Bool == true else { return "inactive" }
+  return info["CGSSessionScreenIsLocked"] as? Bool == true ? "locked" : "unlocked"
+}
+func interactiveSession() -> Bool {
+  return currentLockState() == "unlocked"
+}
+func processExecutableName(_ pid: Int32) -> String? {
+  var buffer = [CChar](repeating: 0, count: 256)
+  return proc_name(pid, &buffer, UInt32(buffer.count)) > 0 ? String(cString: buffer) : nil
+}
+func loginwindowOwnsSecureInput() -> Bool {
+  guard let info = CGSessionCopyCurrentDictionary() as? [String: Any],
+    info[kCGSessionOnConsoleKey as String] as? Bool == true,
+    info[kCGSessionLoginDoneKey as String] as? Bool == true,
+    info["CGSSessionScreenIsLocked"] as? Bool == true,
+    IsSecureEventInputEnabled(),
+    let pid = info["kCGSSessionSecureInputPID"] as? Int32,
+    processExecutableName(pid) == "loginwindow" else { return false }
+  return true
+}
+func verifyMacPassword(_ password: String) -> Bool {
+  let user = NSUserName()
+  guard !user.isEmpty else { return false }
+  for nodeType in [ODNodeType(kODNodeTypeLocalNodes), ODNodeType(kODNodeTypeAuthentication)] {
+    if let node = try? ODNode(session: ODSession.default(), type: nodeType),
+       let record = try? node.record(withRecordType: kODRecordTypeUsers, name: user, attributes: nil) {
+      return (try? record.verifyPassword(password)) != nil
+    }
+  }
+  return false
+}
+func postLockScreenKey(_ code: CGKeyCode, flags: CGEventFlags = []) -> Bool {
+  for down in [true, false] {
+    guard let source = CGEventSource(stateID: .hidSystemState),
+      let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else { return false }
+    event.flags = flags
+    event.post(tap: .cghidEventTap)
+  }
+  return true
+}
+func unlockReply(_ error: String? = nil) -> Never {
+  let payload: [String: Any] = error == nil ? ["ok": true] : ["ok": false, "error": error!]
+  if let data = try? JSONSerialization.data(withJSONObject: payload), let line = String(data: data, encoding: .utf8) {
+    print(line); fflush(stdout)
+  }
+  exit(0)
+}
+func runUnlockFromStdin() -> Never {
+  guard var line = readLine(), line.utf8.count <= 4096, var raw = line.data(using: .utf8) else {
+    unlockReply("INVALID_REQUEST")
+  }
+  defer {
+    raw.resetBytes(in: 0..<raw.count)
+    line.removeAll(keepingCapacity: false)
+  }
+  guard let json = (try? JSONSerialization.jsonObject(with: raw)) as? [String: Any],
+    Set(json.keys) == Set(["password"]),
+    var password = json["password"] as? String,
+    !password.isEmpty, password.utf8.count <= 256, !password.contains("\0") else {
+    unlockReply("INVALID_REQUEST")
+  }
+  defer { password.removeAll(keepingCapacity: false) }
+  let initial = currentLockState()
+  if initial == "inactive" { unlockReply("DESKTOP_HOST_INACTIVE") }
+  guard AXIsProcessTrusted() else { unlockReply("INPUT_PERMISSION_REQUIRED") }
+  // Verify against OpenDirectory before touching loginwindow so wrong passwords never trigger OS lockouts.
+  guard verifyMacPassword(password) else { unlockReply("DESKTOP_UNLOCK_DENIED") }
+  let afterVerify = currentLockState()
+  if afterVerify == "inactive" { unlockReply("DESKTOP_HOST_INACTIVE") }
+  if afterVerify == "unlocked" { unlockReply() }
+
+  var assertion = IOPMAssertionID(0)
+  let declared = IOPMAssertionDeclareUserActivity("Kun remote unlock" as CFString, kIOPMUserActiveLocal, &assertion)
+  defer { if declared == kIOReturnSuccess { IOPMAssertionRelease(assertion) } }
+  let wakeBegin = ProcessInfo.processInfo.systemUptime
+  while CGDisplayIsAsleep(CGMainDisplayID()) != 0 && ProcessInfo.processInfo.systemUptime - wakeBegin < 3.0 {
+    usleep(50_000)
+  }
+  for _ in 0..<8 where !loginwindowOwnsSecureInput() && currentLockState() == "locked" {
+    usleep(50_000)
+  }
+  if !loginwindowOwnsSecureInput() && currentLockState() == "locked" {
+    _ = postLockScreenKey(53)
+    let focusBegin = ProcessInfo.processInfo.systemUptime
+    while !loginwindowOwnsSecureInput() && currentLockState() == "locked" && ProcessInfo.processInfo.systemUptime - focusBegin < 2.0 {
+      usleep(50_000)
+    }
+  }
+  if !loginwindowOwnsSecureInput() {
+    unlockReply(currentLockState() == "unlocked" ? nil : "DESKTOP_UNLOCK_UNAVAILABLE")
+  }
+  // Clear any stray characters already sitting in the lock-screen field before typing.
+  if loginwindowOwnsSecureInput() {
+    _ = postLockScreenKey(0, flags: .maskCommand)
+    usleep(20_000)
+    if loginwindowOwnsSecureInput() { _ = postLockScreenKey(51); usleep(30_000) }
+  }
+  for character in password {
+    guard AXIsProcessTrusted(), loginwindowOwnsSecureInput() else {
+      unlockReply(currentLockState() == "unlocked" ? nil : "DESKTOP_UNLOCK_INTERRUPTED")
+    }
+    let units = Array(String(character).utf16)
+    for down in [true, false] {
+      guard let source = CGEventSource(stateID: .hidSystemState),
+        let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down) else {
+        unlockReply("DESKTOP_UNLOCK_FAILED")
+      }
+      event.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+      event.post(tap: .cghidEventTap)
+    }
+    usleep(30_000)
+  }
+  guard AXIsProcessTrusted(), loginwindowOwnsSecureInput() else {
+    unlockReply(currentLockState() == "unlocked" ? nil : "DESKTOP_UNLOCK_INTERRUPTED")
+  }
+  guard postLockScreenKey(36) else { unlockReply("DESKTOP_UNLOCK_FAILED") }
+  let waitBegin = ProcessInfo.processInfo.systemUptime
+  while ProcessInfo.processInfo.systemUptime - waitBegin < 6.0 {
+    let state = currentLockState()
+    if state == "unlocked" { unlockReply() }
+    if state == "inactive" { unlockReply("DESKTOP_HOST_INACTIVE") }
+    usleep(100_000)
+  }
+  unlockReply(currentLockState() == "unlocked" ? nil : "DESKTOP_UNLOCK_FAILED")
 }
 func flags(excluding released: CGKeyCode? = nil) -> CGEventFlags {
   var value = CGEventFlags()
@@ -94,6 +219,15 @@ let args = Array(CommandLine.arguments.dropFirst())
 @_silgen_name("kun_system_audio") func kunSystemAudio(_ display: UInt32, _ pid: Int32) -> Int32
 @_silgen_name("kun_privacy_screen") func kunPrivacyScreen(_ display: UInt32, _ pid: Int32, _ virtual: Int32) -> Int32
 if args == ["--privacy-screen-probe"] { print("kun-privacy-screen-v1"); exit(0) }
+if args == ["--unlock-probe"] { print("kun-desktop-unlock-v1"); exit(0) }
+if args == ["--lock-state"] {
+  let payload: [String: Any] = ["lockState": currentLockState(), "inputReady": AXIsProcessTrusted()]
+  if let data = try? JSONSerialization.data(withJSONObject: payload), let line = String(data: data, encoding: .utf8) {
+    print(line); fflush(stdout)
+  }
+  exit(0)
+}
+if args == ["--unlock"] { runUnlockFromStdin() }
 if args.count == 5 && args[0] == "--privacy-screen", let display = UInt32(args[1]), let pid = Int32(args[2]),
    ownedCapture(pid, args[3]), ["physical", "virtual"].contains(args[4]) {
   exit(kunPrivacyScreen(display, pid, args[4] == "virtual" ? 1 : 0))

@@ -6,6 +6,7 @@ import type { GenUiWidgetRef } from '../../../../../kun/src/contracts/gen-ui'
 import { appSandboxApi } from '../app-sandbox-client'
 import { useAppSurfaceStore } from '../app-surface-store'
 import { GenUiSurface } from './GenUiSurface'
+import { InstallWidgetButton } from '../widget-apps/InstallWidgetButton'
 
 export function GenUiCard({
   threadId,
@@ -36,6 +37,7 @@ export function GenUiCard({
       <header className="mb-1 flex items-center gap-1.5 text-[12px] text-ds-muted">
         <Sparkles className="h-3.5 w-3.5 shrink-0 text-ds-faint" aria-hidden />
         <span className="min-w-0 flex-1 truncate font-medium text-ds-ink">{widget.title}</span>
+        <InstallWidgetButton source={{ threadId, title: widget.title, widgetId: widget.widgetId, appKey: widget.appKey }} />
         <div className="flex items-center gap-0.5 opacity-0 transition group-hover/gen-ui:opacity-100 focus-within:opacity-100">
           <button
             type="button"

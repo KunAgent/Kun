@@ -649,6 +649,7 @@ export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & R
     options?: { workspaceRoot?: string; clawChannelId?: string; providerId?: string; modelHint?: string; reasoningEffort?: string; mode?: 'agent' | 'plan' }
   ) => Promise<ScheduleTaskFromTextResult>
   runDesktopCommand: (command: DesktopCommand) => Promise<void>
+  openDailyNotes: () => Promise<void>
   getWindowMiniMode: () => Promise<boolean>
   onWindowMiniMode: (handler: (mini: boolean) => void) => () => void
   openExternal: (url: string) => Promise<void>
@@ -673,6 +674,9 @@ export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & R
   /** Main shows allowance reminders itself; a click asks the renderer to open provider settings. */
   onQuotaReminderClicked: (handler: () => void) => () => void
   setAppBadgeCount: (count: number) => Promise<AppBadgeCountResult>
+  syncWorkboardCompletionAttention: (
+    attention: import('./workboard-attention').WorkboardCompletionAttention
+  ) => Promise<{ applied: boolean }>
   /** Notification + Dock bounce + badge while Kun is in the background. */
   requestUserAttention: (request: UserAttentionRequest) => Promise<{ shown: boolean }>
   getAppVersion: () => Promise<string>

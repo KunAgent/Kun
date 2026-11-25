@@ -1,4 +1,10 @@
 {
+  "widgetAppInstall": "ติดตั้งเป็นแอป",
+  "widgetAppOpen": "เปิดแอป",
+  "widgetAppsTitle": "แอปที่ติดตั้ง",
+  "widgetAppRemoveConfirm": "ถอนการติดตั้ง “{{title}}” หรือไม่",
+  "widgetAppOpening": "กำลังเปิดแอป…",
+  "widgetAppUnavailable": "แอปนี้ไม่พร้อมใช้งานแล้ว",
   "appSurfaceDesktopOnly": "หน้าแบบโต้ตอบใช้ได้ในแอปเดสก์ท็อป Kun",
   "appSurfaceRetry": "ลองอีกครั้ง",
   "appSurfacePageError": "หน้าเกิดข้อผิดพลาด: {{message}}",

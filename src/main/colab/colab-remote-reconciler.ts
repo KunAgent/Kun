@@ -3,6 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { basename, join, posix } from 'node:path'
 import type { KunColabSettingsV1 } from '../../shared/app-settings-colab'
 import type { RuntimeUploadResult } from '../../shared/colab/runtime-upload'
+import { runSessionDriveProbeHelper } from './colab-drive-protocol'
 import { colabUploadAccess } from './colab-upload-access'
 import { uploadRuntimeFiles, type UploadOptions } from './runtime-file-upload'
 import { activeDrivePullSessions } from './colab-drive-notebooks'
@@ -17,6 +18,7 @@ import type { ColabCredentialStore } from './colab-credential-store'
 import type { ColabPythonIsolation } from './colab-python-isolation'
 import type { ColabSessionExecutor } from './colab-session-executor'
 import type { PersistedConnectionRecord } from './colab-state-store'
+import { resolveWorkspaceOutputLocalDir } from './colab-workspace-sync'
 
 export async function pollColabBalancesAndRemoteSessions(options: {
   targets: PersistedConnectionRecord[]
@@ -136,28 +138,90 @@ export async function stopRemoteUntrackedEndpoint(options: {
   }
 }
 
+export function normalizeColabUploadTargetDir(targetRemoteDir?: string): string {
+  const cleaned = (targetRemoteDir ?? '').trim().replace(/^\/+|\/+$/g, '')
+  if (!cleaned) return 'content'
+  if (
+    cleaned.includes('\\') ||
+    [...cleaned].some((ch) => ch.charCodeAt(0) < 32) ||
+    cleaned.split('/').some((seg) => !seg || seg === '.' || seg === '..') ||
+    (cleaned !== 'content' && !cleaned.startsWith('content/'))
+  ) {
+    throw new Error('Invalid Colab upload destination directory.')
+  }
+  return cleaned
+}
+
 export async function uploadFilesToColabSession(options: {
   session: ColabSessionView
   localPaths: string[]
+  targetRemoteDir?: string
   transfer?: UploadOptions
   cli: ColabCliRuntime
   credentials: ColabCredentialStore
   isolation: ColabPythonIsolation
+  fetchImpl?: typeof fetch
+  spawnProcess?: typeof spawn
 }): Promise<RuntimeUploadResult> {
   try {
+    const destDir = normalizeColabUploadTargetDir(options.targetRemoteDir)
+    if (
+      destDir === 'content/drive' ||
+      (destDir.startsWith('content/drive/') &&
+        !/^content\/drive\/(MyDrive|My Drive|Shareddrives)(\/|$)/.test(destDir))
+    ) {
+      return {
+        ok: false,
+        uploadedCount: 0,
+        message: 'Choose a folder inside /content/drive/MyDrive to upload files.'
+      }
+    }
     const credFile = await options.credentials.materializeRuntimeToken(options.session.connectionId)
     const { paths, env } = await options.isolation.prepareConnectionEnvironment(
       options.session.connectionId,
       credFile
     )
+    const driveMountMatch = /^content\/([^/]+)\/(?:MyDrive|My Drive|Shareddrives)(?:\/|$)/.exec(
+      destDir
+    )
+    if (driveMountMatch) {
+      const mountPoint = `/content/${driveMountMatch[1]}`
+      const probed = await runSessionDriveProbeHelper({
+        pythonPath: options.cli.venvPythonPath,
+        sessionsJsonPath: paths.sessionsJsonPath,
+        sessionName: options.session.sessionName,
+        env,
+        mountPoint,
+        signal: options.transfer?.signal,
+        spawnProcess: options.spawnProcess
+      })
+      if (options.transfer?.signal?.aborted) {
+        return { ok: false, canceled: true, uploadedCount: 0 }
+      }
+      if (!probed.mounted) {
+        return {
+          ok: false,
+          uploadedCount: 0,
+          message: `Mount Google Drive (${mountPoint}) before uploading files to Drive.`
+        }
+      }
+    }
     const access = colabUploadAccess({
-      pythonPath: options.cli.venvPythonPath, sessionsJsonPath: paths.sessionsJsonPath,
-      sessionName: options.session.sessionName, env
+      pythonPath: options.cli.venvPythonPath,
+      sessionsJsonPath: paths.sessionsJsonPath,
+      sessionName: options.session.sessionName,
+      env
     })
     return await uploadRuntimeFiles(options.localPaths.map((localPath) => ({
-      localPath, remotePath: posix.join('content', basename(localPath))
-    })), access, options.transfer)
-  } catch {
+      localPath, remotePath: posix.join(destDir, basename(localPath))
+    })), access, options.transfer, options.fetchImpl)
+  } catch (error) {
+    if (options.transfer?.signal?.aborted) {
+      return { ok: false, canceled: true, uploadedCount: 0 }
+    }
+    if (error instanceof Error && error.message.includes('Invalid Colab upload destination')) {
+      return { ok: false, uploadedCount: 0, message: error.message }
+    }
     return { ok: false, uploadedCount: 0, message: 'Could not prepare the connected Colab runtime for upload.' }
   }
 }
@@ -176,16 +240,27 @@ export async function downloadArtifactsFromColabSession(options: {
       options.session.connectionId,
       credFile
     )
-    const localDir = join(
+    const localDir = resolveWorkspaceOutputLocalDir(
       options.session.workspaceRoot || process.cwd(),
       options.session.outputLocalDir || './outputs'
     )
     await mkdir(localDir, { recursive: true })
     if (options.remotePath) {
-      const dest = join(localDir, basename(options.remotePath))
+      const normalizedRemote = options.remotePath.trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+      const fileName = posix.basename(normalizedRemote)
+      if (
+        !normalizedRemote.startsWith('content/') ||
+        normalizedRemote.split('/').some((seg) => !seg || seg === '.' || seg === '..') ||
+        !fileName ||
+        fileName === '.' ||
+        fileName === '..'
+      ) {
+        return { ok: false, message: 'Invalid remote file path.' }
+      }
+      const dest = join(localDir, fileName)
       const res = await options.cli.runCommand({
         sessionsJsonPath: paths.sessionsJsonPath,
-        args: ['download', '-s', options.session.sessionName, options.remotePath, dest],
+        args: ['download', '-s', options.session.sessionName, normalizedRemote, dest],
         env,
         timeoutMs: 180_000
       })

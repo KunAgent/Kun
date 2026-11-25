@@ -41,6 +41,7 @@ export const GenUiModeSchema = z.enum(['inline', 'wide'])
 export type GenUiMode = z.infer<typeof GenUiModeSchema>
 
 export const GenUiRenderInputSchema = z.object({
+  appKey: z.string().trim().min(1).max(120).optional(),
   title: z.string().trim().min(1).max(GEN_UI_TITLE_MAX_CHARS),
   html: z.string().min(1).optional(),
   path: z.string().trim().min(1).max(4_096).optional(),
@@ -53,6 +54,7 @@ export const GenUiRenderInputSchema = z.object({
 export type GenUiRenderInput = z.infer<typeof GenUiRenderInputSchema>
 
 export const GenUiWidgetRefSchema = z.object({
+  appKey: z.string().trim().min(1).max(120).optional(),
   widgetId: GenUiWidgetIdSchema,
   sha256: z.string().regex(/^[a-f0-9]{64}$/),
   bytes: z.number().int().positive().max(GEN_UI_HTML_MAX_BYTES),

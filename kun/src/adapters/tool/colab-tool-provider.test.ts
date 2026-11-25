@@ -70,6 +70,7 @@ describe('buildColabToolProviders', () => {
     expect(approval?.requiresUserDecision).toBe(true)
     expect(approval?.reason).toContain('zxy@gmail.com')
     expect(approval?.reason).toContain('9.6 CU')
+    expect(approval?.reason).toContain('/content/drive')
 
     const unauthorizedTools = buildColabToolProviders({
       binding: { url: 'http://127.0.0.1:41234', token: 'wrong-token', fetchImpl }

@@ -56,4 +56,21 @@ describe('runtime upload UI state', () => {
     expect(useRuntimeUploads.getState().sessions.b).toMatchObject({ busy: false, result: { ok: false, message: 'IPC unavailable' } })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
   })
+
+  it('forwards targetRemoteDir when uploading or saving notebooks directly into Google Drive', async () => {
+    invoke.mockResolvedValueOnce({ ok: true, uploadedCount: 1 })
+    await useRuntimeUploads
+      .getState()
+      .start('a', 'train.ipynb', undefined, '/content/drive/MyDrive/Colab Notebooks')
+    expect(invoke).toHaveBeenCalledWith({
+      sessionId: 'a',
+      workspaceNotebook: 'train.ipynb',
+      targetRemoteDir: '/content/drive/MyDrive/Colab Notebooks'
+    })
+    expect(useRuntimeUploads.getState().sessions.a).toEqual({
+      busy: false,
+      result: { ok: true, uploadedCount: 1 },
+      targetRemoteDir: '/content/drive/MyDrive/Colab Notebooks'
+    })
+  })
 })

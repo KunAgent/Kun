@@ -1,4 +1,10 @@
 {
+  "widgetAppInstall": "Установить как приложение",
+  "widgetAppOpen": "Открыть приложение",
+  "widgetAppsTitle": "Установленные приложения",
+  "widgetAppRemoveConfirm": "Удалить «{{title}}»?",
+  "widgetAppOpening": "Открытие приложения…",
+  "widgetAppUnavailable": "Приложение больше недоступно.",
   "appSurfaceDesktopOnly": "Интерактивные страницы доступны в настольном приложении Kun.",
   "appSurfaceRetry": "Повторить",
   "appSurfacePageError": "Ошибка страницы: {{message}}",

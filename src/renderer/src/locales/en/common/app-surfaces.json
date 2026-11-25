@@ -1,4 +1,10 @@
 {
+  "widgetAppInstall": "Install as app",
+  "widgetAppOpen": "Open app",
+  "widgetAppsTitle": "Installed apps",
+  "widgetAppRemoveConfirm": "Uninstall “{{title}}”?",
+  "widgetAppOpening": "Opening app…",
+  "widgetAppUnavailable": "This app is no longer available.",
   "appSurfaceDesktopOnly": "Interactive pages are available in the Kun desktop app.",
   "appSurfaceRetry": "Retry",
   "appSurfacePageError": "Page error: {{message}}",

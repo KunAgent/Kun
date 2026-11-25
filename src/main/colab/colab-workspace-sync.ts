@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { isAbsolute, join, posix, resolve, sep } from 'node:path'
 import type {
   ColabMetricPoint,
   ColabSyncCandidate,
@@ -193,6 +193,27 @@ export async function collectSyncFileList(
   return files
 }
 
+export function sanitizeOutputLocalDir(raw?: string): string {
+  const trimmed = (raw ?? '').trim()
+  if (!trimmed || trimmed.includes('\0') || isAbsolute(trimmed)) return './outputs'
+  const norm = trimmed.replaceAll('\\', '/')
+  if (/^[a-zA-Z]:/.test(norm) || norm.split('/').some((seg) => seg === '..')) return './outputs'
+  return trimmed
+}
+
+export function resolveWorkspaceOutputLocalDir(
+  workspaceRoot: string,
+  outputLocalDir?: string
+): string {
+  const baseRoot = resolve(workspaceRoot.trim() || process.cwd())
+  const safeRel = sanitizeOutputLocalDir(outputLocalDir)
+  const candidate = resolve(baseRoot, safeRel)
+  if (candidate !== baseRoot && !candidate.startsWith(baseRoot + sep)) {
+    return join(baseRoot, 'outputs')
+  }
+  return candidate
+}
+
 export async function readWorkspaceColabConfig(
   workspaceRoot: string
 ): Promise<ColabWorkspaceRunConfig | null> {
@@ -214,7 +235,9 @@ export async function readWorkspaceColabConfig(
         ? raw.syncPaths.filter((p): p is string => typeof p === 'string')
         : [],
       outputRemoteDir: typeof raw.outputRemoteDir === 'string' ? raw.outputRemoteDir : 'outputs/',
-      outputLocalDir: typeof raw.outputLocalDir === 'string' ? raw.outputLocalDir : './outputs',
+      outputLocalDir: sanitizeOutputLocalDir(
+        typeof raw.outputLocalDir === 'string' ? raw.outputLocalDir : undefined
+      ),
       maxRuntimeHours:
         typeof raw.maxRuntimeHours === 'number' && raw.maxRuntimeHours > 0
           ? raw.maxRuntimeHours

@@ -1,4 +1,5 @@
 import { codexReferenceRevision, sourceHistoryAllowed } from '../history-reference/codex-reference-state'
+import { inferClientUserMessageSource } from '@shared/background-shell-notice'
 import { kunThreadPath, kunThreadTimelinePath } from '@shared/kun-endpoints'
 import { runtimeErrorToError } from '@shared/runtime-error'
 import type { ThreadDetail } from './types'
@@ -62,28 +63,51 @@ export async function getKunThreadDetail(threadId: string, options: {
   )
   const turns = (Array.isArray(thread.turns) ? thread.turns : [])
     .filter((turn) => sourceHistoryAllowed(turn.id) || !/^(codex|claude-code|opencode):/u.test(turn.id))
-  const items = turns.filter((turn) => turn.status !== 'queued').flatMap((turn) =>
-    (turn.items ?? []).map((item) => ({
-      ...item,
-      attachmentIds: turn.attachmentIds,
-      activeSkillIds: turn.activeSkillIds,
-      injectedMemoryIds: turn.injectedMemoryIds,
-      injectedMemorySummaries: turn.injectedMemorySummaries,
-      injectedMemoryRelations: turn.injectedMemoryRelations,
-      injectedDirectiveIds: turn.injectedDirectiveIds,
-      injectedDirectiveSummaries: turn.injectedDirectiveSummaries,
-      skillInjectionBytes: turn.skillInjectionBytes,
-      injectedInstructionSources: turn.injectedInstructionSources,
-      instructionInjectionBytes: turn.instructionInjectionBytes,
-      mode: turn.mode === 'plan' || turn.mode === 'agent' ? turn.mode : undefined,
-      guiDesignCanvas: turn.guiDesignCanvas,
-      guiExcalidrawCanvas: turn.guiExcalidrawCanvas,
-      guiDesignMode: turn.guiDesignMode,
-      designProfile: item.designProfile ?? turn.designProfile,
-      designDocumentTarget: item.designDocumentTarget ?? turn.designDocumentTarget,
-      workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
-    }))
-  )
+  const items = turns.filter((turn) => turn.status !== 'queued').flatMap((turn) => {
+    const turnItems = turn.items ?? []
+    const hasExplicitItemAttachments = turnItems.some(
+      (candidate) => candidate.kind === 'user_message' && Boolean(candidate.attachmentIds?.length)
+    )
+    const openingUserItem = turnItems.find(
+      (candidate) =>
+        candidate.kind === 'user_message' &&
+        !candidate.id.startsWith('item_steered') &&
+        !candidate.messageSource &&
+        !inferClientUserMessageSource(candidate.text ?? '')
+    )
+    return turnItems.map((item) => {
+      // Steered user messages share the running turnId; only a legacy opening
+      // prompt with no item-level attachments may inherit turn.attachmentIds.
+      const attachmentIds =
+        item.kind === 'user_message'
+          ? item.attachmentIds?.length
+            ? item.attachmentIds
+            : item === openingUserItem && !hasExplicitItemAttachments
+              ? turn.attachmentIds
+              : undefined
+          : undefined
+      return {
+        ...item,
+        attachmentIds,
+        activeSkillIds: turn.activeSkillIds,
+        injectedMemoryIds: turn.injectedMemoryIds,
+        injectedMemorySummaries: turn.injectedMemorySummaries,
+        injectedMemoryRelations: turn.injectedMemoryRelations,
+        injectedDirectiveIds: turn.injectedDirectiveIds,
+        injectedDirectiveSummaries: turn.injectedDirectiveSummaries,
+        skillInjectionBytes: turn.skillInjectionBytes,
+        injectedInstructionSources: turn.injectedInstructionSources,
+        instructionInjectionBytes: turn.instructionInjectionBytes,
+        mode: turn.mode === 'plan' || turn.mode === 'agent' ? turn.mode : undefined,
+        guiDesignCanvas: turn.guiDesignCanvas,
+        guiExcalidrawCanvas: turn.guiExcalidrawCanvas,
+        guiDesignMode: turn.guiDesignMode,
+        designProfile: item.designProfile ?? turn.designProfile,
+        designDocumentTarget: item.designDocumentTarget ?? turn.designDocumentTarget,
+        workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
+      }
+    })
+  })
   // Explicit null means this branch has no native turn yet. Source history
   // remains display-only even when a legacy response omits native metadata.
   const nativeTurns = turns.filter((turn) => !/^(codex|claude-code|opencode):/u.test(turn.id))

@@ -15,6 +15,8 @@ import { logWarn } from '../logger'
 import { AppSandboxRegistry } from './app-sandbox-registry'
 import { AppSandboxProtocols } from './app-sandbox-protocol'
 import { AppSandboxService, isAppSandboxTheme } from './app-sandbox-service'
+import { WidgetAppId } from '../../../kun/src/contracts/widget-app'
+import { widgetAppForContents } from '../widget-apps/activation'
 
 /** One registry per Main process; the webview guard and IPC share it. */
 export const appSandboxRegistry = new AppSandboxRegistry()
@@ -22,6 +24,7 @@ export const appSandboxRegistry = new AppSandboxRegistry()
 const instanceIdSchema = z.string().refine(isAppSandboxInstanceId, 'invalid instance id')
 const themeSchema = z.custom<AppSandboxTheme>(isAppSandboxTheme, 'invalid theme')
 const createGenUiSchema = z.object({
+  appId: WidgetAppId.optional(),
   threadId: z.string().min(1).max(256),
   widgetId: z.string().min(1).max(128),
   theme: themeSchema
@@ -115,7 +118,9 @@ export function registerAppSandboxIpcHandlers(options: {
   ipcMain.handle(APP_SANDBOX_CHANNELS.createGenUi, async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)
     observeOwner(event.sender)
-    return appService.createGenUi(event.sender.id, createGenUiSchema.parse(payload))
+    const request = createGenUiSchema.parse(payload)
+    if (request.appId !== widgetAppForContents(event.sender)) throw new Error('Unexpected widget app host')
+    return appService.createGenUi(event.sender.id, request)
   })
   ipcMain.handle(APP_SANDBOX_CHANNELS.createMcpApp, async (event, payload: unknown) => {
     assertTrustedWorkbenchSender(event, options.getMainWindow)

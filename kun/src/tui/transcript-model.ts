@@ -72,7 +72,19 @@ export function buildTranscriptEntries(
   const runningTurnId = projection.runningTurnId
   const toolCalls = new Map(all.flatMap((item) => item.kind === 'tool_call' ? [[item.callId, item] as const] : []))
   const toolResults = new Map(all.flatMap((item) => item.kind === 'tool_result' ? [[item.callId, item] as const] : []))
-  const attachmentIdsByTurn = new Map(projection.thread.turns.map((turn) => [turn.id, turn.attachmentIds] as const))
+  const legacyAttachmentIdsByItemId = new Map<string, readonly string[]>()
+  for (const turn of projection.thread.turns) {
+    if (!turn.attachmentIds.length) continue
+    const turnUserItems = all.filter(
+      (candidate): candidate is Extract<TurnItem, { kind: 'user_message' }> =>
+        candidate.turnId === turn.id && candidate.kind === 'user_message'
+    )
+    if (turnUserItems.some((candidate) => Boolean(candidate.attachmentIds?.length))) continue
+    const openingUserItem = turnUserItems.find(
+      (candidate) => !candidate.id.startsWith('item_steered') && !candidate.messageSource
+    )
+    if (openingUserItem) legacyAttachmentIdsByItemId.set(openingUserItem.id, turn.attachmentIds)
+  }
   const visible = all.filter((item): item is VisibleItem =>
     !HIDDEN_KINDS.has(item.kind) && (item.kind !== 'tool_result' || !toolCalls.has(item.callId))
   )
@@ -249,7 +261,7 @@ export function buildTranscriptEntries(
       projection,
       all,
       toolResults,
-      attachmentIdsByTurn,
+      legacyAttachmentIdsByItemId,
       running: turnRunning(item.turnId) && !superseded.has(item.id),
       turnRunning: turnRunning(item.turnId),
       openTail,
@@ -265,7 +277,7 @@ function itemEntries(
     projection: ThreadProjection
     all: readonly TurnItem[]
     toolResults: ReadonlyMap<string, ToolResultItem>
-    attachmentIdsByTurn: ReadonlyMap<string, readonly string[]>
+    legacyAttachmentIdsByItemId: ReadonlyMap<string, readonly string[]>
     /** The item itself may still change (its turn runs and nothing follows it). */
     running: boolean
     turnRunning: boolean
@@ -286,7 +298,7 @@ function itemEntries(
       ? context.options.reasoningOverrides?.get(item.id) ?? context.options.showReasoning
       : context.options.showReasoning,
     userAttachmentIds: item.kind === 'user_message'
-      ? item.attachmentIds?.length ? item.attachmentIds : context.attachmentIdsByTurn.get(item.turnId) ?? []
+      ? item.attachmentIds?.length ? item.attachmentIds : context.legacyAttachmentIdsByItemId.get(item.id) ?? []
       : [],
     separated: item.kind === 'user_message' || item.kind === 'context_window',
     ...(item.kind === 'tool_call' && context.toolResults.get(item.callId)

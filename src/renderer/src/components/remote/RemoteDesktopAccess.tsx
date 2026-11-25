@@ -30,6 +30,11 @@ export function RemoteDesktopAccess({ link, desktop, onBack }: {
         <RemoteSwitch checked={value.virtualEnabled === true} disabled={busy} label={link.zh ? '允许手机专用桌面' : 'Allow a mobile display'}
           onToggle={event => runTrustedUserActivation(event, () => desktop.setVirtual(!value.virtualEnabled))} />
       </RemoteCompactRow> : null}
+      {value.unlockSupported && link.enabled && link.state?.desktopAccess ? <RemoteCompactRow title={link.zh ? '允许锁屏时手动输密码解锁' : 'Allow manual password unlock'}
+        subtitle={link.zh ? 'Mac 锁屏时可在获准手机上手动输入本机密码进入桌面，Kun 不保存密码。' : 'Authorized phones can manually enter your Mac password to unlock. Kun never saves the password.'}>
+        <RemoteSwitch checked={value.unlockEnabled === true} disabled={busy} label={link.zh ? '允许锁屏时手动输密码解锁' : 'Allow manual password unlock'}
+          onToggle={event => runTrustedUserActivation(event, () => desktop.setUnlock(value.unlockEnabled !== true))} />
+      </RemoteCompactRow> : null}
       <RemoteCompactRow title={t('remoteCompact.screenRecording')}>
         {screenGranted ? <span className="text-[12px] text-ds-muted">{t('remoteCompact.granted')}</span>
           : <button type="button" className={REMOTE_BUTTON_CLASS} disabled={busy} onClick={() => desktop.permission('screenRecording')}>{t('remoteCompact.grant')}</button>}

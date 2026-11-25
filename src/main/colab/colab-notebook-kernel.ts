@@ -9,25 +9,92 @@ import {
   type ColabRemoteEntry,
   type ColabRemoteListResult
 } from '../../shared/colab/colab-notebook-types'
+import { sanitizeDriveMountPoint, type ColabDriveMountManager } from './colab-drive-mount'
 import type { ColabService } from './colab-service'
 
 const b64 = (text: string): string => Buffer.from(text, 'utf8').toString('base64')
+
+export function detectCellDriveMount(code: string): {
+  mountsDrive: boolean
+  forceRemount: boolean
+  mountPoint: string
+} {
+  const stripped = code
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n')
+  const importsBareMount = /\bfrom\s+google\.colab\.drive\s+import\s+[^\n]*\bmount\b/.test(stripped)
+  const callMatch =
+    /\bdrive\s*\.\s*mount\s*\(([^)]*)\)/.exec(stripped) ??
+    (importsBareMount ? /\b(?<!\.)mount\s*\(([^)]*)\)/.exec(stripped) : null)
+  if (!callMatch) {
+    return { mountsDrive: false, forceRemount: false, mountPoint: '/content/drive' }
+  }
+  const argsText = callMatch[1] ?? ''
+  const forceRemount = /\bforce_remount\s*=\s*True\b/.test(argsText)
+  const kwPathMatch = /\bmountpoint\s*=\s*(['"])([^'"]+)\1/.exec(argsText)
+  const posPathMatch = /^\s*(['"])([^'"]+)\1/.exec(argsText)
+  let rawMountPoint = kwPathMatch?.[2] ?? posPathMatch?.[2]
+  if (!rawMountPoint) {
+    const varMatch =
+      /\bmountpoint\s*=\s*([A-Za-z_]\w*)\b/.exec(argsText) ??
+      /^\s*([A-Za-z_]\w*)\s*(?:,|$)/.exec(argsText)
+    const ident = varMatch?.[1]
+    if (ident && ident !== 'True' && ident !== 'False' && ident !== 'None') {
+      const assignMatch = new RegExp(`\\b${ident}\\s*=\\s*(['"])([^'"]+)\\1`).exec(stripped)
+      rawMountPoint = assignMatch?.[2]
+    }
+  }
+  return {
+    mountsDrive: true,
+    forceRemount,
+    mountPoint: sanitizeDriveMountPoint(rawMountPoint)
+  }
+}
+
+export function cellUnmountsDrive(code: string): boolean {
+  const stripped = code
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n')
+  return /\bdrive\s*\.\s*flush_and_unmount\s*\(/.test(stripped)
+}
 
 /**
  * Wraps a cell so it runs in the session's persistent kernel namespace, renders
  * the trailing expression like Jupyter, reports exceptions as a structured
  * marker, and ships matplotlib figures back as PNG markers.
  */
-export function buildNotebookCellPython(source: string): string {
+export function buildNotebookCellPython(
+  source: string,
+  options?: { neutralizeForceRemount?: boolean }
+): string {
   const m = COLAB_NOTEBOOK_MARKER
+  const neutralize = Boolean(options?.neutralizeForceRemount)
   return [
     'def _kun_nb_run(_kun_src):',
     '    import ast as _a, base64 as _b, io as _io, json as _j, sys as _s, traceback as _t',
     '    _g = globals()',
+    '    _orig_drive_mount = None',
+    '    _gcd_mod = None',
     '    try:',
     '        open("/root/.kun-colab/heartbeat", "w").close()',
     '    except Exception:',
     '        pass',
+    ...(neutralize
+      ? [
+          '    try:',
+          '        import google.colab.drive as _gcd_mod',
+          '        _orig_drive_mount = _gcd_mod.mount',
+          '        def _kun_drive_mount(mountpoint, force_remount=False, **_kw):',
+          '            return _orig_drive_mount(mountpoint, force_remount=False, **_kw)',
+          '        _gcd_mod.mount = _kun_drive_mount',
+          '        if _g.get("mount") is _orig_drive_mount:',
+          '            _g["mount"] = _kun_drive_mount',
+          '    except Exception:',
+          '        _gcd_mod = None'
+        ]
+      : []),
     '    _src = _b.b64decode(_kun_src).decode("utf-8")',
     '    try:',
     '        from IPython.core.inputtransformer2 import TransformerManager as _TM',
@@ -55,6 +122,13 @@ export function buildNotebookCellPython(source: string): string {
     '    except BaseException as _e:',
     `        print(${JSON.stringify(m + 'ERR:')} + _j.dumps({"ename": type(_e).__name__, "evalue": str(_e), "traceback": _t.format_exc()}), flush=True)`,
     '    finally:',
+    '        if _gcd_mod is not None and _orig_drive_mount is not None:',
+    '            try:',
+    '                _gcd_mod.mount = _orig_drive_mount',
+    '                if _g.get("mount") is _kun_drive_mount:',
+    '                    _g["mount"] = _orig_drive_mount',
+    '            except Exception:',
+    '                pass',
     '        try:',
     '            _plt = _s.modules.get("matplotlib.pyplot")',
     '            if _plt is not None:',
@@ -229,7 +303,11 @@ export function parseKernelVariablesOutput(stdout: string): ColabKernelVariable[
   return null
 }
 
-type RunningExec = { child: ChildProcess; interrupted: boolean }
+type RunningExec = {
+  child: ChildProcess | null
+  interrupted: boolean
+  mountAbort?: AbortController
+}
 
 /** Runs notebook cells against a provisioned Colab session's persistent kernel. */
 export class ColabNotebookKernel {
@@ -237,7 +315,8 @@ export class ColabNotebookKernel {
 
   constructor(
     private readonly service: ColabService,
-    private readonly emit: (event: ColabNotebookExecEvent) => void
+    private readonly emit: (event: ColabNotebookExecEvent) => void,
+    private readonly driveMount?: ColabDriveMountManager
   ) {}
 
   private async prepare(sessionId: string): Promise<
@@ -271,14 +350,74 @@ export class ColabNotebookKernel {
       this.emit({ execId: input.execId, kind: 'done', ok: false, interrupted: false, message: prepared.message })
       return prepared
     }
+
+    const driveSpec = this.driveMount ? detectCellDriveMount(input.code) : null
+    const handle: RunningExec = {
+      child: null,
+      interrupted: false,
+      ...(driveSpec?.mountsDrive ? { mountAbort: new AbortController() } : {})
+    }
+    this.running.set(input.execId, handle)
+
+    if (driveSpec?.mountsDrive && this.driveMount) {
+      let announcedAuth = false
+      const mounted = await this.driveMount.ensureMountedForKernel(input.sessionId, {
+        forceRemount: driveSpec.forceRemount,
+        mountPoint: driveSpec.mountPoint,
+        signal: handle.mountAbort?.signal,
+        onNeedsAuth: () => {
+          if (announcedAuth) return
+          announcedAuth = true
+          this.emit({
+            execId: input.execId,
+            kind: 'output',
+            output: {
+              type: 'stream',
+              name: 'stdout',
+              text: '[Kun] Waiting for Google Drive authorization in your browser. Complete consent and click Confirm in the banner above or the Files tab…\n'
+            }
+          })
+        }
+      })
+      if (!mounted.ok) {
+        this.running.delete(input.execId)
+        if (!handle.interrupted && mounted.code !== 'canceled') {
+          this.emit({
+            execId: input.execId,
+            kind: 'output',
+            output: {
+              type: 'error',
+              ename: 'DriveMountError',
+              evalue: mounted.message,
+              traceback: `DriveMountError: ${mounted.message}`
+            }
+          })
+        }
+        this.emit({
+          execId: input.execId,
+          kind: 'done',
+          ok: false,
+          interrupted: handle.interrupted || mounted.code === 'canceled',
+          message: handle.interrupted ? undefined : mounted.message
+        })
+        return { ok: true }
+      }
+      if (handle.interrupted) {
+        this.running.delete(input.execId)
+        this.emit({ execId: input.execId, kind: 'done', ok: false, interrupted: true })
+        return { ok: true }
+      }
+    }
+
     const child = this.service.cli.spawnStreamingCommand({
       sessionsJsonPath: prepared.sessionsJsonPath,
       args: ['exec', '-s', prepared.sessionName, '--timeout', '0'],
       env: prepared.env,
-      stdinText: buildNotebookCellPython(input.code)
+      stdinText: buildNotebookCellPython(input.code, {
+        neutralizeForceRemount: Boolean(driveSpec?.mountsDrive && driveSpec.forceRemount)
+      })
     })
-    const handle: RunningExec = { child, interrupted: false }
-    this.running.set(input.execId, handle)
+    handle.child = child
     let sawError = false
     const parser = createNotebookOutputParser((output) => {
       if (output.type === 'error') sawError = true
@@ -293,6 +432,9 @@ export class ColabNotebookKernel {
     parser.flush()
     this.running.delete(input.execId)
     await this.service.credentials.syncRuntimeTokenBack(prepared.connectionId).catch(() => undefined)
+    if (this.driveMount && exitCode === 0 && !sawError && !handle.interrupted && cellUnmountsDrive(input.code)) {
+      await this.driveMount.getState(input.sessionId, { probe: true }).catch(() => undefined)
+    }
     const ok = exitCode === 0 && !sawError && !handle.interrupted
     this.emit({
       execId: input.execId,
@@ -308,7 +450,8 @@ export class ColabNotebookKernel {
     const handle = this.running.get(execId)
     if (!handle) return { ok: false }
     handle.interrupted = true
-    handle.child.kill()
+    handle.mountAbort?.abort()
+    handle.child?.kill()
     return { ok: true }
   }
 
@@ -350,7 +493,10 @@ export class ColabNotebookKernel {
   }
 
   shutdown(): void {
-    for (const handle of this.running.values()) handle.child.kill()
+    for (const handle of this.running.values()) {
+      handle.mountAbort?.abort()
+      handle.child?.kill()
+    }
     this.running.clear()
   }
 }

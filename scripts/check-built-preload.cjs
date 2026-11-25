@@ -14,6 +14,7 @@ const PRELOAD_BRIDGES = {
   'storage-relocation-recovery.cjs': 'kunStorageRelocationRecovery',
   'runtime-data-recovery.cjs': 'kunRuntimeDataRecovery',
   'tray-quota.cjs': 'kunTrayQuota',
+  'daily-notes.cjs': 'kunDailyNotes',
   'pet-overlay.cjs': 'kunPetOverlay'
 }
 

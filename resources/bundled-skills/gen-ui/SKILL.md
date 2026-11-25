@@ -10,11 +10,13 @@ Use `render_widget` to show a small interactive page inside the current desktop 
 
 ## When to build a widget
 - Build one when seeing or manipulating something makes the answer clearer: parameter explorers ("what happens when…"), simulations, algorithm step-throughs, interactive charts, calculators, timelines, or UI mockups with alternatives.
+- For a personal tool the user wants to keep on their desktop, render the working tool in the conversation. They can choose **Install as app** on its card. Use local assets or bundled libraries when it should work offline.
 - Do not build one for a plain table (answer in Markdown), a static structure (Mermaid code block), a simple governed chart (`render_chart` when advertised), or decoration.
 - A request for a website, app page, component, or any project change is project work: edit the workspace instead of rendering a widget.
 
 ## Output contract
 - Call `render_widget` with `title` (short, user facing) and `html` (an HTML fragment). Use `path` instead of `html` only to re-render an existing `.html` file in the workspace.
+- Give each reusable tool a stable `appKey`. Reuse that key when the user edits or renames the tool in this conversation. For a tool originally published without a key, use its original title. An installed copy follows these revisions.
 - Write a fragment: markup plus optional `<style>` and `<script>`. No `<!doctype>`, `<html>`, `<head>` or `<body>`.
 - Give the root element a unique id and query it with `document.getElementById`. Never depend on `document.currentScript`.
 - Keep it under 1 MB. Aggregate, sample, or round large data instead of inlining raw rows.
@@ -40,6 +42,7 @@ Use `render_widget` to show a small interactive page inside the current desktop 
 
 ## State and follow-ups
 - `window.kun.widgetState` is the last saved snapshot (`{ modelContent, privateContent }`) or `null`. Restore from it on load and on the `kun:set_globals` window event.
+- Preserve existing state field names when revising a tool. Read older snapshots and supply defaults for newly added fields so existing selections survive the update.
 - After a meaningful interaction, call `window.kun.setWidgetState({ modelContent, privateContent }).catch(() => {})`. The snapshot is at most 16 KiB. `modelContent` holds choices the user may ask about next (it is attached to their next message); `privateContent` holds view details worth restoring. Never save on load.
 - For drill-down actions, add a clearly labeled button whose click handler calls `await window.kun.sendFollowUpMessage({ prompt, title })` with the selected values in the prompt. The user may be asked to confirm.
 - Links: use normal `<a href="https://…">` anchors, or call `window.kun.openExternal({ href })` from a click handler. Only http(s) URLs open.

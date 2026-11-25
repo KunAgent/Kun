@@ -1,6 +1,6 @@
 import type { ChildProcess } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
-import { join, posix } from 'node:path'
+import { dirname, join, posix, resolve, sep } from 'node:path'
 import type {
   ColabSessionArtifact,
   ColabSessionView,
@@ -8,6 +8,14 @@ import type {
 } from '../../shared/colab/colab-types'
 import { classifyColabErrorOutput, type ColabCliRuntime } from './colab-cli-runtime'
 import type { ColabCredentialStore } from './colab-credential-store'
+import {
+  buildArtifactListPython,
+  isGoogleDriveRemotePath,
+  parseArtifactListOutput,
+  resolveColabRemoteDir,
+  runSessionDriveFlushHelper,
+  runSessionDriveMountHelper
+} from './colab-drive-protocol'
 import { provisionColabHardware } from './colab-hardware-provisioner'
 import { colabUploadAccess } from './colab-upload-access'
 import { uploadRuntimeFiles } from './runtime-file-upload'
@@ -20,85 +28,14 @@ import {
 import {
   collectSyncFileList,
   parseTrainingStdoutLine,
-  readWorkspaceColabConfig
+  readWorkspaceColabConfig,
+  resolveWorkspaceOutputLocalDir
 } from './colab-workspace-sync'
-
-function buildRemoteShellRunnerPython(
-  command: string,
-  envVars: Record<string, string> | undefined,
-  setupScript: string | undefined
-): string {
-  const payload = JSON.stringify({
-    command,
-    env: envVars ?? {},
-    setup: setupScript?.trim() || ''
-  })
-  return `import json, os, subprocess, sys
-cfg = json.loads(${JSON.stringify(payload)})
-os.makedirs("/content", exist_ok=True)
-os.chdir("/content")
-env = dict(os.environ)
-for k, v in cfg["env"].items():
-    env[str(k)] = str(v)
-env["PYTHONUNBUFFERED"] = "1"
-if cfg["setup"]:
-    rc = subprocess.call(cfg["setup"], shell=True, env=env)
-    if rc != 0:
-        sys.exit(rc)
-proc = subprocess.Popen(
-    cfg["command"],
-    shell=True,
-    env=env,
-    stdout=subprocess.PIPE,
-    stderr=subprocess.STDOUT,
-    text=True,
-    bufsize=1,
-)
-for line in proc.stdout:
-    sys.stdout.write(line)
-    sys.stdout.flush()
-sys.exit(proc.wait())
-`
-}
-
-const RUNTIME_PROBE_PYTHON = (includeGpu: boolean): string => `import shutil, subprocess
-try:
-    mt = ma = 0
-    with open("/proc/meminfo") as f:
-        for ln in f:
-            if ln.startswith("MemTotal:"): mt = int(ln.split()[1])
-            elif ln.startswith("MemAvailable:"): ma = int(ln.split()[1])
-    du = shutil.disk_usage("/content")
-    ram_used = max(0.0, (mt - ma) / 1048576.0) if mt else 0.0
-    disk_pct = round(du.used * 100.0 / du.total) if du.total else 0
-    print(f"KUN_SYS:{ram_used:.1f},{disk_pct}")
-except Exception:
-    pass
-${
-  includeGpu
-    ? `try:
-    out = subprocess.check_output(
-        ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
-        text=True,
-        timeout=5,
-    ).strip().splitlines()[0]
-    print("KUN_GPU:" + out)
-except Exception:
-    pass`
-    : ''
-}
-`
-
-const ARTIFACT_LIST_PYTHON = (remoteDir: string): string => `import json, os
-root = os.path.join("/content", ${JSON.stringify(remoteDir.replace(/^\/+|\/+$/g, ''))})
-items = []
-if os.path.isdir(root):
-    for name in sorted(os.listdir(root))[:40]:
-        full = os.path.join(root, name)
-        if os.path.isfile(full):
-            items.append({"name": name, "remotePath": os.path.relpath(full, "/"), "sizeBytes": os.path.getsize(full)})
-print("KUN_ARTIFACTS:" + json.dumps(items))
-`
+import {
+  buildRemoteShellRunnerPython,
+  buildRuntimeTelemetryProbePython,
+  parseRuntimeTelemetryStdout
+} from './colab-session-telemetry'
 
 export type ActiveExecutionHandle = {
   abortController: AbortController
@@ -115,6 +52,7 @@ export class ColabSessionExecutor {
       cli: ColabCliRuntime
       credentials: ColabCredentialStore
       isolation: ColabPythonIsolation
+      openExternal?: (url: string) => Promise<void>
       getSession: (sessionId: string) => ColabSessionView | undefined
       patchSession: (sessionId: string, patch: Partial<ColabSessionView>) => void
       appendLog: (sessionId: string, line: string, metricPattern?: string) => void
@@ -256,13 +194,21 @@ export class ColabSessionExecutor {
         provisioningStep: 'install'
       })
       if (request.mountDrive) {
-        await this.deps.cli.runCommand({
+        const mounted = await runSessionDriveMountHelper({
+          pythonPath: this.deps.cli.venvPythonPath,
           sessionsJsonPath: paths.sessionsJsonPath,
-          args: ['drivemount', '-s', session.sessionName, '/content/drive'],
+          sessionName: session.sessionName,
           env,
-          timeoutMs: 180_000,
-          signal: controller.signal
+          signal: controller.signal,
+          openExternal: this.deps.openExternal,
+          onLog: (line) => this.deps.appendLog(session.id, line)
         })
+        await this.deps.credentials.syncRuntimeTokenBack(session.connectionId)
+        if (!mounted.ok) {
+          if (controller.signal.aborted) return
+          throw new Error(mounted.message)
+        }
+        this.deps.appendLog(session.id, `[colab] Google Drive mounted at ${mounted.mountPath}.`)
       }
       const hasRequirements = syncFiles.some((f) => f.remoteRelPath === 'requirements.txt')
       if (hasRequirements) {
@@ -321,22 +267,37 @@ export class ColabSessionExecutor {
 
       if (controller.signal.aborted) return
 
-      // Refresh & auto-download output artifacts
-      const artifacts = await this.listRemoteArtifacts(
+      // Refresh & auto-download output artifacts (skip bulk local download only when truly persisted on mounted Drive)
+      const scan = await this.scanRemoteArtifacts(
         session.sessionName,
         request.outputRemoteDir,
         paths.sessionsJsonPath,
         env
       )
-      this.deps.patchSession(session.id, { artifacts })
-      if (artifacts.length > 0 && request.outputLocalDir.trim()) {
-        await this.downloadArtifactsToWorkspace(
-          session.sessionName,
-          artifacts,
-          join(request.workspaceRoot, request.outputLocalDir),
-          paths.sessionsJsonPath,
-          env
+      this.deps.patchSession(session.id, { artifacts: scan.items })
+      const persistedOnDrive =
+        (isGoogleDriveRemotePath(request.outputRemoteDir) && scan.driveMounted) || scan.rootMounted
+      if (persistedOnDrive) {
+        this.deps.appendLog(
+          session.id,
+          `[colab] Checkpoints & outputs saved in Google Drive: ${resolveColabRemoteDir(request.outputRemoteDir)}`
         )
+      } else {
+        if (isGoogleDriveRemotePath(request.outputRemoteDir) && !scan.driveMounted) {
+          this.deps.appendLog(
+            session.id,
+            `[colab] Warning: ${resolveColabRemoteDir(request.outputRemoteDir)} is not mounted to Google Drive; downloading outputs locally before shutdown.`
+          )
+        }
+        if (scan.items.length > 0 && request.outputLocalDir.trim()) {
+          await this.downloadArtifactsToWorkspace(
+            session.sessionName,
+            scan.items,
+            resolveWorkspaceOutputLocalDir(request.workspaceRoot, request.outputLocalDir),
+            paths.sessionsJsonPath,
+            env
+          )
+        }
       }
 
       if (exitCode !== 0) {
@@ -349,20 +310,10 @@ export class ColabSessionExecutor {
           })
           return
         }
-        this.deps.patchSession(session.id, {
-          phase: 'failed',
-          finishedAt: new Date().toISOString(),
-          errorKind: 'command_failed',
-          errorMessage: `训练命令退出码 ${exitCode}。`
-        })
-      } else {
-        this.deps.patchSession(session.id, {
-          phase: 'completed',
-          finishedAt: new Date().toISOString()
-        })
       }
 
       if (request.autoStop) {
+        await this.flushMountedDriveBestEffort(session.sessionName, paths.sessionsJsonPath, env, session.id)
         await this.deps.cli.runCommand({
           sessionsJsonPath: paths.sessionsJsonPath,
           args: ['stop', '-s', session.sessionName],
@@ -371,18 +322,33 @@ export class ColabSessionExecutor {
         })
         this.deps.appendLog(session.id, `[colab] 已自动停机（${session.sessionName}）。`)
       }
+
+      this.deps.patchSession(
+        session.id,
+        exitCode !== 0
+          ? {
+              phase: 'failed',
+              finishedAt: new Date().toISOString(),
+              errorKind: 'command_failed',
+              errorMessage: `训练命令退出码 ${exitCode}。`
+            }
+          : {
+              phase: 'completed',
+              finishedAt: new Date().toISOString()
+            }
+      )
     } catch (error) {
       if (!controller.signal.aborted) {
         const msg = error instanceof Error ? error.message : String(error)
+        if (request.autoStop) {
+          await this.bestEffortRemoteStop(session.connectionId, session.sessionName, session.id)
+        }
         this.deps.patchSession(session.id, {
           phase: 'failed',
           finishedAt: new Date().toISOString(),
           errorKind: classifyColabErrorOutput(msg),
           errorMessage: msg
         })
-        if (request.autoStop) {
-          await this.bestEffortRemoteStop(session.connectionId, session.sessionName)
-        }
       }
     } finally {
       this.cleanupHandle(session.id)
@@ -511,30 +477,10 @@ export class ColabSessionExecutor {
         sessionsJsonPath,
         args: ['exec', '-s', current.sessionName, '--timeout', '10'],
         env,
-        stdinText: RUNTIME_PROBE_PYTHON(current.accelerator !== 'CPU'),
+        stdinText: buildRuntimeTelemetryProbePython(current.accelerator !== 'CPU'),
         timeoutMs: 15_000
       })
-      const lines = res.stdout.split(/\r?\n/)
-      const patch: Partial<ColabSessionView> = {}
-      const sysLine = lines.find((l) => l.startsWith('KUN_SYS:'))
-      if (sysLine) {
-        const [ramRaw, diskRaw] = sysLine.slice('KUN_SYS:'.length).split(',')
-        const ramUsed = Number(ramRaw?.trim())
-        const diskPct = Number(diskRaw?.trim())
-        if (Number.isFinite(ramUsed)) patch.ramUsedGb = Number(ramUsed.toFixed(1))
-        if (Number.isFinite(diskPct)) patch.diskUsedPct = Math.round(diskPct)
-      }
-      const gpuLine = lines.find((l) => l.startsWith('KUN_GPU:'))
-      if (gpuLine) {
-        const [utilRaw, usedMbRaw] = gpuLine.slice('KUN_GPU:'.length).split(',')
-        const util = Number(utilRaw?.trim())
-        const usedGb = Number(usedMbRaw?.trim()) / 1024
-        if (Number.isFinite(util)) {
-          patch.gpuUtilizationPct = Math.round(util)
-          patch.vramUsedGb = Number.isFinite(usedGb) ? Number(usedGb.toFixed(1)) : current.vramUsedGb
-          patch.gpuHistory = [...current.gpuHistory, util].slice(-24)
-        }
-      }
+      const patch = parseRuntimeTelemetryStdout(res.stdout, current)
       if (Object.keys(patch).length > 0) this.deps.patchSession(sessionId, patch)
       if (current.outputRemoteDir.trim()) {
         const artifacts = await this.listRemoteArtifacts(
@@ -554,26 +500,29 @@ export class ColabSessionExecutor {
     }, 20_000)
   }
 
+  private async scanRemoteArtifacts(
+    sessionName: string,
+    outputRemoteDir: string,
+    sessionsJsonPath: string,
+    env: Record<string, string>
+  ): Promise<{ items: ColabSessionArtifact[]; driveMounted: boolean; rootMounted: boolean }> {
+    const res = await this.deps.cli.runCommand({
+      sessionsJsonPath,
+      args: ['exec', '-s', sessionName, '--timeout', '10'],
+      env,
+      stdinText: buildArtifactListPython(outputRemoteDir),
+      timeoutMs: 15_000
+    })
+    return parseArtifactListOutput<ColabSessionArtifact>(res.stdout)
+  }
+
   async listRemoteArtifacts(
     sessionName: string,
     outputRemoteDir: string,
     sessionsJsonPath: string,
     env: Record<string, string>
   ): Promise<ColabSessionArtifact[]> {
-    const res = await this.deps.cli.runCommand({
-      sessionsJsonPath,
-      args: ['exec', '-s', sessionName, '--timeout', '10'],
-      env,
-      stdinText: ARTIFACT_LIST_PYTHON(outputRemoteDir),
-      timeoutMs: 15_000
-    })
-    const line = res.stdout.split(/\r?\n/).find((l) => l.startsWith('KUN_ARTIFACTS:'))
-    if (!line) return []
-    try {
-      return JSON.parse(line.slice('KUN_ARTIFACTS:'.length)) as ColabSessionArtifact[]
-    } catch {
-      return []
-    }
+    return (await this.scanRemoteArtifacts(sessionName, outputRemoteDir, sessionsJsonPath, env)).items
   }
 
   async downloadArtifactsToWorkspace(
@@ -583,14 +532,41 @@ export class ColabSessionExecutor {
     sessionsJsonPath: string,
     env: Record<string, string>
   ): Promise<void> {
-    await mkdir(localDir, { recursive: true })
+    const baseDir = resolve(localDir)
+    await mkdir(baseDir, { recursive: true })
     for (const item of artifacts) {
+      const dest = resolve(baseDir, item.name)
+      if (dest === baseDir || !dest.startsWith(baseDir + sep)) continue
+      const remoteRel = item.remotePath.trim().replaceAll('\\', '/').replace(/^\/+/, '')
+      if (!remoteRel || remoteRel.split('/').some((seg) => seg === '..')) continue
+      await mkdir(dirname(dest), { recursive: true })
       await this.deps.cli.runCommand({
         sessionsJsonPath,
-        args: ['download', '-s', sessionName, item.remotePath, join(localDir, item.name)],
+        args: ['download', '-s', sessionName, remoteRel, dest],
         env,
         timeoutMs: 180_000
       })
+    }
+  }
+
+  private async flushMountedDriveBestEffort(
+    sessionName: string,
+    sessionsJsonPath: string,
+    env: Record<string, string>,
+    sessionId?: string
+  ): Promise<void> {
+    try {
+      const flushed = await runSessionDriveFlushHelper({
+        pythonPath: this.deps.cli.venvPythonPath,
+        sessionsJsonPath,
+        sessionName,
+        env
+      })
+      if (flushed && sessionId) {
+        this.deps.appendLog(sessionId, '[colab] Flushed Google Drive (/content/drive) before stopping.')
+      }
+    } catch {
+      // Never block VM shutdown if the runtime is already unreachable.
     }
   }
 
@@ -604,7 +580,7 @@ export class ColabSessionExecutor {
     }
     if (session) {
       if (remoteStop) {
-        await this.bestEffortRemoteStop(session.connectionId, session.sessionName)
+        await this.bestEffortRemoteStop(session.connectionId, session.sessionName, session.id)
       }
       this.deps.patchSession(sessionId, {
         phase: 'stopped',
@@ -613,13 +589,18 @@ export class ColabSessionExecutor {
     }
   }
 
-  async bestEffortRemoteStop(connectionId: string, sessionName: string): Promise<void> {
+  async bestEffortRemoteStop(
+    connectionId: string,
+    sessionName: string,
+    sessionId?: string
+  ): Promise<void> {
     try {
       const credFile = await this.deps.credentials.materializeRuntimeToken(connectionId)
       const { paths, env } = await this.deps.isolation.prepareConnectionEnvironment(
         connectionId,
         credFile
       )
+      await this.flushMountedDriveBestEffort(sessionName, paths.sessionsJsonPath, env, sessionId)
       await this.deps.cli.runCommand({
         sessionsJsonPath: paths.sessionsJsonPath,
         args: ['stop', '-s', sessionName],

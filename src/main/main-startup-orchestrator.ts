@@ -7,7 +7,7 @@ export type WindowFirstStartupShell = {
 
 export type WindowFirstStartupDeps<Background> = {
   initializeShell: () => Promise<WindowFirstStartupShell | null>
-  registerShellIpc: () => void
+  registerShellIpc: (settings: AppSettingsV1) => void
   transitionShellReady: () => void
   createWindow: (settings: AppSettingsV1) => void
   windowAvailable: () => void
@@ -32,7 +32,7 @@ export async function startWindowFirstStartup<Background>(
   const shell = await deps.initializeShell()
   if (!shell) return null
 
-  deps.registerShellIpc()
+  deps.registerShellIpc(shell.shellSettings)
   deps.transitionShellReady()
   deps.createWindow(shell.shellSettings)
   deps.windowAvailable()

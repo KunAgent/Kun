@@ -1,5 +1,6 @@
 import { parseGenUiWidgetState } from '../../../../../kun/src/contracts/gen-ui'
 import i18n from '../../i18n'
+import { confirmDialog } from '../../lib/confirm-dialog'
 import { appSandboxApi, subscribeAppSandbox } from '../app-sandbox-client'
 import { openAppLink, sendAppFollowUp } from '../app-surface-actions'
 import { attachAppSurfaceContext, threadWorkspaceRoot } from '../app-surface-composer-context'
@@ -22,6 +23,7 @@ function isRequest(value: unknown): value is JsonRpcRequest {
  */
 export function attachGenUiPageHost(input: {
   instanceId: string
+  appId?: string
   threadId: string
   widgetId: string
   title: string
@@ -38,6 +40,7 @@ export function attachGenUiPageHost(input: {
 
   const saveState = async (params: Record<string, unknown> | undefined): Promise<void> => {
     const state = parseGenUiWidgetState(params?.state)
+    if (input.appId) return window.kunGui.widgetApps.save(input.appId, input.widgetId, state)
     const response = await appRuntimeRequest(
       `/v1/threads/${encodeURIComponent(input.threadId)}/gen-ui/state/${input.widgetId}`,
       'PUT',
@@ -82,6 +85,13 @@ export function attachGenUiPageHost(input: {
         }
         return
       case 'kun/gen-ui/follow-up': {
+        if (input.appId) {
+          const prompt = String(params.prompt ?? '').trim().slice(0, 8000)
+          const confirmed = prompt && await confirmDialog(i18n.t('common:appSurfaceFollowUpConfirm', { app: input.title }), prompt)
+          const sent = confirmed ? await window.kunGui.widgetApps.followUp(input.appId, prompt).catch(() => false) : false
+          respond(message.id, { result: { sent } })
+          return
+        }
         const sent = await sendAppFollowUp({
           instanceId: input.instanceId,
           threadId: input.threadId,

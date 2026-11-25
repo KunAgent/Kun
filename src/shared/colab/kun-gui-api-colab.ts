@@ -10,6 +10,8 @@ import type {
   ColabWorkspaceRunConfig
 } from './colab-types'
 import type {
+  ColabDriveMountResult,
+  ColabDriveMountState,
   ColabDriveNotebooksListResult,
   ColabDrivePullCloseResult,
   ColabDrivePullStart,
@@ -94,6 +96,7 @@ export type KunGuiColabApi = {
   colabUploadToSession: (input: {
     sessionId: string
     workspaceNotebook?: string
+    targetRemoteDir?: string
   }) => Promise<RuntimeUploadResult>
   colabCancelUpload: (input: { sessionId: string }) => Promise<void>
   onColabUploadProgress: (handler: (event: RuntimeUploadEvent) => void) => () => void
@@ -138,6 +141,13 @@ export type KunGuiColabApi = {
   colabDriveOpenAuth: (input: { pullId: string }) => Promise<{ ok: boolean }>
   colabDriveClosePull: (input: { pullId: string }) => Promise<ColabDrivePullCloseResult>
   colabDriveImportNotebook: (input: { pullId: string; remotePath: string }) => Promise<NotebookPullImportResult>
+  colabDriveGetMountState: (input: { sessionId: string; probe?: boolean }) => Promise<ColabDriveMountState>
+  colabDriveMount: (input: { sessionId: string; forceRemount?: boolean }) => Promise<ColabDriveMountResult>
+  colabDriveCompleteMountAuth: (input: { sessionId: string }) => Promise<ColabDriveMountResult>
+  colabDriveOpenMountAuth: (input: { sessionId: string }) => Promise<{ ok: boolean }>
+  colabDriveCancelMount: (input: { sessionId: string }) => Promise<ColabDriveMountState>
+  colabDriveUnmount: (input: { sessionId: string }) => Promise<ColabDriveMountResult>
+  onColabDriveMountChanged: (handler: (state: ColabDriveMountState) => void) => () => void
   colabImportLocalNotebooks: (input: { workspaceRoot: string }) => Promise<ColabNotebookImportResult>
   colabNotebookAssist: (input: ColabNotebookAssistRequest) => Promise<ColabNotebookAssistResult>
   onColabNotebookEvent: (handler: (event: ColabNotebookExecEvent) => void) => () => void

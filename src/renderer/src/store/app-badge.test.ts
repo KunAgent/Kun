@@ -59,8 +59,9 @@ function makeRow(patch: Partial<ActivityRow>): ActivityRow {
 function stubBadge() {
   const setAppBadgeCount = vi.fn(async () => ({ ok: true as const }))
   const logError = vi.fn(async () => ({ ok: true as const }))
-  vi.stubGlobal('window', { kunGui: { setAppBadgeCount, logError } })
-  return { setAppBadgeCount, logError }
+  const syncWorkboardCompletionAttention = vi.fn(async () => ({ applied: true }))
+  vi.stubGlobal('window', { kunGui: { setAppBadgeCount, logError, syncWorkboardCompletionAttention } })
+  return { setAppBadgeCount, logError, syncWorkboardCompletionAttention }
 }
 
 describe('syncAppBadgeCount', () => {
@@ -85,6 +86,17 @@ describe('syncAppBadgeCount', () => {
 
     expect(count).toBe(3)
     expect(setAppBadgeCount).toHaveBeenCalledWith(3)
+  })
+
+  it('syncs normalized terminal unread outcomes to the workboard publisher once per registry', () => {
+    const { syncWorkboardCompletionAttention } = stubBadge()
+    const input = makeInput({ unreadThreadIds: { done: 'completed', failed: 'failed', legacy: true } })
+
+    syncAppBadgeCount(input)
+    syncAppBadgeCount(input)
+
+    expect(syncWorkboardCompletionAttention).toHaveBeenCalledTimes(1)
+    expect(syncWorkboardCompletionAttention).toHaveBeenCalledWith({ done: 'completed', failed: 'failed', legacy: 'completed' })
   })
 
   it('no longer adds ADE needs-you rows that the panel never shows', () => {

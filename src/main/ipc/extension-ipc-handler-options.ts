@@ -29,6 +29,8 @@ export type RegisterExtensionIpcHandlersOptions = {
   externalBrowsers: ExtensionExternalBrowserManager
   mediaProtocols?: ExtensionMediaProtocolRegistry
   protectedActions: ProtectedExtensionActionService
+  withWidgetAppUninstall?: (id: string, version: string | undefined,
+    uninstall: () => Promise<ExtensionRuntimeRequestResult>) => Promise<ExtensionRuntimeRequestResult>
   credentialSurface: ProtectedCredentialSurfaceController
   contentScripts: ExtensionContentScriptController
   getWorkbenchEnvironment: () => Promise<ExtensionWorkbenchEnvironment>

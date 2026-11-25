@@ -2,6 +2,7 @@ import type { RemoteApi, DeviceIdentity, Socket } from '@kun/remote-protocol'
 import type { ArtAccountAccess } from '../art-assets/account-access'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
 import type { SharedFileTransfer } from './share-files'
+import type { WorkboardCompletionAttention } from '../../shared/workboard-attention'
 
 export type LinkDependencies = {
   createClient?(deps: import('@kun/remote-protocol').ClientDependencies): Pick<import('@kun/remote-protocol').RemoteClient, 'online' | 'start' | 'stop' | 'reconnect' | 'resume' | 'send'>
@@ -16,6 +17,7 @@ export type LinkDependencies = {
   fetch: typeof fetch
   socket(url: string, headers: Record<string, string>): Socket
   lease(): Promise<ProtectedRuntimeRequestLease>
+  completionAttention?(): WorkboardCompletionAttention
   diagnostic?(code: string, details?: { attempt?: number; elapsedMs?: number }): void
   desktop?: import('../remote-desktop/session-service').RemoteDesktopService
   terminal?: import('../remote-terminal/session-service').RemoteTerminalService
@@ -32,6 +34,7 @@ export type LinkDependencies = {
       authorizationId: string
       current(): boolean
       lease(): Promise<ProtectedRuntimeRequestLease>
+  completionAttention?(): WorkboardCompletionAttention
     },
     call: any
   ): Promise<unknown>

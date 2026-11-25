@@ -1,4 +1,10 @@
 {
+  "widgetAppInstall": "アプリとしてインストール",
+  "widgetAppOpen": "アプリを開く",
+  "widgetAppsTitle": "インストール済みのアプリ",
+  "widgetAppRemoveConfirm": "「{{title}}」をアンインストールしますか？",
+  "widgetAppOpening": "アプリを開いています…",
+  "widgetAppUnavailable": "このアプリは利用できません。",
   "appSurfaceDesktopOnly": "インタラクティブページは Kun デスクトップアプリで利用できます。",
   "appSurfaceRetry": "再試行",
   "appSurfacePageError": "ページのエラー: {{message}}",

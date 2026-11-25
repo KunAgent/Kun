@@ -21,6 +21,16 @@ type Props = {
   onClose: () => void
 }
 
+function isDriveOutputDir(raw: string): boolean {
+  const cleaned = raw.trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  return (
+    cleaned === 'content/drive' ||
+    cleaned.startsWith('content/drive/') ||
+    cleaned === 'drive' ||
+    cleaned.startsWith('drive/')
+  )
+}
+
 export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement {
   const { t } = useTranslation('common')
   const snapshot = useColabStore((s) => s.snapshot)
@@ -47,7 +57,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
   const [autoStop, setAutoStop] = useState(true)
   const [saveConfig, setSaveConfig] = useState(false)
   const [advancedOpen, setAdvancedOpen] = useState(false)
-  const [mountDrive, setMountDrive] = useState(false)
+  const [mountDrive, setMountDrive] = useState(true)
   const [envVarsText, setEnvVarsText] = useState('')
   const [setupScript, setSetupScript] = useState('')
   const [starting, setStarting] = useState(false)
@@ -83,7 +93,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
           setOutputLocalDir(savedConfig.outputLocalDir)
           setMaxRuntimeHours(savedConfig.maxRuntimeHours)
           setAutoStop(savedConfig.autoStop)
-          setMountDrive(Boolean(savedConfig.mountDrive))
+          setMountDrive(savedConfig.mountDrive ?? true)
           if (savedConfig.envVars) {
             setEnvVarsText(
               Object.entries(savedConfig.envVars)
@@ -335,9 +345,23 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
           {/* Output mapping & Max runtime */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-[11.5px] font-medium text-ds-muted">
-                {t('colab.outputMappingLabel')}
-              </label>
+              <div className="flex items-center justify-between gap-1.5">
+                <label className="block text-[11.5px] font-medium text-ds-muted">
+                  {t('colab.outputMappingLabel')}
+                </label>
+                {mountDrive && !isDriveOutputDir(outputRemoteDir) ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMountDrive(true)
+                      setOutputRemoteDir('/content/drive/MyDrive/checkpoints')
+                    }}
+                    className="text-[10.5px] font-medium text-accent hover:underline"
+                  >
+                    {t('colab.useDriveCheckpointsBtn')}
+                  </button>
+                ) : null}
+              </div>
               <div className="mt-1 flex items-center gap-1.5">
                 <input
                   type="text"
@@ -345,13 +369,17 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
                   onChange={(e) => setOutputRemoteDir(e.target.value)}
                   className="min-w-0 flex-1 rounded-xl border border-ds-border bg-ds-subtle px-2.5 py-1.5 font-mono text-[11.5px]"
                 />
-                <span className="text-ds-faint">→</span>
-                <input
-                  type="text"
-                  value={outputLocalDir}
-                  onChange={(e) => setOutputLocalDir(e.target.value)}
-                  className="min-w-0 flex-1 rounded-xl border border-ds-border bg-ds-subtle px-2.5 py-1.5 font-mono text-[11.5px]"
-                />
+                {mountDrive && isDriveOutputDir(outputRemoteDir) ? null : (
+                  <>
+                    <span className="text-ds-faint">→</span>
+                    <input
+                      type="text"
+                      value={outputLocalDir}
+                      onChange={(e) => setOutputLocalDir(e.target.value)}
+                      className="min-w-0 flex-1 rounded-xl border border-ds-border bg-ds-subtle px-2.5 py-1.5 font-mono text-[11.5px]"
+                    />
+                  </>
+                )}
               </div>
             </div>
             <div>
@@ -372,7 +400,25 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
             </div>
           </div>
 
+          {mountDrive && isDriveOutputDir(outputRemoteDir) ? (
+            <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+              {t('colab.driveOutputPersistedHint')}
+            </p>
+          ) : null}
+
           <div className="space-y-1.5">
+            <label className="flex cursor-pointer items-start gap-2 text-[12px] text-ds-ink">
+              <input
+                type="checkbox"
+                checked={mountDrive}
+                onChange={(e) => setMountDrive(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="min-w-0">
+                <span className="block">{t('colab.mountDriveCheckbox')}</span>
+                <span className="block text-[11px] text-ds-muted">{t('colab.mountDriveDesc')}</span>
+              </span>
+            </label>
             <label className="flex cursor-pointer items-center gap-2 text-[12px] text-ds-ink">
               <input
                 type="checkbox"
@@ -407,14 +453,6 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
             </button>
             {advancedOpen ? (
               <div className="mt-2.5 space-y-2.5">
-                <label className="flex cursor-pointer items-center gap-2 text-[12px] text-ds-ink">
-                  <input
-                    type="checkbox"
-                    checked={mountDrive}
-                    onChange={(e) => setMountDrive(e.target.checked)}
-                  />
-                  <span>{t('colab.mountDriveCheckbox')}</span>
-                </label>
                 <div>
                   <label className="block text-[11px] text-ds-muted">
                     {t('colab.envVarsLabel')}

@@ -8,6 +8,7 @@ import { NativeDesktopInput, desktopHelperAvailable } from './native-input'
 import { desktopInputArbiter } from './input-arbiter'
 import { getComputerUsePermissions } from '../services/computer-use-permissions'
 import { privacyScreenSupported } from './privacy-screen'
+import { DesktopUnlockCoordinator, desktopUnlockSupported, readDesktopLockState } from './desktop-unlock'
 import { DesktopShareIndicator } from './indicator'
 import { bindDesktopDisplayStops, bindDesktopPrivacyStops } from './host-lifecycle'
 import { logInfo } from '../logger'
@@ -22,12 +23,17 @@ export async function stopBuiltinDesktopEngines() {
 
 export function createDesktopEngine(ice: (authority: DesktopAuthority) => Promise<unknown[]>, authorizeConversation: (authority: DesktopAuthority, origin: { kind: 'code' | 'agent'; id: string }) => Promise<void>) {
   const portal = isWayland() ? new WaylandSession(() => { void service.stopAll('host_inactive').catch(() => {}) }) : undefined
+  const unlock = new DesktopUnlockCoordinator({ diagnostic: value => logInfo('remote-desktop', 'Desktop unlock state.', value) })
   const service: ControlDesktop = controlRuntimeHost().desktop({
     supported: () => desktopHelperAvailable(),
     permissions: async () => portal ? { screenRecording: portal.selection ? 'granted' : 'denied',
       accessibility: portal.selection?.input ? 'granted' : 'denied' } : getComputerUsePermissions(),
     prepareHost: portal ? async enabled => { if (enabled) await portal.prepare(); else portal.close() } : undefined,
     privacySupported: privacyScreenSupported,
+    unlockSupported: desktopUnlockSupported,
+    // Windows checks the interactive desktop in its native guard. Only the Mac helper implements --lock-state.
+    lockState: process.platform === 'darwin' ? readDesktopLockState : undefined,
+    unlock,
     gameSupported: desktopHelperAvailable,
     mobileOriginSupported: () => true,
     diagnostic: value => logInfo('remote-desktop', 'Desktop session state.', value),

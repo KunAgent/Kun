@@ -94,6 +94,12 @@ function localizeKnownChineseCopy(
   const key = `${binding.operationKind}\u0000${copy.title}`
 
   switch (key) {
+    case 'widget.install\u0000Install as app':
+      return {
+        title: '安装为应用',
+        message: copy.message,
+        detail: 'Kun 会创建系统启动图标。应用可以在本机保存数据，并在你确认后向原对话发送消息。你在原对话中修改应用时，已安装的版本也会更新。'
+      }
     case 'extension.install\u0000Install extension':
       return {
         title: '安装扩展',

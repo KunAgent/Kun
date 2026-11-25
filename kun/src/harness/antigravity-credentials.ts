@@ -9,6 +9,15 @@ type Evidence = { configured: boolean; fingerprint: string }
 const evidence = (configured: boolean, value: string): Evidence => ({ configured,
   fingerprint: createHash('sha256').update(value).digest('hex') })
 
+function stableKeychainAttributes(stdout: string): string {
+  // `agy` refreshes its hourly OAuth access_token in place via `security add-generic-password -U`,
+  // which rewrites `"mdat"<timedate>` while keeping `"cdat"<timedate>` and item attributes intact.
+  return stdout
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*"mdat"<timedate>=/.test(line))
+    .join('\n')
+}
+
 /** Native agy storage, distinct from Gemini CLI OAuth. Presence is not authentication. */
 export async function antigravityCredentialEvidence(env: NodeJS.ProcessEnv = process.env, deps: {
   platform?: NodeJS.Platform; home?: string; spawn?: SpawnCaptured; signal?: AbortSignal
@@ -31,9 +40,13 @@ export async function antigravityCredentialEvidence(env: NodeJS.ProcessEnv = pro
           : undefined
         const refreshToken = typeof record.refresh_token === 'string'
           ? record.refresh_token.trim()
-          : typeof nested?.refresh_token === 'string'
-            ? nested.refresh_token.trim()
-            : ''
+          : typeof record.refreshToken === 'string'
+            ? record.refreshToken.trim()
+            : typeof nested?.refresh_token === 'string'
+              ? nested.refresh_token.trim()
+              : typeof nested?.refreshToken === 'string'
+                ? nested.refreshToken.trim()
+                : ''
         // Hash the durable refresh token rather than volatile hourly access_token/expiry fields.
         if (refreshToken) return evidence(true, refreshToken)
       }
@@ -51,7 +64,7 @@ export async function antigravityCredentialEvidence(env: NodeJS.ProcessEnv = pro
   deps.signal?.throwIfAborted()
   if (!result || result.timedOut || result.exitCode !== 0 ||
     !result.stdout.includes('"svce"<blob>="gemini"') || !result.stdout.includes('"acct"<blob>="antigravity"')) return evidence(false, '')
-  // Includes Keychain creation/modification metadata, so removal/replacement
-  // invalidates admission. Only the opaque digest leaves this helper.
-  return evidence(true, result.stdout)
+  // Keep Keychain creation/item metadata while ignoring volatile mdat updates
+  // from hourly OAuth access_token refreshes. Only the opaque digest leaves this helper.
+  return evidence(true, stableKeychainAttributes(result.stdout))
 }

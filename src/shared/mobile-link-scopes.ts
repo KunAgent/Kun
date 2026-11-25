@@ -1,6 +1,6 @@
 /** Protocol scope names. Only trusted desktop UI may choose advanced permissions. */
 export const MOBILE_LINK_SCOPES = ['personal', 'groups.read', 'groups.write', 'collaboration.read',
-  'collaboration.control', 'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage', 'desktop.view', 'desktop.control'] as const
+  'collaboration.control', 'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage', 'desktop.view', 'desktop.control', 'desktop.unlock'] as const
 export type MobileLinkScope = typeof MOBILE_LINK_SCOPES[number]
 /** Desktop-only pairing never supplies the implicit legacy personal scope. */
 export function computerDesktopScopes(raw: unknown): MobileLinkScope[] {
@@ -15,8 +15,8 @@ export const MOBILE_DEFAULT_SCOPES: MobileLinkScope[] = [
   'personal', 'groups.read', 'groups.write', 'collaboration.read',
   'schedules.read', 'extensions.read', 'extensions.control', 'shares.manage'
 ]
-/** The unified phone-remote switch includes full phone access plus desktop viewing and input. */
-export const MOBILE_REMOTE_SCOPES: MobileLinkScope[] = [...MOBILE_DEFAULT_SCOPES, 'desktop.view', 'desktop.control']
+/** The unified phone-remote switch includes full phone access plus desktop viewing, input, and manual unlock. */
+export const MOBILE_REMOTE_SCOPES: MobileLinkScope[] = [...MOBILE_DEFAULT_SCOPES, 'desktop.view', 'desktop.control', 'desktop.unlock']
 /** Direct LAN/tunnel pairing grants all direct-compatible mobile and desktop scopes by default. */
 export const DIRECT_MOBILE_DEFAULT_SCOPES: MobileLinkScope[] = MOBILE_REMOTE_SCOPES.filter((scope) => scope !== 'shares.manage')
 export function mobileLinkScopes(raw: unknown): MobileLinkScope[] {
@@ -30,5 +30,6 @@ export function mobileLinkScopes(raw: unknown): MobileLinkScope[] {
   if (scopes.includes('collaboration.control') && !scopes.includes('collaboration.read')) throw new Error('INVALID_SCOPES')
   if (scopes.includes('extensions.control') && !scopes.includes('extensions.read')) throw new Error('INVALID_SCOPES')
   if (scopes.includes('desktop.control') && !scopes.includes('desktop.view')) throw new Error('INVALID_SCOPES')
+  if (scopes.includes('desktop.unlock') && !scopes.includes('desktop.control')) throw new Error('INVALID_SCOPES')
   return scopes
 }

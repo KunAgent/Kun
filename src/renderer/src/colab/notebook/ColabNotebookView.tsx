@@ -12,6 +12,8 @@ import {
 } from 'lucide-react'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { useChatStore } from '../../store/chat-store'
+import { useColabStore } from '../colab-store'
+import { ColabDriveAuthCard } from './ColabFilesTab'
 import type { ColabKunChatHost } from './ColabKunPane'
 import { ColabNotebookCell } from './ColabNotebookCell'
 import { ColabRightSidebar } from './ColabRightSidebar'
@@ -19,6 +21,7 @@ import { NotebookCommandBar } from './NotebookCommandBar'
 import { NotebookPullView } from './NotebookPullView'
 import { NotebookStatusBar } from './NotebookStatusBar'
 import { NotebookTopbar } from './NotebookTopbar'
+import { useColabDriveStore } from './colab-drive-store'
 import { useColabNotebookStore } from './colab-notebook-store'
 import { useNotebookPullStore } from './notebook-pull-store'
 import { useColabNotebookAgent } from './use-colab-notebook-agent'
@@ -53,6 +56,12 @@ export function ColabNotebookView({
   const saving = useColabNotebookStore((s) => s.saving)
   const kunChangedCellIds = useColabNotebookStore((s) => s.kunChangedCellIds)
   const kunBusy = useColabNotebookStore((s) => s.kunBusy)
+  const sidePanelOpen = useColabNotebookStore((s) => s.sidePanelOpen)
+  const sidePanelTab = useColabNotebookStore((s) => s.sidePanelTab)
+  const connections = useColabStore((s) => s.snapshot.connections)
+  const driveState = useColabDriveStore((s) =>
+    runtime.activeSessionId ? s.states[runtime.activeSessionId] : undefined
+  )
 
   const pullTask = useNotebookPullStore((s) => s.task)
   const pullVisible = useNotebookPullStore((s) => s.visible)
@@ -359,6 +368,23 @@ export function ColabNotebookView({
                         </button>
                       ) : null}
                     </span>
+                  </div>
+                ) : null}
+
+                {!usingJupyter &&
+                sessionId &&
+                driveState?.status === 'needs_auth' &&
+                !(sidePanelOpen && sidePanelTab === 'files') ? (
+                  <div className="mb-3 ml-[52px]" data-colab-drive-auth-banner>
+                    <ColabDriveAuthCard
+                      sessionId={sessionId}
+                      accountLabel={
+                        connections.find((c) => c.id === runtime.session?.connectionId)?.email ??
+                        runtime.connection?.email
+                      }
+                      authUrl={driveState.authUrl}
+                      compact
+                    />
                   </div>
                 ) : null}
 

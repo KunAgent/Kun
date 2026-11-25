@@ -67,6 +67,7 @@ import {
   type RegisterExtensionIpcHandlersOptions
 } from './ipc/register-extension-ipc-handlers'
 import { createExtensionWorkbenchEnvironment } from './extensions/extension-workbench-environment'
+import { registerWidgetAppIpc } from './widget-apps/ipc'
 import { registerBrowserUseIpc } from './browser-use/register-browser-use-ipc'
 import { updateComputerUseHostSettings } from './computer-use/computer-use-host'
 import { browserUseCleanupForRuntimeRequest } from './browser-use/thread-lifecycle'
@@ -548,6 +549,7 @@ export function registerMainIpc(services: MainServices): void {
       logError,
       nativeDialogs: nativeDialogCoordinator
     }
+    extensionIpcOptions.withWidgetAppUninstall = registerWidgetAppIpc(extensionIpcOptions)
     const extensionIpcRegistration = registerExtensionIpcHandlers(extensionIpcOptions)
     publishExtensionWorkbenchEnvironmentChanged = () =>
       extensionIpcRegistration.publishWorkbenchEnvironmentChanged()

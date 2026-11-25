@@ -1,5 +1,5 @@
 import { productAnalyticsApi } from './product-analytics'
-import { USER_ATTENTION_CHANNEL } from '../shared/user-attention'
+import { USER_ATTENTION_CHANNEL, WORKBOARD_COMPLETION_ATTENTION_CHANNEL } from '../shared/user-attention'
 import { mobileLink } from './mobile-link'
 import { assistantMailboxApi } from './assistant-mailbox'
 import { subscriptionPreloadApi } from './subscription-bridge'
@@ -445,6 +445,7 @@ const api = {
     }),
   runDesktopCommand: (command) =>
     ipcRenderer.invoke('desktop:command', command),
+  openDailyNotes: () => ipcRenderer.invoke('daily-notes:open'),
   getWindowMiniMode: () => ipcRenderer.invoke('window:mini-mode:get'),
   onWindowMiniMode: (handler) => {
     const wrapped = (
@@ -487,6 +488,8 @@ const api = {
   },
   showTurnCompleteNotification: (payload) => ipcRenderer.invoke('notification:turn-complete', payload),
   setAppBadgeCount: (count) => ipcRenderer.invoke('app:badge-count', count),
+  syncWorkboardCompletionAttention: (attention) =>
+    ipcRenderer.invoke(WORKBOARD_COMPLETION_ATTENTION_CHANNEL, attention),
   requestUserAttention: (request) => ipcRenderer.invoke(USER_ATTENTION_CHANNEL, request),
   getAppVersion: () => ipcRenderer.invoke('app:version'),
   getGuiUpdateState: () => ipcRenderer.invoke('gui:update-state'),

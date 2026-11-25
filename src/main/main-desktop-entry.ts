@@ -3,6 +3,7 @@ import { stopBuiltinTerminalEngines } from './remote-terminal/engine'
 import { stopBuiltinSimulatorEngines } from './remote-simulator/engine'
 import { app } from 'electron'
 import {
+  gotSingleInstanceLock,
   mainState,
   runningClawScheduleMcpServer
 } from './main-app-context'
@@ -15,7 +16,7 @@ import {
 } from './main-lifecycle'
 import { stopRuntimeWatchdog } from './main-runtime-health'
 import { requestProviderMutationFlush } from './provider-mutation-barrier'
-import { startMainApp } from './main-ready'
+import { exitSecondaryDesktopInstance, startMainApp } from './main-ready'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { notifyApplicationQuitting } from './app-quit-signal'
 import { beginOwnedProcessShutdown } from '../../kun/src/process/owned-process.js'
@@ -26,6 +27,10 @@ import {
 } from './packaged-update-handoff-smoke'
 
 export function startDesktopMainEntry(): void {
+  if (!gotSingleInstanceLock) {
+    void exitSecondaryDesktopInstance()
+    return
+  }
   // Record every ipcMain.handle channel before any registration so the Remote
   // gateway can dispatch browser invokes through the same handlers.
   installRemoteIpcRegistry()

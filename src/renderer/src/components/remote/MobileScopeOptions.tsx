@@ -10,7 +10,8 @@ const OPTIONS: Array<{ id: MobileLinkScope; zh: string; en: string }> = [
   { id: 'extensions.control', zh: '启用或停用已装插件（全局开关，项目覆盖保持有效）', en: 'Enable or disable installed plugins globally (project overrides remain active)' },
   { id: 'shares.manage', zh: '管理单任务跨账号共享及访客权限', en: 'Manage single-task sharing and guest permissions' },
   { id: 'desktop.view', zh: '查看已批准显示器的桌面', en: 'View the approved desktop display' },
-  { id: 'desktop.control', zh: '接管桌面的鼠标和键盘', en: 'Control desktop mouse and keyboard' }
+  { id: 'desktop.control', zh: '接管桌面的鼠标和键盘', en: 'Control desktop mouse and keyboard' },
+  { id: 'desktop.unlock', zh: '锁屏时手动输入 Mac 登录密码解锁（不保存密码）', en: 'Unlock locked Mac by manually entering login password (never saved)' }
 ]
 export function selectMobileScope(current: MobileLinkScope[], id: MobileLinkScope, checked: boolean): MobileLinkScope[] {
   const next = new Set(current)
@@ -21,12 +22,14 @@ export function selectMobileScope(current: MobileLinkScope[], id: MobileLinkScop
     if (id === 'collaboration.control') next.add('collaboration.read')
     if (id === 'extensions.control') next.add('extensions.read')
     if (id === 'desktop.control') next.add('desktop.view')
+    if (id === 'desktop.unlock') { next.add('desktop.view'); next.add('desktop.control') }
   } else {
     next.delete(id)
     if (id === 'groups.read') for (const scope of ['groups.write', 'collaboration.read', 'collaboration.control'] as const) next.delete(scope)
     if (id === 'collaboration.read') next.delete('collaboration.control')
     if (id === 'extensions.read') next.delete('extensions.control')
-    if (id === 'desktop.view') next.delete('desktop.control')
+    if (id === 'desktop.view') { next.delete('desktop.control'); next.delete('desktop.unlock') }
+    if (id === 'desktop.control') next.delete('desktop.unlock')
   }
   return [...next]
 }

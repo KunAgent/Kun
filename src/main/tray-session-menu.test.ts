@@ -23,7 +23,7 @@ describe('tray session menu', () => {
     })
 
     expect(menu.map((item) => item.label).filter(Boolean)).toEqual([
-      'Running', 'Fix tests', 'Recent', 'Review PR', 'New Chat', 'Open Kun', 'Exit'
+      'Running', 'Fix tests', 'Recent', 'Review PR', 'New Chat', 'Daily notes & to-dos', 'Open Kun', 'Exit'
     ])
     expect(menu.find((item) => item.label === 'Fix tests')?.sublabel).toBe('Kun')
     expect(menu.find((item) => item.label === 'Review PR')?.sublabel).toBe('Docs')
@@ -49,9 +49,12 @@ describe('tray session menu', () => {
       'thread-4',
       '更多',
       '新建会话',
+      '每日待办与笔记',
       '打开 Kun',
       '退出'
     ])
+    menu.find(item => item.label === '每日待办与笔记')?.click?.({} as never, undefined, {} as never)
+    expect(actions.openDailyNotes).toHaveBeenCalledOnce()
   })
 })
 
@@ -69,6 +72,7 @@ function fakeActions() {
   return {
     openThread: vi.fn(),
     newChat: vi.fn(),
+    openDailyNotes: vi.fn(),
     openApp: vi.fn(),
     quit: vi.fn()
   }

@@ -89,7 +89,7 @@ export function buildColabToolProviders(options?: {
   const colabRunTool: LocalTool = LocalToolHost.defineTool({
     name: 'colab_run',
     description:
-      'Create a Google Colab GPU/CPU session for the current workspace, sync selected files, run a training command, stream progress, download output artifacts back to the workspace, and optionally auto-stop the VM when finished. Consumes Compute Units (CU) on the user-selected connection.',
+      'Create a Google Colab GPU/CPU session for the current workspace, mount Google Drive (/content/drive) by default for large models and checkpoints, sync selected files, run a training command, stream progress, and optionally auto-stop the VM after flushing Drive writes. Consumes Compute Units (CU) on the user-selected connection.',
     toolKind: 'command_execution',
     sideEffect: 'unknown',
     effects: {
@@ -105,7 +105,8 @@ export function buildColabToolProviders(options?: {
       properties: {
         entryCommand: {
           type: 'string',
-          description: 'Training command to run in /content, e.g. "python train.py --epochs 10 --out outputs/".'
+          description:
+            'Training command to run in /content, e.g. "python train.py --output_dir /content/drive/MyDrive/checkpoints/run1". Save large model checkpoints to /content/drive/MyDrive/... so they persist.'
         },
         accelerator: {
           type: 'string',
@@ -119,11 +120,17 @@ export function buildColabToolProviders(options?: {
         },
         outputRemoteDir: {
           type: 'string',
-          description: 'Remote directory under /content to download after completion (default "outputs/").'
+          description:
+            'Remote directory under /content (e.g. "/content/drive/MyDrive/checkpoints" or "outputs/"). Paths inside /content/drive stay persisted in Google Drive without downloading multi-GB weights locally.'
         },
         outputLocalDir: {
           type: 'string',
-          description: 'Local workspace directory where outputs are downloaded (default "./outputs").'
+          description: 'Local workspace directory where non-Drive outputs are downloaded (default "./outputs").'
+        },
+        mountDrive: {
+          type: 'boolean',
+          description:
+            'Mount Google Drive at /content/drive before running (default true). Keep enabled when loading large models or saving training checkpoints.'
         },
         maxRuntimeHours: {
           type: 'number',
@@ -189,10 +196,12 @@ export function buildColabToolProviders(options?: {
       }
 
       const maxCu = Number((rateCu * maxHours).toFixed(1))
+      const mountDrive = args.mountDrive !== false
       const userReason = typeof args.reason === 'string' && args.reason.trim() ? args.reason.trim() : ''
       const fullReason = [
         `连接：${connSummary}`,
         `加速器：${accel} · ~${rateCu} CU/h`,
+        ...(mountDrive ? ['云盘：自动挂载 /content/drive（持久化模型与 Checkpoint）'] : []),
         `命令：${cmd}`,
         `上限：${maxHours} 小时 · 最多 ~${maxCu} CU${balanceSuffix}`,
         ...(userReason ? [`原因：${userReason}`] : [])
@@ -246,6 +255,7 @@ export function buildColabToolProviders(options?: {
             syncPaths: Array.isArray(args.syncPaths) ? args.syncPaths : [],
             outputRemoteDir: args.outputRemoteDir ?? 'outputs/',
             outputLocalDir: args.outputLocalDir ?? './outputs',
+            mountDrive: args.mountDrive !== false,
             maxRuntimeHours: args.maxRuntimeHours ?? 3,
             autoStop: args.autoStop ?? true,
             ...(typeof args.connectionId === 'string' ? { connectionId: args.connectionId } : {})

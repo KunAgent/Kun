@@ -1,5 +1,6 @@
 import type { ActivityRow } from '@shared/activity-row'
 import { MAX_APP_BADGE_COUNT } from '@shared/kun-gui-api'
+import type { WorkboardCompletionAttention } from '@shared/workboard-attention'
 import type { NormalizedThread } from '../agent/types'
 import type { AttentionItem } from './attention-items'
 import { selectAttentionItems } from './attention-items'
@@ -74,7 +75,17 @@ let appliedCount = -1
 export function syncAppBadgeCount(input: AppBadgeInput): number {
   if (input.unreadThreadIds !== persistedSource) {
     persistedSource = input.unreadThreadIds
-    persistUnreadCompletions(input.unreadThreadIds)
+    const normalized = persistUnreadCompletions(input.unreadThreadIds)
+    const attention: WorkboardCompletionAttention = {}
+    for (const [threadId, outcome] of Object.entries(normalized)) {
+      if (outcome === 'completed' || outcome === 'failed') attention[threadId] = outcome
+    }
+    if (typeof window !== 'undefined') void window.kunGui?.syncWorkboardCompletionAttention?.(attention).catch((error: unknown) => {
+      if (persistedSource === input.unreadThreadIds) persistedSource = null
+      void window.kunGui?.logError?.('app-badge', 'Failed to sync workboard attention', {
+        message: error instanceof Error ? error.message : String(error)
+      }).catch(() => undefined)
+    })
   }
   const count = Math.min(attentionItemsForBadge(input).length, MAX_APP_BADGE_COUNT)
   if (typeof window === 'undefined') return count

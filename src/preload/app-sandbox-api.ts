@@ -1,4 +1,5 @@
 import { ipcRenderer } from 'electron'
+import { WIDGET_APP_CHANNELS as apps, type WidgetAppFollowUp } from '../shared/widget-apps'
 import {
   APP_SANDBOX_CHANNELS,
   type AppSandboxClosedEvent,
@@ -8,6 +9,20 @@ import {
 
 /** Workbench side of the app sandbox; spread into `window.kunGui`. */
 export const appSandboxPreloadApi: KunGuiAppSandboxApi = {
+  widgetApps: {
+    list: () => ipcRenderer.invoke(apps.list),
+    info: id => ipcRenderer.invoke(apps.info, id),
+    open: id => ipcRenderer.invoke(apps.open, id),
+    install: source => ipcRenderer.invoke(apps.install, source),
+    save: (id, widgetId, state) => ipcRenderer.invoke(apps.save, { id, widgetId, state }),
+    followUp: (id, prompt) => ipcRenderer.invoke(apps.followUp, { id, prompt }),
+    composed: (requestId, sent) => ipcRenderer.send(apps.composed, { requestId, sent }),
+    onCompose: handler => {
+      const wrapped = (_event: Electron.IpcRendererEvent, request: WidgetAppFollowUp) => handler(request)
+      ipcRenderer.on(apps.compose, wrapped)
+      return () => ipcRenderer.removeListener(apps.compose, wrapped)
+    }
+  },
   appSandbox: {
     createGenUi: (request) => ipcRenderer.invoke(APP_SANDBOX_CHANNELS.createGenUi, request),
     createMcpApp: (request) => ipcRenderer.invoke(APP_SANDBOX_CHANNELS.createMcpApp, request),

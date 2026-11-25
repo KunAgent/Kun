@@ -75,6 +75,7 @@ export default defineConfig({
           'storage-relocation-recovery': resolve('src/preload/storage-relocation-recovery.ts'),
           'runtime-data-recovery': resolve('src/preload/runtime-data-recovery.ts'),
           'tray-quota': resolve('src/preload/tray-quota.ts'),
+          'daily-notes': resolve('src/preload/daily-notes.ts'),
           'pet-overlay': resolve('src/preload/pet-overlay.ts'),
           'remote-desktop-capture': resolve('src/preload/remote-desktop-capture.ts'),
           'remote-desktop-viewer': resolve('src/preload/remote-desktop-viewer.ts'),
@@ -130,6 +131,7 @@ export default defineConfig({
         input: {
           index: resolve('src/renderer/index.html'),
           'tray-quota': resolve('src/renderer/tray-quota.html'),
+          'daily-notes': resolve('src/renderer/daily-notes.html'),
           'pet-overlay': resolve('src/renderer/pet-overlay.html'),
         }
       }

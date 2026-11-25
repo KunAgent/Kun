@@ -17,6 +17,7 @@ import {
 import { ARTIFACT_KIND_ICONS, ArtifactCard, ArtifactListRow } from './ArtifactCard'
 import { projectNameForRoot } from './artifact-index'
 import { ArtifactViewer } from './ArtifactViewer'
+import { InstalledAppsSection } from '../app-surfaces/widget-apps/InstalledAppsSection'
 import type { ArtifactChatHost } from './chat/use-artifact-office-session'
 import { WorkArtifactRowMenu } from './WorkArtifactRowMenu'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
@@ -212,6 +213,7 @@ export function ArtifactsPage({ leftSidebarCollapsed, onToggleLeftSidebar, chat,
             </div>
           </div>
 
+          {!isWork && <InstalledAppsSection />}
           {isWork ? (
             <section aria-label={t('artifactsWorkNew')} className="flex flex-wrap items-center gap-3">
               <button

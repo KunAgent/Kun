@@ -10,7 +10,6 @@ import { managedKunHostCanAutoStart } from './managed-runtime-startup-policy'
 import { kunRuntimeAdapter } from './runtime/kun-adapter'
 import { configureLogger, logError, logInfo, pruneOnStartup, logWarn } from './logger'
 import {
-  gotSingleInstanceLock,
   mainState,
   runningClawScheduleMcpServer,
   traceStartup
@@ -47,6 +46,8 @@ import {
 import { startWindowFirstStartup } from './main-startup-orchestrator'
 import { createWindow } from './main-window'
 import { MainWindowActivationCoordinator } from './main-window-activation'
+import { acceptWidgetAppLaunch, hasPendingWidgetLaunch, widgetAppRuntimeReady, widgetAppStartup } from './widget-apps/activation'
+import { widgetAppFromArg } from '../shared/widget-apps'
 import { initializeMainServices } from './main-ready-services'
 import { initializeWindowShell } from './main-ready-shell'
 import { registerShellIpc } from './main-ready-ipc'
@@ -159,15 +160,20 @@ export function startMainApp(): Promise<void> {
   }
   app.on('open-url', (event, url) => {
     event.preventDefault()
+    if (widgetAppFromArg(url)) return
     onImportLink(url)
   })
-  app.on('second-instance', (_event, argv) => {
+  app.on('second-instance', (_event, argv, _cwd, data) => {
+    if (data && typeof data === 'object' && 'widgetLaunchUrl' in data &&
+        typeof data.widgetLaunchUrl === 'string' && acceptWidgetAppLaunch(data.widgetLaunchUrl)) return
+    if (argv.some(acceptWidgetAppLaunch)) return
     activation.requestReveal()
     const link = findProviderImportLinkArg(argv)
     if (link) onImportLink(link)
   })
   // Windows/Linux cold starts pass the link in this process's own argv.
   const coldStartLink = findProviderImportLinkArg(process.argv)
+  process.argv.some(acceptWidgetAppLaunch)
   if (coldStartLink) onImportLink(coldStartLink)
 
   const handleStartupFailure = async (error: unknown): Promise<void> => {
@@ -237,10 +243,6 @@ export function startMainApp(): Promise<void> {
     registerArtProtocol(protocol)
     registerPetAssetProtocol(protocol)
     sharedWorkspacePreviewProtocols().register(protocol)
-    if (!gotSingleInstanceLock) {
-      await explainConflictingDesktopInstance()
-      return
-    }
     // Capture this before Chromium storage, migrations, or the Manager create
     // data. A development profile still shares the production installation.
     const installation = await detectAnalyticsInstallation(app.getPath('userData'), join(homedir(), '.kun'), [
@@ -259,8 +261,9 @@ export function startMainApp(): Promise<void> {
       registerShellIpc,
       transitionShellReady: () => mainState.startupState.transition('shell_ready'),
       createWindow: (settings) => {
+        widgetAppStartup.launcherOnly = hasPendingWidgetLaunch()
         createWorkbenchWindow({
-          suppressInitialShow: shouldStartHidden(settings),
+          suppressInitialShow: widgetAppStartup.launcherOnly || shouldStartHidden(settings),
           useSystemTitleBar: settings.appBehavior.useSystemTitleBar
         })
         traceStartup('createWindow:returned')
@@ -299,7 +302,7 @@ export function startMainApp(): Promise<void> {
 
     await runPostWindowRuntimeStartup(initial, {
       startupState: mainState.startupState,
-      onReady: () => desktopProcessStack.finishStartup(),
+      onReady: () => { desktopProcessStack.finishStartup(); widgetAppRuntimeReady() },
       reconcileBundledRuntimeAfterInstall,
       resolveManagedRuntimeStartupTarget,
       managedKunHostCanAutoStart,
@@ -351,20 +354,27 @@ function publishDesktopInstanceIdentity(): void {
   }
 }
 
-async function explainConflictingDesktopInstance(): Promise<void> {
-  const current = currentDesktopInstanceIdentity()
-  const recorded = readDesktopInstanceIdentity(app.getPath('userData'))
-  const decision = decideDesktopInstanceLock(current, recorded)
-  if (decision.action !== 'conflict') return
-  await dialog.showMessageBox({
-    type: 'warning',
-    title: 'Kun is already running',
-    message: 'Kun is already running from a different app.',
-    detail: formatDesktopInstanceConflictMessage(decision.current, decision.recorded),
-    buttons: ['OK']
-  }).catch((error) => {
+export async function exitSecondaryDesktopInstance(): Promise<void> {
+  try {
+    const current = currentDesktopInstanceIdentity()
+    const recorded = readDesktopInstanceIdentity(app.getPath('userData'))
+    const decision = decideDesktopInstanceLock(current, recorded)
+    if (decision.action === 'conflict') {
+      await app.whenReady()
+      await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Kun is already running',
+        message: 'Kun is already running from a different app.',
+        detail: formatDesktopInstanceConflictMessage(decision.current, decision.recorded),
+        buttons: ['OK']
+      })
+    }
+  } catch (error) {
     logWarn('startup', 'Failed to explain a conflicting Kun instance.', {
       message: error instanceof Error ? error.message : String(error)
     })
-  })
+  } finally {
+    // The primary received the activation. No owned services or shutdown barrier exist here.
+    app.exit(0)
+  }
 }

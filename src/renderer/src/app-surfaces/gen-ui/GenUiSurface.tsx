@@ -13,12 +13,14 @@ export function GenUiSurface({
   threadId,
   widgetId,
   title,
+  appId,
   fill = false,
   onInstance
 }: {
   threadId: string
   widgetId: string
   title: string
+  appId?: string
   fill?: boolean
   onInstance?: (instance: AppSandboxInstanceInfo | null) => void
 }): ReactElement {
@@ -37,11 +39,12 @@ export function GenUiSurface({
     const api = appSandboxApi()
     if (!api) return Promise.resolve({ ok: false as const, code: 'UNAVAILABLE', message: t('appSurfaceDesktopOnly') })
     return api.createGenUi({
+      ...(appId ? { appId } : {}),
       threadId,
       widgetId,
       theme: resolveAppSandboxTheme(anchorRef.current, i18n.language)
     })
-  }, [i18n.language, t, threadId, widgetId])
+  }, [appId, i18n.language, t, threadId, widgetId])
 
   const onStatus = useCallback((status: AppSandboxFrameStatus) => {
     const next = status.kind === 'ready' ? status.instance : null
@@ -54,13 +57,14 @@ export function GenUiSurface({
     if (!instance) return
     return attachGenUiPageHost({
       instanceId: instance.instanceId,
+      appId,
       threadId,
       widgetId,
       title: titleRef.current,
       onHeight: setHeight,
       onPageError: setPageError
     })
-  }, [instance, threadId, widgetId])
+  }, [appId, instance, threadId, widgetId])
 
   return (
     <div ref={anchorRef} className={fill ? 'flex h-full min-h-0 flex-col' : 'relative'}>

@@ -13,3 +13,4 @@ export type UserAttentionRequest = {
 }
 
 export const USER_ATTENTION_CHANNEL = 'app:user-attention'
+export const WORKBOARD_COMPLETION_ATTENTION_CHANNEL = 'workboard:completion-attention'

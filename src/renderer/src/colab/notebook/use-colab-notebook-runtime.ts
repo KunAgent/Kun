@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ColabAccelerator, ColabConnectionView, ColabSessionView } from '@shared/colab/colab-types'
 import { COLAB_NOTEBOOK_ENTRY_COMMAND } from '@shared/colab/colab-notebook-types'
 import type {
@@ -17,6 +17,7 @@ import {
   useColabSubscription
 } from '../colab-store'
 import { COLAB_REMOTE_ROOT, useColabNotebookStore } from './colab-notebook-store'
+import { useColabDriveMountSubscription, useColabDriveStore } from './colab-drive-store'
 import { useColabPortForwardSubscription } from './colab-port-forward-store'
 import { useJupyterStore, useJupyterSubscription } from './jupyter-store'
 
@@ -57,6 +58,8 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
   useColabSubscription()
   useJupyterSubscription()
   useColabPortForwardSubscription()
+  useColabDriveMountSubscription()
+  const autoMountSessionRef = useRef<string | null>(null)
   const snapshot = useColabStore((s) => s.snapshot)
   const jupyterSnapshot = useJupyterStore((s) => s.snapshot)
   const selectedBackend = useColabNotebookStore((s) => s.runtimeBackend)
@@ -125,10 +128,12 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
           maxSpendCu: opts.maxSpendCu,
           minBalanceCu: opts.minBalanceCu,
           autoStop: opts.maxRuntimeHours > 0 || opts.idleAutoStopMinutes > 0,
+          mountDrive: opts.mountDrive,
           terminalOnly: true
         })
         if (!res.ok) setError(res.message)
         else {
+          if (opts.mountDrive) autoMountSessionRef.current = res.session.id
           setRuntimeBackend('colab')
           useColabNotebookStore.getState().resetKernelState()
         }
@@ -140,6 +145,14 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
     },
     [pending, session, setRuntimeBackend, wsKey]
   )
+
+  useEffect(() => {
+    if (!session || session.phase !== 'running') return
+    if (autoMountSessionRef.current === session.id || session.mountDrive) {
+      autoMountSessionRef.current = null
+      useColabDriveStore.getState().autoMountSession(session.id)
+    }
+  }, [session])
 
   const disconnect = useCallback(async () => {
     const target = session ?? pending

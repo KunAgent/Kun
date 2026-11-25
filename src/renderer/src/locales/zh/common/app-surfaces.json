@@ -1,4 +1,10 @@
 {
+  "widgetAppInstall": "安装为应用",
+  "widgetAppOpen": "打开应用",
+  "widgetAppsTitle": "已安装的应用",
+  "widgetAppRemoveConfirm": "卸载“{{title}}”？",
+  "widgetAppOpening": "正在打开应用…",
+  "widgetAppUnavailable": "此应用已停用或卸载。",
   "appSurfaceDesktopOnly": "交互页面仅在 Kun 桌面端可用。",
   "appSurfaceRetry": "重试",
   "appSurfacePageError": "页面出错：{{message}}",

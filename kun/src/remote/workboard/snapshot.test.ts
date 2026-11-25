@@ -24,6 +24,11 @@ describe('workboard durable metadata projection', () => {
       await f.h.turns.finishTurn({ threadId: thread.id, turnId: turn.turnId, status: 'completed' })
       expect((await workboardSnapshot(f.runtime)).sessions[0].phase).toBe('completed')
       expect((await f.h.threads.getMetadata(thread.id))?.turns).toHaveLength(1)
+      const old = new Date(Date.now() - 3600000).toISOString(), record = (await f.h.threads.getMetadata(thread.id))!
+      await f.h.threadStore.upsert({ ...record, updatedAt: old, turns: record.turns.map(row => ({ ...row, finishedAt: old })) })
+      expect((await workboardSnapshot(f.runtime)).sessions.find(row => row.id === thread.id)).toBeUndefined()
+      const unread = await workboardSnapshot(f.runtime, Date.now(), { [thread.id]: 'completed' })
+      expect(unread.sessions.find(row => row.id === thread.id)).toMatchObject({ phase: 'completed', unread: true })
       await f.h.threads.setGoal(thread.id, { objective: 'keep going' })
       expect((await workboardSnapshot(f.runtime)).sessions[0].phase).toBe('running')
     } finally { await f.close() }

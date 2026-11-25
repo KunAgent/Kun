@@ -501,7 +501,10 @@ export function registerExtensionManagementIpcHandlers(
       const path = request.version
         ? `/v1/extensions/${encodeURIComponent(request.extensionId)}/versions/${encodeURIComponent(request.version)}`
         : `/v1/extensions/${encodeURIComponent(request.extensionId)}`
-      return options.runtimeRequest(path, 'DELETE')
+      const uninstall = () => options.runtimeRequest(path, 'DELETE')
+      return options.withWidgetAppUninstall
+        ? options.withWidgetAppUninstall(request.extensionId, request.version, uninstall)
+        : uninstall()
     })
     if (result.ok) {
       await revokeContentScripts(options, event.sender, request.extensionId, 'uninstall')

@@ -112,4 +112,32 @@ describe('buildTranscriptEntries', () => {
     group.childRuns = [child('child_1', 'layout'), child('child_2', 'style')]
     expect(buildTranscriptEntries(group, options).map((entry) => entry.key)).toEqual(['u1', 'kun-reply:turn_1', 'c3', 'child-group:turn_1'])
   })
+
+  it('does not leak opening turn attachments onto steered user messages', () => {
+    const entries = buildTranscriptEntries(fixtureProjection([
+      {
+        id: 'turn_1',
+        attachmentIds: ['att_opening'],
+        items: [
+          item.user('u1', 'turn_1', 'open with image', ['att_opening']),
+          item.user('item_steered_1', 'turn_1', 'steered without image')
+        ]
+      },
+      {
+        id: 'turn_legacy',
+        attachmentIds: ['att_legacy'],
+        items: [
+          item.user('u_legacy', 'turn_legacy', 'legacy open'),
+          item.user('item_steered_2', 'turn_legacy', 'legacy steered')
+        ]
+      }
+    ]), options)
+    const userAttachments = new Map(
+      entries.flatMap((entry) => entry.kind === 'item' ? [[entry.key, entry.userAttachmentIds] as const] : [])
+    )
+    expect(userAttachments.get('u1')).toEqual(['att_opening'])
+    expect(userAttachments.get('item_steered_1')).toEqual([])
+    expect(userAttachments.get('u_legacy')).toEqual(['att_legacy'])
+    expect(userAttachments.get('item_steered_2')).toEqual([])
+  })
 })

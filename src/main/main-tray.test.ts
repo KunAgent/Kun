@@ -81,6 +81,7 @@ import { mainState } from './main-app-context'
 import { runtimeShutdown } from './main-lifecycle'
 import { notifyApplicationQuitting } from './app-quit-signal'
 import { handleMainWindowClose, syncTray } from './main-tray'
+import { buildTrayMenuTemplate } from './tray-session-menu'
 import { resolveMainWindowCloseDecision } from './window-close-behavior'
 
 function settings(closeAction: 'ask' | 'tray' | 'quit') {
@@ -143,5 +144,19 @@ describe('syncTray', () => {
     expect(mainState.trayAvailable).toBe(true)
     expect(tray.destroy).not.toHaveBeenCalled()
     expect(quotaWindow.destroy).not.toHaveBeenCalled()
+  })
+
+  it('keeps daily notes accessible from the tray if recent sessions cannot be loaded', async () => {
+    mainState.openDailyNotes = vi.fn(async () => undefined)
+    syncTray(settings('quit'))
+    const menu = mainState.trayMenu
+    const tray = state.createdTrays[0]
+    vi.mocked(mainState.store.load).mockRejectedValueOnce(new Error('offline'))
+    const rightClick = tray.on.mock.calls.find(([event]) => event === 'right-click')![1]
+    rightClick()
+    await mainState.trayMenuOpenPromise
+    expect(tray.popUpContextMenu).toHaveBeenCalledWith(menu)
+    vi.mocked(buildTrayMenuTemplate).mock.lastCall![0].actions.openDailyNotes()
+    expect(mainState.openDailyNotes).toHaveBeenCalledOnce()
   })
 })
