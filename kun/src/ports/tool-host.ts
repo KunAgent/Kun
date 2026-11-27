@@ -113,6 +113,8 @@ export type ToolHostContext = {
   roomAgent?: boolean
   roomStepKind?: 'coordination' | 'discussion' | 'execution' | 'review' | 'conversation'
   roomPeer?: boolean
+  /** File tools explicitly assigned by the frozen unattended room; never supplied by the model. */
+  unattendedRoomReads?: readonly ('read' | 'ls')[]
   threadId: string
   turnId: string
   workspace: string
