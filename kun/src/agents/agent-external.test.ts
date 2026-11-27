@@ -89,6 +89,45 @@ describe('external coding Agent identities', () => {
       .rejects.toThrow('cannot review')
   })
 
+  it('requires an explicit Work read grant and rejects unsupported writes without changing the Agent', async () => {
+    const { agents, store } = await fixture()
+    const noGrant = await agents.create({ clientRequestId: 'no-grant', executor: codex, name: 'New' })
+    expect(noGrant.agent.workbench?.work).toBe('off')
+    const native = await agents.create({ clientRequestId: 'native-write', name: 'Kun', workbench: { work: 'auto' } })
+    expect(native.agent.workbench?.work).toBe('auto')
+    const { agent } = await agents.create({ clientRequestId: 'partial', name: 'Codex', executor: codex, workbench: { code: 'auto' } })
+    expect(agent.workbench).toMatchObject({ work: 'off', code: 'auto' })
+    await expect(agents.create({ clientRequestId: 'partial', name: 'Codex', executor: codex, workbench: { code: 'auto', work: 'read' } }))
+      .rejects.toThrow('agent request changed')
+    for (const work of ['confirm', 'auto']) {
+      await expect(agents.create({ clientRequestId: 'new-' + work, executor: codex, name: 'Codex', workbench: { work } }))
+        .rejects.toThrow('only Off or Read only')
+      await expect(agents.update(agent.id, { clientRequestId: 'update-' + work, expectedRevision: 0, workbench: { work } }))
+        .rejects.toThrow('only Off or Read only')
+    }
+    expect(await agents.get(agent.id)).toMatchObject({ revision: 0, workbench: { work: 'off' } })
+    // Simulate an old stored record without a grant, before the general Kun schema can supply its default.
+    await store.commit({ requestId: 'legacy', checks: [{ kind: 'agent_identity', id: agent.id, expectedRevision: 0 }], puts: [{ kind: 'agent_identity', id: agent.id,
+      value: { ...agent, workbench: { code: 'off', maxActiveTasks: 1 } } }] })
+    expect((await agents.get(agent.id)).workbench?.work).toBe('off')
+    expect((await agents.list()).agents.find((item) => item.id === agent.id)?.workbench?.work).toBe('off')
+    const allowed = await agents.update(agent.id, { clientRequestId: 'read', expectedRevision: 1, workbench: { work: 'read' } })
+    expect(allowed.agent.workbench).toEqual({ code: 'off', work: 'read', maxActiveTasks: 1 })
+    await expect(agents.update(agent.id, { clientRequestId: 'read', expectedRevision: 1,
+      workbench: { code: 'confirm', work: 'read', maxActiveTasks: 3 } })).rejects.toThrow('agent request changed')
+    const codeOnly = await agents.update(agent.id, { clientRequestId: 'code-only', expectedRevision: allowed.agent.revision, workbench: { code: 'off' } })
+    expect(codeOnly.agent.workbench).toMatchObject({ work: 'read', code: 'off' })
+    const reset = await agents.update(agent.id, { clientRequestId: 'reset', expectedRevision: codeOnly.agent.revision, workbench: null })
+    expect(reset.agent.workbench?.work).toBe('off')
+    // A profile written by an earlier build may say "auto" despite the hard write block.
+    await store.commit({ requestId: 'old-write', checks: [{ kind: 'agent_identity', id: agent.id, expectedRevision: reset.agent.revision }],
+      puts: [{ kind: 'agent_identity', id: agent.id, value: { ...reset.agent, workbench: { ...reset.agent.workbench, work: 'auto' } } }] })
+    const prior = await agents.get(agent.id)
+    expect(prior.workbench?.work).toBe('off')
+    const renamed = await agents.update(agent.id, { clientRequestId: 'legacy-rename', expectedRevision: prior.revision, name: 'Renamed' })
+    expect(renamed.agent).toMatchObject({ name: 'Renamed', workbench: { work: 'off' } })
+  })
+
   it('preserves read-only Work documents access for external coding Agents', async () => {
     const { agents } = await fixture()
     const { agent } = await agents.create({ clientRequestId: 'codex-read-work', name: 'Codex', executor: codex,

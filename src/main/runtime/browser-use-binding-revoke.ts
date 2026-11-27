@@ -19,9 +19,9 @@ type BrowserUseBindingOwner = {
 }
 
 /**
- * Revoke only the desktop-owned ephemeral Browser authority. The shared Kun
- * daemon and its durable configuration intentionally outlive an ordinary GUI
- * process, so shutdown must not replay the GUI's full settings snapshot here.
+ * Revoke only the desktop-owned ephemeral Browser authority before its Runtime
+ * drains. Matching the old binding keeps a late response from revoking a
+ * replacement authority or replaying the GUI's full settings snapshot.
  */
 export async function revokeManagedRuntimeBrowserUseBinding(
   settings: AppSettingsV1,

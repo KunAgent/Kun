@@ -65,7 +65,7 @@ export class WorkbenchBridge {
   async agentScope(agentId: string): Promise<WorkbenchAgentScope> {
     const row = await this.deps.store.get<AgentIdentity>('agent_identity', agentId)
     if (!row || row.value.archivedAt) throw new Error('the Agent is unavailable')
-    return { agentId, name: row.value.name, policy: resolveWorkbenchPolicy(row.value.workbench),
+    return { agentId, name: row.value.name, policy: resolveWorkbenchPolicy(row.value.workbench, row.value.executor ? 'external' : 'kun'),
       ...(row.value.allowedRepositoryRoots ? { allowedRoots: row.value.allowedRepositoryRoots } : {}) }
   }
 

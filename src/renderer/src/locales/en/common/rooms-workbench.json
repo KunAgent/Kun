@@ -75,6 +75,7 @@
   "roomsWorkbenchPolicyCode": "Code tasks",
   "roomsWorkbenchPolicyWork": "Work documents",
   "roomsWorkbenchPolicyMax": "Tasks at once",
+  "roomsWorkbenchExternalWorkHint": "Coding Agents can read Work documents when you choose Read only. They cannot create or edit documents.",
   "roomsWorkbenchPolicyHint": "Off means the Agent cannot reach that mode. Ask first shows a card you must accept. Start right away only applies to messages you just sent, and only in projects you already use.",
   "roomsWorkbenchPolicy_off": "Off",
   "roomsWorkbenchPolicy_read": "Read only",

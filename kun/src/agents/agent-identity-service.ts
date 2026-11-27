@@ -6,9 +6,10 @@ import { AgentIdentitySchema, CreateAgentRequest, UpdateAgentRequest, AgentPageQ
   AgentFeaturesSchema, type AgentIdentity, type AgentPage, type AgentFeatures } from '../contracts/agent-identities.js'
 import { RoomMemberSchema, RoomSchema, type Room, type RoomMember } from '../contracts/rooms.js'
 import type { SubagentProfileConfig } from '../contracts/capabilities-core.js'
-import type { RoomStore, RoomStoreCommit } from '../rooms/room-store.js'
+import type { RoomStore, RoomStoreCommit, RoomStoreRequest } from '../rooms/room-store.js'
 import { RoomStoreConflictError } from '../rooms/room-store.js'
 import { bindAgentMembers, freezeAgentRoom } from './agent-membership.js'
+import { resolveWorkbenchPolicy, type AgentWorkbenchPolicy } from '../contracts/workbench-policy.js'
 import { agentExecutorRouteKey, type AgentExecutor } from '../contracts/agent-executor.js'
 
 export const agentStableId = (kind: string, ...parts: string[]): string =>
@@ -65,7 +66,7 @@ export class AgentIdentityService {
   async get(id: string): Promise<AgentIdentity> {
     const row = await this.store.get<AgentIdentity>('agent_identity', id)
     if (!row) throw new Error('agent not found')
-    return AgentIdentitySchema.parse({ ...row.value, revision: row.revision })
+    return storedIdentity(row.value, row.revision)
   }
   async active(id: string): Promise<AgentIdentity> {
     const agent = await this.get(id)
@@ -76,7 +77,7 @@ export class AgentIdentityService {
     const input = AgentPageQuery.parse(raw)
     const rows = await this.store.list<AgentIdentity>('agent_identity', {
       limit: input.limit + 1, beforeSeq: input.cursor, search: input.search, archivedOnly: input.archivedOnly })
-    return { agents: rows.slice(0, input.limit).map((row) => AgentIdentitySchema.parse({ ...row.value, revision: row.revision })),
+    return { agents: rows.slice(0, input.limit).map((row) => storedIdentity(row.value, row.revision)),
       ...(rows.length > input.limit ? { nextCursor: String(rows[input.limit - 1].seq) } : {}) }
   }
   async create(raw: unknown): Promise<{ agent: AgentIdentity }> {
@@ -84,12 +85,9 @@ export class AgentIdentityService {
   }
   private async createNow(raw: unknown): Promise<{ agent: AgentIdentity }> {
     const input = CreateAgentRequest.parse(raw)
-    const key = 'agent-create:' + input.clientRequestId, hash = fingerprint(input)
+    const key = 'agent-create:' + input.clientRequestId
     const replay = await this.store.getRequest(key)
-    if (replay) {
-      if (replay.fingerprint !== hash) throw new RoomStoreConflictError('agent request changed')
-      return replay.result as { agent: AgentIdentity }
-    }
+    if (replay) return replayIdentity(replay, input, raw)
     if (!(await this.features()).identities) throw new RoomStoreConflictError('agent creation is disabled')
     const copy = input.copyFromAgentId ? await this.get(input.copyFromAgentId) : undefined
     const { clientRequestId: _, copyFromAgentId: __, ...fields } = input
@@ -102,9 +100,9 @@ export class AgentIdentityService {
       id: 'agent-' + randomUUID(), schemaVersion: 1, revision: 0, createdAt: now, updatedAt: now,
       archivedAt: undefined, migratedFrom: undefined,
       setup: copy ? undefined : { status: 'completed' as const, startedAt: now, completedAt: now } })
-    await this.validate(normalizeExternalAgent(agent))
+    await this.validate(normalizeExternalAgent(agent, raw, copy))
     const result = { agent }
-    const saved = await this.store.commit({ requestId: key, fingerprint: hash,
+    const saved = await this.store.commit({ requestId: key, fingerprint: identityRequestHash(input, raw, agent),
       checks: [{ kind: 'agent_identity', id: agent.id, expectedRevision: null }],
       puts: [{ kind: 'agent_identity', id: agent.id, value: agent }], result,
       events: [{ roomId: namespace, kind: 'agent.created', payload: { id: agent.id } }] })
@@ -118,13 +116,9 @@ export class AgentIdentityService {
     // Zod defaults inside optional fields must not turn a partial update into a reset.
     const input = Object.fromEntries(Object.entries(parsed).filter(([key]) =>
       Object.hasOwn(raw as object, key))) as typeof parsed
-    const hash = fingerprint(input)
     const key = 'agent-update:' + id + ':' + input.clientRequestId
     const replay = await this.store.getRequest(key)
-    if (replay) {
-      if (replay.fingerprint !== hash) throw new RoomStoreConflictError('agent request changed')
-      return replay.result as { agent: AgentIdentity }
-    }
+    if (replay) return replayIdentity(replay, input, raw)
     const old = await this.get(id)
     const { clientRequestId: _, expectedRevision, archived, ...patch } = input
     const normalizedPatch = Object.fromEntries(Object.entries(patch).map(([key, value]) => [key, value === null ? undefined : value]))
@@ -140,8 +134,8 @@ export class AgentIdentityService {
       (old.executor && agentExecutorRouteKey(old.executor) !== agentExecutorRouteKey(agent.executor!))) {
       throw new RoomStoreConflictError('an Agent\'s engine route cannot change; only a coding Agent\'s model can')
     }
-    await this.validate(normalizeExternalAgent(agent), old.executor, old.avatar)
-    const saved = await this.store.commit({ requestId: key, fingerprint: hash,
+    await this.validate(normalizeExternalAgent(agent, raw, old), old.executor, old.avatar)
+    const saved = await this.store.commit({ requestId: key, fingerprint: identityRequestHash(input, raw, agent),
       checks: [{ kind: 'agent_identity', id, expectedRevision }],
       puts: [{ kind: 'agent_identity', id, value: agent }], result: { agent },
       events: [{ roomId: namespace, kind: 'agent.updated', payload: { id } }] })
@@ -204,9 +198,43 @@ export class AgentIdentityService {
   freeze(room: Room): Promise<Room> { return freezeAgentRoom(this, room) }
 }
 
+function storedIdentity(value: AgentIdentity, revision: number): AgentIdentity {
+  return AgentIdentitySchema.parse({ ...value, revision,
+    ...(value.executor ? { workbench: resolveWorkbenchPolicy(value.workbench, 'external') } : {}) })
+}
+
+// Request schemas already validated raw; their nested Kun defaults do not distinguish omission from explicit read.
+function externalWorkRequest(raw: unknown) {
+  const requested = (raw as { workbench?: Partial<AgentWorkbenchPolicy> | null }).workbench
+  if (requested?.work === 'confirm' || requested?.work === 'auto') {
+    throw new RoomStoreConflictError('Coding Agents support only Off or Read only for Work documents')
+  }
+  return requested
+}
+
+function identityRequestHash(input: object, raw: unknown, agent: AgentIdentity): string {
+  const requested = agent.executor && externalWorkRequest(raw)
+  // Validated values are already in input; retain which settings were actually supplied.
+  return fingerprint(requested ? [input, Object.keys(requested).sort()] : input)
+}
+
+function replayIdentity(replay: RoomStoreRequest, input: object, raw: unknown): { agent: AgentIdentity } {
+  const result = replay.result as { agent: AgentIdentity }
+  const hash = identityRequestHash(input, raw, result.agent)
+  const saved = result.agent.executor ? { agent: storedIdentity(result.agent, result.agent.revision) } : result
+  // Older receipts used only the validated payload. Return their conservative
+  // projection; they are never reapplied as fresh permission changes.
+  if (replay.fingerprint !== hash && replay.fingerprint !== fingerprint(input)) throw new RoomStoreConflictError('agent request changed')
+  return saved
+}
+
 /** Coding Agents keep their fixed engine and may reach Code through the scoped bridge. */
-function normalizeExternalAgent(agent: AgentIdentity): AgentIdentity {
+function normalizeExternalAgent(agent: AgentIdentity, raw: unknown, previous?: AgentIdentity): AgentIdentity {
   if (!agent.executor) return agent
+  const requested = externalWorkRequest(raw)
+  const work = requested?.work ?? (requested === null || !previous?.executor ? 'off' : previous.workbench?.work)
+  const inherited = requested === null ? undefined : previous?.workbench
+  agent.workbench = resolveWorkbenchPolicy({ ...agent.workbench, ...inherited, ...requested, work }, 'external')
   agent.modelRef = undefined
   agent.fastModelRef = undefined
   agent.reviewerAgentId = undefined

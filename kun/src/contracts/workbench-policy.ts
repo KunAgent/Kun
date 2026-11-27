@@ -22,9 +22,13 @@ export type AgentWorkbenchPolicy = z.infer<typeof AgentWorkbenchPolicySchema>
 export const DEFAULT_WORKBENCH_POLICY: AgentWorkbenchPolicy = AgentWorkbenchPolicySchema.parse({})
 
 /** Missing or malformed stored policy always resolves to the conservative defaults. */
-export function resolveWorkbenchPolicy(value: unknown): AgentWorkbenchPolicy {
+export function resolveWorkbenchPolicy(value: unknown, engine: 'kun' | 'external' = 'kun'): AgentWorkbenchPolicy {
   const parsed = AgentWorkbenchPolicySchema.safeParse(value ?? {})
-  return parsed.success ? parsed.data : DEFAULT_WORKBENCH_POLICY
+  const policy = parsed.success ? parsed.data : DEFAULT_WORKBENCH_POLICY
+  if (engine !== 'external') return policy
+  // Kun's default read is not an external grant. Only an explicitly saved read opts in.
+  const explicitRead = parsed.success && typeof value === 'object' && value !== null && 'work' in value && value.work === 'read'
+  return { ...policy, work: explicitRead ? 'read' : 'off' }
 }
 
 /** Agent tool names by the capability that gates them. */

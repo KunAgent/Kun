@@ -202,7 +202,9 @@ export const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () =>
         store: mainState.store,
         hasBinding: Boolean(browserUseBinding),
         runtimeIsLive: kunRuntimeAdapter.isChildRunning(),
-        revoke: (settings) => revokeManagedRuntimeBrowserUseBinding(settings, browserUseBinding)
+        // Let the best-effort revoke settle before the shared phase deadline.
+        deadline: cleanup.deadline(2_000) - 100,
+        revoke: (settings, timeoutMs) => revokeManagedRuntimeBrowserUseBinding(settings, browserUseBinding, { timeoutMs })
       })
   }, cleanup.deadline(2_000))
   const releaseLeases = mainState.shutdownDesktopResourceLeases

@@ -29,7 +29,7 @@ import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
-import { DAILY_NOTES_TOOL_NAMES, WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
+import { DAILY_NOTES_TOOL_NAMES, WORKBENCH_READ_WORK_TOOLS, WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
 import { agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
 import { agentExecutorRouteKey } from '../contracts/agent-executor.js'
 import { EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS, externalAgentBinding, externalAgentSystemPrompt, externalAgentThreadRoute } from './agent-external.js'
@@ -95,11 +95,14 @@ export class AgentDirectRunner {
       const canonical = await realpath(workspace)
       const profile = member.presetSnapshot ?? this.deps.profiles()[member.presetId]
       const agent = await this.deps.agentDirectory?.get(member.participantAgentId)
+      const workbench = external ? resolveWorkbenchPolicy(member.workbenchPolicy, 'external') : resolveWorkbenchPolicy(agent?.workbench)
       const fingerprint = JSON.stringify([request.roomId, request.roomSnapshot.privateEpoch ?? 0, canonical,
         ...(contextGeneration(request.roomSnapshot) ? ['context-generation', contextGeneration(request.roomSnapshot)] : []),
         main.providerId, main.accountId, request.roomSnapshot.privateExecutionPolicy, member.presetId, member.agentInstructions,
-        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', resolveWorkbenchPolicy(agent?.workbench),
-        ...(external ? [agentExecutorRouteKey(external), 'private-code-dispatch-v1'] : [])])
+        profile, member.capabilityOverrides, agent?.setup?.status ?? 'completed', workbench,
+        // Pre-upgrade threads denied all Work reads. The same-room history bridge carries
+        // prior messages into the new read lane without rewriting old turns or their tools.
+        ...(external ? [agentExecutorRouteKey(external), workbench.work === 'read' ? 'private-work-read-v2' : 'private-code-dispatch-v1'] : [])])
       const threadId = agentStableId('agent-chat', createHash('sha256').update(fingerprint).digest('hex'))
       const reply = request.message.replyToMessageId ? await this.deps.store.get<RoomMessage>('message', request.message.replyToMessageId) : null
       const reminderInput = request.privateReminder ? await this.reminderWakeInput(request) : null
@@ -255,7 +258,7 @@ export class AgentDirectRunner {
   /** An external engine runs in the private workspace under the conversation's own permission policy. */
   private async createExternalThread(request: RoomRequestState, member: RoomMember): Promise<ThreadRecord> {
     const executor = member.executor!
-    const workbench = resolveWorkbenchPolicy(member.workbenchPolicy)
+    const workbench = resolveWorkbenchPolicy(member.workbenchPolicy, 'external')
     const enabled = workbenchToolNamesForPolicy(workbench)
     return this.deps.threads.create({ title: member.displayName, workspace: request.privateWorkspace!,
       ...externalAgentThreadRoute(executor), ...request.privateModel, agentId: member.presetId, mode: 'agent', agentSurface: 'code',
@@ -268,6 +271,7 @@ export class AgentDirectRunner {
       // Kun bridge discovery and execution independently require a real bridge
       // for an external turn; the host continues to publish its final reply.
       blockedToolNames: [...new Set([...EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS,
+        ...WORKBENCH_READ_WORK_TOOLS.filter((name) => member.capabilityOverrides?.blockedTools?.includes(name) || member.presetSnapshot?.blockedTools?.includes(name)),
         ...WORKBENCH_TOOL_NAMES.filter((name) => !enabled.includes(name))])],
       blockedProviderIds: [], blockedSkillIds: [], skillsEnabled: true } })
   }
