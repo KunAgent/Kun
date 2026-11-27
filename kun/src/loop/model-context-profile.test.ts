@@ -3,12 +3,38 @@ import {
   contextThresholdsForModel,
   modelCapabilitiesForModel,
   modelCapabilitiesForProviderModel,
+  modelContextProfilesForProvider,
   modelContextProfilesFromConfig,
   resolveModelContextProfile,
-  safeProviderReasoningCapability
+  safeProviderReasoningCapability,
+  type ModelContextProfileConfig
 } from './model-context-profile.js'
 
 describe('DeepSeek flash aliases', () => {
+  it.each(['models.profiles', 'contextCompaction.modelProfiles'])('preserves a global relay alias from %s', (source) => {
+    const model = 'deepseek-flash'
+    const relay = { model, baseUrl: 'https://relay.example/v1' }
+    const limits = { contextWindowTokens: 128_000, maxOutputTokens: 4096,
+      inputModalities: ['text', 'image'], messageParts: ['text', 'image_url'] } as const
+    const read = (exact?: ModelContextProfileConfig) => {
+      const saved = { 'deepseek-v4-flash': { aliases: [model], ...limits }, ...(exact ? { [model]: exact } : {}) }
+      return modelContextProfilesFromConfig(source === 'models.profiles'
+        ? { models: { profiles: saved } } : { contextCompaction: { modelProfiles: saved } })
+    }
+    const profiles = read()
+    const scoped = modelContextProfilesForProvider(relay, profiles)
+    expect.soft(modelCapabilitiesForProviderModel(relay, profiles)).toMatchObject(limits)
+    expect.soft(modelCapabilitiesForModel(model, scoped)).toMatchObject(limits)
+    expect.soft(contextThresholdsForModel(model, undefined, scoped)).toEqual({ softThreshold: 96_000, hardThreshold: 108_800 })
+    expect(modelCapabilitiesForProviderModel({ model, baseUrl: 'https://api.deepseek.com' }, profiles))
+      .toMatchObject({ contextWindowTokens: 1_000_000, inputModalities: ['text', 'image'] })
+
+    const exact = { contextWindowTokens: 64_000, maxOutputTokens: 2048,
+      inputModalities: ['text'], messageParts: ['text'] } as const
+    const explicit = read(exact)
+    expect(modelCapabilitiesForProviderModel(relay, explicit)).toMatchObject(exact)
+    expect(modelCapabilitiesForModel(model, modelContextProfilesForProvider(relay, explicit))).toMatchObject(exact)
+  })
   it('gives the harness catalog short id the same reasoning facts as v4-flash', () => {
     for (const id of ['deepseek-v4-flash', 'deepseek-flash']) {
       const capabilities = modelCapabilitiesForModel(id)

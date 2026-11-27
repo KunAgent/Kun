@@ -26,6 +26,8 @@ export type ModelContextCompactionProfileConfig = {
 export type ModelContextProfile = ModelContextThresholds & {
   canonicalModel: string
   modelIds: readonly string[]
+  /** Runtime-only: this route stripped the facts of an implicit vendor profile. */
+  unprovenBuiltIn?: true
   contextWindowTokens: number
   maxInputTokens?: number
   maxOutputTokens?: number
