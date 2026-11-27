@@ -35,7 +35,8 @@ it('routes a private chat to the coding Agent engine and posts its final reply',
   cleanup.push(async () => { await runtime.close(); await h.turns.interruptActiveTurns(); await store.close(); await rm(root, { recursive: true, force: true }) })
   runtime.agents.setExecutorValidator(async (executor) => executor)
   const { agent } = await runtime.agents.create({ clientRequestId: 'codex', name: 'Codex',
-    executor: { kind: 'harness', harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-5.5' } })
+    executor: { kind: 'harness', harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-5.5' },
+    workbench: { code: 'off', work: 'read', maxActiveTasks: 1 } })
   const { room } = await openAgentConversation(runtime.agents, runtime.service, agent.id)
   const sent = await runtime.service.send(room.id, { clientRequestId: 'ask', body: 'Why does parsing fail?' })
   for (let i = 0; i < 12; i++) {
@@ -57,6 +58,12 @@ it('routes a private chat to the coding Agent engine and posts its final reply',
   expect(thread.model).toBe('gpt-5.5')
   expect(thread.mode).toBe('agent')
   expect(thread.roomContext?.blockedToolNames).toContain('send_im_message')
+  expect(thread.roomContext?.blockedToolNames).not.toContain('list_work_spaces')
+  expect(thread.roomContext?.blockedToolNames).not.toContain('search_work_documents')
+  expect(thread.roomContext?.blockedToolNames).not.toContain('read_work_document')
+  expect(thread.roomContext?.blockedToolNames).toEqual(expect.arrayContaining([
+    'create_work_document', 'propose_work_edit', 'create_work_task'
+  ]))
   expect(thread.systemPrompt).toContain('You are Codex, a coding Agent')
   expect(thread.turns[0]).toMatchObject({ harnessId: 'codex', credentialMode: 'native-login' })
   expect(prompts.join('\n')).toContain('Why does parsing fail?')

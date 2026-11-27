@@ -1,7 +1,8 @@
 import type { AgentExecutor } from '../contracts/agent-executor.js'
 import type { ApprovalPolicy } from '../contracts/policy.js'
 import { AGENT_ARTIFACT_TOOLS, AGENT_COMMITMENT_TOOLS, AGENT_HISTORY_TOOLS } from '../contracts/agent-work-tools.js'
-import { DAILY_NOTES_TOOL_NAMES, WORKBENCH_TOOL_NAMES, WORKBENCH_READ_CODE_TOOLS, WORKBENCH_WRITE_CODE_TOOLS } from '../contracts/workbench-policy.js'
+import { DAILY_NOTES_TOOL_NAMES, WORKBENCH_TOOL_NAMES, WORKBENCH_READ_CODE_TOOLS, WORKBENCH_WRITE_CODE_TOOLS,
+  WORKBENCH_READ_WORK_TOOLS } from '../contracts/workbench-policy.js'
 import { AGENT_COLLABORATION_TOOLS } from './agent-handoff-tools.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
@@ -30,9 +31,9 @@ export const EXTERNAL_AGENT_BLOCKED_TOOLS = [
   ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...AGENT_HISTORY_TOOLS, ...DAILY_NOTES_TOOL_NAMES, ...WORKBENCH_TOOL_NAMES
 ]
 
-/** Private Code handoffs cross the scoped Kun bridge; group discussion remains read-only. */
+/** Private Code handoffs and Work reference reads cross the scoped Kun bridge; Work writes remain host-controlled. */
 export const EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS = EXTERNAL_AGENT_BLOCKED_TOOLS.filter((name) =>
-  !([...WORKBENCH_READ_CODE_TOOLS, ...WORKBENCH_WRITE_CODE_TOOLS] as readonly string[]).includes(name))
+  !([...WORKBENCH_READ_CODE_TOOLS, ...WORKBENCH_WRITE_CODE_TOOLS, ...WORKBENCH_READ_WORK_TOOLS] as readonly string[]).includes(name))
 
 /**
  * Discussion is unattended: nobody watches its hidden thread for approvals.
