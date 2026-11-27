@@ -89,6 +89,17 @@ describe('external coding Agent identities', () => {
       .rejects.toThrow('cannot review')
   })
 
+  it('preserves read-only Work documents access for external coding Agents', async () => {
+    const { agents } = await fixture()
+    const { agent } = await agents.create({ clientRequestId: 'codex-read-work', name: 'Codex', executor: codex,
+      workbench: { code: 'off', work: 'read', maxActiveTasks: 1 } })
+    expect(agent.workbench).toEqual({ code: 'off', work: 'read', maxActiveTasks: 1 })
+
+    const updated = await agents.update(agent.id, { clientRequestId: 'codex-read-work-update', expectedRevision: agent.revision,
+      workbench: { code: 'off', work: 'read', maxActiveTasks: 2 } })
+    expect(updated.agent.workbench).toEqual({ code: 'off', work: 'read', maxActiveTasks: 2 })
+  })
+
   it('requires a Kun lead in groups and freezes the engine route with mention-only attention', async () => {
     const { agents, rooms } = await fixture()
     const external = (await agents.create({ clientRequestId: 'codex', name: 'Codex', executor: codex })).agent

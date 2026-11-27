@@ -209,7 +209,6 @@ function normalizeExternalAgent(agent: AgentIdentity): AgentIdentity {
   if (!agent.executor) return agent
   agent.modelRef = undefined
   agent.fastModelRef = undefined
-  if (agent.workbench) agent.workbench = { ...agent.workbench, work: 'off' }
   agent.reviewerAgentId = undefined
   agent.presetId = 'general'
   agent.defaultRole = 'developer'
