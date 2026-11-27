@@ -1,11 +1,14 @@
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { ipcMain } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
 import { admitControlOperation, pauseControlAdmission, resumeControlAdmission } from '../control-host/admission'
+const viewerEntry = resolve('verified release', 'viewer', 'index.html')
 const h = vi.hoisted(() => ({ resource: vi.fn(), windows: [] as any[], handlers: new Map<string, (...args: any[]) => any>() }))
 vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
   class Window extends EventEmitter {
-    webContents = Object.assign(new EventEmitter(), {send: vi.fn(), mainFrame: {url: 'file:///verified/release/viewer/index.html'}})
+    webContents = Object.assign(new EventEmitter(), {send: vi.fn(), mainFrame: {url: pathToFileURL(viewerEntry).href}})
     destroyed = false
     full = false
     setFullScreen = vi.fn()
@@ -35,7 +38,7 @@ import { ComputerViewerWindow } from './viewer-window'
 let viewer: ComputerViewerWindow | undefined
 function fixture(open = async () => ({hostId: 'host', name: 'Mac'})) {
   resumeControlAdmission()
-  h.resource.mockImplementation(async () => ({entry: '/verified/release/viewer/index.html', release: admitControlOperation()}))
+  h.resource.mockImplementation(async () => ({entry: viewerEntry, release: admitControlOperation()}))
   const service = { open: vi.fn(open), close: vi.fn(async () => {}), status: () => ({}), release: vi.fn(), configuration: vi.fn() }
   viewer = new ComputerViewerWindow(service as any)
   return service
@@ -67,6 +70,14 @@ it('releases the package after an unexpected native window destruction even with
   await viewer!.open('host')
   h.windows[0].destroy()
   await vi.waitFor(() => expect(pauseControlAdmission()).toBe(true))
+})
+it('rejects fullscreen IPC after the main frame leaves the verified viewer URL', async () => {
+  fixture(); await viewer!.open('host')
+  const window = h.windows[0], contents = window.webContents
+  contents.mainFrame.url = new URL('other.html', contents.mainFrame.url).href
+  expect(() => h.handlers.get('computer-viewer:fullscreen')!({ sender: contents, senderFrame: contents.mainFrame }, true))
+    .toThrow('UNTRUSTED_DESKTOP_VIEWER')
+  expect(window.setFullScreen).not.toHaveBeenCalled()
 })
 it('waits for native fullscreen, coalesces clicks and follows an exit performed through system controls', async () => {
   fixture(); await viewer!.open('host')

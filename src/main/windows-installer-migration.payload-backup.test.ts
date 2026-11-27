@@ -81,7 +81,7 @@ afterEach(() => {
 })
 
 describe('automatic-update payload helper packaging', () => {
-  it('uses native metadata only as evidence and keeps strict manifest failures', () => {
+  it('records native diagnostics without weakening manifest failures', () => {
     const script = readFileSync(join(process.cwd(), 'build/windows-installer-migration-runtime-integrity.ps1'), 'utf8')
     expect(script).toContain('[KunInstallerPayloadCopy]::InspectLiteralFile($PathValue)')
     const native = readFileSync(join(process.cwd(), 'build/windows-installer-migration-payload-copy.ps1'), 'utf8')
@@ -120,7 +120,7 @@ describe('automatic-update payload helper packaging', () => {
 })
 
 windowsOnly('Windows PowerShell 5.1 automatic-update payload copy', () => {
-  it('distinguishes native long-path metadata from provider visibility without weakening manifest validation', () => {
+  it('validates complete, truncated and missing files beyond MAX_PATH using native metadata', () => {
     const input = fixture()
     const relative = join(dirname(deepRelativePath()), 'package.json')
     const file = put(input.source, relative)
@@ -134,7 +134,7 @@ windowsOnly('Windows PowerShell 5.1 automatic-update payload copy', () => {
       '. (Join-Path $env:KUN_TEST_HELPERS "windows-installer-migration-filesystem.ps1")',
       '. (Join-Path $env:KUN_TEST_HELPERS "windows-installer-migration-payload-copy.ps1")',
       '. (Join-Path $env:KUN_TEST_HELPERS "windows-installer-migration-runtime-integrity.ps1")',
-      '[Console]::Out.WriteLine((@{providerExists=(Test-Path -LiteralPath $env:KUN_TEST_FILE -PathType Leaf); native=[KunInstallerPayloadCopy]::InspectLiteralFile($env:KUN_TEST_FILE)} | ConvertTo-Json -Compress))',
+      '[Console]::Out.WriteLine([KunInstallerPayloadCopy]::InspectLiteralFile($env:KUN_TEST_FILE))',
       'Assert-PackagedRuntimeIntegrity $env:KUN_TEST_ROOT'
     ].join('; ')], {
       encoding: 'utf8', timeout: 60_000,
@@ -142,25 +142,18 @@ windowsOnly('Windows PowerShell 5.1 automatic-update payload copy', () => {
         KUN_TEST_ROOT: input.source, KUN_INSTALLER_DIAGNOSTIC_PATH: join(input.root, 'diagnostic.log') }
     })
     const present = inspect()
-    expect(present.error).toBeUndefined()
-    const observation = JSON.parse(present.stdout.trim()) as { providerExists: boolean, native: string }
-    expect(observation.native).toBe(`exists=true kind=file bytes=${original.length}`)
-    console.info('[runtime-integrity-long-path]', JSON.stringify({ pathLength: file.length, ...observation }))
-    // Provider behavior depends on the runner's .NET long-path switches. Record
-    // the distinction instead of claiming every PowerShell 5.1 host rejects it.
-    if (observation.providerExists) succeeded(present)
-    else {
-      expect(present.status).not.toBe(0)
-      expect(present.stderr).toContain('missing a packaged file')
-      expect(readFileSync(join(input.root, 'diagnostic.log'), 'utf8')).toContain('native=exists=true kind=file')
-    }
+    succeeded(present)
+    expect(present.stdout.trim()).toBe(`exists=true kind=file bytes=${original.length}`)
     writeFileSync(manifest, JSON.stringify({ schemaVersion: 1, files: [{ path: manifestPath, size: original.length - 1 }], modules: [] }))
-    expect(inspect().status).not.toBe(0)
+    const truncated = inspect()
+    expect(truncated.status).toBe(1)
+    expect(truncated.stderr).toContain('truncated')
     expect(readFileSync(join(input.root, 'diagnostic.log'), 'utf8')).toContain(`native=exists=true kind=file bytes=${original.length}`)
     rmSync(file)
     const absent = inspect()
-    expect(absent.status).not.toBe(0)
-    expect(JSON.parse(absent.stdout.trim()).native).toBe('exists=false win32Error=2')
+    expect(absent.status).toBe(1)
+    expect(absent.stderr).toContain('missing a packaged file')
+    expect(absent.stdout.trim()).toBe('exists=false win32Error=2')
     expect(readFileSync(join(input.root, 'diagnostic.log'), 'utf8')).toContain('native=exists=false win32Error=2')
     untouchedOutside(input)
   }, 180_000)

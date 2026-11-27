@@ -1,0 +1,33 @@
+name: Windows path regressions
+
+on:
+  push:
+    branches: [develop]
+    paths:
+      - '.github/workflows/windows-path-regressions.yml'
+      - 'src/main/computer-access/viewer-window*.ts'
+      - 'src/main/computer-access/fullscreen.ts'
+      - 'src/main/windows-installer-migration.payload-backup.test.ts'
+      - 'src/main/windows-installer-migration.recovery-safety.test.ts'
+      - 'build/windows-installer-migration*.ps1'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-paths:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.1'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test viewer trust and installer recovery paths
+        run: >-
+          npm exec -- vitest run --no-file-parallelism
+          src/main/computer-access/viewer-window.test.ts
+          src/main/windows-installer-migration.recovery-safety.test.ts
+          src/main/windows-installer-migration.payload-backup.test.ts
