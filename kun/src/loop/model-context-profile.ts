@@ -57,15 +57,12 @@ const DEFAULT_MODEL_MESSAGE_PARTS: readonly ModelMessagePartSupport[] = ['text']
 
 export const MODEL_CONTEXT_PROFILES: readonly ModelContextProfile[] = [
   deepseekV4Profile('deepseek-v4-pro', ['deepseek-v4-pro']),
-  deepseekV4Profile('deepseek-v4-flash', [
-    'deepseek-v4-flash',
-    // Back-compat aliases currently routed by DeepSeek to v4-flash modes. The
-    // harness catalogs advertise the short `deepseek-flash` id, so it must
-    // resolve to the same reasoning and context facts.
-    'deepseek-flash',
-    'deepseek-chat',
-    'deepseek-reasoner'
-  ]),
+  deepseekV4Profile('deepseek-v4-flash', ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner']),
+  {
+    ...deepseekV4Profile('deepseek-flash', ['deepseek-flash']),
+    inputModalities: ['text', 'image'],
+    messageParts: ['text', 'image_url']
+  },
   glmReasoningProfile('glm-5.3-flash', 200_000),
   glmReasoningProfile('glm-5.2', 1_000_000),
   glmReasoningProfile('glm-5.1', 200_000),
@@ -88,7 +85,9 @@ export function resolveModelContextProfile(
 ): ModelContextProfile | null {
   const normalized = normalizeModelId(model)
   if (!normalized) return null
-  return profiles.find((profile) =>
+  // A saved alias must not mask the active model's own capability declaration.
+  const exact = profiles.find((profile) => profile.canonicalModel === normalized)
+  return exact ?? profiles.find((profile) =>
     profile.modelIds.some((modelId) => normalized === modelId || normalized.endsWith(`/${modelId}`))
   ) ?? null
 }

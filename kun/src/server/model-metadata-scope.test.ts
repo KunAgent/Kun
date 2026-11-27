@@ -56,6 +56,37 @@ describe('provider-scoped model facts', () => {
     expect(modelCapabilitiesForProviderModel({ providerId: 'zhipu-coding-plan', baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions', model: 'glm-5.2' }).contextWindowTokens).toBe(1_000_000)
     expect(modelCapabilitiesForProviderModel({ providerId: 'deepseek', baseUrl: 'https://api.deepseek.com', model: 'deepseek-v4-pro' }).contextWindowTokens).toBe(1_000_000)
   })
+  it('keeps the official Flash image input distinct from saved V4 aliases and relay routes', () => {
+    const model = 'deepseek-flash'
+    const legacy = 'deepseek-v4-flash'
+    const base: NonNullable<KunServeRuntimeOptions['providers']>[string] = {
+      apiKey: '', baseUrl: 'https://api.deepseek.com', models: [model],
+      modelProfiles: { [legacy]: { aliases: [model], inputModalities: ['text'], messageParts: ['text'] } }
+    }
+    const global = modelContextProfilesFromConfig({ models: { profiles: base.modelProfiles } })
+    const resolve = (provider: typeof base) => {
+      const scoped = modelContextProfilesByProvider({ deepseek: provider }).get('deepseek')!
+      const profiles = modelContextProfilesForProvider({ providerId: 'deepseek', baseUrl: provider.baseUrl, endpoints: provider.endpoints },
+        mergeModelContextProfiles(scoped, global))
+      return modelCapabilitiesForModel(model, profiles)
+    }
+    const vision = { inputModalities: ['text', 'image'], messageParts: ['text', 'image_url'] }
+    const text = { inputModalities: ['text'], messageParts: ['text'] }
+    expect(resolve(base)).toMatchObject(vision)
+    expect(modelCapabilitiesForProviderModel({ model, baseUrl: base.baseUrl })).toMatchObject(vision)
+    expect(resolve({ ...base, modelCapabilities: { [model]: {
+      id: model, inputModalities: ['text', 'image'], messageParts: ['text', 'image_url'],
+      outputModalities: ['text'], supportsToolCalling: true
+    } } })).toMatchObject(vision)
+    expect(resolve({ ...base, modelProfiles: { ...base.modelProfiles,
+      [model]: { inputModalities: ['text'], messageParts: ['text'] } } })).toMatchObject(text)
+    expect(resolve({ ...base, baseUrl: relay.baseUrl })).toMatchObject(text)
+    expect(resolve({ ...base, endpoints: { responses: relay.baseUrl } })).toMatchObject(text)
+    expect(resolve({ ...base, baseUrl: relay.baseUrl, modelProfiles: { [legacy]: {
+      aliases: [model], inputModalities: ['text', 'image'], messageParts: ['text', 'image_url']
+    } } })).toMatchObject(vision)
+    expect(modelCapabilitiesForProviderModel({ model: 'deepseek-v4-pro', baseUrl: base.baseUrl })).toMatchObject(text)
+  })
   it('retains explicit global and provider settings without inheriting unrelated built-in fields', () => {
     const global = modelContextProfilesFromConfig({ models: { profiles: { 'gpt-5.5': { contextWindowTokens: 64_000 } } } })
     const profiles = modelContextProfilesForProvider(relay, global)
