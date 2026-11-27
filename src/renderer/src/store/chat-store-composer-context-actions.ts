@@ -14,7 +14,7 @@ function eventMatchesCurrentComposer(
   workspaceRoot: string | undefined,
   threadId?: string
 ): boolean {
-  if (state.route !== 'chat') return false
+  if (state.route !== 'chat' && state.route !== 'ade') return false
   if (workspaceRootScopeKey(workspaceRoot) !== workspaceRootScopeKey(activeWorkspaceRoot(state))) {
     return false
   }

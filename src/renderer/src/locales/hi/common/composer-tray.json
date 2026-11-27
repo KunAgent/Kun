@@ -4,6 +4,21 @@
     "queueLabel": "कतार में संदेश",
     "collapse": "समेटें",
     "stop": "रोकें",
+    "referenceAction": "संदर्भ लें",
+    "referencedAction": "संदर्भित",
+    "referenceWorkerAria": "सहयोगी {{title}} को इनपुट में संदर्भित करें",
+    "unreferenceWorkerAria": "सहयोगी {{title}} का संदर्भ हटाएं",
+    "referenceTodoAria": "कार्य {{title}} को इनपुट में संदर्भित करें",
+    "unreferenceTodoAria": "कार्य {{title}} का संदर्भ हटाएं",
+    "referenceTodoBadge": "चरण {{index}} / {{total}}",
+    "referencePlaceholder": "संदर्भित कार्यों या सहयोगियों के लिए निर्देश लिखें…",
+    "sheetPlaceholder": {
+      "todo": "ऊपर दी गई कार्य सूची पर फ़ीडबैक दें या चरण समायोजित करें…",
+      "workers": "ऊपर सहयोगियों की प्रगति या आपकी प्रतीक्षा कर रहे मदों पर जवाब दें…",
+      "goal": "मौजूदा लक्ष्य के लिए शर्तें या अगली दिशा जोड़ें…",
+      "graph": "ऊपर चल रही प्रगति पर आगे निर्देश दें…",
+      "shells": "ऊपर बैकग्राउंड कमांड आउटपुट के बारे में पूछें…"
+    },
     "duration": {
       "seconds": "{{seconds}} से",
       "minutes": "{{minutes}} मि",

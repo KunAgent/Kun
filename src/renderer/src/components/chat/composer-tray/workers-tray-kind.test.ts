@@ -15,6 +15,7 @@ vi.mock('../../../agent/registry', () => ({
 }))
 
 import { useActivityStore } from '../../../store/activity-store'
+import { useChatStore } from '../../../store/chat-store'
 import { useHarnessStore } from '../../../store/harness-store'
 import { MGR, workerRow } from '../../workers/worker-test-fixtures'
 import { OPEN_WORKER_SESSION_EVENT } from '../../workers/worker-view-store'
@@ -61,6 +62,13 @@ describe('workers and dispatch tray kinds', () => {
     provider.interruptTurn.mockResolvedValue(undefined)
     useActivityStore.setState({ rows: {}, cursor: null, status: 'live' })
     useHarnessStore.setState({ rows: [] })
+    useChatStore.setState({
+      route: 'chat',
+      activeThreadId: MGR,
+      workspaceRoot: '/workspace/kun',
+      threads: [{ id: MGR, workspace: '/workspace/kun' }] as never,
+      extensionComposerContexts: []
+    })
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
@@ -213,6 +221,29 @@ describe('workers and dispatch tray kinds', () => {
     expect(button.querySelector('.ds-composer-tray-segment-label')).toBeNull()
     expect(button.querySelector('.ds-composer-tray-dot')?.getAttribute('data-tone')).toBe('waiting')
     expect(button.title).toBe('Collaborators: 1 needs you')
+  })
+
+  it('references collaborators into the composer without closing the sheet', async () => {
+    seed({
+      w1: workerRow({ unitId: 'w1', threadId: 'w1', title: 'Data analyst', state: 'waiting', waitingReason: 'question', lastMessagePreview: 'Confirm schema?' }),
+      w2: workerRow({ unitId: 'w2', threadId: 'w2', title: 'Test runner', state: 'done', reviewStatus: 'passed' })
+    })
+    await render()
+    await click(segment())
+
+    const refW1 = host.querySelector<HTMLButtonElement>('[data-workers-tray-reference="w1"]')!
+    expect(refW1.getAttribute('aria-pressed')).toBe('false')
+    await click(refW1)
+    await vi.waitFor(() => expect(useChatStore.getState().extensionComposerContexts).toHaveLength(1))
+    expect(host.querySelector('[data-tray-sheet="workers"]')).not.toBeNull()
+    expect(host.querySelector('[data-workers-tray-reference="w1"]')?.getAttribute('aria-pressed')).toBe('true')
+    expect(host.querySelector('[data-worker-tray-row="w1"]')?.getAttribute('data-referenced')).toBe('true')
+
+    await click(host.querySelector('[data-workers-tray-reference="w2"]'))
+    await vi.waitFor(() => expect(useChatStore.getState().extensionComposerContexts).toHaveLength(2))
+
+    await click(host.querySelector('[data-workers-tray-reference="w1"]'))
+    await vi.waitFor(() => expect(useChatStore.getState().extensionComposerContexts).toHaveLength(1))
   })
 
   describe('dispatchable agents', () => {

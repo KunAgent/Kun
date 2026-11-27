@@ -62,4 +62,46 @@ describe('FloatingComposerContextChips', () => {
     }).props.onClick())
     expect(onRemove).toHaveBeenCalledWith(quoteChip.id)
   })
+
+  it('renders tray reference chips and reveals their hover preview card', async () => {
+    const onRemove = vi.fn()
+    const trayChip: DesignComposerContext = {
+      id: 'workspace-selection-context:tray1',
+      kind: 'tray-reference',
+      label: '#2 Verify session UI',
+      removable: true,
+      trayReference: {
+        targetKind: 'todo',
+        targetId: 'todo_2',
+        badge: '#2',
+        title: 'Verify session UI',
+        statusLabel: 'In progress',
+        tone: 'running',
+        note: 'Checking hover tooltip',
+        stepIndex: 2,
+        totalSteps: 4
+      }
+    }
+    await act(async () => {
+      renderer = create(createElement(FloatingComposerContextChips, {
+        chips: [trayChip],
+        onRemove,
+        t: (key) => key
+      }))
+    })
+
+    expect(JSON.stringify(renderer!.toJSON())).toContain('#2')
+    expect(JSON.stringify(renderer!.toJSON())).toContain('Verify session UI')
+    expect(JSON.stringify(renderer!.toJSON())).not.toContain('Checking hover tooltip')
+
+    const wrapper = renderer!.root.findByProps({ 'data-tray-reference-chip': 'todo' })
+    await act(async () => wrapper.props.onMouseEnter())
+    expect(JSON.stringify(renderer!.toJSON())).toContain('Checking hover tooltip')
+    expect(JSON.stringify(renderer!.toJSON())).toContain('In progress')
+
+    await act(async () => renderer!.root.findByProps({
+      'aria-label': 'composerRemoveContext'
+    }).props.onClick())
+    expect(onRemove).toHaveBeenCalledWith(trayChip.id)
+  })
 })

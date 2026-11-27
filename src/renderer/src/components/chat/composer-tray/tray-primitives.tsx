@@ -171,6 +171,8 @@ export type TrayRowProps = Omit<HTMLAttributes<HTMLDivElement>, 'title' | 'child
   openLabel?: string
   /** Raised white row (current step, item needing the user). */
   highlighted?: boolean
+  /** Marked as referenced in the active composer. */
+  referenced?: boolean
   /** Monospace title (commands, paths). */
   monoTitle?: boolean
 }
@@ -193,6 +195,7 @@ export function TrayRow({
   onOpen,
   openLabel,
   highlighted = false,
+  referenced = false,
   monoTitle = false,
   className,
   ...rest
@@ -208,6 +211,7 @@ export function TrayRow({
       data-two-line={twoLine ? 'true' : undefined}
       data-interactive={onOpen ? 'true' : undefined}
       data-highlighted={highlighted && !hasDetail ? 'true' : undefined}
+      data-referenced={referenced && !hasDetail ? 'true' : undefined}
     >
       {onOpen ? (
         <button
@@ -234,6 +238,7 @@ export function TrayRow({
       {...rest}
       className={`ds-composer-tray-row-group ${className ?? ''}`.trim()}
       data-highlighted={highlighted ? 'true' : undefined}
+      data-referenced={referenced ? 'true' : undefined}
     >
       {line}
       <div className="ds-composer-tray-row-detail">{detail}</div>

@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { act, createElement, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ActivityRow } from '@shared/activity-row'
 import type { ThreadTodoItem, ThreadTodoList } from '../../../agent/types'
 import { useGraphStore } from '../../../graph/graph-store'
 import type { GraphRun, GraphRunStatus } from '../../../graph/graph-types'
 import i18n from '../../../i18n'
 import { useActivityStore } from '../../../store/activity-store'
+import { useChatStore } from '../../../store/chat-store'
 import type { FloatingComposerRenderContext } from '../floating-composer-view-context'
 import { ComposerActivityTray } from './ComposerActivityTray'
 import { useTodoTrayKind } from './todo-tray-kind'
@@ -238,6 +239,35 @@ describe('todo tray kind', () => {
       expect(avatar(row.id).style.background).toBe(normalized(row.color))
       expect(avatar(row.id).querySelector('svg')).not.toBeNull()
     }
+  })
+
+  it('toggles checklist item references in the composer on row click without closing', async () => {
+    act(() => {
+      useChatStore.setState({
+        route: 'chat',
+        activeThreadId: 'thread-1',
+        workspaceRoot: '/workspace/kun',
+        threads: [{ id: 'thread-1', workspace: '/workspace/kun' }] as never,
+        extensionComposerContexts: []
+      })
+    })
+    await render(list([item('one', 'in_progress'), item('two', 'pending')]))
+    await open()
+
+    const openTarget = (id: string): HTMLButtonElement =>
+      sheet()!.querySelector<HTMLButtonElement>(`[data-todo-item="${id}"] .ds-composer-tray-row-open`)!
+
+    await act(async () => openTarget('one').click())
+    await vi.waitFor(() => expect(useChatStore.getState().extensionComposerContexts).toHaveLength(1))
+    expect(sheet()).not.toBeNull()
+    expect(sheet()!.querySelector('[data-todo-referenced-badge="one"]')?.textContent).toContain('Referenced')
+
+    await act(async () => openTarget('two').click())
+    await vi.waitFor(() => expect(useChatStore.getState().extensionComposerContexts).toHaveLength(2))
+
+    await act(async () => openTarget('one').click())
+    await vi.waitFor(() => expect(useChatStore.getState().extensionComposerContexts).toHaveLength(1))
+    useChatStore.setState({ extensionComposerContexts: [] })
   })
 })
 

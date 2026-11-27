@@ -433,7 +433,7 @@ export function activeChatWorkspaceRoot(state: ChatState): string {
 }
 
 export function pendingComposerContexts(state: ChatState): ComposerContextAttachment[] {
-  if (state.route !== 'chat') return []
+  if (state.route !== 'chat' && state.route !== 'ade') return []
   const workspaceRoot = activeChatWorkspaceRoot(state)
   return state.extensionComposerContexts
     .filter((event) =>

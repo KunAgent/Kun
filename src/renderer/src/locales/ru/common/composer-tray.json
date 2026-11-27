@@ -4,6 +4,21 @@
     "queueLabel": "Сообщения в очереди",
     "collapse": "Свернуть",
     "stop": "Остановить",
+    "referenceAction": "Упомянуть",
+    "referencedAction": "Упомянуто",
+    "referenceWorkerAria": "Упомянуть участника {{title}} в поле ввода",
+    "unreferenceWorkerAria": "Убрать упоминание участника {{title}}",
+    "referenceTodoAria": "Упомянуть задачу {{title}} в поле ввода",
+    "unreferenceTodoAria": "Убрать упоминание задачи {{title}}",
+    "referenceTodoBadge": "Шаг {{index}} / {{total}}",
+    "referencePlaceholder": "Введите указания по выбранным задачам или участникам…",
+    "sheetPlaceholder": {
+      "todo": "Добавьте комментарий или скорректируйте список задач выше…",
+      "workers": "Ответьте на прогресс участников или вопросы выше…",
+      "goal": "Уточните ограничения или направление для текущей цели…",
+      "graph": "Добавьте указания по ходу оркестрации выше…",
+      "shells": "Задайте вопрос по выводу фоновых команд выше…"
+    },
     "duration": {
       "seconds": "{{seconds}} с",
       "minutes": "{{minutes}} мин",

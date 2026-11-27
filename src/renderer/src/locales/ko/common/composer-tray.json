@@ -4,6 +4,21 @@
     "queueLabel": "대기 중인 메시지",
     "collapse": "접기",
     "stop": "중지",
+    "referenceAction": "참조",
+    "referencedAction": "참조됨",
+    "referenceWorkerAria": "협업자 {{title}}을(를) 입력창에 참조",
+    "unreferenceWorkerAria": "협업자 {{title}} 참조 해제",
+    "referenceTodoAria": "작업 {{title}}을(를) 입력창에 참조",
+    "unreferenceTodoAria": "작업 {{title}} 참조 해제",
+    "referenceTodoBadge": "{{index}} / {{total}} 단계",
+    "referencePlaceholder": "참조한 작업이나 협업자에 대한 지시를 입력하세요…",
+    "sheetPlaceholder": {
+      "todo": "위 작업 목록에 대한 피드백이나 수정 사항을 입력하세요…",
+      "workers": "위 협업자 진행 상황이나 확인 필요 항목에 바로 답장하세요…",
+      "goal": "현재 목표에 대한 제약 조건이나 다음 방향을 추가하세요…",
+      "graph": "위 오케스트레이션 진행 상황에 대해 후속 지시를 내리세요…",
+      "shells": "위 백그라운드 명령 출력에 대해 이어서 질문하세요…"
+    },
     "duration": {
       "seconds": "{{seconds}}초",
       "minutes": "{{minutes}}분",

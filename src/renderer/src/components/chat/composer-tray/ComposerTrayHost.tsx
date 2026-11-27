@@ -6,6 +6,7 @@ import { useGoalTrayKind } from './goal-tray-kind'
 import { useGraphTrayKind } from './graph-tray-kind'
 import { useShellsTrayKind } from './shells-tray-kind'
 import { useTodoTrayKind } from './todo-tray-kind'
+import type { TrayKindId } from './tray-kind'
 import { useWorkersTrayKind } from './workers-tray-kind'
 
 /**
@@ -20,11 +21,13 @@ import { useWorkersTrayKind } from './workers-tray-kind'
  */
 export function ComposerTrayHost({
   context,
-  queue
+  queue,
+  onOpenKindChange
 }: {
   context: FloatingComposerRenderContext
   /** The queue section (null when nothing is queued). */
   queue: ReactNode
+  onOpenKindChange?: (kind: TrayKindId | null) => void
 }): ReactElement | null {
   const {
     activeThreadId, compact, composerInterrupt, composerMenuOpen, fileMentions, goalPanelOpen, slashQuery
@@ -45,6 +48,7 @@ export function ComposerTrayHost({
       queue={queue}
       menuOpen={menuOpen || composerInterrupt != null}
       resetKey={activeThreadId ?? null}
+      onOpenKindChange={onOpenKindChange}
     />
   )
 }

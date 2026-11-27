@@ -4,6 +4,21 @@
     "queueLabel": "キュー内のメッセージ",
     "collapse": "折りたたむ",
     "stop": "停止",
+    "referenceAction": "引用",
+    "referencedAction": "引用中",
+    "referenceWorkerAria": "コラボレーター {{title}} を入力欄に引用",
+    "unreferenceWorkerAria": "コラボレーター {{title}} の引用を解除",
+    "referenceTodoAria": "タスク {{title}} を入力欄に引用",
+    "unreferenceTodoAria": "タスク {{title}} の引用を解除",
+    "referenceTodoBadge": "ステップ {{index}} / {{total}}",
+    "referencePlaceholder": "引用したタスクやコラボレーターへの指示を入力…",
+    "sheetPlaceholder": {
+      "todo": "上のタスクリストへのフィードバックや調整を入力…",
+      "workers": "上のコラボレーターの進捗や確認待ち項目に返信…",
+      "goal": "現在の目標に対する制約や方針を追加…",
+      "graph": "上のオーケストレーション進捗について指示…",
+      "shells": "上のバックグラウンド出力について質問・指示…"
+    },
     "duration": {
       "seconds": "{{seconds}}秒",
       "minutes": "{{minutes}}分",

@@ -1,6 +1,11 @@
 import { useCallback, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AlertCircle, ArrowUpRight, Bot, ChevronRight, X } from 'lucide-react'
+import { AlertCircle, ArrowUpRight, AtSign, Bot, Check, ChevronRight, X } from 'lucide-react'
+import {
+  toggleTrayReference,
+  useCanReferenceInComposer,
+  useReferencedTrayTargetIds
+} from '../../../lib/tray-reference-attachment'
 import { useWorkerActions } from '../../workers/use-worker-actions'
 import { openWorkerSession } from '../../workers/worker-view-store'
 import {
@@ -11,6 +16,7 @@ import {
 import { requestOpenWorkersPanel } from '../FloatingComposerWorkersPill'
 import { WorkerSeatGlyph } from '../../workers/worker-seat'
 import { formatTrayDuration, useTrayNow, type TrayTranslate } from './tray-elapsed'
+import type { TrayTone } from './tray-kind'
 import {
   TrayAvatar,
   TrayButton,
@@ -59,6 +65,8 @@ export function WorkersTraySheet({
   const nowMs = useTrayNow(rows.some((row) => row.status === 'running'))
   const reload = useCallback(() => Promise.resolve(), [])
   const { busy, error, dismissError, stop } = useWorkerActions(reload)
+  const canReference = useCanReferenceInComposer(compact)
+  const referencedIds = useReferencedTrayTargetIds('worker')
 
   const openRow = (row: WorkersTrayRow): void => {
     openWorkerSession(row.id, row.title)
@@ -104,6 +112,8 @@ export function WorkersTraySheet({
             nowMs={nowMs}
             compact={compact}
             t={t}
+            canReference={canReference}
+            referenced={referencedIds.includes(row.id)}
             stopping={busy?.id === row.id && busy.action === 'stop'}
             onOpen={() => openRow(row)}
             onStop={() => {
@@ -145,11 +155,34 @@ function Chevron(): ReactElement {
   )
 }
 
+function workerReferenceMeta(row: WorkersTrayRow, t: TrayTranslate): { tone: TrayTone; statusLabel: string } {
+  switch (row.status) {
+    case 'waiting':
+      return { tone: 'waiting', statusLabel: t('composerTrayWorkers.status.waiting') }
+    case 'failed':
+      return { tone: 'error', statusLabel: t('composerTrayWorkers.status.failed') }
+    case 'running':
+      return { tone: 'running', statusLabel: t('backgroundTaskRunning') }
+    case 'starting':
+      return { tone: 'running', statusLabel: t('composerTrayWorkers.starting') }
+    case 'review':
+      return { tone: 'default', statusLabel: t('composerTrayWorkers.status.review') }
+    case 'unconfirmed':
+      return { tone: 'default', statusLabel: t('composerTrayWorkers.status.unconfirmed') }
+    default:
+      return row.source.lastOutcome === 'cancelled'
+        ? { tone: 'default', statusLabel: t('composerTrayWorkers.status.cancelled') }
+        : { tone: 'done', statusLabel: t('composerTrayWorkers.status.done') }
+  }
+}
+
 function WorkerTrayRowView({
   row,
   nowMs,
   compact,
   t,
+  canReference,
+  referenced,
   stopping,
   onOpen,
   onStop
@@ -158,6 +191,8 @@ function WorkerTrayRowView({
   nowMs: number
   compact: boolean
   t: TrayTranslate
+  canReference: boolean
+  referenced: boolean
   stopping: boolean
   onOpen: () => void
   onStop: () => void
@@ -175,10 +210,40 @@ function WorkerTrayRowView({
     subtitle = workerRowNote(row, t)
   }
 
+  const refMeta = workerReferenceMeta(row, t)
+  const referenceButton = canReference ? (
+    <TrayButton
+      icon={referenced
+        ? <Check className="h-3 w-3" strokeWidth={2.3} aria-hidden="true" />
+        : <AtSign className="h-3 w-3" strokeWidth={2} aria-hidden="true" />}
+      onClick={() => {
+        void toggleTrayReference({
+          targetKind: 'worker',
+          targetId: row.id,
+          title: row.title,
+          statusLabel: refMeta.statusLabel,
+          tone: refMeta.tone,
+          seat: row.seat,
+          color: row.color,
+          ...(subtitle ? { note: subtitle } : {})
+        })
+      }}
+      aria-pressed={referenced}
+      aria-label={referenced
+        ? t('composerTray.unreferenceWorkerAria', { title: row.title })
+        : t('composerTray.referenceWorkerAria', { title: row.title })}
+      data-workers-tray-reference={row.id}
+      data-referenced={referenced ? 'true' : undefined}
+    >
+      {referenced ? t('composerTray.referencedAction') : t('composerTray.referenceAction')}
+    </TrayButton>
+  ) : null
+
   if (row.status === 'waiting') {
     trailing = (
       <>
         {compact ? null : <TrayStatusPill tone="waiting">{t('composerTrayWorkers.status.waiting')}</TrayStatusPill>}
+        {referenceButton}
         <TrayButton variant="solid" onClick={onOpen} data-workers-tray-resolve={row.id}>
           {workerAwaitsAnswer(row) ? t('composerTrayWorkers.answer') : t('composerTrayWorkers.resolve')}
         </TrayButton>
@@ -187,6 +252,7 @@ function WorkerTrayRowView({
   } else if (row.status === 'running' || row.status === 'starting') {
     trailing = (
       <>
+        {referenceButton}
         {row.stop ? (
           <span className="inline-flex" data-workers-tray-stop={row.id}>
             <TrayStopButton
@@ -213,6 +279,7 @@ function WorkerTrayRowView({
     trailing = (
       <>
         {pill}
+        {referenceButton}
         <Chevron />
       </>
     )
@@ -226,6 +293,7 @@ function WorkerTrayRowView({
       title={row.title}
       subtitle={subtitle || ' '}
       highlighted={row.status === 'waiting'}
+      referenced={referenced}
       onOpen={onOpen}
       openLabel={t('composerTrayWorkers.openWorker', { title: row.title })}
       trailing={trailing}

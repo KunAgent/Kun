@@ -4,6 +4,21 @@
     "queueLabel": "Queued messages",
     "collapse": "Collapse",
     "stop": "Stop",
+    "referenceAction": "Reference",
+    "referencedAction": "Referenced",
+    "referenceWorkerAria": "Reference collaborator {{title}} in composer",
+    "unreferenceWorkerAria": "Remove reference to collaborator {{title}}",
+    "referenceTodoAria": "Reference task {{title}} in composer",
+    "unreferenceTodoAria": "Remove reference to task {{title}}",
+    "referenceTodoBadge": "Step {{index}} / {{total}}",
+    "referencePlaceholder": "Give instructions for the referenced tasks or collaborators…",
+    "sheetPlaceholder": {
+      "todo": "Add feedback or adjust the task checklist above…",
+      "workers": "Reply to collaborator updates or items needing you above…",
+      "goal": "Add constraints or guidance for the active goal above…",
+      "graph": "Follow up on the orchestration progress above…",
+      "shells": "Ask about or follow up on the command output above…"
+    },
     "duration": {
       "seconds": "{{seconds}}s",
       "minutes": "{{minutes}}m",

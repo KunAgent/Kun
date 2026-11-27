@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { terminalOutputFromComposerContext } from '../../lib/terminal-output-attachment'
+import { trayReferenceFromComposerContext } from '../../lib/tray-reference-attachment'
 import { workspaceRootScopeKey } from '../../lib/workspace-path'
 import { resolveActiveExtensionWorkspaceRoot } from '../../extensions/active-extension-workspace'
 import {
@@ -42,7 +43,7 @@ export function useWorkbenchExtensionContext({
   }, [attachExtensionComposerContext])
 
   const activeComposerContextEvents = useMemo(() => {
-    if (route !== 'chat') return []
+    if (route !== 'chat' && route !== 'ade') return []
     const workspace = workspaceRootScopeKey(extensionWorkspaceRoot)
     return extensionComposerContexts.filter((event) =>
       workspaceRootScopeKey(event.workspaceRoot) === workspace &&
@@ -104,6 +105,19 @@ export function composerContextChip(
     : null
   if (terminalOutput) {
     return { id: attachment.attachmentId, kind: 'terminal-output', label: attachment.title, removable: true, terminalOutput }
+  }
+  const trayReference = 'source' in attachment.provenance && attachment.provenance.source === 'workspace-selection'
+    ? trayReferenceFromComposerContext(attachment)
+    : null
+  if (trayReference) {
+    return {
+      id: attachment.attachmentId,
+      kind: 'tray-reference',
+      label: attachment.title,
+      detail: attachment.summary,
+      removable: true,
+      trayReference
+    }
   }
   if (
     'source' in attachment.provenance &&

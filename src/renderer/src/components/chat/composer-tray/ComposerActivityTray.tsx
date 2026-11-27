@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { resolveTrayKinds, type TrayKind, type TrayKindId } from './tray-kind'
 import { TraySegmentButton } from './tray-primitives'
 import './composer-tray.css'
+import './composer-tray-pill.css'
 
 export type ComposerActivityTrayProps = {
   /** Raw hook results in any order; null entries are skipped. */
@@ -18,6 +19,8 @@ export type ComposerActivityTrayProps = {
   menuOpen?: boolean
   /** Closes the sheet when it changes (for example the active thread id). */
   resetKey?: string | null
+  /** Notifies the composer stack when an expandable sheet opens or closes. */
+  onOpenKindChange?: (kind: TrayKindId | null) => void
 }
 
 /**
@@ -33,10 +36,12 @@ export function ComposerActivityTray({
   compact = false,
   queue,
   menuOpen = false,
-  resetKey
+  resetKey,
+  onOpenKindChange
 }: ComposerActivityTrayProps): ReactElement | null {
   const { t } = useTranslation('common')
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const reportedOpenRef = useRef<TrayKindId | null>(null)
   const sheetId = useId()
   const [openId, setOpenId] = useState<TrayKindId | null>(null)
   const resolved = resolveTrayKinds(kinds)
@@ -46,6 +51,20 @@ export function ComposerActivityTray({
   const close = useCallback(() => setOpenId(null), [])
   const sheet = openKind?.renderSheet ? openKind.renderSheet({ close, compact }) : null
   const sheetOpen = openKind !== null && sheet != null && sheet !== false
+  const activeOpenId = sheetOpen && openKind ? openKind.id : null
+
+  useEffect(() => {
+    if (reportedOpenRef.current === activeOpenId) return
+    reportedOpenRef.current = activeOpenId
+    onOpenKindChange?.(activeOpenId)
+  }, [activeOpenId, onOpenKindChange])
+
+  useEffect(() => () => {
+    if (reportedOpenRef.current !== null) {
+      reportedOpenRef.current = null
+      onOpenKindChange?.(null)
+    }
+  }, [onOpenKindChange])
 
   // A vanished kind (or one with nothing to show) must not reopen its sheet
   // when it comes back later.
@@ -110,6 +129,7 @@ export function ComposerActivityTray({
   )
   const startKinds = resolved.filter((kind) => kind.align !== 'end')
   const endKinds = resolved.filter((kind) => kind.align === 'end')
+  const floatingPill = !sheetOpen && !hasQueue
 
   return (
     <div
@@ -117,6 +137,8 @@ export function ComposerActivityTray({
       className="ds-composer-tray ds-no-drag"
       data-composer-tray
       data-compact={compact ? 'true' : undefined}
+      data-floating-pill={floatingPill ? 'true' : undefined}
+      data-docked={!floatingPill ? 'true' : undefined}
     >
       {sheetOpen && openKind ? (
         <section

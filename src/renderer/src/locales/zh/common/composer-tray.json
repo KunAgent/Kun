@@ -4,6 +4,21 @@
     "queueLabel": "排队消息",
     "collapse": "收起",
     "stop": "停止",
+    "referenceAction": "引用",
+    "referencedAction": "已引用",
+    "referenceWorkerAria": "引用协作者 {{title}} 到输入框",
+    "unreferenceWorkerAria": "取消引用协作者 {{title}}",
+    "referenceTodoAria": "引用任务 {{title}} 到输入框",
+    "unreferenceTodoAria": "取消引用任务 {{title}}",
+    "referenceTodoBadge": "第 {{index}} / {{total}} 步",
+    "referencePlaceholder": "针对已引用的任务或协作者输入指令…",
+    "sheetPlaceholder": {
+      "todo": "对上方任务清单补充反馈或调整步骤…",
+      "workers": "对上方协作者进展或待处理项直接回复…",
+      "goal": "对当前目标补充约束或下一步方向…",
+      "graph": "针对上方编排进展继续指示…",
+      "shells": "针对上方后台命令输出继续提问…"
+    },
     "duration": {
       "seconds": "{{seconds}} 秒",
       "minutes": "{{minutes}} 分",

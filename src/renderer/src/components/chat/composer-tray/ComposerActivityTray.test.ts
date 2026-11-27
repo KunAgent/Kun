@@ -63,6 +63,7 @@ describe('ComposerActivityTray markup', () => {
   it('marks compact trays and hands compact to segments', () => {
     const html = renderToStaticMarkup(createElement(ComposerActivityTray, { kinds: [kind('todo')], compact: true }))
     expect(html).toContain('data-compact="true"')
+    expect(html).toContain('data-floating-pill="true"')
     expect(html).toContain('todo#')
     expect(html).toContain('title="todo label"')
   })
@@ -157,5 +158,27 @@ describe('ComposerActivityTray interaction', () => {
     await act(async () => segment('todo').click())
     expect(sheet()).toBeNull()
     expect(segment('todo').getAttribute('aria-expanded')).toBe('false')
+  })
+
+  it('morphs between floating pill and docked tray and reports open sheet changes', async () => {
+    const onOpenKindChange = vi.fn()
+    const kinds = [kind('todo'), kind('workers')]
+    await render({ kinds, onOpenKindChange })
+    const tray = (): Element => host.querySelector('[data-composer-tray]')!
+    expect(tray().getAttribute('data-floating-pill')).toBe('true')
+    expect(tray().getAttribute('data-docked')).toBeNull()
+    expect(onOpenKindChange).not.toHaveBeenCalled()
+
+    await act(async () => segment('todo').click())
+    expect(tray().getAttribute('data-floating-pill')).toBeNull()
+    expect(tray().getAttribute('data-docked')).toBe('true')
+    expect(onOpenKindChange).toHaveBeenLastCalledWith('todo')
+
+    await act(async () => segment('workers').click())
+    expect(onOpenKindChange).toHaveBeenLastCalledWith('workers')
+
+    await act(async () => segment('workers').click())
+    expect(tray().getAttribute('data-floating-pill')).toBe('true')
+    expect(onOpenKindChange).toHaveBeenLastCalledWith(null)
   })
 })

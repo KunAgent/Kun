@@ -1,8 +1,9 @@
-import type { ReactElement } from 'react'
+import { useState, type ReactElement } from 'react'
 import type { FloatingComposerRenderContext } from './floating-composer-view-context'
 import { steerDelivery } from '../../agent/harness-capability-ui'
 import { useChatStore } from '../../store/chat-store'
 import { ComposerTrayHost } from './composer-tray/ComposerTrayHost'
+import type { TrayKindId } from './composer-tray/tray-kind'
 import { FloatingComposerGoalPanel } from './FloatingComposerGoalPanel'
 import { FloatingComposerSurfaceView } from './FloatingComposerSurfaceView'
 
@@ -47,8 +48,9 @@ export function FloatingComposerStackView({
       onResume={onResumeQueuedMessages}
     />
   ) : null
+  const [openTrayKind, setOpenTrayKind] = useState<TrayKindId | null>(null)
   // The kind hooks live in the host so their updates re-render only the tray.
-  const tray = <ComposerTrayHost context={context} queue={queue} />
+  const tray = <ComposerTrayHost context={context} queue={queue} onOpenKindChange={setOpenTrayKind} />
   return (
     <>
       {composerMenuOpen && slashQuery == null ? (
@@ -80,6 +82,7 @@ export function FloatingComposerStackView({
 
       <FloatingComposerSurfaceView
         context={context}
+        openTrayKind={openTrayKind}
         aboveInput={<FloatingComposerAboveInputStack tray={tray} />}
       />
     </>

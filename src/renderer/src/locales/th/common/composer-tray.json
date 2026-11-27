@@ -4,6 +4,21 @@
     "queueLabel": "ข้อความในคิว",
     "collapse": "ย่อ",
     "stop": "หยุด",
+    "referenceAction": "อ้างอิง",
+    "referencedAction": "อ้างอิงแล้ว",
+    "referenceWorkerAria": "อ้างอิงผู้ร่วมงาน {{title}} ในช่องพิมพ์",
+    "unreferenceWorkerAria": "ยกเลิกการอ้างอิงผู้ร่วมงาน {{title}}",
+    "referenceTodoAria": "อ้างอิงงาน {{title}} ในช่องพิมพ์",
+    "unreferenceTodoAria": "ยกเลิกการอ้างอิงงาน {{title}}",
+    "referenceTodoBadge": "ขั้นตอน {{index}} / {{total}}",
+    "referencePlaceholder": "พิมพ์คำสั่งสำหรับงานหรือผู้ร่วมงานที่อ้างอิงไว้…",
+    "sheetPlaceholder": {
+      "todo": "เพิ่มข้อเสนอแนะหรือปรับรายการงานด้านบน…",
+      "workers": "ตอบกลับความคืบหน้าของผู้ร่วมงานหรือรายการที่รอคุณด้านบน…",
+      "goal": "เพิ่มเงื่อนไขหรือแนวทางสำหรับเป้าหมายปัจจุบัน…",
+      "graph": "สั่งการต่อเนื่องสำหรับความคืบหน้าด้านบน…",
+      "shells": "ถามต่อเกี่ยวกับผลลัพธ์คำสั่งเบื้องหลังด้านบน…"
+    },
     "duration": {
       "seconds": "{{seconds}} วิ",
       "minutes": "{{minutes}} นาที",

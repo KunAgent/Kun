@@ -26,6 +26,8 @@ import { composerSubscriptionSelection } from './composer-subscription-selection
 import { FloatingComposerPrimaryAction } from './FloatingComposerPrimaryAction'
 import { FloatingComposerInterruptSlot } from './FloatingComposerInterruptSlot'
 import type { ComposerInterrupt } from './use-composer-interrupt'
+import { resolveComposerTrayPlaceholder } from './composer-tray/composer-tray-placeholder'
+import type { TrayKindId } from './composer-tray/tray-kind'
 
 /**
  * Composer controls rows, then `aboveInput` (flow panels + the activity tray,
@@ -35,10 +37,12 @@ import type { ComposerInterrupt } from './use-composer-interrupt'
  */
 export function FloatingComposerSurfaceView({
   context,
-  aboveInput
+  aboveInput,
+  openTrayKind
 }: {
   context: FloatingComposerRenderContext
   aboveInput?: ReactNode
+  openTrayKind?: TrayKindId | null
 }): ReactElement {
   const {
     FileText, FloatingComposerAgentPicker, FloatingComposerAttachments,
@@ -106,6 +110,11 @@ export function FloatingComposerSurfaceView({
   const modelAgent = sideAgentControls ?? (externalAgent ? adeComposer : undefined)
   const documentQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'document-quote')
   const messageQuoteAttached = contextChips.some((chip: { kind: string }) => chip.kind === 'message-quote')
+  const trayPlaceholder = resolveComposerTrayPlaceholder({
+    canEditComposer, busy, runtimeReady, goalInputMode, goalPanelOpen: context.goalPanelOpen === true, route,
+    hasTrayReference: !side && contextChips.some((chip: { kind: string }) => chip.kind === 'tray-reference'),
+    openTrayKind: side ? null : openTrayKind, t
+  })
   // "continue local session" is offered only on a fresh thread when
   // the picked harness exposes a matching historySource + lab flag.
   const [continueDialogOpen, setContinueDialogOpen] = useState(false)
@@ -242,7 +251,7 @@ export function FloatingComposerSurfaceView({
             } ${promptEnhance?.running ? 'text-ds-muted' : ''} ${compact ? 'text-[14px] py-2' : emptyTaskLayout ? 'min-h-[64px]' : 'min-h-[40px]'}`}
             placeholder={messageQuoteAttached
               ? t(side ? 'messageQuoteSidePlaceholder' : 'messageQuoteComposerPlaceholder')
-              : documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : placeholder}
+              : documentQuoteAttached ? t('composerDocumentQuotePlaceholder') : trayPlaceholder ?? placeholder}
             value={input}
             disabled={!canEditComposer}
             readOnly={promptEnhance?.running === true}

@@ -1,7 +1,14 @@
 import { useId, useState, type ReactElement, type ReactNode } from 'react'
-import { ArrowRight, Circle, CircleCheck, CircleDot, CircleSlash, CircleX } from 'lucide-react'
+import { ArrowRight, Check, Circle, CircleCheck, CircleDot, CircleSlash, CircleX } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ThreadTodoItem, ThreadTodoList } from '../../../agent/types'
+import {
+  toggleTrayReference,
+  useCanReferenceInComposer,
+  useReferencedTrayTargetIds
+} from '../../../lib/tray-reference-attachment'
+import { useActivityStore } from '../../../store/activity-store'
+import type { TrayTone } from './tray-kind'
 import {
   TrayFoldRow,
   TrayRow,
@@ -54,6 +61,8 @@ export function TodoTraySheet({
   const [expandedAfter, setExpandedAfter] = useState(false)
   const beforeId = useId()
   const afterId = useId()
+  const canReference = useCanReferenceInComposer(compact)
+  const referencedIds = useReferencedTrayTargetIds('todo')
   const items = todos.items
   const total = items.length
   const progress = getTodoProgress(items)
@@ -70,6 +79,8 @@ export function TodoTraySheet({
       index={range.start + offset}
       total={total}
       current={range.start + offset === currentIndex && isTodoItemOpen(item)}
+      canReference={canReference}
+      referenced={referencedIds.includes(item.id)}
       live={live}
       compact={compact}
       planPath={planPath}
@@ -215,6 +226,8 @@ function TodoTrayRow({
   index,
   total,
   current,
+  canReference,
+  referenced,
   live,
   compact,
   planPath,
@@ -224,6 +237,8 @@ function TodoTrayRow({
   index: number
   total: number
   current: boolean
+  canReference: boolean
+  referenced: boolean
   live: boolean
   compact: boolean
   planPath: string | null
@@ -247,6 +262,23 @@ function TodoTrayRow({
     ? `${item.source.relativePath} · ${item.source.ordinal + 1}`
     : null
   const owner = item.ownerThreadId && item.ownerThreadId !== listThreadId ? item.ownerThreadId : null
+  const ownerTitle = useActivityStore((s) => {
+    if (!owner) return undefined
+    for (const row of Object.values(s.rows)) {
+      if (row.threadId === owner) return row.title || owner
+    }
+    return owner
+  })
+  const tone: TrayTone = state === 'done'
+    ? 'done'
+    : state === 'failed'
+      ? 'error'
+      : state === 'current' || state === 'active'
+        ? 'running'
+        : flag === 'blocked'
+          ? 'waiting'
+          : 'default'
+  const sourceLabel = planPath ?? source ?? undefined
   const detail = item.reason || source ? (
     <span className="-mt-1 flex min-w-0 flex-col gap-0.5 pl-6 text-[12px] leading-[17px] text-ds-faint">
       {item.reason ? <span className="break-words [overflow-wrap:anywhere]" data-todo-reason>{item.reason}</span> : null}
@@ -263,6 +295,26 @@ function TodoTrayRow({
       data-todo-state={state}
       data-todo-current={current ? 'true' : undefined}
       highlighted={current}
+      referenced={referenced}
+      onOpen={canReference ? () => {
+        void toggleTrayReference({
+          targetKind: 'todo',
+          targetId: item.id,
+          stepIndex: index + 1,
+          totalSteps: total,
+          title: item.content,
+          statusLabel,
+          tone,
+          ...(item.reason ? { note: item.reason } : {}),
+          ...(ownerTitle ? { ownerLabel: ownerTitle } : {}),
+          ...(sourceLabel ? { sourceLabel } : {})
+        })
+      } : undefined}
+      openLabel={canReference
+        ? referenced
+          ? t('composerTray.unreferenceTodoAria', { title: item.content })
+          : t('composerTray.referenceTodoAria', { title: item.content })
+        : undefined}
       leading={<span aria-hidden="true" className="inline-flex"><TodoRowIcon state={state} /></span>}
       title={(
         // One flex line, so the step text keeps the space: the owner name
@@ -277,6 +329,15 @@ function TodoTrayRow({
             <TrayStatusPill tone={TODO_FLAG_TONE[flag]} className="ml-auto self-center">{statusLabel}</TrayStatusPill>
           ) : null}
           {owner ? <TodoOwnerLabel ownerThreadId={owner} compact={compact} className={flag ? undefined : 'ml-auto'} /> : null}
+          {referenced ? (
+            <span
+              className={`ds-composer-tray-ref-badge self-center ${!flag && !owner ? 'ml-auto' : ''}`.trim()}
+              data-todo-referenced-badge={item.id}
+            >
+              <Check className="h-3 w-3" strokeWidth={2.3} aria-hidden="true" />
+              {t('composerTray.referencedAction')}
+            </span>
+          ) : null}
         </span>
       )}
       detail={detail}

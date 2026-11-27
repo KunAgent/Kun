@@ -16,6 +16,7 @@ import {
 import type { DesignComposerContext } from '../../design/design-composer-context'
 import { ComposerMessageQuoteChip } from './MessageQuoteViews'
 import { TerminalOutputChip } from './TerminalOutputChip'
+import { TrayReferenceChip } from './TrayReferenceChip'
 
 type Translate = (key: string, values?: unknown) => string
 
@@ -36,7 +37,9 @@ export function FloatingComposerContextChips({
           ? <DocumentQuoteChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />
           : chip.kind === 'terminal-output' && chip.terminalOutput
             ? <TerminalOutputChip key={chip.id} id={chip.id} label={chip.label} output={chip.terminalOutput} onRemove={onRemove} />
-            : <DefaultContextChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />)}
+            : chip.kind === 'tray-reference' && chip.trayReference
+              ? <TrayReferenceChip key={chip.id} id={chip.id} reference={chip.trayReference} onRemove={onRemove} />
+              : <DefaultContextChip key={chip.id} chip={chip} onRemove={onRemove} t={t} />)}
     </div>
   )
 }
