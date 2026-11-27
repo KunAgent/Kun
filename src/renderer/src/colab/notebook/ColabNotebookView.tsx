@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  AlertCircle,
   AlertTriangle,
   Cpu,
   FolderOpen,
@@ -8,12 +9,13 @@ import {
   NotebookPen,
   Plug,
   Plus,
-  Sparkles
+  Sparkles,
+  X
 } from 'lucide-react'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { useChatStore } from '../../store/chat-store'
 import { useColabStore } from '../colab-store'
-import { ColabDriveAuthCard } from './ColabFilesTab'
+import { ColabDriveAuthCard, formatDriveMountErrorMessage } from './ColabFilesTab'
 import type { ColabKunChatHost } from './ColabKunPane'
 import { ColabNotebookCell } from './ColabNotebookCell'
 import { ColabRightSidebar } from './ColabRightSidebar'
@@ -62,6 +64,8 @@ export function ColabNotebookView({
   const driveState = useColabDriveStore((s) =>
     runtime.activeSessionId ? s.states[runtime.activeSessionId] : undefined
   )
+  const mountDrive = useColabDriveStore((s) => s.mount)
+  const applyDriveState = useColabDriveStore((s) => s.applyState)
 
   const pullTask = useNotebookPullStore((s) => s.task)
   const pullVisible = useNotebookPullStore((s) => s.visible)
@@ -187,6 +191,57 @@ export function ColabNotebookView({
     setSidePanelTab('kun')
   }
 
+  const driveAccountLabel =
+    connections.find((c) => c.id === runtime.session?.connectionId)?.email ??
+    runtime.session?.connectionEmail ??
+    runtime.connection?.email
+  const showInlineDriveNotice = Boolean(
+    !usingJupyter && sessionId && !(sidePanelOpen && sidePanelTab === 'files')
+  )
+  const inlineDriveNotice =
+    showInlineDriveNotice && sessionId && driveState?.status === 'needs_auth' ? (
+      <div data-colab-drive-auth-banner>
+        <ColabDriveAuthCard
+          sessionId={sessionId}
+          accountLabel={driveAccountLabel}
+          authUrl={driveState.authUrl}
+          reason={driveState.reason}
+          compact
+        />
+      </div>
+    ) : showInlineDriveNotice && sessionId && driveState?.status === 'error' ? (
+      <div
+        role="alert"
+        data-colab-drive-error-banner
+        onMouseDown={(e) => e.stopPropagation()}
+        className="flex items-start justify-between gap-2 rounded-[10px] border border-red-500/30 bg-red-500/[0.06] px-3 py-2 text-left text-[12px] text-red-600 dark:text-red-400"
+      >
+        <span className="flex min-w-0 items-start gap-1.5">
+          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span className="min-w-0 break-words leading-relaxed">
+            {formatDriveMountErrorMessage(t, driveState, driveAccountLabel)}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => void mountDrive(sessionId)}
+            className="rounded border border-red-500/30 bg-ds-card px-2 py-0.5 text-[11.5px] font-medium text-ds-ink hover:bg-ds-hover"
+          >
+            {t('colabNb.driveMountRetry')}
+          </button>
+          <button
+            type="button"
+            aria-label={t('artifactsClose')}
+            onClick={() => applyDriveState({ sessionId, status: 'unmounted' })}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-ds-faint hover:bg-ds-hover hover:text-ds-ink"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </span>
+      </div>
+    ) : null
+
   return (
     <div className="ds-drag relative flex h-full min-h-0 flex-col bg-ds-main" data-colab-notebook>
       <NotebookTopbar
@@ -248,6 +303,9 @@ export function ColabNotebookView({
                   {t('colabNb.chooseProject')}
                 </button>
               )}
+              {inlineDriveNotice ? (
+                <div className="mt-2 w-full max-w-[520px] text-left">{inlineDriveNotice}</div>
+              ) : null}
             </div>
           ) : loadError ? (
             <div className="mx-auto max-w-[720px] px-7 py-10 text-[13px] text-red-500">
@@ -371,21 +429,8 @@ export function ColabNotebookView({
                   </div>
                 ) : null}
 
-                {!usingJupyter &&
-                sessionId &&
-                driveState?.status === 'needs_auth' &&
-                !(sidePanelOpen && sidePanelTab === 'files') ? (
-                  <div className="mb-3 ml-[52px]" data-colab-drive-auth-banner>
-                    <ColabDriveAuthCard
-                      sessionId={sessionId}
-                      accountLabel={
-                        connections.find((c) => c.id === runtime.session?.connectionId)?.email ??
-                        runtime.connection?.email
-                      }
-                      authUrl={driveState.authUrl}
-                      compact
-                    />
-                  </div>
+                {inlineDriveNotice ? (
+                  <div className="mb-3 ml-[52px]">{inlineDriveNotice}</div>
                 ) : null}
 
                 {kunBusy ? (

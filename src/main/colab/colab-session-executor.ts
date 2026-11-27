@@ -1,10 +1,10 @@
 import type { ChildProcess } from 'node:child_process'
 import { mkdir } from 'node:fs/promises'
 import { dirname, join, posix, resolve, sep } from 'node:path'
-import type {
-  ColabSessionArtifact,
-  ColabSessionView,
-  ColabStartRunRequest
+import {
+  type ColabSessionArtifact,
+  type ColabSessionView,
+  type ColabStartRunRequest
 } from '../../shared/colab/colab-types'
 import { classifyColabErrorOutput, type ColabCliRuntime } from './colab-cli-runtime'
 import type { ColabCredentialStore } from './colab-credential-store'
@@ -18,7 +18,7 @@ import {
 } from './colab-drive-protocol'
 import { provisionColabHardware } from './colab-hardware-provisioner'
 import { colabUploadAccess } from './colab-upload-access'
-import { uploadRuntimeFiles } from './runtime-file-upload'
+import { uploadRuntimeFiles, type UploadAccess } from './runtime-file-upload'
 import type { ColabPythonIsolation } from './colab-python-isolation'
 import {
   buildExtendVmWatchdogPython,
@@ -31,21 +31,57 @@ import {
   readWorkspaceColabConfig,
   resolveWorkspaceOutputLocalDir
 } from './colab-workspace-sync'
-import {
-  buildRemoteShellRunnerPython,
-  buildRuntimeTelemetryProbePython,
-  parseRuntimeTelemetryStdout
-} from './colab-session-telemetry'
+import { ColabResourceMonitor, startExclusivePoll } from './colab-session-telemetry'
+import { listLiveArtifacts } from './colab-runtime-metadata'
+
+function buildRemoteShellRunnerPython(
+  command: string,
+  envVars: Record<string, string> | undefined,
+  setupScript: string | undefined
+): string {
+  const payload = JSON.stringify({
+    command,
+    env: envVars ?? {},
+    setup: setupScript?.trim() || ''
+  })
+  return `import json, os, subprocess, sys
+cfg = json.loads(${JSON.stringify(payload)})
+os.makedirs("/content", exist_ok=True)
+os.chdir("/content")
+env = dict(os.environ)
+for k, v in cfg["env"].items():
+    env[str(k)] = str(v)
+env["PYTHONUNBUFFERED"] = "1"
+if cfg["setup"]:
+    rc = subprocess.call(cfg["setup"], shell=True, env=env)
+    if rc != 0:
+        sys.exit(rc)
+proc = subprocess.Popen(
+    cfg["command"],
+    shell=True,
+    env=env,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+    text=True,
+    bufsize=1,
+)
+for line in proc.stdout:
+    sys.stdout.write(line)
+    sys.stdout.flush()
+sys.exit(proc.wait())
+`
+}
 
 export type ActiveExecutionHandle = {
   abortController: AbortController
   child: ChildProcess | null
-  telemetryTimer: ReturnType<typeof setInterval> | null
   maxRuntimeTimer: ReturnType<typeof setTimeout> | null
 }
 
 export class ColabSessionExecutor {
   private readonly handles = new Map<string, ActiveExecutionHandle>()
+
+  private readonly resources: ColabResourceMonitor
 
   constructor(
     private readonly deps: {
@@ -59,7 +95,9 @@ export class ColabSessionExecutor {
       onSessionAuthExpired: (connectionId: string) => void
       onSessionFinished: (session: ColabSessionView) => void
     }
-  ) {}
+  ) {
+    this.resources = new ColabResourceMonitor(deps.getSession, deps.patchSession)
+  }
 
   isRunning(sessionId: string): boolean {
     return this.handles.has(sessionId)
@@ -70,11 +108,11 @@ export class ColabSessionExecutor {
     const handle: ActiveExecutionHandle = {
       abortController: controller,
       child: null,
-      telemetryTimer: null,
       maxRuntimeTimer: null
     }
     this.handles.set(session.id, handle)
 
+    let keepTerminalHandle = false
     const savedConfig = await readWorkspaceColabConfig(request.workspaceRoot)
     const metricPattern = savedConfig?.metricPattern
 
@@ -96,6 +134,7 @@ export class ColabSessionExecutor {
         sessionsJsonPath: paths.sessionsJsonPath,
         env,
         runCli: (p) => this.deps.cli.runCommand(p),
+        upgradeCli: async () => (await this.deps.cli.ensureInstalled({ upgrade: true })).state === 'ready',
         syncTokenBack: () => this.deps.credentials.syncRuntimeTokenBack(session.connectionId),
         onAttempt: (attempt, maxAttempts, sessionName) => {
           session.sessionName = sessionName
@@ -138,6 +177,7 @@ export class ColabSessionExecutor {
         paths.sessionsJsonPath,
         env
       )
+      if (controller.signal.aborted) return
       this.scheduleMaxRuntimeTimer(session.id, handle, request.maxRuntimeHours)
 
       if (request.terminalOnly) {
@@ -146,7 +186,8 @@ export class ColabSessionExecutor {
           provisioningStep: 'start'
         })
         this.deps.appendLog(session.id, `[colab] Runtime '${session.sessionName}' ready.`)
-        this.startTelemetryLoop(session.id, paths.sessionsJsonPath, env, handle)
+        this.startRunMonitoring(session, paths.sessionsJsonPath, env, handle)
+        keepTerminalHandle = true
         return
       }
 
@@ -199,6 +240,7 @@ export class ColabSessionExecutor {
           sessionsJsonPath: paths.sessionsJsonPath,
           sessionName: session.sessionName,
           env,
+          expectedEmail: session.connectionEmail,
           signal: controller.signal,
           openExternal: this.deps.openExternal,
           onLog: (line) => this.deps.appendLog(session.id, line)
@@ -225,13 +267,14 @@ export class ColabSessionExecutor {
         }
       }
 
+      if (controller.signal.aborted) return
       // Step 4: Stream training command execution
       this.deps.patchSession(session.id, {
         phase: 'running',
         provisioningStep: 'start'
       })
       this.deps.appendLog(session.id, `$ ${request.entryCommand}`)
-      this.startTelemetryLoop(session.id, paths.sessionsJsonPath, env, handle)
+      this.startRunMonitoring(session, paths.sessionsJsonPath, env, handle)
 
       const runnerPy = buildRemoteShellRunnerPython(
         request.entryCommand,
@@ -351,9 +394,12 @@ export class ColabSessionExecutor {
         })
       }
     } finally {
-      this.cleanupHandle(session.id)
-      const latest = this.deps.getSession(session.id)
-      if (latest) this.deps.onSessionFinished(latest)
+      if (!keepTerminalHandle && this.handles.get(session.id) === handle) {
+        this.resources.stop(session.id)
+        this.cleanupHandle(session.id)
+        const latest = this.deps.getSession(session.id)
+        if (latest) this.deps.onSessionFinished(latest)
+      }
     }
   }
 
@@ -464,40 +510,39 @@ export class ColabSessionExecutor {
     return true
   }
 
-  private startTelemetryLoop(
-    sessionId: string,
-    sessionsJsonPath: string,
-    env: Record<string, string>,
-    handle: ActiveExecutionHandle
-  ): void {
-    const poll = async (): Promise<void> => {
-      const current = this.deps.getSession(sessionId)
-      if (!current || current.phase !== 'running') return
-      const res = await this.deps.cli.runCommand({
-        sessionsJsonPath,
-        args: ['exec', '-s', current.sessionName, '--timeout', '10'],
-        env,
-        stdinText: buildRuntimeTelemetryProbePython(current.accelerator !== 'CPU'),
-        timeoutMs: 15_000
-      })
-      const patch = parseRuntimeTelemetryStdout(res.stdout, current)
-      if (Object.keys(patch).length > 0) this.deps.patchSession(sessionId, patch)
-      if (current.outputRemoteDir.trim()) {
-        const artifacts = await this.listRemoteArtifacts(
-          current.sessionName,
-          current.outputRemoteDir,
-          sessionsJsonPath,
-          env
-        )
-        if (artifacts.length > 0) {
-          this.deps.patchSession(sessionId, { artifacts })
-        }
+  private startRunMonitoring(session: ColabSessionView, sessionsJsonPath: string,
+    env: Record<string, string>, handle: ActiveExecutionHandle): void {
+    const access = colabUploadAccess({ pythonPath: this.deps.cli.venvPythonPath,
+      sessionsJsonPath, env, sessionName: session.sessionName })
+    if (handle.abortController.signal.aborted) return
+    this.resources.start(session.id, access)
+    if (!session.outputRemoteDir.trim()) return
+    startExclusivePoll(20_000, handle.abortController.signal, async () => {
+      const signal = AbortSignal.any([handle.abortController.signal, AbortSignal.timeout(15_000)])
+      const artifacts = await listLiveArtifacts(access, session.outputRemoteDir, signal)
+      if (!signal.aborted && this.deps.getSession(session.id)?.phase === 'running' && artifacts.length) {
+        this.deps.patchSession(session.id, { artifacts })
       }
-    }
-    void poll()
-    handle.telemetryTimer = setInterval(() => {
-      void poll()
-    }, 20_000)
+    }, false)
+  }
+
+  resumeResourceMonitoring(session: ColabSessionView): void {
+    let access: UploadAccess | undefined
+    this.resources.start(session.id, async (signal) => {
+      if (!access) {
+        const token = await this.deps.credentials.materializeRuntimeToken(session.connectionId)
+        signal.throwIfAborted()
+        const { paths, env } = await this.deps.isolation.prepareConnectionEnvironment(session.connectionId, token)
+        signal.throwIfAborted()
+        access = colabUploadAccess({ pythonPath: this.deps.cli.venvPythonPath,
+          sessionsJsonPath: paths.sessionsJsonPath, env, sessionName: session.sessionName, endpoint: session.endpoint })
+      }
+      return access(signal)
+    })
+  }
+
+  stopMonitoring(): void {
+    this.resources.stopAll()
   }
 
   private async scanRemoteArtifacts(
@@ -514,15 +559,6 @@ export class ColabSessionExecutor {
       timeoutMs: 15_000
     })
     return parseArtifactListOutput<ColabSessionArtifact>(res.stdout)
-  }
-
-  async listRemoteArtifacts(
-    sessionName: string,
-    outputRemoteDir: string,
-    sessionsJsonPath: string,
-    env: Record<string, string>
-  ): Promise<ColabSessionArtifact[]> {
-    return (await this.scanRemoteArtifacts(sessionName, outputRemoteDir, sessionsJsonPath, env)).items
   }
 
   async downloadArtifactsToWorkspace(
@@ -571,10 +607,10 @@ export class ColabSessionExecutor {
   }
 
   async stopSession(sessionId: string, remoteStop = true): Promise<void> {
+    this.resources.stop(sessionId)
     const session = this.deps.getSession(sessionId)
     const handle = this.handles.get(sessionId)
     if (handle) {
-      handle.abortController.abort()
       handle.child?.kill('SIGTERM')
       this.cleanupHandle(sessionId)
     }
@@ -582,10 +618,12 @@ export class ColabSessionExecutor {
       if (remoteStop) {
         await this.bestEffortRemoteStop(session.connectionId, session.sessionName, session.id)
       }
+      this.resources.stop(sessionId)
       this.deps.patchSession(sessionId, {
         phase: 'stopped',
         finishedAt: new Date().toISOString()
       })
+      if (handle) this.deps.onSessionFinished(session)
     }
   }
 
@@ -616,7 +654,7 @@ export class ColabSessionExecutor {
   private cleanupHandle(sessionId: string): void {
     const handle = this.handles.get(sessionId)
     if (!handle) return
-    if (handle.telemetryTimer) clearInterval(handle.telemetryTimer)
+    handle.abortController.abort()
     if (handle.maxRuntimeTimer) clearTimeout(handle.maxRuntimeTimer)
     this.handles.delete(sessionId)
   }

@@ -9,5 +9,6 @@ export {
 } from './runtime-data-dir-migration-entry'
 export {
   markCanonicalKunRuntimeMigrationRuntimeVerified,
+  runtimeMigrationNeedsThreadInventory,
   type RuntimeMigrationRuntimeVerification
 } from './runtime-data-dir-migration-verification'

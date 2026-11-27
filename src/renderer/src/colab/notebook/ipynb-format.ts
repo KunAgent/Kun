@@ -93,6 +93,12 @@ function serializeOutput(output: ColabNotebookOutput): IpynbOutput {
 }
 
 export function serializeIpynb(cells: NotebookCell[], accelerator?: string): string {
+  const accelMeta =
+    !accelerator || accelerator === 'CPU'
+      ? undefined
+      : accelerator === 'V6E1' || accelerator === 'V5E1'
+        ? 'TPU'
+        : 'GPU'
   const notebook = {
     cells: cells.map((cell) =>
       cell.kind === 'code'
@@ -106,7 +112,7 @@ export function serializeIpynb(cells: NotebookCell[], accelerator?: string): str
         : { cell_type: 'markdown', metadata: {}, source: splitLines(cell.source) }
     ),
     metadata: {
-      accelerator: accelerator && accelerator !== 'CPU' ? 'GPU' : undefined,
+      accelerator: accelMeta,
       colab: { provenance: [] },
       kernelspec: { display_name: 'Python 3', name: 'python3' },
       language_info: { name: 'python' }

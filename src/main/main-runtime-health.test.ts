@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 const harness = vi.hoisted(() => ({
   marker: vi.fn(),
+  needsInventory: vi.fn(() => true),
   logWarn: vi.fn(),
   supervisor: {
     latestOr: <T>(value: T): T => value,
@@ -11,6 +12,8 @@ const harness = vi.hoisted(() => ({
     waitForIdle: vi.fn()
   },
   mainState: {
+    canonicalRuntimeMigration: { status: 'completed', authority: 'current' },
+    startupState: { isReady: vi.fn(() => true) },
     store: { load: vi.fn(async () => ({ agents: { kun: {} } })) },
     ensureRuntime: vi.fn(),
     restartRuntime: vi.fn()
@@ -22,7 +25,8 @@ vi.mock('electron', () => ({
   BrowserWindow: { getAllWindows: () => [] }
 }))
 vi.mock('./runtime-data-dir-migration', () => ({
-  markCanonicalKunRuntimeMigrationRuntimeVerified: harness.marker
+  markCanonicalKunRuntimeMigrationRuntimeVerified: harness.marker,
+  runtimeMigrationNeedsThreadInventory: harness.needsInventory
 }))
 vi.mock('./logger', () => ({ logError: vi.fn(), logWarn: harness.logWarn }))
 vi.mock('./runtime/kun-adapter', () => ({
@@ -39,7 +43,7 @@ vi.mock('./main-lifecycle', () => ({ isAppQuitInProgress: () => false, runtimeSh
 vi.mock('./browser-use/browser-use-host', () => ({ stopBrowserUseHost: vi.fn() }))
 vi.mock('./computer-use/computer-use-host', () => ({ stopComputerUseHost: vi.fn() }))
 
-import { noteRuntimeHealthy, probeRuntimeApi } from './main-runtime-health'
+import { probeRuntimeApi } from './main-runtime-health'
 
 describe('Runtime API readiness', () => {
   it('normalizes every HTTP 401 into the desktop credential error', async () => {
@@ -57,7 +61,28 @@ describe('Runtime API readiness', () => {
 })
 
 describe('runtime migration health verification', () => {
+  it('waits for desktop readiness and skips network I/O for a finished journal', async () => {
+    vi.resetModules()
+    const { noteRuntimeHealthy } = await import('./main-runtime-health')
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    try {
+      harness.mainState.startupState.isReady.mockReturnValueOnce(false)
+      noteRuntimeHealthy('starting')
+      expect(harness.needsInventory).not.toHaveBeenCalled()
+      harness.needsInventory.mockReturnValueOnce(false)
+      noteRuntimeHealthy('started')
+      await vi.waitFor(() => expect(harness.needsInventory).toHaveBeenCalled())
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(harness.marker).not.toHaveBeenCalled()
+    } finally {
+      fetchMock.mockRestore()
+    }
+  })
+
   it('stops future inventory checks and WARNs once verification is unresolved', async () => {
+    vi.resetModules()
+    const { noteRuntimeHealthy } = await import('./main-runtime-health')
+    harness.supervisor.noteHealthy.mockClear()
     harness.marker.mockReturnValue({
       status: 'unresolved',
       expectedThreadCount: 1,
@@ -67,7 +92,8 @@ describe('runtime migration health verification', () => {
       maxAttempts: 3
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(JSON.stringify({ threads: [] })))
+      .mockResolvedValueOnce(Response.json({ threads: [], hasMore: true, nextCursor: 'old+archived' }))
+      .mockResolvedValueOnce(Response.json({ threads: [{ id: 'thr_last' }] }))
 
     noteRuntimeHealthy('final')
     await vi.waitFor(() => expect(harness.marker).toHaveBeenCalledTimes(1))
@@ -75,7 +101,8 @@ describe('runtime migration health verification', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(harness.marker).toHaveBeenCalledTimes(1)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(harness.marker).toHaveBeenCalledWith('/tmp/userData', new Set(['thr_last']), expect.anything())
     expect(harness.logWarn).toHaveBeenCalledTimes(1)
     expect(harness.logWarn.mock.calls[0]?.[1]).toBe(
       'Runtime history verification reached its retry limit; automatic retries stopped without blocking Runtime availability.'

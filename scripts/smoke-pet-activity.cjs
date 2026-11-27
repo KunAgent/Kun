@@ -42,6 +42,13 @@ async function main() {
       .map(([held, tap], index) => ({ type: 'keys', sequence: index + 1, held, tap })),
     { type: 'recording', active: true }, { type: 'recording', active: false }
   ])
+  assert.deepEqual(lines(['--self-test-desk']), [
+    { type: 'keys', sequence: 1, held: 1, tap: 1, zone: { col: 0, row: 1 } },
+    { type: 'keys', sequence: 2, held: 0, tap: 0 },
+    { type: 'mouse', sequence: 1, buttons: 1, wheel: 0 },
+    { type: 'mouse', sequence: 2, buttons: 0, wheel: 0 },
+    { type: 'mouse', sequence: 3, buttons: 0, wheel: 1 }
+  ])
   const [status] = lines(['--status', '--keyboard', '--microphone'])
   assert.equal(status.type, 'status')
   assert.ok(['active', 'permission-required', 'unavailable'].includes(status.keyboard))

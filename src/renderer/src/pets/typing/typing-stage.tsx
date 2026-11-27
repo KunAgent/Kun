@@ -1,5 +1,5 @@
-import { useRef, type ButtonHTMLAttributes, type ReactElement } from 'react'
-import type { PetOverlayBootstrap, PetSummary } from '@shared/pets'
+import { useLayoutEffect, useRef, type ButtonHTMLAttributes, type ReactElement } from 'react'
+import type { PetCursorSample, PetOverlayBootstrap, PetSummary } from '@shared/pets'
 import type { PetTypingState } from '@shared/pets-typing'
 import type { Point } from '../joint/geometry'
 import { usePetCanvas } from '../joint/use-pet-canvas'
@@ -7,13 +7,14 @@ import { jointHitPath } from '../joint/timeline'
 import { usePetAnimationPainter } from '../use-pet-animation-painter'
 import { nextFrameDelayMs } from '../pet-animation'
 import { PetResidentSprite } from '../pet-resident-sprite'
-import { PetTypingMotion } from './typing-motion'
+import { DESK_EXIT_FADE_MS, PetTypingMotion, type PetGazeMemory } from './typing-motion'
 import { petTypingCutouts, petTypingRig } from './typing-rig'
 import { typingScene } from './typing-scene'
 import '../joint/joint-stage.css'
 
 export function PetTypingStage(props: {
-  pet: PetOverlayBootstrap; typing?: PetTypingState; expiresAt: number
+  pet: PetOverlayBootstrap; typing?: PetTypingState; typingActive?: boolean; cursor?: PetCursorSample | null
+  gazeMemory?: PetGazeMemory; expiresAt: number
   width: number; height: number; mascotWidth: number; origin: Point; paused: boolean; language: string
   actorEvents: ButtonHTMLAttributes<HTMLButtonElement>
 }): ReactElement {
@@ -24,29 +25,38 @@ export function PetTypingStage(props: {
     spriteVersionNumber: props.pet.spriteVersionNumber, spritesheetUrl: props.pet.spritesheetUrl ?? undefined,
     interactions: props.pet.interactions }
   const frameAt = (now: number, reduced: boolean) => {
-    const state = motion.current.sample(props.typing, now, reduced, props.paused)
+    const state = motion.current.sample(props.typing, now, reduced, props.paused, {
+      cursor: props.cursor,
+      typingActive: props.typingActive,
+      deskExpiresAt: props.expiresAt,
+      gaze: props.gazeMemory
+    })
     return { state, frame: typingScene({ ...props, pet, now, reduced, enteredAt: enteredAt.current, motion: state }) }
   }
   const { canvas, renderer, ready, error, revision } = usePetCanvas(`${pet.id}:${pet.spritesheetUrl}:${JSON.stringify(petTypingRig(pet))}:${JSON.stringify(petTypingCutouts(pet))}`, () => frameAt(Date.now(), false).frame)
-  usePetAnimationPainter(`typing:${pet.id}:${ready}:${revision}`, props.paused, ({ elapsed, reduced }) => {
+  const wake = usePetAnimationPainter(`typing:${pet.id}:${ready}:${revision}`, props.paused, ({ elapsed, reduced }) => {
     const now = Date.now(), { state, frame } = frameAt(now, reduced)
     if (hit.current) hit.current.style.clipPath = `path('${jointHitPath(frame)}')`
     if (!ready) return 80
     renderer.current?.paint(frame, elapsed, reduced)
     const remaining = props.expiresAt - now
-    if (state.moving || now - enteredAt.current < 80 || remaining < 240) return
-    return Math.max(1, Math.min(nextFrameDelayMs('idle', elapsed), remaining - 220))
+    if (state.moving || now - enteredAt.current < 260 || remaining < DESK_EXIT_FADE_MS + 60) return
+    return Math.max(1, Math.min(nextFrameDelayMs('idle', elapsed), remaining - DESK_EXIT_FADE_MS - 40))
   })
+  useLayoutEffect(() => {
+    wake()
+  }, [wake, props.typing, props.typingActive, props.cursor, props.expiresAt, ready])
   return <div className="pet-reaction-stage pet-typing-stage" data-pet-reaction="typing" data-ready={ready}
     style={{ width: props.width, height: props.height }}>
     <canvas ref={canvas} style={{ position: 'absolute', inset: 0, width: props.width, height: props.height,
       visibility: ready ? 'visible' : 'hidden', pointerEvents: 'none' }} aria-hidden="true" />
     {!ready ? <PetResidentSprite animation="idle" version={props.pet.spriteVersionNumber} sheet={props.pet.spritesheetUrl}
+      petId={props.pet.petId} cursor={props.cursor} gazeMemory={props.gazeMemory}
       className="pet-sprite" aria-hidden="true" tabIndex={-1}
       style={{ position: 'absolute', pointerEvents: 'none', width: props.mascotWidth, height: props.mascotWidth * 208 / 192,
         left: props.origin.x - props.mascotWidth / 2, top: props.origin.y - props.mascotWidth * 208 / 384 }} /> : null}
     <button {...props.actorEvents} ref={hit} type="button" className="pet-joint-hit"
-      aria-label={`${pet.displayName} · ${props.language.startsWith('zh') ? '键盘陪伴' : 'Keyboard companion'}`} />
+      aria-label={`${pet.displayName} · ${props.language.startsWith('zh') ? '桌台陪伴' : 'Desk companion'}`} />
     {error ? <span className="pet-joint-error" role="status">{props.language.startsWith('zh') ? '角色素材暂时无法显示' : 'Character artwork is unavailable'}</span> : null}
   </div>
 }

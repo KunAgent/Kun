@@ -16,6 +16,7 @@ import {
 import { preserveRedactedProviderCredentials } from './settings-credential-redaction'
 import { syncLoginItemSettings } from './desktop-behavior'
 import { syncNativeThemeSource } from './native-theme-source'
+import { syncDailyNotesGlobalShortcut } from './daily-notes/shortcut'
 import {
   getKunRuntimeSettings,
   getModelProviderSettings,
@@ -209,6 +210,7 @@ export function registerMainIpc(services: MainServices): void {
       ) {
         configureLogger({ enabled: saved.log.enabled, retentionDays: saved.log.retentionDays })
       }
+      syncDailyNotesGlobalShortcut(saved.keyboardShortcuts)
       updateComputerUseHostSettings(saved)
       if (previous.guiUpdate.channel !== saved.guiUpdate.channel && mainState.guiUpdaterModulePromise) {
         void mainState.guiUpdaterModulePromise

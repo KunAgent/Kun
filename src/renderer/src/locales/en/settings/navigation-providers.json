@@ -376,6 +376,8 @@
   "shortcutTogglePaperModeDesc": "Switch to Work and open the paper library.",
   "shortcutPaperImport": "Import paper",
   "shortcutPaperImportDesc": "Switch to Work and open the paper import dialog.",
+  "shortcutToggleDailyNotes": "Daily notes & to-dos",
+  "shortcutToggleDailyNotesDesc": "Show or hide the daily notes & to-dos panel or window.",
   "shortcutModalTitle": "Keyboard shortcuts",
   "shortcutModalSearchPlaceholder": "Search shortcuts…",
   "shortcutModalEmpty": "No shortcuts match your search.",

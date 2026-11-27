@@ -1,9 +1,11 @@
 import { armLayerVertices } from './arm-layer'
+import { drawActorLiveEyes, type PetEyeOverlaySet } from './eye-layer'
 import type { JointFrame } from './timeline'
 import type { JointTexture } from './assets'
 import { blinkCell } from './assets'
 import { createRigMesh, paintRigVertices, type RigMesh } from './mesh'
 import { drawJointGround, drawJointObjects } from './draw-world'
+import { drawPetKeyboardPops } from '../typing/keyboard-surface'
 
 const VERTEX = `
 attribute vec2 a_position;
@@ -37,7 +39,7 @@ void main() {
   gl_FragColor = mix(base, solo, u_solo) * u_opacity * mask;
 }`
 
-type MeshResource = { mesh: RigMesh; vertices: WebGLBuffer; indices: WebGLBuffer; texture: WebGLTexture; arms?: WebGLTexture }
+type MeshResource = { mesh: RigMesh; vertices: WebGLBuffer; indices: WebGLBuffer; texture: WebGLTexture; arms?: WebGLTexture; eyes?: PetEyeOverlaySet }
 export class JointWebGLRenderer {
   private readonly program: WebGLProgram
   private readonly locations: Record<string, WebGLUniformLocation | null>
@@ -80,7 +82,7 @@ export class JointWebGLRenderer {
         arms = this.texture()
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source.arms)
       }
-      this.resources.set(a.pet.id, { mesh, texture, vertices, indices, arms })
+      this.resources.set(a.pet.id, { mesh, texture, vertices, indices, arms, eyes: source?.eyes })
     }
   }
 
@@ -111,7 +113,14 @@ export class JointWebGLRenderer {
       this.uniforms(a.opacity, 0, a.soloBlend, column)
       gl.drawElements(gl.TRIANGLES, resource.mesh.indices.length, gl.UNSIGNED_SHORT, 0)
     }
-    this.paintLayer(frame, ratio, drawJointObjects)
+    this.paintLayer(frame, ratio, (ctx, current) => {
+      for (const { a, i } of ordered) {
+        const resource = this.resources.get(a.pet.id)
+        if (!resource?.eyes || a.opacity < .001) continue
+        drawActorLiveEyes(ctx, a, resource.eyes, blinkCell(elapsed, i, reduced))
+      }
+      drawJointObjects(ctx, current)
+    })
     // Foreground limbs cover the prop; typing uses isolated silhouettes and a key plane.
     for (const { a, i } of ordered) {
       if (a.opacity < .001) continue
@@ -134,6 +143,11 @@ export class JointWebGLRenderer {
       gl.bindTexture(gl.TEXTURE_2D, resource.texture)
       this.uniforms(a.opacity, 1, a.soloBlend, blinkCell(elapsed, i, reduced))
       gl.drawElements(gl.TRIANGLES, resource.mesh.indices.length, gl.UNSIGNED_SHORT, 0)
+    }
+    if (frame.keyboard?.pops?.length) {
+      this.paintLayer(frame, ratio, (ctx, current) => {
+        if (current.keyboard) drawPetKeyboardPops(ctx, current.keyboard)
+      })
     }
   }
 

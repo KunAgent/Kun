@@ -66,22 +66,42 @@ export type ColabDrivePullCloseResult =
   | { ok: true; stoppedTemporary: boolean }
   | { ok: false; message: string }
 
+export type ColabDriveAuthHint = 'incomplete' | 'account_mismatch'
+
+export type ColabDriveErrorCode =
+  | 'auth_expired'
+  | 'auth_incomplete'
+  | 'account_mismatch'
+  | 'canceled'
+
 export type ColabDriveNotebooksListResult =
   | { ok: true; status: 'ready'; entries: ColabDriveNotebookEntry[] }
-  | { ok: true; status: 'needs_auth'; authUrl: string; expiresAt: number }
-  | { ok: false; message: string; code?: 'auth_expired' | 'auth_incomplete' | 'canceled' }
+  | {
+      ok: true
+      status: 'needs_auth'
+      authUrl: string
+      expiresAt: number
+      reason?: ColabDriveAuthHint
+    }
+  | { ok: false; message: string; code?: ColabDriveErrorCode }
 
 export type ColabDriveMountState =
   | { sessionId: string; status: 'unmounted' }
   | { sessionId: string; status: 'mounting' }
-  | { sessionId: string; status: 'needs_auth'; authUrl: string; expiresAt: number }
+  | {
+      sessionId: string
+      status: 'needs_auth'
+      authUrl: string
+      expiresAt: number
+      reason?: ColabDriveAuthHint
+    }
   | { sessionId: string; status: 'mounted'; mountPath: string }
   | { sessionId: string; status: 'unmounting' }
   | {
       sessionId: string
       status: 'error'
       message: string
-      code?: 'auth_expired' | 'auth_incomplete' | 'canceled'
+      code?: ColabDriveErrorCode
     }
 
 export type ColabDriveMountResult =
@@ -89,7 +109,7 @@ export type ColabDriveMountResult =
   | {
       ok: false
       message: string
-      code?: 'auth_expired' | 'auth_incomplete' | 'canceled'
+      code?: ColabDriveErrorCode
       state?: ColabDriveMountState
     }
 

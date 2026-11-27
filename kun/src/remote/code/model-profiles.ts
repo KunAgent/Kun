@@ -26,8 +26,17 @@ export function routeProfiles(models: string[], profileOf: (model: string) => Re
 /** Spawn-free cached native facts from the same sources `probedModels` reads. */
 export function probedModelInfo(runtime: ServerRuntime, definition: HarnessDefinition): HarnessModelInfo[] | undefined {
   const harnesses = runtime.harnesses
-  return liveModelInfo(runtime, definition) ??
-    (harnesses?.liveProbedModels?.(definition) ? undefined : harnesses?.modelCatalogs?.get(definition)?.catalog.modelInfo)
+  const live = liveModelInfo(runtime, definition)
+  const persisted = harnesses?.modelCatalogs?.get(definition)?.catalog.modelInfo
+  if (!live) return harnesses?.liveProbedModels?.(definition) ? undefined : persisted
+  if (!persisted?.length) return live
+  return live.map((entry) => {
+    if (entry.reasoningEfforts !== undefined) return entry
+    const kept = persisted.find((item) => item.id === entry.id)
+    return kept?.reasoningEfforts !== undefined
+      ? { ...entry, reasoningEfforts: kept.reasoningEfforts, ...(kept.defaultReasoningEffort !== undefined ? { defaultReasoningEffort: kept.defaultReasoningEffort } : {}) }
+      : entry
+  })
 }
 
 function liveModelInfo(runtime: ServerRuntime, definition: HarnessDefinition): HarnessModelInfo[] | undefined {

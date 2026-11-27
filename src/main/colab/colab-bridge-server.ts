@@ -1,7 +1,12 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import type { KunColabSettingsV1 } from '../../shared/app-settings-colab'
-import { COLAB_ACCELERATOR_SPECS, type ColabAccelerator } from '../../shared/colab/colab-types'
+import {
+  COLAB_ACCELERATORS,
+  COLAB_ACCELERATOR_SPECS,
+  isColabAcceleratorEligible,
+  normalizeColabAccelerator
+} from '../../shared/colab/colab-types'
 import type { ColabNotebookAgentRelay } from './colab-notebook-agent-relay'
 import type { ColabService } from './colab-service'
 
@@ -108,8 +113,8 @@ export class ColabBridgeServer {
               (c) => c.id === snap.workspaceConnections[workspaceRoot.trim().replace(/[\\/]+$/, '')]
             ) ?? snap.connections.find((c) => c.status === 'connected')
         const settings = this.getSettings()
-        const accel = (typeof body.accelerator === 'string' ? body.accelerator : 'T4') as ColabAccelerator
-        const spec = COLAB_ACCELERATOR_SPECS[accel] ?? COLAB_ACCELERATOR_SPECS.T4
+        const accel = normalizeColabAccelerator(body.accelerator, 'T4')
+        const spec = COLAB_ACCELERATOR_SPECS[accel]
         this.sendJson(res, 200, {
           requireApprovalForAgent: settings.requireApprovalForAgent,
           connection: conn
@@ -117,11 +122,15 @@ export class ColabBridgeServer {
                 id: conn.id,
                 name: conn.name,
                 email: conn.email,
+                planLabel: conn.planLabel,
                 balanceCu: conn.balanceCu,
+                eligibleAccelerators: conn.eligibleAccelerators,
+                ineligibleAccelerators: conn.ineligibleAccelerators,
                 status: conn.status
               }
             : null,
-          acceleratorSpec: spec
+          acceleratorSpec: spec,
+          eligible: isColabAcceleratorEligible(conn, accel)
         })
         return
       }
@@ -138,12 +147,16 @@ export class ColabBridgeServer {
             : snap.sessions
         this.sendJson(res, 200, {
           cli: snap.cli,
+          availableAccelerators: COLAB_ACCELERATORS,
           connections: snap.connections.map((c) => ({
             id: c.id,
             name: c.name,
             email: c.email,
+            planLabel: c.planLabel,
             balanceCu: c.balanceCu,
             burnRateCuPerHour: c.burnRateCuPerHour,
+            eligibleAccelerators: c.eligibleAccelerators,
+            ineligibleAccelerators: c.ineligibleAccelerators,
             status: c.status,
             activeSessionsCount: c.activeSessions.length
           })),
@@ -175,11 +188,18 @@ export class ColabBridgeServer {
           })
           return
         }
-        const accelRaw = typeof body.accelerator === 'string' ? body.accelerator.toUpperCase() : 'T4'
-        const accelerator: ColabAccelerator =
-          accelRaw === 'T4' || accelRaw === 'L4' || accelRaw === 'A100' || accelRaw === 'CPU'
-            ? accelRaw
-            : 'T4'
+        const accelerator = normalizeColabAccelerator(body.accelerator, 'T4')
+        if (!isColabAcceleratorEligible(resolvedConn, accelerator)) {
+          const allowed = COLAB_ACCELERATORS.filter((id) =>
+            isColabAcceleratorEligible(resolvedConn, id)
+          ).join(', ')
+          this.sendJson(res, 400, {
+            ok: false,
+            code: 'not_entitled',
+            message: `当前连接「${resolvedConn.name}」不支持 ${COLAB_ACCELERATOR_SPECS[accelerator].fullLabel}。可用加速器：${allowed}`
+          })
+          return
+        }
         const syncPaths = Array.isArray(body.syncPaths)
           ? body.syncPaths.filter((p): p is string => typeof p === 'string')
           : []
@@ -189,6 +209,7 @@ export class ColabBridgeServer {
           connectionId: resolvedConn.id,
           entryCommand: typeof body.entryCommand === 'string' ? body.entryCommand : 'python train.py',
           accelerator,
+          ...(typeof body.highMem === 'boolean' ? { highMem: body.highMem } : {}),
           syncPaths,
           outputRemoteDir: typeof body.outputRemoteDir === 'string' ? body.outputRemoteDir : 'outputs/',
           outputLocalDir: typeof body.outputLocalDir === 'string' ? body.outputLocalDir : './outputs',

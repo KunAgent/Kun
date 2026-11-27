@@ -32,7 +32,9 @@ export function parsePetOverlayOpenPayload(value: unknown): PetPayloadResult<boo
   return { ok: true, value }
 }
 
-export function parsePetImportPreferences(value: unknown): PetPayloadResult<{ importCodexPets?: boolean }> {
+export function parsePetImportPreferences(
+  value: unknown
+): PetPayloadResult<{ importCodexPets?: boolean; importKurocatPets?: boolean }> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return { ok: false, error: 'invalid import preferences' }
   }
@@ -40,9 +42,15 @@ export function parsePetImportPreferences(value: unknown): PetPayloadResult<{ im
   if ('importCodexPets' in candidate && typeof candidate.importCodexPets !== 'boolean') {
     return { ok: false, error: 'importCodexPets must be boolean' }
   }
+  if ('importKurocatPets' in candidate && typeof candidate.importKurocatPets !== 'boolean') {
+    return { ok: false, error: 'importKurocatPets must be boolean' }
+  }
   return {
     ok: true,
-    value: typeof candidate.importCodexPets === 'boolean' ? { importCodexPets: candidate.importCodexPets } : {}
+    value: {
+      ...(typeof candidate.importCodexPets === 'boolean' ? { importCodexPets: candidate.importCodexPets } : {}),
+      ...(typeof candidate.importKurocatPets === 'boolean' ? { importKurocatPets: candidate.importKurocatPets } : {})
+    }
   }
 }
 

@@ -58,7 +58,8 @@ import type {
   StorageRelocationActiveWork,
   StorageRelocationProgress
 } from '../shared/storage-relocation'
-import { logError } from './logger'
+import { logError, logWarn } from './logger'
+import { auditPreservedHistory } from './runtime-data-dir-preserved-history-audit'
 import {
   mainState,
   remainingHomeMappings,
@@ -348,6 +349,18 @@ export function releaseRuntimeDataRecoveryMigrationLock(): void {
   if (!lock) return
   mainState.runtimeDataRecoveryMigrationLock = null
   lock.release()
+}
+
+export function startPreservedHistoryAudit(): void {
+  const check = mainState.canonicalRuntimeMigration?.preservedHistoryCheck
+  if (!check) return
+  const controller = new AbortController()
+  const cancel = (): void => controller.abort()
+  app.once('before-quit', cancel)
+  const warn = (message: string, detail?: unknown): void => logWarn('runtime-data-migration', message, detail)
+  void auditPreservedHistory(check, warn, controller.signal).catch((error: unknown) => {
+    if (!controller.signal.aborted) warn('Could not audit preserved Runtime history.', { message: String(error) })
+  }).finally(() => { app.removeListener('before-quit', cancel) })
 }
 
 function acceptCompletedRuntimeDataRecovery(): RuntimeDataDirMigrationResult {

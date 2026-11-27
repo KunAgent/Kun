@@ -9,8 +9,11 @@ import { uploadRuntimeFiles, type UploadOptions } from './runtime-file-upload'
 import { activeDrivePullSessions } from './colab-drive-notebooks'
 import type { ColabSessionView, ColabUntrackedSession } from '../../shared/colab/colab-types'
 import {
+  buildColabCcuInfoPython,
   classifyColabErrorOutput,
   type ColabCliRuntime,
+  type ParsedColabUsage,
+  parseColabCcuInfoOutput,
   parseColabSessionsOutput,
   parseColabUsageOutput
 } from './colab-cli-runtime'
@@ -19,6 +22,28 @@ import type { ColabPythonIsolation } from './colab-python-isolation'
 import type { ColabSessionExecutor } from './colab-session-executor'
 import type { PersistedConnectionRecord } from './colab-state-store'
 import { resolveWorkspaceOutputLocalDir } from './colab-workspace-sync'
+
+export function deriveColabPlanLabel(parsed: ParsedColabUsage): string {
+  const tier = parsed.subscriptionTier ?? ''
+  if (/ultra/i.test(tier) || parsed.eligibleAccelerators?.includes('H100')) {
+    return 'Google AI Ultra'
+  }
+  if (
+    /pro_plus|pro\+/i.test(tier) ||
+    parsed.balanceCu >= 300 ||
+    parsed.eligibleAccelerators?.includes('G4')
+  ) {
+    return 'Colab Pro+'
+  }
+  if (
+    /\bpro\b/i.test(tier) ||
+    parsed.balanceCu > 0 ||
+    parsed.eligibleAccelerators?.some((acc) => acc === 'A100' || acc === 'L4' || acc === 'V6E1')
+  ) {
+    return 'Colab Pro'
+  }
+  return 'Colab'
+}
 
 export async function pollColabBalancesAndRemoteSessions(options: {
   targets: PersistedConnectionRecord[]
@@ -39,26 +64,48 @@ export async function pollColabBalancesAndRemoteSessions(options: {
       const credFile = await options.credentials.materializeRuntimeToken(conn.id)
       const { paths, env } = await options.isolation.prepareConnectionEnvironment(conn.id, credFile)
 
-      const usageRes = await options.cli.runCommand({
-        sessionsJsonPath: paths.sessionsJsonPath,
-        args: ['usage'],
-        env,
-        timeoutMs: 20_000
-      })
-      await options.credentials.syncRuntimeTokenBack(conn.id)
-
-      if (usageRes.exitCode !== 0) {
-        if (classifyColabErrorOutput(`${usageRes.stdout}\n${usageRes.stderr}`) === 'auth_expired') {
+      let parsed: ParsedColabUsage | null = null
+      if (typeof options.cli.runPythonScript === 'function') {
+        const ccuRes = await options.cli.runPythonScript({
+          script: buildColabCcuInfoPython(paths.sessionsJsonPath),
+          env,
+          timeoutMs: 20_000
+        })
+        await options.credentials.syncRuntimeTokenBack(conn.id)
+        if (ccuRes.exitCode === 0) {
+          parsed = parseColabCcuInfoOutput(ccuRes.stdout)
+        } else if (classifyColabErrorOutput(`${ccuRes.stdout}\n${ccuRes.stderr}`) === 'auth_expired') {
           conn.status = 'expired'
+          continue
         }
-        continue
       }
-      const parsed = parseColabUsageOutput(usageRes.stdout)
+
+      if (!parsed) {
+        const usageRes = await options.cli.runCommand({
+          sessionsJsonPath: paths.sessionsJsonPath,
+          args: ['usage'],
+          env,
+          timeoutMs: 20_000
+        })
+        await options.credentials.syncRuntimeTokenBack(conn.id)
+
+        if (usageRes.exitCode !== 0) {
+          if (classifyColabErrorOutput(`${usageRes.stdout}\n${usageRes.stderr}`) === 'auth_expired') {
+            conn.status = 'expired'
+          }
+          continue
+        }
+        parsed = parseColabUsageOutput(usageRes.stdout)
+      }
+
       if (parsed) {
         conn.balanceCu = Number(parsed.balanceCu.toFixed(1))
         conn.burnRateCuPerHour = Number(parsed.burnRateCuPerHour.toFixed(2))
-        conn.planLabel =
-          conn.balanceCu >= 300 ? 'Colab Pro+' : conn.balanceCu > 0 ? 'Colab Pro' : 'Colab'
+        if (parsed.eligibleAccelerators) {
+          conn.eligibleAccelerators = parsed.eligibleAccelerators
+          conn.ineligibleAccelerators = parsed.ineligibleAccelerators ?? []
+        }
+        conn.planLabel = deriveColabPlanLabel(parsed)
         conn.updatedAt = new Date().toISOString()
 
         if (
@@ -97,6 +144,7 @@ export async function pollColabBalancesAndRemoteSessions(options: {
               endpoint: item.endpoint,
               remoteLabel: item.untracked ? `colab-${item.endpoint.slice(-4)}` : item.name,
               accelerator: item.accelerator,
+              ...(item.highMem ? { highMem: true } : {}),
               variant: item.variant,
               detectedAt: new Date().toISOString()
             })

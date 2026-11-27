@@ -503,6 +503,7 @@ describe('ColabNotebookCell and ColabNotebookView', () => {
           gpuUtilizationPct: 35,
           vramUsedGb: 22,
           gpuHistory: [35],
+          resourceHistory: [{ at: Date.now(), gpuPct: 0, vramUsedGiB: 0, vramTotalGiB: 80, ramUsedGiB: 8, ramTotalGiB: 167, diskPct: null }],
           metrics: {},
           logTail: [],
           artifacts: []
@@ -590,6 +591,11 @@ describe('ColabNotebookCell and ColabNotebookView', () => {
       expect(renderedJson).toContain('7860')
       expect(renderedJson).toContain('1 port(s)')
       expect(renderedJson).toContain('Auto-stop in')
+      await act(async () => stage.findByProps({ 'data-runtime-source': 'colab' }).props.onClick())
+      expect(JSON.stringify(renderer!.toJSON())).toContain('0.0 / 80.0 GiB')
+      await act(async () => buttonWithText(stage, 'View resource trends').props.onClick())
+      expect(useColabNotebookStore.getState().kernelPickerOpen).toBe(false)
+      expect(stage.findByProps({ 'data-resource-session-id': 'sess-a100' })).toBeDefined()
     } finally {
       if (renderer) await act(async () => renderer?.unmount())
       useColabPortForwardStore.setState({ forwards: [] })

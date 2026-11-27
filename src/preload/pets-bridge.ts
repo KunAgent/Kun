@@ -10,6 +10,7 @@ function listen(channel: string, handler: () => void): () => void {
 export const petsPreloadApi: PetDesktopBridge = {
   getPetGlobalActivityStatus: () => ipcRenderer.invoke(PET_IPC.getPetGlobalActivityStatus),
   setPetGlobalActivity: (preferences) => ipcRenderer.invoke(PET_IPC.setPetGlobalActivity, preferences),
+  setPetSoundEnabled: (enabled) => ipcRenderer.invoke(PET_IPC.setPetSoundEnabled, enabled),
   requestPetKeyboardAccess: () => ipcRenderer.invoke(PET_IPC.requestPetKeyboardAccess),
   notifyPetBottleDrop: (drop) => ipcRenderer.send(PET_IPC.notifyPetBottleDrop, drop),
   setPetVisitPreferences: (input) => ipcRenderer.invoke(PET_IPC.setPetVisitPreferences, input),
@@ -25,6 +26,7 @@ export const petsPreloadApi: PetDesktopBridge = {
   refreshPets: () => ipcRenderer.invoke(PET_IPC.refreshPets),
   openKunPetsDirectory: () => ipcRenderer.invoke(PET_IPC.openKunDirectory),
   openCodexPetsDirectory: () => ipcRenderer.invoke(PET_IPC.openCodexDirectory),
+  openKurocatPetsDirectory: () => ipcRenderer.invoke(PET_IPC.openKurocatDirectory),
   updatePetActivity: (snapshot) => ipcRenderer.send(PET_IPC.updateActivity, snapshot),
   onPetCatalogChanged: (handler) => listen(PET_IPC.catalogChanged, handler),
   onPetNavigationRequested: (handler) => {

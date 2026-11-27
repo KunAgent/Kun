@@ -11,9 +11,15 @@ import {
   Server,
   ShieldCheck
 } from 'lucide-react'
+import {
+  COLAB_ACCELERATOR_SPECS,
+  COLAB_RESOURCE_INTERVAL_MS,
+  COLAB_RESOURCE_WINDOW_MS
+} from '@shared/colab/colab-types'
 import { formatColabDuration, useColabStore } from '../colab-store'
 import { ColabFilesTab as ColabFilesTabContent } from './ColabFilesTab'
 import { formatJupyterAuthLabel, isLocalJupyterUrl } from './JupyterRuntimeSection'
+import { ResourceDetails } from './ResourceDetails'
 import { useColabNotebookStore } from './colab-notebook-store'
 import { useNotebookPullStore } from './notebook-pull-store'
 import type { ColabNotebookRuntime } from './use-colab-notebook-runtime'
@@ -34,33 +40,6 @@ function OfflineState({ message }: { message: string }): ReactElement {
       >
         {t('colabNb.connectRuntimeBtn')}
       </button>
-    </div>
-  )
-}
-
-function Meter({
-  label,
-  value,
-  pct,
-  barClass = 'bg-accent'
-}: {
-  label: string
-  value: string
-  pct: number | null
-  barClass?: string
-}): ReactElement {
-  return (
-    <div className="space-y-1 py-1.5 text-[12px]">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-ds-muted">{label}</span>
-        <span className="font-mono text-[11.5px] text-ds-ink">{value}</span>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-ds-hover">
-        <span
-          className={`block h-full rounded-full ${barClass}`}
-          style={{ width: `${Math.min(100, Math.max(0, pct ?? 0))}%` }}
-        />
-      </div>
     </div>
   )
 }
@@ -305,10 +284,6 @@ export function ColabResourcesTab({ runtime }: { runtime: ColabNotebookRuntime }
   }
 
   const account = connections.find((c) => c.id === session.connectionId)
-  const ramPct =
-    session.ramGb > 0 && session.ramUsedGb != null ? (session.ramUsedGb / session.ramGb) * 100 : null
-  const vramPct =
-    session.vramGb && session.vramUsedGb != null ? (session.vramUsedGb / session.vramGb) * 100 : null
   const remainingSec =
     session.maxRuntimeHours > 0
       ? Math.max(0, Math.round(session.maxRuntimeHours * 3600 - session.elapsedSeconds))
@@ -325,7 +300,7 @@ export function ColabResourcesTab({ runtime }: { runtime: ColabNotebookRuntime }
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="truncate text-[13px] font-semibold text-ds-ink">
-              Colab · {session.accelerator === 'CPU' ? 'CPU' : `${session.accelerator} GPU`}
+              Colab · {COLAB_ACCELERATOR_SPECS[session.accelerator].fullLabel}
             </span>
             {session.highMem ? (
               <span className="shrink-0 rounded bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
@@ -338,28 +313,11 @@ export function ColabResourcesTab({ runtime }: { runtime: ColabNotebookRuntime }
           </span>
         </div>
 
-        <div className="divide-y divide-ds-border/60">
-          <Meter
-            label="RAM"
-            value={`${(session.ramUsedGb ?? 0).toFixed(1)} / ${session.ramGb} GB`}
-            pct={ramPct}
-            barClass="bg-accent"
-          />
-          {session.vramGb != null ? (
-            <Meter
-              label="GPU VRAM"
-              value={`${(session.vramUsedGb ?? 0).toFixed(1)} / ${session.vramGb} GB`}
-              pct={vramPct}
-              barClass="bg-amber-500"
-            />
-          ) : null}
-          <Meter
-            label={t('colabNb.diskLabel')}
-            value={`${session.diskUsedPct ?? 0}%`}
-            pct={session.diskUsedPct ?? 0}
-            barClass="bg-emerald-500"
-          />
-        </div>
+        <ResourceDetails
+          session={session}
+          intervalMs={COLAB_RESOURCE_INTERVAL_MS}
+          windowMs={COLAB_RESOURCE_WINDOW_MS}
+        />
 
         <dl className="space-y-1.5 border-t border-ds-border/70 pt-2.5 text-[12px]">
           <div className="flex justify-between gap-2">

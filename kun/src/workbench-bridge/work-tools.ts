@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { LocalToolHost, type LocalTool } from '../adapters/tool/local-tool-host.js'
-import { WORKBENCH_LIMITS, WorkbenchEditSchema, WorkbenchScheduleSchema } from '../contracts/workbench-links.js'
+import { WORKBENCH_LIMITS, WorkbenchDailyNoteRefSchema, WorkbenchEditSchema, WorkbenchScheduleSchema } from '../contracts/workbench-links.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from '../rooms/room-ax-surfaces.js'
 import {
   advertiseWorkbenchTool, assertWorkbenchCapability, requestWorkbenchLink, workbenchFail, workbenchToolMeta, workbenchToolScope,
@@ -30,7 +30,7 @@ const EditInput = z.object({ workspaceRoot: Root, relativePath: z.string().min(1
 const WorkTaskInput = z.object({ title: z.string().trim().min(1).max(160), goal: z.string().trim().min(1).max(8000),
   acceptance: z.string().trim().max(2000).optional(), workspaceRoot: Root.optional(),
   relativePath: z.string().min(1).max(4096).optional(), report: z.enum(['final', 'silent', 'failure']).default('final'),
-  schedule: WorkbenchScheduleSchema.optional() }).strict()
+  schedule: WorkbenchScheduleSchema.optional(), dailyNote: WorkbenchDailyNoteRefSchema.optional() }).strict()
 
 /** Work-mode tools of a private Agent: read the user's documents and hand writing work to Work. */
 export function workbenchWorkTools(threads: ThreadStore): LocalTool[] {
@@ -117,7 +117,8 @@ export function workbenchWorkTools(threads: ThreadStore): LocalTool[] {
       return requestWorkbenchLink(scope, { kind: 'work_task', surface: 'work', mode: input.schedule ? 'confirm' : mode, request: {
         title: input.title, goal: input.goal, ...(input.acceptance ? { acceptance: input.acceptance } : {}), workspaceRoot: root,
         ...(input.relativePath ? { relativePath: input.relativePath } : {}), mode: 'agent', isolation: 'inherit', report: input.report,
-        ...(input.schedule ? { schedule: input.schedule } : {}) } })
+        ...(input.schedule ? { schedule: input.schedule } : {}),
+        ...(input.dailyNote ? { dailyNote: input.dailyNote } : {}) } })
     }, { needsToolCall: true })
   ]
 }

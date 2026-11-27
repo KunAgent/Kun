@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   COLAB_ACCELERATOR_SPECS,
+  isColabAcceleratorEligible,
   type ColabAccelerator,
   type ColabConnectionView,
   type ColabSessionView,
@@ -10,11 +11,15 @@ import {
 } from '@shared/colab/colab-types'
 import { useColabStore } from './colab-store'
 
-const ALTERNATIVE_ACCELERATOR: Record<ColabAccelerator, ColabAccelerator> = {
-  T4: 'L4',
-  L4: 'T4',
-  A100: 'L4',
-  CPU: 'T4'
+const ALTERNATIVE_PREFERENCE: Record<ColabAccelerator, readonly ColabAccelerator[]> = {
+  H100: ['G4', 'A100', 'L4', 'T4'],
+  A100: ['G4', 'L4', 'T4'],
+  G4: ['A100', 'L4', 'T4'],
+  L4: ['T4', 'G4', 'A100'],
+  T4: ['L4', 'G4', 'A100', 'V5E1'],
+  V6E1: ['V5E1', 'L4', 'T4'],
+  V5E1: ['T4', 'V6E1'],
+  CPU: ['T4', 'V5E1']
 }
 
 const primaryBtn = 'rounded-lg bg-accent px-2.5 py-1 text-[11px] font-medium text-white'
@@ -41,7 +46,7 @@ export function ColabUntrackedCallout({
           <p className="mt-0.5 leading-relaxed opacity-90">
             {t('colab.untrackedDesc', {
               name: untracked.connectionName,
-              accelerator: untracked.accelerator,
+              accelerator: COLAB_ACCELERATOR_SPECS[untracked.accelerator].fullLabel,
               endpoint: untracked.remoteLabel
             })}
           </p>
@@ -98,25 +103,51 @@ export function ColabSessionCallouts({
       ? { id: activeConnection.id, name: activeConnection.name }
       : null
 
-  const alternative = session ? ALTERNATIVE_ACCELERATOR[session.accelerator] : null
+  const eligibilityTarget = owningConnection ?? activeConnection
+  const alternative = session
+    ? (ALTERNATIVE_PREFERENCE[session.accelerator].find((cand) =>
+        isColabAcceleratorEligible(eligibilityTarget, cand)
+      ) ?? 'CPU')
+    : null
 
   return (
     <>
       {session?.errorKind === 'gpu_unavailable' && alternative ? (
         <div className={warnCard}>
           <div className="font-semibold">
-            {t('colab.errGpuUnavailableTitle', { accelerator: session.accelerator })}
+            {t('colab.errGpuUnavailableTitle', {
+              accelerator: COLAB_ACCELERATOR_SPECS[session.accelerator].fullLabel
+            })}
           </div>
           <p className="mt-0.5 opacity-90">{t('colab.errGpuUnavailableDesc')}</p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <button type="button" onClick={() => openRunDialog(alternative)} className={primaryBtn}>
               {t('colab.switchToAccelerator', {
-                accelerator: alternative,
+                accelerator: COLAB_ACCELERATOR_SPECS[alternative].label,
                 rate: COLAB_ACCELERATOR_SPECS[alternative].estimatedCuPerHour
               })}
             </button>
             <button type="button" onClick={() => openRunDialog(session.accelerator)} className={quietBtn}>
               {t('colab.retryLater')}
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {session?.errorKind === 'not_entitled' && alternative ? (
+        <div className={warnCard}>
+          <div className="font-semibold">
+            {t('colab.errNotEntitledTitle', {
+              accelerator: COLAB_ACCELERATOR_SPECS[session.accelerator].fullLabel
+            })}
+          </div>
+          <p className="mt-0.5 opacity-90">{t('colab.errNotEntitledDesc')}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => openRunDialog(alternative)} className={primaryBtn}>
+              {t('colab.switchToAccelerator', {
+                accelerator: COLAB_ACCELERATOR_SPECS[alternative].label,
+                rate: COLAB_ACCELERATOR_SPECS[alternative].estimatedCuPerHour
+              })}
             </button>
           </div>
         </div>

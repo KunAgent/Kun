@@ -186,6 +186,41 @@ describe('responseFromResolution / responseFromAskManager', () => {
   })
 })
 
+describe('Antigravity write-in alternatives', () => {
+  const title = 'Which scope?'
+  const q1 = { type: 'string', title, oneOf: [{ const: '1', title: 'Desktop' }] }
+  const other = { type: 'string', title: 'Other', description: `Optional free-form answer to: ${title}` }
+  const properties = { q1, q1_other: other }
+
+  test('offers one question and returns the original property for each answer type', () => {
+    const fields = fieldsFromSchema({ properties }, 'antigravity')
+    expect(questionsFromFields(fields).map((q) => q.id)).toEqual(['q1'])
+    expect(contentFromAnswers([{ id: 'q1', label: 'Desktop', value: 'Desktop' }], fields))
+      .toEqual({ q1: '1' })
+    expect(contentFromAnswers([{ id: 'q1', label: 'Other', value: 'Mobile first' }], fields))
+      .toEqual({ q1_other: 'Mobile first' })
+  })
+
+  test('preserves both checked options and custom text for a multi-select', () => {
+    const fields = fieldsFromSchema({ properties: {
+      q1_other: other, q1: { type: 'array', title, items: { oneOf: q1.oneOf } }
+    } }, 'antigravity')
+    expect(contentFromAnswers([{
+      id: 'q1', label: 'Other', value: 'Desktop, Mobile', labels: ['Desktop'], values: ['Desktop', 'Mobile']
+    }], fields)).toEqual({ q1: ['1'], q1_other: 'Mobile' })
+  })
+
+  test('does not fold independent, required or non-Antigravity fields', () => {
+    for (const fields of [
+      fieldsFromSchema({ properties }, 'devin'),
+      fieldsFromSchema({ properties, required: ['q1_other'] }, 'antigravity'),
+      fieldsFromSchema({ properties: { q1, q1_other: { ...other, description: 'Any other context?' } } }, 'antigravity')
+    ]) {
+      expect(questionsFromFields(fields).map((q) => q.id)).toEqual(['q1', 'q1_other'])
+    }
+  })
+})
+
 describe('acpElicitForTurn', () => {
   const baseDeps = (over: Partial<AcpElicitationDeps> = {}): AcpElicitationDeps => ({
     turns: {

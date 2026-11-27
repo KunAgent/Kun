@@ -3,9 +3,12 @@ import { homedir } from 'node:os'
 import path from 'node:path'
 import { isBuiltinPetId } from '../../shared/pets-builtin'
 import type { PetImportReport, PetSource, PetSourceState } from '../../shared/pets'
+import { detectKurocatDataDir, importKurocatDirectory, importLocalKurocatPlugins } from './pet-kurocat-importer'
 import { directoryStateFromError } from './pet-paths'
 import { PetStore, pathExists } from './pet-store'
 import { validatePetPackage } from './pet-validator'
+
+export { detectKurocatDataDir }
 
 export function detectCodexHome(env: NodeJS.ProcessEnv = process.env, home = homedir()): string {
   const override = env.CODEX_HOME?.trim()
@@ -28,15 +31,23 @@ export async function refreshPetLibraries(input: {
   localRoot: string
   codexHome: string
   importCodexPets: boolean
+  kurocatHome?: string
+  importKurocatPets?: boolean
 }): Promise<PetImportReport> {
   await mkdir(input.localRoot, { recursive: true })
   const report = emptyReport(input.store.getSettings().selectedPetId)
   report.sourceStates.builtin = await importTree(input.store, input.builtinRoot, 'kun-builtin', report)
   await input.store.retireBuiltinPets()
   report.sourceStates.local = await importTree(input.store, input.localRoot, 'kun-local', report)
+  await importLocalKurocatPlugins(input.store, input.localRoot, report)
+  await markMissingSources(input.store, 'kun-local', report)
   if (input.importCodexPets) {
     report.sourceStates.codex = await importTree(input.store, path.join(input.codexHome, 'pets'), 'codex-custom', report)
     await markMissingSources(input.store, 'codex-custom', report)
+  }
+  if (input.importKurocatPets && input.kurocatHome) {
+    report.sourceStates.kurocat = await importKurocatDirectory(input.store, input.kurocatHome, report)
+    await markMissingSources(input.store, 'kurocat-custom', report)
   }
   report.sourceMissing = input.store.manifests().filter((manifest) => manifest.sourceMissing)
   report.selectedPetIdUnchanged = input.store.getSettings().selectedPetId
@@ -101,7 +112,8 @@ async function importTree(
         spriteVersionNumber: validated.spriteVersionNumber,
         spritesheetSourcePath: validated.spritesheetPath,
         sourcePath: candidate.petDir,
-        interactions: validated.interactions
+        interactions: validated.interactions,
+        kurocatSkin: validated.kurocatSkin
       })
       report[result.status].push(result.manifest)
     } catch (error) {
@@ -132,7 +144,7 @@ function emptyReport(selectedPetId: string | null): PetImportReport {
     sourceMissing: [],
     failed: [],
     conflicts: [],
-    sourceStates: { builtin: 'missing', local: 'missing', codex: 'missing' },
+    sourceStates: { builtin: 'missing', local: 'missing', codex: 'missing', kurocat: 'missing' },
     selectedPetIdUnchanged: selectedPetId
   }
 }

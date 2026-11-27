@@ -34,7 +34,7 @@ describe('built-in pet collection upgrades', () => {
       codexHome: path.join(root, 'no-codex'), importCodexPets: false })
     await refresh(store)
     expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:whale-girl', overlayOpen: open })
-    expect(store.listPets().filter((pet) => pet.source === 'kun-builtin').map((pet) => pet.sourceId).sort()).toEqual(['ikun', 'whale-girl', 'xiao-kun'])
+    expect(store.listPets().filter((pet) => pet.source === 'kun-builtin').map((pet) => pet.sourceId).sort()).toEqual(['ikun', 'kurocat', 'whale-girl', 'xiao-kun'])
     expect(store.getManifest('kun:gpt-girl')).toBeNull()
     expect(store.getManifest('kun-local:gpt-girl')).not.toBeNull()
     const restarted = new PetStore(root); await restarted.initialize(); await refresh(restarted)
@@ -55,7 +55,7 @@ describe('built-in pet collection upgrades', () => {
       builtinRoot: path.resolve('resources/pets'), localRoot: path.join(root, 'local'),
       codexHome: path.join(root, 'no-codex'), importCodexPets: false })
     await refresh(store)
-    expect(store.listPets().filter((pet) => pet.source === 'kun-builtin')).toHaveLength(3)
+    expect(store.listPets().filter((pet) => pet.source === 'kun-builtin')).toHaveLength(4)
     expect(store.getSettings()).toMatchObject({ selectedPetId: 'kun:xiao-kun', overlayOpen: open })
     expect(store.getManifest('kun:anya')).toBeNull()
     expect(store.getManifest('kun:unknown-old-builtin')).toBeNull()

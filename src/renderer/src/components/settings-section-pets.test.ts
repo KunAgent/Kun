@@ -39,7 +39,7 @@ function report(failed = 0): PetImportReport {
 
 function install(pets: PetSummary[], settings: PetSettings, fail = false,
   activity: PetGlobalActivityStatus = { keyboard: 'active', microphone: 'active', recording: false }
-): { refresh: ReturnType<typeof vi.fn>; catalog: () => void; requestAccess: ReturnType<typeof vi.fn>; setGlobalActivity: ReturnType<typeof vi.fn> } {
+): { refresh: ReturnType<typeof vi.fn>; catalog: () => void; requestAccess: ReturnType<typeof vi.fn>; setGlobalActivity: ReturnType<typeof vi.fn>; setSoundEnabled: ReturnType<typeof vi.fn> } {
   let catalog = (): void => undefined
   const refresh = vi.fn(async () => report(1))
   const requestAccess = vi.fn(async () => { activity = { ...activity, keyboard: 'active' } })
@@ -47,6 +47,11 @@ function install(pets: PetSummary[], settings: PetSettings, fail = false,
     settings = { ...settings, globalActivity: preferences }
     activity = { ...activity, microphone: preferences.microphone ? 'active' : 'off',
       recording: preferences.microphone && activity.recording }
+    catalog()
+    return settings
+  })
+  const setSoundEnabled = vi.fn(async (enabled: boolean) => {
+    settings = { ...settings, soundEnabled: enabled }
     catalog()
     return settings
   })
@@ -59,6 +64,7 @@ function install(pets: PetSummary[], settings: PetSettings, fail = false,
     requestPetKeyboardAccess: requestAccess,
     getPetSettings: vi.fn(async () => settings),
     setPetGlobalActivity: setGlobalActivity,
+    setPetSoundEnabled: setSoundEnabled,
     getPetInteraction: vi.fn(async () => ({ mode: 'passthrough' as const, note: null })),
     selectPet: vi.fn(async (id: string | null) => ({ ...settings, selectedPetId: id })),
     setOverlayOpen: vi.fn(async (open: boolean) => ({ ...settings, overlayOpen: open })),
@@ -66,6 +72,7 @@ function install(pets: PetSummary[], settings: PetSettings, fail = false,
     refreshPets: refresh,
     openKunPetsDirectory: vi.fn(async () => undefined),
     openCodexPetsDirectory: vi.fn(async () => undefined),
+    openKurocatPetsDirectory: vi.fn(async () => undefined),
     updatePetActivity: vi.fn(),
     onPetCatalogChanged: vi.fn((handler: () => void) => {
       catalog = handler
@@ -76,7 +83,7 @@ function install(pets: PetSummary[], settings: PetSettings, fail = false,
   }
   vi.stubGlobal('window', { kunGui: { pets: api }, dispatchEvent: () => true,
     setInterval: vi.fn(() => 0), clearInterval: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() })
-  return { refresh, catalog: () => catalog(), requestAccess, setGlobalActivity }
+  return { refresh, catalog: () => catalog(), requestAccess, setGlobalActivity, setSoundEnabled }
 }
 
 function collectText(node: ReactTestInstance): string {
@@ -148,10 +155,14 @@ describe('pets settings section', () => {
     const renderer = await renderSection()
     const checkboxes = renderer.root.findAllByType('input').filter((node) => node.props.type === 'checkbox')
     expect(checkboxes.map((node) => collectText(node.parent!))).toEqual([
-      'Follow recording in other apps', 'petsImportCodex'
+      'Typing and interaction sound effects', 'Follow recording in other apps', 'petsImportCodex', 'petsImportKurocat'
     ])
     expect(checkboxes[0].props.checked).toBe(true)
+    expect(checkboxes[1].props.checked).toBe(true)
     expect(installed.setGlobalActivity).not.toHaveBeenCalled()
+    expect(installed.setSoundEnabled).not.toHaveBeenCalled()
+    await act(async () => checkboxes[0].props.onChange({ target: { checked: false } }))
+    expect(installed.setSoundEnabled).toHaveBeenCalledExactlyOnceWith(false)
     expect(renderer.root.findAllByProps({ role: 'status' }).map(collectText)).toEqual([
       'Typing across appsReady', 'Recording stateRecording detected; your pet is listening'
     ])

@@ -18,6 +18,7 @@ export class PetPresence {
   update(senderId: number, signal: PetPresenceSignal): void {
     const now = this.now()
     if (senderId >= 0 && this.globalKeyboardActive && (signal.type === 'keyboard' || (signal.type === 'input' && signal.kind === 'typing'))) return
+    if (signal.type === 'mouse') return
     if (signal.type === 'model') {
       if (this.value.model?.model === signal.model && this.value.model.provider === signal.provider) return
       this.value.modelChangedAt = signal.announce ? now : 0
@@ -30,7 +31,7 @@ export class PetPresence {
         if (!this.inputs.has(key) && this.inputs.size >= 32) this.inputs.delete(this.inputs.keys().next().value!)
         const previous = this.inputs.get(key)
         const typing = signal.type === 'keyboard'
-          ? updatePetTyping(previous?.typing, signal.held, signal.tap, now)
+          ? updatePetTyping(previous?.typing, signal.held, signal.tap, now, signal.zone)
           : signal.kind === 'typing' ? updatePetTyping(previous?.typing, 0,
             (previous?.typing?.left.sequence ?? 0) > (previous?.typing?.right.sequence ?? 0) ? 2 : 1, now) : undefined
         this.inputs.set(key, { kind,

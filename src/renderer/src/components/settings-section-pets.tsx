@@ -79,7 +79,11 @@ export function PetsSettingsSection(): ReactElement {
           <span>{selectedPet?.description ?? t('petsSelectFirst')}</span>
         </div>
       </div>
-      <SettingsPetGlobalActivity api={petsApi} settings={view.settings} language={i18n?.language ?? 'en'} />
+      <SettingsPetGlobalActivity api={petsApi} settings={view.settings} language={i18n?.language ?? 'en'}
+        onSettings={(settings) => {
+          setView((current) => ({ ...current, settings }))
+          window.dispatchEvent(new Event('kun-pet-settings-changed'))
+        }} />
       <SettingsPetVisits pets={view.pets} settings={view.settings} api={petsApi}
         language={i18n?.language ?? 'en'} onSettings={(settings) => {
           setView((current) => ({ ...current, settings }))
@@ -98,6 +102,11 @@ export function PetsSettingsSection(): ReactElement {
             <button type="button" className={settingsButtonClass({ variant: 'ghost', size: 'compact' })} onClick={() => void petsApi.openCodexPetsDirectory()}>
               <FolderOpen className="h-4 w-4" /> {t('petsOpenCodexDir')}
             </button>
+            {petsApi.openKurocatPetsDirectory ? (
+              <button type="button" className={settingsButtonClass({ variant: 'ghost', size: 'compact' })} onClick={() => void petsApi.openKurocatPetsDirectory?.()}>
+                <FolderOpen className="h-4 w-4" /> {t('petsOpenKurocatDir')}
+              </button>
+            ) : null}
           </div>
         </div>
         <label className="pets-settings-toggle">
@@ -107,6 +116,14 @@ export function PetsSettingsSection(): ReactElement {
             onChange={(event) => void update(petsApi.setImportPreferences({ importCodexPets: event.target.checked }))}
           />
           {t('petsImportCodex')}
+        </label>
+        <label className="pets-settings-toggle">
+          <input
+            type="checkbox"
+            checked={view.settings?.importKurocatPets !== false}
+            onChange={(event) => void update(petsApi.setImportPreferences({ importKurocatPets: event.target.checked }))}
+          />
+          {t('petsImportKurocat')}
         </label>
         <div className="pets-settings-list" role="radiogroup" aria-label={t('petsImported')}>
           {view.status === 'ready' && view.pets.length === 0 ? <div className="pets-settings-empty">{t('petsEmpty')}</div> : null}

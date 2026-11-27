@@ -45,6 +45,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
   const [draft, setDraft] = useState<WorkbenchTaskDraft | null>(null)
   const [expanded, setExpanded] = useState(false)
   const [resultExpanded, setResultExpanded] = useState(false)
+  const [noteDone, setNoteDone] = useState(false)
   const [now, setNow] = useState(Date.now)
   const busyRef = useRef(false)
 
@@ -75,6 +76,14 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
     const timer = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(timer)
   }, [link?.activity?.startedAt, link?.status])
+
+  useEffect(() => {
+    const dailyNote = link?.request.dailyNote
+    const bridge = typeof window !== 'undefined' ? window.kunGui?.dailyNotes : undefined
+    if (!dailyNote || !bridge || link?.status !== 'completed') return
+    void bridge.getTaskStatus({ day: dailyNote.day, taskText: dailyNote.taskText, linkId: link.id })
+      .then(res => setNoteDone(res.done)).catch(() => undefined)
+  }, [link?.id, link?.request.dailyNote, link?.status])
 
   const act = useCallback(async (task: () => Promise<WorkbenchLinkEntry | void>) => {
     if (busyRef.current) return
@@ -181,6 +190,7 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       </div> : null}
       <div className="rooms-workbench-meta">
         {project && kind !== 'watch' && !showsOptions ? <span title={request.workspaceRoot}>{t(kind === 'code_task' || kind === 'board_card' ? 'roomsWorkbenchProject' : 'roomsWorkbenchWorkspace')}: {project}</span> : null}
+        {request.dailyNote ? <span>{t('dailyNotes.title')}: {request.dailyNote.day}</span> : null}
         {request.relativePath ? <span title={request.relativePath}>{request.relativePath}</span> : null}
         {request.isolation === 'worktree' && !showsOptions ? <span>{t('roomsWorkbenchIsolated')}</span> : null}
         {request.mode === 'plan' && longRunning && !showsOptions ? <span>{t('roomsWorkbenchPlanMode')}</span> : null}
@@ -254,6 +264,14 @@ export function RoomWorkbenchTaskCard({ room, message }: { room: Room; message: 
       {status === 'plan_ready' ? <button type="button" className="is-primary" disabled={busy} onClick={() => void act(() => workbenchClient.build(link))}>{t('roomsWorkbenchBuildPlan')}</button> : null}
       {(status === 'queued' || status === 'running' || status === 'needs_attention') && kind !== 'watch' && longRunning && !link.dispatchIntentId ? <button type="button" disabled={busy}
         onClick={() => void act(() => workbenchClient.cancel(link))}><CircleStop size={14} />{t('roomsWorkbenchStop')}</button> : null}
+      {status === 'completed' && request.dailyNote && typeof window !== 'undefined' && window.kunGui?.dailyNotes ? (
+        <button type="button" disabled={busy || noteDone} onClick={() => void act(async () => {
+          const updated = await window.kunGui?.dailyNotes?.setTaskDone({
+            day: request.dailyNote!.day, taskText: request.dailyNote!.taskText, linkId: link.id, done: true
+          })
+          if (updated) setNoteDone(true)
+        })}><Check size={14} />{t(noteDone ? 'dailyNotes.todoCompleted' : 'dailyNotes.completeTodo')}</button>
+      ) : null}
       {opens && status !== 'awaiting_confirmation' && status !== 'dismissed' ? <button type="button" className={status === 'needs_attention' ? 'is-primary' : ''}
         onClick={() => void openWorkbenchLinkTarget(link).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)))}>
         <ExternalLink size={14} />{t(opens === 'code' ? 'roomsWorkbenchOpenCode' : opens === 'board' ? 'roomsWorkbenchOpenBoard' : 'roomsWorkbenchOpenWork')}</button> : null}

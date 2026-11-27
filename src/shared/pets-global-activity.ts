@@ -1,4 +1,4 @@
-import { isPetKeyMask, type PetKeyMask } from './pets-typing'
+import { isPetKeyMask, isPetKeyZone, isPetMouseButtons, type PetKeyMask, type PetKeyZone, type PetMouseButtons } from './pets-typing'
 export type PetGlobalActivityPreferences = { keyboard: boolean; microphone: boolean }
 export type PetGlobalActivityState = 'off' | 'starting' | 'active' | 'paused' | 'permission-required' | 'unsupported' | 'unavailable'
 export type PetGlobalActivityStatus = {
@@ -22,7 +22,8 @@ export function parsePetGlobalActivityPreferences(value: unknown): PetGlobalActi
 }
 
 export type PetNativeActivityEvent =
-  | { type: 'keys'; sequence: number; held: PetKeyMask; tap: PetKeyMask }
+  | { type: 'keys'; sequence: number; held: PetKeyMask; tap: PetKeyMask; zone?: PetKeyZone }
+  | { type: 'mouse'; sequence: number; buttons: PetMouseButtons; wheel: -1 | 0 | 1 }
   | { type: 'typing' }
   | { type: 'recording'; active: boolean }
   | { type: 'status'; keyboard: PetGlobalActivityState; microphone: PetGlobalActivityState }
@@ -34,7 +35,12 @@ export function parsePetNativeActivity(line: string): PetNativeActivityEvent | n
     const value = JSON.parse(line)
     if (!value || typeof value !== 'object') return null
     if (value.type === 'keys' && Number.isSafeInteger(value.sequence) && value.sequence > 0 && isPetKeyMask(value.held) && isPetKeyMask(value.tap)) {
-      return { type: 'keys', sequence: value.sequence, held: value.held, tap: value.tap }
+      const zone = isPetKeyZone(value.zone) ? { col: value.zone.col, row: value.zone.row } : undefined
+      return { type: 'keys', sequence: value.sequence, held: value.held, tap: value.tap, ...(zone ? { zone } : {}) }
+    }
+    if (value.type === 'mouse' && Number.isSafeInteger(value.sequence) && value.sequence > 0 &&
+      isPetMouseButtons(value.buttons) && (value.wheel === -1 || value.wheel === 0 || value.wheel === 1)) {
+      return { type: 'mouse', sequence: value.sequence, buttons: value.buttons, wheel: value.wheel }
     }
     if (value.type === 'typing') return { type: 'typing' }
     if (value.type === 'recording' && typeof value.active === 'boolean') return { type: 'recording', active: value.active }

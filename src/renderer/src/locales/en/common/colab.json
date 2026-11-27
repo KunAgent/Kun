@@ -1,6 +1,12 @@
 {
   "rightPanelColab": "Colab",
   "colab": {
+    "gpuLoad": "GPU utilization",
+    "staleSample": "Sample delayed",
+    "lastSample": "Last sample",
+    "awaitSample": "Waiting for sample",
+    "resourceTrends": "View resource trends",
+    "adoptForResources": "Take over this instance to view resource usage.",
     "panelTitle": "Colab",
     "emptyTitle": "No Google account connected yet",
     "emptyDesc": "Sign in to launch Colab GPU training sessions directly from this workspace.",
@@ -136,6 +142,10 @@
     "locateBtn": "Locate",
     "billedToHint": "Billed to \"{{name}}\"",
     "sessionsLabel": "Sessions",
-    "backToOverview": "Back to overview"
+    "backToOverview": "Back to overview",
+    "tpuHbmLabel": "{{gb}} GB HBM · TPU",
+    "highMemCheckbox": "Use High-RAM VM shape (--high-mem)",
+    "errNotEntitledTitle": "Account not entitled to {{accelerator}}",
+    "errNotEntitledDesc": "This accelerator requires a higher subscription tier (e.g. Colab Pro+ or Google AI Ultra) or positive CU balance."
   }
 }

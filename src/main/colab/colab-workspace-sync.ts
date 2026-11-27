@@ -1,10 +1,11 @@
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, posix, resolve, sep } from 'node:path'
-import type {
-  ColabMetricPoint,
-  ColabSyncCandidate,
-  ColabWorkspaceRunConfig
+import {
+  normalizeColabAccelerator,
+  type ColabMetricPoint,
+  type ColabSyncCandidate,
+  type ColabWorkspaceRunConfig
 } from '../../shared/colab/colab-types'
 
 const ALWAYS_IGNORED = new Set([
@@ -224,13 +225,8 @@ export async function readWorkspaceColabConfig(
     if (typeof raw.entryCommand !== 'string') return null
     return {
       entryCommand: raw.entryCommand,
-      accelerator:
-        raw.accelerator === 'T4' ||
-        raw.accelerator === 'L4' ||
-        raw.accelerator === 'A100' ||
-        raw.accelerator === 'CPU'
-          ? raw.accelerator
-          : 'T4',
+      accelerator: normalizeColabAccelerator(raw.accelerator, 'T4'),
+      ...(typeof raw.highMem === 'boolean' ? { highMem: raw.highMem } : {}),
       syncPaths: Array.isArray(raw.syncPaths)
         ? raw.syncPaths.filter((p): p is string => typeof p === 'string')
         : [],

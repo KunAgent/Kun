@@ -10,6 +10,7 @@ import {
   harnessSlashCommandText,
   harnessSwitchNeedsConfirmation
 } from './ade-composer-harness'
+import { resolveComposerReasoningSelection } from '../components/chat/floating-composer-model-picker-logic'
 
 const labels = {
   nativeLogin: 'Native sign-in',
@@ -230,5 +231,29 @@ describe('harnessSlashCommandText', () => {
     expect(harnessSlashCommandText({ name: 'review' })).toBe('/review')
     expect(harnessSlashCommandText({ name: '/compact' })).toBe('/compact')
     expect(harnessSlashCommandText({ name: '  login  ' })).toBe('/login')
+  })
+})
+
+describe('Antigravity composer reasoning selection', () => {
+  it('resolves reported levels for explicit and default Antigravity models while hiding all orchestrator variants', () => {
+    const row = harnessRow({ id: 'antigravity', credentialModes: ['native-login'] })
+    row.definition.displayName = 'Antigravity'
+    row.definition.transport = 'acp'
+    const groups = adeHarnessModelGroups({
+      row,
+      models: ['gemini-4-carbon', 'gemini-pro-orchestrator-neon'],
+      modelInfo: [
+        { id: 'gemini-4-carbon', isDefault: true, reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'high' },
+        { id: 'gemini-pro-orchestrator-neon', reasoningEfforts: [] }
+      ],
+      labels,
+      hasConfiguredProvider: false
+    })
+    expect(resolveComposerReasoningSelection({ groups, model: 'gemini-4-carbon', providerId: groups[0]!.providerId }).options.map((o) => o.id))
+      .toEqual(['auto', 'low', 'medium', 'high'])
+    expect(resolveComposerReasoningSelection({ groups, model: 'default', providerId: null }).options.map((o) => o.id))
+      .toEqual(['auto', 'low', 'medium', 'high'])
+    expect(resolveComposerReasoningSelection({ groups, model: 'gemini-pro-orchestrator-neon', providerId: groups[0]!.providerId }))
+      .toEqual({ options: [], current: 'auto', availability: 'unsupported' })
   })
 })

@@ -33,6 +33,8 @@ import { gitCommitApi } from './git-commit-api'
 import { terminalDockApi } from './terminal-dock-api'
 import { kunAccountApi } from './kun-account'
 import { appSandboxPreloadApi } from './app-sandbox-api'
+import { browserUsePreloadApi } from './browser-use-api'
+import { dailyNotesWorkbenchApi } from './daily-notes-workbench-api'
 registerExtensionContentScriptPreload({ contextBridge, ipcRenderer, webFrame })
 // The preload runs sandboxed (webPreferences.sandbox = true), so it cannot
 // require node built-ins like node:os. The home dir is passed in from the main
@@ -446,6 +448,7 @@ const api = {
   runDesktopCommand: (command) =>
     ipcRenderer.invoke('desktop:command', command),
   openDailyNotes: () => ipcRenderer.invoke('daily-notes:open'),
+  dailyNotes: dailyNotesWorkbenchApi,
   getWindowMiniMode: () => ipcRenderer.invoke('window:mini-mode:get'),
   onWindowMiniMode: (handler) => {
     const wrapped = (
@@ -460,32 +463,7 @@ const api = {
   getComputerUsePermissions: () => ipcRenderer.invoke('computer-use:permissions'),
   requestComputerUsePermission: (kind) =>
     ipcRenderer.invoke('computer-use:request-permission', kind),
-  getBrowserUseState: (threadId, expectedTurnId) =>
-    ipcRenderer.invoke('browser-use:state:get', { threadId, expectedTurnId }),
-  mountBrowserUse: (input) =>
-    ipcRenderer.invoke('browser-use:mount', input),
-  decideBrowserUseOrigin: (input) =>
-    ipcRenderer.invoke('browser-use:origin:decide', input),
-  decideBrowserUseAction: (input) =>
-    ipcRenderer.invoke('browser-use:action:decide', input),
-  setBrowserUseControl: (input) =>
-    ipcRenderer.invoke('browser-use:control', input),
-  navigateBrowserUse: (input) =>
-    ipcRenderer.invoke('browser-use:navigate', input),
-  setBrowserUseZoom: (input) =>
-    ipcRenderer.invoke('browser-use:zoom', input),
-  stopBrowserUse: (threadId, expectedTurnId) =>
-    ipcRenderer.invoke('browser-use:stop', { threadId, expectedTurnId }),
-  clearBrowserUse: (threadId, expectedTurnId) =>
-    ipcRenderer.invoke('browser-use:clear', { threadId, expectedTurnId }),
-  onBrowserUseState: (handler) => {
-    const wrapped = (
-      _: Electron.IpcRendererEvent,
-      payload: Parameters<typeof handler>[0]
-    ) => handler(payload)
-    ipcRenderer.on('browser-use:state', wrapped)
-    return () => ipcRenderer.removeListener('browser-use:state', wrapped)
-  },
+  ...browserUsePreloadApi,
   showTurnCompleteNotification: (payload) => ipcRenderer.invoke('notification:turn-complete', payload),
   setAppBadgeCount: (count) => ipcRenderer.invoke('app:badge-count', count),
   syncWorkboardCompletionAttention: (attention) =>

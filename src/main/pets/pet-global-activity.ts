@@ -23,6 +23,7 @@ export class PetGlobalActivity {
   private permission: Promise<void> | null = null
   private permissionChild: ChildProcessWithoutNullStreams | null = null
   private disposed = false
+  private mouseButtons = 0
 
   constructor(private readonly options: Options) {}
 
@@ -77,6 +78,7 @@ export class PetGlobalActivity {
     this.child = child
     let buffer = ''
     let lastKeySequence = 0
+    let lastMouseSequence = 0
     const failure = (): void => {
       if (this.child !== child) return
       this.stop()
@@ -100,7 +102,18 @@ export class PetGlobalActivity {
         } else if (event.type === 'keys' && keyboard) {
           if (event.sequence <= lastKeySequence) continue
           lastKeySequence = event.sequence
-          this.options.signal({ type: 'keyboard', source: 'global-keyboard', held: event.held, tap: event.tap })
+          this.options.signal({
+            type: 'keyboard',
+            source: 'global-keyboard',
+            held: event.held,
+            tap: event.tap,
+            ...(event.zone ? { zone: event.zone } : {})
+          })
+        } else if (event.type === 'mouse' && keyboard) {
+          if (event.sequence <= lastMouseSequence) continue
+          lastMouseSequence = event.sequence
+          this.mouseButtons = event.buttons
+          this.options.signal({ type: 'mouse', source: 'global-mouse', buttons: event.buttons, wheel: event.wheel })
         } else if (event.type === 'typing' && keyboard) {
           this.options.signal({ type: 'input', source: 'global-keyboard', kind: 'typing', level: .5 })
         } else if (event.type === 'recording' && microphone) {
@@ -124,6 +137,10 @@ export class PetGlobalActivity {
     this.child = null
     child?.stdin.end()
     child?.kill()
+    if (this.mouseButtons !== 0) {
+      this.mouseButtons = 0
+      this.options.signal({ type: 'mouse', source: 'global-mouse', buttons: 0, wheel: 0 })
+    }
     for (const source of ['global-keyboard', 'global-microphone']) {
       this.options.signal({ type: 'input', source, kind: 'idle', level: 0 })
     }

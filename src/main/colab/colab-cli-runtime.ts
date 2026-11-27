@@ -3,10 +3,12 @@ import { existsSync } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import type {
-  ColabAccelerator,
-  ColabCliRuntimeStatus,
-  ColabSessionErrorKind
+import {
+  normalizeColabAccelerator,
+  parseKnownColabAccelerator,
+  type ColabAccelerator,
+  type ColabCliRuntimeStatus,
+  type ColabSessionErrorKind
 } from '../../shared/colab/colab-types'
 
 const execFileAsync = promisify(execFile)
@@ -15,14 +17,105 @@ export type ParsedColabUsage = {
   balanceCu: number
   burnRateCuPerHour: number
   activeAssignments: number
+  eligibleAccelerators?: ColabAccelerator[]
+  ineligibleAccelerators?: ColabAccelerator[]
+  subscriptionTier?: string
 }
 
 export type ParsedColabServerSession = {
   name: string
   endpoint: string
   accelerator: ColabAccelerator
+  highMem?: boolean
   variant: string
   untracked: boolean
+}
+
+export function buildColabCcuInfoPython(sessionsJsonPath: string): string {
+  return [
+    'import json, sys',
+    'from colab_cli.common import state',
+    `state.config_path = ${JSON.stringify(sessionsJsonPath)}`,
+    'url = f"{state.client.colab_domain}/tun/m/ccu-info"',
+    'resp = state.client.session.request(',
+    '    "GET",',
+    '    url,',
+    '    params={"authuser": "0", "get_ccu_consumption_info": "1"},',
+    '    headers={"Accept": "application/json", "X-Colab-Client-Agent": "colab-cli"},',
+    '    timeout=15,',
+    ')',
+    'if not resp.ok:',
+    '    sys.stderr.write(f"HTTP {resp.status_code} {resp.reason}: {resp.text[:300]}\\n")',
+    '    raise SystemExit(1)',
+    'body = resp.text',
+    'if body.startswith(")]}\'\\n"):',
+    '    body = body[5:]',
+    'elif body.lstrip().startswith(")]}\'"):',
+    '    body = body.split("\\n", 1)[-1]',
+    'parsed = json.loads(body) if body.strip() else {}',
+    'print("KUN_CCU_INFO:" + json.dumps(parsed if isinstance(parsed, dict) else {}), flush=True)'
+  ].join('\n')
+}
+
+export function parseColabCcuInfoOutput(stdout: string): ParsedColabUsage | null {
+  const line = stdout.split(/\r?\n/).find((item) => item.startsWith('KUN_CCU_INFO:'))
+  if (!line) return null
+  try {
+    const raw = JSON.parse(line.slice('KUN_CCU_INFO:'.length)) as Record<string, unknown>
+    const rawBalance = raw.currentBalance ?? raw.paidComputeUnitsBalance
+    if (typeof rawBalance !== 'number' || !Number.isFinite(rawBalance)) return null
+    const burnRateCuPerHour =
+      typeof raw.consumptionRateHourly === 'number' && Number.isFinite(raw.consumptionRateHourly)
+        ? raw.consumptionRateHourly
+        : 0
+    const activeAssignments =
+      typeof raw.assignmentsCount === 'number' && Number.isFinite(raw.assignmentsCount)
+        ? raw.assignmentsCount
+        : 0
+    const hasEligibility =
+      Array.isArray(raw.eligibleGpus) ||
+      Array.isArray(raw.ineligibleGpus) ||
+      Array.isArray(raw.eligibleTpus) ||
+      Array.isArray(raw.ineligibleTpus)
+    let eligibleAccelerators: ColabAccelerator[] | undefined
+    let ineligibleAccelerators: ColabAccelerator[] | undefined
+    if (hasEligibility) {
+      const eligibleSet = new Set<ColabAccelerator>(['CPU'])
+      for (const item of [
+        ...(Array.isArray(raw.eligibleGpus) ? raw.eligibleGpus : []),
+        ...(Array.isArray(raw.eligibleTpus) ? raw.eligibleTpus : [])
+      ]) {
+        const parsedAcc = parseKnownColabAccelerator(item)
+        if (parsedAcc) eligibleSet.add(parsedAcc)
+      }
+      const ineligibleSet = new Set<ColabAccelerator>()
+      for (const item of [
+        ...(Array.isArray(raw.ineligibleGpus) ? raw.ineligibleGpus : []),
+        ...(Array.isArray(raw.ineligibleTpus) ? raw.ineligibleTpus : [])
+      ]) {
+        const parsedAcc = parseKnownColabAccelerator(item)
+        if (parsedAcc && parsedAcc !== 'CPU' && !eligibleSet.has(parsedAcc)) {
+          ineligibleSet.add(parsedAcc)
+        }
+      }
+      eligibleAccelerators = [...eligibleSet]
+      ineligibleAccelerators = [...ineligibleSet]
+    }
+    const subscriptionTier =
+      typeof raw.subscriptionTier === 'string' && raw.subscriptionTier.trim()
+        ? raw.subscriptionTier.trim()
+        : undefined
+    return {
+      balanceCu: rawBalance,
+      burnRateCuPerHour,
+      activeAssignments,
+      ...(eligibleAccelerators ? { eligibleAccelerators } : {}),
+      ...(ineligibleAccelerators ? { ineligibleAccelerators } : {}),
+      ...(subscriptionTier ? { subscriptionTier } : {})
+    }
+  } catch {
+    return null
+  }
 }
 
 export function parseColabUsageOutput(stdout: string): ParsedColabUsage | null {
@@ -37,12 +130,6 @@ export function parseColabUsageOutput(stdout: string): ParsedColabUsage | null {
   }
 }
 
-function normalizeAccelerator(raw: string): ColabAccelerator {
-  const upper = raw.trim().toUpperCase()
-  if (upper === 'T4' || upper === 'L4' || upper === 'A100') return upper
-  return 'CPU'
-}
-
 export function parseColabSessionsOutput(stdout: string): ParsedColabServerSession[] {
   const results: ParsedColabServerSession[] = []
   for (const rawLine of stdout.split(/\r?\n/)) {
@@ -52,10 +139,12 @@ export function parseColabSessionsOutput(stdout: string): ParsedColabServerSessi
     )
     if (!match) continue
     const name = match[1].trim()
+    const highMem = /high/i.test(match[4])
     results.push({
       name,
       endpoint: match[2].trim(),
-      accelerator: normalizeAccelerator(match[3]),
+      accelerator: normalizeColabAccelerator(match[3], 'CPU'),
+      ...(highMem ? { highMem: true } : {}),
       variant: match[5].trim(),
       untracked: name === '?'
     })
@@ -360,5 +449,60 @@ export class ColabCliRuntime {
     }
     child.stdin?.end()
     return child
+  }
+
+  async runPythonScript(params: {
+    script: string
+    env: Record<string, string>
+    timeoutMs?: number
+    maxOutputChars?: number
+    signal?: AbortSignal
+  }): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+    const status = await this.ensureInstalled()
+    if (status.state !== 'ready') {
+      return {
+        exitCode: 127,
+        stdout: '',
+        stderr: status.message || 'Colab CLI 运行环境尚未就绪。'
+      }
+    }
+    if (params.signal?.aborted) {
+      return { exitCode: 1, stdout: '', stderr: 'Colab command canceled.' }
+    }
+    return new Promise((resolve) => {
+      const child = spawn(this.venvPythonPath, ['-c', params.script], {
+        env: params.env,
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      let stdout = ''
+      let stderr = ''
+      const timer = params.timeoutMs
+        ? setTimeout(() => {
+            child.kill('SIGTERM')
+          }, params.timeoutMs)
+        : undefined
+      const onAbort = (): void => {
+        child.kill('SIGTERM')
+      }
+      params.signal?.addEventListener('abort', onAbort, { once: true })
+
+      child.stdout.on('data', (chunk: Buffer) => {
+        const remaining = (params.maxOutputChars ?? 256_000) - stdout.length
+        if (remaining > 0) stdout += chunk.toString('utf8').slice(0, remaining)
+      })
+      child.stderr.on('data', (chunk: Buffer) => {
+        if (stderr.length < 256_000) stderr += chunk.toString('utf8')
+      })
+      child.once('error', (err) => {
+        if (timer) clearTimeout(timer)
+        params.signal?.removeEventListener('abort', onAbort)
+        resolve({ exitCode: 1, stdout, stderr: `${stderr}\n${err.message}`.trim() })
+      })
+      child.once('close', (code) => {
+        if (timer) clearTimeout(timer)
+        params.signal?.removeEventListener('abort', onAbort)
+        resolve({ exitCode: code ?? 1, stdout, stderr })
+      })
+    })
   }
 }

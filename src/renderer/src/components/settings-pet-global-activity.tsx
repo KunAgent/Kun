@@ -3,8 +3,8 @@ import type { PetDesktopBridge, PetSettings } from '@shared/pets'
 import { defaultPetGlobalActivity, type PetGlobalActivityState, type PetGlobalActivityStatus } from '@shared/pets-global-activity'
 import { settingsButtonClass } from './settings-button'
 
-export function SettingsPetGlobalActivity({ api, settings, language }: {
-  api: PetDesktopBridge; settings: PetSettings | null; language: string
+export function SettingsPetGlobalActivity({ api, settings, language, onSettings }: {
+  api: PetDesktopBridge; settings: PetSettings | null; language: string; onSettings?: (settings: PetSettings) => void
 }): ReactElement {
   const zh = language.startsWith('zh')
   const text = (cn: string, en: string): string => zh ? cn : en
@@ -12,6 +12,7 @@ export function SettingsPetGlobalActivity({ api, settings, language }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [pendingMicrophone, setPendingMicrophone] = useState<boolean | null>(null)
+  const [pendingSound, setPendingSound] = useState<boolean | null>(null)
   useEffect(() => {
     let cancelled = false
     const refresh = (): void => {
@@ -40,11 +41,21 @@ export function SettingsPetGlobalActivity({ api, settings, language }: {
   // until the settings round-trip lands.
   const microphoneEnabled = pendingMicrophone ??
     settings?.globalActivity?.microphone ?? defaultPetGlobalActivity().microphone
+  const soundEnabled = pendingSound ?? (settings?.soundEnabled !== false)
   const setMicrophone = (enabled: boolean): void => {
     setPendingMicrophone(enabled)
     void run(async () => {
-      await api.setPetGlobalActivity({ ...(settings?.globalActivity ?? defaultPetGlobalActivity()), microphone: enabled })
+      const next = await api.setPetGlobalActivity({ ...(settings?.globalActivity ?? defaultPetGlobalActivity()), microphone: enabled })
+      onSettings?.(next)
     }).finally(() => { setPendingMicrophone(null) })
+  }
+  const setSound = (enabled: boolean): void => {
+    if (!api.setPetSoundEnabled) return
+    setPendingSound(enabled)
+    void run(async () => {
+      const next = await api.setPetSoundEnabled!(enabled)
+      onSettings?.(next)
+    }).finally(() => { setPendingSound(null) })
   }
   return <div className="pets-settings-section">
     <h3>{text('自动陪伴', 'Automatic companionship')}</h3>
@@ -59,6 +70,11 @@ export function SettingsPetGlobalActivity({ api, settings, language }: {
         onClick={() => void run(() => api.requestPetKeyboardAccess())}>
         {text('授权系统输入监控', 'Allow Input Monitoring')}
       </button> : null}
+    <label className="pets-settings-toggle">
+      <input type="checkbox" checked={soundEnabled} disabled={busy || !api.setPetSoundEnabled}
+        onChange={(event) => setSound(event.target.checked)} />
+      {text('打字与互动音效', 'Typing and interaction sound effects')}
+    </label>
     <label className="pets-settings-toggle">
       <input type="checkbox" checked={microphoneEnabled} disabled={busy}
         onChange={(event) => setMicrophone(event.target.checked)} />

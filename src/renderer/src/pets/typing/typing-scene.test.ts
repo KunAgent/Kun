@@ -4,9 +4,11 @@ import type { PetSummary } from '@shared/pets'
 import { bodyPoint } from '../joint/geometry'
 import { armLayerContact, armLayerMatrix, armLayerPoint } from '../joint/arm-layer'
 import { createRigMesh, paintRigVertices } from '../joint/mesh'
+import { jointHitPath } from '../joint/timeline'
+import { drawPetKeyboard, drawPetKeyboardPops } from './keyboard-surface'
 import { typingScene } from './typing-scene'
 
-const pets = ['xiao-kun', 'ikun', 'whale-girl'].map((id): PetSummary => ({
+const pets = ['xiao-kun', 'ikun', 'whale-girl', 'kurocat'].map((id): PetSummary => ({
   ...JSON.parse(readFileSync(`resources/pets/${id}/pet.json`, 'utf8')),
   id: `kun:${id}`, sourceId: id, source: 'kun-builtin', available: true, sourceMissing: false
 }))
@@ -104,6 +106,61 @@ describe('keyboard and paw contact', () => {
     for (const [down, glow] of [[1, .2], [0, .8], [0, 0]]) {
       const frame = typingScene({ ...input, motion: { ...input.motion, left: { down, glow } } })
       expect(frame.keyboard!.left.impact).toBe(0)
+    }
+  })
+
+  it.each(pets)('places $sourceId beside a left-side mousepad and moves paws across 2D zones without stretching limbs', (pet) => {
+    const baseFrame = typingScene({
+      pet, width: 240, height: 185, mascotWidth: 112, origin: { x: 120, y: 84 },
+      motion: {
+        left: { down: 1, glow: 0.8, onMouse: true },
+        right: { down: 1, glow: 1, col: 4, row: 0 },
+        moving: true,
+        desk: 1,
+        lean: -0.03,
+        headTilt: -0.04,
+        gaze: { x: -0.5, y: 0.2 },
+        mouse: {
+          active: 1, nx: 0.8, ny: 0.4, leftButton: true, rightButton: false, middleButton: false,
+          leftPress: 0.9, rightPress: 0, middlePress: 0, wheelGlow: 0.5, wheelDir: -1
+        },
+        pops: [
+          { id: 1, kind: 'key', col: 4, pawSide: 1, progress: 0.25 },
+          { id: 2, kind: 'space', col: 2.5, progress: 0.4 },
+          { id: 3, kind: 'mouse-left', col: -0.35, progress: 0.2 },
+          { id: 4, kind: 'mouse-right', col: -0.85, progress: 0.5 }
+        ]
+      },
+      now: 1200, enteredAt: 1000, expiresAt: 3000, paused: false
+    })
+    const actor = baseFrame.actors[0], kb = baseFrame.keyboard!, pad = kb.mousePad!
+    expect(pad).toBeDefined()
+    expect(pad.x).toBeGreaterThanOrEqual(0)
+    expect(pad.x + pad.width).toBeLessThan(kb.x)
+    expect(kb.x + kb.width).toBeLessThanOrEqual(240)
+    expect(kb.left.onMouse).toBe(true)
+    const hitPath = jointHitPath(baseFrame)
+    const deskMatch = hitPath.match(/M([-\d.]+),([-\d.]+)h([-\d.]+)v/)
+    expect(deskMatch).not.toBeNull()
+    expect(Number(deskMatch![1])).toBeCloseTo(pad.x - 8)
+    expect(Number(deskMatch![3])).toBeCloseTo((kb.x + kb.width) - pad.x + 16)
+
+    const noop = () => undefined
+    const mockCtx = {
+      save: noop, restore: noop, translate: noop, rotate: noop, scale: noop,
+      beginPath: noop, closePath: noop, moveTo: noop, lineTo: noop, quadraticCurveTo: noop,
+      arc: noop, ellipse: noop, roundRect: noop, fillRect: noop, fill: noop, stroke: noop, clip: noop,
+      fillText: noop, drawImage: noop,
+      createLinearGradient: () => ({ addColorStop: noop }),
+      globalAlpha: 1, fillStyle: '', strokeStyle: '', lineWidth: 1, lineCap: 'round', lineJoin: 'round',
+      font: '', textAlign: 'center', textBaseline: 'middle', shadowColor: '', shadowBlur: 0, shadowOffsetY: 0
+    } as unknown as CanvasRenderingContext2D
+    expect(() => drawPetKeyboard(mockCtx, kb)).not.toThrow()
+    expect(() => drawPetKeyboardPops(mockCtx, kb)).not.toThrow()
+    for (const side of [0, 1] as const) {
+      const m = armLayerMatrix(actor, side)
+      expect(m.a * m.c + m.b * m.d).toBeCloseTo(0)
+      expect(Math.hypot(m.a, m.b)).toBeCloseTo(Math.hypot(m.c, m.d))
     }
   })
 })

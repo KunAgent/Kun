@@ -29,7 +29,7 @@ import { withdrawRunProposals } from '../rooms/room-proposals.js'
 import { roomContinuationIsCurrent } from '../rooms/room-continuation-service.js'
 import { ROOM_REMINDER_TOOL_NAMES } from '../rooms/room-reminder-tools.js'
 import { ROOM_APP_TOOL_NAMES } from '../rooms/room-app-connection-tools.js'
-import { WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
+import { DAILY_NOTES_TOOL_NAMES, WORKBENCH_TOOL_NAMES, resolveWorkbenchPolicy, workbenchToolNamesForPolicy } from '../contracts/workbench-policy.js'
 import { agentPrivateSystemPrompt, agentPrivateTurnInput, agentReminderWakeInput } from '../rooms/room-ax-surfaces.js'
 import { agentExecutorRouteKey } from '../contracts/agent-executor.js'
 import { EXTERNAL_AGENT_PRIVATE_BLOCKED_TOOLS, externalAgentBinding, externalAgentSystemPrompt, externalAgentThreadRoute } from './agent-external.js'
@@ -139,7 +139,7 @@ export class AgentDirectRunner {
           ...(workbench ? { workbench: { code: workbench.code !== 'off', work: workbench.work !== 'off' } } : {}) })
       }, { id: request.threadId, relation: 'side', roomContext: { roomId: request.roomId, memberId: member.id,
         participantAgentId: member.participantAgentId, agentRevision: member.agentRevision, kind: 'conversation',
-        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...AGENT_HISTORY_TOOLS, ...workbenchNames])] : undefined,
+        allowedToolNames: policy.allowed ? [...policy.allowed, ...(agentSetupPending(agent) ? [] : ['read_room_playbook', 'propose_room_action', ...ROOM_REMINDER_TOOL_NAMES, ...ROOM_APP_TOOL_NAMES, ...AGENT_COLLABORATION_TOOLS, ...AGENT_COMMITMENT_TOOLS, ...AGENT_ARTIFACT_TOOLS, ...AGENT_HISTORY_TOOLS, ...DAILY_NOTES_TOOL_NAMES, ...workbenchNames])] : undefined,
         // Tools outside the Agent's workbench policy are hidden, not merely refused.
         blockedToolNames: [...new Set([...(policy.blocked ?? []), ...WORKBENCH_TOOL_NAMES.filter((name) => !workbenchNames.includes(name))])],
         blockedProviderIds: limits?.blockedMcpServers ?? [], blockedSkillIds: limits?.blockedSkills ?? [], skillsEnabled: policy.skillsEnabled } })

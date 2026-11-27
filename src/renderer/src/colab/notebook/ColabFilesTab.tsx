@@ -23,12 +23,12 @@ import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { formatColabBytes, useColabStore } from '../colab-store'
 import { RuntimeUploadStatus } from '../RuntimeUploadStatus'
 import { useRuntimeUploads } from '../runtime-upload-store'
-import { ColabDriveAuthCard } from './ColabDriveAuthCard'
+import { ColabDriveAuthCard, formatDriveMountErrorMessage } from './ColabDriveAuthCard'
 import { useColabDriveStore } from './colab-drive-store'
 import { useColabNotebookStore } from './colab-notebook-store'
 import type { ColabNotebookRuntime } from './use-colab-notebook-runtime'
 
-export { ColabDriveAuthCard } from './ColabDriveAuthCard'
+export { ColabDriveAuthCard, formatDriveMountErrorMessage } from './ColabDriveAuthCard'
 
 const iconButton =
   'flex h-6 w-6 items-center justify-center rounded-md text-ds-faint hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40'
@@ -419,6 +419,7 @@ export function ColabFilesTab({
           sessionId={sessionId}
           accountLabel={accountLabel}
           authUrl={driveState.authUrl}
+          reason={driveState.reason}
         />
       ) : null}
 
@@ -430,7 +431,9 @@ export function ColabFilesTab({
         >
           <span className="flex min-w-0 items-start gap-1.5">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-            <span className="min-w-0 break-words">{driveState.message}</span>
+            <span className="min-w-0 break-words">
+              {formatDriveMountErrorMessage(t, driveState, accountLabel)}
+            </span>
           </span>
           <span className="flex shrink-0 items-center gap-1">
             <button

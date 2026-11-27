@@ -1,6 +1,12 @@
 {
   "rightPanelColab": "Colab",
   "colab": {
+    "gpuLoad": "GPU उपयोग",
+    "staleSample": "पुराना नमूना",
+    "lastSample": "अंतिम नमूना",
+    "awaitSample": "नमूने की प्रतीक्षा",
+    "resourceTrends": "संसाधन रुझान देखें",
+    "adoptForResources": "संसाधनों का उपयोग देखने के लिए इंस्टेंस का प्रबंधन अपने हाथ में लें।",
     "panelTitle": "Colab",
     "emptyTitle": "अभी कोई Google खाता जुड़ा नहीं है",
     "emptyDesc": "इस वर्कस्पेस से सीधे Colab GPU प्रशिक्षण सत्र शुरू करने के लिए साइन इन करें।",
@@ -136,6 +142,10 @@
     "locateBtn": "दिखाएँ",
     "billedToHint": "\"{{name}}\" से शुल्क",
     "sessionsLabel": "सत्र",
-    "backToOverview": "अवलोकन पर लौटें"
+    "backToOverview": "अवलोकन पर लौटें",
+    "tpuHbmLabel": "{{gb}} GB HBM · TPU",
+    "highMemCheckbox": "High-RAM VM (--high-mem) का उपयोग करें",
+    "errNotEntitledTitle": "इस खाते को {{accelerator}} की अनुमति नहीं है",
+    "errNotEntitledDesc": "इस एक्सेलेरेटर के लिए उच्च सदस्यता स्तर (जैसे Colab Pro+ या Google AI Ultra) या पर्याप्त CU शेष आवश्यक है।"
   }
 }

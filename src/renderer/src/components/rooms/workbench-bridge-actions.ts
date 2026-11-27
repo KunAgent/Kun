@@ -138,12 +138,17 @@ export function useWorkbenchDirectorySync(enabled = true): void {
     let last: WorkbenchDirectory | null = null
     let attempts = 0
     let stopped = false
+    let dailyNotesRootCache: string | undefined
     const push = async () => {
+      if (!dailyNotesRootCache && window.kunGui?.dailyNotes) {
+        dailyNotesRootCache = await window.kunGui.dailyNotes.getDirectory().catch(() => undefined)
+      }
       const work = useWriteWorkspaceStore.getState()
       const directory: WorkbenchDirectory = {
         workRoots: [...new Set(work.workspaceRoots.filter(Boolean))].slice(0, 50),
         ...(work.defaultWorkspaceRoot ? { defaultWorkRoot: work.defaultWorkspaceRoot } : {}),
-        codeProjects: [...new Set(useChatStore.getState().codeWorkspaceRoots.filter(Boolean))].slice(0, 200)
+        codeProjects: [...new Set(useChatStore.getState().codeWorkspaceRoots.filter(Boolean))].slice(0, 200),
+        ...(dailyNotesRootCache ? { dailyNotesRoot: dailyNotesRootCache } : {})
       }
       if (sameDirectory(last, directory)) return
       try {

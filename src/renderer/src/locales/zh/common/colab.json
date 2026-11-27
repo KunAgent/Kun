@@ -1,6 +1,12 @@
 {
   "rightPanelColab": "Colab",
   "colab": {
+    "gpuLoad": "GPU 利用率",
+    "staleSample": "采样已延迟",
+    "lastSample": "上次采样",
+    "awaitSample": "等待采样",
+    "resourceTrends": "查看资源趋势",
+    "adoptForResources": "接管后可查看此实例的资源用量。",
     "panelTitle": "Colab",
     "emptyTitle": "还没有连接 Google 账号",
     "emptyDesc": "登录后可在当前工作区启动 Colab GPU 训练会话，自动同步代码与回传产物。",
@@ -136,6 +142,10 @@
     "locateBtn": "定位",
     "billedToHint": "扣「{{name}}」的额度",
     "sessionsLabel": "会话",
-    "backToOverview": "返回概览"
+    "backToOverview": "返回概览",
+    "tpuHbmLabel": "{{gb}} GB HBM · TPU",
+    "highMemCheckbox": "启用高内存机型 (--high-mem)",
+    "errNotEntitledTitle": "当前账号无权使用 {{accelerator}}",
+    "errNotEntitledDesc": "该加速器需要更高订阅等级（如 Colab Pro+ 或 Google AI Ultra）或充足的 CU 余额。"
   }
 }

@@ -1,20 +1,42 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { Copy, ExternalLink, HardDrive, Loader2, X } from 'lucide-react'
+import type {
+  ColabDriveAuthHint,
+  ColabDriveErrorCode
+} from '@shared/colab/colab-notebook-types'
 import { useColabDriveStore } from './colab-drive-store'
 
 const iconButton =
   'flex h-6 w-6 items-center justify-center rounded-md text-ds-faint hover:bg-ds-hover hover:text-ds-ink disabled:opacity-40'
 
+export function formatDriveMountErrorMessage(
+  t: TFunction<'common'>,
+  error: { message: string; code?: ColabDriveErrorCode },
+  accountLabel?: string
+): string {
+  const account = accountLabel || 'Google'
+  if (error.code === 'account_mismatch') {
+    return t('colabNb.driveMountAccountMismatch', { account })
+  }
+  if (error.code === 'auth_incomplete') {
+    return t('colabNb.driveMountAuthIncomplete', { account })
+  }
+  return error.message
+}
+
 export function ColabDriveAuthCard({
   sessionId,
   accountLabel,
   authUrl,
+  reason,
   compact = false
 }: {
   sessionId: string
   accountLabel?: string
   authUrl: string
+  reason?: ColabDriveAuthHint
   compact?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
@@ -23,6 +45,7 @@ export function ColabDriveAuthCard({
   const cancelMount = useColabDriveStore((s) => s.cancelMount)
   const [submitting, setSubmitting] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
+  const account = accountLabel || 'Google'
 
   const handleConfirm = async (): Promise<void> => {
     setSubmitting(true)
@@ -30,9 +53,7 @@ export function ColabDriveAuthCard({
     try {
       const res = await completeAuth(sessionId)
       if (!res.ok) {
-        setFeedback(
-          res.code === 'auth_incomplete' ? t('colabNb.driveMountAuthIncomplete') : res.message
-        )
+        setFeedback(formatDriveMountErrorMessage(t, res, accountLabel))
       }
     } finally {
       setSubmitting(false)
@@ -47,6 +68,14 @@ export function ColabDriveAuthCard({
       setFeedback(t('colabNb.pullAuthNotice.copyError'))
     }
   }
+
+  const stateHint =
+    reason === 'account_mismatch'
+      ? t('colabNb.driveMountAccountMismatch', { account })
+      : reason === 'incomplete'
+        ? t('colabNb.driveMountAuthIncomplete', { account })
+        : null
+  const displayFeedback = feedback ?? stateHint
 
   return (
     <div
@@ -73,7 +102,7 @@ export function ColabDriveAuthCard({
         </button>
       </div>
       <p className="text-[11.5px] leading-relaxed text-ds-muted">
-        {t('colabNb.driveMountAuthDesc', { account: accountLabel || 'Google' })}
+        {t('colabNb.driveMountAuthDesc', { account })}
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         <button
@@ -106,7 +135,11 @@ export function ColabDriveAuthCard({
           <span>{t('colabNb.driveAuthCopyLink')}</span>
         </button>
       </div>
-      {feedback ? <p className="text-[11px] text-amber-700 dark:text-amber-300">{feedback}</p> : null}
+      {displayFeedback ? (
+        <p className="text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+          {displayFeedback}
+        </p>
+      ) : null}
     </div>
   )
 }

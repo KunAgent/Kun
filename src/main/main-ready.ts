@@ -22,14 +22,16 @@ import {
 import {
   assertCanonicalRuntimeMigrationReady,
   createStartupKunHandoffRecovery,
-  shutdownActiveServiceManagerForUpdate
+  shutdownActiveServiceManagerForUpdate,
+  startPreservedHistoryAudit
 } from './main-migrations'
 import {
   applyManagedRuntimeSettingsHot,
   publishRuntimeSettingsSyncStatus
 } from './main-runtime-settings'
 import {
-  runtimeSupervisor
+  runtimeSupervisor,
+  scheduleRuntimeMigrationHistoryVerification
 } from './main-runtime-health'
 import {
   recoverDesktopManagerAfterExit,
@@ -302,7 +304,12 @@ export function startMainApp(): Promise<void> {
 
     await runPostWindowRuntimeStartup(initial, {
       startupState: mainState.startupState,
-      onReady: () => { desktopProcessStack.finishStartup(); widgetAppRuntimeReady() },
+      finishStartup: () => desktopProcessStack.finishStartup(),
+      onReady: (runtimeConnected) => {
+        widgetAppRuntimeReady()
+        startPreservedHistoryAudit()
+        if (runtimeConnected) scheduleRuntimeMigrationHistoryVerification()
+      },
       reconcileBundledRuntimeAfterInstall,
       resolveManagedRuntimeStartupTarget,
       managedKunHostCanAutoStart,

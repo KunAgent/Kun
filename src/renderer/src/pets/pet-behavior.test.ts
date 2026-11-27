@@ -38,7 +38,13 @@ describe('pet animation and interaction', () => {
     expect(nextMascotWidth(224, 1)).toBe(224)
     expect(overlayKeyAction('Enter')).toBe('reply')
     expect(overlayKeyAction('Escape')).toBe('close')
-    expect(petContextMenuLabels('zh-CN')).toEqual({ settings: '设置', hide: '隐藏', ensemble: '叫朋友来玩' })
+    expect(petContextMenuLabels('zh-CN')).toEqual({
+      settings: '设置',
+      hide: '隐藏',
+      ensemble: '叫朋友来玩',
+      muteSound: '关闭音效',
+      unmuteSound: '开启音效'
+    })
     expect(petContextMenuLabels('en-US').settings).toBe('Settings')
     expect(petContextMenuLabels('fr').hide).toBe('Hide')
   })

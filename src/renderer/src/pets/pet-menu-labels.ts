@@ -10,8 +10,21 @@ const PACKS: Record<string, { petsContextSettings: string; petsContextHide: stri
   en, zh, ru, hi, th, ja, ko
 }
 
-export function petContextMenuLabels(language: string): { settings: string; hide: string; ensemble: string } {
+export function petContextMenuLabels(language: string): {
+  settings: string
+  hide: string
+  ensemble: string
+  muteSound: string
+  unmuteSound: string
+} {
   const code = language.toLowerCase().split('-')[0] ?? ''
   const pack = PACKS[code] ?? en
-  return { settings: pack.petsContextSettings, hide: pack.petsContextHide, ensemble: code === 'zh' ? '叫朋友来玩' : 'Invite friends' }
+  const isZh = code === 'zh'
+  return {
+    settings: pack.petsContextSettings,
+    hide: pack.petsContextHide,
+    ensemble: isZh ? '叫朋友来玩' : 'Invite friends',
+    muteSound: isZh ? '关闭音效' : 'Mute sound',
+    unmuteSound: isZh ? '开启音效' : 'Enable sound'
+  }
 }

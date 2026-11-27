@@ -228,7 +228,11 @@ async function handleRequest(id, method, params) {
     case 'session/prompt':
       await runPrompt(id, params)
       return
-    case 'session/set_config_option':
+    case 'session/set_config_option': {
+      journal('event', { kind: 'configSet', method, params })
+      respond(id, scenario.onSetConfigOption?.[params.value] ?? {})
+      return
+    }
     case 'session/set_model':
     case 'session/set_mode':
       journal('event', { kind: 'configSet', method, params })

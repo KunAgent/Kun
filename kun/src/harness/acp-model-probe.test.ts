@@ -11,6 +11,7 @@ import { AcpError } from '../runtime/acp/acp-schema.js'
 
 const devin = BUILTIN_HARNESSES.find((entry) => entry.id === 'devin')!
 const opencode = BUILTIN_HARNESSES.find((entry) => entry.id === 'opencode')!
+const antigravity = BUILTIN_HARNESSES.find((entry) => entry.id === 'antigravity')!
 const fixture = fileURLToPath(new URL('../runtime/acp/__fixtures__/fake-acp-agent.mjs', import.meta.url))
 const scenarioPath = fileURLToPath(new URL('../runtime/acp/__fixtures__/scenarios/auth-advertised.json', import.meta.url))
 const dirs: string[] = []
@@ -173,6 +174,68 @@ describe('AcpModelProbe', () => {
       await new Promise((resolve) => setTimeout(resolve, 50))
       await probe.probeCatalog(devin)
       expect(f.spawned()).toBe(2)
+    } finally { probe.dispose() }
+  })
+
+  it('probes every Antigravity model effort up front, restores the initial model, and preserves learned efforts across seed', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-acp-agy-probe-')); dirs.push(dir)
+    const journalPath = join(dir, 'journal.jsonl')
+    const modelOptions = [
+      { value: 'gemini-pro-orchestrator-neon', name: 'Orchestrator (Neon)' },
+      { value: 'gemini-4-carbon', name: 'Gemini 4 Carbon' },
+      { value: 'gemini-4-hydrogen', name: 'Gemini 4 Hydrogen' },
+      { value: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' }
+    ]
+    const selector = (currentValue: string) => ({
+      id: 'model', name: 'Model', category: 'model', type: 'select', currentValue, options: modelOptions
+    })
+    const thought = (currentValue: string, values: string[]) => ({
+      id: 'effort', name: 'Thinking', category: 'thought_level', type: 'select', currentValue,
+      options: values.map((value) => ({ value, name: value }))
+    })
+    const f = await sequence({
+      newSession: { configOptions: [selector('gemini-pro-orchestrator-neon')] },
+      onSetConfigOption: {
+        'gemini-4-carbon': { configOptions: [selector('gemini-4-carbon'), thought('high', ['low', 'medium', 'high'])] },
+        'gemini-4-hydrogen': { configOptions: [selector('gemini-4-hydrogen'), thought('xhigh', ['xhigh'])] },
+        'claude-sonnet-4-6': { configOptions: [selector('claude-sonnet-4-6')] },
+        'gemini-pro-orchestrator-neon': { configOptions: [selector('gemini-pro-orchestrator-neon')] }
+      }
+    })
+    const probe = new AcpModelProbe({
+      spawn: async (cmd, args, opts) => f.spawnFixture(cmd, args, { ...opts, env: { ...opts.env, FAKE_ACP_JOURNAL: journalPath } }),
+      retryDelayMs: 0,
+      log: () => undefined
+    })
+    try {
+      // Seed from a partial turn session first: probeCatalog must still complete the unprobed models once.
+      probe.seed(antigravity, {
+        models: modelOptions.map((item) => item.value),
+        modelInfo: [{ id: 'gemini-pro-orchestrator-neon', isDefault: true, reasoningEfforts: [] }, { id: 'gemini-4-carbon' }, { id: 'gemini-4-hydrogen' }, { id: 'claude-sonnet-4-6' }]
+      })
+      const catalog = await probe.probeCatalog(antigravity)
+      expect(catalog.modelInfo).toEqual([
+        { id: 'gemini-pro-orchestrator-neon', displayName: 'Orchestrator (Neon)', isDefault: true, reasoningEfforts: [] },
+        { id: 'gemini-4-carbon', displayName: 'Gemini 4 Carbon', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'high' },
+        { id: 'gemini-4-hydrogen', displayName: 'Gemini 4 Hydrogen', reasoningEfforts: ['xhigh'], defaultReasoningEffort: 'xhigh' },
+        { id: 'claude-sonnet-4-6', displayName: 'Claude Sonnet 4.6', reasoningEfforts: [] }
+      ])
+      // Verify the initial default model was restored so `agy` settings are not mutated.
+      const lines = (await readFile(journalPath, 'utf8')).trim().split('\n').map((line) => JSON.parse(line))
+      const setCalls = lines.filter((entry) => entry.frame?.kind === 'configSet').map((entry) => entry.frame.params.value)
+      expect(setCalls).toEqual(['gemini-4-carbon', 'gemini-4-hydrogen', 'claude-sonnet-4-6', 'gemini-pro-orchestrator-neon'])
+      // Later single-model turn seeds must not wipe out the other models' learned reasoningEfforts.
+      probe.seed(antigravity, {
+        models: modelOptions.map((item) => item.value),
+        modelInfo: [
+          { id: 'gemini-pro-orchestrator-neon', reasoningEfforts: [] },
+          { id: 'gemini-4-carbon', isDefault: true, reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'medium' },
+          { id: 'gemini-4-hydrogen' },
+          { id: 'claude-sonnet-4-6' }
+        ]
+      })
+      expect(probe.peekInfo(antigravity)?.find((entry) => entry.id === 'gemini-4-hydrogen')?.reasoningEfforts).toEqual(['xhigh'])
+      expect(probe.peekInfo(antigravity)?.find((entry) => entry.id === 'claude-sonnet-4-6')?.reasoningEfforts).toEqual([])
     } finally { probe.dispose() }
   })
 })

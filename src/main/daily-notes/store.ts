@@ -2,7 +2,8 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { Rectangle } from 'electron'
-import { isNoteDay } from '../../shared/daily-notes'
+import { rolloverIncompleteDailyNoteTasks } from '../../../kun/src/contracts/daily-notes-markdown'
+import { isNoteDay, type DailyNoteRolloverResult } from '../../shared/daily-notes'
 import { atomicWriteFile } from '../atomic-json-file'
 
 type PendingNote = { markdown: string; saved: Promise<void> }
@@ -12,6 +13,14 @@ export class DailyNotesStore {
   private readonly pending = new Map<string, PendingNote>()
 
   constructor(private readonly directory: string) {}
+
+  getDirectory(): string {
+    return this.directory
+  }
+
+  hasPending(day: string): boolean {
+    return this.pending.has(day)
+  }
 
   private notePath(day: string): string {
     if (!isNoteDay(day)) throw new Error('Invalid note date')
@@ -67,6 +76,30 @@ export class DailyNotesStore {
     } finally {
       this.pending.delete(day)
     }
+  }
+
+  async mutateDay(day: string, updater: (markdown: string) => string | null): Promise<{ changed: boolean; markdown: string }> {
+    const path = this.notePath(day)
+    await this.pending.get(day)?.saved
+    const current = await this.read(day)
+    const next = updater(current)
+    if (next === null || next === current) return { changed: false, markdown: current }
+    await atomicWriteFile(path, next)
+    return { changed: true, markdown: next }
+  }
+
+  async rollover(fromDay: string, toDay: string): Promise<DailyNoteRolloverResult> {
+    const fromPath = this.notePath(fromDay)
+    const toPath = this.notePath(toDay)
+    if (fromDay === toDay) return { movedCount: 0, fromMarkdown: await this.read(fromDay), toMarkdown: await this.read(toDay) }
+    await this.flush()
+    const [fromMarkdown, toMarkdown] = await Promise.all([this.read(fromDay), this.read(toDay)])
+    const { nextFrom, nextTo, movedCount } = rolloverIncompleteDailyNoteTasks(fromMarkdown, toMarkdown)
+    if (movedCount > 0) {
+      await atomicWriteFile(toPath, nextTo)
+      await atomicWriteFile(fromPath, nextFrom)
+    }
+    return { movedCount, fromMarkdown: nextFrom, toMarkdown: nextTo }
   }
 
   async flush(): Promise<void> {

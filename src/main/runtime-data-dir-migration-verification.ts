@@ -52,17 +52,28 @@ type JournalOperations<T extends VerificationJournal> = {
   writeReport: (journal: T) => void
 }
 
-function terminalResult(
-  journal: VerificationJournal,
-  visibleThreadCount: number
-): RuntimeMigrationRuntimeVerification | null {
-  if (!journal.runtimeVerifiedAt && !journal.runtimeVerificationStoppedAt) return null
-  return {
-    status: 'not-needed',
-    expectedThreadCount: new Set(journal.sourceThreadIds).size,
-    visibleThreadCount,
-    missingThreadIds: []
-  }
+type VerificationLocation = { homeDir?: string; platform?: NodeJS.Platform }
+
+function completedVerificationJournal(userDataPath: string, options: VerificationLocation): VerificationJournal | null {
+  if (options.homeDir && validateAcceptedRuntimeDataRecovery({
+    userDataPath, homeDir: options.homeDir, platform: options.platform
+  }).status === 'valid') return null // The recovery seal binds the exact journal bytes.
+  const preservation = readPreservationJournal(join(userDataPath, PRESERVATION_JOURNAL_FILE_NAME))
+  if (preservation?.phase === 'completed') return preservation
+  const legacy = readJournal(join(userDataPath, JOURNAL_FILE_NAME))
+  return legacy?.phase === 'completed' ? legacy : null
+}
+
+function needsThreadInventory(journal: VerificationJournal): boolean {
+  // Older clients stopped after comparing only the first page. Give that
+  // journal one complete inventory before honoring its exhausted retry budget.
+  return !journal.runtimeVerifiedAt &&
+    !(journal.runtimeVerificationStoppedAt && journal.runtimeVerificationInventory === 'paginated')
+}
+
+export function runtimeMigrationNeedsThreadInventory(userDataPath: string, options: VerificationLocation): boolean {
+  const journal = completedVerificationJournal(userDataPath, options)
+  return journal !== null && needsThreadInventory(journal)
 }
 
 function verifyCompletedJournal<T extends VerificationJournal>(
@@ -72,9 +83,6 @@ function verifyCompletedJournal<T extends VerificationJournal>(
   now: () => Date,
   operations: JournalOperations<T>
 ): RuntimeMigrationRuntimeVerification {
-  const terminal = terminalResult(journal, visibleIds.size)
-  if (terminal) return terminal
-
   const expectedThreadIds = [...new Set([...journal.sourceThreadIds, ...targetThreadIds])]
   const missingThreadIds = expectedThreadIds.filter((threadId) => !visibleIds.has(threadId))
   const counts = {
@@ -84,6 +92,7 @@ function verifyCompletedJournal<T extends VerificationJournal>(
   if (missingThreadIds.length === 0) {
     const verified = operations.update(journal, {
       runtimeVerifiedAt: now().toISOString(),
+      runtimeVerificationInventory: 'paginated',
       runtimeVerificationAttempts: undefined,
       runtimeVerificationLastAttemptAt: undefined,
       runtimeVerificationMissingThreadIds: undefined,
@@ -94,13 +103,13 @@ function verifyCompletedJournal<T extends VerificationJournal>(
     return { ...counts, status: 'verified', missingThreadIds: [] }
   }
 
-  const attempt = Math.min(
-    (journal.runtimeVerificationAttempts ?? 0) + 1,
-    RUNTIME_MIGRATION_VERIFICATION_MAX_ATTEMPTS
-  )
+  const attempt = journal.runtimeVerificationStoppedAt
+    ? RUNTIME_MIGRATION_VERIFICATION_MAX_ATTEMPTS
+    : Math.min((journal.runtimeVerificationAttempts ?? 0) + 1, RUNTIME_MIGRATION_VERIFICATION_MAX_ATTEMPTS)
   const stopped = attempt >= RUNTIME_MIGRATION_VERIFICATION_MAX_ATTEMPTS
   const updated = operations.update(journal, {
     runtimeVerificationAttempts: attempt,
+    runtimeVerificationInventory: stopped ? 'paginated' : undefined,
     runtimeVerificationLastAttemptAt: now().toISOString(),
     runtimeVerificationMissingThreadIds: missingThreadIds,
     runtimeVerificationStoppedAt: stopped ? now().toISOString() : undefined
@@ -130,37 +139,26 @@ export function markCanonicalKunRuntimeMigrationRuntimeVerified(
   const now = verificationOptions.now ?? (() => new Date())
   const visibleIds = new Set(visibleRuntimeThreadIds)
 
-  if (verificationOptions.homeDir) {
-    const acceptedRecovery = validateAcceptedRuntimeDataRecovery({
-      userDataPath,
-      homeDir: verificationOptions.homeDir,
-      platform: verificationOptions.platform
-    })
-    if (acceptedRecovery.status === 'valid') {
-      // Recovery seals bind the exact journal bytes, so verification must not
-      // mutate the preserved evidence even when the Runtime is healthy.
-      return {
-        status: 'not-needed',
-        expectedThreadCount: 0,
-        visibleThreadCount: visibleIds.size,
-        missingThreadIds: []
-      }
+  const journal = completedVerificationJournal(userDataPath, verificationOptions)
+  if (!journal || !needsThreadInventory(journal)) {
+    return {
+      status: 'not-needed',
+      expectedThreadCount: new Set(journal?.sourceThreadIds).size,
+      visibleThreadCount: visibleIds.size,
+      missingThreadIds: []
     }
   }
 
-  const preservationJournalPath = join(userDataPath, PRESERVATION_JOURNAL_FILE_NAME)
-  const preservationJournal = readPreservationJournal(preservationJournalPath)
-  if (preservationJournal?.phase === 'completed') {
+  const targetThreadIds = threadIds(journal.targetPath)
+  if (journal.schemaVersion === 3) {
     return verifyCompletedJournal(
-      preservationJournal,
+      journal,
       visibleIds,
-      preservationJournal.runtimeVerifiedAt || preservationJournal.runtimeVerificationStoppedAt
-        ? []
-        : threadIds(preservationJournal.targetPath),
+      targetThreadIds,
       now,
       {
         update: (journal, patch) => updatePreservationJournal(
-          preservationJournalPath,
+          join(userDataPath, PRESERVATION_JOURNAL_FILE_NAME),
           journal,
           patch,
           now
@@ -170,25 +168,13 @@ export function markCanonicalKunRuntimeMigrationRuntimeVerified(
     )
   }
 
-  const journalPath = join(userDataPath, JOURNAL_FILE_NAME)
-  const journal = readJournal(journalPath)
-  if (!journal || journal.phase !== 'completed') {
-    return {
-      status: 'not-needed',
-      expectedThreadCount: 0,
-      visibleThreadCount: visibleIds.size,
-      missingThreadIds: []
-    }
-  }
   return verifyCompletedJournal(
     journal,
     visibleIds,
-    journal.runtimeVerifiedAt || journal.runtimeVerificationStoppedAt
-      ? []
-      : threadIds(journal.targetPath),
+    targetThreadIds,
     now,
     {
-      update: (current, patch) => updateJournal(journalPath, current, patch, now),
+      update: (current, patch) => updateJournal(join(userDataPath, JOURNAL_FILE_NAME), current, patch, now),
       writeReport: (current) => { writeReport(userDataPath, current) }
     }
   )

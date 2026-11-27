@@ -62,10 +62,20 @@ describe('buildColabToolProviders', () => {
       {
         callId: 'call-1',
         toolName: 'colab_run',
-        arguments: { entryCommand: 'python train.py', accelerator: 'L4', maxRuntimeHours: 2 }
+        arguments: { entryCommand: 'python train.py', accelerator: 'G4', maxRuntimeHours: 2 }
       },
       guiCtx
     )
+    expect((tools[1]!.inputSchema as any).properties.accelerator.enum).toEqual([
+      'T4',
+      'L4',
+      'G4',
+      'A100',
+      'H100',
+      'V6E1',
+      'V5E1',
+      'CPU'
+    ])
     expect(approval?.toolName).toBe('colab_run')
     expect(approval?.requiresUserDecision).toBe(true)
     expect(approval?.reason).toContain('zxy@gmail.com')

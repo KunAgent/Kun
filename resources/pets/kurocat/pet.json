@@ -1,0 +1,108 @@
+{
+  "id": "kurocat",
+  "displayName": "黑猫 Kuro",
+  "description": "来自 KuroCat 的丝绒小黑猫，亮黄绿猫眼会跟随光标，敲键盘、点鼠标与摸头都会带来灵动陪伴。",
+  "spriteVersionNumber": 1,
+  "spritesheetPath": "spritesheet.webp",
+  "interactions": {
+    "version": 1,
+    "modelAliases": [],
+    "providerAliases": [],
+    "greeting": {
+      "states": [
+        "waving",
+        "jumping",
+        "waiting"
+      ],
+      "durationMs": 4600
+    },
+    "clips": {
+      "typing": {
+        "state": "running",
+        "tempo": 1.25,
+        "strength": 0.78
+      },
+      "listening": {
+        "state": "waiting",
+        "tempo": 0.9,
+        "strength": 0.55
+      },
+      "speaking": {
+        "state": "waving",
+        "tempo": 1.15,
+        "strength": 0.8
+      },
+      "transcribing": {
+        "state": "review",
+        "tempo": 0.75,
+        "strength": 0.35
+      }
+    },
+    "visits": {
+      "scenes": [
+        "dance",
+        "cheer",
+        "beatbox",
+        "bubbles"
+      ],
+      "arrival": "peek"
+    },
+    "bottle": {
+      "catchStyle": "bounce",
+      "inspectState": "waiting",
+      "celebrateState": "jumping",
+      "durationMs": 8200
+    },
+    "joint": {
+      "version": 1,
+      "row": 0,
+      "blink": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "ground": 0.92,
+      "head": [
+        0.47,
+        0.5
+      ],
+      "arms": [
+        {
+          "shoulder": [
+            0.333,
+            0.644
+          ],
+          "hand": [
+            0.281,
+            0.798
+          ],
+          "radius": 0.085
+        },
+        {
+          "shoulder": [
+            0.604,
+            0.644
+          ],
+          "hand": [
+            0.656,
+            0.798
+          ],
+          "radius": 0.085
+        }
+      ],
+      "feet": [
+        [
+          0.33,
+          0.89
+        ],
+        [
+          0.58,
+          0.89
+        ]
+      ]
+    }
+  }
+}

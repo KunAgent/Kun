@@ -15,9 +15,11 @@
   "petsImportErrors": "가져오기 오류",
   "petsShow": "데스크톱에 펫 표시",
   "petsImportCodex": "Codex 펫 자동 가져오기",
+  "petsImportKurocat": "KuroCat 펫 및 플러그인 자동 가져오기",
   "petsRefresh": "새로고침",
   "petsOpenKunDir": "Kun 펫 폴더 열기",
   "petsOpenCodexDir": "Codex 펫 폴더 열기",
+  "petsOpenKurocatDir": "KuroCat 폴더 열기",
   "petsSourceMissing": "원본 패키지 없음",
   "petsReport": "실패 {{failed}}, 누락 {{missing}}",
   "petsContextSettings": "설정",
@@ -25,6 +27,7 @@
   "petsSource": {
     "kun-builtin": "기본 제공",
     "kun-local": "로컬",
-    "codex-custom": "Codex"
+    "codex-custom": "Codex",
+    "kurocat-custom": "KuroCat"
   }
 }

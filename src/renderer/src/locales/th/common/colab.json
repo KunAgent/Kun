@@ -1,6 +1,12 @@
 {
   "rightPanelColab": "Colab",
   "colab": {
+    "gpuLoad": "การใช้งาน GPU",
+    "staleSample": "ข้อมูลล่าช้า",
+    "lastSample": "ตัวอย่างล่าสุด",
+    "awaitSample": "รอตัวอย่าง",
+    "resourceTrends": "ดูแนวโน้มทรัพยากร",
+    "adoptForResources": "รับช่วงอินสแตนซ์เพื่อดูการใช้ทรัพยากร",
     "panelTitle": "Colab",
     "emptyTitle": "ยังไม่ได้เชื่อมต่อบัญชี Google",
     "emptyDesc": "ลงชื่อเข้าใช้เพื่อเริ่มเซสชันฝึกสอนบน Colab GPU จากเวิร์กสเปซนี้ได้ทันที",
@@ -136,6 +142,10 @@
     "locateBtn": "แสดง",
     "billedToHint": "หักจาก \"{{name}}\"",
     "sessionsLabel": "เซสชัน",
-    "backToOverview": "กลับไปภาพรวม"
+    "backToOverview": "กลับไปภาพรวม",
+    "tpuHbmLabel": "{{gb}} GB HBM · TPU",
+    "highMemCheckbox": "ใช้เครื่อง High-RAM (--high-mem)",
+    "errNotEntitledTitle": "บัญชีนี้ไม่มีสิทธิ์ใช้งาน {{accelerator}}",
+    "errNotEntitledDesc": "ตัวเร่งนี้ต้องใช้แพ็กเกจที่สูงขึ้น (เช่น Colab Pro+ หรือ Google AI Ultra) หรือมียอด CU คงเหลือ"
   }
 }

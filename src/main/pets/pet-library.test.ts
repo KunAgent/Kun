@@ -157,7 +157,7 @@ describe('pet packages', () => {
     expect((await readPetAsset('file:///etc/passwd', () => '/etc/passwd', store.libraryRoot())).status).toBe(404)
   })
 
-  it('ships only the two Kun mascots and DS', async () => {
+  it('ships only the Kun mascots, DS and KuroCat', async () => {
     const root = path.resolve('resources/pets')
     const names = (await readdir(root)).sort()
     const imported: string[] = []
@@ -168,7 +168,7 @@ describe('pet packages', () => {
       expect(validated.warnings, name).toEqual([])
       imported.push(`${validated.sourceId}:v${validated.spriteVersionNumber}`)
     }
-    expect(imported).toEqual(['ikun:v1', 'whale-girl:v1', 'xiao-kun:v1'])
+    expect(imported).toEqual(['ikun:v1', 'kurocat:v1', 'whale-girl:v1', 'xiao-kun:v1'])
   })
 
   it('loads the offline built-in pet from a packaged resource root', async () => {
@@ -176,7 +176,7 @@ describe('pet packages', () => {
     const packaged = path.join(root, 'Resources', 'pets')
     await mkdir(packaged, { recursive: true })
     const { cp } = await import('node:fs/promises')
-    for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
+    for (const id of ['xiao-kun', 'ikun', 'whale-girl', 'kurocat']) {
       await cp(path.resolve('resources/pets', id), path.join(packaged, id), { recursive: true })
     }
     const validated = await validatePetPackage(path.join(packaged, 'xiao-kun'), 'xiao-kun')

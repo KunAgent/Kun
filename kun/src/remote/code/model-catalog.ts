@@ -146,7 +146,13 @@ async function externalAgents(runtime: ServerRuntime, bindings: CodeCatalog['bin
         // Native catalog facts describe only the Agent's own login.
         ...(native ? routeProfiles(models, (model) => {
           const entry = info.get(model)
-          return modelProfile(entry?.reasoningEfforts, entry?.defaultReasoningEffort)
+          const efforts = definition.transport === 'acp'
+            ? entry?.reasoningEfforts?.map((effort) => effort === 'xhigh' ? 'max' : effort)
+            : entry?.reasoningEfforts
+          const defaultEffort = definition.transport === 'acp' && entry?.defaultReasoningEffort === 'xhigh'
+            ? 'max'
+            : entry?.defaultReasoningEffort
+          return modelProfile(efforts, defaultEffort)
         }) : {}),
         // The Agent's own names and inputs for its login; a Kun connection's inputs otherwise (Fast is Kun's loop only).
         ...routeModelInfo(models, (model) => native ? nativeModelInfo(model, info.get(model))

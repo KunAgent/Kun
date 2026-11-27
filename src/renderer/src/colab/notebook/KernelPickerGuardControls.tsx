@@ -1,7 +1,11 @@
 import { useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertTriangle, ChevronDown, Shield } from 'lucide-react'
-import type { ColabAccelerator, ColabUntrackedSession } from '@shared/colab/colab-types'
+import {
+  COLAB_ACCELERATOR_SPECS,
+  type ColabAccelerator,
+  type ColabUntrackedSession
+} from '@shared/colab/colab-types'
 import { useColabNotebookStore } from './colab-notebook-store'
 
 const selectField =
@@ -23,9 +27,10 @@ export function KernelLaunchGuardControls({
   const opts = useColabNotebookStore((s) => s.launchOptions)
   const patch = useColabNotebookStore((s) => s.patchLaunchOptions)
   const [expanded, setExpanded] = useState(false)
+  const spec = COLAB_ACCELERATOR_SPECS[accelerator]
 
   const summaryParts: string[] = []
-  if (opts.highMem) summaryParts.push(t('colabNb.guardsSummaryHighMem'))
+  if (!spec.supportsHighMem || opts.highMem) summaryParts.push(t('colabNb.guardsSummaryHighMem'))
   if (accelerator === 'A100' && opts.requireA10080Gb) {
     summaryParts.push(t('colabNb.guardsSummary80Gb'))
   }
@@ -71,14 +76,25 @@ export function KernelLaunchGuardControls({
           data-colab-guards-panel
           className="space-y-2 border-t border-ds-border/70 px-2.5 py-2 text-[11.5px]"
         >
-          <label className="flex cursor-pointer items-center justify-between gap-2">
-            <span className="text-ds-ink">{t('colabNb.highMemLabel')}</span>
+          <label
+            className={`flex items-center justify-between gap-2 ${
+              spec.supportsHighMem ? 'cursor-pointer' : 'cursor-default'
+            }`}
+          >
+            <span className="flex min-w-0 items-center gap-1.5 text-ds-ink">
+              <span className="truncate">{t('colabNb.highMemLabel')}</span>
+              {!spec.supportsHighMem ? (
+                <span className="shrink-0 rounded bg-ds-hover px-1.5 py-0.5 text-[10px] text-ds-muted">
+                  {t('colabNb.highMemBuiltinHint')}
+                </span>
+              ) : null}
+            </span>
             <input
               type="checkbox"
-              disabled={disabled}
-              checked={opts.highMem}
+              disabled={disabled || !spec.supportsHighMem}
+              checked={spec.supportsHighMem ? opts.highMem : true}
               onChange={(e) => patch({ highMem: e.target.checked })}
-              className="accent-accent"
+              className="shrink-0 accent-accent"
             />
           </label>
 
@@ -201,6 +217,7 @@ export function KernelUntrackedRuntimesSection({
         <AlertTriangle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
         <span>{t('colabNb.untrackedSectionTitle')}</span>
       </div>
+      <p className="text-ds-muted">{t('colab.adoptForResources')}</p>
       {untracked.map((item) => (
         <div
           key={`${item.connectionId}:${item.endpoint}`}
@@ -208,7 +225,7 @@ export function KernelUntrackedRuntimesSection({
         >
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-ds-ink">
-              {item.connectionName} · {item.accelerator}
+              {item.connectionName} · {COLAB_ACCELERATOR_SPECS[item.accelerator].fullLabel}
             </div>
             <div className="truncate font-mono text-[10.5px] text-ds-muted">{item.remoteLabel}</div>
           </div>

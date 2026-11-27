@@ -26,10 +26,22 @@ import {
 } from './colab-watchdog-guard'
 
 describe('colab hardware provisioner', () => {
-  it('builds CLI flags with --high-mem and parses MemTotal + nvidia-smi probe output', () => {
+  it('builds CLI flags for GPU/TPU/CPU shapes and parses MemTotal + nvidia-smi probe output', () => {
     expect(
       buildColabNewArgs({ sessionName: 'kun-a100', accelerator: 'A100', highMem: true })
     ).toEqual(['new', '-s', 'kun-a100', '--gpu', 'A100', '--high-mem'])
+    expect(
+      buildColabNewArgs({ sessionName: 'kun-g4', accelerator: 'G4', highMem: true })
+    ).toEqual(['new', '-s', 'kun-g4', '--gpu', 'G4'])
+    expect(
+      buildColabNewArgs({ sessionName: 'kun-h100', accelerator: 'H100', highMem: false })
+    ).toEqual(['new', '-s', 'kun-h100', '--gpu', 'H100'])
+    expect(
+      buildColabNewArgs({ sessionName: 'kun-tpu6', accelerator: 'V6E1', highMem: true })
+    ).toEqual(['new', '-s', 'kun-tpu6', '--tpu', 'v6e1'])
+    expect(
+      buildColabNewArgs({ sessionName: 'kun-tpu5', accelerator: 'V5E1', highMem: false })
+    ).toEqual(['new', '-s', 'kun-tpu5', '--tpu', 'v5e1'])
     expect(buildColabNewArgs({ sessionName: 'kun-cpu', accelerator: 'CPU', highMem: false })).toEqual([
       'new',
       '-s',
@@ -39,6 +51,47 @@ describe('colab hardware provisioner', () => {
       ramGb: 83.5,
       vramGb: 80
     })
+  })
+
+  it('skips nvidia-smi on TPU VMs and auto-upgrades legacy colab-cli when G4/TPU flags are unsupported', async () => {
+    const cliCalls: Array<{ args: string[]; stdinText?: string }> = []
+    let upgraded = false
+    const runCli: RunColabCliFn = async ({ args, stdinText }) => {
+      cliCalls.push({ args, stdinText })
+      if (args[0] === 'new' && !upgraded) {
+        return { exitCode: 2, stdout: '', stderr: "Invalid value for '--tpu': unsupported value 'v6e1'." }
+      }
+      if (args[0] === 'new') return { exitCode: 0, stdout: 'created', stderr: '' }
+      return { exitCode: 0, stdout: 'KUN_HW:33554432,0\n', stderr: '' }
+    }
+    const upgradeCli = vi.fn(async () => {
+      upgraded = true
+      return true
+    })
+
+    const res = await provisionColabHardware({
+      baseSessionName: 'kun-tpu',
+      accelerator: 'V6E1',
+      minVramGb: 80,
+      sessionsJsonPath: '/tmp/sessions.json',
+      env: {},
+      runCli,
+      upgradeCli,
+      syncTokenBack: async () => undefined,
+      signal: new AbortController().signal,
+      retryDelayMs: 0
+    })
+
+    expect(upgradeCli).toHaveBeenCalledTimes(1)
+    expect(res).toEqual({
+      ok: true,
+      sessionName: 'kun-tpu',
+      ramGb: 32,
+      vramGb: null,
+      attemptsUsed: 1
+    })
+    const execCall = cliCalls.find((c) => c.args[0] === 'exec')
+    expect(execCall?.stdinText).not.toContain('nvidia-smi')
   })
 
   it('releases 40GB A100 VMs and retries with distinct session names until 80GB is allocated', async () => {

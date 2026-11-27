@@ -137,15 +137,27 @@ export function DriveAuthorization({ task }: { task: NotebookPullTask }): ReactE
       setNotice('copyError')
     }
   }
+  const accountLabel = account?.email ?? task.source.label
+  const authReasonNotice =
+    task.auth?.reason === 'account_mismatch'
+      ? t('colabNb.driveMountAccountMismatch', { account: accountLabel })
+      : task.auth?.reason === 'incomplete'
+        ? t('colabNb.driveMountAuthIncomplete', { account: accountLabel })
+        : null
   return (
     <div className={`${pullSurface} space-y-3`}>
       <h3 className="text-[14px] font-semibold text-ds-ink">{t('colabNb.pullAuthorizeTitle')}</h3>
       <p className={pullSupporting}>
-        {t('colabNb.pullAuthorizeHint', { account: account?.email ?? task.source.label })}
+        {t('colabNb.pullAuthorizeHint', { account: accountLabel })}
       </p>
       {task.access?.temporary ? (
         <p className="text-[12px] text-amber-700 dark:text-amber-300">
           {t('colabNb.pullTempBilling')}
+        </p>
+      ) : null}
+      {authReasonNotice ? (
+        <p role="alert" className="text-[12px] leading-relaxed text-amber-700 dark:text-amber-300">
+          {authReasonNotice}
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">

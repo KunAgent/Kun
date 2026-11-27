@@ -1,17 +1,36 @@
-import { app, BrowserWindow, ipcMain, nativeTheme, screen, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, screen, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { randomUUID } from 'node:crypto'
+import { watch, type FSWatcher } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { DAILY_NOTES_CHANNELS as channels, type DailyNotesAppearance, type DailyNotesContext } from '../../shared/daily-notes'
+import {
+  appendDailyNoteTaskChange, applyDailyNoteChange, findMatchingDailyNoteTask,
+  formatKunDispatchUrl, parseDailyNoteTasks, setDailyNoteTaskLinkChange, toggleDailyNoteTaskChange,
+  type DailyNoteQuadrant
+} from '../../../kun/src/contracts/daily-notes-markdown'
+import {
+  DAILY_NOTES_CHANNELS as channels, isNoteDay, localNoteDay,
+  type DailyNoteDockPayload, type DailyNoteLinkSummary, type DailyNoteSendRequest,
+  type DailyNoteSendResult, type DailyNoteStartThreadRequest, type DailyNoteStartThreadResult,
+  type DailyNoteTargetsSnapshot, type DailyNotesAppearance, type DailyNotesContext,
+  type DailyNotesWorkbenchCommand
+} from '../../shared/daily-notes'
 import { resolveNamedPreloadPath } from '../main-paths'
 import { isNativeWaylandSession } from '../pets/pet-platform'
 import { isTrustedRendererUrl, isTrustedRendererSurfaceUrl } from '../renderer-trust-policy'
 import { fitWindowToWorkArea } from '../window-mini-mode'
+import { setDailyNotesToggleHandler, syncDailyNotesGlobalShortcut } from './shortcut'
 import { DailyNotesStore } from './store'
 
 type Options = {
   getMainWindow: () => BrowserWindow | null
   getAppearance: () => DailyNotesAppearance
   developmentUrl?: string
+}
+
+type PendingCommand = {
+  resolve: (value: unknown) => void
+  timer: ReturnType<typeof setTimeout>
 }
 
 export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmentUrl }: Options): () => Promise<void> {
@@ -21,6 +40,10 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
   const noteUrl = new URL('daily-notes.html', workbenchUrl).href
   const store = new DailyNotesStore(join(app.getPath('userData'), 'daily-notes'))
   const canPin = !isNativeWaylandSession(process.platform, app.commandLine.getSwitchValue('ozone-platform'), process.env)
+  const lastNoteWindowText = new Map<string, string>()
+  const watchTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  const pendingCommands = new Map<string, PendingCommand>()
+  let dirWatcher: FSWatcher | null = null
   let note: BrowserWindow | null = null
   let opening: Promise<void> | null = null
   let closing: Promise<void> | null = null
@@ -37,6 +60,89 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
     return note
   }
 
+  function requireWorkbench(event: IpcMainInvokeEvent | IpcMainEvent): BrowserWindow {
+    const owner = getMainWindow()
+    if (!owner || owner.isDestroyed() || event.sender !== owner.webContents ||
+        !event.senderFrame || event.senderFrame !== owner.webContents.mainFrame ||
+        !isTrustedRendererSurfaceUrl(event.senderFrame.url, workbenchUrl, 'workbench')) {
+      throw new Error('Untrusted workbench')
+    }
+    return owner
+  }
+
+  async function pushExternalChange(day: string, markdown: string): Promise<void> {
+    const owner = getMainWindow()
+    const hasNote = Boolean(note && !note.isDestroyed() && !note.webContents.isDestroyed())
+    const hasOwner = Boolean(owner && !owner.isDestroyed() && !owner.webContents.isDestroyed())
+    if (!hasNote && !hasOwner) return
+    const days = await store.listDays().catch(() => [])
+    const payload = { day, markdown, days }
+    if (note && !note.isDestroyed() && !note.webContents.isDestroyed()) {
+      note.webContents.send(channels.externalChange, payload)
+    }
+    const latestOwner = getMainWindow()
+    if (latestOwner && !latestOwner.isDestroyed() && !latestOwner.webContents.isDestroyed()) {
+      latestOwner.webContents.send(channels.workbenchExternalChange, payload)
+    }
+  }
+
+  function ensureDirWatcher(): void {
+    const owner = getMainWindow()
+    const anySurface = (note && !note.isDestroyed()) || (owner && !owner.isDestroyed())
+    if (dirWatcher || !anySurface) return
+    try {
+      dirWatcher = watch(store.getDirectory(), (_eventType, filename) => {
+        if (typeof filename !== 'string' || !filename.endsWith('.md')) return
+        const day = filename.slice(0, -3)
+        if (!isNoteDay(day)) return
+        clearTimeout(watchTimers.get(day))
+        watchTimers.set(day, setTimeout(() => {
+          watchTimers.delete(day)
+          if (store.hasPending(day)) return
+          void store.read(day).then(markdown => {
+            if (store.hasPending(day) || lastNoteWindowText.get(day) === markdown) return
+            lastNoteWindowText.set(day, markdown)
+            return pushExternalChange(day, markdown)
+          }).catch(() => undefined)
+        }, 80))
+      })
+      dirWatcher.on('error', () => { stopDirWatcher() })
+    } catch {
+      // Directory may not exist before the first note is saved; save/mutate retries attaching.
+    }
+  }
+
+  function stopDirWatcher(): void {
+    for (const timer of watchTimers.values()) clearTimeout(timer)
+    watchTimers.clear()
+    if (dirWatcher) {
+      try { dirWatcher.close() } catch { /* ignore */ }
+      dirWatcher = null
+    }
+  }
+
+  function invokeWorkbench<T>(
+    command: DailyNotesWorkbenchCommand extends infer C ? C extends DailyNotesWorkbenchCommand ? Omit<C, 'requestId'> : never : never,
+    options: { focusWindow?: boolean; fallback: T }
+  ): Promise<T> {
+    const owner = getMainWindow()
+    if (!owner || owner.isDestroyed() || owner.webContents.isDestroyed()) return Promise.resolve(options.fallback)
+    if (options.focusWindow) {
+      if (owner.isMinimized()) owner.restore()
+      owner.show()
+      owner.focus()
+    }
+    return new Promise<T>(resolve => {
+      const requestId = randomUUID()
+      const timer = setTimeout(() => {
+        pendingCommands.delete(requestId)
+        resolve(options.fallback)
+      }, 15_000)
+      pendingCommands.set(requestId, { resolve: value => resolve(value as T), timer })
+      owner.webContents.send(channels.workbenchCommand, { ...command, requestId })
+    })
+  }
+
   async function close(window: BrowserWindow): Promise<void> {
     if (editorReady && !window.webContents.isCrashed()) {
       const saved = await new Promise<boolean>(resolve => {
@@ -50,8 +156,6 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
     await store.saveWindowState({ bounds: window.getNormalBounds(), pinned: canPin && window.isAlwaysOnTop() })
       .catch(error => console.warn('[daily-notes] Could not save window position', error))
     if (!window.isDestroyed()) window.destroy()
-    // Vetoing the first native close cancels Electron's quit. Resume it once
-    // the renderer has committed the active input and the write is durable.
     if (quitting) app.quit()
   }
 
@@ -69,7 +173,8 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
       minWidth: Math.min(300, area.width), minHeight: Math.min(280, area.height),
       title: 'Kun', show: false, autoHideMenuBar: true, fullscreenable: false,
       alwaysOnTop: canPin && (saved?.pinned ?? true),
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#202221' : '#fbfaf7',
+      ...(process.platform === 'darwin' ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 16, y: 15 } } : {}),
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#191919' : '#ffffff',
       webPreferences: {
         preload: resolveNamedPreloadPath(appPath, 'daily-notes'),
         contextIsolation: true, sandbox: true, nodeIntegration: false
@@ -77,6 +182,7 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
     })
     note = window
     editorReady = false
+    ensureDirWatcher()
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
     window.webContents.on('will-navigate', (event, url) => {
       if (!isTrustedRendererUrl(url, noteUrl)) event.preventDefault()
@@ -106,6 +212,8 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
     })
     window.once('closed', () => {
       screen.removeListener('display-removed', refit)
+      const owner = getMainWindow()
+      if (!owner || owner.isDestroyed()) stopDirWatcher()
       finishEditing?.(true)
       note = null
     })
@@ -128,13 +236,32 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
       note.focus()
     }
   }
-  ipcMain.handle(channels.open, event => {
-    const owner = getMainWindow()
-    if (!owner || owner.isDestroyed() || event.sender !== owner.webContents ||
-        !event.senderFrame || event.senderFrame !== owner.webContents.mainFrame ||
-        !isTrustedRendererSurfaceUrl(event.senderFrame.url, workbenchUrl, 'workbench')) throw new Error('Untrusted workbench')
-    return open()
-  })
+
+  async function closeOpenWindow(): Promise<void> {
+    if (closing) {
+      await closing
+      return
+    }
+    const target = note
+    if (!target || target.isDestroyed()) return
+    closing = close(target).catch(error => console.error('[daily-notes] Could not flush notes', error))
+      .finally(() => { closing = null; finishEditing = null })
+    await closing
+  }
+
+  async function toggle(): Promise<{ open: boolean }> {
+    if (note && !note.isDestroyed() && note.isVisible() && note.isFocused()) {
+      await closeOpenWindow()
+      return { open: false }
+    }
+    await open()
+    return { open: Boolean(note && !note.isDestroyed()) }
+  }
+
+  setDailyNotesToggleHandler(toggle)
+  syncDailyNotesGlobalShortcut()
+
+  ipcMain.handle(channels.open, event => { requireWorkbench(event); return open() })
   ipcMain.handle(channels.context, event => {
     const window = requireNote(event)
     editorReady = true
@@ -147,11 +274,223 @@ export function registerDailyNotesIpc({ getMainWindow, getAppearance, developmen
     return canPin && window.isAlwaysOnTop()
   })
   ipcMain.handle(channels.listDays, event => { requireNote(event); return store.listDays() })
-  ipcMain.handle(channels.read, (event, day: string) => { requireNote(event); return store.read(day) })
-  ipcMain.handle(channels.save, (event, day: string, text: string) => { requireNote(event); return store.save(day, text) })
+  ipcMain.handle(channels.read, async (event, day: string) => {
+    requireNote(event)
+    const text = await store.read(day)
+    lastNoteWindowText.set(day, text)
+    return text
+  })
+  ipcMain.handle(channels.save, async (event, day: string, text: string) => {
+    requireNote(event)
+    lastNoteWindowText.set(day, text)
+    await store.save(day, text)
+    ensureDirWatcher()
+    const owner = getMainWindow()
+    if (owner && !owner.isDestroyed() && !owner.webContents.isDestroyed()) {
+      const days = await store.listDays().catch(() => [])
+      if (!owner.isDestroyed() && !owner.webContents.isDestroyed()) {
+        owner.webContents.send(channels.workbenchExternalChange, { day, markdown: text, days })
+      }
+    }
+  })
+  ipcMain.handle(channels.rollover, async (event, fromDay: string, toDay: string) => {
+    requireNote(event)
+    const result = await store.rollover(fromDay, toDay)
+    lastNoteWindowText.set(fromDay, result.fromMarkdown)
+    lastNoteWindowText.set(toDay, result.toMarkdown)
+    ensureDirWatcher()
+    await pushExternalChange(fromDay, result.fromMarkdown)
+    await pushExternalChange(toDay, result.toMarkdown)
+    return result
+  })
+  ipcMain.handle(channels.sendToKun, (event, request: DailyNoteSendRequest) => {
+    requireNote(event)
+    if (!request || !Array.isArray(request.items) || request.items.length === 0) {
+      return { ok: false, error: 'Empty task selection' } satisfies DailyNoteSendResult
+    }
+    return invokeWorkbench<DailyNoteSendResult>(
+      { kind: 'send-to-kun', request },
+      { focusWindow: true, fallback: { ok: false, error: 'Workbench unavailable' } }
+    )
+  })
+  ipcMain.handle(channels.startThread, (event, request: DailyNoteStartThreadRequest) => {
+    requireNote(event)
+    if (!request || typeof request.prompt !== 'string' || !request.prompt.trim()) {
+      return { ok: false, error: 'Empty prompt' } satisfies DailyNoteStartThreadResult
+    }
+    return invokeWorkbench<DailyNoteStartThreadResult>(
+      { kind: 'start-thread', request },
+      { focusWindow: true, fallback: { ok: false, error: 'Workbench unavailable' } }
+    )
+  })
+  ipcMain.handle(channels.listTargets, event => {
+    requireNote(event)
+    return invokeWorkbench<DailyNoteTargetsSnapshot>(
+      { kind: 'list-targets' },
+      { focusWindow: false, fallback: { activeWorkspaceRoot: '', projects: [], threads: [] } }
+    )
+  })
+  ipcMain.handle(channels.dockToWorkbench, async (event, payload?: DailyNoteDockPayload) => {
+    requireNote(event)
+    await closeOpenWindow()
+    return invokeWorkbench<boolean>(
+      { kind: 'dock-in-workbench', payload },
+      { focusWindow: true, fallback: false }
+    )
+  })
+  ipcMain.handle(channels.openLink, (event, url: string) => {
+    requireNote(event)
+    if (typeof url !== 'string' || !url.startsWith('kun://')) return false
+    return invokeWorkbench<boolean>(
+      { kind: 'open-link', url },
+      { focusWindow: true, fallback: false }
+    )
+  })
+  ipcMain.handle(channels.watchLinks, (event, urls: string[]) => {
+    requireNote(event)
+    const safeUrls = Array.isArray(urls) ? urls.filter(u => typeof u === 'string' && u.startsWith('kun://')).slice(0, 60) : []
+    return invokeWorkbench<Record<string, DailyNoteLinkSummary>>(
+      { kind: 'watch-links', urls: safeUrls },
+      { focusWindow: false, fallback: {} }
+    )
+  })
   ipcMain.handle(channels.finishClose, (event, saved: boolean) => {
     requireNote(event)
     finishEditing?.(saved === true)
   })
+
+  // Workbench-side handlers for bidirectional task <-> conversation coordination.
+  ipcMain.handle(channels.workbenchDirectory, event => {
+    requireWorkbench(event)
+    return store.getDirectory()
+  })
+  ipcMain.handle(channels.workbenchToggleWindow, event => {
+    requireWorkbench(event)
+    return toggle()
+  })
+  ipcMain.handle(channels.workbenchCloseWindow, event => {
+    requireWorkbench(event)
+    return closeOpenWindow()
+  })
+  ipcMain.handle(channels.workbenchListDays, event => {
+    requireWorkbench(event)
+    return store.listDays()
+  })
+  ipcMain.handle(channels.workbenchRead, async (event, day: string) => {
+    requireWorkbench(event)
+    const text = await store.read(day)
+    lastNoteWindowText.set(day, text)
+    ensureDirWatcher()
+    return text
+  })
+  ipcMain.handle(channels.workbenchSave, async (event, day: string, text: string) => {
+    requireWorkbench(event)
+    lastNoteWindowText.set(day, text)
+    await store.save(day, text)
+    ensureDirWatcher()
+    if (note && !note.isDestroyed() && !note.webContents.isDestroyed()) {
+      const days = await store.listDays().catch(() => [])
+      if (note && !note.isDestroyed() && !note.webContents.isDestroyed()) {
+        note.webContents.send(channels.externalChange, { day, markdown: text, days })
+      }
+    }
+  })
+  ipcMain.handle(channels.workbenchRollover, async (event, fromDay: string, toDay: string) => {
+    requireWorkbench(event)
+    const result = await store.rollover(fromDay, toDay)
+    lastNoteWindowText.set(fromDay, result.fromMarkdown)
+    lastNoteWindowText.set(toDay, result.toMarkdown)
+    ensureDirWatcher()
+    await pushExternalChange(fromDay, result.fromMarkdown)
+    await pushExternalChange(toDay, result.toMarkdown)
+    return result
+  })
+  ipcMain.handle(channels.workbenchAppendTask, async (event, input: {
+    day?: string; text: string; quadrant?: DailyNoteQuadrant | null; linkLabel?: string; linkUrl?: string
+  }) => {
+    requireWorkbench(event)
+    const day = input?.day ?? localNoteDay()
+    const body = typeof input?.text === 'string' ? input.text.trim() : ''
+    if (!body) throw new Error('Task text required')
+    const link = input.linkUrl ? { label: input.linkLabel || 'Kun', url: input.linkUrl } : null
+    const quadrant = input.quadrant && [1, 2, 3, 4].includes(input.quadrant) ? input.quadrant : null
+    const { changed, markdown } = await store.mutateDay(day, current =>
+      applyDailyNoteChange(current, appendDailyNoteTaskChange(current, body, quadrant, link)))
+    if (changed) {
+      lastNoteWindowText.set(day, markdown)
+      ensureDirWatcher()
+      await pushExternalChange(day, markdown)
+    }
+    return { day }
+  })
+  ipcMain.handle(channels.workbenchSetDone, async (event, input: {
+    day: string; taskText?: string; linkId?: string; done: boolean
+  }) => {
+    requireWorkbench(event)
+    if (!isNoteDay(input?.day)) return false
+    const { changed, markdown } = await store.mutateDay(input.day, current => {
+      const target = findMatchingDailyNoteTask(parseDailyNoteTasks(current), {
+        linkId: input.linkId,
+        taskText: input.taskText
+      })
+      if (!target || target.done === Boolean(input.done)) return null
+      return applyDailyNoteChange(current, toggleDailyNoteTaskChange(target, Boolean(input.done)))
+    })
+    if (changed) {
+      lastNoteWindowText.set(input.day, markdown)
+      await pushExternalChange(input.day, markdown)
+    }
+    return changed
+  })
+  ipcMain.handle(channels.workbenchGetTaskStatus, async (event, input: {
+    day: string; taskText?: string; linkId?: string
+  }) => {
+    requireWorkbench(event)
+    if (!isNoteDay(input?.day)) return { found: false, done: false }
+    const current = await store.read(input.day)
+    const target = findMatchingDailyNoteTask(parseDailyNoteTasks(current), {
+      linkId: input.linkId,
+      taskText: input.taskText
+    })
+    return target ? { found: true, done: target.done } : { found: false, done: false }
+  })
+  ipcMain.handle(channels.workbenchBindDispatch, async (event, input: {
+    day: string; taskText?: string; previousUrl?: string; roomId: string; linkId: string; label?: string
+  }) => {
+    requireWorkbench(event)
+    if (!isNoteDay(input?.day) || !input.roomId || !input.linkId) return false
+    const url = formatKunDispatchUrl(input.roomId, input.linkId)
+    const { changed, markdown } = await store.mutateDay(input.day, current => {
+      const target = findMatchingDailyNoteTask(parseDailyNoteTasks(current), {
+        linkUrl: input.previousUrl,
+        linkId: input.linkId,
+        taskText: input.taskText
+      })
+      if (!target || target.link?.url === url) return null
+      return applyDailyNoteChange(current, setDailyNoteTaskLinkChange(target, {
+        label: input.label || target.link?.label || '小Kun',
+        url
+      }))
+    })
+    if (changed) {
+      lastNoteWindowText.set(input.day, markdown)
+      await pushExternalChange(input.day, markdown)
+    }
+    return changed
+  })
+  ipcMain.on(channels.workbenchPublishSummaries, (event, summaries: Record<string, DailyNoteLinkSummary>) => {
+    try { requireWorkbench(event) } catch { return }
+    if (!note || note.isDestroyed() || note.webContents.isDestroyed()) return
+    note.webContents.send(channels.linkSummaries, summaries)
+  })
+  ipcMain.on(channels.workbenchReply, (event, payload: { requestId?: string; response?: unknown }) => {
+    try { requireWorkbench(event) } catch { return }
+    const entry = payload?.requestId ? pendingCommands.get(payload.requestId) : undefined
+    if (!entry) return
+    clearTimeout(entry.timer)
+    pendingCommands.delete(payload.requestId!)
+    entry.resolve(payload.response)
+  })
+
   return open
 }

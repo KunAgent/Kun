@@ -24,6 +24,7 @@ import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import { openCodeProjectManage } from '../../store/code-workspace-project-editor'
 import { threadLooksRunning } from '../../store/chat-store-runtime-helpers'
 import { sendThreadToBot, watchThreadWithBot } from '../rooms/workbench-bridge-actions'
+import { addThreadToDailyNotes } from '../rooms/daily-notes-workbench-sync'
 import type { SidebarThreadWorktreeRecord } from './sidebar-project-selectors'
 import type { SidebarVirtualFolder } from './sidebar-folders'
 
@@ -376,6 +377,9 @@ export function ThreadContextMenu({
       <MenuItem icon={<MoveRight className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadMove')} disabled={moveDisabled} title={moveDisabledTitle} onClick={() => run(onMove)} />
       <MenuItem icon={<PencilLine className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadRename')} disabled={busy} onClick={() => run(onRename)} />
       <MenuItem icon={<Bot className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('roomsWorkbenchSendToBot')} disabled={busy} onClick={() => run(() => void sendThreadToBot(state.thread))} />
+      {typeof window !== 'undefined' && window.kunGui?.dailyNotes && !window.kunGui?.isRemoteWeb ? (
+        <MenuItem icon={<ScrollText className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('dailyNotes.addFromThread')} disabled={busy} onClick={() => run(() => void addThreadToDailyNotes(state.thread))} />
+      ) : null}
       {threadLooksRunning(state.thread) && !archived ? <MenuItem icon={<Eye className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('roomsWorkbenchWatchSession')} disabled={busy} onClick={() => run(() => void watchThreadWithBot(state.thread))} /> : null}
       <MenuItem icon={<ScrollText className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('summarizeSession')} disabled={busy} onClick={() => run(onSummarize)} />
       <MenuItem icon={<Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />} label={t('sidebarThreadPrune')} disabled={busy || archived} onClick={() => run(onPrune)} />

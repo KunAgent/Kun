@@ -376,6 +376,8 @@
   "shortcutTogglePaperModeDesc": "切换到 Work 并打开论文文献库。",
   "shortcutPaperImport": "导入论文",
   "shortcutPaperImportDesc": "切换到 Work 并打开导入论文对话框。",
+  "shortcutToggleDailyNotes": "每日待办与笔记",
+  "shortcutToggleDailyNotesDesc": "呼出或收起每日待办与笔记分栏或独立小窗。",
   "shortcutModalTitle": "键盘快捷键",
   "shortcutModalSearchPlaceholder": "搜索快捷键…",
   "shortcutModalEmpty": "没有匹配的快捷键。",

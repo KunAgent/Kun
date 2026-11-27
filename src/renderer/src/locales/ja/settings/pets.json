@@ -15,9 +15,11 @@
   "petsImportErrors": "読み込みエラー",
   "petsShow": "ペットをデスクトップに表示",
   "petsImportCodex": "Codex のペットを自動で読み込む",
+  "petsImportKurocat": "KuroCat のペットとプラグインを自動で読み込む",
   "petsRefresh": "更新",
   "petsOpenKunDir": "Kun のペットフォルダを開く",
   "petsOpenCodexDir": "Codex のペットフォルダを開く",
+  "petsOpenKurocatDir": "KuroCat フォルダを開く",
   "petsSourceMissing": "元のパッケージがありません",
   "petsReport": "失敗 {{failed}}、欠損 {{missing}}",
   "petsContextSettings": "設定",
@@ -25,6 +27,7 @@
   "petsSource": {
     "kun-builtin": "内蔵",
     "kun-local": "ローカル",
-    "codex-custom": "Codex"
+    "codex-custom": "Codex",
+    "kurocat-custom": "KuroCat"
   }
 }

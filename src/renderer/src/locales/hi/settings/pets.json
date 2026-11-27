@@ -15,9 +15,11 @@
   "petsImportErrors": "आयात त्रुटियां",
   "petsShow": "पालतू को डेस्कटॉप पर दिखाएँ",
   "petsImportCodex": "Codex पालतू अपने आप आयात करें",
+  "petsImportKurocat": "KuroCat पालतू और प्लगइन अपने आप आयात करें",
   "petsRefresh": "रिफ्रेश",
   "petsOpenKunDir": "Kun पालतू फ़ोल्डर खोलें",
   "petsOpenCodexDir": "Codex पालतू फ़ोल्डर खोलें",
+  "petsOpenKurocatDir": "KuroCat फ़ोल्डर खोलें",
   "petsSourceMissing": "मूल पैकेज गायब है",
   "petsReport": "{{failed}} विफल, {{missing}} गायब",
   "petsContextSettings": "सेटिंग्स",
@@ -25,6 +27,7 @@
   "petsSource": {
     "kun-builtin": "अंतर्निहित",
     "kun-local": "स्थानीय",
-    "codex-custom": "Codex"
+    "codex-custom": "Codex",
+    "kurocat-custom": "KuroCat"
   }
 }

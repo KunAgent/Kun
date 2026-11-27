@@ -1,6 +1,12 @@
 {
   "rightPanelColab": "Colab",
   "colab": {
+    "gpuLoad": "GPU 使用率",
+    "staleSample": "サンプル遅延",
+    "lastSample": "最終サンプル",
+    "awaitSample": "サンプル待機中",
+    "resourceTrends": "リソースの推移",
+    "adoptForResources": "インスタンスを引き継ぐとリソース使用量を確認できます。",
     "panelTitle": "Colab",
     "emptyTitle": "Google アカウントが未接続です",
     "emptyDesc": "ログインすると、このワークスペースから Colab GPU 学習セッションを起動できます。",
@@ -136,6 +142,10 @@
     "locateBtn": "表示",
     "billedToHint": "「{{name}}」に課金",
     "sessionsLabel": "セッション",
-    "backToOverview": "概要に戻る"
+    "backToOverview": "概要に戻る",
+    "tpuHbmLabel": "{{gb}} GB HBM · TPU",
+    "highMemCheckbox": "高メモリ VM (--high-mem) を使用",
+    "errNotEntitledTitle": "このアカウントでは {{accelerator}} を利用できません",
+    "errNotEntitledDesc": "このアクセラレータには上位プラン（Colab Pro+ や Google AI Ultra など）または CU 残高が必要です。"
   }
 }

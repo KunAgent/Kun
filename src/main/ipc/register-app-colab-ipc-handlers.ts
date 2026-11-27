@@ -77,6 +77,7 @@ const runConfigSchema = z
   .object({
     entryCommand: z.string().min(1).max(2048),
     accelerator: z.enum(COLAB_ACCELERATORS),
+    highMem: z.boolean().optional(),
     syncPaths: z.array(z.string().max(1024)).max(128),
     outputRemoteDir: z.string().max(512),
     outputLocalDir: z.string().max(512),

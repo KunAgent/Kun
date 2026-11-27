@@ -4,6 +4,9 @@ import { readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import {
   COLAB_ACCELERATOR_SPECS,
+  normalizeColabAccelerator,
+  parseKnownColabAccelerator,
+  type ColabAccelerator,
   type ColabConnectionOccupancy,
   type ColabConnectionStatus,
   type ColabConnectionView,
@@ -23,6 +26,8 @@ export type PersistedConnectionRecord = {
   planLabel: string
   balanceCu: number | null
   burnRateCuPerHour: number | null
+  eligibleAccelerators?: ColabAccelerator[]
+  ineligibleAccelerators?: ColabAccelerator[]
   status: ColabConnectionStatus
   createdAt: string
   updatedAt: string
@@ -69,16 +74,40 @@ export async function loadColabPersistedState(statePath: string): Promise<{
   }
   try {
     const parsed = JSON.parse(await readFile(statePath, 'utf8')) as Partial<PersistedColabState>
+    const sanitizeAccelList = (list: unknown): ColabAccelerator[] | undefined => {
+      if (!Array.isArray(list)) return undefined
+      return list
+        .map((item) => parseKnownColabAccelerator(item))
+        .filter((item): item is ColabAccelerator => item !== null)
+    }
+    const connections = Array.isArray(parsed.connections)
+      ? parsed.connections.map((rec) => {
+          const eligible = sanitizeAccelList(rec.eligibleAccelerators)
+          const ineligible = sanitizeAccelList(rec.ineligibleAccelerators)
+          return {
+            ...rec,
+            ...(eligible ? { eligibleAccelerators: eligible } : {}),
+            ...(ineligible ? { ineligibleAccelerators: ineligible } : {})
+          }
+        })
+      : []
+    const lastRunsByWorkspace: Record<string, ColabLastRunSummary> = {}
+    if (parsed.lastRunsByWorkspace && typeof parsed.lastRunsByWorkspace === 'object') {
+      for (const [ws, summary] of Object.entries(parsed.lastRunsByWorkspace)) {
+        if (!summary || typeof summary !== 'object') continue
+        lastRunsByWorkspace[ws] = {
+          ...summary,
+          accelerator: normalizeColabAccelerator(summary.accelerator, 'T4')
+        }
+      }
+    }
     return {
-      connections: Array.isArray(parsed.connections) ? parsed.connections : [],
+      connections,
       workspaceConnections:
         parsed.workspaceConnections && typeof parsed.workspaceConnections === 'object'
           ? { ...parsed.workspaceConnections }
           : {},
-      lastRunsByWorkspace:
-        parsed.lastRunsByWorkspace && typeof parsed.lastRunsByWorkspace === 'object'
-          ? { ...parsed.lastRunsByWorkspace }
-          : {},
+      lastRunsByWorkspace,
       ignoredUntrackedKeys: new Set(
         Array.isArray(parsed.ignoredUntrackedKeys) ? parsed.ignoredUntrackedKeys : []
       )
@@ -148,6 +177,7 @@ export function buildAdoptedSessionView(
     connectionAvatarColor: conn.avatarColor,
     workspaceRoot: normalizeWorkspaceKey(workspaceRoot),
     accelerator: item.accelerator,
+    ...(item.highMem ? { highMem: true } : {}),
     vramGb: spec.vramGb,
     ramGb: spec.ramGb,
     phase: 'running',

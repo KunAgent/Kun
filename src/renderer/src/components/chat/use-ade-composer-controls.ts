@@ -356,8 +356,10 @@ export function useAdeComposerControls(input: {
       const remembered = readHarnessLastModel(nextId, cred)
       const lastPicked = remembered && remembered.providerId === (selectedProfile?.providerId ?? '') &&
         (!models.length || models.includes(remembered.model)) ? remembered.model : undefined
+      const configuredDefault = defaults?.model && defaults.model !== 'default' &&
+        (!models.length || models.includes(defaults.model)) ? defaults.model : undefined
       // An unnamed ready profile is the system account, not a missing default.
-      setComposerModel(defaults?.model ?? lastPicked ?? nativeDefault ?? models[0] ?? '', selectedProfile?.providerId ?? '')
+      setComposerModel(configuredDefault ?? lastPicked ?? nativeDefault ?? models[0] ?? '', selectedProfile?.providerId ?? '')
     }
     if (managedDraft && defaults?.isolation) {
       setComposerIsolation(

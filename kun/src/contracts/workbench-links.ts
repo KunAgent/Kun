@@ -42,6 +42,12 @@ export const WorkbenchBoardDraftSchema = z.object({
   priority: z.enum(['P0', 'P1', 'P2']).nullable().default(null)
 }).strict()
 
+export const WorkbenchDailyNoteRefSchema = z.object({
+  day: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  taskText: z.string().trim().min(1).max(500)
+}).strict()
+export type WorkbenchDailyNoteRef = z.infer<typeof WorkbenchDailyNoteRefSchema>
+
 export const WorkbenchEditSchema = z.object({
   oldText: z.string().min(1).max(4_000),
   newText: z.string().max(8_000)
@@ -93,7 +99,9 @@ export const WorkbenchRequestSchema = z.object({
   baseSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   /** Exact-match replacements a `work_edit` applies to the document, in order. */
   edits: z.array(WorkbenchEditSchema).min(1).max(20).optional(),
-  board: WorkbenchBoardDraftSchema.optional()
+  board: WorkbenchBoardDraftSchema.optional(),
+  /** Source to-do in Daily Notes, when this task was dispatched from a note. */
+  dailyNote: WorkbenchDailyNoteRefSchema.optional()
 }).strict().refine((value) => (value.edits ?? []).reduce((sum, edit) => sum + edit.oldText.length + edit.newText.length, 0) <=
   WORKBENCH_LIMITS.maxContentBytes, 'edits are too large')
 export type WorkbenchRequest = z.infer<typeof WorkbenchRequestSchema>
@@ -222,6 +230,7 @@ export const WatchWorkbenchThreadSchema = z.object({
 export const WorkbenchDirectorySchema = z.object({
   workRoots: z.array(z.string().min(1).max(4096)).max(50).default([]),
   defaultWorkRoot: z.string().min(1).max(4096).optional(),
-  codeProjects: z.array(z.string().min(1).max(4096)).max(200).default([])
+  codeProjects: z.array(z.string().min(1).max(4096)).max(200).default([]),
+  dailyNotesRoot: z.string().min(1).max(4096).optional()
 }).strict()
 export type WorkbenchDirectory = z.infer<typeof WorkbenchDirectorySchema>

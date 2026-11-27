@@ -1,24 +1,44 @@
 import type { ArmCutouts } from './arm-layer'
+import { buildEyeOverlays, type PetEyeOverlaySet } from './eye-layer'
 import type { PetSummary } from '@shared/pets'
 import type { PetJointRig } from '@shared/pets-joint'
 
-export type JointTexture = { id: string; atlas: HTMLCanvasElement; arms?: HTMLCanvasElement }
+export type JointTexture = { id: string; atlas: HTMLCanvasElement; arms?: HTMLCanvasElement; eyes?: PetEyeOverlaySet }
 const cache = new Map<string, Promise<Omit<JointTexture, 'id'>>>()
+const resolved = new Map<string, Omit<JointTexture, 'id'>>()
+
+function textureKey(pet: Pick<PetSummary, 'id' | 'spritesheetUrl'>, rig: PetJointRig, cutouts?: ArmCutouts): string {
+  return `${pet.id}:${pet.spritesheetUrl}:${JSON.stringify(rig)}:${JSON.stringify(cutouts)}`
+}
+
+/** Synchronous hit for preloaded textures so desk mounts never flash an unready frame. */
+export function peekJointTexture(pet: Pick<PetSummary, 'id' | 'spritesheetUrl'>, rig: PetJointRig, cutouts?: ArmCutouts): JointTexture | null {
+  const hit = resolved.get(textureKey(pet, rig, cutouts))
+  return hit ? { id: pet.id, ...hit } : null
+}
 
 /** Decode once and retain seven small cells, not three full-resolution GPU sheets. */
 export async function loadJointTexture(pet: Pick<PetSummary, 'id' | 'spritesheetUrl'>, rig: PetJointRig, cutouts?: ArmCutouts): Promise<JointTexture> {
-  const key = `${pet.spritesheetUrl}:${JSON.stringify(rig)}:${JSON.stringify(cutouts)}`
+  const key = textureKey(pet, rig, cutouts)
   let pending = cache.get(key)
   if (!pending) {
-    pending = decode(pet.spritesheetUrl ?? '', rig, cutouts)
+    pending = decode(pet.id, pet.spritesheetUrl ?? '', rig, cutouts).then((texture) => {
+      resolved.set(key, texture)
+      while (resolved.size > 6) resolved.delete(resolved.keys().next().value!)
+      return texture
+    })
     cache.set(key, pending)
-    while (cache.size > 6) cache.delete(cache.keys().next().value!)
-    void pending.catch(() => cache.delete(key))
+    while (cache.size > 6) {
+      const oldest = cache.keys().next().value!
+      cache.delete(oldest)
+      resolved.delete(oldest)
+    }
+    void pending.catch(() => { cache.delete(key); resolved.delete(key) })
   }
   return { id: pet.id, ...await pending }
 }
 
-async function decode(url: string, rig: PetJointRig, cutouts?: ArmCutouts): Promise<Omit<JointTexture, 'id'>> {
+async function decode(petId: string, url: string, rig: PetJointRig, cutouts?: ArmCutouts): Promise<Omit<JointTexture, 'id'>> {
   const image = new Image()
   if (!url.startsWith('file:')) image.crossOrigin = 'anonymous'
   image.src = url
@@ -65,7 +85,8 @@ async function decode(url: string, rig: PetJointRig, cutouts?: ArmCutouts): Prom
   })
   // Last cell is the original solo idle, used only at the entrance/exit seam.
   context.drawImage(image, 0, 0, 192, 208, 192 * 6, 0, 192, 208)
-  return { atlas: canvas, ...(arms ? { arms } : {}) }
+  const eyes = buildEyeOverlays(petId, canvas, rig.row)
+  return { atlas: canvas, ...(arms ? { arms } : {}), ...(eyes ? { eyes } : {}) }
 }
 
 export function blinkCell(elapsed: number, index: number, reduced: boolean): number {

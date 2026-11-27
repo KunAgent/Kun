@@ -1,16 +1,18 @@
 import { armLayerBounds, armLayerMatrix } from './arm-layer'
+import { drawActorLiveEyes, type PetEyeOverlaySet } from './eye-layer'
 import { blinkCell, type JointTexture } from './assets'
 import { createRigMesh, paintRigVertices, type RigMesh } from './mesh'
 import type { JointFrame } from './timeline'
 import { drawJointGround, drawJointObjects } from './draw-world'
+import { drawPetKeyboardPops } from '../typing/keyboard-surface'
 
 /** Same joint geometry on machines without WebGL, using a coarser textured mesh. */
 export class JointCanvasRenderer {
-  private readonly resources = new Map<string, { mesh: RigMesh; atlas: HTMLCanvasElement; arms?: HTMLCanvasElement }>()
+  private readonly resources = new Map<string, { mesh: RigMesh; atlas: HTMLCanvasElement; arms?: HTMLCanvasElement; eyes?: PetEyeOverlaySet }>()
   constructor(private readonly ctx: CanvasRenderingContext2D, textures: JointTexture[], frame: JointFrame) {
     for (const a of frame.actors) {
       const source = textures.find((t) => t.id === a.pet.id)
-      if (source) this.resources.set(a.pet.id, { atlas: source.atlas, arms: source.arms, mesh: createRigMesh(a.rig, 3) })
+      if (source) this.resources.set(a.pet.id, { atlas: source.atlas, arms: source.arms, eyes: source.eyes, mesh: createRigMesh(a.rig, 3) })
     }
   }
   paint(frame: JointFrame, elapsed: number, reduced: boolean): void {
@@ -48,8 +50,10 @@ export class JointCanvasRenderer {
           const target = indices.map((index) => [data[index * 5], data[index * 5 + 1]])
           drawTriangle(ctx, resource.atlas, column, source, target)
         }
+        if (!handPass && resource.eyes) drawActorLiveEyes(ctx, a, resource.eyes, column)
       }
     }
+    if (frame.keyboard?.pops?.length) drawPetKeyboardPops(ctx, frame.keyboard)
     ctx.globalAlpha = 1
   }
   dispose(): void { this.resources.clear() }

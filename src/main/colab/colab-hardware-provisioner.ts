@@ -29,8 +29,9 @@ export function buildColabNewArgs(params: {
 }): string[] {
   const spec = COLAB_ACCELERATOR_SPECS[params.accelerator]
   const args = ['new', '-s', params.sessionName]
-  if (spec.cliGpuFlag) args.push('--gpu', spec.cliGpuFlag)
-  if (params.highMem) args.push('--high-mem')
+  if (spec.cliTpuFlag) args.push('--tpu', spec.cliTpuFlag)
+  else if (spec.cliGpuFlag) args.push('--gpu', spec.cliGpuFlag)
+  if (params.highMem && spec.supportsHighMem) args.push('--high-mem')
   return args
 }
 
@@ -129,17 +130,21 @@ export async function provisionColabHardware(params: {
   sessionsJsonPath: string
   env: Record<string, string>
   runCli: RunColabCliFn
+  upgradeCli?: () => Promise<boolean>
   syncTokenBack: () => Promise<void>
   onAttempt?: (attempt: number, maxAttempts: number, sessionName: string) => void
   onLog?: (message: string) => void
   signal: AbortSignal
   retryDelayMs?: number
 }): Promise<ProvisionColabHardwareResult> {
-  const isGpu = params.accelerator !== 'CPU'
-  const minVramGb = isGpu && params.minVramGb && params.minVramGb > 0 ? params.minVramGb : null
+  const spec = COLAB_ACCELERATOR_SPECS[params.accelerator]
+  const isNvidiaGpu = spec.kind === 'gpu'
+  const minVramGb =
+    isNvidiaGpu && params.minVramGb && params.minVramGb > 0 ? params.minVramGb : null
   const maxAttempts = clampProvisionAttempts(params.maxAttempts, minVramGb !== null)
   const onExhausted = params.onExhausted ?? 'stop_and_fail'
   const retryDelayMs = params.retryDelayMs ?? 2_500
+  let upgradedLegacyCli = false
 
   const assignEnv: Record<string, string> = {
     COLAB_CLI_ASSIGN_RETRIES: '1',
@@ -193,6 +198,31 @@ export async function provisionColabHardware(params: {
       signal: params.signal
     })
 
+    if (
+      newRes.exitCode !== 0 &&
+      !upgradedLegacyCli &&
+      params.upgradeCli &&
+      /unsupported value|no such option:\s*--tpu/i.test(`${newRes.stdout}\n${newRes.stderr}`)
+    ) {
+      upgradedLegacyCli = true
+      params.onLog?.(
+        `[colab] Installed google-colab-cli lacks ${spec.fullLabel} support; upgrading CLI…`
+      )
+      if ((await params.upgradeCli().catch(() => false)) && !params.signal.aborted) {
+        newRes = await params.runCli({
+          sessionsJsonPath: params.sessionsJsonPath,
+          args: buildColabNewArgs({
+            sessionName,
+            accelerator: params.accelerator,
+            highMem: params.highMem
+          }),
+          env: assignEnv,
+          timeoutMs: 120_000,
+          signal: params.signal
+        })
+      }
+    }
+
     // Fall back cleanly if an older `google-colab-cli` lacks `--high-mem`.
     if (
       newRes.exitCode !== 0 &&
@@ -238,7 +268,7 @@ export async function provisionColabHardware(params: {
       sessionsJsonPath: params.sessionsJsonPath,
       args: ['exec', '-s', sessionName, '--timeout', '15'],
       env: params.env,
-      stdinText: HARDWARE_PROBE_PYTHON(isGpu),
+      stdinText: HARDWARE_PROBE_PYTHON(isNvidiaGpu),
       timeoutMs: 20_000,
       signal: params.signal
     })

@@ -1,6 +1,7 @@
 import { defaultPetGlobalActivity, parsePetGlobalActivityPreferences, type PetGlobalActivityPreferences } from '../../shared/pets-global-activity'
 import { defaultPetVisits, parsePetVisitPreferences, type PetVisitPreferences } from '../../shared/pets-visits'
 import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
+import { parseKuroCatSkinConfig, type KuroCatSkinConfig } from '../../shared/pets-kurocat'
 import { isBuiltinPetId, RETIRED_AI_PET_IDS, RETIRED_BUILTIN_PET_IDS } from '../../shared/pets-builtin'
 import { normalizeSavedPetEnsemble, parsePetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { createHash, randomUUID } from 'node:crypto'
@@ -52,8 +53,9 @@ export class PetStore {
   }
 
   listPets(): PetSummary[] {
-    const order: Record<PetSource, number> = { 'kun-builtin': 0, 'kun-local': 1, 'codex-custom': 2 }
+    const order: Record<PetSource, number> = { 'kun-builtin': 0, 'kun-local': 1, 'kurocat-custom': 2, 'codex-custom': 3 }
     return [...this.catalog.values()]
+      .filter((manifest) => manifest.source !== 'kurocat-custom' || this.settings.importKurocatPets !== false || manifest.id === this.settings.selectedPetId)
       .map((manifest) => this.toSummary(manifest))
       .sort((a, b) => {
         const selected = Number(b.id === this.settings.selectedPetId) - Number(a.id === this.settings.selectedPetId)
@@ -120,6 +122,12 @@ export class PetStore {
     })
   }
 
+  async setPetSoundEnabled(enabled: boolean): Promise<PetSettings> {
+    return this.mutate(async () => {
+      this.settings.soundEnabled = enabled
+    })
+  }
+
   async setPetEnsemble(ensemble: PetEnsembleSettings): Promise<PetSettings> {
     return this.mutate(async () => {
       const parsed = parsePetEnsemble(ensemble)
@@ -152,9 +160,10 @@ export class PetStore {
     await this.mutate(async () => { this.settings.bubblesCollapsed = collapsed })
   }
 
-  async setImportPreferences(input: { importCodexPets?: boolean }): Promise<PetSettings> {
+  async setImportPreferences(input: { importCodexPets?: boolean; importKurocatPets?: boolean }): Promise<PetSettings> {
     return this.mutate(async () => {
       if (typeof input.importCodexPets === 'boolean') this.settings.importCodexPets = input.importCodexPets
+      if (typeof input.importKurocatPets === 'boolean') this.settings.importKurocatPets = input.importKurocatPets
     })
   }
 
@@ -201,9 +210,12 @@ export class PetStore {
     displayName: string
     description: string
     spriteVersionNumber: PetSpriteVersion
-    spritesheetSourcePath: string
+    spritesheetSourcePath?: string
+    spritesheetBytes?: () => Buffer | Promise<Buffer>
+    virtualImageKey?: string
     sourcePath: string
     interactions?: PetInteractionPack
+    kurocatSkin?: KuroCatSkinConfig
   }): Promise<{ manifest: PetManifest; status: 'imported' | 'updated' | 'unchanged' }> {
     return this.enqueueResult(() => this.importOrUpdateNow(input))
   }
@@ -214,9 +226,12 @@ export class PetStore {
     displayName: string
     description: string
     spriteVersionNumber: PetSpriteVersion
-    spritesheetSourcePath: string
+    spritesheetSourcePath?: string
+    spritesheetBytes?: () => Buffer | Promise<Buffer>
+    virtualImageKey?: string
     sourcePath: string
     interactions?: PetInteractionPack
+    kurocatSkin?: KuroCatSkinConfig
   }): Promise<{ manifest: PetManifest; status: 'imported' | 'updated' | 'unchanged' }> {
     const petId = petIdForSource(input.source, input.sourceId)
     const fingerprint = await fingerprintPackage(input)
@@ -232,12 +247,14 @@ export class PetStore {
         sourcePath: input.sourcePath,
         sourceMissing: false,
         ...(input.interactions ? { interactions: input.interactions } : {}),
+        ...(input.kurocatSkin ? { kurocatSkin: input.kurocatSkin } : {}),
         importedAt: new Date().toISOString()
       }
       await this.writeManifest(restored)
       this.catalog.set(petId, restored)
       return { manifest: restored, status: 'updated' }
     }
+    const spritesheetFile = input.spritesheetSourcePath ? spritesheetFileName(input.spritesheetSourcePath) : 'spritesheet.png'
     const manifest: PetManifest = {
       schemaVersion: 1,
       id: petId,
@@ -245,15 +262,16 @@ export class PetStore {
       displayName: input.displayName,
       description: input.description,
       spriteVersionNumber: input.spriteVersionNumber,
-      spritesheetFile: spritesheetFileName(input.spritesheetSourcePath),
+      spritesheetFile,
       ...(input.interactions ? { interactions: input.interactions } : {}),
+      ...(input.kurocatSkin ? { kurocatSkin: input.kurocatSkin } : {}),
       source: input.source,
       sourcePath: input.sourcePath,
       sourceFingerprint: fingerprint,
       importedAt: new Date().toISOString(),
       sourceMissing: false
     }
-    await this.commitPackage(manifest, input.spritesheetSourcePath, Boolean(existing))
+    await this.commitPackage(manifest, input, Boolean(existing))
     this.catalog.set(petId, manifest)
     return { manifest, status: existing ? 'updated' : 'imported' }
   }
@@ -268,13 +286,24 @@ export class PetStore {
     })
   }
 
-  private async commitPackage(manifest: PetManifest, spritesheetSourcePath: string, replacing: boolean): Promise<void> {
+  private async commitPackage(
+    manifest: PetManifest,
+    source: { spritesheetSourcePath?: string; spritesheetBytes?: () => Buffer | Promise<Buffer> },
+    replacing: boolean
+  ): Promise<void> {
     const targetDir = this.petDir(manifest.id)
     const stagingDir = path.join(this.libraryDir, `.import-${randomUUID()}`)
     const backupDir = `${targetDir}.backup-${randomUUID()}`
     await mkdir(stagingDir, { recursive: true })
-    const { copyFile } = await import('node:fs/promises')
-    await copyFile(spritesheetSourcePath, path.join(stagingDir, manifest.spritesheetFile))
+    if (source.spritesheetSourcePath) {
+      const { copyFile } = await import('node:fs/promises')
+      await copyFile(source.spritesheetSourcePath, path.join(stagingDir, manifest.spritesheetFile))
+    } else if (source.spritesheetBytes) {
+      const bytes = await source.spritesheetBytes()
+      await writeFile(path.join(stagingDir, manifest.spritesheetFile), bytes)
+    } else {
+      throw new Error('missing spritesheet source')
+    }
     await writeFile(path.join(stagingDir, 'pet.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
     try {
       if (replacing && await exists(targetDir)) await rename(targetDir, backupDir)
@@ -324,6 +353,7 @@ export class PetStore {
       available: true,
       sourceMissing: manifest.sourceMissing === true,
       ...(manifest.interactions ? { interactions: manifest.interactions } : {}),
+      ...(manifest.kurocatSkin ? { kurocatSkin: manifest.kurocatSkin } : {}),
       ...(manifest.sourceMissing ? { warning: 'The original package is missing. Kun is using its saved copy.' } : {})
     }
   }
@@ -407,10 +437,14 @@ export async function fingerprintPackage(input: {
   displayName: string
   description: string
   spriteVersionNumber: PetSpriteVersion
-  spritesheetSourcePath: string
+  spritesheetSourcePath?: string
+  virtualImageKey?: string
   interactions?: PetInteractionPack
+  kurocatSkin?: KuroCatSkinConfig
 }): Promise<string> {
-  const image = createHash('sha256').update(await readFile(input.spritesheetSourcePath)).digest('hex')
+  const image = input.spritesheetSourcePath
+    ? createHash('sha256').update(await readFile(input.spritesheetSourcePath)).digest('hex')
+    : createHash('sha256').update(input.virtualImageKey ?? JSON.stringify(input.kurocatSkin ?? input.sourceId)).digest('hex')
   return createHash('sha256').update(JSON.stringify({
     image,
     source: input.source,
@@ -418,7 +452,8 @@ export async function fingerprintPackage(input: {
     displayName: input.displayName,
     description: input.description,
     spriteVersionNumber: input.spriteVersionNumber,
-    ...(input.interactions ? { interactions: input.interactions } : {})
+    ...(input.interactions ? { interactions: input.interactions } : {}),
+    ...(input.kurocatSkin ? { kurocatSkin: input.kurocatSkin } : {})
   })).digest('hex')
 }
 
@@ -434,10 +469,12 @@ function normalizeSettings(value: unknown): PetSettings {
     bubblesCollapsed: candidate.bubblesCollapsed === true,
     mascotWidthPx: clampMascotWidth(candidate.mascotWidthPx),
     importCodexPets: candidate.importCodexPets !== false,
+    importKurocatPets: candidate.importKurocatPets !== false,
     // Typing follows pet visibility; recording detection is an explicit
     // opt-in that must survive restarts.
     globalActivity: parsePetGlobalActivityPreferences(candidate.globalActivity) ?? defaultPetGlobalActivity(),
     reactionsEnabled: true,
+    soundEnabled: candidate.soundEnabled !== false,
     ...(candidate.ensemble !== undefined ? { ensemble: normalizeSavedPetEnsemble(candidate.ensemble) } : {}),
     ...(candidate.visits !== undefined ? { visits: parsePetVisitPreferences(candidate.visits) ?? defaultPetVisits() } : {}),
     welcomedPetIds: stringList(candidate.welcomedPetIds),
@@ -452,7 +489,7 @@ function normalizeManifest(value: unknown): PetManifest | null {
   if (!value || typeof value !== 'object') return null
   const candidate = value as Record<string, unknown>
   const source = candidate.source
-  if (source !== 'kun-builtin' && source !== 'kun-local' && source !== 'codex-custom') return null
+  if (source !== 'kun-builtin' && source !== 'kun-local' && source !== 'codex-custom' && source !== 'kurocat-custom') return null
   if (typeof candidate.sourceId !== 'string' || typeof candidate.displayName !== 'string' || typeof candidate.description !== 'string') {
     return null
   }
@@ -460,6 +497,7 @@ function normalizeManifest(value: unknown): PetManifest | null {
   if (candidate.id !== id) return null
   if (candidate.spritesheetFile !== 'spritesheet.png' && candidate.spritesheetFile !== 'spritesheet.webp') return null
   const interactions = parsePetInteractionPack(candidate.interactions)
+  const kurocatSkin = candidate.kurocatSkin ? (parseKuroCatSkinConfig(candidate.kurocatSkin, candidate.sourceId) ?? undefined) : undefined
   return {
     schemaVersion: 1,
     id,
@@ -473,7 +511,8 @@ function normalizeManifest(value: unknown): PetManifest | null {
     ...(typeof candidate.sourceFingerprint === 'string' ? { sourceFingerprint: candidate.sourceFingerprint } : {}),
     ...(typeof candidate.importedAt === 'string' ? { importedAt: candidate.importedAt } : {}),
     sourceMissing: candidate.sourceMissing === true,
-    ...(interactions ? { interactions } : {})
+    ...(interactions ? { interactions } : {}),
+    ...(kurocatSkin ? { kurocatSkin } : {})
   }
 }
 

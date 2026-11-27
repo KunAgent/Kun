@@ -10,6 +10,7 @@ import {
 } from '@shared/keyboard-shortcuts'
 import { useKeyboardShortcutSettings } from '../../lib/keyboard-shortcut-settings'
 import { isNativeDialogOpen } from '../../lib/native-dialog-activity'
+import { triggerDailyNotesEntry } from '../../daily-notes/dock-state'
 import { runPaperModeShortcut } from '../../paper/paper-mode-actions'
 
 const DESKTOP_SHORTCUT_COMMANDS: Partial<Record<KeyboardShortcutCommandId, DesktopCommand>> = {
@@ -105,6 +106,10 @@ export function runWorkbenchShortcutCommand(
   }
   if (commandId === 'open-keyboard-shortcuts') {
     context.openKeyboardShortcuts?.()
+    return
+  }
+  if (commandId === 'toggle-daily-notes') {
+    void triggerDailyNotesEntry('toggle')
     return
   }
   // Papers live on the Work route; the runner navigates there first. The

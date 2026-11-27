@@ -1,5 +1,7 @@
 import type { HarnessDefinition } from '../../contracts/harness.js'
+import { providerModule } from '../../harness/providers/registry.js'
 import type { ServerRuntime } from '../../server/routes/server-runtime.js'
+import { probedModelInfo } from './model-profiles.js'
 
 /** How long the phone's catalog waits for Agent model lists it had to start, after the readiness wait. */
 export const NATIVE_MODELS_WAIT_MS = 4_000
@@ -8,13 +10,22 @@ export const NATIVE_MODELS_WAIT_MS = 4_000
 function probe(runtime: ServerRuntime, definition: HarnessDefinition): Promise<string[]> | undefined {
   const harnesses = runtime.harnesses
   switch (definition.transport) {
-    case 'acp': return harnesses?.acpModels?.probe(definition)
-    case 'agent-sdk': return harnesses?.agentSdkModels?.probe(definition)
-    case 'codex-app-server': return harnesses?.codexModels?.probe(definition)
-    case 'pi-rpc': return harnesses?.piModels?.probe(definition)
-    case 'antigravity-cli': return harnesses?.antigravityModels?.probe(definition)
+    case 'acp': return harnesses?.acpModels?.probe?.(definition)
+    case 'agent-sdk': return harnesses?.agentSdkModels?.probe?.(definition)
+    case 'codex-app-server': return harnesses?.codexModels?.probe?.(definition)
+    case 'pi-rpc': return harnesses?.piModels?.probe?.(definition)
+    case 'antigravity-cli': return harnesses?.antigravityModels?.probe?.(definition)
     default: return undefined
   }
+}
+
+function needsNativeModelProbe(runtime: ServerRuntime, definition: HarnessDefinition): boolean {
+  if (definition.modelSource !== 'probe') return false
+  const models = runtime.harnesses?.probedModels?.(definition)
+  if (!models?.length) return true
+  if (!providerModule(definition.id)?.acp?.probeAllModelEfforts) return false
+  const info = probedModelInfo(runtime, definition)
+  return !info?.length || models.some((id) => info.find((entry) => entry.id === id)?.reasoningEfforts === undefined)
 }
 
 /**
@@ -25,7 +36,7 @@ function probe(runtime: ServerRuntime, definition: HarnessDefinition): Promise<s
  */
 export async function settleNativeModels(runtime: ServerRuntime, definitions: HarnessDefinition[]): Promise<void> {
   const pending = definitions
-    .filter((definition) => definition.modelSource === 'probe' && !runtime.harnesses?.probedModels?.(definition)?.length)
+    .filter((definition) => needsNativeModelProbe(runtime, definition))
     .flatMap((definition) => {
       const task = probe(runtime, definition)
       return task ? [task.catch(() => [])] : []

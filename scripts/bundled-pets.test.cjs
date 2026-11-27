@@ -27,9 +27,9 @@ test('bundled pet assets fit within the macOS installer allowance', () => {
     `Bundled pets use ${(bytes / MIB).toFixed(2)} MiB; limit is 3 MiB. Optimize new sheets before packaging.`)
 })
 
-test('only the two Kun mascots and DS ship as built-ins', () => {
+test('only the Kun mascots, DS and KuroCat ship as built-ins', () => {
   const ids = readdirSync(petsRoot, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name).sort()
-  assert.deepEqual(ids, ['xiao-kun', 'ikun', 'whale-girl'].sort())
+  assert.deepEqual(ids, ['xiao-kun', 'ikun', 'whale-girl', 'kurocat'].sort())
 })
 
 test('every bundled pet retains a decodable transparent Codex sprite layout', async () => {
@@ -48,7 +48,7 @@ test('every bundled pet retains a decodable transparent Codex sprite layout', as
   }
 })
 
-for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
+for (const id of ['xiao-kun', 'ikun', 'whale-girl', 'kurocat']) {
   test(`${id} fits its allowance and has all 57 animation frames with clear cell margins`, async () => {
     const dir = join(petsRoot, id)
     const budget = MIB
@@ -90,7 +90,7 @@ for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
 }
 
 test('each built-in ships a joint rig with original artwork and DS attribution', () => {
-  for (const id of ['xiao-kun', 'ikun', 'whale-girl']) {
+  for (const id of ['xiao-kun', 'ikun', 'whale-girl', 'kurocat']) {
     const pet = JSON.parse(readFileSync(join(petsRoot, id, 'pet.json'), 'utf8'))
     assert.equal(pet.interactions.joint.version, 1)
     assert.equal(pet.interactions.joint.arms.length, 2)
@@ -98,4 +98,5 @@ test('each built-in ships a joint rig with original artwork and DS attribution',
     assert(pet.interactions.visits.scenes.every(scene => ['bubbles', 'beatbox', 'dance', 'cheer'].includes(scene)))
   }
   assert(readFileSync(join(petsRoot, 'whale-girl', 'ATTRIBUTION.md'), 'utf8').includes('CC BY-NC-SA 4.0'))
+  assert(readFileSync(join(petsRoot, 'kurocat', 'ATTRIBUTION.md'), 'utf8').includes('MIT License'))
 })

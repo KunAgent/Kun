@@ -589,11 +589,15 @@ export function resolveComposerReasoningSelection(input: {
   allowedEfforts?: readonly ComposerReasoningEffort[]
   requireReportedLevels?: boolean
 }): ComposerReasoningSelection {
-  const group = input.groups.find((entry) => entry.providerId === input.providerId)
-  if (isManagedAntigravityBudget(group, input.model)) return { options: [], current: 'auto', availability: 'unsupported' }
-  const profile = modelProfileForSelection(input.groups, input.model, input.providerId)
+  const group = input.groups.find((entry) => entry.providerId === input.providerId) ??
+    ((!input.model || input.model === 'default') && input.groups.length === 1 && input.groups[0]?.nativeHarnessId ? input.groups[0] : undefined)
   const nativeHarnessId = group?.nativeHarnessId
-  const nativeModel = nativeHarnessId ? group.modelInfo?.[input.model] : undefined
+  const effectiveModel = (!input.model || input.model === 'default') && nativeHarnessId
+    ? Object.values(group?.modelInfo ?? {}).find((entry) => entry?.isDefault)?.id ?? group?.modelIds[0] ?? input.model
+    : input.model
+  if (isManagedAntigravityBudget(group, effectiveModel)) return { options: [], current: 'auto', availability: 'unsupported' }
+  const profile = modelProfileForSelection(input.groups, effectiveModel, group?.providerId ?? input.providerId)
+  const nativeModel = nativeHarnessId ? group.modelInfo?.[effectiveModel] : undefined
   const declared = nativeHarnessId ? nativeModel?.reasoningEfforts : profile?.reasoning?.supportedEfforts
   const availability = (!nativeHarnessId && profile?.supportsReasoning === false) || declared?.length === 0 ? 'unsupported'
     : declared ? 'supported' : 'unknown'

@@ -165,6 +165,8 @@ export type ProviderAcpHooks = {
   modelCategory?(value: string): NonNullable<HarnessModelInfo['category']>
   /** Report a known-empty reasoning list when no thought_level option exists. */
   readonly emptyEffortsWithoutThoughtLevel?: boolean
+  /** Walk unprobed models in the base probe session so every model's thought_level is known up front. */
+  readonly probeAllModelEfforts?: boolean
   /** Models that assign their own reasoning budget, even with a stale session selector. */
   managesReasoningBudget?(model: string | undefined): boolean
   /**

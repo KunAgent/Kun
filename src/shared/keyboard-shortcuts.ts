@@ -152,6 +152,13 @@ export const KEYBOARD_SHORTCUT_COMMANDS = [
     platformDefaultBindings: { darwin: ['Meta+Shift+I'] }
   },
   {
+    id: 'toggle-daily-notes',
+    labelKey: 'shortcutToggleDailyNotes',
+    descriptionKey: 'shortcutToggleDailyNotesDesc',
+    defaultBindings: ['Ctrl+Shift+D'],
+    platformDefaultBindings: { darwin: ['Meta+Shift+D'] }
+  },
+  {
     id: 'open-keyboard-shortcuts',
     labelKey: 'shortcutKeyboardShortcuts',
     descriptionKey: 'shortcutKeyboardShortcutsDesc',

@@ -21,7 +21,42 @@ async function main() {
     await symlink(join(root, 'out', 'preload'), join(fixture, 'out', 'preload'), 'junction')
     await symlink(join(root, 'out', 'renderer', 'assets'), join(renderer, 'assets'), 'junction')
     await copyFile(join(root, 'out', 'renderer', 'daily-notes.html'), join(renderer, 'daily-notes.html'))
-    await writeFile(join(renderer, 'index.html'), '<!doctype html><title>Test workbench</title>')
+    await writeFile(join(renderer, 'index.html'), `<!doctype html><title>Test workbench</title><script>
+      window.__kunReceived = []
+      window.__kunStartedThreads = []
+      window.__kunDockedPayloads = []
+      window.__kunOpenedLinks = []
+      window.__kunSummaries = {}
+      window.kunGui?.dailyNotes?.onCommand((cmd, reply) => {
+        if (cmd.kind === 'send-to-kun') {
+          window.__kunReceived.push(cmd.request)
+          reply({ ok: true, roomId: 'room-kun', messageId: 'msg-1', agentLabel: '小Kun' })
+        } else if (cmd.kind === 'start-thread') {
+          window.__kunStartedThreads.push(cmd.request)
+          reply({ ok: true, threadId: 'thr-direct-1', title: 'KunRepo' })
+        } else if (cmd.kind === 'list-targets') {
+          reply({
+            activeWorkspaceRoot: '/workspace/KunRepo',
+            projects: [{ root: '/workspace/KunRepo', label: 'KunRepo' }],
+            threads: [{ id: 'thr-existing', title: '性能优化排查', workspaceRoot: '/workspace/KunRepo', workspaceLabel: 'KunRepo', status: 'running' }]
+          })
+        } else if (cmd.kind === 'dock-in-workbench') {
+          window.__kunDockedPayloads.push(cmd.payload || {})
+          reply(true)
+        } else if (cmd.kind === 'open-link') {
+          window.__kunOpenedLinks.push(cmd.url)
+          reply(true)
+        } else if (cmd.kind === 'watch-links') {
+          const out = {}
+          for (const url of cmd.urls) {
+            out[url] = window.__kunSummaries[url] || (url.includes('dispatch/')
+              ? { url, tone: 'running', statusText: '运行中 · Kun', detail: '正在执行测试' }
+              : { url, tone: 'running', statusText: '小Kun处理中' })
+          }
+          reply(out)
+        }
+      })
+    </script>`)
     await writeFile(join(fixture, 'package.json'), JSON.stringify({ name: 'kun-note-test', main: 'main.cjs' }))
     await writeFile(join(notes, '2020-02-29.md'), '- [ ] Earlier task\n')
     await build({ stdin: { resolveDir: root, contents: `
@@ -57,9 +92,16 @@ async function main() {
       })
       await closed
     }
+    const selectedDay = page => page.locator('.daily-notes').getAttribute('data-selected-day')
+    const pickQuickDate = async (page, targetDay) => {
+      await page.locator('.note-title-button').click()
+      await page.getByRole('dialog', { name: '选择笔记日期' }).waitFor()
+      await page.locator(`[data-quick-day="${targetDay}"]`).click()
+      await page.waitForFunction(expected => document.querySelector('.daily-notes')?.dataset.selectedDay === expected, targetDay)
+    }
 
     let page = await open()
-    const day = await page.getByRole('combobox').inputValue()
+    const day = await selectedDay(page)
     const todayFile = join(notes, day + '.md')
     await owner.evaluate(() => window.kunGui.openDailyNotes())
     assert.equal(application.windows().length, 2)
@@ -78,12 +120,76 @@ async function main() {
     await page.getByRole('button', { name: '添加待办' }).click()
     await page.keyboard.insertText('跟进反馈')
     await page.getByRole('checkbox', { name: '跟进反馈' }).check()
-    await page.getByRole('combobox').selectOption('2020-02-29')
+
+    // Date-picker popover: jump to saved historical date and back to today.
+    await pickQuickDate(page, '2020-02-29')
     await page.getByRole('checkbox', { name: 'Earlier task' }).check()
-    await page.getByRole('combobox').selectOption(day)
+    await pickQuickDate(page, day)
     await page.getByRole('checkbox', { name: '跟进反馈', checked: true }).waitFor()
     assert.equal(await readFile(todayFile, 'utf8'), '用户反馈\n- [x] 跟进反馈')
     assert.equal(await readFile(join(notes, '2020-02-29.md'), 'utf8'), '- [x] Earlier task\n')
+
+    // Four-quadrant view: classify, drag, inline-add, and hand a task to Xiao Kun.
+    await page.getByRole('button', { name: '四象限' }).click()
+    await page.getByRole('button', { name: '跟进反馈 → 重要且紧急' }).click()
+    await page.locator('[data-quadrant="1"] [data-task-line="1"]').dragTo(page.locator('[data-quadrant="3"]'))
+    await page.getByRole('button', { name: '重要不紧急: 添加', exact: true }).click()
+    await page.getByRole('textbox', { name: '重要不紧急: 添加待办', exact: true }).fill('整理设计稿')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Escape')
+
+    // Hand task over to Xiao Kun -> upgrades to kun://dispatch -> live completion -> 1-click check.
+    await page.getByRole('button', { name: '整理设计稿: 交给小Kun' }).click()
+    await page.getByRole('button', { name: /小Kun处理中/ }).waitFor()
+    const sentItems = await owner.evaluate(() => window.__kunReceived)
+    assert.equal(sentItems.length, 1)
+    assert.equal(sentItems[0].items[0].text, '整理设计稿')
+    await owner.evaluate(async targetDay => {
+      await window.kunGui.dailyNotes.bindDispatchLink({
+        day: targetDay,
+        taskText: '整理设计稿',
+        previousUrl: 'kun://room/room-kun?message=msg-1',
+        roomId: 'room-kun',
+        linkId: 'wbl-42',
+        label: '小Kun'
+      })
+      const completedSummary = {
+        url: 'kun://dispatch/room-kun/wbl-42',
+        tone: 'completed',
+        statusText: '已完成',
+        detail: '回归测试全部通过',
+        canMarkDone: true
+      }
+      window.__kunSummaries[completedSummary.url] = completedSummary
+      window.kunGui.dailyNotes.publishLinkSummaries({
+        [completedSummary.url]: completedSummary
+      })
+    }, day)
+    await page.getByRole('button', { name: /已完成 — 回归测试全部通过/ }).click()
+    assert.deepEqual(await owner.evaluate(() => window.__kunOpenedLinks), ['kun://dispatch/room-kun/wbl-42'])
+    await page.getByRole('button', { name: '整理设计稿: 勾选待办完成' }).click()
+    await page.getByRole('checkbox', { name: '整理设计稿', checked: true }).waitFor()
+
+    // Workbench reverse appendTask hot-syncs into the open Daily Notes window.
+    await owner.evaluate(async targetDay => {
+      await window.kunGui.dailyNotes.appendTask({
+        day: targetDay,
+        text: '来自会话的待办',
+        quadrant: 1,
+        linkLabel: '会话',
+        linkUrl: 'kun://thread/thr-99'
+      })
+    }, day)
+    await page.getByRole('checkbox', { name: '来自会话的待办' }).waitFor()
+
+    // Calendar month view: inspect bars, check task in day pane, and jump back to page editor.
+    await page.getByRole('button', { name: '月历' }).click()
+    assert.equal(await page.locator('.note-month-cell').count(), 42)
+    await page.getByRole('checkbox', { name: '来自会话的待办' }).check()
+    await page.getByRole('button', { name: '打开页面' }).click()
+    await page.getByRole('textbox', { name: '每日待办与笔记' }).waitFor()
+    await page.getByRole('button', { name: '紧急不重要', exact: true }).waitFor()
+    await page.getByRole('button', { name: '重要不紧急', exact: true }).waitFor()
 
     const geometry = await application.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find(win => win.webContents.getURL().endsWith('/daily-notes.html'))
@@ -91,9 +197,15 @@ async function main() {
       return win.getBounds()
     })
     await page.getByRole('textbox').press('ControlOrMeta+End')
-    await page.keyboard.insertText('！')
+    await page.keyboard.insertText('\n备注！')
     await close(page)
-    assert.match(await readFile(todayFile, 'utf8'), /！$/)
+    assert.equal(await readFile(todayFile, 'utf8'), [
+      '用户反馈',
+      '- [x] 跟进反馈 !3',
+      '- [x] 整理设计稿 [小Kun](kun://dispatch/room-kun/wbl-42) !2',
+      '- [x] 来自会话的待办 [会话](kun://thread/thr-99) !1',
+      '备注！'
+    ].join('\n'))
     page = await open()
     const restored = await application.evaluate(({ BrowserWindow }) => {
       const win = BrowserWindow.getAllWindows().find(win => win.webContents.getURL().endsWith('/daily-notes.html'))
@@ -115,34 +227,74 @@ async function main() {
     await owner.waitForFunction(() => document.hasFocus())
     assert.equal(await page.evaluate(() => document.visibilityState), 'visible')
 
-    // Keep a deliberately selected historical page in place across midnight.
-    await page.getByRole('combobox').selectOption('2020-02-29')
+    // Keep a deliberately selected historical page in place across midnight, then test rollover!
+    await pickQuickDate(page, '2020-02-29')
     await page.getByRole('checkbox', { name: 'Earlier task' }).waitFor()
     const tomorrow = new Date(day + 'T12:00:00')
     tomorrow.setDate(tomorrow.getDate() + 1)
     await page.clock.setFixedTime(tomorrow)
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
-    assert.equal(await page.getByRole('combobox').inputValue(), '2020-02-29')
-    const nextDay = await page.locator('option').first().getAttribute('value')
+    assert.equal(await selectedDay(page), '2020-02-29')
+    await page.getByRole('button', { name: '回到今天' }).click()
+    await page.waitForFunction(previous => {
+      const current = document.querySelector('.daily-notes')?.dataset.selectedDay
+      return Boolean(current && current !== '2020-02-29' && current !== previous)
+    }, day)
+    const nextDay = await selectedDay(page)
     assert.notEqual(nextDay, day)
-    await page.getByRole('combobox').selectOption(nextDay)
-    await page.waitForFunction(date => document.querySelector('select').value === date, nextDay)
-    await page.getByRole('textbox').fill('新一天')
+    await page.getByRole('textbox').fill('- [ ] 跨日顺延待办 !1')
     const following = new Date(tomorrow)
     following.setDate(following.getDate() + 1)
     await page.clock.setFixedTime(following)
     await page.evaluate(() => window.dispatchEvent(new Event('focus')))
-    await page.waitForFunction(date => document.querySelector('select').value !== date, nextDay)
-    assert.equal(await readFile(join(notes, nextDay + '.md'), 'utf8'), '新一天')
-    await page.getByRole('combobox').selectOption(day)
-    await page.getByRole('checkbox', { name: /跟进反馈/ }).waitFor()
+    await page.waitForFunction(previous => document.querySelector('.daily-notes')?.dataset.selectedDay !== previous, nextDay)
+    assert.equal(await readFile(join(notes, nextDay + '.md'), 'utf8'), '- [ ] 跨日顺延待办 !1')
+
+    // Rollover banner carries unfinished tasks from nextDay into following day.
+    await page.getByRole('button', { name: '顺延到今天' }).click()
+    await page.getByRole('checkbox', { name: '跨日顺延待办' }).waitFor()
+    assert.equal(await readFile(join(notes, nextDay + '.md'), 'utf8'), '')
+
+    // Continuous day stream renders non-empty historical day (`day`) right below today.
+    await page.locator(`[data-stream-day="${day}"]`).waitFor()
+
+    // Focus View (drill-down): zoom into task, write sub-notes, start direct session, and return via breadcrumb.
+    await page.getByRole('button', { name: '跨日顺延待办: 下钻聚焦此待办' }).click()
+    await page.locator('.note-page.is-focus-view').waitFor()
+    await page.getByRole('textbox', { name: '每日待办与笔记' }).focus()
+    await page.keyboard.insertText('- 根源分析说明')
+    await page.getByRole('button', { name: '跨日顺延待办: 直接启动会话' }).click()
+    await page.getByRole('dialog', { name: '从待办直接启动会话' }).waitFor()
+    await page.getByRole('button', { name: '启动会话', exact: true }).click()
+    await page.getByRole('button', { name: /小Kun处理中|KunRepo/ }).waitFor()
+    const started = await owner.evaluate(() => window.__kunStartedThreads)
+    assert.equal(started.length, 1)
+    assert.match(started[0].prompt, /根源分析说明/)
+    await page.locator('.note-crumb-back').click()
+    await page.locator('.note-bullet-dot.is-ringed').first().waitFor()
+
+    // Dock-to-workbench closes the floating window and forwards the active day to the main workbench.
+    const followingDay = await selectedDay(page)
+    const closedOnDock = page.waitForEvent('close')
+    await page.getByRole('button', { name: '停靠到主窗口侧边' }).click()
+    await closedOnDock
+    const dockedPayloads = await owner.evaluate(() => window.__kunDockedPayloads)
+    assert.equal(dockedPayloads[0]?.day, followingDay)
+    const wbRead = await owner.evaluate(targetDay => window.kunGui.dailyNotes.read(targetDay), followingDay)
+    assert.match(wbRead, /kun:\/\/thread\/thr-direct-1/)
+    assert.match(wbRead, / {2}- 根源分析说明/)
+
+    // Reopen standalone window for final flush-on-quit check.
+    page = await open()
+    await pickQuickDate(page, day)
+    await page.getByRole('checkbox', { name: '跟进反馈' }).waitFor()
 
     await page.getByRole('textbox').press('ControlOrMeta+End')
     await page.keyboard.insertText('保存')
     await application.close()
     application = null
     assert.match(await readFile(todayFile, 'utf8'), /保存$/)
-    console.log('Daily notes passed: singleton, IME composition, checkbox, history, midnight, focus, close, geometry, pin and quit.')
+    console.log('Daily notes passed: singleton, IME, checkbox, date-picker, stream, focus-drilldown, direct-session, dock-bridge, quadrants, calendar, Kun handoff, live link sync, reverse append, rollover, midnight, close, geometry, pin and quit.')
   } finally {
     if (application) await application.close()
     await rm(fixture, { recursive: true, force: true })

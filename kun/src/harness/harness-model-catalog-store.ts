@@ -15,7 +15,7 @@ import { nativeAgentNetworkIdentity } from './native-agent-network.js'
 import { providerBinaryEnvKeys, providerModule } from './providers/registry.js'
 
 /** Bump when probe parsing changes what a catalog means; old entries then re-probe once. */
-const CATALOG_FORMAT = 1
+const CATALOG_FORMAT = 2
 const MAX_ENTRIES = 64
 const SAVE_DEBOUNCE_MS = 1_000
 /** Identity reads stat files (and one engine's credential database); pickers ask several times per list. */

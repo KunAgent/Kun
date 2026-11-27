@@ -2,10 +2,11 @@ import { useLayoutEffect, useRef } from 'react'
 import { PetAnimationLoop, type PetPaint } from './pet-animation-loop'
 
 /** Positions and sprite frames belong to the animation loop, not React state. */
-export function usePetAnimationPainter(key: string, paused: boolean, paint: PetPaint): void {
+export function usePetAnimationPainter(key: string, paused: boolean, paint: PetPaint): () => void {
   const painter = useRef(paint)
   const pause = useRef(paused)
   const loop = useRef<PetAnimationLoop | null>(null)
+  const wake = useRef(() => { loop.current?.refresh() })
   useLayoutEffect(() => { painter.current = paint; pause.current = paused })
   useLayoutEffect(() => {
     const media = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -29,6 +30,7 @@ export function usePetAnimationPainter(key: string, paused: boolean, paint: PetP
   useLayoutEffect(() => {
     loop.current?.update({ hidden: document.hidden, paused, reduced: window.matchMedia('(prefers-reduced-motion: reduce)').matches })
   })
+  return wake.current
 }
 
 // Avoid reassigning unchanged sprite positions (browsers normalize percentage strings).

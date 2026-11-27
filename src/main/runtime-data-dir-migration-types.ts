@@ -118,7 +118,14 @@ export type RuntimeMigrationJournal = {
   runtimeVerificationLastAttemptAt?: string
   runtimeVerificationMissingThreadIds?: string[]
   runtimeVerificationStoppedAt?: string
+  runtimeVerificationInventory?: 'paginated'
   error?: string
+}
+
+export type PreservedHistoryCheck = {
+  path: string
+  inventory: RuntimeStoreInventory
+  fingerprint?: string
 }
 
 export type RuntimeDataDirMigrationResult = {
@@ -129,6 +136,7 @@ export type RuntimeDataDirMigrationResult = {
   destinationBackupPath?: string
   journalPath: string
   reportPath?: string
+  preservedHistoryCheck?: PreservedHistoryCheck
   message?: string
 }
 
@@ -234,6 +242,7 @@ export type PreservationJournal = {
   runtimeVerificationLastAttemptAt?: string
   runtimeVerificationMissingThreadIds?: string[]
   runtimeVerificationStoppedAt?: string
+  runtimeVerificationInventory?: 'paginated'
   error?: string
 }
 

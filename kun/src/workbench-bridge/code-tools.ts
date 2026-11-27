@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { LocalToolHost, type LocalTool } from '../adapters/tool/local-tool-host.js'
 import { agentStableId } from '../agents/agent-identity-service.js'
-import { WORKBENCH_LIMITS, WorkbenchExecutionSchema, WorkbenchScheduleSchema, type WorkbenchLink } from '../contracts/workbench-links.js'
+import { WORKBENCH_LIMITS, WorkbenchDailyNoteRefSchema, WorkbenchExecutionSchema, WorkbenchScheduleSchema, type WorkbenchLink } from '../contracts/workbench-links.js'
 import { resolveThreadAgentSurface } from '../domain/thread.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from '../rooms/room-ax-surfaces.js'
 import { WorkbenchBridge } from './bridge.js'
@@ -43,7 +43,8 @@ const CreateTaskInput = z.object({
   agentSelection: z.enum(['user', 'auto']).default('user'),
   schedule: WorkbenchScheduleSchema.optional(),
   isolation: z.enum(['inherit', 'worktree']).default('inherit'),
-  report: z.enum(['final', 'silent']).default('final')
+  report: z.enum(['final', 'silent']).default('final'),
+  dailyNote: WorkbenchDailyNoteRefSchema.optional()
 }).strict()
 const LinkInput = z.object({ linkId: LinkId }).strict()
 const MessageTaskInput = z.object({ linkId: LinkId, message: z.string().trim().min(1).max(2000) }).strict()
@@ -155,7 +156,8 @@ export function workbenchCodeTools(threads: ThreadStore): LocalTool[] {
       const request = await validateExecution(scope.bridge, scope.roomId, {
         title: input.title, goal: input.goal, ...(input.acceptance ? { acceptance: input.acceptance } : {}),
         workspaceRoot: root, mode: input.mode, isolation: input.isolation, report: input.report,
-        ...(execution ? { execution } : {}), ...(input.schedule ? { schedule: input.schedule } : {})
+        ...(execution ? { execution } : {}), ...(input.schedule ? { schedule: input.schedule } : {}),
+        ...(input.dailyNote ? { dailyNote: input.dailyNote } : {})
       }, true)
       return requestWorkbenchLink(scope, { kind: 'code_task', surface: 'code',
         mode: !known || input.schedule || (request.execution?.mode === 'goal' && !request.execution.goalTokenBudget) ? 'confirm' : mode,

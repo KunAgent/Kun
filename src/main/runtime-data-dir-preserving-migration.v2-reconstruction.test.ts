@@ -238,11 +238,13 @@ describe('history-preserving Kun Runtime migration', () => {
     const journal = JSON.parse(await readFile(result.journalPath, 'utf8'))
     expect(journal.provenance).toBe('reconstructed-from-current')
     expect((await lstat(journal.compatibilityLinkBackupPath)).isSymbolicLink()).toBe(true)
+    expect(markCanonicalKunRuntimeMigrationRuntimeVerified(test.userData, ['thr_history']).status).toBe('verified')
     const report = JSON.parse(await readFile(
       join(test.userData, 'kun-runtime-data-migration-v3-report.json'),
       'utf8'
     ))
     expect(report.exactPreMigrationSnapshot).toBe(false)
+    expect(report.reconstructedPath).toBe(test.legacy)
     expect(report.warning).toContain('reconstructed from the current store')
 
     await writeFile(

@@ -15,22 +15,24 @@ import {
 } from './pets-payload'
 
 describe('pet contracts', () => {
-  it('namespaces every source, including Codex, and uses Awaken frame timing', () => {
+  it('namespaces every source, including Codex and KuroCat, and uses Awaken frame timing', () => {
     expect(petIdForSource('kun-builtin', 'kun-dot')).toBe('kun:kun-dot')
     expect(petIdForSource('kun-local', 'kun-dot')).toBe('kun-local:kun-dot')
     expect(petIdForSource('codex-custom', 'kun-dot')).toBe('codex-custom:kun-dot')
+    expect(petIdForSource('kurocat-custom', 'ragdoll')).toBe('kurocat:ragdoll')
     expect(PET_ROWS.waiting).toMatchObject({ row: 6, frames: 6 })
     expect(petSheetHeightForVersion(1)).toBe(1872)
     expect(petSheetHeightForVersion(2)).toBe(2288)
     expect(petAssetUrl('kun:kun-dot', 'abc')).toBe('kun-pet://asset/kun%3Akun-dot/spritesheet?v=abc')
   })
 
-  it('starts closed at 112 DIP with automatic activity and Codex import enabled', () => {
+  it('starts closed at 112 DIP with automatic activity and Codex + KuroCat import enabled', () => {
     expect(defaultPetSettings()).toMatchObject({
       selectedPetId: null,
       overlayOpen: false,
       mascotWidthPx: PET_MASCOT_DEFAULT_WIDTH_PX,
       importCodexPets: true,
+      importKurocatPets: true,
       reactionsEnabled: true,
       globalActivity: { keyboard: true, microphone: false }
     })
@@ -40,6 +42,11 @@ describe('pet contracts', () => {
     expect(parsePetSelectPayload('../x').ok).toBe(false)
     expect(parsePetSelectPayload(1).ok).toBe(false)
     expect(parsePetImportPreferences({ importCodexPets: 'yes' }).ok).toBe(false)
+    expect(parsePetImportPreferences({ importKurocatPets: 'yes' }).ok).toBe(false)
+    expect(parsePetImportPreferences({ importKurocatPets: false })).toEqual({
+      ok: true,
+      value: { importCodexPets: undefined, importKurocatPets: false }
+    })
     expect(parsePetActionRequest({ type: 'stop', threadId: 'thr', turnId: 'turn' })).toMatchObject({ ok: true })
     expect(parsePetActionRequest({ type: 'reply', threadId: 'thr' })).toMatchObject({
       ok: true,

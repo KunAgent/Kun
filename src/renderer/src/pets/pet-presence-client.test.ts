@@ -56,7 +56,7 @@ describe('typing presence', () => {
     vi.useFakeTimers()
     const send = vi.fn()
     vi.stubGlobal('window', { kunGui: { pets: { updatePetPresence: send } } })
-    document.body.innerHTML = '<div data-floating-composer><textarea></textarea><input type="password"></div><input id="setting">'
+    document.body.innerHTML = '<div data-floating-composer><textarea></textarea><input type="password"></div><textarea id="room"></textarea><div id="note" contenteditable=""></div><input id="setting">'
     const stop = startPetTypingPresence(document)
     const editor = document.querySelector('textarea')!
     Object.defineProperty(editor, 'value', { get: () => { throw new Error('text must not be read') } })
@@ -66,8 +66,12 @@ describe('typing presence', () => {
     vi.advanceTimersByTime(125)
     editor.dispatchEvent(new CompositionEvent('compositionupdate', { bubbles: true, data: 'private' }))
     expect(send).toHaveBeenCalledTimes(2)
+    vi.advanceTimersByTime(125)
+    document.querySelector('#room')!.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF', bubbles: true }))
+    expect(send).toHaveBeenCalledTimes(3)
+    expect(send.mock.lastCall?.[0]).toMatchObject({ type: 'keyboard', held: 1, tap: 1, zone: { col: 2, row: 1 } })
     for (const input of document.querySelectorAll('input')) input.dispatchEvent(new InputEvent('input', { bubbles: true }))
-    expect(send).toHaveBeenCalledTimes(2)
+    expect(send).toHaveBeenCalledTimes(3)
     expect(send.mock.calls[0][0]).toEqual({ type: 'keyboard', source: expect.any(String), held: 0, tap: 1 })
     editor.dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
     expect(send.mock.lastCall?.[0].kind).toBe('idle')

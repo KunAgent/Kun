@@ -18,7 +18,8 @@ export type PostWindowRuntimeStartupDeps = {
   loadGuiUpdaterModule: () => Promise<StartupGuiUpdaterModule | null>
   showCliInstallPrompt: () => Promise<void>
   logWarn: (category: string, message: string, detail?: unknown) => void
-  onReady?: () => void
+  finishStartup?: () => void
+  onReady?: (runtimeConnected: boolean) => void
 }
 
 export async function runPostWindowRuntimeStartup(
@@ -39,8 +40,9 @@ export async function runPostWindowRuntimeStartup(
   )
   if (current) await deps.enqueueStartupSettingsApply(current)
 
-  deps.onReady?.()
+  deps.finishStartup?.()
   deps.startupState.transition('ready')
+  deps.onReady?.(Boolean(current))
 
   try {
     const updaterModule = await deps.loadGuiUpdaterModule()

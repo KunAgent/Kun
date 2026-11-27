@@ -49,6 +49,10 @@ import { GroupParamSchemas, GroupWriteParamSchemas } from './groups/contracts.js
 import { RemoteCollaboration } from './collaboration/service.js'
 import { RemoteSchedules } from './schedules/service.js'
 import { RemotePlugins } from './plugins/service.js'
+import { TodoParamSchemas } from './todos/contracts.js'
+import { RemoteTodos } from './todos/service.js'
+import { ProjectBoardParamSchemas } from './project-board/contracts.js'
+import { RemoteProjectBoard } from './project-board/service.js'
 import { remoteCatalog, remoteCapabilityDescriptors } from './catalog.js'
 
 const strictMethods = new Set<string>(OPERATION_METHODS)
@@ -80,6 +84,8 @@ export class RemoteFacade {
   private readonly collaboration: RemoteCollaboration
   private readonly schedules: RemoteSchedules
   private readonly plugins: RemotePlugins
+  private readonly todos: RemoteTodos
+  private readonly projectBoard: RemoteProjectBoard
   private readonly attachmentAdmissions: RemoteAttachmentAdmissions
   private readonly handlers = new Map<string, (scope: Envelope, params: any) => Promise<unknown>>()
 
@@ -108,6 +114,8 @@ export class RemoteFacade {
     this.collaboration = new RemoteCollaboration(runtime)
     this.schedules = new RemoteSchedules(runtime)
     this.plugins = new RemotePlugins(runtime)
+    this.todos = new RemoteTodos(runtime)
+    this.projectBoard = new RemoteProjectBoard(runtime)
     this.attachmentAdmissions = new RemoteAttachmentAdmissions(runtime)
     this.dispatches = new RemoteDispatch(runtime, () => this.tasks.models())
     this.registerHandlers()
@@ -140,6 +148,7 @@ export class RemoteFacade {
     if (method === 'dispatch.act') return this.dispatches.preflight(params)
     if (Object.hasOwn(GroupParamSchemas, method)) return this.groups.preflight(method, params, envelope)
     if (method === 'plugin.setEnabled') return this.plugins.preflight(envelope, params)
+    if (Object.hasOwn(ProjectBoardParamSchemas, method)) return this.projectBoard.preflight(method, params)
     if (Object.hasOwn(CodeManagementParamSchemas, method)) return this.code.preflight(method, params)
     try {
       if (this.history.supports(method)) return await this.history.preflight(method, params)
@@ -166,6 +175,7 @@ export class RemoteFacade {
     else if (Object.hasOwn(ExecutionQueueParamSchemas, method)) result = await this.queue.recover(scope, receipt)
     else if (Object.hasOwn(GroupWriteParamSchemas, method)) result = await this.groups.recoverMutation(scope, receipt)
     else if (method === 'plugin.setEnabled') result = await this.plugins.recover(scope, receipt)
+    else if (Object.hasOwn(ProjectBoardParamSchemas, method)) result = await this.projectBoard.recover(scope, receipt)
     else if (method === 'group.message.send' && typeof receipt.params.roomId === 'string')
       result = await this.groups.recover(scope, receipt.params.roomId, receipt.requestId)
     return { receipt: result === undefined ? receipt : await this.receipts.recovered(scope, id, result) }
@@ -210,6 +220,8 @@ export class RemoteFacade {
       : scope.call.method === 'approval.resolve' ? this.approvals.resolve(scope, p) : this.approvalQueries.dispatch(scope, p))
     add(RequestParamSchemas, (scope, p) => this.lookup(scope, p.requestId))
     add(CodeHistoryParamSchemas, (scope, p) => this.history.dispatch(scope.call.method, p, scope))
+    add(TodoParamSchemas, (_scope, p) => this.todos.get(p.threadId))
+    add(ProjectBoardParamSchemas, (scope, p) => this.projectBoard.dispatch(scope, p))
     const single: Partial<Record<Method, (scope: Envelope, p: any) => Promise<unknown>>> = {
       'catalog.get': (scope) => remoteCatalog(this.runtime, scope, () => this.tasks.models(),
         () => remoteCapabilityDescriptors(this.runtime, scope, this.agents, this.source)),

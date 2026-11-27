@@ -1,7 +1,10 @@
 import { petTypingCutouts, petTypingRig } from './pets/typing/typing-rig'
+import { createPetGazeMemory } from './pets/typing/typing-motion'
 import { loadJointTexture } from './pets/joint/assets'
+import { loadSoloEyeOverlays } from './pets/joint/eye-layer'
 import type { PetVisit } from '@shared/pets-visits'
 import { defaultPetVisits } from '@shared/pets-visits'
+import { isKuroCatBootstrap, kuroCatStageSize, KuroCatStage } from './pets/kurocat/kurocat-stage'
 import { PetReactionStage } from './pets/pet-reaction-stage'
 import { usePetPresence } from './pets/use-pet-presence'
 import { startPetTypingPresence } from './pets/pet-presence-client'
@@ -16,6 +19,8 @@ import {
   type PetOverlayLayout
 } from '@shared/pets'
 import { PetResidentSprite } from './pets/pet-resident-sprite'
+import { petAudio } from './pets/pet-audio'
+import { PetHeadPatTracker } from './pets/pet-head-pat'
 import { acceptPetSnapshot, earliestPetNotificationExpiry, visiblePetNotifications } from './pets/pet-activity'
 import { PetWorkBubbles } from './pets/pet-bubble'
 import { PetQuickChat } from './pets/pet-quick-chat'
@@ -32,9 +37,6 @@ import './pet-overlay.css'
 function PetOverlayApp(): React.JSX.Element {
   const bridge = window.kunPetOverlay
   const [bootstrap, setBootstrap] = useState<PetOverlayBootstrap | null>(null)
-  const reactions = usePetPresence(bridge, bootstrap)
-  const heldReaction = useRef<typeof reactions | null>(null)
-  const heldVisit = useRef<PetVisit | null>(null)
   const [snapshot, setSnapshot] = useState<PetActivitySnapshot | null>(null)
   const [width, setWidth] = useState(112)
   const [nativeLayout, setNativeLayout] = useState<PetOverlayLayout | null>(null)
@@ -46,10 +48,29 @@ function PetOverlayApp(): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [dragDirection, setDragDirection] = useState<PetDragDirection>('right')
+  const [dragVelX, setDragVelX] = useState(0)
   const [expanded, setExpanded] = useState(false)
   const [bubblesCollapsed, setBubblesCollapsed] = useState(false)
   const [quickChatInteractive, setQuickChatInteractive] = useState(false)
   const [editing, setEditing] = useState<string | null>(null)
+  const [patting, setPatting] = useState(false)
+  const uiBlockingDesk = menuOpen || quickChatInteractive || dragging || Boolean(editing) || patting
+  const petUiActive = hover || controlsHover || uiBlockingDesk
+  const reactions = usePetPresence(bridge, bootstrap, uiBlockingDesk, patting)
+  const heldReaction = useRef<typeof reactions | null>(null)
+  const heldVisit = useRef<PetVisit | null>(null)
+  const gazeMemory = useRef(createPetGazeMemory())
+  const headPat = useRef(new PetHeadPatTracker())
+  const petIdRef = useRef<string | null>(null)
+  petIdRef.current = bootstrap?.petId ?? null
+  const isKuroCat = isKuroCatBootstrap(bootstrap)
+  const isKuroCatRef = useRef(false)
+  isKuroCatRef.current = isKuroCat
+  const liveTyping = reactions.presence.input?.typing
+  const lastStrikeAt = Math.max(liveTyping?.left.struckAt ?? 0, liveTyping?.right.struckAt ?? 0)
+  const activelyTypingRef = useRef(false)
+  activelyTypingRef.current = (liveTyping?.held ?? 0) !== 0 || (lastStrikeAt > 0 && Date.now() - lastStrikeAt < 1600)
+  const mascotHitRef = useRef<{ left: number; top: number; right: number; bottom: number } | null>(null)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [queued, setQueued] = useState<Record<string, string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -57,6 +78,7 @@ function PetOverlayApp(): React.JSX.Element {
   const [closedKeys, setClosedKeys] = useState<string[]>([])
   const inFlight = useRef(new Set<string>())
   const dragOrigin = useRef<{ x: number; y: number } | null>(null)
+  const lastDragScreenX = useRef<number | null>(null)
   const hitRef = useRef<HTMLDivElement | null>(null)
   const companionRef = useRef<HTMLDivElement | null>(null)
   const controlsRef = useRef<HTMLDivElement | null>(null)
@@ -72,16 +94,30 @@ function PetOverlayApp(): React.JSX.Element {
   useEffect(() => {
     if (!draggingRef.current) return
     dragOrigin.current = null
+    lastDragScreenX.current = null
+    setDragVelX(0)
     setDragging(false)
     bridge.cancelDrag()
   }, [bridge, bootstrap?.petId])
 
   useEffect(() => startPetTypingPresence(document), [])
+  const soundEnabled = bootstrap?.soundEnabled !== false
   useEffect(() => {
-    if (bootstrap?.petId && bootstrap.spritesheetUrl && bootstrap.interactions?.joint) {
-      void loadJointTexture({ id: bootstrap.petId, spritesheetUrl: bootstrap.spritesheetUrl }, petTypingRig({ id: bootstrap.petId, interactions: bootstrap.interactions })!, petTypingCutouts({ id: bootstrap.petId })).catch(() => undefined)
+    petAudio.setSoundEnabled(Boolean(bootstrap?.isOpen !== false && bootstrap?.reactionsEnabled !== false && soundEnabled))
+  }, [bootstrap?.isOpen, bootstrap?.reactionsEnabled, soundEnabled])
+  useEffect(() => () => { petAudio.dispose() }, [])
+  useEffect(() => {
+    gazeMemory.current = createPetGazeMemory()
+    headPat.current.reset()
+    petAudio.setPurrIntensity(0, true)
+    setPatting(false)
+    if (!isKuroCatBootstrap(bootstrap) && bootstrap?.petId && bootstrap.spritesheetUrl) {
+      void loadSoloEyeOverlays(bootstrap.petId, bootstrap.spritesheetUrl).catch(() => undefined)
+      if (bootstrap.interactions?.joint) {
+        void loadJointTexture({ id: bootstrap.petId, spritesheetUrl: bootstrap.spritesheetUrl }, petTypingRig({ id: bootstrap.petId, interactions: bootstrap.interactions })!, petTypingCutouts({ id: bootstrap.petId })).catch(() => undefined)
+      }
     }
-  }, [bootstrap?.petId, bootstrap?.spritesheetUrl, bootstrap?.interactions])
+  }, [bootstrap])
 
   useEffect(() => {
     let cancelled = false
@@ -91,6 +127,7 @@ function PetOverlayApp(): React.JSX.Element {
     }
     void bridge.getBootstrap().then((value) => {
       if (cancelled) return
+      petAudio.noteTyping(value.presence?.input?.typing, true)
       setBootstrap(value)
       setWidth(value.mascotWidthPx)
       if (value.layout) setNativeLayout(value.layout)
@@ -117,11 +154,11 @@ function PetOverlayApp(): React.JSX.Element {
   }, [bridge])
 
   useEffect(() => {
-    const wants = hover || dragging || menuOpen
+    const wants = hover || controlsHover || dragging || menuOpen || quickChatInteractive
     if (interactiveRef.current === wants) return
     interactiveRef.current = wants
     bridge.setPointerInteractive(wants)
-  }, [bridge, hover, dragging, menuOpen])
+  }, [bridge, hover, controlsHover, dragging, menuOpen, quickChatInteractive])
 
   useEffect(() => {
     let leaveTimer = 0
@@ -138,8 +175,15 @@ function PetOverlayApp(): React.JSX.Element {
       const pet = hit?.querySelector<HTMLElement>('.pet-character-stage')?.getBoundingClientRect()
       const controls = hit?.querySelector<HTMLElement>(controlsVisibleRef.current
         ? '.pet-quick-composer, .pet-toolbar' : '.pet-toolbar-handle')?.getBoundingClientRect()
+      const overMascot = pointInsidePetHit(point, mascotHitRef.current)
+      if (mascotHitRef.current && !draggingRef.current && !isKuroCatRef.current && !activelyTypingRef.current) {
+        const box = mascotHitRef.current
+        const relX = (point.x - (box.left + box.right) * 0.5) / Math.max(1, (box.right - box.left) * 0.5)
+        const relY = (point.y - (box.top + box.bottom) * 0.5) / Math.max(1, (box.bottom - box.top) * 0.5)
+        if (headPat.current.noteMove(relX, relY, event.buttons, Date.now(), petIdRef.current)) setPatting(true)
+      }
       const overJoint = Boolean(document.elementFromPoint(point.x, point.y)?.closest('.pet-joint-hit'))
-      const overCompanion = overJoint || Array.from(hit?.querySelectorAll<HTMLElement>('.pet-sprite') ?? []).some((element) => pointInsidePetHit(point, element.getBoundingClientRect())) || pointInsidePetHit(point, controls ?? null) ||
+      const overCompanion = overMascot || overJoint || Array.from(hit?.querySelectorAll<HTMLElement>('.pet-sprite') ?? []).some((element) => pointInsidePetHit(point, element.getBoundingClientRect())) || pointInsidePetHit(point, controls ?? null) ||
         (controlsVisibleRef.current && pet && controls ? pointInsidePetHit(point, petControlsBridge(pet, controls)) : false)
       if (overCompanion || draggingRef.current) {
         window.clearTimeout(controlsLeaveTimer)
@@ -160,7 +204,7 @@ function PetOverlayApp(): React.JSX.Element {
       }
       leave()
     }
-    const onLeave = (): void => { leave(); leaveControls() }
+    const onLeave = (): void => { headPat.current.leave(); leave(); leaveControls() }
     const onOut = (event: MouseEvent): void => { if (!event.relatedTarget) onLeave() }
     window.addEventListener('mousemove', onMove, true)
     window.addEventListener('mouseout', onOut)
@@ -180,6 +224,40 @@ function PetOverlayApp(): React.JSX.Element {
     return () => window.removeEventListener('resize', resize)
   }, [])
 
+  useEffect(() => {
+    const t = reactions.presence.input?.typing
+    petAudio.noteTyping(t, false)
+    const struck = Math.max(t?.left.struckAt ?? 0, t?.right.struckAt ?? 0)
+    if (patting && ((t?.held ?? 0) !== 0 || (struck > 0 && Date.now() - struck < 280))) {
+      headPat.current.reset()
+      setPatting(false)
+    }
+  }, [reactions.presence, patting])
+
+  useEffect(() => {
+    petAudio.noteCursor(reactions.cursor, petUiActive, false)
+  }, [reactions.cursor, petUiActive])
+
+  useEffect(() => {
+    const sample = reactions.cursor
+    if (!sample?.overMascot || draggingRef.current) return
+    setHover(true)
+    setControlsHover(true)
+    if (!isKuroCatRef.current && !activelyTypingRef.current && sample.localX !== undefined && sample.localY !== undefined) {
+      if (headPat.current.noteMove(sample.localX, sample.localY, sample.buttons, Date.now(), petIdRef.current)) {
+        setPatting(true)
+      }
+    }
+  }, [reactions.cursor])
+
+  useEffect(() => {
+    if (!patting) return undefined
+    const timer = window.setInterval(() => {
+      if (!headPat.current.isActive()) setPatting(false)
+    }, 350)
+    return () => window.clearInterval(timer)
+  }, [patting])
+
   const dismissed = new Set([...(bootstrap?.dismissedNotificationKeys ?? []), ...closedKeys])
   const retained = new Set([...(editing ? [editing] : []), ...Object.keys(queued)])
   const notifications = snapshot ? visiblePetNotifications(snapshot, dismissed, now, retained) : []
@@ -188,25 +266,36 @@ function PetOverlayApp(): React.JSX.Element {
   const bubblesRevealed = !bubblesHidden && hover
   const controlsSize = usePetSurfaceSize(controlsRef, true, { width: 140, height: 44 })
   const noticeSize = usePetSurfaceSize(noticeRef, bubblesRevealed, { width: 330, height: 80 })
-  const menuSize = usePetSurfaceSize(menuRef, menuOpen, { width: 136, height: 74 })
+  const menuSize = usePetSurfaceSize(menuRef, menuOpen, { width: 144, height: 108 })
   const liveVisit = usePetVisits({ bridge, bootstrap, presence: reactions.presence, work: snapshot,
     blocked: dragging || menuOpen || quickChatInteractive || Boolean(editing) })
   const currentVisit = liveVisit?.primaryId === bootstrap?.petId ? liveVisit : null
   if (!dragging || heldVisit.current?.primaryId !== bootstrap?.petId) heldVisit.current = currentVisit
   const visit = dragging ? heldVisit.current : currentVisit
-  if (!dragging) heldReaction.current = bootstrap?.spritesheetUrl && reactions.input ? reactions : null
+  if (!dragging) heldReaction.current = !isKuroCat && bootstrap?.spritesheetUrl && reactions.input ? reactions : null
   const reaction = heldReaction.current
-  const reactionSize = { width: Math.min(viewport.width - 16, reaction?.input?.kind === 'typing' ? Math.max(180, width * 1.3 + 24) : Math.max(160, width + 32)),
-    height: Math.min(viewport.height - 32, width * 208 / 192 + (reaction?.input?.kind === 'typing' ? 36 : 72)) }
+  const kuroSize = kuroCatStageSize(bootstrap, width, viewport)
+  const reactionSize = { width: Math.min(viewport.width - 16, reaction?.input?.kind === 'typing' ? Math.max(228, Math.round(width * 1.7 + 30)) : Math.max(160, width + 32)),
+    height: Math.min(viewport.height - 32, width * 208 / 192 + (reaction?.input?.kind === 'typing' ? 44 : 72)) }
   const visitSize = { width: Math.max(160, Math.min(404, viewport.width - 16)), height: Math.min(300, viewport.height - 32) }
   const anchor = petViewportAnchor(nativeLayout ?? { anchorX: viewport.width / 2, anchorY: viewport.height / 2,
     viewportWidth: viewport.width, viewportHeight: viewport.height }, viewport, width)
   const placement = petSurfaceLayout({
     anchor,
-    petWidth: width, ...(visit ? { petSize: visitSize } : reaction ? { petSize: reactionSize } : {}), controls: controlsSize, notification: noticeSize, menu: menuSize
+    petWidth: width,
+    ...(visit ? { petSize: visitSize } : isKuroCat ? { petSize: kuroSize } : reaction ? { petSize: reactionSize } : {}),
+    controls: controlsSize,
+    notification: noticeSize,
+    menu: menuSize
   })
   const business = effectivePetBusinessState({ activeStatus: active?.status ?? null, welcomeUntilMs: welcome, nowMs: now })
-  const animation: PetAnimationState = resolveOverlayAnimationState({ resizeMode: false, dragging, dragDirection, hover, effectiveBusinessState: business })
+  const animation: PetAnimationState = resolveOverlayAnimationState({
+    resizeMode: false,
+    dragging,
+    dragDirection,
+    hover: business === 'idle' ? false : hover,
+    effectiveBusinessState: business
+  })
   const nextExpiry = earliestPetNotificationExpiry(notifications, now)
   useEffect(() => {
     if (!welcome) return undefined
@@ -226,6 +315,19 @@ function PetOverlayApp(): React.JSX.Element {
   }, [nextExpiry])
   const version = bootstrap?.spriteVersionNumber ?? 1
   const height = Math.round(width * (PET_CELL_HEIGHT / PET_CELL_WIDTH))
+  mascotHitRef.current = isKuroCat && !visit
+    ? {
+        left: placement.pet.left,
+        right: placement.pet.left + placement.pet.width,
+        top: placement.pet.top,
+        bottom: placement.pet.top + placement.pet.height
+      }
+    : {
+        left: anchor.anchorX - width / 2,
+        right: anchor.anchorX + width / 2,
+        top: anchor.anchorY - height / 2,
+        bottom: anchor.anchorY + height / 2
+      }
 
   useEffect(() => {
     if (!menuOpen) return undefined
@@ -257,14 +359,23 @@ function PetOverlayApp(): React.JSX.Element {
     setMenuOpen(false)
     event.currentTarget.setPointerCapture(event.pointerId)
     dragOrigin.current = { x: event.screenX, y: event.screenY }
+    lastDragScreenX.current = event.screenX
+    setDragVelX(0)
     bridge.beginDrag({ x: event.screenX, y: event.screenY })
   }
   const onPointerMove = (event: React.PointerEvent<HTMLButtonElement>): void => {
     if (!dragOrigin.current) return
     const dx = event.screenX - dragOrigin.current.x
     const dy = event.screenY - dragOrigin.current.y
+    const stepDx = lastDragScreenX.current !== null ? event.screenX - lastDragScreenX.current : 0
+    lastDragScreenX.current = event.screenX
+    setDragVelX(stepDx)
     setDragDirection((current) => nextDragDirection(current, dx))
-    if (classifyPointerGesture({ cancelled: false, dx, dy }) === 'drag') setDragging(true)
+    if (classifyPointerGesture({ cancelled: false, dx, dy }) === 'drag') {
+      headPat.current.reset()
+      setPatting(false)
+      setDragging(true)
+    }
     bridge.moveDrag({ x: event.screenX, y: event.screenY })
   }
   const finishPointer = (event: React.PointerEvent<HTMLButtonElement>, cancelled: boolean): void => {
@@ -275,9 +386,22 @@ function PetOverlayApp(): React.JSX.Element {
       dy: event.screenY - dragOrigin.current.y
     })
     dragOrigin.current = null
+    lastDragScreenX.current = null
+    setDragVelX(0)
     setDragging(false)
     if (cancelled || gesture === 'cancel') bridge.cancelDrag()
-    else bridge.endDrag({ x: event.screenX, y: event.screenY })
+    else {
+      bridge.endDrag({ x: event.screenX, y: event.screenY })
+      if (gesture === 'click' && mascotHitRef.current && !isKuroCatRef.current) {
+        const box = mascotHitRef.current
+        const relX = (event.clientX - (box.left + box.right) * 0.5) / Math.max(1, (box.right - box.left) * 0.5)
+        const relY = (event.clientY - (box.top + box.bottom) * 0.5) / Math.max(1, (box.bottom - box.top) * 0.5)
+        if (headPat.current.noteTap(relX, relY, Date.now(), petIdRef.current)) {
+          setPatting(true)
+          petAudio.playPatBoop()
+        }
+      }
+    }
   }
 
   const dismissNotification = (key: string): void => {
@@ -328,6 +452,18 @@ function PetOverlayApp(): React.JSX.Element {
       void bridge.performAction({ type: 'stop', threadId: active.threadId, turnId: active.turnId, unitId: active.unitId })
     }
     if (action === 'dismiss' && active) dismissNotification(active.key)
+  }
+
+  const stageActorEvents = {
+    onPointerDown,
+    onPointerMove,
+    onPointerUp: (event: React.PointerEvent<HTMLButtonElement>) => finishPointer(event, false),
+    onPointerCancel: (event: React.PointerEvent<HTMLButtonElement>) => finishPointer(event, true),
+    onContextMenu: (event: React.MouseEvent<HTMLButtonElement>) => { event.preventDefault(); setMenuOpen((open) => !open) },
+    onKeyDown: (event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (menuOpen && event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setMenuOpen(false); return }
+      if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) }
+    }
   }
 
   return (
@@ -394,22 +530,29 @@ function PetOverlayApp(): React.JSX.Element {
               primaryOrigin={{ x: anchor.anchorX - placement.pet.left,
                 y: anchor.anchorY - placement.pet.top }}
               onDismiss={() => void bridge.dismissPetVisit()}
-              actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
-                onPointerCancel: (event) => finishPointer(event, true),
-                onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
-                onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
-              }} /> : reaction && bootstrap ? <PetReactionStage pet={bootstrap}
-              typing={reaction.presence.input?.typing} expiresAt={reaction.presence.input?.expiresAt ?? 0}
+              actorEvents={stageActorEvents} /> : isKuroCat && bootstrap ? <KuroCatStage
+              pet={bootstrap}
+              typing={reactions.typing ?? reactions.presence.input?.typing}
+              cursor={reactions.cursor}
+              business={active?.status ?? 'idle'}
+              dragging={dragging}
+              dragVelX={dragVelX}
+              width={kuroSize.width}
+              height={kuroSize.height}
+              language={window.navigator.language}
+              menuOpen={menuOpen}
+              actorEvents={stageActorEvents}
+            /> : reaction && bootstrap ? <PetReactionStage pet={bootstrap}
+              typing={reaction.typing ?? reaction.presence.input?.typing} typingActive={reaction.typingActive}
+              cursor={reactions.cursor} gazeMemory={gazeMemory.current}
+              expiresAt={reaction.input?.kind === 'typing' ? reaction.deskExpiresAt : (reaction.presence.input?.expiresAt ?? 0)}
               primaryOrigin={{ x: anchor.anchorX - placement.pet.left,
                 y: anchor.anchorY - placement.pet.top }}
               eventId={reaction.presence.modelChangedAt} kind={reaction.input?.kind ?? 'typing'} level={reaction.input?.level ?? 0}
               language={window.navigator.language} width={reactionSize.width} height={reactionSize.height} mascotWidth={width} paused={dragging}
-              actorEvents={{ onPointerDown, onPointerMove, onPointerUp: (event) => finishPointer(event, false),
-                onPointerCancel: (event) => finishPointer(event, true),
-                onContextMenu: (event) => { event.preventDefault(); setMenuOpen((open) => !open) },
-                onKeyDown: (event) => { if (overlayKeyAction(event.key)) { event.preventDefault(); runKey(event.key) } }
-              }} /> : <PetResidentSprite
+              actorEvents={stageActorEvents} /> : <PetResidentSprite
               animation={animation} version={version} sheet={bootstrap?.spritesheetUrl}
+              petId={bootstrap?.petId} cursor={reactions.cursor} gazeMemory={gazeMemory.current} headPat={headPat.current}
               type="button"
               className="pet-sprite"
               aria-label={bootstrap?.displayName ?? 'Desktop pet'}
@@ -431,6 +574,14 @@ function PetOverlayApp(): React.JSX.Element {
           {menuOpen ? <div className="pet-menu-position" ref={menuRef}
             style={{ left: placement.menu.left, top: placement.menu.top }}>
             <PetContextMenu labels={menuLabels}
+              soundEnabled={soundEnabled}
+              onToggleSound={bridge.setPetSoundEnabled ? () => {
+                const next = !soundEnabled
+                setBootstrap((current) => current ? { ...current, soundEnabled: next } : current)
+                petAudio.setSoundEnabled(next)
+                setMenuOpen(false)
+                void bridge.setPetSoundEnabled?.(next)
+              } : undefined}
               onEnsemble={() => { setMenuOpen(false); void bridge.requestPetVisit() }}
               onClose={() => { setMenuOpen(false); hitRef.current?.querySelector<HTMLButtonElement>('.pet-sprite, .pet-joint-hit')?.focus() }}
               onSettings={() => { setMenuOpen(false); bridge.openPetSettings() }}

@@ -376,6 +376,8 @@
   "shortcutTogglePaperModeDesc": "Switch to Work and open the paper library.",
   "shortcutPaperImport": "Import paper",
   "shortcutPaperImportDesc": "Switch to Work and open the paper import dialog.",
+  "shortcutToggleDailyNotes": "일일 노트 및 할 일",
+  "shortcutToggleDailyNotesDesc": "일일 노트 및 할 일 패널이나 창을 열거나 닫습니다.",
   "shortcutModalTitle": "키보드 단축키",
   "shortcutModalSearchPlaceholder": "단축키 검색…",
   "shortcutModalEmpty": "검색과 일치하는 단축키가 없습니다.",

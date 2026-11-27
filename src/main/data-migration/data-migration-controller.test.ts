@@ -50,8 +50,8 @@ describe('data migration IPC sender boundary', () => {
 })
 
 describe('data migration runtime thread inventory', () => {
-  it('requests the complete supported inventory without exceeding the route limit', async () => {
-    const runtimeFetch = vi.fn(async () => new Response(JSON.stringify({
+  it('follows the cursor with archived and side threads on every page', async () => {
+    const runtimeFetch = vi.fn().mockResolvedValueOnce(Response.json({
       threads: [{
         id: 'thr_side_archived',
         title: 'Side history',
@@ -60,14 +60,23 @@ describe('data migration runtime thread inventory', () => {
         relation: 'side',
         createdAt: '2026-07-16T00:00:00.000Z',
         updatedAt: '2026-07-16T00:01:00.000Z'
-      }]
-    }), { status: 200, headers: { 'content-type': 'application/json' } }))
+      }],
+      hasMore: true, nextCursor: 'before+/='
+    })).mockResolvedValueOnce(Response.json({ threads: [{ id: 'thr_older' }] }))
 
     await expect(listRuntimeThreadsForMigration(runtimeFetch)).resolves.toEqual([
-      expect.objectContaining({ id: 'thr_side_archived', status: 'archived', relation: 'side' })
+      expect.objectContaining({ id: 'thr_side_archived', status: 'archived', relation: 'side' }),
+      expect.objectContaining({ id: 'thr_older' })
     ])
-    expect(runtimeFetch).toHaveBeenCalledOnce()
-    expect(runtimeFetch).toHaveBeenCalledWith('/v1/threads?include_archived=true&include=side')
+    const first = '/v1/threads?include_archived=true&include=side&lean=true&limit=500'
+    expect(runtimeFetch.mock.calls).toEqual([[first], [first + '&cursor=before%2B%2F%3D']])
+  })
+
+  it('rejects a broken or cycling cursor without accepting a partial inventory', async () => {
+    const missing = () => Promise.resolve(Response.json({ threads: [], hasMore: true }))
+    const repeats = () => Promise.resolve(Response.json({ threads: [], hasMore: true, nextCursor: 'repeat' }))
+    await expect(listRuntimeThreadsForMigration(missing)).rejects.toThrow('cursor')
+    await expect(listRuntimeThreadsForMigration(repeats)).rejects.toThrow('cursor')
   })
 })
 

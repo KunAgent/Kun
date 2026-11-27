@@ -7,6 +7,7 @@ import { defaultPetVisits, type PetVisitPreferences, type PetVisitRequest } from
 import type { PetSceneId } from '../../shared/pets-ensemble'
 import type { PetPresenceSignal } from '../../shared/pets-interactions'
 import { PetPresence } from './pet-presence'
+import { PetCursorTracker } from './pet-cursor-tracker'
 import { isBuiltinPetId } from '../../shared/pets-builtin'
 import { defaultPetEnsemble, type PetEnsembleSettings } from '../../shared/pets-ensemble'
 import { app, BrowserWindow, ipcMain, powerMonitor, screen, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
@@ -18,7 +19,9 @@ import { resolveNamedPreloadPath } from '../main-paths'
 import { runtimeRequest } from '../main-runtime-settings'
 import { petStopConflict, validatePetStop } from './pet-actions'
 import { askPetChat, askPetFollowUp, settlePetFollowUp } from './pet-follow-up'
-import { detectCodexHome, localPetsRoot, refreshPetLibraries, resolveBuiltinPetsRoot } from './pet-importer'
+import { detectCodexHome, detectKurocatDataDir, localPetsRoot, refreshPetLibraries, resolveBuiltinPetsRoot } from './pet-importer'
+import { readKurocatBlackOverride, readKurocatUserPrefs } from './pet-kurocat-importer'
+import type { KuroCatSkinConfig, KuroCatUserPrefs } from '../../shared/pets-kurocat'
 import { petEventAllowed, petIpcHandlers, type PetIpcEvent } from './pet-ipc'
 import { bindPetAssetReader } from './pet-protocol'
 import { DEFAULT_BUILTIN_PET_ID, PetStore } from './pet-store'
@@ -66,15 +69,35 @@ class DesktopPetRuntime implements DesktopPets {
   private visitRequest: PetVisitRequest | null = null
   private visitSequence = 0
   private readonly bottleGate = new PetBottleGate()
+  private globalKeyboardVerified = false
+  private globalMouseVerified = false
+  private kurocatPrefs: KuroCatUserPrefs | null = null
+  private kurocatBlackOverride: KuroCatSkinConfig | null = null
   private readonly presence = new PetPresence((snapshot) => this.controller?.send(PET_IPC.overlayPresence, snapshot))
+  private readonly cursorTracker = new PetCursorTracker({
+    cursor: () => screen.getCursorScreenPoint?.() ?? { x: 0, y: 0 },
+    placement: () => this.controller?.cursorTarget?.() ?? null,
+    isOverlayInteractive: () => Boolean(this.controller?.isPointerInteractive?.()),
+    isTypingActive: () => {
+      const input = this.presence.snapshot().input
+      return Boolean(input && input.kind === 'typing' && input.expiresAt > Date.now())
+    },
+    publish: (sample) => {
+      this.controller?.setCursorOverMascot(Boolean(sample.overMascot))
+      this.controller?.send(PET_IPC.overlayCursor, sample)
+    }
+  })
 
   private suspended = false
   private readonly globalActivity = new PetGlobalActivity({
     platform: process.platform,
     executable: path.join(app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), 'resources'), 'native', 'pet-activity'),
-    signal: (signal) => this.presence.update(PET_GLOBAL_SENDER_ID, signal),
+    signal: (signal) => this.routePresenceSignal(PET_GLOBAL_SENDER_ID, signal),
     changed: () => {
-      this.presence.setGlobalKeyboardActive(this.globalActivity.status().keyboard === 'active')
+      if (this.globalActivity.status().keyboard !== 'active') {
+        this.globalKeyboardVerified = false
+        this.presence.setGlobalKeyboardActive(false)
+      }
       if (this.mainWindow && !this.mainWindow.isDestroyed()) this.mainWindow.webContents.send(PET_IPC.catalogChanged, {}) }
   })
   private readonly onSuspend = (): void => { this.suspended = true; this.syncGlobalActivity() }
@@ -82,10 +105,31 @@ class DesktopPetRuntime implements DesktopPets {
 
   constructor(private readonly store: PetStore, private readonly options: DesktopPetOptions) {}
 
+  private routePresenceSignal(senderId: number, signal: PetPresenceSignal): void {
+    if (signal.type === 'mouse') {
+      if (senderId === PET_GLOBAL_SENDER_ID) this.globalMouseVerified = true
+      this.cursorTracker.noteMouse(senderId, signal.buttons, signal.wheel, this.globalMouseVerified)
+      return
+    }
+    if (senderId === PET_GLOBAL_SENDER_ID && !this.globalKeyboardVerified &&
+      (signal.type === 'keyboard' || (signal.type === 'input' && signal.kind === 'typing')) &&
+      this.globalActivity.status().keyboard === 'active') {
+      this.globalKeyboardVerified = true
+      this.presence.setGlobalKeyboardActive(true)
+    }
+    this.presence.update(senderId, signal)
+  }
+
   private syncGlobalActivity(): void {
     const settings = this.store.getSettings()
-    this.globalActivity.configure(settings.globalActivity ?? defaultPetGlobalActivity(),
-      !this.suspended && settings.reactionsEnabled !== false && settings.overlayOpen && Boolean(this.controller?.isOpen()))
+    const active = !this.suspended && settings.reactionsEnabled !== false && settings.overlayOpen && Boolean(this.controller?.isOpen())
+    if (!active || !(settings.globalActivity ?? defaultPetGlobalActivity()).keyboard) {
+      this.globalKeyboardVerified = false
+      this.globalMouseVerified = false
+      this.presence.setGlobalKeyboardActive(false)
+    }
+    this.globalActivity.configure(settings.globalActivity ?? defaultPetGlobalActivity(), active)
+    this.cursorTracker.configure(active)
   }
 
   noteMainWindow(window: BrowserWindow | null): void {
@@ -164,6 +208,7 @@ class DesktopPetRuntime implements DesktopPets {
     powerMonitor.off('suspend', this.onSuspend)
     powerMonitor.off('resume', this.onResume)
     this.globalActivity.dispose()
+    this.cursorTracker.dispose()
     this.presence.dispose()
     this.detachMain?.()
     this.detachMain = null
@@ -182,6 +227,12 @@ class DesktopPetRuntime implements DesktopPets {
       setPetGlobalActivity: async (preferences: PetGlobalActivityPreferences) => {
         const settings = await this.store.setPetGlobalActivity(preferences)
         this.syncGlobalActivity()
+        this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
+        return settings
+      },
+      setPetSoundEnabled: async (enabled: boolean) => {
+        const settings = await this.store.setPetSoundEnabled(enabled)
+        this.controller?.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
         this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
         return settings
       },
@@ -204,7 +255,7 @@ class DesktopPetRuntime implements DesktopPets {
         this.controller.send(PET_IPC.overlayBootstrapChanged, this.bootstrap())
       },
       updatePresence: (senderId: number, signal: PetPresenceSignal) => {
-        this.presence.update(senderId, signal)
+        this.routePresenceSignal(senderId, signal)
       },
       setPetVisitPreferences: async (input: PetVisitPreferences) => {
         const settings = await this.store.setPetVisitPreferences(input)
@@ -250,10 +301,15 @@ class DesktopPetRuntime implements DesktopPets {
         this.mainWindow?.webContents.send(PET_IPC.catalogChanged, {})
         return settings
       },
-      setImportPreferences: (input: { importCodexPets?: boolean }) => this.store.setImportPreferences(input),
+      setImportPreferences: async (input: { importCodexPets?: boolean; importKurocatPets?: boolean }) => {
+        const settings = await this.store.setImportPreferences(input)
+        await this.refresh()
+        return settings
+      },
       refresh: () => this.refresh(),
       openKunDirectory: async () => { await this.openDirectory(localPetsRoot(this.store.libraryRoot())) },
       openCodexDirectory: async () => { await this.openDirectory(path.join(detectCodexHome(), 'pets')) },
+      openKurocatDirectory: async () => { await this.openDirectory(detectKurocatDataDir()) },
       interaction: async () => ({ mode: this.controller?.mode() ?? 'passthrough', note: this.controller?.policy.note ?? null }),
       updateActivity: (snapshot: PetActivitySnapshot) => {
         this.snapshot = snapshot
@@ -348,12 +404,21 @@ class DesktopPetRuntime implements DesktopPets {
 
   private async refresh(isFreshInstall = false) {
     const settings = this.store.getSettings()
+    const kurocatHome = detectKurocatDataDir()
+    const [prefs, blackOverride] = await Promise.all([
+      readKurocatUserPrefs(kurocatHome),
+      readKurocatBlackOverride(kurocatHome)
+    ])
+    this.kurocatPrefs = prefs
+    this.kurocatBlackOverride = blackOverride
     const report = await refreshPetLibraries({
       store: this.store,
       builtinRoot: resolveBuiltinPetsRoot({ packaged: app.isPackaged, resourcesPath: process.resourcesPath, appPath: app.getAppPath() }),
       localRoot: localPetsRoot(this.store.libraryRoot()),
       codexHome: detectCodexHome(),
-      importCodexPets: settings.importCodexPets
+      importCodexPets: settings.importCodexPets,
+      kurocatHome,
+      importKurocatPets: settings.importKurocatPets !== false
     })
     const defaultImported = [...report.imported, ...report.updated, ...report.unchanged]
       .some((pet) => pet.id === DEFAULT_BUILTIN_PET_ID)
@@ -382,6 +447,7 @@ class DesktopPetRuntime implements DesktopPets {
   private bootstrap(): PetOverlayBootstrap {
     const settings = this.store.getSettings()
     const manifest = settings.selectedPetId ? this.store.getManifest(settings.selectedPetId) : null
+    const kurocatSkin = manifest?.kurocatSkin ?? (manifest?.id === 'kun:kurocat' ? this.kurocatBlackOverride : null)
     return {
       petId: manifest?.id ?? null,
       displayName: manifest?.displayName ?? null,
@@ -399,6 +465,9 @@ class DesktopPetRuntime implements DesktopPets {
       interactions: manifest?.interactions,
       presence: this.presence.snapshot(),
       reactionsEnabled: settings.reactionsEnabled !== false,
+      soundEnabled: settings.soundEnabled !== false,
+      kurocatSkin,
+      kurocatPrefs: this.kurocatPrefs,
       visits: settings.visits ?? defaultPetVisits(),
       visitRequest: this.visitRequest,
       ensemblePets: this.store.listPets().filter((pet) => pet.source === 'kun-builtin' && isBuiltinPetId(pet.sourceId)),
@@ -429,7 +498,8 @@ class DesktopPetRuntime implements DesktopPets {
         preload: resolveNamedPreloadPath(app.getAppPath(), 'pet-overlay'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: true,
+        autoplayPolicy: 'no-user-gesture-required'
       }
     })
     const contentsId = window.webContents.id

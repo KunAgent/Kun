@@ -376,6 +376,8 @@
   "shortcutTogglePaperModeDesc": "Switch to Work and open the paper library.",
   "shortcutPaperImport": "Import paper",
   "shortcutPaperImportDesc": "Switch to Work and open the paper import dialog.",
+  "shortcutToggleDailyNotes": "บันทึกประจำวันและงาน",
+  "shortcutToggleDailyNotesDesc": "แสดงหรือซ่อนแผงหรือหน้าต่างบันทึกประจำวันและงาน",
   "shortcutModalTitle": "แป้นพิมพ์ลัด",
   "shortcutModalSearchPlaceholder": "ค้นหาแป้นพิมพ์ลัด…",
   "shortcutModalEmpty": "ไม่พบแป้นพิมพ์ลัดที่ตรงกับการค้นหา",

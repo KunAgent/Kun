@@ -9,7 +9,7 @@ describe('pet ensemble preferences', () => {
     expect(parsePetEnsemble({ ...input, members: ['xiao-kun', 'ikun'] })).not.toBeNull()
     expect(parsed).toEqual(input)
     expect(parsed?.members).not.toBe(input.members)
-    expect(parsed?.members).toHaveLength(3)
+    expect(parsed?.members).toHaveLength(4)
     expect(new Set(PET_SCENE_IDS).size).toBe(24)
   })
 

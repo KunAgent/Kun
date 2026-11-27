@@ -1,8 +1,10 @@
 import { useEffect, useRef, type ReactElement } from 'react'
-import { EyeOff, Settings, UsersRound } from 'lucide-react'
+import { EyeOff, Settings, UsersRound, Volume2, VolumeX } from 'lucide-react'
 
 export function PetContextMenu(props: {
-  labels: { settings: string; hide: string; ensemble?: string }
+  labels: { settings: string; hide: string; ensemble?: string; muteSound?: string; unmuteSound?: string }
+  soundEnabled?: boolean
+  onToggleSound?: () => void
   onEnsemble?: () => void
   onSettings: () => void
   onHide: () => void
@@ -35,6 +37,10 @@ export function PetContextMenu(props: {
       }}>
       {props.onEnsemble ? <button type="button" role="menuitem" className="pet-menu-item" onClick={props.onEnsemble}>
         <UsersRound aria-hidden="true" strokeWidth={1.7} /><span>{props.labels.ensemble}</span>
+      </button> : null}
+      {props.onToggleSound ? <button type="button" role="menuitem" className="pet-menu-item" data-pet-menu-sound onClick={props.onToggleSound}>
+        {props.soundEnabled !== false ? <VolumeX aria-hidden="true" strokeWidth={1.7} /> : <Volume2 aria-hidden="true" strokeWidth={1.7} />}
+        <span>{props.soundEnabled !== false ? props.labels.muteSound : props.labels.unmuteSound}</span>
       </button> : null}
       <button type="button" role="menuitem" className="pet-menu-item" data-pet-menu-settings onClick={props.onSettings}>
         <Settings aria-hidden="true" strokeWidth={1.7} />

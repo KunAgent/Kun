@@ -1,10 +1,21 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { createPortal } from 'react-dom'
-import { AlertTriangle, ChevronDown, ChevronRight, Info, Loader2, Play, X } from 'lucide-react'
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronRight,
+  Info,
+  Loader2,
+  Lock,
+  Play,
+  X
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   COLAB_ACCELERATORS,
   COLAB_ACCELERATOR_SPECS,
+  isColabAcceleratorEligible,
+  resolveEligibleColabAccelerator,
   type ColabAccelerator,
   type ColabSyncCandidate
 } from '@shared/colab/colab-types'
@@ -49,6 +60,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
   const [accelerator, setAccelerator] = useState<ColabAccelerator>(
     accelOverride ?? lastRun?.accelerator ?? 'T4'
   )
+  const [highMem, setHighMem] = useState<boolean>(Boolean(lastRun?.highMem))
   const [candidates, setCandidates] = useState<ColabSyncCandidate[]>([])
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
   const [outputRemoteDir, setOutputRemoteDir] = useState('outputs/')
@@ -62,6 +74,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
   const [setupScript, setSetupScript] = useState('')
   const [starting, setStarting] = useState(false)
   const [errorText, setErrorText] = useState<string | null>(null)
+  const probedEligibilityRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!selectedConnId && initialConn?.id) {
@@ -88,6 +101,7 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
         if (savedConfig) {
           setEntryCommand(savedConfig.entryCommand)
           if (!accelOverride) setAccelerator(savedConfig.accelerator)
+          if (typeof savedConfig.highMem === 'boolean') setHighMem(savedConfig.highMem)
           setSelectedPaths(new Set(savedConfig.syncPaths))
           setOutputRemoteDir(savedConfig.outputRemoteDir)
           setOutputLocalDir(savedConfig.outputLocalDir)
@@ -114,7 +128,24 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
 
   const chosenConn = snapshot.connections.find((c) => c.id === selectedConnId) ?? initialConn
   const chosenConnExpired = chosenConn?.status === 'expired'
-  const spec = COLAB_ACCELERATOR_SPECS[accelerator]
+
+  useEffect(() => {
+    if (
+      !chosenConn ||
+      chosenConn.status !== 'connected' ||
+      chosenConn.eligibleAccelerators !== undefined ||
+      snapshot.cli.state !== 'ready' ||
+      probedEligibilityRef.current.has(chosenConn.id) ||
+      typeof window.kunGui?.colabRefreshBalances !== 'function'
+    ) {
+      return
+    }
+    probedEligibilityRef.current.add(chosenConn.id)
+    void window.kunGui.colabRefreshBalances({ connectionId: chosenConn.id })
+  }, [chosenConn, snapshot.cli.state])
+
+  const effectiveAccelerator = resolveEligibleColabAccelerator(chosenConn, accelerator)
+  const spec = COLAB_ACCELERATOR_SPECS[effectiveAccelerator]
   const totalUploadBytes = useMemo(
     () =>
       candidates
@@ -162,7 +193,8 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
         connectionId: chosenConn.id,
         setAsWorkspaceCurrent: alsoSetCurrent,
         entryCommand: entryCommand.trim(),
-        accelerator,
+        accelerator: effectiveAccelerator,
+        highMem: Boolean(highMem && spec.supportsHighMem),
         syncPaths: [...selectedPaths],
         outputRemoteDir: outputRemoteDir.trim() || 'outputs/',
         outputLocalDir: outputLocalDir.trim() || './outputs',
@@ -256,31 +288,68 @@ export function ColabRunDialog({ workspaceRoot, onClose }: Props): ReactElement 
             ) : null}
           </div>
 
-          {/* Accelerator 4-card selector */}
+          {/* Accelerator selector */}
           <div>
-            <label className="block text-[11.5px] font-medium text-ds-muted">
-              {t('colab.acceleratorLabel')}
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-[11.5px] font-medium text-ds-muted">
+                {t('colab.acceleratorLabel')}
+              </label>
+              {spec.supportsHighMem ? (
+                <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11.5px] text-ds-ink">
+                  <input
+                    type="checkbox"
+                    checked={highMem}
+                    onChange={(e) => setHighMem(e.target.checked)}
+                    className="accent-accent"
+                  />
+                  <span>{t('colab.highMemCheckbox')}</span>
+                </label>
+              ) : (
+                <span className="rounded bg-ds-subtle px-1.5 py-0.5 text-[10.5px] text-ds-muted">
+                  {t('colabNb.highMemBuiltinHint')}
+                </span>
+              )}
+            </div>
             <div className="mt-1.5 grid grid-cols-4 gap-2">
               {COLAB_ACCELERATORS.map((acc) => {
                 const item = COLAB_ACCELERATOR_SPECS[acc]
-                const active = accelerator === acc
+                const eligible = isColabAcceleratorEligible(chosenConn, acc)
+                const active = effectiveAccelerator === acc
+                const ineligibleReason = !eligible
+                  ? t(
+                      item.tierRequirement === 'ai_ultra'
+                        ? 'colabNb.ineligibleAiUltra'
+                        : 'colabNb.ineligibleTier',
+                      { gpu: item.fullLabel }
+                    )
+                  : undefined
                 return (
                   <button
                     key={acc}
                     type="button"
+                    disabled={!eligible}
+                    title={ineligibleReason}
                     onClick={() => setAccelerator(acc)}
                     className={`rounded-xl border p-2.5 text-left transition ${
                       active
                         ? 'border-accent bg-accent/10'
-                        : 'border-ds-border bg-ds-subtle hover:border-ds-faint'
+                        : !eligible
+                          ? 'cursor-not-allowed border-ds-border/60 bg-ds-subtle/50 opacity-45'
+                          : 'border-ds-border bg-ds-subtle hover:border-ds-faint'
                     }`}
                   >
-                    <div className="text-[13px] font-bold text-ds-ink">{item.label}</div>
-                    <div className="mt-0.5 text-[10.5px] text-ds-muted">
+                    <div className="flex items-center justify-between gap-1 text-[13px] font-bold text-ds-ink">
+                      <span>{item.label}</span>
+                      {!eligible ? (
+                        <Lock className="h-3 w-3 shrink-0 text-ds-muted" aria-hidden="true" />
+                      ) : null}
+                    </div>
+                    <div className="mt-0.5 truncate text-[10.5px] text-ds-muted">
                       {item.vramGb
                         ? t('colab.vramLabel', { gb: item.vramGb })
-                        : t('colab.cpuRamLabel', { gb: item.ramGb })}
+                        : item.tpuHbmGb
+                          ? t('colab.tpuHbmLabel', { gb: item.tpuHbmGb })
+                          : t('colab.cpuRamLabel', { gb: item.ramGb })}
                     </div>
                     <div className="mt-1 font-mono text-[10.5px] text-accent">
                       ~{item.estimatedCuPerHour} CU/h

@@ -1,46 +1,543 @@
-:root {
+/* Daily Notes: Outliner page, Focus view, Day stream, Quadrants, Calendar, and Docked shell. */
+html.daily-notes-standalone {
   color-scheme: light dark;
-  --paper: light-dark(#fbfaf7, #202221);
-  --ink: light-dark(#292d2a, #eceee9);
-  --muted: light-dark(#686d66, #a9afa6);
-  --line: light-dark(#dddcd4, #3d413c);
-  --hover: light-dark(#eeeee7, #30342f);
-  --accent: light-dark(#346350, #a7d1b7);
-  --selected: light-dark(#e3eee5, #304139);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  background: light-dark(#ffffff, #191919);
+}
+html.daily-notes-standalone[data-theme="light"] { color-scheme: light; }
+html.daily-notes-standalone[data-theme="dark"] { color-scheme: dark; }
+html.daily-notes-standalone body { margin: 0; }
+
+.daily-notes {
+  color-scheme: light dark;
+  --paper: light-dark(#ffffff, #191919);
+  --popover: light-dark(#ffffff, #242424);
+  --elevated: light-dark(#ffffff, #2e2e2e);
+  --card: light-dark(rgba(55, 53, 47, .026), rgba(255, 255, 255, .035));
+  --ink: light-dark(#37352f, rgba(255, 255, 255, .86));
+  --muted: light-dark(rgba(55, 53, 47, .55), rgba(255, 255, 255, .5));
+  --faint: light-dark(rgba(55, 53, 47, .38), rgba(255, 255, 255, .32));
+  --line: light-dark(rgba(55, 53, 47, .09), rgba(255, 255, 255, .09));
+  --border-strong: light-dark(rgba(15, 15, 15, .08), rgba(255, 255, 255, .14));
+  --border-dashed: light-dark(rgba(55, 53, 47, .22), rgba(255, 255, 255, .2));
+  --hover: light-dark(rgba(55, 53, 47, .06), rgba(255, 255, 255, .06));
+  --accent: #2383e2;
+  --accent-soft: light-dark(rgba(35, 131, 226, .12), rgba(35, 131, 226, .24));
+  --accent-ink: light-dark(#1f6fbf, #6cb2f3);
+  --done: light-dark(rgba(55, 53, 47, .5), rgba(255, 255, 255, .42));
+  --strike: light-dark(rgba(55, 53, 47, .25), rgba(255, 255, 255, .25));
+  --danger: light-dark(#c4332b, #ff8f86);
+  --q1: light-dark(#d44c47, #ff7369);
+  --q1-bg: light-dark(rgba(212, 76, 71, .12), rgba(255, 115, 105, .18));
+  --q2: light-dark(#cb7b37, #ffa344);
+  --q2-bg: light-dark(rgba(203, 123, 55, .14), rgba(255, 163, 68, .18));
+  --q3: light-dark(#2383e2, #6cb2f3);
+  --q3-bg: light-dark(rgba(35, 131, 226, .12), rgba(108, 178, 243, .18));
+  --q4: light-dark(#448361, #4dab9a);
+  --q4-bg: light-dark(rgba(68, 131, 97, .13), rgba(77, 171, 154, .18));
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font: 14px/1.5 ui-sans-serif, -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", Helvetica, sans-serif;
   color: var(--ink);
   background: var(--paper);
+  -webkit-font-smoothing: antialiased;
 }
-:root[data-theme="light"] { color-scheme: light; }
-:root[data-theme="dark"] { color-scheme: dark; }
-* { box-sizing: border-box; }
-body { margin: 0; }
-button, select { font: inherit; }
-button { cursor: pointer; }
-button:disabled { cursor: default; opacity: .45; }
-button:focus-visible, .note-date-choice:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
-.daily-notes { height: 100vh; display: flex; flex-direction: column; }
-.note-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 21px 22px 15px; border-bottom: 1px solid var(--line); }
-.note-date { min-width: 0; }
-.note-weekday, .note-date-choice, .note-actions, .note-footer { display: flex; align-items: center; gap: 7px; }
-.note-weekday { font-size: 12px; color: var(--muted); }
-.note-date-choice { position: relative; width: fit-content; max-width: 100%; border-radius: 4px; }
-.note-date-choice h1 { margin: 2px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -.035em; }
-.note-date-choice > svg { color: var(--muted); flex-shrink: 0; }
-.note-date-choice select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-.note-actions { gap: 4px; }
-.note-actions button { display: grid; place-items: center; width: 32px; height: 32px; border: none; border-radius: 7px; background: transparent; color: var(--muted); }
-.note-actions button:hover { background: var(--hover); color: var(--ink); }
-.note-actions button[aria-pressed="true"] { background: var(--selected); color: var(--accent); }
-.note-body { flex: 1; min-height: 0; }
-.note-editor, .note-editor .cm-editor { height: 100%; }
-.note-editor .cm-editor.cm-focused { outline: none; }
-.note-editor .cm-scroller { font: inherit; line-height: 1.75; overflow: auto; }
-.note-editor .cm-content { min-height: 100%; padding: 17px 22px; caret-color: var(--ink); }
-.note-editor .cm-line { padding: 0; }
-.note-editor .cm-placeholder { color: var(--muted); }
-.note-checkbox { width: 15px; height: 15px; margin: 0 2px 0 0; vertical-align: -.14em; accent-color: var(--accent); cursor: pointer; }
-.note-completed { color: var(--muted); text-decoration: line-through; }
-.note-footer { min-height: 33px; padding: 5px 22px 8px; color: var(--muted); font-size: 12px; }
-.note-footer [role="alert"] { color: light-dark(#9c3734, #ffa8a2); }
-.note-footer button { color: var(--ink); border: 0; background: none; text-decoration: underline; }
+.note-docked-shell[data-theme="light"] .daily-notes { color-scheme: light; }
+.note-docked-shell[data-theme="dark"] .daily-notes { color-scheme: dark; }
+.daily-notes.is-docked { height: 100%; border-radius: 12px; overflow: hidden; }
+.daily-notes.is-thread-drop { box-shadow: inset 0 0 0 2px var(--accent); }
+.daily-notes *, .daily-notes *::before, .daily-notes *::after { box-sizing: border-box; }
+.daily-notes button, .daily-notes input, .daily-notes select, .daily-notes textarea { font: inherit; color: inherit; }
+.daily-notes button { cursor: pointer; border: 0; background: none; padding: 0; }
+.daily-notes button:disabled { cursor: default; opacity: .35; }
+.daily-notes button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Docked Workbench Column */
+.note-docked-shell {
+  position: relative; flex: none; height: 100%; min-width: 288px; max-width: 540px;
+  padding: 6px 4px 6px 0; display: flex; flex-direction: column;
+}
+.note-docked-shell > .daily-notes {
+  box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgba(0, 0, 0, .06);
+}
+.note-dock-resizer {
+  position: absolute; top: 8px; bottom: 8px; right: -2px; width: 6px;
+  cursor: col-resize; z-index: 20; border-radius: 3px;
+}
+.note-dock-resizer:hover { background: rgba(35, 131, 226, .32); }
+
+/* Top bar */
+.daily-notes .note-header {
+  flex: none; display: flex; align-items: center; gap: 2px; height: 42px; padding: 0 10px;
+  -webkit-app-region: drag; user-select: none;
+}
+html.daily-notes-standalone[data-platform="mac"] .daily-notes:not(.is-docked) .note-header { padding-left: 84px; }
+.daily-notes.is-docked .note-header { -webkit-app-region: no-drag; border-bottom: 1px solid var(--line); }
+.daily-notes .note-header button, .daily-notes .note-views { -webkit-app-region: no-drag; }
+.daily-notes .note-icon-button { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 5px; color: var(--muted); }
+.daily-notes .note-icon-button:not(:disabled):hover, .daily-notes .note-text-button:not(:disabled):hover { background: var(--hover); color: var(--ink); }
+.daily-notes .note-pin[aria-pressed="true"] { color: var(--ink); }
+.daily-notes .note-text-button { flex: none; height: 26px; padding: 0 8px; border-radius: 5px; color: var(--muted); font-size: 13px; }
+.daily-notes .note-status { flex: 1; min-width: 0; margin-right: 6px; text-align: right; font-size: 11.5px; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.daily-notes .note-views { flex: none; display: flex; gap: 2px; padding: 2px; margin-right: 4px; border-radius: 7px; background: var(--hover); }
+.daily-notes .note-views button { display: grid; place-items: center; width: 27px; height: 22px; border-radius: 5px; color: var(--muted); transition: background .12s, color .12s; }
+.daily-notes .note-views button:not(:disabled):hover { color: var(--ink); }
+.daily-notes .note-views button[aria-pressed="true"] { background: var(--elevated); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .14), 0 0 0 .5px var(--line); }
+
+/* Compact Page Hero & Date Picker Popover */
+.daily-notes .note-page { flex: 1; min-height: 0; overflow: auto; padding: 10px 22px 32vh; cursor: text; }
+.daily-notes .note-hero { cursor: default; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.daily-notes .note-hero-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-height: 34px; }
+.daily-notes .note-hero-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.daily-notes .note-inline-progress {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.daily-notes .note-date-picker { position: relative; }
+.daily-notes .note-date-picker h1 { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 700; letter-spacing: -.01em; }
+.daily-notes .note-title-button {
+  display: inline-flex; align-items: center; gap: 5px; max-width: 100%;
+  margin-left: -6px; padding: 2px 6px; border-radius: 6px; text-align: left;
+}
+.daily-notes .note-title-button:not(:disabled):hover, .daily-notes .note-title-button[aria-expanded="true"] { background: var(--hover); }
+.daily-notes .note-title-button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-title-button svg { flex: none; color: var(--faint); width: 16px; height: 16px; }
+.daily-notes .note-popover {
+  position: absolute; left: -4px; top: calc(100% + 6px); z-index: 35;
+  width: min(284px, calc(100vw - 36px)); padding: 12px 12px 10px; border-radius: 10px;
+  background: var(--popover);
+  box-shadow: 0 0 0 1px var(--border-strong), 0 6px 16px rgba(0, 0, 0, .12), 0 16px 36px rgba(0, 0, 0, .16);
+}
+.daily-notes .note-popover-head { display: flex; align-items: center; gap: 2px; margin: 0 2px 8px; font-size: 14px; font-weight: 600; }
+.daily-notes .note-popover-head span { flex: 1; }
+.daily-notes .note-mini-grid { display: grid; grid-template-columns: repeat(7, 1fr); row-gap: 2px; text-align: center; }
+.daily-notes .note-weekday-label { height: 24px; line-height: 24px; font-size: 11px; color: var(--faint); user-select: none; }
+.daily-notes .note-mini-day {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 36px; padding-bottom: 3px; border-radius: 6px; font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.daily-notes .note-mini-day:hover { background: var(--hover); }
+.daily-notes .note-mini-day.is-outside { color: var(--faint); }
+.daily-notes .note-mini-num { width: 25px; height: 25px; line-height: 25px; border-radius: 50%; }
+.daily-notes .note-mini-day.is-selected:not(.is-today) .note-mini-num { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent-ink); font-weight: 600; }
+.daily-notes .note-mini-day.is-today .note-mini-num { background: #eb5757; color: #fff; font-weight: 600; }
+.daily-notes .note-mini-day i { position: absolute; bottom: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--faint); }
+.daily-notes .note-mini-day i.is-done { background: var(--q4); }
+.daily-notes .note-popover-foot {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--line); font-size: 12.5px;
+}
+.daily-notes .note-popover-foot button { padding: 3px 8px; border-radius: 5px; color: var(--muted); }
+.daily-notes .note-popover-foot button:hover, .daily-notes .note-popover-foot button.is-active { background: var(--hover); color: var(--ink); }
+
+.daily-notes .note-chip { padding: 0 6px; border-radius: 4px; line-height: 20px; font-size: 11.5px; font-weight: 500; color: var(--accent-ink); background: var(--accent-soft); }
+.daily-notes .note-track { width: 48px; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.daily-notes .note-track i { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s; }
+.daily-notes .note-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.daily-notes .note-plan-kun {
+  flex: none; display: inline-flex; align-items: center; gap: 5px;
+  height: 22px; padding: 0 8px; border-radius: 5px; font-size: 12px; font-weight: 500;
+  color: var(--accent-ink); background: var(--accent-soft); transition: filter .12s;
+}
+.daily-notes .note-plan-kun:not(:disabled):hover { filter: brightness(.95); }
+.daily-notes .note-rollover-banner {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 6px 10px;
+  border-radius: 7px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line);
+  font-size: 12.5px; color: var(--muted);
+}
+.daily-notes .note-rollover-banner span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-rollover-banner button {
+  flex: none; padding: 2px 7px; border-radius: 4px; font-weight: 500;
+  color: var(--accent-ink); background: var(--accent-soft);
+}
+.daily-notes .note-quadrants .note-rollover-banner { margin: 0 0 8px; }
+
+/* Outliner Bullets, Ringed Dots, and Subtree Folding */
+.daily-notes .note-bullet-group {
+  position: relative; display: inline-flex; align-items: center; vertical-align: middle;
+  margin-right: 4px; user-select: none;
+}
+.daily-notes .note-fold-toggle {
+  position: absolute; left: -14px; width: 14px; height: 18px; display: grid; place-items: center;
+  font-size: 10px; color: var(--faint); border-radius: 3px; opacity: 0; transition: opacity .12s;
+}
+.daily-notes .cm-line:hover .note-fold-toggle,
+.daily-notes .note-bullet-group.is-folded .note-fold-toggle,
+.daily-notes .note-fold-toggle:focus-visible { opacity: 1; }
+.daily-notes .note-fold-toggle:hover { color: var(--ink); background: var(--hover); }
+.daily-notes .note-bullet-dot {
+  width: 16px; height: 16px; border-radius: 50%; display: inline-grid; place-items: center;
+  color: var(--faint); transition: background .12s, color .12s;
+}
+.daily-notes .note-bullet-dot i {
+  width: 5px; height: 5px; border-radius: 50%; background: currentColor; transition: transform .12s;
+}
+.daily-notes .note-bullet-dot.is-ringed {
+  box-shadow: inset 0 0 0 1.5px light-dark(rgba(55, 53, 47, .2), rgba(255, 255, 255, .24));
+  background: light-dark(rgba(55, 53, 47, .05), rgba(255, 255, 255, .07));
+  color: var(--muted);
+}
+.daily-notes .note-bullet-dot:not(:disabled):hover {
+  background: var(--accent-soft); color: var(--accent-ink);
+}
+.daily-notes .note-fold-chip {
+  display: inline-flex; align-items: center; height: 17px; margin-left: 5px; padding: 0 6px;
+  border-radius: 999px; font-size: 11px; line-height: 1; color: var(--muted); background: var(--hover);
+}
+.daily-notes .note-fold-chip:hover { color: var(--ink); background: var(--accent-soft); }
+.daily-notes .note-subnote-badge {
+  flex: none; display: inline-grid; place-items: center; min-width: 18px; height: 17px; padding: 0 5px;
+  border-radius: 999px; font-size: 10.5px; font-weight: 600; color: var(--muted);
+  background: var(--hover); box-shadow: inset 0 0 0 1px var(--line);
+}
+.daily-notes .note-subnote-badge:not(:disabled):hover { color: var(--accent-ink); background: var(--accent-soft); }
+
+/* Focus View (Node Drill-down) */
+.daily-notes .note-breadcrumbs {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin-bottom: 10px;
+  font-size: 12px; color: var(--muted); cursor: default;
+}
+.daily-notes .note-crumb-back,
+.daily-notes .note-crumb-step button {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 150px; padding: 2px 5px;
+  border-radius: 4px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.daily-notes .note-crumb-back:hover,
+.daily-notes .note-crumb-step button:hover { background: var(--hover); color: var(--ink); }
+.daily-notes .note-crumb-step { display: inline-flex; align-items: center; gap: 2px; min-width: 0; }
+.daily-notes .note-crumb-step.is-current span {
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ink); font-weight: 600; padding: 0 3px;
+}
+.daily-notes .note-focus-head {
+  padding-bottom: 10px; margin-bottom: 6px; border-bottom: 1px solid var(--line); cursor: default;
+}
+.daily-notes .note-focus-title-row { display: flex; align-items: center; gap: 8px; }
+.daily-notes .note-checkbox.is-large { width: 18px; height: 18px; margin: 0; flex: none; }
+.daily-notes .note-focus-title-input {
+  flex: 1; min-width: 0; border: 0; background: transparent; padding: 2px 0;
+  font-size: 19px; font-weight: 700; color: var(--ink); outline: none;
+}
+.daily-notes .note-focus-meta {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 8px; padding-left: 26px;
+}
+.daily-notes .note-quadrant.is-unset {
+  color: var(--faint); background: var(--hover); font-weight: 500;
+}
+.daily-notes .note-quadrant.is-unset:hover { color: var(--ink); }
+
+/* Editor & Shared Task Widgets */
+.daily-notes .note-editor { position: relative; margin-top: 8px; }
+.daily-notes .note-editor .cm-editor { height: auto; background: transparent; }
+.daily-notes .note-editor .cm-editor.cm-focused { outline: none; }
+.daily-notes .note-editor .cm-scroller { font: inherit; font-size: 14.5px; line-height: 29px; overflow: visible; }
+.daily-notes .note-editor .cm-content { padding: 0; caret-color: var(--ink); }
+.daily-notes .note-editor .cm-line { padding: 0 0 0 8px; }
+.daily-notes .note-editor .cm-placeholder, .daily-notes .note-line-hint { color: var(--faint); pointer-events: none; }
+.daily-notes .note-editor .cm-selectionBackground,
+.daily-notes .note-editor .cm-focused .cm-selectionBackground {
+  background: light-dark(rgba(35, 131, 226, .18), rgba(35, 131, 226, .35)) !important;
+}
+.daily-notes .note-checkbox {
+  appearance: none; position: relative; width: 15px; height: 15px; margin: 0 6px 0 0; vertical-align: -.18em;
+  border: 1.5px solid currentColor; border-radius: 3px; background: transparent; color: var(--ink); opacity: .82; cursor: pointer;
+}
+.daily-notes .note-checkbox:hover { background: var(--hover); }
+.daily-notes .note-checkbox:checked { background: var(--accent); border-color: var(--accent) !important; opacity: 1; }
+.daily-notes .note-checkbox:checked::after {
+  content: ""; position: absolute; left: 3.8px; top: .8px; width: 3.8px; height: 7.5px;
+  border: solid #fff; border-width: 0 1.8px 1.8px 0; transform: rotate(45deg);
+}
+.daily-notes .note-checkbox:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.daily-notes .note-completed { color: var(--done); text-decoration: line-through; text-decoration-color: var(--strike); }
+.daily-notes .note-quadrant {
+  flex: none; display: inline-grid; place-items: center; min-width: 20px; height: 18px; padding: 0 5px;
+  border-radius: 4px; font-size: 11px; line-height: 1; font-weight: 700; letter-spacing: .02em; user-select: none;
+}
+.daily-notes .note-editor .cm-line .note-quadrant { vertical-align: 1px; margin-left: 4px; }
+.daily-notes .note-editor .cm-line .note-editor-link { display: inline-flex; align-items: center; gap: 3px; vertical-align: 1px; margin-left: 4px; line-height: 1; }
+.daily-notes .note-q1 { color: var(--q1); background: var(--q1-bg); }
+.daily-notes .note-q2 { color: var(--q2); background: var(--q2-bg); }
+.daily-notes .note-q3 { color: var(--q3); background: var(--q3-bg); }
+.daily-notes .note-q4 { color: var(--q4); background: var(--q4-bg); }
+
+/* Session Status Pills, Quick Menu & Task Actions */
+.daily-notes .note-link-group { position: relative; flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 3px; max-width: 100%; }
+.daily-notes .note-link-pill {
+  min-width: 0; flex: 0 1 auto; display: inline-flex; align-items: center; gap: 5px; max-width: 148px; height: 20px; padding: 0 7px;
+  border-radius: 999px; font-size: 11px; line-height: 1; font-weight: 500;
+  color: var(--muted); background: var(--hover); user-select: none;
+}
+.daily-notes .note-link-pill:not(:disabled):hover { filter: brightness(.95); color: var(--ink); }
+.daily-notes .note-link-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-link-pill i { flex: none; width: 6px; height: 6px; border-radius: 50%; background: currentColor; opacity: .75; }
+.daily-notes .note-link-pill.is-pending { color: var(--q2); background: var(--q2-bg); }
+.daily-notes .note-link-pill.is-running { color: var(--q3); background: var(--q3-bg); }
+.daily-notes .note-link-pill.is-running i { animation: note-pulse 1.2s ease-in-out infinite; }
+.daily-notes .note-link-pill.is-attention { color: var(--q2); background: var(--q2-bg); font-weight: 600; }
+.daily-notes .note-link-pill.is-completed { color: var(--q4); background: var(--q4-bg); }
+.daily-notes .note-link-pill.is-failed { color: var(--q1); background: var(--q1-bg); }
+@keyframes note-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
+.daily-notes .note-complete-pill {
+  flex: none; display: inline-grid; place-items: center; width: 18px; height: 18px;
+  border-radius: 50%; font-size: 11px; font-weight: 700; color: var(--q4); background: var(--q4-bg);
+}
+.daily-notes .note-complete-pill:not(:disabled):hover { filter: brightness(.92); }
+.daily-notes .note-link-more,
+.daily-notes .note-unlink-inline {
+  flex: none; width: 17px; height: 17px; display: inline-grid; place-items: center;
+  border-radius: 4px; font-size: 12px; color: var(--faint); opacity: 0; transition: opacity .12s;
+}
+.daily-notes .note-link-group:hover .note-link-more,
+.daily-notes .note-editor-link:hover .note-unlink-inline,
+.daily-notes .note-link-more[aria-expanded="true"],
+.daily-notes .note-link-more:focus-visible,
+.daily-notes .note-unlink-inline:focus-visible { opacity: 1; }
+.daily-notes .note-link-more:hover,
+.daily-notes .note-unlink-inline:hover { background: var(--hover); color: var(--ink); }
+
+.daily-notes .note-pill-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 40; min-width: 146px; padding: 4px;
+  border-radius: 8px; background: var(--popover);
+  box-shadow: 0 0 0 1px var(--border-strong), 0 8px 24px rgba(0, 0, 0, .18);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.daily-notes .note-pill-menu button {
+  display: flex; align-items: center; gap: 7px; width: 100%; padding: 5px 8px;
+  border-radius: 5px; font-size: 12px; color: var(--ink); text-align: left; white-space: nowrap;
+}
+.daily-notes .note-pill-menu button:hover { background: var(--hover); }
+.daily-notes .note-pill-menu button.is-danger { color: var(--danger); }
+
+.daily-notes .note-task-actions,
+.daily-notes .note-inline-actions {
+  display: inline-flex; align-items: center; gap: 4px; vertical-align: 1px;
+}
+.daily-notes .note-inline-actions { margin-left: 6px; }
+.daily-notes .note-send-kun,
+.daily-notes .note-start-session {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 20px;
+  border-radius: 4px; font-size: 11px; line-height: 1; opacity: 0; transition: opacity .12s; user-select: none;
+}
+.daily-notes .note-send-kun { padding: 0 6px; color: var(--accent-ink); background: var(--accent-soft); }
+.daily-notes .note-start-session { width: 20px; padding: 0; font-size: 9px; color: var(--muted); background: var(--hover); }
+.daily-notes .note-start-session:not(:disabled):hover { color: var(--accent-ink); background: var(--accent-soft); }
+.daily-notes .note-editor .cm-line:hover .note-send-kun,
+.daily-notes .note-editor .cm-line:hover .note-start-session,
+.daily-notes .note-quadrant-item:hover .note-send-kun,
+.daily-notes .note-quadrant-item:hover .note-start-session,
+.daily-notes .note-quadrant-item:focus-within .note-send-kun,
+.daily-notes .note-quadrant-item:focus-within .note-start-session,
+.daily-notes .note-day-task:hover .note-send-kun,
+.daily-notes .note-day-task:hover .note-start-session,
+.daily-notes .note-focus-meta .note-send-kun,
+.daily-notes .note-focus-meta .note-start-session,
+.daily-notes .note-send-kun:focus-visible,
+.daily-notes .note-start-session:focus-visible { opacity: 1; }
+
+.daily-notes .note-add {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; margin: 2px 0 0 2px; padding: 0 6px;
+  border-radius: 4px; color: var(--faint); font-size: 13.5px; text-align: left;
+}
+.daily-notes .note-add:not(:disabled):hover { background: var(--hover); color: var(--muted); }
+.daily-notes .note-inline-input {
+  width: 100%; height: 27px; margin-top: 4px; padding: 0 8px; border: 1px solid var(--accent);
+  border-radius: 5px; background: var(--paper); color: var(--ink); font-size: 13px; outline: none;
+}
+
+/* Continuous Historical Day Stream */
+.daily-notes .note-day-stream {
+  margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 18px; cursor: default;
+}
+.daily-notes .note-stream-day { display: flex; flex-direction: column; gap: 4px; }
+.daily-notes .note-stream-head { display: flex; align-items: center; }
+.daily-notes .note-stream-date-btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 6px; margin-left: -6px;
+  border-radius: 5px; font-size: 14px; color: var(--muted);
+}
+.daily-notes .note-stream-date-btn:hover { background: var(--hover); color: var(--ink); }
+.daily-notes .note-stream-tag {
+  padding: 0 5px; border-radius: 4px; font-size: 11px; line-height: 18px;
+  color: var(--muted); background: var(--hover);
+}
+.daily-notes .note-stream-tasks { display: flex; flex-direction: column; gap: 1px; }
+.daily-notes .note-stream-row {
+  display: flex; align-items: center; gap: 5px; min-height: 27px; padding: 1px 4px;
+  margin: 0 -4px; border-radius: 5px; font-size: 13.5px;
+}
+.daily-notes .note-stream-row:hover { background: var(--hover); }
+.daily-notes .note-stream-row .note-stream-check {
+  appearance: none; position: relative; flex: none; width: 14px; height: 14px; margin: 0 2px 0 0;
+  border: 1.5px solid var(--muted); border-radius: 3px; background: transparent;
+}
+.daily-notes .note-stream-row .note-stream-check.is-checked { background: var(--accent); border-color: var(--accent); }
+.daily-notes .note-stream-row .note-stream-check.is-checked::after {
+  content: ""; position: absolute; left: 3.4px; top: .5px; width: 3.5px; height: 7px;
+  border: solid #fff; border-width: 0 1.8px 1.8px 0; transform: rotate(45deg);
+}
+.daily-notes .note-stream-task-text {
+  flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.daily-notes .note-stream-prose { font-size: 13px; color: var(--muted); cursor: pointer; padding: 2px 0; }
+.daily-notes .note-stream-prose p { margin: 0 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-stream-more {
+  align-self: flex-start; padding: 4px 10px; border-radius: 6px; font-size: 12.5px;
+  color: var(--muted); background: var(--hover);
+}
+.daily-notes .note-stream-more:hover { color: var(--ink); }
+
+/* @ Mention Autocomplete & Direct Start Session Modal */
+.daily-notes .note-mention-popover {
+  position: absolute; z-index: 45; width: 256px; max-height: 240px; overflow-y: auto; padding: 4px;
+  border-radius: 9px; background: var(--popover);
+  box-shadow: 0 0 0 1px var(--border-strong), 0 10px 28px rgba(0, 0, 0, .2);
+}
+.daily-notes .note-mention-head { padding: 4px 8px; font-size: 11px; font-weight: 600; color: var(--faint); }
+.daily-notes .note-mention-empty { padding: 8px; font-size: 12.5px; color: var(--muted); }
+.daily-notes .note-mention-item {
+  display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px;
+  border-radius: 6px; font-size: 12.5px; text-align: left;
+}
+.daily-notes .note-mention-item.is-active { background: var(--accent-soft); color: var(--accent-ink); }
+.daily-notes .note-mention-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.daily-notes .note-mention-dot.is-running { background: var(--accent); }
+.daily-notes .note-mention-dot.is-error { background: var(--q1); }
+.daily-notes .note-mention-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-mention-project { flex: none; max-width: 84px; font-size: 11px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.daily-notes .note-modal-backdrop {
+  position: absolute; inset: 0; z-index: 50; padding: 16px; display: grid; place-items: center;
+  background: rgba(0, 0, 0, .32); backdrop-filter: blur(2px);
+}
+.daily-notes .note-modal-card {
+  width: min(368px, 100%); padding: 12px; border-radius: 11px; background: var(--popover);
+  box-shadow: 0 0 0 1px var(--border-strong), 0 16px 40px rgba(0, 0, 0, .24);
+  display: flex; flex-direction: column; gap: 9px;
+}
+.daily-notes .note-modal-head { display: flex; align-items: center; justify-content: space-between; font-size: 13.5px; }
+.daily-notes .note-modal-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.daily-notes .note-project-select-wrap {
+  display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px;
+  border-radius: 6px; background: var(--card); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink);
+}
+.daily-notes .note-project-select-wrap select { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; font-size: 12.5px; }
+.daily-notes .note-modal-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.daily-notes .note-modal-textarea {
+  width: 100%; resize: vertical; min-height: 84px; padding: 7px 9px; border-radius: 7px;
+  border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-size: 13px; line-height: 1.45; outline: none;
+}
+.daily-notes .note-modal-textarea:focus { border-color: var(--accent); }
+.daily-notes .note-modal-error { font-size: 12px; color: var(--danger); }
+.daily-notes .note-modal-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.daily-notes .note-btn-ghost,
+.daily-notes .note-btn-primary {
+  display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 11px;
+  border-radius: 6px; font-size: 12.5px; font-weight: 500;
+}
+.daily-notes .note-btn-ghost { color: var(--muted); background: var(--hover); }
+.daily-notes .note-btn-ghost:hover { color: var(--ink); }
+.daily-notes .note-btn-primary { color: #fff; background: var(--accent); }
+.daily-notes .note-btn-primary:not(:disabled):hover { filter: brightness(.95); }
+
+/* Four Quadrants View */
+.daily-notes .note-quadrants { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; padding: 2px 12px 10px; }
+.daily-notes .note-view-title { flex: none; display: flex; align-items: baseline; gap: 8px; padding: 2px 4px 8px; }
+.daily-notes .note-view-title h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.daily-notes .note-view-title span { font-size: 12.5px; color: var(--muted); }
+.daily-notes .note-view-title .note-plan-kun { margin-left: auto; }
+.daily-notes .note-quadrants-grid {
+  flex: 1; min-height: 268px; display: grid; gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(120px, 1fr) minmax(120px, 1fr);
+}
+.daily-notes .note-quadrant-card {
+  min-height: 0; display: flex; flex-direction: column; padding: 9px 10px; border-radius: 10px;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line); transition: background .12s, box-shadow .12s;
+}
+.daily-notes .note-quadrant-card.is-drop-target { background: var(--accent-soft); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.daily-notes .note-quadrant-head { flex: none; display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.daily-notes .note-quadrant-head h3 { margin: 0; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-quadrant-head b { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--faint); font-variant-numeric: tabular-nums; }
+.daily-notes .note-quadrant-card.is-q1 .note-quadrant-head h3 { color: var(--q1); }
+.daily-notes .note-quadrant-card.is-q2 .note-quadrant-head h3 { color: var(--q2); }
+.daily-notes .note-quadrant-card.is-q3 .note-quadrant-head h3 { color: var(--q3); }
+.daily-notes .note-quadrant-card.is-q4 .note-quadrant-head h3 { color: var(--q4); }
+.daily-notes .note-quadrant-card.is-q1 .note-checkbox:not(:checked) { border-color: var(--q1); }
+.daily-notes .note-quadrant-card.is-q2 .note-checkbox:not(:checked) { border-color: var(--q2); }
+.daily-notes .note-quadrant-card.is-q3 .note-checkbox:not(:checked) { border-color: var(--q3); }
+.daily-notes .note-quadrant-card.is-q4 .note-checkbox:not(:checked) { border-color: var(--q4); }
+.daily-notes .note-quadrant-list { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
+.daily-notes .note-quadrant-item {
+  position: relative; display: flex; align-items: flex-start; gap: 7px; padding: 4px; margin: 0 -4px;
+  border-radius: 5px; font-size: 13px; line-height: 18px; cursor: grab;
+}
+.daily-notes .note-quadrant-item:hover { background: var(--hover); }
+.daily-notes .note-quadrant-item.is-dragging { opacity: .45; }
+.daily-notes .note-quadrant-item .note-checkbox { flex: none; width: 14px; height: 14px; margin: 2px 0 0; border-radius: 3px; }
+.daily-notes .note-quadrant-item .note-checkbox:checked::after { left: 3.4px; top: .5px; width: 3.5px; height: 7px; }
+.daily-notes .note-quadrant-main { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.daily-notes .note-quadrant-title-line { width: 100%; display: flex; align-items: center; gap: 4px; }
+.daily-notes .note-quadrant-card .note-task-actions { position: absolute; right: 4px; top: 3px; z-index: 2; }
+.daily-notes .note-task-body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.daily-notes .note-quadrant-add {
+  flex: none; display: flex; align-items: center; gap: 5px; width: 100%; height: 24px;
+  margin-top: 4px; padding: 0 4px; border-radius: 4px; font-size: 12.5px; color: var(--faint);
+}
+.daily-notes .note-quadrant-add:not(:disabled):hover { background: var(--hover); color: var(--muted); }
+.daily-notes .note-unsorted-tray {
+  flex: none; max-height: 118px; overflow-y: auto; margin-top: 8px; padding: 7px 10px;
+  border-radius: 8px; border: 1px dashed var(--border-dashed); transition: background .12s, border-color .12s;
+}
+.daily-notes .note-unsorted-tray.is-drop-target { background: var(--accent-soft); border-color: var(--accent); }
+.daily-notes .note-unsorted-head { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.daily-notes .note-unsorted-hint { margin-left: auto; font-size: 12px; color: var(--faint); }
+.daily-notes .note-unsorted-list { margin-top: 4px; display: flex; flex-direction: column; gap: 1px; }
+.daily-notes .note-quick-quadrants { display: flex; gap: 3px; opacity: 0; transition: opacity .12s; }
+.daily-notes .note-quadrant-item:hover .note-quick-quadrants,
+.daily-notes .note-quadrant-item:focus-within .note-quick-quadrants { opacity: 1; }
+
+/* Calendar Month View */
+.daily-notes .note-calendar { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.daily-notes .note-month-head { flex: none; display: flex; align-items: center; gap: 4px; padding: 2px 12px 6px 16px; }
+.daily-notes .note-month-head h2 { margin: 0; flex: 1; font-size: 20px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-month-today { height: 26px; padding: 0 9px; border-radius: 6px; box-shadow: inset 0 0 0 1px var(--line); font-size: 12.5px; }
+.daily-notes .note-month-today:not(:disabled):hover { background: var(--hover); }
+.daily-notes .note-month-grid { flex: none; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); padding: 0 8px; text-align: center; }
+.daily-notes .note-month-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 1.5px; height: 50px; padding: 4px 2px 2px;
+  border-top: 1px solid var(--line); font-size: 13px; font-variant-numeric: tabular-nums;
+}
+.daily-notes .note-month-cell:hover { background: var(--hover); border-radius: 6px; }
+.daily-notes .note-month-cell.is-outside { color: var(--faint); }
+.daily-notes .note-month-cell.is-selected { background: light-dark(rgba(35, 131, 226, .08), rgba(35, 131, 226, .18)); border-radius: 6px; }
+.daily-notes .note-month-num { width: 22px; height: 22px; line-height: 22px; border-radius: 50%; }
+.daily-notes .note-month-cell.is-today .note-month-num { background: #eb5757; color: #fff; font-weight: 600; }
+.daily-notes .note-month-cell small { font-size: 9.5px; line-height: 11px; color: var(--faint); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.daily-notes .note-month-cell small.is-lunar-month { color: var(--q4); font-weight: 500; }
+.daily-notes .note-day-bars { display: flex; gap: 2px; margin-top: 1px; }
+.daily-notes .note-day-bars i { width: 5px; height: 3px; border-radius: 1.5px; background: light-dark(rgba(55, 53, 47, .2), rgba(255, 255, 255, .22)); }
+.daily-notes .note-day-bars i.is-done { background: var(--accent); }
+.daily-notes .note-day-pane { flex: 1; min-height: 120px; overflow-y: auto; margin-top: 4px; padding: 10px 20px 14px; border-top: 1px solid var(--line); }
+.daily-notes .note-day-pane-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 13px; }
+.daily-notes .note-open-page {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 6px; margin-right: -6px; border-radius: 5px; font-size: 12.5px; color: var(--accent-ink);
+}
+.daily-notes .note-open-page:not(:disabled):hover { background: var(--accent-soft); }
+.daily-notes .note-day-tasks { display: flex; flex-direction: column; }
+.daily-notes .note-day-task { display: flex; align-items: center; gap: 8px; min-height: 28px; font-size: 14px; }
+.daily-notes .note-day-task .note-checkbox { flex: none; margin: 0; }
+.daily-notes .note-empty-day, .daily-notes .note-prose-preview { margin: 4px 0 6px; font-size: 13px; color: var(--muted); }
+.daily-notes .note-prose-preview { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: pre-line; }
+.daily-notes .note-day-add { margin-top: 4px; height: 28px; font-size: 13px; }
+
+/* Floating Alert */
+.daily-notes .note-alert {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 30; display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px; font-size: 12.5px; color: var(--danger);
+  background: var(--popover); box-shadow: 0 0 0 1px var(--border-strong), 0 6px 20px rgba(15, 15, 15, .14);
+}
+.daily-notes .note-alert [role="alert"] { flex: 1; min-width: 0; }
+.daily-notes .note-alert button { color: var(--ink); font-weight: 500; text-decoration: underline; }

@@ -96,7 +96,14 @@ export const REMOTE_METHOD_ORDER = [
   "approval.list",
   "approval.prepare",
   "approval.resolve",
-  "input.resolve"
+  "input.resolve",
+  "todo.thread.get",
+  "project.board.get",
+  "project.board.summary",
+  "project.board.create",
+  "project.board.update",
+  "project.board.move",
+  "project.board.delete"
 ] as const
 
 /** Historical capability presentation order is distinct from the wire schema order. */
@@ -183,5 +190,12 @@ export const REMOTE_CAPABILITY_ORDER = [
   "schedule.runs.list",
   "plugin.catalog",
   "plugin.view",
-  "plugin.setEnabled"
+  "plugin.setEnabled",
+  "todo.thread.get",
+  "project.board.get",
+  "project.board.summary",
+  "project.board.create",
+  "project.board.update",
+  "project.board.move",
+  "project.board.delete"
 ] as const

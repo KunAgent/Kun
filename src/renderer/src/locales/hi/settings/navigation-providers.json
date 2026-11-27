@@ -376,6 +376,8 @@
   "shortcutTogglePaperModeDesc": "Switch to Work and open the paper library.",
   "shortcutPaperImport": "Import paper",
   "shortcutPaperImportDesc": "Switch to Work and open the paper import dialog.",
+  "shortcutToggleDailyNotes": "दैनिक नोट्स और कार्य",
+  "shortcutToggleDailyNotesDesc": "दैनिक नोट्स और कार्य पैनल या विंडो दिखाएँ या छिपाएँ।",
   "shortcutModalTitle": "कीबोर्ड शॉर्टकट",
   "shortcutModalSearchPlaceholder": "शॉर्टकट खोजें…",
   "shortcutModalEmpty": "आपकी खोज से कोई शॉर्टकट मेल नहीं खाता।",

@@ -7,6 +7,7 @@ import type {
 } from 'react'
 import { ChevronRight, Command, ListTodo, PanelLeft, Search, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { triggerDailyNotesEntry, useDailyNotesDockState } from '../../daily-notes/dock-state'
 import { useToastStore } from '../../toast/toast-store'
 import './sidebar-lean-rows.css'
 
@@ -58,6 +59,7 @@ export function SidebarFrame({
   className
 }: SidebarFrameProps): ReactElement {
   const { t } = useTranslation('common')
+  const dock = useDailyNotesDockState()
   const desktopNotes = typeof window !== 'undefined' && typeof window.kunGui?.openDailyNotes === 'function' &&
     !window.kunGui.isRemoteWeb
   return (
@@ -88,7 +90,8 @@ export function SidebarFrame({
           {desktopNotes && <SidebarCommandRow
             icon={<ListTodo className="h-4 w-4" strokeWidth={1.75} />}
             label={t('dailyNotes.title')}
-            onClick={() => void window.kunGui.openDailyNotes().catch(() => useToastStore.getState().publish({
+            active={dock.open}
+            onClick={() => void triggerDailyNotesEntry(dock.open ? 'toggle' : 'open').catch(() => useToastStore.getState().publish({
               id: 'daily-notes-open', tone: 'error', title: t('dailyNotes.openFailed')
             }))}
             variant="footer"

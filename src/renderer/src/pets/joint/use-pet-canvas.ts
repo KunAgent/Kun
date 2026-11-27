@@ -1,6 +1,6 @@
-import { useLayoutEffect, useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { JointFrame } from './timeline'
-import { loadJointTexture } from './assets'
+import { loadJointTexture, peekJointTexture, type JointTexture } from './assets'
 import { JointWebGLRenderer } from './webgl-renderer'
 import { JointCanvasRenderer } from './canvas-renderer'
 
@@ -13,16 +13,10 @@ export function usePetCanvas(assetKey: string, frame: () => JointFrame) {
   const [revision, setRevision] = useState(0), [loadedKey, setLoadedKey] = useState(''), [error, setError] = useState(false)
   const renderKey = `${assetKey}:${revision}`
   const ready = renderKey === loadedKey
-  useEffect(() => {
+  useLayoutEffect(() => {
     let cancelled = false
     const element = canvas.current!, initial = latest.current()
-    setLoadedKey(''); setError(false)
-    const lost = (event: Event): void => {
-      event.preventDefault(); renderer.current?.dispose(); renderer.current = null; setLoadedKey('')
-    }
-    const restored = (): void => setRevision((value) => value + 1)
-    element.addEventListener('webglcontextlost', lost); element.addEventListener('webglcontextrestored', restored)
-    void Promise.all(initial.actors.map((a) => loadJointTexture(a.pet, a.rig, a.armLayers?.cutouts))).then((textures) => {
+    const mountRenderer = (textures: JointTexture[]): void => {
       if (cancelled) return
       const gl = element.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: true })
       if (gl?.isContextLost()) return
@@ -32,8 +26,25 @@ export function usePetCanvas(assetKey: string, frame: () => JointFrame) {
         if (!ctx) throw new Error('No canvas renderer available')
         renderer.current = new JointCanvasRenderer(ctx, textures, initial)
       }
+      const reduced = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+      renderer.current.paint(initial, 0, Boolean(reduced))
       setLoadedKey(renderKey)
-    }).catch(() => { if (!cancelled) setError(true) })
+    }
+    const lost = (event: Event): void => {
+      event.preventDefault(); renderer.current?.dispose(); renderer.current = null; setLoadedKey('')
+    }
+    const restored = (): void => setRevision((value) => value + 1)
+    element.addEventListener('webglcontextlost', lost); element.addEventListener('webglcontextrestored', restored)
+    setError(false)
+    const cached = initial.actors.map((a) => peekJointTexture(a.pet, a.rig, a.armLayers?.cutouts))
+    if (cached.every((item): item is JointTexture => item !== null)) {
+      try { mountRenderer(cached) } catch { if (!cancelled) setError(true) }
+    } else {
+      setLoadedKey('')
+      void Promise.all(initial.actors.map((a) => loadJointTexture(a.pet, a.rig, a.armLayers?.cutouts)))
+        .then(mountRenderer)
+        .catch(() => { if (!cancelled) setError(true) })
+    }
     return () => {
       cancelled = true; renderer.current?.dispose(); renderer.current = null
       element.removeEventListener('webglcontextlost', lost); element.removeEventListener('webglcontextrestored', restored)

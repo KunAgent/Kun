@@ -48,6 +48,9 @@ export class PetWindowController {
   private requestedFrame: Rect | null = null
   private spriteWidth = 112
   private petCenter: ScreenPoint = { x: 0, y: 0 }
+  private pointerInteractive = false
+  private cursorOverMascot = false
+  private effectiveInteractive = false
   private unsubscribe: (() => void) | null = null
   readonly policy: ReturnType<typeof petPlatformPolicy>
   navigationDenied: string[] = []
@@ -138,8 +141,17 @@ export class PetWindowController {
       viewportWidth: bounds.width, viewportHeight: bounds.height }
   }
 
+  cursorTarget(): { petCenter: ScreenPoint; workArea: Rect; mascotWidth: number } | null {
+    if (!this.isOpen()) return null
+    const display = this.displayFor(this.petCenter)
+    return { petCenter: { ...this.petCenter }, workArea: { ...display.workArea }, mascotWidth: this.spriteWidth }
+  }
+
   close(): void {
     this.drag = null
+    this.pointerInteractive = false
+    this.cursorOverMascot = false
+    this.effectiveInteractive = false
     this.unsubscribe?.()
     this.unsubscribe = null
     const window = this.window
@@ -149,9 +161,30 @@ export class PetWindowController {
     if (window && !window.isDestroyed()) window.destroy()
   }
 
+  isPointerInteractive(): boolean {
+    return this.isOpen() && (this.pointerInteractive || this.cursorOverMascot)
+  }
+
   setPointerInteractive(interactive: boolean): void {
-    if (!this.isOpen() || this.policy.mode === 'bounded') return
-    this.window!.setIgnoreMouseEvents(!interactive, { forward: this.host.forwardMouseEvents })
+    this.pointerInteractive = interactive
+    this.syncMouseIgnore()
+  }
+
+  setCursorOverMascot(over: boolean): void {
+    if (this.cursorOverMascot === over) return
+    this.cursorOverMascot = over
+    this.syncMouseIgnore()
+  }
+
+  private syncMouseIgnore(): void {
+    const next = this.pointerInteractive || this.cursorOverMascot
+    if (!this.isOpen() || this.policy.mode === 'bounded') {
+      this.effectiveInteractive = next
+      return
+    }
+    if (this.effectiveInteractive === next) return
+    this.effectiveInteractive = next
+    this.window!.setIgnoreMouseEvents(!next, { forward: this.host.forwardMouseEvents })
   }
 
   beginDrag(point: ScreenPoint): void {

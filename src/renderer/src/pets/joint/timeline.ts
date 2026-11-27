@@ -109,7 +109,9 @@ export function jointHitPath(frame: JointFrame): string {
   }
   if (frame.keyboard && frame.keyboard.opacity > .1) {
     const k = frame.keyboard
-    bodies.push(`M${k.x - 8},${k.y}h${k.width + 16}v${k.height + 14}h${-k.width - 16}Z`)
+    const left = k.mousePad ? Math.min(k.x, k.mousePad.x) : k.x
+    const right = k.mousePad ? Math.max(k.x + k.width, k.mousePad.x + k.mousePad.width) : k.x + k.width
+    bodies.push(`M${left - 8},${k.y}h${right - left + 16}v${k.height + 14}h${-(right - left + 16)}Z`)
   }
   return bodies.join(' ')
 }

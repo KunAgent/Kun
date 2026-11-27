@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   NOTEBOOK_IMPORT_MAX_BYTES,
+  type ColabDriveAuthHint,
   type ColabDriveNotebookEntry,
   type ColabDriveNotebooksListResult,
   type ColabDrivePullCloseResult,
@@ -15,7 +16,7 @@ export type NotebookPullSource =
   | { kind: 'jupyter'; serverId: string; label: string }
 
 type Phase = 'prepare' | 'reading' | 'auth' | 'select' | 'importing' | 'result' | 'error' | 'closing'
-type PullError = { message?: string; kind?: 'auth_expired' | 'interrupted' }
+type PullError = { message?: string; kind?: 'auth_expired' | 'account_mismatch' | 'interrupted' }
 type PullFailure = { entry: ColabDriveNotebookEntry; message?: string }
 type DriveAccess = { id: string; temporary: boolean }
 
@@ -24,7 +25,7 @@ export type NotebookPullTask = {
   source: NotebookPullSource
   phase: Phase
   access?: DriveAccess
-  auth?: { url: string; expiresAt: number }
+  auth?: { url: string; expiresAt: number; reason?: ColabDriveAuthHint }
   error?: PullError
   cleanup?: 'stopping' | 'stopped' | 'failed'
   query: string
@@ -128,11 +129,21 @@ export const useNotebookPullStore = create<PullStore>((set, get) => {
         patch(ticket, { phase: 'error', error: {} })
         return
       }
-      patch(ticket, { phase: 'auth', auth: { url: result.authUrl, expiresAt: result.expiresAt } })
+      patch(ticket, {
+        phase: 'auth',
+        auth: {
+          url: result.authUrl,
+          expiresAt: result.expiresAt,
+          ...(result.reason ? { reason: result.reason } : {})
+        }
+      })
       expiryTimer = setTimeout(() => get().expireAuth(access.id), Math.max(0, result.expiresAt - Date.now()))
     } else {
       const message = 'message' in result ? result.message : undefined
-      const kind = 'code' in result && result.code === 'auth_expired' ? 'auth_expired' : undefined
+      const kind =
+        'code' in result && (result.code === 'auth_expired' || result.code === 'account_mismatch')
+          ? result.code
+          : undefined
       patch(ticket, { phase: 'error', error: { message, kind } })
       await release(ticket, task.access)
     }

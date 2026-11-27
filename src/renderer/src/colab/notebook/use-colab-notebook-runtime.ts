@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ColabAccelerator, ColabConnectionView, ColabSessionView } from '@shared/colab/colab-types'
+import {
+  COLAB_ACCELERATOR_SPECS,
+  type ColabAccelerator,
+  type ColabConnectionView,
+  type ColabSessionView
+} from '@shared/colab/colab-types'
 import { COLAB_NOTEBOOK_ENTRY_COMMAND } from '@shared/colab/colab-notebook-types'
 import type {
   JupyterConnectRequest,
@@ -98,7 +103,7 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
   const activeRuntimeLabel = usingJupyter && jupyterSession
     ? `${jupyterSession.serverName} · ${jupyterSession.kernelName}`
     : session
-      ? session.accelerator
+      ? COLAB_ACCELERATOR_SPECS[session.accelerator].label
       : null
   const remoteRoot = (usingJupyter || (selectedBackend === 'jupyter' && !session)) ? '/' : COLAB_REMOTE_ROOT
 
@@ -109,6 +114,7 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
       setError(null)
       try {
         const opts = useColabNotebookStore.getState().launchOptions
+        const spec = COLAB_ACCELERATOR_SPECS[accelerator]
         const minVramGb =
           accelerator === 'A100' && opts.requireA10080Gb ? 70 : null
         const res = await window.kunGui.colabStartRun({
@@ -117,7 +123,7 @@ export function useColabNotebookRuntime(workspaceRoot: string): ColabNotebookRun
           entryCommand: COLAB_NOTEBOOK_ENTRY_COMMAND,
           setAsWorkspaceCurrent: true,
           accelerator,
-          highMem: opts.highMem,
+          highMem: Boolean(opts.highMem && spec.supportsHighMem),
           minVramGb,
           maxProvisionAttempts: minVramGb ? 3 : 1,
           syncPaths: [],

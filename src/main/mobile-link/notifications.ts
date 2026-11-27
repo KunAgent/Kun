@@ -1,13 +1,23 @@
 import { sessionOperation } from './lifecycle'
 import type { RemoteApi } from '@kun/remote-protocol'
 import type { ProtectedRuntimeRequestLease } from '../ipc/app-ipc-handler-options'
-type Intent = { eventId: string; resourceKind: 'agent' | 'code'; resourceId: string; kind: 'completed' | 'failed' | 'approval' | 'input' }
+type Intent = { eventId: string; resourceKind: 'agent' | 'code'; resourceId: string; kind: 'completed' | 'failed' | 'approval' | 'input'; title?: string }
+const REQUIRED_KEYS = ['eventId', 'kind', 'resourceId', 'resourceKind']
+const ALLOWED_KEYS = new Set([...REQUIRED_KEYS, 'title'])
+function validTitle(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && Array.from(value.trim()).length <= 80 && !/[\u0000-\u001F\u007F-\u009F]/.test(value)
+}
 function intent(raw: unknown): Intent {
-  const p = raw as Intent
-  if (!p || typeof p.eventId !== 'string' || typeof p.resourceId !== 'string' || Object.keys(p).sort().join(',') !== 'eventId,kind,resourceId,resourceKind' ||
+  const p = raw as Record<string, unknown>
+  if (!p || typeof p !== 'object' || Array.isArray(p) || REQUIRED_KEYS.some((key) => !Object.hasOwn(p, key)) ||
+    Object.keys(p).some((key) => !ALLOWED_KEYS.has(key)) ||
+    typeof p.eventId !== 'string' || typeof p.resourceId !== 'string' ||
     !/^[A-Za-z0-9_-]{1,128}$/.test(p.eventId) || !/^[A-Za-z0-9_-]{1,128}$/.test(p.resourceId) ||
-    !['agent', 'code'].includes(p.resourceKind) || !['completed', 'failed', 'approval', 'input'].includes(p.kind)) throw new Error('INVALID_NOTIFICATION')
-  return { eventId: p.eventId, resourceKind: p.resourceKind, resourceId: p.resourceId, kind: p.kind }
+    !['agent', 'code'].includes(String(p.resourceKind)) || !['completed', 'failed', 'approval', 'input'].includes(String(p.kind)) ||
+    (Object.hasOwn(p, 'title') && p.title !== undefined && !validTitle(p.title))) throw new Error('INVALID_NOTIFICATION')
+  const title = typeof p.title === 'string' ? p.title.trim() : undefined
+  return { eventId: p.eventId, resourceKind: p.resourceKind as Intent['resourceKind'], resourceId: p.resourceId,
+    kind: p.kind as Intent['kind'], ...(title ? { title } : {}) }
 }
 function delay(ms: number, signal: AbortSignal) {
   return new Promise<void>((resolve) => {
@@ -100,9 +110,17 @@ export class MobileNotifications {
               if (value.event) {
                 const event = intent(value.event)
                 if (!this.seen.has(event.eventId)) {
+                  let payload: Intent = event
                   for (let retry = 0; retry < 3 && current(); retry++) {
-                    try { await api.request('/notifications/events', 'POST', event, false, signal); break }
-                    catch { if (retry === 2) this.deps.diagnostic?.('NOTIFICATION_POST_FAILED'); else await delay(2000, signal) }
+                    try { await api.request('/notifications/events', 'POST', payload, false, signal); break }
+                    catch (error) {
+                      if (payload.title && (error as { status?: number })?.status === 400) {
+                        const { title: _title, ...legacy } = payload
+                        payload = legacy
+                        try { await api.request('/notifications/events', 'POST', payload, false, signal); break } catch {}
+                      }
+                      if (retry === 2) this.deps.diagnostic?.('NOTIFICATION_POST_FAILED'); else await delay(2000, signal)
+                    }
                   }
                   if (!current()) return
                   this.seen.add(event.eventId)

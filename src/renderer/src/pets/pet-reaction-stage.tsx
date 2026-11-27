@@ -1,9 +1,10 @@
 import type { PetTypingState } from '@shared/pets-typing'
 import type { Point } from './joint/geometry'
+import type { PetGazeMemory } from './typing/typing-motion'
 import { PetTypingStage } from './typing/typing-stage'
 import { useRef, type ButtonHTMLAttributes, type ReactElement } from 'react'
 import { Keyboard, Mic, AudioLines, MessageCircle } from 'lucide-react'
-import { PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetOverlayBootstrap } from '@shared/pets'
+import { PET_SHEET_COLUMNS, petSheetRowsForVersion, type PetCursorSample, type PetOverlayBootstrap } from '@shared/pets'
 import type { PetReactionKind } from '@shared/pets-interactions'
 import { petReactionLabel, reactionFrame } from './pet-reactions'
 import { paintPetStyle, usePetAnimationPainter } from './use-pet-animation-painter'
@@ -13,7 +14,8 @@ type ReactionStageProps = {
   pet: PetOverlayBootstrap; kind: PetReactionKind; level: number
   width: number; height: number; mascotWidth: number; paused: boolean; language: string; eventId: number
   actorEvents: ButtonHTMLAttributes<HTMLButtonElement>
-  typing?: PetTypingState; expiresAt: number; primaryOrigin: Point
+  typing?: PetTypingState; typingActive?: boolean; cursor?: PetCursorSample | null; gazeMemory?: PetGazeMemory
+  expiresAt: number; primaryOrigin: Point
 }
 
 export function PetReactionStage(props: ReactionStageProps): ReactElement {

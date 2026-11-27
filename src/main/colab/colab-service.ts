@@ -46,10 +46,7 @@ import {
   type PersistedConnectionRecord,
   saveColabPersistedState
 } from './colab-state-store'
-import {
-  inspectWorkspaceSyncCandidates,
-  saveWorkspaceColabConfig
-} from './colab-workspace-sync'
+import { inspectWorkspaceSyncCandidates, saveWorkspaceColabConfig } from './colab-workspace-sync'
 
 export class ColabService {
   readonly cli: ColabCliRuntime
@@ -435,6 +432,7 @@ export class ColabService {
       await saveWorkspaceColabConfig(wsKey, {
         entryCommand: input.entryCommand,
         accelerator: input.accelerator,
+        ...(input.highMem ? { highMem: true } : {}),
         syncPaths: input.syncPaths,
         outputRemoteDir: input.outputRemoteDir,
         outputLocalDir: input.outputLocalDir,
@@ -470,12 +468,15 @@ export class ColabService {
   }
 
   async reconnectSession(sessionId: string): Promise<{ ok: boolean; message?: string }> {
-    if (!this.sessions.has(sessionId)) return { ok: false, message: '会话不存在。' }
+    const session = this.sessions.get(sessionId)
+    if (!session) return { ok: false, message: '会话不存在。' }
+    if (session.phase !== 'disconnected' && session.phase !== 'running') return { ok: false, message: '运行时不可恢复。' }
     this.patchSession(sessionId, {
       phase: 'running',
       errorKind: undefined,
       errorMessage: undefined
     })
+    this.executor.resumeResourceMonitoring(session)
     return { ok: true }
   }
 
@@ -572,6 +573,7 @@ export class ColabService {
     if (!item || !conn) return { ok: false, message: '未找到该远端会话。' }
     const adopted = buildAdoptedSessionView(item, conn, input.workspaceRoot)
     this.sessions.set(adopted.id, adopted)
+    this.executor.resumeResourceMonitoring(adopted)
     this.untrackedSessions = this.untrackedSessions.filter(
       (u) => !(u.connectionId === input.connectionId && u.endpoint === input.endpoint)
     )
@@ -680,6 +682,7 @@ export class ColabService {
     if (this.refreshInterval) clearInterval(this.refreshInterval)
     this.clockInterval = null
     this.refreshInterval = null
+    this.executor.stopMonitoring()
     await this.oauth.cancelCurrent('shutdown')
 
     const stopRemote = this.options.getColabSettings().stopSessionsOnQuit

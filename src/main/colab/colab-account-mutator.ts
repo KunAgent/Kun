@@ -137,8 +137,8 @@ export function createColabSessionDraft(
     connectionAvatarColor: conn.avatarColor,
     workspaceRoot: wsKey,
     accelerator: input.accelerator,
-    highMem: Boolean(input.highMem),
-    minVramGb: input.minVramGb ?? null,
+    highMem: Boolean(input.highMem && spec.supportsHighMem),
+    minVramGb: spec.kind === 'gpu' ? (input.minVramGb ?? null) : null,
     vramGb: spec.vramGb,
     ramGb: spec.ramGb,
     phase: 'provisioning',
@@ -176,6 +176,7 @@ export function buildLastRunSummary(session: ColabSessionView): ColabLastRunSumm
   return {
     entryCommand: session.entryCommand,
     accelerator: session.accelerator,
+    ...(session.highMem ? { highMem: true } : {}),
     syncPaths: session.syncPaths,
     outputRemoteDir: session.outputRemoteDir,
     outputLocalDir: session.outputLocalDir,

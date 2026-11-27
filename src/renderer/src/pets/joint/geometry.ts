@@ -8,6 +8,7 @@ export type JointActor = {
   lean: number; crouch: number; headTilt: number; step: number; jump: number
   hands: [Point, Point]; grips: [number, number]; feet: [Point, Point]
   soloBlend: number
+  gaze?: Point
   frontArms?: boolean
   armLayers?: ArmLayers
 }

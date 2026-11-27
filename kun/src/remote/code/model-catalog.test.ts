@@ -156,13 +156,20 @@ describe('mobile Code reasoning profiles', () => {
     ],
     ready: {
       'claude-code': [native('claude-code'), { harnessId: 'claude-code', credentialMode: 'provider', providerId: 'claude-account', expiresAt: later() }],
-      codex: [native('codex')]
+      codex: [native('codex')],
+      antigravity: [native('antigravity')]
     },
-    models: { codex: ['gpt-5', 'gpt-5-mini'] },
+    extra: [definition('antigravity', { displayName: 'Antigravity', transport: 'acp', credentialModes: ['native-login'], staticModels: [] })],
+    models: { codex: ['gpt-5', 'gpt-5-mini'], antigravity: ['gemini-4-carbon', 'gemini-4-hydrogen', 'gemini-pro-orchestrator-neon'] },
     info: {
       'claude-code': [{ id: 'claude-sonnet-4-5', reasoningEfforts: ['low', 'medium', 'high', 'max'], defaultReasoningEffort: 'high' }],
       // Codex-native names outside the wire's six levels never reach a phone.
-      codex: [{ id: 'gpt-5', reasoningEfforts: ['minimal', 'low', 'high', 'xhigh'], defaultReasoningEffort: 'xhigh' }, { id: 'gpt-5-mini', reasoningEfforts: ['xhigh'] }]
+      codex: [{ id: 'gpt-5', reasoningEfforts: ['minimal', 'low', 'high', 'xhigh'], defaultReasoningEffort: 'xhigh' }, { id: 'gpt-5-mini', reasoningEfforts: ['xhigh'] }],
+      antigravity: [
+        { id: 'gemini-4-carbon', reasoningEfforts: ['low', 'medium', 'high'], defaultReasoningEffort: 'high' },
+        { id: 'gemini-4-hydrogen', reasoningEfforts: ['xhigh'], defaultReasoningEffort: 'xhigh' },
+        { id: 'gemini-pro-orchestrator-neon', reasoningEfforts: [] }
+      ]
     }
   })
 
@@ -174,6 +181,10 @@ describe('mobile Code reasoning profiles', () => {
     // Native catalog facts describe the Agent's own login, not a provider route that lists the same id.
     expect(routes['claude-code/claude-account'].profiles).toBeUndefined()
     expect(routes['codex/native-login'].profiles).toEqual({ 'gpt-5': { efforts: ['low', 'high'] } })
+    expect(routes['antigravity/native-login'].profiles).toEqual({
+      'gemini-4-carbon': { efforts: ['low', 'medium', 'high'], defaultEffort: 'high' },
+      'gemini-4-hydrogen': { efforts: ['max'], defaultEffort: 'max' }
+    })
     for (const route of Object.values(routes)) expect(() => validateModelProfiles(route)).not.toThrow()
   })
 

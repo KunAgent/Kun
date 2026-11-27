@@ -21,6 +21,7 @@ import { probeAcpHandshake } from '../../harness/acp-handshake-probe.js'
 import { exposableProvider, providerModelIds } from './model-gateway-core.js'
 import { legacyProviderKindFor } from '../../harness/harness-provider-kind.js'
 import { cursorHarnessModelInfo } from '../../harness/cursor-subscription-catalog.js'
+import { providerModule } from '../../harness/providers/registry.js'
 import { harnessWorkspaceSupport } from '../../runtime/workspace-roots.js'
 
 /**
@@ -337,10 +338,14 @@ export async function listHarnessModels(
         // A catalog from a previous Runtime is useful until the Agent changes.
         // An explicit refresh and an unlearned per-model detail lookup still ask the Agent.
         const kept = !refresh ? harnesses.modelCatalogs?.get(definition) : undefined
-        if (kept && (!selectedModelParam || kept.catalog.modelInfo?.find((entry) => entry.id === selectedModelParam)?.reasoningEfforts !== undefined)) {
+        const complete = Boolean(kept && (!providerModule(definition.id)?.acp?.probeAllModelEfforts ||
+          kept.catalog.models.every((id) => kept.catalog.modelInfo?.find((entry) => entry.id === id)?.reasoningEfforts !== undefined)))
+        if (kept && complete && (!selectedModelParam || kept.catalog.modelInfo?.find((entry) => entry.id === selectedModelParam)?.reasoningEfforts !== undefined)) {
           return reply({ harnessId: definition.id, ...kept.catalog }, 'cache', kept.fetchedAt)
         }
-        return replyCatalog(await harnesses.acpModels.probeCatalog(definition, selectedModelParam))
+        const catalog = await harnesses.acpModels.probeCatalog(definition, selectedModelParam)
+        const merged = !catalog.error && catalog.models.length ? harnesses.modelCatalogs?.get(definition)?.catalog : undefined
+        return replyCatalog(merged ? { ...catalog, modelInfo: merged.modelInfo } : catalog)
       }
       if (definition.transport === 'codex-app-server' && harnesses.codexModels?.probeCatalog) {
         return replyCatalog(await harnesses.codexModels.probeCatalog(definition))

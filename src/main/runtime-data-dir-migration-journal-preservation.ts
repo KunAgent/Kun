@@ -86,6 +86,7 @@ export function readPreservationJournal(path: string): PreservationJournal | nul
       typeof parsed.updatedAt !== 'string' ||
       (parsed.completedAt !== undefined && typeof parsed.completedAt !== 'string') ||
       (parsed.runtimeVerifiedAt !== undefined && typeof parsed.runtimeVerifiedAt !== 'string') ||
+      (parsed.runtimeVerificationInventory !== undefined && parsed.runtimeVerificationInventory !== 'paginated') ||
       (
         parsed.runtimeVerificationAttempts !== undefined &&
         (!Number.isSafeInteger(parsed.runtimeVerificationAttempts) || parsed.runtimeVerificationAttempts < 0)

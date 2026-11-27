@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, Cloud, Plug, Server } from 'lucide-react'
+import { COLAB_ACCELERATOR_SPECS } from '@shared/colab/colab-types'
 import type { NotebookRuntimeBackend } from '@shared/colab/colab-notebook-types'
 import { useColabStore } from '../colab-store'
 import { useColabDismiss } from '../use-colab-dismiss'
@@ -72,7 +73,7 @@ export function KernelPickerPopover({
             : 'colabNb.jupyterRemoteBadge'
         )
       : runtime.session
-        ? `Colab ${runtime.session.accelerator}`
+        ? `Colab ${COLAB_ACCELERATOR_SPECS[runtime.session.accelerator].label}`
         : runtime.activeRuntimeLabel
 
   const secondaryConnectedLabel =

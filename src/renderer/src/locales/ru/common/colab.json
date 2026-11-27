@@ -1,6 +1,12 @@
 {
   "rightPanelColab": "Colab",
   "colab": {
+    "gpuLoad": "Загрузка GPU",
+    "staleSample": "Данные устарели",
+    "lastSample": "Последний замер",
+    "awaitSample": "Ожидание замера",
+    "resourceTrends": "Графики ресурсов",
+    "adoptForResources": "Возьмите экземпляр под управление, чтобы увидеть расход ресурсов.",
     "panelTitle": "Colab",
     "emptyTitle": "Аккаунт Google ещё не подключён",
     "emptyDesc": "Войдите, чтобы запускать GPU-сессии Colab прямо из этого рабочего пространства.",
@@ -136,6 +142,10 @@
     "locateBtn": "Показать",
     "billedToHint": "Списывается с «{{name}}»",
     "sessionsLabel": "Сеансы",
-    "backToOverview": "К обзору"
+    "backToOverview": "К обзору",
+    "tpuHbmLabel": "{{gb}} ГБ HBM · TPU",
+    "highMemCheckbox": "Использовать ВМ с увеличенной ОЗУ (--high-mem)",
+    "errNotEntitledTitle": "Аккаунту недоступен {{accelerator}}",
+    "errNotEntitledDesc": "Для этого ускорителя требуется более высокий тариф (например, Colab Pro+ или Google AI Ultra) или баланс CU."
   }
 }

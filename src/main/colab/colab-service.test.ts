@@ -4,10 +4,16 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { defaultKunColabSettings } from '../../shared/app-settings-colab'
 import {
+  isColabAcceleratorEligible,
+  resolveEligibleColabAccelerator
+} from '../../shared/colab/colab-types'
+import {
   classifyColabErrorOutput,
+  parseColabCcuInfoOutput,
   parseColabSessionsOutput,
   parseColabUsageOutput
 } from './colab-cli-runtime'
+import { deriveColabPlanLabel } from './colab-remote-reconciler'
 import { ColabCredentialStore } from './colab-credential-store'
 import { ColabPythonIsolation } from './colab-python-isolation'
 import { ColabService } from './colab-service'
@@ -125,16 +131,41 @@ describe('Colab engine & multi-account isolation', () => {
       activeAssignments: 1
     })
 
-    const sessions = parseColabSessionsOutput(
-      '[lora-ft] m-s-abc123 | Hardware: T4 | Shape: STANDARD | Variant: GPU\n' +
-        '[?] m-s-orphan99 | Hardware: A100 | Shape: HIGHMEM | Variant: GPU\n'
+    const ccuInfo = parseColabCcuInfoOutput(
+      'KUN_CCU_INFO:{"currentBalance":1000,"consumptionRateHourly":8.8,"assignmentsCount":1,"eligibleGpus":["T4","L4","A100","G4"],"ineligibleGpus":["H100"],"eligibleTpus":["V5E1","V6E1"],"ineligibleTpus":[]}\n'
     )
-    expect(sessions).toHaveLength(2)
-    expect(sessions[0]).toMatchObject({ name: 'lora-ft', accelerator: 'T4', untracked: false })
+    expect(ccuInfo).toEqual({
+      balanceCu: 1000,
+      burnRateCuPerHour: 8.8,
+      activeAssignments: 1,
+      eligibleAccelerators: ['CPU', 'T4', 'L4', 'A100', 'G4', 'V5E1', 'V6E1'],
+      ineligibleAccelerators: ['H100']
+    })
+    expect(deriveColabPlanLabel(ccuInfo!)).toBe('Colab Pro+')
+    expect(isColabAcceleratorEligible(ccuInfo, 'G4')).toBe(true)
+    expect(isColabAcceleratorEligible(ccuInfo, 'V6E1')).toBe(true)
+    expect(isColabAcceleratorEligible(ccuInfo, 'H100')).toBe(false)
+    expect(resolveEligibleColabAccelerator(ccuInfo, 'H100')).toBe('T4')
+
+    const sessions = parseColabSessionsOutput(
+      '[lora-ft] m-s-abc123 | Hardware: G4 | Shape: Standard | Variant: GPU\n' +
+        '[?] m-s-orphan99 | Hardware: A100 | Shape: High-RAM | Variant: GPU\n' +
+        '[tpu-job] m-s-tpu6 | Hardware: V6E1 | Shape: High-RAM | Variant: TPU\n'
+    )
+    expect(sessions).toHaveLength(3)
+    expect(sessions[0]).toMatchObject({ name: 'lora-ft', accelerator: 'G4', untracked: false })
     expect(sessions[1]).toMatchObject({
       endpoint: 'm-s-orphan99',
       accelerator: 'A100',
+      highMem: true,
       untracked: true
+    })
+    expect(sessions[2]).toMatchObject({
+      name: 'tpu-job',
+      accelerator: 'V6E1',
+      highMem: true,
+      variant: 'TPU',
+      untracked: false
     })
 
     expect(classifyColabErrorOutput('Failed to assign runtime: resource exhausted')).toBe(

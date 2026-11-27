@@ -16,6 +16,7 @@ import { RoomService, putRoomDocument } from '../rooms/room-service.js'
 import { SqliteRoomStore } from '../rooms/room-store-sqlite.js'
 import { WorkbenchBridge, bindWorkbenchBridge } from './bridge.js'
 import { workbenchCodeTools } from './code-tools.js'
+import { workbenchDailyNotesTools } from './daily-notes-tools.js'
 import { workbenchWorkTools } from './work-tools.js'
 
 export type StubThread = Pick<ThreadRecord, 'id' | 'workspace' | 'title' | 'status' | 'updatedAt'> & Partial<ThreadRecord>
@@ -124,7 +125,7 @@ export async function workbenchFixture(options: WorkbenchFixtureOptions = {}) {
     sandboxMode: 'workspace-write', approvalPolicy: 'auto', threadMode: 'agent', roomStepKind: 'conversation', roomAgent: true,
     managerToolBridgeAvailable: true,
     activeToolCallId: toolCallId, abortSignal: new AbortController().signal, awaitApproval: async () => 'allow' })
-  const tools = [...workbenchCodeTools(deps.threadStore), ...workbenchWorkTools(deps.threadStore)]
+  const tools = [...workbenchCodeTools(deps.threadStore), ...workbenchWorkTools(deps.threadStore), ...workbenchDailyNotesTools(deps.threadStore)]
   const tool = (name: string) => tools.find((item) => item.name === name)!
   const run = async (name: string, args: Record<string, unknown>, toolCallId?: string) => tool(name).execute(args, context(toolCallId))
   /** A directory the tests may treat as a Code project or Work workspace. */

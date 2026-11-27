@@ -1,20 +1,193 @@
-export const COLAB_ACCELERATORS = ['T4', 'L4', 'A100', 'CPU'] as const
+export const COLAB_ACCELERATORS = [
+  'T4',
+  'L4',
+  'G4',
+  'A100',
+  'H100',
+  'V6E1',
+  'V5E1',
+  'CPU'
+] as const
 export type ColabAccelerator = (typeof COLAB_ACCELERATORS)[number]
+export type ColabAcceleratorKind = 'gpu' | 'tpu' | 'cpu'
 
 export type ColabAcceleratorSpec = {
   id: ColabAccelerator
   label: string
+  fullLabel: string
+  kind: ColabAcceleratorKind
   cliGpuFlag: string | null
+  cliTpuFlag: string | null
   estimatedCuPerHour: number
   vramGb: number | null
+  tpuHbmGb: number | null
   ramGb: number
+  supportsHighMem: boolean
+  tierRequirement?: 'pro' | 'ai_ultra'
 }
 
 export const COLAB_ACCELERATOR_SPECS: Record<ColabAccelerator, ColabAcceleratorSpec> = {
-  T4: { id: 'T4', label: 'T4', cliGpuFlag: 'T4', estimatedCuPerHour: 1.8, vramGb: 15, ramGb: 12.7 },
-  L4: { id: 'L4', label: 'L4', cliGpuFlag: 'L4', estimatedCuPerHour: 4.8, vramGb: 24, ramGb: 53 },
-  A100: { id: 'A100', label: 'A100', cliGpuFlag: 'A100', estimatedCuPerHour: 11.8, vramGb: 40, ramGb: 83.5 },
-  CPU: { id: 'CPU', label: 'CPU', cliGpuFlag: null, estimatedCuPerHour: 0.1, vramGb: null, ramGb: 12.7 }
+  T4: {
+    id: 'T4',
+    label: 'T4',
+    fullLabel: 'T4 GPU',
+    kind: 'gpu',
+    cliGpuFlag: 'T4',
+    cliTpuFlag: null,
+    estimatedCuPerHour: 1.8,
+    vramGb: 15,
+    tpuHbmGb: null,
+    ramGb: 12.7,
+    supportsHighMem: true
+  },
+  L4: {
+    id: 'L4',
+    label: 'L4',
+    fullLabel: 'L4 GPU',
+    kind: 'gpu',
+    cliGpuFlag: 'L4',
+    cliTpuFlag: null,
+    estimatedCuPerHour: 4.8,
+    vramGb: 24,
+    tpuHbmGb: null,
+    ramGb: 53,
+    supportsHighMem: false,
+    tierRequirement: 'pro'
+  },
+  G4: {
+    id: 'G4',
+    label: 'G4',
+    fullLabel: 'G4 GPU',
+    kind: 'gpu',
+    cliGpuFlag: 'G4',
+    cliTpuFlag: null,
+    estimatedCuPerHour: 8.8,
+    vramGb: 96,
+    tpuHbmGb: null,
+    ramGb: 177,
+    supportsHighMem: false,
+    tierRequirement: 'pro'
+  },
+  A100: {
+    id: 'A100',
+    label: 'A100',
+    fullLabel: 'A100 GPU',
+    kind: 'gpu',
+    cliGpuFlag: 'A100',
+    cliTpuFlag: null,
+    estimatedCuPerHour: 11.8,
+    vramGb: 40,
+    tpuHbmGb: null,
+    ramGb: 83.5,
+    supportsHighMem: true,
+    tierRequirement: 'pro'
+  },
+  H100: {
+    id: 'H100',
+    label: 'H100',
+    fullLabel: 'H100 GPU',
+    kind: 'gpu',
+    cliGpuFlag: 'H100',
+    cliTpuFlag: null,
+    estimatedCuPerHour: 18.1,
+    vramGb: 80,
+    tpuHbmGb: null,
+    ramGb: 170,
+    supportsHighMem: false,
+    tierRequirement: 'ai_ultra'
+  },
+  V6E1: {
+    id: 'V6E1',
+    label: 'v6e-1',
+    fullLabel: 'v6e-1 TPU',
+    kind: 'tpu',
+    cliGpuFlag: null,
+    cliTpuFlag: 'v6e1',
+    estimatedCuPerHour: 4.1,
+    vramGb: null,
+    tpuHbmGb: 32,
+    ramGb: 32,
+    supportsHighMem: false,
+    tierRequirement: 'pro'
+  },
+  V5E1: {
+    id: 'V5E1',
+    label: 'v5e-1',
+    fullLabel: 'v5e-1 TPU',
+    kind: 'tpu',
+    cliGpuFlag: null,
+    cliTpuFlag: 'v5e1',
+    estimatedCuPerHour: 2.9,
+    vramGb: null,
+    tpuHbmGb: 16,
+    ramGb: 47,
+    supportsHighMem: false
+  },
+  CPU: {
+    id: 'CPU',
+    label: 'CPU',
+    fullLabel: 'CPU',
+    kind: 'cpu',
+    cliGpuFlag: null,
+    cliTpuFlag: null,
+    estimatedCuPerHour: 0.1,
+    vramGb: null,
+    tpuHbmGb: null,
+    ramGb: 12.7,
+    supportsHighMem: true
+  }
+}
+
+export function parseKnownColabAccelerator(raw: unknown): ColabAccelerator | null {
+  if (typeof raw !== 'string') return null
+  const compact = raw
+    .trim()
+    .toUpperCase()
+    .replace(/\b(GPU|TPU)\b/g, '')
+    .replace(/[^A-Z0-9]+/g, '')
+  if (!compact) return null
+  if (compact === 'CPU' || compact === 'NONE' || compact === 'DEFAULT') return 'CPU'
+  if (compact === 'T4') return 'T4'
+  if (compact === 'L4') return 'L4'
+  if (compact === 'G4') return 'G4'
+  if (compact === 'A100') return 'A100'
+  if (compact === 'H100') return 'H100'
+  if (compact === 'V6E1') return 'V6E1'
+  if (compact === 'V5E1') return 'V5E1'
+  return null
+}
+
+export function normalizeColabAccelerator(
+  raw: unknown,
+  fallback: ColabAccelerator = 'CPU'
+): ColabAccelerator {
+  return parseKnownColabAccelerator(raw) ?? fallback
+}
+
+export type ColabAcceleratorEligibilitySource = {
+  eligibleAccelerators?: readonly ColabAccelerator[]
+  ineligibleAccelerators?: readonly ColabAccelerator[]
+}
+
+export function isColabAcceleratorEligible(
+  conn: ColabAcceleratorEligibilitySource | null | undefined,
+  id: ColabAccelerator
+): boolean {
+  if (id === 'CPU' || !conn) return true
+  if (conn.eligibleAccelerators?.includes(id)) return true
+  if (conn.ineligibleAccelerators?.includes(id)) return false
+  if (conn.eligibleAccelerators && conn.eligibleAccelerators.length > 0) {
+    return conn.eligibleAccelerators.includes(id)
+  }
+  return true
+}
+
+export function resolveEligibleColabAccelerator(
+  conn: ColabAcceleratorEligibilitySource | null | undefined,
+  preferred: ColabAccelerator
+): ColabAccelerator {
+  if (isColabAcceleratorEligible(conn, preferred)) return preferred
+  return COLAB_ACCELERATORS.find((id) => isColabAcceleratorEligible(conn, id)) ?? 'CPU'
 }
 
 export type ColabConnectionStatus = 'connected' | 'expired'
@@ -36,6 +209,8 @@ export type ColabConnectionView = {
   planLabel: string
   balanceCu: number | null
   burnRateCuPerHour: number | null
+  eligibleAccelerators?: ColabAccelerator[]
+  ineligibleAccelerators?: ColabAccelerator[]
   status: ColabConnectionStatus
   createdAt: string
   updatedAt: string
@@ -110,6 +285,19 @@ export type ColabGuardWarningKind =
 
 export type ColabGuardStopReason = 'max_runtime' | 'max_spend' | 'balance_floor'
 
+export const COLAB_RESOURCE_INTERVAL_MS = 5_000
+export const COLAB_RESOURCE_WINDOW_MS = 5 * 60_000
+
+export type ColabResourceSample = {
+  at: number // Unix epoch milliseconds
+  gpuPct: number | null
+  vramUsedGiB: number | null
+  vramTotalGiB: number | null
+  ramUsedGiB: number | null
+  ramTotalGiB: number | null
+  diskPct: number | null
+}
+
 export type ColabSessionView = {
   id: string
   sessionName: string
@@ -155,6 +343,7 @@ export type ColabSessionView = {
   ramUsedGb?: number | null
   diskUsedPct?: number | null
   gpuHistory: number[]
+  resourceHistory?: ColabResourceSample[]
   metrics: Record<string, ColabMetricPoint[]>
   progressSummary?: string
   logTail: string[]
@@ -170,6 +359,7 @@ export type ColabUntrackedSession = {
   endpoint: string
   remoteLabel: string
   accelerator: ColabAccelerator
+  highMem?: boolean
   variant: string
   detectedAt: string
 }
@@ -177,6 +367,7 @@ export type ColabUntrackedSession = {
 export type ColabLastRunSummary = {
   entryCommand: string
   accelerator: ColabAccelerator
+  highMem?: boolean
   syncPaths: string[]
   outputRemoteDir: string
   outputLocalDir: string
@@ -194,6 +385,7 @@ export type ColabLastRunSummary = {
 export type ColabWorkspaceRunConfig = {
   entryCommand: string
   accelerator: ColabAccelerator
+  highMem?: boolean
   syncPaths: string[]
   outputRemoteDir: string
   outputLocalDir: string

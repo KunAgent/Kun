@@ -1,4 +1,5 @@
 import { parsePetInteractionPack, type PetInteractionPack } from '../../shared/pets-interactions'
+import { parseKuroCatSkinConfig, type KuroCatSkinConfig } from '../../shared/pets-kurocat'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import {
@@ -18,6 +19,7 @@ export type ValidatedPetPackage = {
   spritesheetPath: string
   warnings: string[]
   interactions?: PetInteractionPack
+  kurocatSkin?: KuroCatSkinConfig
 }
 
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
@@ -72,8 +74,9 @@ function readManifest(value: unknown, folderName: string): Omit<ValidatedPetPack
   if (folderName !== id) warnings.push(`folder ${folderName} does not match id ${id}`)
   const interactions = candidate.interactions === undefined ? undefined : parsePetInteractionPack(candidate.interactions)
   if (interactions === null) throw new Error('invalid pet interaction recipes')
+  const kurocatSkin = candidate.kurocatSkin === undefined ? undefined : (parseKuroCatSkinConfig(candidate.kurocatSkin, id) ?? undefined)
   return { sourceId: id, displayName, description, spriteVersionNumber: version, spritesheetPath, warnings,
-    ...(interactions ? { interactions } : {}) }
+    ...(interactions ? { interactions } : {}), ...(kurocatSkin ? { kurocatSkin } : {}) }
 }
 
 export function spritesheetFileName(sourcePath: string): 'spritesheet.png' | 'spritesheet.webp' {
@@ -83,5 +86,6 @@ export function spritesheetFileName(sourcePath: string): 'spritesheet.png' | 'sp
 export function petSourceLabel(source: PetSource): string {
   if (source === 'kun-builtin') return 'Built-in'
   if (source === 'kun-local') return 'Local'
+  if (source === 'kurocat-custom') return 'KuroCat'
   return 'Codex'
 }

@@ -1,7 +1,10 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { posix } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
-import { COLAB_NOTEBOOK_MARKER } from '../../shared/colab/colab-notebook-types'
+import {
+  COLAB_NOTEBOOK_MARKER,
+  type ColabDriveAuthHint,
+  type ColabDriveErrorCode
+} from '../../shared/colab/colab-notebook-types'
 
 export const DRIVE_AUTH_WAIT_TIMEOUT_MS = 8 * 60 * 1000
 
@@ -49,7 +52,7 @@ export function terminateDriveHelper(child: ChildProcess): void {
 
 export function driveRuntimeSetup(sessionsJsonPath: string, sessionName: string): string[] {
   return [
-    'import json, signal, sys',
+    'import json, signal, sys, threading',
     'from colab_cli.common import state',
     'from colab_cli.runtime import ColabRuntime',
     `state.config_path = ${JSON.stringify(sessionsJsonPath)}`,
@@ -59,6 +62,14 @@ export function driveRuntimeSetup(sessionsJsonPath: string, sessionName: string)
     '    sys.exit(0)',
     // Omitting the saved kernel and session IDs gives this helper its own kernel on the same VM.
     'runtime = ColabRuntime(s.url, s.token)',
+    '_rt_lock = threading.Lock()',
+    '_rt_stopped = [False]',
+    'def _cleanup_runtime():',
+    '    with _rt_lock:',
+    '        if _rt_stopped[0]:',
+    '            return',
+    '        _rt_stopped[0] = True',
+    '    runtime.stop(shutdown_kernel=True)',
     'def _terminate(*_):',
     '    raise SystemExit(1)',
     'signal.signal(signal.SIGTERM, _terminate)',
@@ -70,7 +81,7 @@ export function driveRuntimeSetup(sessionsJsonPath: string, sessionName: string)
   ]
 }
 
-export const driveRuntimeCleanup = ['finally:', '    runtime.stop(shutdown_kernel=True)', '']
+export const driveRuntimeCleanup = ['finally:', '    _cleanup_runtime()', '']
 
 export function driveMountedRootExpr(mountPointExpr: string): string {
   return (
@@ -80,70 +91,167 @@ export function driveMountedRootExpr(mountPointExpr: string): string {
   )
 }
 
-export function drivefsAuthHookPython(indent = '        '): string[] {
+export function drivefsAuthHookPython(indent = '        ', expectedEmail?: string): string[] {
   const m = COLAB_NOTEBOOK_MARKER
+  const acctJson = JSON.stringify(expectedEmail?.trim() || '')
   return [
     `${indent}auth_aborted = [False]`,
+    `${indent}_hook_started = [False]`,
+    `${indent}def _parse_resp(resp):`,
+    `${indent}    text = getattr(resp, "text", "") or ""`,
+    `${indent}    for cand in (text, text.split("\\n", 1)[-1], text.rsplit("\\n", 1)[-1]):`,
+    `${indent}        cand = cand.strip()`,
+    `${indent}        if not cand:`,
+    `${indent}            continue`,
+    `${indent}        try:`,
+    `${indent}            obj = json.loads(cand)`,
+    `${indent}        except Exception:`,
+    `${indent}            continue`,
+    `${indent}        if isinstance(obj, dict):`,
+    `${indent}            return obj`,
+    `${indent}    return {}`,
+    `${indent}def _prop_err(status, data):`,
+    `${indent}    acct = ${acctJson} or "the connected Colab account"`,
+    `${indent}    if status == 400:`,
+    `${indent}        return (f"Google Drive credentials could not be propagated (HTTP 400). Your browser likely authorized a different Google account than {acct}. Switch to {acct} or open the link in an Incognito/dedicated profile window and retry.", "account_mismatch")`,
+    `${indent}    det = data.get("error") or data.get("message") or ""`,
+    `${indent}    det_s = f" ({str(det).strip()[:200]})" if isinstance(det, str) and det.strip() else ""`,
+    `${indent}    st_s = f" (HTTP {status})" if status is not None and status != 200 else ""`,
+    `${indent}    return (f"Google Drive authorization not completed{st_s}{det_s}.", "auth_incomplete")`,
+    `${indent}def _fail_auth(msg, code=None):`,
+    `${indent}    if auth_aborted[0]:`,
+    `${indent}        return`,
+    `${indent}    auth_aborted[0] = True`,
+    `${indent}    payload = {"message": msg, "code": code} if code else msg`,
+    `${indent}    print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(payload), flush=True)`,
+    `${indent}    _cleanup_runtime()`,
     `${indent}def drivefs_hook(deserialize_msg, wsclient):`,
-    `${indent}    import threading`,
     `${indent}    content = deserialize_msg.get("content", {})`,
     `${indent}    if content.get("request", {}).get("authType") != "dfs_ephemeral":`,
     `${indent}        return False`,
+    `${indent}    if _hook_started[0]:`,
+    `${indent}        return True`,
+    `${indent}    _hook_started[0] = True`,
     `${indent}    msg_id = deserialize_msg.get("metadata", {}).get("colab_msg_id")`,
-    `${indent}    url = f"{state.client.colab_domain}/tun/m/credentials-propagation/{s.endpoint}"`,
-    `${indent}    params = {"authuser": "0", "authtype": "dfs_ephemeral", "version": "2", "dryrun": "true", "propagate": "true", "record": "false"}`,
-    `${indent}    creds = get_credentials(state.client_oauth_config, provider=state.auth_provider)`,
-    `${indent}    r0 = creds.request("GET", url, params=params)`,
-    `${indent}    tok = _parse_json(r0.text).get("token") if get_status_code(r0) == 200 else None`,
-    `${indent}    headers = {"x-goog-colab-token": tok}`,
-    `${indent}    r1 = creds.request("POST", url, params=params, headers=headers, files={"file_id": (None, "empty.ipynb")})`,
-    `${indent}    data = _parse_json(r1.text)`,
-    `${indent}    if not data.get("success"):`,
-    `${indent}        uri = data.get("unauthorized_redirect_uri") or ""`,
-    `${indent}        print(${JSON.stringify(m + 'DRV_AUTH:')} + json.dumps({"uri": uri}), flush=True)`,
-    `${indent}        wake = threading.Event()`,
-    `${indent}        cmd_q = []`,
-    `${indent}        def _stdin_reader():`,
-    `${indent}            while not auth_aborted[0]:`,
-    `${indent}                ln = sys.stdin.readline()`,
-    `${indent}                if not ln:`,
-    `${indent}                    return`,
-    `${indent}                cmd_q.append(ln.strip())`,
-    `${indent}                wake.set()`,
-    `${indent}        threading.Thread(target=_stdin_reader, daemon=True).start()`,
-    `${indent}        while not data.get("success"):`,
-    `${indent}            wake.wait(3.0)`,
-    `${indent}            wake.clear()`,
-    `${indent}            manual = False`,
-    `${indent}            while cmd_q:`,
-    `${indent}                c = cmd_q.pop(0)`,
-    `${indent}                if c == "CONTINUE":`,
-    `${indent}                    manual = True`,
-    `${indent}                elif c != "":`,
-    `${indent}                    auth_aborted[0] = True`,
-    `${indent}                    print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps("Google Drive authorization canceled."), flush=True)`,
-    `${indent}                    return True`,
-    `${indent}            try:`,
-    `${indent}                fresh = creds.request("GET", url, params=params)`,
-    `${indent}                if get_status_code(fresh) == 200:`,
-    `${indent}                    headers = {"x-goog-colab-token": _parse_json(fresh.text).get("token")}`,
-    `${indent}                    data = _parse_json(creds.request("POST", url, params=params, headers=headers, files={"file_id": (None, "empty.ipynb")}).text)`,
-    `${indent}            except Exception:`,
-    `${indent}                data = {}`,
-    `${indent}            if manual and not data.get("success"):`,
-    `${indent}                uri = data.get("unauthorized_redirect_uri") or uri`,
-    `${indent}                print(${JSON.stringify(m + 'DRV_AUTH:')} + json.dumps({"uri": uri}), flush=True)`,
-    `${indent}    params["dryrun"] = "false"`,
-    `${indent}    r2 = creds.request("POST", url, params=params, headers=headers, files={"file_id": (None, "empty.ipynb")})`,
-    `${indent}    if get_status_code(r2) == 200:`,
+    `${indent}    def _send_ok():`,
     `${indent}        print(${JSON.stringify(m + 'DRV_AUTH_OK:1')}, flush=True)`,
     `${indent}        reply = wsclient.session.msg("input_reply", {"value": {"type": "colab_reply", "colab_msg_id": msg_id}})`,
     `${indent}        if "header" in deserialize_msg:`,
     `${indent}            reply["parent_header"] = deserialize_msg["header"]`,
     `${indent}        wsclient.stdin_channel.send(reply)`,
-    `${indent}    else:`,
-    `${indent}        auth_aborted[0] = True`,
-    `${indent}        print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(f"Google Drive authorization not completed (HTTP {get_status_code(r2)})."), flush=True)`,
+    `${indent}    def _worker():`,
+    `${indent}        try:`,
+    `${indent}            url = f"{state.client.colab_domain}/tun/m/credentials-propagation/{s.endpoint}"`,
+    `${indent}            base_p = {"authuser": "0", "authtype": "dfs_ephemeral", "version": "2", "propagate": "true", "record": "false"}`,
+    `${indent}            creds = get_credentials(state.client_oauth_config, provider=state.auth_provider)`,
+    `${indent}            def _get_tok():`,
+    `${indent}                rt = creds.request("GET", url, params=dict(base_p, dryrun="true"), timeout=30)`,
+    `${indent}                dt = _parse_resp(rt)`,
+    `${indent}                st = get_status_code(rt)`,
+    `${indent}                return (st, dt.get("token") if st == 200 else None, dt)`,
+    `${indent}            def _post(dry, tok):`,
+    `${indent}                rp = creds.request("POST", url, params=dict(base_p, dryrun=dry), headers={"x-goog-colab-token": tok}, files={"file_id": (None, "empty.ipynb")}, timeout=30)`,
+    `${indent}                return (get_status_code(rp), _parse_resp(rp))`,
+    `${indent}            st0, tok, d0 = _get_tok()`,
+    `${indent}            if not tok:`,
+    `${indent}                _fail_auth(*_prop_err(st0, d0))`,
+    `${indent}                return`,
+    `${indent}            st1, d1 = _post("true", tok)`,
+    `${indent}            if st1 == 200 and d1.get("success"):`,
+    `${indent}                st2, d2 = _post("false", tok)`,
+    `${indent}                if st2 == 200 and d2.get("success"):`,
+    `${indent}                    _send_ok()`,
+    `${indent}                    return`,
+    `${indent}                uri = d2.get("unauthorized_redirect_uri") or ""`,
+    `${indent}                if not uri:`,
+    `${indent}                    _fail_auth(*_prop_err(st2, d2))`,
+    `${indent}                    return`,
+    `${indent}            else:`,
+    `${indent}                uri = d1.get("unauthorized_redirect_uri") or ""`,
+    `${indent}                if not uri:`,
+    `${indent}                    _fail_auth(*_prop_err(st1, d1))`,
+    `${indent}                    return`,
+    `${indent}            print(${JSON.stringify(m + 'DRV_AUTH:')} + json.dumps({"uri": uri}), flush=True)`,
+    `${indent}            wake = threading.Event()`,
+    `${indent}            cmd_q, stdin_eof = [], [False]`,
+    `${indent}            def _stdin_reader():`,
+    `${indent}                while not auth_aborted[0]:`,
+    `${indent}                    try:`,
+    `${indent}                        ln = sys.stdin.readline()`,
+    `${indent}                    except Exception:`,
+    `${indent}                        ln = ""`,
+    `${indent}                    if not ln:`,
+    `${indent}                        stdin_eof[0] = True`,
+    `${indent}                        return`,
+    `${indent}                    cmd_q.append(ln.strip())`,
+    `${indent}                    wake.set()`,
+    `${indent}            threading.Thread(target=_stdin_reader, daemon=True).start()`,
+    `${indent}            first_poll = True`,
+    `${indent}            while not auth_aborted[0]:`,
+    `${indent}                wake.wait(8.0 if first_poll else 5.0)`,
+    `${indent}                first_poll = False`,
+    `${indent}                wake.clear()`,
+    `${indent}                if auth_aborted[0]:`,
+    `${indent}                    return`,
+    `${indent}                manual = False`,
+    `${indent}                while cmd_q:`,
+    `${indent}                    c = cmd_q.pop(0)`,
+    `${indent}                    if c == "CONTINUE":`,
+    `${indent}                        manual = True`,
+    `${indent}                    elif c != "":`,
+    `${indent}                        _fail_auth("Google Drive authorization canceled.", "canceled")`,
+    `${indent}                        return`,
+    `${indent}                try:`,
+    `${indent}                    stt, ftok, dt = _get_tok()`,
+    `${indent}                    if not ftok:`,
+    `${indent}                        if manual:`,
+    `${indent}                            _fail_auth(*_prop_err(stt, dt))`,
+    `${indent}                            return`,
+    `${indent}                        continue`,
+    `${indent}                    if manual or stdin_eof[0]:`,
+    `${indent}                        stp, dp = _post("false", ftok)`,
+    `${indent}                        if stp == 200 and dp.get("success"):`,
+    `${indent}                            _send_ok()`,
+    `${indent}                            return`,
+    `${indent}                        n_uri = dp.get("unauthorized_redirect_uri") or ""`,
+    `${indent}                        if n_uri:`,
+    `${indent}                            uri = n_uri`,
+    `${indent}                            if manual:`,
+    `${indent}                                print(${JSON.stringify(m + 'DRV_AUTH:')} + json.dumps({"uri": uri, "reason": "incomplete"}), flush=True)`,
+    `${indent}                            continue`,
+    `${indent}                        if manual and stp == 400:`,
+    `${indent}                            _, dr = _post("true", ftok)`,
+    `${indent}                            r_uri = dr.get("unauthorized_redirect_uri") or ""`,
+    `${indent}                            if r_uri:`,
+    `${indent}                                uri = r_uri`,
+    `${indent}                                print(${JSON.stringify(m + 'DRV_AUTH:')} + json.dumps({"uri": uri, "reason": "account_mismatch"}), flush=True)`,
+    `${indent}                                continue`,
+    `${indent}                        _fail_auth(*_prop_err(stp, dp))`,
+    `${indent}                        return`,
+    `${indent}                    stc, dc = _post("true", ftok)`,
+    `${indent}                    if stc == 200 and dc.get("success"):`,
+    `${indent}                        stp, dp = _post("false", ftok)`,
+    `${indent}                        if stp == 200 and dp.get("success"):`,
+    `${indent}                            _send_ok()`,
+    `${indent}                            return`,
+    `${indent}                        if stp == 400:`,
+    `${indent}                            _, dr = _post("true", ftok)`,
+    `${indent}                            r_uri = dr.get("unauthorized_redirect_uri") or ""`,
+    `${indent}                            if r_uri:`,
+    `${indent}                                uri = r_uri`,
+    `${indent}                                print(${JSON.stringify(m + 'DRV_AUTH:')} + json.dumps({"uri": uri, "reason": "account_mismatch"}), flush=True)`,
+    `${indent}                                continue`,
+    `${indent}                        _fail_auth(*_prop_err(stp, dp))`,
+    `${indent}                        return`,
+    `${indent}                    elif stc == 400:`,
+    `${indent}                        _fail_auth(*_prop_err(stc, dc))`,
+    `${indent}                        return`,
+    `${indent}                except Exception:`,
+    `${indent}                    if manual:`,
+    `${indent}                        print(${JSON.stringify(m + 'DRV_AUTH:')} + json.dumps({"uri": uri, "reason": "incomplete"}), flush=True)`,
+    `${indent}        except Exception as ex:`,
+    `${indent}            _fail_auth(str(ex))`,
+    `${indent}    threading.Thread(target=_worker, daemon=True).start()`,
     `${indent}    return True`,
     `${indent}runtime.colab_request_hook = drivefs_hook`
   ]
@@ -175,10 +283,20 @@ export function buildDriveProbeSessionPython(
   ].join('\n')
 }
 
+export {
+  buildArtifactListPython,
+  buildDriveFlushSessionPython,
+  buildFlushMountedDriveIfPresentPython,
+  isGoogleDriveRemotePath,
+  parseArtifactListOutput,
+  resolveColabRemoteDir,
+  runSessionDriveFlushHelper
+} from './colab-drive-artifacts'
+
 export function buildDriveMountSessionPython(
   sessionsJsonPath: string,
   sessionName: string,
-  options?: { forceRemount?: boolean; mountPoint?: string }
+  options?: { forceRemount?: boolean; mountPoint?: string; expectedEmail?: string }
 ): string {
   const m = COLAB_NOTEBOOK_MARKER
   const mp = sanitizeDriveMountPoint(options?.mountPoint)
@@ -204,18 +322,11 @@ export function buildDriveMountSessionPython(
     'else:',
     `    print(${JSON.stringify(m + 'DRV_ERR:')} + _j.dumps("Google Drive mount folder was not created."), flush=True)`
   ].join('\n')
-  const mountCall = `from google.colab import drive\ndrive.mount(${JSON.stringify(mp)}, force_remount=${forcePy})`
+  const mountCall = `from google.colab import drive\ndrive.mount(${JSON.stringify(mp)}, force_remount=${forcePy}, timeout_ms=600000)`
   return [
     ...driveRuntimeSetup(sessionsJsonPath, sessionName),
     'from colab_cli.auth import get_credentials',
     'from colab_cli.utils import get_status_code',
-    'def _parse_json(raw):',
-    '    try:',
-    '        body = raw.split("\\n", 1)[-1] if raw.lstrip().startswith(")]}\'") else raw',
-    '        parsed = json.loads(body)',
-    '        return parsed if isinstance(parsed, dict) else {}',
-    '    except Exception:',
-    '        return {}',
     'try:',
     `    force = ${forcePy}`,
     '    already = ""',
@@ -228,17 +339,23 @@ export function buildDriveMountSessionPython(
     '    if already:',
     `        print(${JSON.stringify(m + 'DRV_MOUNTED:')} + json.dumps({"mounted": True, "mountPath": already}), flush=True)`,
     '    else:',
-    ...drivefsAuthHookPython('        '),
+    ...drivefsAuthHookPython('        ', options?.expectedEmail),
     `        m_out = runtime.execute_code(${JSON.stringify(mountCall)}, allow_stdin=True, timeout=600)`,
     '        if auth_aborted[0]:',
     '            sys.exit(0)',
     '        for o in (m_out or []):',
     '            if o.get("output_type") == "error":',
-    `                print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(f"{o.get('ename', 'Error')}: {o.get('evalue', '')}"), flush=True)`,
+    '                ev = str(o.get("evalue", ""))',
+    '                if "Mountpoint must not already contain files" in ev:',
+    `                    msg = f"${mp} on the VM already contains local files created before Drive was mounted. Move or remove local files under ${mp} and mount again."`,
+    '                else:',
+    '                    msg = f"{o.get(\'ename\', \'Error\')}: {ev}"',
+    `                print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(msg), flush=True)`,
     '                sys.exit(0)',
     `        _emit_outputs(runtime.execute_code(${JSON.stringify(verifyCode)}, timeout=20))`,
     'except Exception as ex:',
-    `    print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(str(ex)), flush=True)`,
+    '    if not auth_aborted[0]:',
+    `        print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(str(ex)), flush=True)`,
     ...driveRuntimeCleanup
   ].join('\n')
 }
@@ -273,9 +390,9 @@ export function parseDriveMountMarkerLine(
 ):
   | { kind: 'mounted'; mounted: boolean; mountPath: string }
   | { kind: 'unmounted' }
-  | { kind: 'auth'; uri: string }
+  | { kind: 'auth'; uri: string; reason?: ColabDriveAuthHint }
   | { kind: 'auth_ok' }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; code?: ColabDriveErrorCode }
   | null {
   if (!line.startsWith(COLAB_NOTEBOOK_MARKER)) return null
   const body = line.slice(COLAB_NOTEBOOK_MARKER.length)
@@ -295,176 +412,44 @@ export function parseDriveMountMarkerLine(
   if (body.startsWith('DRV_AUTH_OK:')) return { kind: 'auth_ok' }
   if (body.startsWith('DRV_AUTH:')) {
     try {
-      const parsed = JSON.parse(body.slice(9)) as { uri?: string }
-      return { kind: 'auth', uri: String(parsed.uri ?? '') }
+      const parsed = JSON.parse(body.slice(9)) as { uri?: string; reason?: string }
+      const reason =
+        parsed.reason === 'incomplete' || parsed.reason === 'account_mismatch'
+          ? parsed.reason
+          : undefined
+      return {
+        kind: 'auth',
+        uri: String(parsed.uri ?? ''),
+        ...(reason ? { reason } : {})
+      }
     } catch {
       return null
     }
   }
   if (body.startsWith('DRV_ERR:')) {
     try {
-      return { kind: 'error', message: String(JSON.parse(body.slice(8))) }
+      const parsed = JSON.parse(body.slice(8)) as string | { message?: unknown; code?: unknown }
+      if (parsed && typeof parsed === 'object') {
+        const rawCode = parsed.code
+        const code =
+          rawCode === 'auth_expired' ||
+          rawCode === 'auth_incomplete' ||
+          rawCode === 'account_mismatch' ||
+          rawCode === 'canceled'
+            ? rawCode
+            : undefined
+        return {
+          kind: 'error',
+          message: String(parsed.message ?? ''),
+          ...(code ? { code } : {})
+        }
+      }
+      return { kind: 'error', message: String(parsed) }
     } catch {
       return { kind: 'error', message: body.slice(8) }
     }
   }
   return null
-}
-
-/** Resolves relative (`outputs/`) or absolute (`/content/drive/MyDrive/ckpts`) Colab paths without doubling `/content`. */
-export function resolveColabRemoteDir(remoteDir: string): string {
-  const cleaned = remoteDir.trim().replaceAll('\\', '/').replace(/\/+$/, '')
-  if (!cleaned) return '/content'
-  const raw =
-    cleaned === '/content' || cleaned.startsWith('/content/')
-      ? cleaned
-      : cleaned === 'content' || cleaned.startsWith('content/')
-        ? `/${cleaned}`
-        : posix.join('/content', cleaned.replace(/^\/+/, ''))
-  const normalized = posix.normalize(raw)
-  return normalized === '/content' || normalized.startsWith('/content/') ? normalized : '/content'
-}
-
-export function isGoogleDriveRemotePath(remoteDir: string): boolean {
-  const resolved = resolveColabRemoteDir(remoteDir)
-  return resolved === '/content/drive' || resolved.startsWith('/content/drive/')
-}
-
-export function buildArtifactListPython(remoteDir: string): string {
-  const root = resolveColabRemoteDir(remoteDir)
-  return [
-    'import json, os as _o',
-    `root = ${JSON.stringify(root)}`,
-    'try:',
-    `    _drv = bool(${driveMountedRootExpr('"/content/drive"')})`,
-    'except OSError:',
-    '    _drv = False',
-    '_root_mounted = False',
-    'try:',
-    '    _cdev = _o.stat("/content").st_dev',
-    '    _probe = root',
-    '    while _probe and _probe != "/" and _probe != "/content" and not _o.path.exists(_probe):',
-    '        _probe = _o.path.dirname(_probe)',
-    '    if _probe and _probe != "/" and _probe != "/content" and _o.path.exists(_probe):',
-    '        _root_mounted = _o.stat(_probe).st_dev != _cdev',
-    'except OSError:',
-    '    _root_mounted = False',
-    'items = []',
-    'if _o.path.isdir(root):',
-    '    _files, _dirs = [], []',
-    '    try:',
-    '        with _o.scandir(root) as _it:',
-    '            for _e in _it:',
-    '                if _e.name.startswith("."):',
-    '                    continue',
-    '                try:',
-    '                    _st = _e.stat()',
-    '                    if _e.is_file():',
-    '                        _files.append((_e.name, _e.path, _st.st_size))',
-    '                    elif _e.is_dir():',
-    '                        _dirs.append((_st.st_mtime, _e.name, _e.path))',
-    '                except OSError:',
-    '                    continue',
-    '    except OSError:',
-    '        pass',
-    '    for _n, _fp, _sz in sorted(_files, key=lambda x: x[0])[:40]:',
-    '        items.append({"name": _n, "remotePath": _o.path.relpath(_fp, "/"), "sizeBytes": _sz})',
-    '    for _, _dn, _dp in sorted(_dirs, key=lambda x: (-x[0], x[1]))[:20]:',
-    '        if len(items) >= 40:',
-    '            break',
-    '        try:',
-    '            with _o.scandir(_dp) as _sit:',
-    '                _subs = []',
-    '                for _se in _sit:',
-    '                    try:',
-    '                        if _se.is_file():',
-    '                            _subs.append((_se.name, _se.path, _se.stat().st_size))',
-    '                    except OSError:',
-    '                        continue',
-    '            for _sn, _sp, _ssz in sorted(_subs, key=lambda x: x[0])[:8]:',
-    '                if len(items) >= 40:',
-    '                    break',
-    '                items.append({"name": _dn + "/" + _sn, "remotePath": _o.path.relpath(_sp, "/"), "sizeBytes": _ssz})',
-    '        except OSError:',
-    '            continue',
-    'print("KUN_ARTIFACTS:" + json.dumps({"items": items, "driveMounted": _drv, "rootMounted": _root_mounted}), flush=True)',
-    ''
-  ].join('\n')
-}
-
-export function parseArtifactListOutput<T>(stdout: string): {
-  items: T[]
-  driveMounted: boolean
-  rootMounted: boolean
-} {
-  const line = stdout.split(/\r?\n/).find((l) => l.startsWith('KUN_ARTIFACTS:'))
-  if (!line) return { items: [], driveMounted: false, rootMounted: false }
-  try {
-    const parsed = JSON.parse(line.slice('KUN_ARTIFACTS:'.length)) as
-      | T[]
-      | { items?: T[]; driveMounted?: boolean; rootMounted?: boolean }
-    if (Array.isArray(parsed)) return { items: parsed, driveMounted: true, rootMounted: true }
-    return {
-      items: Array.isArray(parsed.items) ? parsed.items : [],
-      driveMounted: Boolean(parsed.driveMounted),
-      rootMounted: Boolean(parsed.rootMounted)
-    }
-  } catch {
-    return { items: [], driveMounted: false, rootMounted: false }
-  }
-}
-
-export function buildFlushMountedDriveIfPresentPython(): string {
-  return [
-    'import os as _o',
-    '_cands = ["/content/drive"]',
-    'try:',
-    '    _cfg = "/root/.config/Google/DriveFS/mount_point"',
-    '    if _o.path.isfile(_cfg):',
-    '        _mp = open(_cfg, "r", encoding="utf-8", errors="ignore").read().strip()',
-    '        if _mp and _mp not in _cands:',
-    '            _cands.append(_mp)',
-    'except OSError:',
-    '    pass',
-    'try:',
-    '    with open("/proc/mounts", "r", encoding="utf-8", errors="ignore") as _mf:',
-    '        for _ln in _mf:',
-    '            _ps = _ln.split()',
-    '            if len(_ps) >= 3 and (_ps[2].startswith("fuse") or _ps[0] == "drive"):',
-    '                _mp = _ps[1].replace("\\\\040", " ")',
-    '                if _mp not in _cands:',
-    '                    _cands.append(_mp)',
-    'except OSError:',
-    '    pass',
-    '_mounted = False',
-    'for _mp in _cands:',
-    '    _mp = _mp.rstrip("/") or "/"',
-    '    if _mp == "/":',
-    '        continue',
-    '    try:',
-    `        if ${driveMountedRootExpr('_mp')}:`,
-    '            _mounted = True',
-    '            break',
-    '    except OSError:',
-    '        continue',
-    'if _mounted:',
-    '    from google.colab import drive',
-    '    drive.flush_and_unmount()',
-    '    print("KUN_DRIVE_FLUSHED:1", flush=True)',
-    ''
-  ].join('\n')
-}
-
-export function buildDriveFlushSessionPython(sessionsJsonPath: string, sessionName: string): string {
-  const flushVmCode = buildFlushMountedDriveIfPresentPython()
-  return [
-    ...driveRuntimeSetup(sessionsJsonPath, sessionName),
-    'try:',
-    `    _emit_outputs(runtime.execute_code(${JSON.stringify(flushVmCode)}, timeout=120))`,
-    'except Exception:',
-    '    pass',
-    ...driveRuntimeCleanup
-  ].join('\n')
 }
 
 export async function runSessionDriveProbeHelper(options: {
@@ -515,43 +500,12 @@ export async function runSessionDriveProbeHelper(options: {
   return { mounted: false, mountPath: '' }
 }
 
-export async function runSessionDriveFlushHelper(options: {
-  pythonPath: string
-  sessionsJsonPath: string
-  sessionName: string
-  env: Record<string, string>
-  spawnProcess?: typeof spawn
-}): Promise<boolean> {
-  const script = buildDriveFlushSessionPython(options.sessionsJsonPath, options.sessionName)
-  const spawnFn = options.spawnProcess ?? spawn
-  const child = spawnFn(options.pythonPath, ['-c', script], {
-    env: options.env,
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
-  const output = await new Promise<string>((resolve) => {
-    let stdout = ''
-    const timer = setTimeout(() => terminateDriveHelper(child), 125_000)
-    child.stderr?.resume()
-    child.stdout?.on('data', (chunk: Buffer) => {
-      if (stdout.length < 16_384) stdout += chunk.toString('utf8')
-    })
-    child.once('error', () => {
-      clearTimeout(timer)
-      resolve(stdout)
-    })
-    child.once('close', () => {
-      clearTimeout(timer)
-      resolve(stdout)
-    })
-  })
-  return output.includes('KUN_DRIVE_FLUSHED:1')
-}
-
 export async function runSessionDriveMountHelper(options: {
   pythonPath: string
   sessionsJsonPath: string
   sessionName: string
   env: Record<string, string>
+  expectedEmail?: string
   signal?: AbortSignal
   openExternal?: (url: string) => Promise<void>
   onLog?: (line: string) => void
@@ -560,7 +514,9 @@ export async function runSessionDriveMountHelper(options: {
   if (options.signal?.aborted) {
     return { ok: false, message: 'Google Drive mount canceled.' }
   }
-  const script = buildDriveMountSessionPython(options.sessionsJsonPath, options.sessionName)
+  const script = buildDriveMountSessionPython(options.sessionsJsonPath, options.sessionName, {
+    expectedEmail: options.expectedEmail
+  })
   const spawnFn = options.spawnProcess ?? spawn
   const child = spawnFn(options.pythonPath, ['-c', script], {
     env: options.env,

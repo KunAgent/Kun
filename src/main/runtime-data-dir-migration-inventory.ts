@@ -7,7 +7,8 @@ import {
   readlinkSync,
   readSync,
   realpathSync,
-  statSync
+  statSync,
+  type Stats
 } from 'node:fs'
 import {
   createHash
@@ -186,10 +187,9 @@ export type RuntimeTreeFingerprint = {
   threadIds: string[]
 }
 
-export function hashRegularFile(path: string): string {
+export function hashRegularFile(path: string, buffer = Buffer.allocUnsafe(1024 * 1024)): string {
   const hash = createHash('sha256')
   const handle = openSync(path, 'r')
-  const buffer = Buffer.allocUnsafe(1024 * 1024)
   try {
     while (true) {
       const bytesRead = readSync(handle, buffer, 0, buffer.length, null)
@@ -207,11 +207,19 @@ export function canonicalRelativePath(rootPath: string, entryPath: string): stri
   return value === '' ? '.' : value.split(sep).join('/')
 }
 
+/** Both the activation check and the later backup audit hash this on-disk format. */
+export function treeFingerprintRecord(path: string, metadata: Stats, contents = ''): string {
+  if (metadata.isSymbolicLink()) return `link\0${path}\0${contents}\0`
+  if (metadata.isDirectory()) return `dir\0${path}\0${metadata.mode & 0o7777}\0`
+  return `file\0${path}\0${metadata.mode & 0o7777}\0${metadata.size}\0${contents}\0`
+}
+
 export function runtimeTreeFingerprint(rootPath: string): RuntimeTreeFingerprint {
   if (pathState(rootPath) !== 'dir') {
     throw new Error(`Runtime fingerprint root is not a directory: ${rootPath}`)
   }
   const hash = createHash('sha256')
+  const buffer = Buffer.allocUnsafe(1024 * 1024)
   const inventory: RuntimeStoreInventory = {
     files: 0,
     directories: 0,
@@ -225,14 +233,12 @@ export function runtimeTreeFingerprint(rootPath: string): RuntimeTreeFingerprint
       const target = readlinkSync(entryPath)
       inventory.symlinks += 1
       inventory.bytes += metadata.size
-      hash.update(`link\0${relativePath}\0${target}\0`)
+      hash.update(treeFingerprintRecord(relativePath, metadata, target))
       return
     }
     if (metadata.isDirectory()) {
       inventory.directories += 1
-      hash.update(
-        `dir\0${relativePath}\0${metadata.mode & 0o7777}\0`
-      )
+      hash.update(treeFingerprintRecord(relativePath, metadata))
       for (const name of readdirSync(entryPath).sort()) {
         visit(join(entryPath, name))
       }
@@ -241,10 +247,7 @@ export function runtimeTreeFingerprint(rootPath: string): RuntimeTreeFingerprint
     if (metadata.isFile()) {
       inventory.files += 1
       inventory.bytes += metadata.size
-      hash.update(
-        `file\0${relativePath}\0${metadata.mode & 0o7777}\0${metadata.size}\0` +
-        `${hashRegularFile(entryPath)}\0`
-      )
+      hash.update(treeFingerprintRecord(relativePath, metadata, hashRegularFile(entryPath, buffer)))
       return
     }
     throw new Error(`Runtime tree contains an unsupported entry: ${entryPath}`)

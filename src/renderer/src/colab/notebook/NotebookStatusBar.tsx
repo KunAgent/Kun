@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
+import { COLAB_ACCELERATOR_SPECS } from '@shared/colab/colab-types'
 import { formatColabDuration } from '../colab-store'
 import { isLocalJupyterUrl } from './JupyterRuntimeSection'
 import { useColabNotebookStore } from './colab-notebook-store'
@@ -57,7 +58,9 @@ export function NotebookStatusBar({
             : 'colabNb.jupyterRemoteBadge'
         )} · ${runtime.jupyterSession.serverName} · ${runtime.jupyterSession.kernelName}`
       : sessionId && runtime.session
-        ? t('colabNb.statusColabDetail', { gpu: runtime.session.accelerator })
+        ? t('colabNb.statusColabDetail', {
+            gpu: COLAB_ACCELERATOR_SPECS[runtime.session.accelerator].fullLabel
+          })
         : null
 
   const sessionCu =

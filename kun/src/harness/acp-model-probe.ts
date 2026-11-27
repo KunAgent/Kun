@@ -12,10 +12,11 @@ import { harnessExecutableIdentity } from './harness-executable-identity.js'
 import { tmpdir } from 'node:os'
 import { AcpConnection } from '../runtime/acp/acp-connection.js'
 import { AcpClientHost } from '../runtime/acp/acp-client-host.js'
-import { applyAcpSessionModel, parseAcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
+import { applyAcpSessionModel, parseAcpLegacyModels, type AcpLegacyModels } from '../runtime/acp/acp-legacy-models.js'
 import { isAcpAuthenticationRequired } from '../runtime/acp/acp-authentication.js'
-import type { HarnessModelCatalog, HarnessModelCatalogError } from '../contracts/harness-models.js'
+import type { HarnessModelCatalog, HarnessModelCatalogError, HarnessModelInfo } from '../contracts/harness-models.js'
 import { acpModelCatalog, attachNativeAgents } from './acp-model-catalog.js'
+import { providerModule } from './providers/registry.js'
 import { acpSessionSettings } from '../runtime/acp/acp-session-settings.js'
 import { startAcpProcess, type AcpSpawnFn } from '../runtime/acp/acp-process.js'
 import {
@@ -118,12 +119,16 @@ export class AcpModelProbe {
   /** Store a catalog another session already read (the readiness handshake). */
   seed(definition: HarnessDefinition, catalog: HarnessModelCatalog): void {
     if (catalog.models.length === 0) return
-    this.store(this.cacheKey(definition), catalog, this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS)
-    this.failures.delete(this.cacheKey(definition))
-    this.lastGood.set(this.identityKey(definition), catalog)
+    const baseKey = this.cacheKey(definition)
+    const baseIdentity = this.identityKey(definition)
+    const previous = this.cache.get(baseKey)?.catalog.modelInfo ?? this.lastGood.get(baseIdentity)?.modelInfo
+    const merged = mergeCatalogModelEfforts(catalog, previous)
+    this.store(baseKey, merged, this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS)
+    this.failures.delete(baseKey)
+    this.lastGood.set(baseIdentity, merged)
     // A real session is the cheapest way to learn ACP's per-model options;
     // keep that catalog for pickers and across restarts like a live probe.
-    this.deps.onCatalog?.(definition, catalog)
+    this.deps.onCatalog?.(definition, merged)
   }
 
   /** Close every warm probe process (runtime shutdown). */
@@ -184,19 +189,35 @@ export class AcpModelProbe {
     options: AcpModelProbeOptions = {}): Promise<HarnessModelCatalog> {
     const key = this.cacheKey(definition, selectedModel)
     const cached = this.cache.get(key)
-    if (cached && cached.expiresAt > this.nowMs()) return cached.catalog
+    if (cached && cached.expiresAt > this.nowMs() && (selectedModel || acpCatalogHasAllModelEfforts(definition, cached.catalog))) {
+      return cached.catalog
+    }
     const inFlight = this.pending.get(key)
     if (inFlight) return inFlight
     const started = this.nowMs()
     const task = this.probeWithRetry(definition, selectedModel, options.keepWarm !== false)
-      .then((catalog) => {
+      .then((rawCatalog) => {
+        const baseKey = this.cacheKey(definition)
+        const baseIdentity = this.identityKey(definition)
+        const previousBase = this.cache.get(baseKey)?.catalog.modelInfo ?? this.lastGood.get(baseIdentity)?.modelInfo
+        const catalog = !selectedModel ? mergeCatalogModelEfforts(rawCatalog, previousBase) : rawCatalog
         this.store(key, catalog, this.deps.cacheMs ?? ACP_MODEL_PROBE_CACHE_MS)
         this.failures.delete(key)
         if (catalog.models.length > 0) {
           if (this.lastGood.size >= 32) this.lastGood.delete(this.lastGood.keys().next().value!)
           this.lastGood.set(this.identityKey(definition, selectedModel), catalog)
-          if (!selectedModel) this.deps.onCatalog?.(definition, catalog)
-          else this.deps.onModelDetails?.(definition, selectedModel, catalog)
+          if (!selectedModel) {
+            this.deps.onCatalog?.(definition, catalog)
+          } else {
+            const detail = catalog.modelInfo.find((entry) => entry.id === selectedModel)
+            const baseCached = this.cache.get(baseKey)
+            if (detail?.reasoningEfforts !== undefined && baseCached) {
+              const updatedBase = mergeCatalogModelEfforts(baseCached.catalog, [detail])
+              this.cache.set(baseKey, { ...baseCached, catalog: updatedBase })
+              this.lastGood.set(baseIdentity, updatedBase)
+            }
+            this.deps.onModelDetails?.(definition, selectedModel, catalog)
+          }
         }
         return catalog
       })
@@ -249,6 +270,7 @@ export class AcpModelProbe {
       }
       const session = { ...parsed.data, models: parseAcpLegacyModels(parsed.data.models) }
       const initial = acpModelCatalog({ harnessId: definition.id, ...parsed.data })
+      const defaultModel = initial.modelInfo.find((entry) => entry.isDefault)?.id
       const off = conn.subscribeSession(session.sessionId, { onUpdate: (update) => {
         if (update.sessionUpdate === 'config_option_update') {
           session.configOptions = (update as { configOptions: AcpConfigOption[] }).configOptions
@@ -256,9 +278,11 @@ export class AcpModelProbe {
       } })
       try {
         if (selectedModel) await applyAcpSessionModel(conn, session, selectedModel)
-        const catalog = acpModelCatalog({ harnessId: definition.id, configOptions: session.configOptions,
-          models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
-          defaultModel: initial.modelInfo.find((entry) => entry.isDefault)?.id })
+        const catalog = !selectedModel && providerModule(definition.id)?.acp?.probeAllModelEfforts
+          ? await probeAllSessionModelEfforts(conn, session, definition.id, parsed.data.models, initial, defaultModel)
+          : acpModelCatalog({ harnessId: definition.id, configOptions: session.configOptions,
+              models: session.models ? { ...(parsed.data.models as object), currentModelId: session.models.currentModelId } : parsed.data.models,
+              defaultModel })
         attachNativeAgents(definition, catalog, parsed.data)
         const settings = acpSessionSettings(session.configOptions, definition.acpPermission?.configOptionId)
         // A background lookup returns only once its process is gone, so the
@@ -389,6 +413,87 @@ export class AcpModelProbe {
 
   private nowMs(): number {
     return this.deps.nowMs?.() ?? Date.now()
+  }
+}
+
+const ACP_EAGER_EFFORT_PROBE_LIMIT = 24
+
+function acpCatalogHasAllModelEfforts(definition: Pick<HarnessDefinition, 'id'>, catalog: HarnessModelCatalog | undefined): boolean {
+  if (!catalog || catalog.error || !catalog.models.length) return true
+  if (!providerModule(definition.id)?.acp?.probeAllModelEfforts) return true
+  return catalog.models.every((id) => catalog.modelInfo.find((entry) => entry.id === id)?.reasoningEfforts !== undefined)
+}
+
+function mergeCatalogModelEfforts(
+  catalog: HarnessModelCatalog,
+  previous: readonly HarnessModelInfo[] | undefined
+): HarnessModelCatalog {
+  if (!previous?.length) return catalog
+  let changed = false
+  const modelInfo = catalog.modelInfo.map((entry) => {
+    if (entry.reasoningEfforts !== undefined) return entry
+    const old = previous.find((item) => item.id === entry.id)
+    if (old?.reasoningEfforts === undefined) return entry
+    changed = true
+    return {
+      ...entry,
+      reasoningEfforts: old.reasoningEfforts,
+      ...(old.defaultReasoningEffort !== undefined ? { defaultReasoningEffort: old.defaultReasoningEffort } : {})
+    }
+  })
+  return changed ? { ...catalog, modelInfo } : catalog
+}
+
+async function probeAllSessionModelEfforts(
+  conn: AcpConnection,
+  session: { sessionId: string; models?: AcpLegacyModels; configOptions?: AcpConfigOption[] | null },
+  harnessId: string,
+  rawModels: unknown,
+  initial: HarnessModelCatalog,
+  defaultModel: string | undefined
+): Promise<HarnessModelCatalog> {
+  const unprobed = initial.modelInfo
+    .filter((entry) => entry.reasoningEfforts === undefined)
+    .slice(0, ACP_EAGER_EFFORT_PROBE_LIMIT)
+  if (!unprobed.length) return initial
+  const learned = new Map<string, Pick<HarnessModelInfo, 'reasoningEfforts' | 'defaultReasoningEffort'>>()
+  let switched = false
+  for (const entry of unprobed) {
+    try {
+      await applyAcpSessionModel(conn, session, entry.id)
+      switched = true
+      const step = acpModelCatalog({
+        harnessId,
+        configOptions: session.configOptions,
+        models: session.models ? { ...(rawModels as object), currentModelId: session.models.currentModelId } : rawModels,
+        defaultModel
+      })
+      const detail = step.modelInfo.find((item) => item.id === entry.id)
+      if (detail?.reasoningEfforts !== undefined) {
+        learned.set(entry.id, {
+          reasoningEfforts: detail.reasoningEfforts,
+          ...(detail.defaultReasoningEffort !== undefined ? { defaultReasoningEffort: detail.defaultReasoningEffort } : {})
+        })
+      }
+    } catch (error) {
+      if (conn.closed || !(error instanceof AcpError)) break
+    }
+  }
+  // Engines such as `agy` persist the session's model into user settings; restore the initial pick.
+  if (switched && defaultModel && !conn.closed) {
+    await applyAcpSessionModel(conn, session, defaultModel).catch(() => undefined)
+  }
+  return {
+    ...initial,
+    modelInfo: initial.modelInfo.map((entry) => {
+      const detail = learned.get(entry.id)
+      if (!detail || entry.reasoningEfforts !== undefined) return entry
+      return {
+        ...entry,
+        reasoningEfforts: detail.reasoningEfforts,
+        ...(detail.defaultReasoningEffort !== undefined ? { defaultReasoningEffort: detail.defaultReasoningEffort } : {})
+      }
+    })
   }
 }
 

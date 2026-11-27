@@ -11,11 +11,12 @@ import {
   Upload
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import type {
-  ColabConnectionView,
-  ColabMetricPoint,
-  ColabProvisioningStep,
-  ColabSessionView
+import {
+  COLAB_ACCELERATOR_SPECS,
+  type ColabConnectionView,
+  type ColabMetricPoint,
+  type ColabProvisioningStep,
+  type ColabSessionView
 } from '@shared/colab/colab-types'
 import { openTerminal } from '../components/terminal/terminal-open'
 import { formatColabBytes, formatColabDuration, isColabSessionRunning } from './colab-store'
@@ -197,8 +198,14 @@ export function ColabSessionCards({
         </div>
 
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ds-muted">
-          <span className="font-medium text-ds-ink">{session.accelerator}</span>
-          {session.vramGb ? <span>· {session.vramGb} GB VRAM</span> : null}
+          <span className="font-medium text-ds-ink">
+            {COLAB_ACCELERATOR_SPECS[session.accelerator].fullLabel}
+          </span>
+          {session.vramGb ? (
+            <span>· {session.vramGb} GB VRAM</span>
+          ) : COLAB_ACCELERATOR_SPECS[session.accelerator].tpuHbmGb ? (
+            <span>· {COLAB_ACCELERATOR_SPECS[session.accelerator].tpuHbmGb} GB HBM</span>
+          ) : null}
           <span>· {session.ramGb} GB RAM</span>
           <span>· {phaseLabel}</span>
           <span className="ml-auto font-mono text-ds-faint">

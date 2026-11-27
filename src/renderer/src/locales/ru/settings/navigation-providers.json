@@ -376,6 +376,8 @@
   "shortcutTogglePaperModeDesc": "Switch to Work and open the paper library.",
   "shortcutPaperImport": "Import paper",
   "shortcutPaperImportDesc": "Switch to Work and open the paper import dialog.",
+  "shortcutToggleDailyNotes": "Ежедневные заметки и задачи",
+  "shortcutToggleDailyNotesDesc": "Показать или скрыть панель или окно ежедневных заметок.",
   "shortcutModalTitle": "Сочетания клавиш",
   "shortcutModalSearchPlaceholder": "Поиск сочетаний клавиш…",
   "shortcutModalEmpty": "По вашему запросу сочетания клавиш не найдены.",

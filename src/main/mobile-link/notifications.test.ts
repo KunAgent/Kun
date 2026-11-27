@@ -44,22 +44,35 @@ describe('desktop notification bridge', () => {
       expect(f.request).toHaveBeenCalledOnce(); expect(f.fetcher).not.toHaveBeenCalled()
     } finally { f.bridge.stop() }
   })
-  it('has one subscription, sends only four opaque metadata fields, and deduplicates repeated intents', async () => {
-    const f = fixture(), event = { eventId: 'event', resourceKind: 'code', resourceId: 'task', kind: 'completed' }
+  it('has one subscription, forwards optional bounded titles with legacy fallback, and deduplicates repeated intents', async () => {
+    const f = fixture(), event = { eventId: 'event', resourceKind: 'code', resourceId: 'task', kind: 'completed', title: '修复工作看板同步' }
     try {
       f.bridge.start(f.api, () => true); f.bridge.start(f.api, () => true)
       await vi.waitFor(() => expect(f.fetcher).toHaveBeenCalledOnce())
       f.emit({ type: 'synchronized', cursor: 'one' }); f.emit({ cursor: 'two', event }); f.emit({ cursor: 'two', event })
       await vi.waitFor(() => expect(f.request.mock.calls.filter(([path]) => path === '/notifications/events')).toHaveLength(1))
       expect(f.request).toHaveBeenCalledWith('/notifications/events', 'POST', event, false, expect.any(AbortSignal))
+      f.request.mockImplementation(async (path: string, _method?: string, body?: any) => {
+        if (path === '/capabilities') return { notifications: { available: true } }
+        if (body?.title) throw Object.assign(new Error('invalid_request'), { status: 400 })
+        return { queued: 1 }
+      })
+      f.emit({ cursor: 'three', event: { ...event, eventId: 'legacy-fallback' } })
+      await vi.waitFor(() => expect(f.request.mock.calls.filter(([path]) => path === '/notifications/events')).toHaveLength(3))
+      expect(f.request).toHaveBeenLastCalledWith('/notifications/events', 'POST',
+        { eventId: 'legacy-fallback', resourceKind: 'code', resourceId: 'task', kind: 'completed' }, false, expect.any(AbortSignal))
       f.bridge.stop(); await tick(); expect(f.cancel).toHaveBeenCalledOnce()
     } finally { f.bridge.stop() }
   })
-  it('rejects accidental titles/body and fences a late capability result after account/stop changes', async () => {
+  it('rejects accidental body/control-char/oversized titles and fences a late capability result after account/stop changes', async () => {
     const f = fixture()
     try {
       f.bridge.start(f.api, () => true); await vi.waitFor(() => expect(f.fetcher).toHaveBeenCalledOnce())
-      f.emit({ cursor: 'bad', event: { eventId: 'e', resourceKind: 'agent', resourceId: 'a', kind: 'approval', title: 'private' } })
+      for (const bad of [
+        { eventId: 'e1', resourceKind: 'agent', resourceId: 'a', kind: 'approval', body: 'private' },
+        { eventId: 'e2', resourceKind: 'code', resourceId: 'a', kind: 'completed', title: 'bad\ntitle' },
+        { eventId: 'e3', resourceKind: 'code', resourceId: 'a', kind: 'completed', title: 'x'.repeat(81) }
+      ]) f.emit({ cursor: 'bad', event: bad })
       await tick(); expect(f.request.mock.calls.filter(([path]) => path === '/notifications/events')).toEqual([])
       f.bridge.stop()
       let resolve!: (value: any) => void

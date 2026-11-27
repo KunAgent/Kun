@@ -3,6 +3,7 @@ import type { PetBottleDrop } from './pets-bottle'
 import type { PetVisitPreferences, PetVisitRequest } from './pets-visits'
 import type { PetSceneId } from './pets-ensemble'
 import type { PetInteractionPack, PetPresenceSignal, PetPresenceSnapshot } from './pets-interactions'
+import type { KuroCatSkinConfig, KuroCatUserPrefs } from './pets-kurocat'
 import type { PetEnsembleSettings } from './pets-ensemble'
 import type { SpeechTranscriptionRequest, SpeechTranscriptionResult } from './speech-to-text'
 
@@ -17,7 +18,7 @@ export type PetAnimationState =
   | 'running'
   | 'review'
 
-export type PetSource = 'kun-builtin' | 'kun-local' | 'codex-custom'
+export type PetSource = 'kun-builtin' | 'kun-local' | 'codex-custom' | 'kurocat-custom'
 
 export type PetSpriteVersion = 1 | 2
 
@@ -37,6 +38,7 @@ export type PetManifest = {
   importedAt?: string
   sourceMissing?: boolean
   interactions?: PetInteractionPack
+  kurocatSkin?: KuroCatSkinConfig
 }
 
 export type PetSummary = {
@@ -51,6 +53,7 @@ export type PetSummary = {
   sourceMissing: boolean
   warning?: string
   interactions?: PetInteractionPack
+  kurocatSkin?: KuroCatSkinConfig
 }
 
 export type PetOverlayPlacement = {
@@ -69,8 +72,10 @@ export type PetSettings = {
   bubblesCollapsed?: boolean
   mascotWidthPx: number
   importCodexPets: boolean
+  importKurocatPets?: boolean
   ensemble?: PetEnsembleSettings
   reactionsEnabled?: boolean
+  soundEnabled?: boolean
   globalActivity?: PetGlobalActivityPreferences
   visits?: PetVisitPreferences
   welcomedPetIds: string[]
@@ -87,7 +92,7 @@ export type PetImportReport = {
   sourceMissing: PetManifest[]
   failed: Array<{ sourcePath: string; sourceId?: string; error: string }>
   conflicts: Array<{ sourcePath: string; sourceId: string; keptSourcePath: string }>
-  sourceStates: { builtin: PetSourceState; local: PetSourceState; codex: PetSourceState }
+  sourceStates: { builtin: PetSourceState; local: PetSourceState; codex: PetSourceState; kurocat?: PetSourceState }
   selectedPetIdUnchanged: string | null
 }
 
@@ -154,6 +159,9 @@ export type PetOverlayBootstrap = {
   interactions?: PetInteractionPack
   presence?: PetPresenceSnapshot
   reactionsEnabled?: boolean
+  soundEnabled?: boolean
+  kurocatSkin?: KuroCatSkinConfig | null
+  kurocatPrefs?: KuroCatUserPrefs | null
   visits?: PetVisitPreferences
   visitRequest?: PetVisitRequest | null
 }
@@ -170,9 +178,28 @@ export type PetOverlayBounds = { width: number; height: number; anchorX: number;
 
 export type ScreenPoint = { x: number; y: number }
 
+export type PetCursorSample = {
+  nx: number
+  ny: number
+  gx: number
+  gy: number
+  buttons: number
+  wheelSeq: number
+  wheelDir: -1 | 0 | 1
+  clickSeq?: number
+  clickMask?: number
+  clickedAt?: number
+  deskActiveAt: number
+  active: boolean
+  overMascot?: boolean
+  localX?: number
+  localY?: number
+}
+
 export type PetDesktopBridge = {
   getPetGlobalActivityStatus: () => Promise<PetGlobalActivityStatus>
   setPetGlobalActivity: (preferences: PetGlobalActivityPreferences) => Promise<PetSettings>
+  setPetSoundEnabled?: (enabled: boolean) => Promise<PetSettings>
   requestPetKeyboardAccess: () => Promise<void>
   notifyPetBottleDrop: (drop: PetBottleDrop | null) => void
   setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
@@ -184,10 +211,11 @@ export type PetDesktopBridge = {
   selectPet: (petId: string | null) => Promise<PetSettings>
   setOverlayOpen: (open: boolean) => Promise<PetSettings>
   setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
-  setImportPreferences: (input: { importCodexPets?: boolean }) => Promise<PetSettings>
+  setImportPreferences: (input: { importCodexPets?: boolean; importKurocatPets?: boolean }) => Promise<PetSettings>
   refreshPets: () => Promise<PetImportReport>
   openKunPetsDirectory: () => Promise<void>
   openCodexPetsDirectory: () => Promise<void>
+  openKurocatPetsDirectory?: () => Promise<void>
   updatePetActivity: (snapshot: PetActivitySnapshot) => void
   onPetCatalogChanged: (handler: () => void) => () => void
   onPetNavigationRequested: (handler: (target: PetActionRequest) => void) => () => void
@@ -202,6 +230,7 @@ export type PetDesktopBridge = {
 }
 
 export type PetOverlayBridge = {
+  setPetSoundEnabled?: (enabled: boolean) => Promise<PetSettings>
   onVisitRequested: (handler: (request: PetVisitRequest) => void) => () => void
   acknowledgeVisitRequest: (id: string) => void
   setPetVisitPreferences: (preferences: PetVisitPreferences) => Promise<PetSettings>
@@ -209,6 +238,7 @@ export type PetOverlayBridge = {
   dismissPetVisit: () => Promise<void>
   updatePetPresence: (signal: PetPresenceSignal) => void
   onPresenceChanged: (handler: (snapshot: PetPresenceSnapshot) => void) => () => void
+  onCursorChanged?: (handler: (sample: PetCursorSample) => void) => () => void
   setPetEnsemble: (settings: PetEnsembleSettings) => Promise<PetSettings>
   getBootstrap: () => Promise<PetOverlayBootstrap>
   onBootstrapChanged: (handler: (value: PetOverlayBootstrap) => void) => () => void
@@ -276,12 +306,14 @@ export const PET_NOTIFICATION_TTL_MS: Record<Exclude<PetSessionStatus, 'idle'>, 
 export const PET_SOURCE_PREFIX: Record<PetSource, string> = {
   'kun-builtin': 'kun',
   'kun-local': 'kun-local',
-  'codex-custom': 'codex-custom'
+  'codex-custom': 'codex-custom',
+  'kurocat-custom': 'kurocat'
 }
 
 export const PET_IPC = {
   getPetGlobalActivityStatus: 'kun:pets:global-activity:status',
   setPetGlobalActivity: 'kun:pets:global-activity:preferences',
+  setPetSoundEnabled: 'kun:pets:sound',
   requestPetKeyboardAccess: 'kun:pets:global-activity:keyboard-access',
   notifyPetBottleDrop: 'kun:pets:bottle-drop',
   setPetVisitPreferences: 'kun:pets:visits:preferences',
@@ -291,6 +323,7 @@ export const PET_IPC = {
   acknowledgeVisitRequest: 'kun:pets:overlay:visit-ack',
   updatePetPresence: 'kun:pets:presence',
   overlayPresence: 'kun:pets:overlay:presence',
+  overlayCursor: 'kun:pets:overlay:cursor',
   setPetEnsemble: 'kun:pets:ensemble',
   listPets: 'kun:pets:list',
   getSettings: 'kun:pets:settings:get',
@@ -300,6 +333,7 @@ export const PET_IPC = {
   refreshPets: 'kun:pets:refresh',
   openKunDirectory: 'kun:pets:open-kun-dir',
   openCodexDirectory: 'kun:pets:open-codex-dir',
+  openKurocatDirectory: 'kun:pets:open-kurocat-dir',
   updateActivity: 'kun:pets:activity',
   catalogChanged: 'kun:pets:catalog-changed',
   navigationRequested: 'kun:pets:navigation-requested',
@@ -363,7 +397,9 @@ export function defaultPetSettings(): PetSettings {
     bubblesCollapsed: false,
     mascotWidthPx: PET_MASCOT_DEFAULT_WIDTH_PX,
     importCodexPets: true,
+    importKurocatPets: true,
     reactionsEnabled: true,
+    soundEnabled: true,
     globalActivity: defaultPetGlobalActivity(),
     welcomedPetIds: [],
     dismissedNotificationKeys: [],

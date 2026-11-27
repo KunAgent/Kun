@@ -134,7 +134,9 @@ export function FloatingComposerModelPicker({
     group.modelIds.some((id) => modelIdsMatch(id, currentModel))
   )?.providerId ?? providerMenuGroups.find((group) =>
     group.modelIds.some((id) => modelIdsMatch(id, currentModel))
-  )?.providerId ?? null
+  )?.providerId ?? ((!currentModel || currentModel === 'default') && providerMenuGroups.length === 1 && providerMenuGroups[0]?.nativeHarnessId
+    ? providerMenuGroups[0].providerId
+    : null)
   const selectedProviderGroup = providerMenuGroups.find((group) => group.providerId === selectedProviderId) ?? null
   const emptyModelMessage = emptyModelState && providerMenuGroups.length === 0
     ? emptyModelState === 'agent-failed'

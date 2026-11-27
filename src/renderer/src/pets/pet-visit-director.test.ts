@@ -5,7 +5,7 @@ import { defaultPetInteractions } from '@shared/pets-interactions'
 import { defaultPetVisits, type PetVisit } from '@shared/pets-visits'
 import { PetVisitDirector, type PetVisitContext } from './pet-visit-director'
 
-const pets: PetSummary[] = ['xiao-kun', 'ikun', 'whale-girl'].map((id) => ({
+const pets: PetSummary[] = ['xiao-kun', 'ikun', 'whale-girl', 'kurocat'].map((id) => ({
   id: `kun:${id}`, sourceId: id, displayName: id, description: '', source: 'kun-builtin', available: true,
   sourceMissing: false, spriteVersionNumber: 1, spritesheetUrl: `kun-pet://asset/${id}`, interactions: defaultPetInteractions()
 }))

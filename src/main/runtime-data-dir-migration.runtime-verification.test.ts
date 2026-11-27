@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   markCanonicalKunRuntimeMigrationRuntimeVerified,
+  runtimeMigrationNeedsThreadInventory,
   runCanonicalKunRuntimeDataMigration
 } from './runtime-data-dir-migration'
 
@@ -105,5 +106,27 @@ describe('Runtime migration history verification retries', () => {
     expect(journal.runtimeVerificationAttempts).toBeUndefined()
     expect(journal.runtimeVerificationMissingThreadIds).toBeUndefined()
     expect(journal.runtimeVerificationStoppedAt).toBeUndefined()
+  })
+
+  it.each([false, true])('rechecks a journal stopped by an older first-page check (v2 = %s)', async (v2) => {
+    const test = await fixture()
+    const result = await migrate(test, v2)
+    const stopped = {
+      ...JSON.parse(await readFile(result.journalPath, 'utf8')),
+      runtimeVerificationAttempts: 3,
+      runtimeVerificationStoppedAt: NOW().toISOString(),
+      runtimeVerificationMissingThreadIds: ['thr_history']
+    }
+    await writeFile(result.journalPath, JSON.stringify(stopped))
+    const location = { homeDir: test.home }
+    expect(runtimeMigrationNeedsThreadInventory(test.userData, location)).toBe(true)
+    expect(markCanonicalKunRuntimeMigrationRuntimeVerified(test.userData, ['thr_history'], location))
+      .toMatchObject({ status: 'verified', missingThreadIds: [] })
+    expect(runtimeMigrationNeedsThreadInventory(test.userData, location)).toBe(false)
+
+    await writeFile(result.journalPath, JSON.stringify(stopped))
+    expect(markCanonicalKunRuntimeMigrationRuntimeVerified(test.userData, [], location))
+      .toMatchObject({ status: 'unresolved', attempt: 3, missingThreadIds: ['thr_history'] })
+    expect(runtimeMigrationNeedsThreadInventory(test.userData, location)).toBe(false)
   })
 })

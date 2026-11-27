@@ -15,9 +15,11 @@
   "petsImportErrors": "Import errors",
   "petsShow": "Show the pet on the desktop",
   "petsImportCodex": "Import pets from Codex automatically",
+  "petsImportKurocat": "Import KuroCat pets and plugins automatically",
   "petsRefresh": "Refresh",
   "petsOpenKunDir": "Open Kun pets folder",
   "petsOpenCodexDir": "Open Codex pets folder",
+  "petsOpenKurocatDir": "Open KuroCat folder",
   "petsSourceMissing": "Original package missing",
   "petsReport": "{{failed}} failed, {{missing}} missing",
   "petsContextSettings": "Settings",
@@ -25,6 +27,7 @@
   "petsSource": {
     "kun-builtin": "Built-in",
     "kun-local": "Local",
-    "codex-custom": "Codex"
+    "codex-custom": "Codex",
+    "kurocat-custom": "KuroCat"
   }
 }

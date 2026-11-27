@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { remoteFixture } from '../testing/runtime.test-support.js'
-import { codeNotification, agentNotification } from './events.js'
+import { codeNotification, agentNotification, sanitizeNotificationTitle } from './events.js'
 import { createApprovalRequest } from '../../domain/approval.js'
 import { RemoteNotificationFeed } from './feed.js'
 import { openAgentConversation } from '../../agents/agent-conversations.js'
@@ -16,9 +16,18 @@ describe('notification intents use real persisted semantic state', () => {
       expect(await codeNotification(f.runtime, event)).toBeNull()
       await f.h.turns.finishTurn({ threadId: thread.id, turnId: start.turnId, status: 'completed' })
       const intent = await codeNotification(f.runtime, event)
-      expect(intent).toMatchObject({ resourceKind: 'code', resourceId: thread.id, kind: 'completed' })
-      expect(Object.keys(intent!).sort()).toEqual(['eventId', 'kind', 'resourceId', 'resourceKind'])
+      expect(intent).toMatchObject({ resourceKind: 'code', resourceId: thread.id, kind: 'completed', title: 'Code task' })
+      expect(Object.keys(intent!).sort()).toEqual(['eventId', 'kind', 'resourceId', 'resourceKind', 'title'])
+      expect(JSON.stringify(intent)).not.toContain('private prompt')
+      expect(JSON.stringify(intent)).not.toContain('private reply')
       expect(await codeNotification(f.runtime, { ...event, seq: 999 })).toEqual(intent)
+      const renamed = (await f.h.threads.get(thread.id))!
+      await f.h.threadStore.upsert({ ...renamed, title: '  修复通知\n换行  ' + '字'.repeat(90) })
+      const clipped = await codeNotification(f.runtime, event)
+      expect(clipped?.eventId).toBe(intent!.eventId)
+      expect(Array.from(clipped?.title ?? '')).toHaveLength(80)
+      expect(clipped?.title?.startsWith('修复通知 换行 ')).toBe(true)
+      expect(sanitizeNotificationTitle('   \n\t  ')).toBeUndefined()
       const completed = (await f.h.threads.get(thread.id))!
       await f.h.threadStore.upsert({ ...completed, turns: completed.turns.map((turn) => ({ ...turn, finishedAt: '2020-01-01T00:00:00.000Z' })) })
       expect(await codeNotification(f.runtime, event)).toBeNull()
@@ -57,7 +66,7 @@ describe('notification intents use real persisted semantic state', () => {
       const row = (await f.store.get<RoomRequestState>('request', sent.requestId))!
       await putRoomDocument(f.store, 'request', row.id, room.id, { ...row.value, status: 'completed' }, row)
       const value = await agentNotification(f.runtime, source)
-      expect(value).toMatchObject({ resourceKind: 'agent', resourceId: agent.id, kind: 'completed' })
+      expect(value).toMatchObject({ resourceKind: 'agent', resourceId: agent.id, kind: 'completed', title: 'Agent' })
       expect(JSON.stringify(value)).not.toContain('private input')
       const group = (await f.rooms.service.create({ name: 'Group', clientRequestId: 'g' })).room
       const groupInput = await f.rooms.service.send(group.id, { clientRequestId: 'group-message', body: 'group input' })

@@ -31,6 +31,7 @@ export type PetIpcEvent = { senderId: number; isMainFrame: boolean; senderKind: 
 export type PetIpcApi = {
   getPetGlobalActivityStatus(): PetGlobalActivityStatus
   setPetGlobalActivity(preferences: PetGlobalActivityPreferences): Promise<PetSettings>
+  setPetSoundEnabled(enabled: boolean): Promise<PetSettings>
   requestPetKeyboardAccess(): Promise<void>
   notifyBottleDrop(drop: PetBottleDrop | null): void
   setPetVisitPreferences(input: PetVisitPreferences): Promise<PetSettings>
@@ -43,10 +44,11 @@ export type PetIpcApi = {
   getSettings(): Promise<PetSettings>
   selectPet(petId: string | null): Promise<PetSettings>
   setOverlayOpen(open: boolean): Promise<PetSettings>
-  setImportPreferences(input: { importCodexPets?: boolean }): Promise<PetSettings>
+  setImportPreferences(input: { importCodexPets?: boolean; importKurocatPets?: boolean }): Promise<PetSettings>
   refresh(): Promise<PetImportReport>
   openKunDirectory(): Promise<void>
   openCodexDirectory(): Promise<void>
+  openKurocatDirectory?(): Promise<void>
   interaction(): Promise<{ mode: 'passthrough' | 'bounded'; note: string | null }>
   updateActivity(snapshot: PetActivitySnapshot): void
   bootstrap(): Promise<PetOverlayBootstrap>
@@ -92,6 +94,11 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
       const parsed = parsePetGlobalActivityPreferences(input)
       if (!parsed) throw new Error('invalid pet global activity preferences')
       return api.setPetGlobalActivity(parsed)
+    },
+    [PET_IPC.setPetSoundEnabled]: async (event, enabled) => {
+      controls(event)
+      if (typeof enabled !== 'boolean') throw new Error('invalid pet sound preference')
+      return api.setPetSoundEnabled(enabled)
     },
     [PET_IPC.requestPetKeyboardAccess]: async (event) => { main(event); await api.requestPetKeyboardAccess() },
     [PET_IPC.notifyPetBottleDrop]: (event, input) => {
@@ -151,6 +158,7 @@ export function petIpcHandlers(api: PetIpcApi): Record<string, Handler> {
     [PET_IPC.refreshPets]: async (event) => { main(event); return api.refresh() },
     [PET_IPC.openKunDirectory]: async (event) => { main(event); await api.openKunDirectory() },
     [PET_IPC.openCodexDirectory]: async (event) => { main(event); await api.openCodexDirectory() },
+    [PET_IPC.openKurocatDirectory]: async (event) => { main(event); await api.openKurocatDirectory?.() },
     [PET_IPC.interaction]: async (event) => { main(event); return api.interaction() },
     [PET_IPC.updateActivity]: (event, snapshot) => {
       main(event)

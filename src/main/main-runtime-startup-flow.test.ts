@@ -65,9 +65,17 @@ describe('runPostWindowRuntimeStartup', () => {
   it('orders handoff, attach, initial settings apply, ready, and release notes', async () => {
     const { deps, events, phases, startupState } = createDeps()
 
-    await runPostWindowRuntimeStartup(settings(), deps)
+    await runPostWindowRuntimeStartup(settings(), {
+      ...deps,
+      finishStartup: () => expect(startupState.isReady()).toBe(false),
+      onReady: (connected) => {
+        expect(connected).toBe(true)
+        expect(startupState.isReady()).toBe(true)
+        events.push('maintenance')
+      }
+    })
 
-    expect(events).toEqual(['handoff', 'attach', 'settings', 'release-notes', 'cli-prompt'])
+    expect(events).toEqual(['handoff', 'attach', 'settings', 'maintenance', 'release-notes', 'cli-prompt'])
     expect(phases).toEqual(['runtime_handoff', 'runtime_starting', 'ready'])
     expect(startupState.phase).toBe('ready')
   })

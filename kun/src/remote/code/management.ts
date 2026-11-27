@@ -14,16 +14,19 @@ import { RemoteNoEffect } from '../requests/rejections.js'
 import { RemoteMessages } from '../messages/service.js'
 import { matchesUpdatedRange, type UpdatedRange } from './search-filters.js'
 import { movedTurn, sessionRoute, turnRoute } from './session-route.js'
+import { threadTodoProgress } from '../todos/service.js'
 export const metadataRevision = (thread: Pick<ThreadRecord, 'revision'>) => `thread-v1:${thread.revision ?? 0}`
 export class RemoteCodeManagement {
   constructor(private runtime: ServerRuntime, private legacyModels: () => Promise<string[]>) {}
   async summary(thread: ThreadRecord) {
     let projectId: string | undefined
     try { projectId = createHash('sha256').update(await realpath(thread.workspace)).digest('hex') } catch { /* workspace no longer resolves */ }
+    const todoProgress = threadTodoProgress(thread)
     return { id: thread.id, title: thread.title, status: thread.status,
       pinned: thread.pinned === true, archived: thread.status === 'archived', revision: metadataRevision(thread),
       ...sessionRoute(thread),
       ...(thread.activityAt ? { activityAt: thread.activityAt } : {}),
+      ...(todoProgress ? { todoProgress } : {}),
       createdAt: thread.createdAt, updatedAt: thread.updatedAt, ...(projectId ? { projectId } : {}) }
   }
   async search(p: { query?: string; status?: string; harnessId?: string; projectId?: string; cursor?: string; limit?: number } & UpdatedRange) {

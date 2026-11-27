@@ -23,6 +23,8 @@ import { GroupParamSchemas } from './groups/contracts.js'
 import { CollaborationParamSchemas } from './collaboration/contracts.js'
 import { ScheduleParamSchemas } from './schedules/contracts.js'
 import { PluginParamSchemas } from './plugins/contracts.js'
+import { TodoParamSchemas } from './todos/contracts.js'
+import { ProjectBoardParamSchemas } from './project-board/contracts.js'
 import { operationAuthorized } from './authorization/scopes.js'
 import { projects } from './files/project-directory.js'
 import { codeAgents } from './code/model-catalog.js'
@@ -74,6 +76,8 @@ export async function remoteCapabilityDescriptors(
   add(ScheduleParamSchemas, 'schedule', { pageSize: 20 }, Boolean(runtime.rooms))
   add(CollaborationParamSchemas, 'collaboration', { pageSize: 20 }, Boolean(runtime.rooms))
   add(PluginParamSchemas, 'plugin', { pageSize: 20 }, Boolean(runtime.extensionPlatform))
+  add(TodoParamSchemas, 'code', { items: 2000 })
+  add(ProjectBoardParamSchemas, 'project', { pageSize: 500 }, Boolean(runtime.projectBoardService))
   const order = new Map<string, number>(REMOTE_CAPABILITY_ORDER.map((method, index) => [method, index]))
   return descriptors.filter(({ operation }) => {
     if (operation === 'artifact.widget.state.update') return Boolean(runtime.genUi?.store && runtime.sessionStore.loadItemPage)

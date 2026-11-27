@@ -1,8 +1,9 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ExternalLink,
   Loader2,
+  Lock,
   MoreHorizontal,
   Plus,
   RefreshCw,
@@ -11,11 +12,14 @@ import {
 import {
   COLAB_ACCELERATORS,
   COLAB_ACCELERATOR_SPECS,
+  isColabAcceleratorEligible,
+  resolveEligibleColabAccelerator,
   type ColabAccelerator,
   type ColabConnectionView
 } from '@shared/colab/colab-types'
 import { useChatStore } from '../../store/chat-store'
 import { ColabConnectionsAddFlow } from '../ColabConnectionsAddFlow'
+import { ColabResourceSummary } from './ColabResourceSummary'
 import { ColabRuntimeSetup } from '../ColabRuntimeSetup'
 import { formatColabDuration, selectWorkspaceActiveConnection, useColabStore } from '../colab-store'
 import {
@@ -87,6 +91,23 @@ export function ColabKernelSection({
   const addFlowVisible = addAccountOpen || Boolean(snapshot.oauthPending) || hasLoginFailure
   const cliState = snapshot.cli.state
   const kernelBusy = busy || kunBusy
+  const probedEligibilityRef = useRef<Set<string>>(new Set())
+
+  useEffect(() => {
+    if (cliState !== 'ready' || !effectiveConnId) return
+    const target = connections.find((c) => c.id === effectiveConnId)
+    if (
+      !target ||
+      target.status !== 'connected' ||
+      target.eligibleAccelerators !== undefined ||
+      probedEligibilityRef.current.has(target.id) ||
+      typeof window.kunGui?.colabRefreshBalances !== 'function'
+    ) {
+      return
+    }
+    probedEligibilityRef.current.add(target.id)
+    void window.kunGui.colabRefreshBalances({ connectionId: target.id })
+  }, [cliState, connections, effectiveConnId])
 
   const commitRename = (conn: ColabConnectionView, save: boolean): void => {
     const trimmed = renameDraft.trim()
@@ -115,7 +136,9 @@ export function ColabKernelSection({
             const ownedPending = runtime.pending?.connectionId === conn.id ? runtime.pending : null
             const ownedFailed = runtime.failed?.connectionId === conn.id ? runtime.failed : null
             const ownedLive = ownedSession ?? ownedPending
-            const pickedGpu: ColabAccelerator = ownedLive?.accelerator ?? accelerator
+            const pickedGpu: ColabAccelerator = ownedLive
+              ? ownedLive.accelerator
+              : resolveEligibleColabAccelerator(conn, accelerator)
             const spec = COLAB_ACCELERATOR_SPECS[pickedGpu]
             const estHours =
               conn.balanceCu != null && spec.estimatedCuPerHour > 0
@@ -294,23 +317,50 @@ export function ColabKernelSection({
                     >
                       {COLAB_ACCELERATORS.map((id) => {
                         const itemSpec = COLAB_ACCELERATOR_SPECS[id]
+                        const eligible = isColabAcceleratorEligible(conn, id)
                         const on = pickedGpu === id
+                        const memTag = itemSpec.vramGb
+                          ? `${itemSpec.vramGb}G`
+                          : itemSpec.tpuHbmGb
+                            ? 'TPU'
+                            : null
+                        const ineligibleReason = !eligible
+                          ? t(
+                              itemSpec.tierRequirement === 'ai_ultra'
+                                ? 'colabNb.ineligibleAiUltra'
+                                : 'colabNb.ineligibleTier',
+                              { gpu: itemSpec.fullLabel }
+                            )
+                          : undefined
                         return (
                           <button
                             key={id}
                             type="button"
                             role="radio"
+                            data-colab-accel-option={id}
                             aria-checked={on}
-                            disabled={Boolean(colabLive)}
+                            disabled={Boolean(colabLive) || !eligible}
+                            title={
+                              ineligibleReason ??
+                              `${itemSpec.fullLabel} · ~${itemSpec.estimatedCuPerHour} CU/h`
+                            }
                             onClick={() => setAccelerator(id)}
                             className={`rounded-[8px] border bg-ds-card py-1.5 text-center text-[11.5px] font-semibold transition disabled:cursor-default ${
                               on
                                 ? 'border-accent bg-accent/[0.08] text-accent'
-                                : 'border-ds-border text-ds-ink hover:bg-ds-hover'
+                                : !eligible
+                                  ? 'border-ds-border/60 bg-ds-main/40 text-ds-muted opacity-45 disabled:cursor-not-allowed'
+                                  : 'border-ds-border text-ds-ink hover:bg-ds-hover'
                             } ${ownedLive && !on ? 'opacity-45' : ''}`}
                           >
-                            {itemSpec.label}
-                            <span className="block text-[10px] font-normal text-ds-faint">
+                            <span className="inline-flex items-center justify-center gap-1">
+                              <span>{itemSpec.label}</span>
+                              {!eligible ? (
+                                <Lock className="h-2.5 w-2.5 shrink-0 opacity-75" aria-hidden="true" />
+                              ) : null}
+                            </span>
+                            <span className="block truncate px-0.5 text-[10px] font-normal text-ds-faint">
+                              {memTag ? `${memTag} · ` : ''}
                               {t('colabNb.perHour', { cu: itemSpec.estimatedCuPerHour })}
                             </span>
                           </button>
@@ -346,6 +396,12 @@ export function ColabKernelSection({
                       <div className="mt-2">
                         <ColabRuntimeSetup inPanel />
                       </div>
+                    ) : null}
+                    {ownedSession && ownedSession.id === runtime.activeSessionId ? (
+                      <ColabResourceSummary session={ownedSession} onDetails={() => {
+                        useColabNotebookStore.getState().setSidePanelTab('resources')
+                        onClose()
+                      }} />
                     ) : null}
                     {colabLive && !ownedLive ? (
                       <p className="mt-2 text-[11px] text-ds-muted">
@@ -409,7 +465,7 @@ export function ColabKernelSection({
                                       total: ownedPending.provisioningMaxAttempts
                                     })
                                   : t('colabNb.connecting')
-                                : t('colabNb.launchGpu', { gpu: pickedGpu })}
+                                : t('colabNb.launchGpu', { gpu: spec.label })}
                             </span>
                           </button>
                         )}

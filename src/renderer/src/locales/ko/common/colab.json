@@ -1,6 +1,12 @@
 {
   "rightPanelColab": "Colab",
   "colab": {
+    "gpuLoad": "GPU 사용률",
+    "staleSample": "샘플 지연",
+    "lastSample": "최근 샘플",
+    "awaitSample": "샘플 대기 중",
+    "resourceTrends": "리소스 추이 보기",
+    "adoptForResources": "인스턴스를 인계받으면 리소스 사용량을 확인할 수 있습니다.",
     "panelTitle": "Colab",
     "emptyTitle": "연결된 Google 계정이 없습니다",
     "emptyDesc": "로그인하면 현재 워크스페이스에서 바로 Colab GPU 학습 세션을 시작할 수 있습니다.",
@@ -136,6 +142,10 @@
     "locateBtn": "찾기",
     "billedToHint": "\"{{name}}\" 계정에 과금",
     "sessionsLabel": "세션",
-    "backToOverview": "개요로 돌아가기"
+    "backToOverview": "개요로 돌아가기",
+    "tpuHbmLabel": "{{gb}} GB HBM · TPU",
+    "highMemCheckbox": "고용량 RAM VM (--high-mem) 사용",
+    "errNotEntitledTitle": "이 계정에서는 {{accelerator}} 권한이 없습니다",
+    "errNotEntitledDesc": "이 가속기는 상위 구독 등급(Colab Pro+ 또는 Google AI Ultra 등) 또는 CU 잔액이 필요합니다."
   }
 }

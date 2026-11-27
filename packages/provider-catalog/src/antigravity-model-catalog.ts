@@ -17,7 +17,7 @@ const MODEL_ID_MAX_LENGTH = 128
 /** Orchestrator chooses its own planner/worker budgets; /effort does not apply. */
 export function isAntigravityOrchestrator(model: string | undefined): boolean {
   const id = model?.trim().replace(/^models\//, '')
-  return id === 'gemini-pro-orchestrator' || id === 'gemini-pro-orchestrator-argon'
+  return id === 'gemini-pro-orchestrator' || Boolean(id?.startsWith('gemini-pro-orchestrator-'))
 }
 
 /** Parses the bounded, human-readable output of `agy models`. */

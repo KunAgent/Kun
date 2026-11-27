@@ -15,9 +15,11 @@
   "petsImportErrors": "Ошибки импорта",
   "petsShow": "Показывать питомца на рабочем столе",
   "petsImportCodex": "Автоматически импортировать питомцев Codex",
+  "petsImportKurocat": "Автоматически импортировать питомцев и плагины KuroCat",
   "petsRefresh": "Обновить",
   "petsOpenKunDir": "Открыть папку питомцев Kun",
   "petsOpenCodexDir": "Открыть папку питомцев Codex",
+  "petsOpenKurocatDir": "Открыть папку KuroCat",
   "petsSourceMissing": "Исходный пакет отсутствует",
   "petsReport": "Ошибок: {{failed}}, отсутствует: {{missing}}",
   "petsContextSettings": "Настройки",
@@ -25,6 +27,7 @@
   "petsSource": {
     "kun-builtin": "Встроенный",
     "kun-local": "Локальный",
-    "codex-custom": "Codex"
+    "codex-custom": "Codex",
+    "kurocat-custom": "KuroCat"
   }
 }

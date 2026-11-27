@@ -4,7 +4,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import i18n from '../../i18n'
 import { useChatStore } from '../../store/chat-store'
 import { useColabStore } from '../colab-store'
-import { createCell } from './ipynb-format'
+import { createCell, serializeIpynb } from './ipynb-format'
 import { ColabNotebookCell } from './ColabNotebookCell'
 import { ColabNotebookView } from './ColabNotebookView'
 import { ColabSidebarContent } from './ColabSidebarContent'
@@ -412,6 +412,232 @@ describe('Notebook layout redesign', () => {
     } finally {
       Object.assign(window.kunGui, prevGui)
       if (renderer) await act(async () => renderer?.unmount())
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('renders all 8 GPU/TPU/CPU accelerators, locks ineligible tiers, and handles fixed High-RAM shapes', async () => {
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const workspaceRoot = '/tmp/demo'
+    expect(JSON.parse(serializeIpynb([createCell('code', 'x=1')], 'V6E1')).metadata.accelerator).toBe(
+      'TPU'
+    )
+    expect(JSON.parse(serializeIpynb([createCell('code', 'x=1')], 'G4')).metadata.accelerator).toBe(
+      'GPU'
+    )
+    expect(
+      JSON.parse(serializeIpynb([createCell('code', 'x=1')], 'CPU')).metadata.accelerator
+    ).toBeUndefined()
+
+    useChatStore.setState({ workspaceRoot })
+    useColabStore.setState({
+      snapshot: {
+        cli: { state: 'ready', version: '0.8.1', pythonVersion: '3.12', venvPath: '/tmp/venv' },
+        connections: [
+          {
+            id: 'conn-pro-plus',
+            name: 'jackzhongxiaoyu',
+            email: 'jackzhongxiaoyu@gmail.com',
+            avatarColor: '#7a68e8',
+            status: 'connected',
+            planLabel: 'Colab Pro+',
+            balanceCu: 1000,
+            burnRateCuPerHour: 0,
+            eligibleAccelerators: ['CPU', 'T4', 'L4', 'G4', 'A100', 'V6E1', 'V5E1'],
+            ineligibleAccelerators: ['H100'],
+            createdAt: '',
+            updatedAt: new Date().toISOString(),
+            activeSessions: []
+          }
+        ],
+        workspaceConnections: { [workspaceRoot]: 'conn-pro-plus' },
+        oauthPending: null,
+        lastLoginOutcome: null,
+        sessions: [],
+        untrackedSessions: [],
+        lastRunsByWorkspace: {}
+      }
+    })
+    useColabNotebookStore.setState({
+      workspaceRoot,
+      notebooks: ['train.ipynb'],
+      activePath: 'train.ipynb',
+      cells: [createCell('code', 'import torch')],
+      accelerator: 'H100',
+      kernelPickerOpen: true
+    })
+
+    let renderer: ReturnType<typeof create> | undefined
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(ColabNotebookView, {
+            leftSidebarCollapsed: false,
+            onToggleLeftSidebar: () => undefined
+          })
+        )
+      })
+      const root = renderer!.root
+      const options = root.findAll(
+        (n) => n.type === 'button' && typeof n.props['data-colab-accel-option'] === 'string'
+      )
+      expect(options.map((n) => n.props['data-colab-accel-option'])).toEqual([
+        'T4',
+        'L4',
+        'G4',
+        'A100',
+        'H100',
+        'V6E1',
+        'V5E1',
+        'CPU'
+      ])
+      const h100Btn = root.findByProps({ 'data-colab-accel-option': 'H100' })
+      const g4Btn = root.findByProps({ 'data-colab-accel-option': 'G4' })
+      const tpuBtn = root.findByProps({ 'data-colab-accel-option': 'V6E1' })
+      expect(h100Btn.props.disabled).toBe(true)
+      expect(h100Btn.props.title).toContain('Google AI Ultra')
+      expect(g4Btn.props.disabled).toBe(false)
+      expect(tpuBtn.props.disabled).toBe(false)
+      // Since H100 is ineligible on this account, effective selection falls back to T4 automatically
+      expect(root.findByProps({ 'data-colab-accel-option': 'T4' }).props['aria-checked']).toBe(true)
+
+      await act(async () => {
+        g4Btn.props.onClick()
+        root.findByProps({ 'data-colab-guards-toggle': true }).props.onClick()
+      })
+      const guardsPanel = root.findByProps({ 'data-colab-guards-panel': true })
+      expect(collectText(guardsPanel)).toContain('High-RAM included')
+      const pickerText = collectText(root.findByProps({ 'data-colab-kernel-section': 'colab' }))
+      expect(pickerText).toContain('Launch G4')
+    } finally {
+      if (renderer) await act(async () => renderer?.unmount())
+      useColabNotebookStore.setState({ accelerator: 'T4', kernelPickerOpen: false })
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('surfaces Drive auth account_mismatch guidance and error banners even without an open notebook or Files tab', async () => {
+    const workspaceRoot = '/tmp/proj-drive'
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      kunGui: {
+        listWorkspaceFiles: vi.fn(async () => ({
+          ok: true,
+          root: workspaceRoot,
+          files: [],
+          truncated: false
+        })),
+        colabNotebookInterrupt: vi.fn(async () => ({ ok: true }))
+      }
+    })
+    useChatStore.setState({ workspaceRoot })
+    useColabStore.setState({
+      snapshot: {
+        cli: { state: 'ready', version: '0.8.0', pythonVersion: '3.12', venvPath: '/tmp/venv' },
+        connections: [
+          {
+            id: 'conn-drive',
+            name: 'jackzhongxiaoyu',
+            email: 'jackzhongxiaoyu@gmail.com',
+            avatarColor: '#7a68e8',
+            status: 'connected',
+            planLabel: 'Colab Pro+',
+            balanceCu: 1000,
+            burnRateCuPerHour: 0.1,
+            createdAt: '',
+            updatedAt: new Date().toISOString(),
+            activeSessions: []
+          }
+        ],
+        workspaceConnections: { [workspaceRoot]: 'conn-drive' },
+        oauthPending: null,
+        lastLoginOutcome: null,
+        sessions: [
+          {
+            id: 'sess-drive-ui',
+            sessionName: 'kun-nb-drive',
+            connectionId: 'conn-drive',
+            connectionName: 'jackzhongxiaoyu',
+            connectionEmail: 'jackzhongxiaoyu@gmail.com',
+            connectionAvatarColor: '#7a68e8',
+            workspaceRoot,
+            entryCommand: 'kun-notebook',
+            accelerator: 'CPU',
+            phase: 'running',
+            provisioningStep: 'start',
+            startedAt: new Date().toISOString(),
+            elapsedSeconds: 8,
+            burnRateCuPerHour: 0.1,
+            consumedCu: 0,
+            estimatedTotalCu: 0.2,
+            ramGb: 12.7,
+            vramGb: null,
+            gpuUtilizationPct: null,
+            vramUsedGb: null,
+            uploadTransferredBytes: 0,
+            uploadTotalBytes: 0,
+            gpuHistory: [],
+            maxRuntimeHours: 2,
+            autoStop: true,
+            mountDrive: false,
+            syncPaths: [],
+            outputRemoteDir: '',
+            outputLocalDir: '',
+            artifacts: [],
+            metrics: {},
+            logTail: []
+          }
+        ],
+        untrackedSessions: [],
+        lastRunsByWorkspace: {}
+      }
+    })
+    useColabNotebookStore.setState({
+      workspaceRoot,
+      notebooks: [],
+      activePath: null,
+      cells: [],
+      sidePanelOpen: true,
+      sidePanelTab: 'kun'
+    })
+    useColabDriveStore.getState().applyState({
+      sessionId: 'sess-drive-ui',
+      status: 'needs_auth',
+      authUrl: 'https://accounts.google.com/o/oauth2/v2/auth?state=retry',
+      expiresAt: Date.now() + 300_000,
+      reason: 'account_mismatch'
+    })
+
+    let renderer: ReturnType<typeof create> | undefined
+    try {
+      await act(async () => {
+        renderer = create(
+          createElement(ColabNotebookView, {
+            leftSidebarCollapsed: false,
+            onToggleLeftSidebar: () => undefined
+          })
+        )
+      })
+      const root = renderer!.root
+      const authCard = root.findByProps({ 'data-colab-drive-auth-card': true })
+      const authText = collectText(authCard)
+      expect(authText).toContain('jackzhongxiaoyu@gmail.com')
+      expect(authText).toContain('Incognito')
+
+      await act(async () => {
+        useColabDriveStore.getState().applyState({
+          sessionId: 'sess-drive-ui',
+          status: 'error',
+          code: 'account_mismatch',
+          message: 'HTTP 400'
+        })
+      })
+      const errBanner = root.findByProps({ 'data-colab-drive-error-banner': true })
+      expect(collectText(errBanner)).toContain('jackzhongxiaoyu@gmail.com')
+    } finally {
+      if (renderer) await act(async () => renderer?.unmount())
+      useColabDriveStore.setState({ states: {}, probedSessions: {}, autoMountAttemptedSessions: {} })
       vi.unstubAllGlobals()
     }
   })

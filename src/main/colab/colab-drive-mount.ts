@@ -38,6 +38,7 @@ export {
 type PreparedEnv = {
   sessionName: string
   connectionId: string
+  accountEmail?: string
   sessionsJsonPath: string
   env: Record<string, string>
 }
@@ -116,6 +117,9 @@ export class ColabDriveMountManager {
     if (!session || session.phase !== 'running') {
       return { ok: false, message: 'Colab runtime is not connected.' }
     }
+    const accountEmail =
+      snapshot.connections.find((c) => c.id === session.connectionId)?.email ||
+      session.connectionEmail
     const credFile = await this.service.credentials.materializeRuntimeToken(session.connectionId)
     const { paths, env } = await this.service.isolation.prepareConnectionEnvironment(
       session.connectionId,
@@ -126,6 +130,7 @@ export class ColabDriveMountManager {
       data: {
         sessionName: session.sessionName,
         connectionId: session.connectionId,
+        accountEmail,
         sessionsJsonPath: paths.sessionsJsonPath,
         env
       }
@@ -232,7 +237,11 @@ export class ColabDriveMountManager {
     const script = buildDriveMountSessionPython(
       prepared.data.sessionsJsonPath,
       prepared.data.sessionName,
-      { forceRemount, mountPoint: targetMountPoint }
+      {
+        forceRemount,
+        mountPoint: targetMountPoint,
+        expectedEmail: prepared.data.accountEmail
+      }
     )
     const child = this.spawnProcess(this.service.cli.venvPythonPath, ['-c', script], {
       env: prepared.data.env,
@@ -264,6 +273,7 @@ export class ColabDriveMountManager {
     let authExpiry = 0
     let timer: ReturnType<typeof setTimeout>
     let finished = false
+    let hasExplicitError = false
     let outcome: ColabDriveMountResult = {
       ok: false,
       message: 'Could not mount Google Drive on this runtime.'
@@ -274,7 +284,9 @@ export class ColabDriveMountManager {
       clearTimeout(timer)
       timer = setTimeout(() => {
         if (expireAuth) job.expired = true
-        else outcome = { ok: false, message: 'Mounting Google Drive timed out. Try again.' }
+        else if (!hasExplicitError) {
+          outcome = { ok: false, message: 'Mounting Google Drive timed out. Try again.' }
+        }
         abortHelper()
       }, ms)
     }
@@ -291,6 +303,7 @@ export class ColabDriveMountManager {
       if (marker.kind === 'auth') {
         const url = checkedDriveAuthUrl(marker.uri)
         if (!url) {
+          hasExplicitError = true
           outcome = { ok: false, message: 'Google returned an unusable Drive authorization link.' }
           abortHelper()
           return
@@ -303,16 +316,21 @@ export class ColabDriveMountManager {
           sessionId,
           status: 'needs_auth',
           authUrl: url,
-          expiresAt: authExpiry
+          expiresAt: authExpiry,
+          ...(marker.reason ? { reason: marker.reason } : {})
         })
         if (firstPrompt) {
           job.settleStep({ ok: true, state: authState })
           void this.openMountAuth({ sessionId })
         } else {
+          const isMismatch = marker.reason === 'account_mismatch'
+          const acct = prepared.data.accountEmail || 'the selected Google account'
           job.settleStep({
             ok: false,
-            code: 'auth_incomplete',
-            message: 'Google has not confirmed Drive access yet. Complete authorization in your browser and try again.',
+            code: isMismatch ? 'account_mismatch' : 'auth_incomplete',
+            message: isMismatch
+              ? `Your browser authorized a different Google account than ${acct}. Switch to ${acct} or open the copied link in an Incognito window and confirm again.`
+              : 'Google has not confirmed Drive access yet. Complete authorization in your browser and try again.',
             state: authState
           })
         }
@@ -330,13 +348,19 @@ export class ColabDriveMountManager {
         })
         outcome = { ok: true, state: mountedState }
       } else if (marker.kind === 'error') {
-        const incomplete = marker.message.includes('authorization not completed')
+        hasExplicitError = true
+        const code =
+          marker.code ??
+          (marker.message.includes('authorization not completed')
+            ? ('auth_incomplete' as const)
+            : undefined)
         outcome = {
           ok: false,
-          ...(incomplete ? { code: 'auth_incomplete' as const } : {}),
-          message: incomplete
-            ? 'Google has not authorized Drive access. Try again with the selected Google account.'
-            : marker.message || 'Could not mount Google Drive.'
+          ...(code ? { code } : {}),
+          message:
+            code === 'auth_incomplete'
+              ? 'Google has not authorized Drive access. Try again with the selected Google account.'
+              : marker.message || 'Could not mount Google Drive.'
         }
       }
     }
@@ -412,7 +436,7 @@ export class ColabDriveMountManager {
       }
     }
     if (!job.authorization) {
-      return job.finalPromise
+      return job.pendingPromise
     }
     if (Date.now() >= job.authorization.expiresAt) {
       job.expired = true
@@ -423,7 +447,6 @@ export class ColabDriveMountManager {
       return { ok: false, message: 'The authorization session is no longer active.' }
     }
     delete job.authorization
-    this.setState({ sessionId, status: 'mounting' })
     const stepPromise = new Promise<ColabDriveMountResult>((resolve) => {
       job.settleStep = resolve
       job.child.stdin!.write('CONTINUE\n')

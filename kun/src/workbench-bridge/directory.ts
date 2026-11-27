@@ -56,10 +56,16 @@ export class WorkbenchDirectoryService {
       .filter((root): root is string => Boolean(root)))]
     const workRoots = await keep(input.workRoots)
     const defaultCanonical = input.defaultWorkRoot ? await canonicalDirectory(input.defaultWorkRoot) : undefined
+    let dailyNotesRoot: string | undefined
+    if (input.dailyNotesRoot) {
+      await mkdir(resolve(input.dailyNotesRoot), { recursive: true }).catch(() => undefined)
+      dailyNotesRoot = await canonicalDirectory(input.dailyNotesRoot)
+    }
     const next: WorkbenchDirectory = {
       workRoots,
       ...(defaultCanonical && workRoots.includes(defaultCanonical) ? { defaultWorkRoot: defaultCanonical } : {}),
-      codeProjects: await keep(input.codeProjects)
+      codeProjects: await keep(input.codeProjects),
+      ...(dailyNotesRoot ? { dailyNotesRoot } : {})
     }
     await mkdir(dirname(this.path), { recursive: true })
     const temp = this.path + '.tmp'
@@ -86,5 +92,11 @@ export class WorkbenchDirectoryService {
     if (allowedRoots) return directory.workRoots.filter((root) => allowedRoots.some((allowed) => pathWithin(allowed, root)))
     const fallback = directory.defaultWorkRoot ?? directory.workRoots[0]
     return fallback ? [fallback] : []
+  }
+
+  /** Personal daily-notes folder; hidden from repository-restricted Agents. */
+  async dailyNotesDirectory(allowedRoots?: readonly string[]): Promise<string | undefined> {
+    if (allowedRoots !== undefined) return undefined
+    return (await this.get()).dailyNotesRoot
   }
 }

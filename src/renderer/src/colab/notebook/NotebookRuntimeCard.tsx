@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { MoreHorizontal } from 'lucide-react'
+import { COLAB_ACCELERATOR_SPECS } from '@shared/colab/colab-types'
 import { formatColabDuration, useColabStore } from '../colab-store'
 import { useColabDismiss } from '../use-colab-dismiss'
 import { isLocalJupyterUrl } from './JupyterRuntimeSection'
@@ -153,8 +154,7 @@ export function NotebookRuntimeCard({ runtime }: { runtime: ColabNotebookRuntime
     const session = runtime.session
     const isPending = !session
     const account = connections.find((c) => c.id === colabLive.connectionId)
-    const gpuTitle =
-      colabLive.accelerator === 'CPU' ? 'Colab · CPU' : `Colab · ${colabLive.accelerator} GPU`
+    const gpuTitle = `Colab · ${COLAB_ACCELERATOR_SPECS[colabLive.accelerator].fullLabel}`
     const metaParts = [
       account?.name ?? colabLive.connectionName,
       isPending ? t('colabNb.connecting') : formatColabDuration(session.elapsedSeconds),

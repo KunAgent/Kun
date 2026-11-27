@@ -16,6 +16,7 @@ import { versionedHistory } from '../messages/history-version.js'
 import { continuationRoute, movedTurn } from './session-route.js'
 import { fastServiceTier } from './model-info.js'
 import { mobileUsage } from './mobile-usage.js'
+import { threadTodoSnapshot } from '../todos/service.js'
 
 /**
  * The task depth a new turn inherits. A fresh admission promotes pending settings first, so they win; the
@@ -72,8 +73,12 @@ case 'code.history': {
         ))
         const metadata = await requireCode(runtime, p.threadId)
         const { relayed, retained } = relayHistoryPage(history, p.cursor)
+        const hasTodos = !p.cursor && Boolean(
+          (metadata.executionTasks?.tasks.length ?? 0) > 0 || (metadata.todos?.items.length ?? 0) > 0
+        )
         return {
           ...relayed,
+          ...(hasTodos ? { todoSnapshot: await threadTodoSnapshot(runtime, metadata) } : {}),
           mobileUsage: mobileUsage(runtime.usageService?.forThread(p.threadId), (history as { contextSnapshot?: unknown }).contextSnapshot),
           revision: metadataRevision(metadata),
           historyState: metadata.remoteRewind?.phase === 'pending' ? 'reconciliation_required' : 'ready',

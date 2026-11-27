@@ -1,8 +1,9 @@
 # Built-in companions
 
-Kun ships exactly three built-in pets: Xiao Kun, iKun and DS (`whale-girl`).
+Kun ships four built-in pets: Xiao Kun, iKun, DS (`whale-girl`) and KuroCat (`kurocat`).
 Every package retains its original nine solo animation states and 57 transparent
-frames. DS's artwork attribution is in [whale-girl/ATTRIBUTION.md](whale-girl/ATTRIBUTION.md).
+frames. Artwork attributions live in [whale-girl/ATTRIBUTION.md](whale-girl/ATTRIBUTION.md)
+and [kurocat/ATTRIBUTION.md](kurocat/ATTRIBUTION.md).
 Each package also includes a declarative rig for joint canvas interactions.
 
 ## One resident, occasional visitors

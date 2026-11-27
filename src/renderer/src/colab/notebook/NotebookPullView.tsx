@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { ArrowRight, Check, ChevronRight, Loader2, X } from 'lucide-react'
 import { COLAB_ACCELERATOR_SPECS } from '@shared/colab/colab-types'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { useColabStore } from '../colab-store'
 import { useColabNotebookStore } from './colab-notebook-store'
 import {
   DriveAuthorization,
@@ -74,9 +75,14 @@ export function NotebookPullView({
 }): ReactElement {
   const { t } = useTranslation('common')
   const otherSourceRequested = useNotebookPullStore((s) => s.otherSourceRequested)
-  const { phase, progress, cleanup } = task
+  const connections = useColabStore((s) => s.snapshot.connections)
+  const { phase, progress, cleanup, source } = task
   const project = workspaceLabelFromPath(task.workspaceRoot)
-  const drive = task.source.kind === 'drive'
+  const drive = source.kind === 'drive'
+  const driveAccountLabel =
+    source.kind === 'drive'
+      ? (connections.find((c) => c.id === source.connectionId)?.email ?? source.label)
+      : source.label
   const matchingProject = task.workspaceRoot === workspaceRoot
   const releasing = phase === 'closing' || cleanup === 'stopping'
   const title = t(drive ? 'colabNb.importModalDriveTitle' : 'colabNb.importModalJupyterTitle')
@@ -195,13 +201,15 @@ export function NotebookPullView({
               role="alert"
               className={`${pullSurface} break-words text-[13px] text-amber-700 dark:text-amber-300`}
             >
-              {t(
-                task.error?.kind === 'auth_expired'
-                  ? 'colabNb.pullAuthExpired'
-                  : task.error?.kind === 'interrupted'
-                    ? 'colabNb.pullInterrupted'
-                    : 'colabNb.pullFailed'
-              )}
+              {task.error?.kind === 'account_mismatch'
+                ? t('colabNb.driveMountAccountMismatch', { account: driveAccountLabel })
+                : t(
+                    task.error?.kind === 'auth_expired'
+                      ? 'colabNb.pullAuthExpired'
+                      : task.error?.kind === 'interrupted'
+                        ? 'colabNb.pullInterrupted'
+                        : 'colabNb.pullFailed'
+                  )}
               {task.error?.message && !task.error.kind ? (
                 <span className="mt-1 block text-[12px] text-ds-muted">{task.error.message}</span>
               ) : null}

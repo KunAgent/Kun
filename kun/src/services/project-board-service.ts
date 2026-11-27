@@ -127,11 +127,15 @@ export class ProjectBoardService {
   }
 
   async createManualCard(
-    request: CreateManualProjectBoardCardRequest
+    request: CreateManualProjectBoardCardRequest & { id?: string }
   ): Promise<ProjectBoardSnapshotResponse> {
     const workspaceRoot = await canonicalWorkspaceRoot(request.workspace)
     const now = this.options.nowIso()
-    const id = this.options.ids.next('board')
+    const id = request.id ?? this.options.ids.next('board')
+    if (request.id) {
+      const existing = (await this.options.store.read(workspaceRoot, { repair: false })).document.manualCards[id]
+      if (existing) return this.snapshotCanonical(workspaceRoot, {})
+    }
     await this.mutate(workspaceRoot, request.expectedRevision, (document) => {
       const card: ManualProjectBoardCard = {
         id,

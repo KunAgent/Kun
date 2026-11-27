@@ -20,6 +20,7 @@ import { AgentActivityToasts } from './components/ade/AgentActivityToasts'
 import { MobilePairingDialog } from './components/remote/MobilePairingDialog'
 import { useRoomEvents } from './components/rooms/useRoomEvents'
 import { useWorkbenchDirectorySync } from './components/rooms/workbench-bridge-actions'
+import { useDailyNotesWorkbenchSync } from './components/rooms/daily-notes-workbench-sync'
 import { WorkbenchFlash } from './components/rooms/workbench-flash'
 import { useRemoteSurface } from './mobile/use-remote-surface'
 import { useRemoteReconnectRecovery } from './use-remote-reconnect-recovery'
@@ -105,6 +106,7 @@ export default function AppShell(): React.ReactElement {
   useQuotaReminderNotifications(surface === 'desktop')
   // Only the desktop knows the user's real workspaces; a phone must never overwrite them.
   useWorkbenchDirectorySync(surface === 'desktop')
+  useDailyNotesWorkbenchSync(surface === 'desktop')
   const { enabled: adeEnabled } = useAdeEnabled()
   const initialSetupOpen = useChatStore((s) => s.initialSetupOpen)
   const platform = typeof window !== 'undefined' ? window.kunGui?.platform ?? 'unknown' : 'unknown'

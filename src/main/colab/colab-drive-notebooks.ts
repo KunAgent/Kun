@@ -10,6 +10,8 @@ import {
   COLAB_NOTEBOOK_MARKER,
   NOTEBOOK_IMPORT_MAX_BYTES,
   NOTEBOOK_PULL_MAX_FILES,
+  type ColabDriveAuthHint,
+  type ColabDriveErrorCode,
   type ColabDriveNotebookEntry,
   type ColabDriveNotebooksListResult,
   type ColabDrivePullCloseResult,
@@ -86,7 +88,11 @@ const VM_SCAN_CODE = [
   'del _kun_scan_drive'
 ].join('\n')
 
-export function buildDriveMountAndListPython(sessionsJsonPath: string, sessionName: string): string {
+export function buildDriveMountAndListPython(
+  sessionsJsonPath: string,
+  sessionName: string,
+  expectedEmail?: string
+): string {
   const m = COLAB_NOTEBOOK_MARKER
   const checkMountedCode = [
     'import os as _o',
@@ -100,19 +106,12 @@ export function buildDriveMountAndListPython(sessionsJsonPath: string, sessionNa
     ...driveRuntimeSetup(sessionsJsonPath, sessionName),
     'from colab_cli.auth import get_credentials',
     'from colab_cli.utils import get_status_code',
-    'def _parse_json(raw):',
-    '    try:',
-    '        body = raw.split("\\n", 1)[-1] if raw.lstrip().startswith(")]}\'") else raw',
-    '        parsed = json.loads(body)',
-    '        return parsed if isinstance(parsed, dict) else {}',
-    '    except Exception:',
-    '        return {}',
     'try:',
     `    chk = runtime.execute_code(${JSON.stringify(checkMountedCode)}, timeout=20)`,
     '    mounted = any("KUN_MOUNTED:1" in (o.get("text") or "") for o in (chk or []))',
     '    if not mounted:',
-    ...drivefsAuthHookPython('        '),
-    '        m_out = runtime.execute_code("from google.colab import drive\\ndrive.mount(\\"/content/drive\\")", allow_stdin=True, timeout=600)',
+    ...drivefsAuthHookPython('        ', expectedEmail),
+    '        m_out = runtime.execute_code("from google.colab import drive\\ndrive.mount(\\"/content/drive\\", timeout_ms=600000)", allow_stdin=True, timeout=600)',
     '        if auth_aborted[0]:',
     '            sys.exit(0)',
     '        for o in (m_out or []):',
@@ -121,7 +120,8 @@ export function buildDriveMountAndListPython(sessionsJsonPath: string, sessionNa
     '                sys.exit(0)',
     `    _emit_outputs(runtime.execute_code(${JSON.stringify(VM_SCAN_CODE)}, timeout=45))`,
     'except Exception as ex:',
-    `    print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(str(ex)), flush=True)`,
+    '    if not auth_aborted[0]:',
+    `        print(${JSON.stringify(m + 'DRV_ERR:')} + json.dumps(str(ex)), flush=True)`,
     ...driveRuntimeCleanup
   ].join('\n')
 }
@@ -168,10 +168,10 @@ function buildDriveReadHelperPython(session: DriveSession, remotePath: string): 
 
 export function parseDriveMarkerLines(stdout: string):
   | { kind: 'list'; entries: ColabDriveNotebookEntry[] }
-  | { kind: 'auth'; uri: string }
+  | { kind: 'auth'; uri: string; reason?: ColabDriveAuthHint }
   | { kind: 'auth_ok' }
   | { kind: 'file'; content: Buffer }
-  | { kind: 'error'; message: string }
+  | { kind: 'error'; message: string; code?: ColabDriveErrorCode }
   | null {
   for (const line of stdout.split(/\r?\n/)) {
     if (!line.startsWith(COLAB_NOTEBOOK_MARKER)) continue
@@ -188,8 +188,12 @@ export function parseDriveMarkerLines(stdout: string):
     if (body.startsWith('DRV_AUTH_OK:')) return { kind: 'auth_ok' }
     if (body.startsWith('DRV_AUTH:')) {
       try {
-        const parsed = JSON.parse(body.slice(9)) as { uri?: string }
-        return { kind: 'auth', uri: String(parsed.uri ?? '') }
+        const parsed = JSON.parse(body.slice(9)) as { uri?: string; reason?: string }
+        const reason =
+          parsed.reason === 'incomplete' || parsed.reason === 'account_mismatch'
+            ? parsed.reason
+            : undefined
+        return { kind: 'auth', uri: String(parsed.uri ?? ''), ...(reason ? { reason } : {}) }
       } catch {
         return null
       }
@@ -199,7 +203,19 @@ export function parseDriveMarkerLines(stdout: string):
     }
     if (body.startsWith('DRV_ERR:')) {
       try {
-        return { kind: 'error', message: String(JSON.parse(body.slice(8))) }
+        const parsed = JSON.parse(body.slice(8)) as string | { message?: unknown; code?: unknown }
+        if (parsed && typeof parsed === 'object') {
+          const rawCode = parsed.code
+          const code =
+            rawCode === 'auth_expired' ||
+            rawCode === 'auth_incomplete' ||
+            rawCode === 'account_mismatch' ||
+            rawCode === 'canceled'
+              ? rawCode
+              : undefined
+          return { kind: 'error', message: String(parsed.message ?? ''), ...(code ? { code } : {}) }
+        }
+        return { kind: 'error', message: String(parsed) }
       } catch {
         return { kind: 'error', message: body.slice(8) }
       }
@@ -213,7 +229,12 @@ const ended = (expired = false): DriveResult & { ok: false } => expired
   ? { ok: false, code: 'auth_expired', message: 'Drive access expired. Prepare the source again.' }
   : { ok: false, code: 'canceled', message: 'This pull has ended.' }
 
-type DriveSession = { sessionName: string; sessionsJsonPath: string; env: Record<string, string> }
+type DriveSession = {
+  sessionName: string
+  sessionsJsonPath: string
+  env: Record<string, string>
+  accountEmail?: string
+}
 type PendingScan = {
   child: ChildProcess
   finished: Promise<void>
@@ -270,9 +291,11 @@ export class ColabDriveNotebookManager {
     job.controller.signal.throwIfAborted()
     const credFile = await this.service.credentials.materializeRuntimeToken(job.connectionId)
     const { paths, env } = await this.service.isolation.prepareConnectionEnvironment(job.connectionId, credFile)
-    const prepared = {
+    const prepared: DriveSession = {
       sessionName: borrowed ? borrowed.sessionName : `${COLAB_DRIVE_PULL_SESSION_PREFIX}${randomUUID().slice(0, 12)}`,
-      sessionsJsonPath: paths.sessionsJsonPath, env
+      sessionsJsonPath: paths.sessionsJsonPath,
+      env,
+      accountEmail: account.email
     }
     job.controller.signal.throwIfAborted()
     if (borrowed) return prepared
@@ -339,13 +362,18 @@ export class ColabDriveNotebookManager {
   }
 
   private scanDrive(job: DrivePull, session: DriveSession): Promise<DriveResult> {
-    const script = buildDriveMountAndListPython(session.sessionsJsonPath, session.sessionName)
+    const script = buildDriveMountAndListPython(
+      session.sessionsJsonPath,
+      session.sessionName,
+      session.accountEmail
+    )
     const child = this.spawnProcess(this.service.cli.venvPythonPath, ['-c', script], {
       env: session.env, stdio: ['pipe', 'pipe', 'pipe']
     })
     const signal = job.controller.signal
     const decoder = new StringDecoder('utf8')
     let remainder = ''
+    let hasExplicitError = false
     let final: DriveResult = { ok: false, message: 'Could not read Google Drive notebooks.' }
     let resolveInitial!: (result: DriveResult) => void
     let resolveFinished!: () => void
@@ -363,7 +391,9 @@ export class ColabDriveNotebookManager {
           job.expired = true
           void this.closePull(job.id)
         } else {
-          final = { ok: false, message: 'Reading Drive timed out. Try again.' }
+          if (!hasExplicitError) {
+            final = { ok: false, message: 'Reading Drive timed out. Try again.' }
+          }
           abort()
         }
       }, ms)
@@ -378,6 +408,7 @@ export class ColabDriveNotebookManager {
       if (marker.kind === 'auth') {
         const url = checkedDriveAuthUrl(marker.uri)
         if (!url) {
+          hasExplicitError = true
           final = { ok: false, message: 'Google returned an unusable Drive authorization link.' }
           abort()
           return
@@ -386,7 +417,13 @@ export class ColabDriveNotebookManager {
         if (first) authExpiry = Date.now() + DRIVE_AUTH_WAIT_TIMEOUT_MS
         resetTimer(Math.max(0, authExpiry - Date.now()), true)
         scan.authorization = { url, expiresAt: authExpiry }
-        scan.settle({ ok: true, status: 'needs_auth', authUrl: url, expiresAt: authExpiry })
+        scan.settle({
+          ok: true,
+          status: 'needs_auth',
+          authUrl: url,
+          expiresAt: authExpiry,
+          ...(marker.reason ? { reason: marker.reason } : {})
+        })
         if (first) void this.openAuth({ pullId: job.id })
       } else if (marker.kind === 'auth_ok') {
         delete scan.authorization
@@ -402,9 +439,17 @@ export class ColabDriveNotebookManager {
         final = { ok: true, status: 'ready', entries: [...job.files.values()] }
         job.cachedResult = final
       } else if (marker.kind === 'error') {
-        final = { ok: false, message: marker.message.includes('authorization not completed')
-          ? 'Google has not authorized Drive access. Try again with the selected Google account.'
-          : 'Could not mount or read Google Drive. Retry or choose another source.' }
+        hasExplicitError = true
+        final = {
+          ok: false,
+          ...(marker.code ? { code: marker.code } : {}),
+          message:
+            marker.code === 'account_mismatch'
+              ? marker.message
+              : marker.message.includes('authorization not completed')
+                ? 'Google has not authorized Drive access. Try again with the selected Google account.'
+                : 'Could not mount or read Google Drive. Retry or choose another source.'
+        }
         job.cachedResult = final
       }
     }

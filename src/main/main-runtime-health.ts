@@ -9,8 +9,10 @@ import {
 } from './runtime/kun-adapter'
 import { KunRuntimeHealthMonitor } from './runtime/kun-runtime-health-monitor'
 import {
-  markCanonicalKunRuntimeMigrationRuntimeVerified
+  markCanonicalKunRuntimeMigrationRuntimeVerified,
+  runtimeMigrationNeedsThreadInventory
 } from './runtime-data-dir-migration'
+import { listRuntimeThreadIdsForMigration } from './data-migration/runtime-thread-inventory'
 import {
   KunRuntimeSupervisor,
   type KunRuntimeStatus
@@ -147,35 +149,24 @@ let runtimeMigrationVerificationCompleted = false
 let runtimeMigrationVerificationErrorWarned = false
 
 async function verifyRuntimeMigrationHistory(): Promise<void> {
+  const userDataPath = app.getPath('userData')
+  const location = { homeDir: app.getPath('home'), platform: process.platform }
+  if (mainState.canonicalRuntimeMigration?.status !== 'completed' ||
+      mainState.canonicalRuntimeMigration.authority !== 'current' ||
+      !runtimeMigrationNeedsThreadInventory(userDataPath, location)) {
+    runtimeMigrationVerificationCompleted = true
+    return
+  }
   const settings = await mainState.store.load()
+  const base = getRuntimeBaseUrlForSettings(settings)
   const headers = runtimeAuthHeaders(settings)
   headers.set('Accept', 'application/json')
-  const response = await fetch(
-    `${getRuntimeBaseUrlForSettings(settings)}/v1/threads?include_archived=true&include=side`,
-    {
-      headers,
-      signal: AbortSignal.timeout(15_000)
-    }
-  )
-  if (!response.ok) {
-    throw new Error(`Runtime thread inventory returned HTTP ${response.status}`)
-  }
-  const payload = JSON.parse(await response.text()) as { threads?: unknown }
-  if (!Array.isArray(payload.threads)) {
-    throw new Error('Runtime thread inventory response has no threads array')
-  }
-  const visibleThreadIds = payload.threads.flatMap((thread) =>
-    thread &&
-    typeof thread === 'object' &&
-    typeof (thread as { id?: unknown }).id === 'string'
-      ? [(thread as { id: string }).id]
-      : []
-  )
-  const result = markCanonicalKunRuntimeMigrationRuntimeVerified(
-    app.getPath('userData'),
-    visibleThreadIds,
-    { homeDir: app.getPath('home'), platform: process.platform }
-  )
+  const visibleIds = await listRuntimeThreadIdsForMigration(path => {
+    if (runtimeShutdown.isQuitInProgress) throw new Error('Kun is shutting down')
+    return fetch(`${base}${path}`, { headers, signal: AbortSignal.timeout(15_000) })
+  })
+  if (runtimeShutdown.isQuitInProgress) return
+  const result = markCanonicalKunRuntimeMigrationRuntimeVerified(userDataPath, visibleIds, location)
   runtimeMigrationVerificationErrorWarned = false
   runtimeMigrationVerificationCompleted = result.status !== 'incomplete'
   if (result.status === 'incomplete' && result.attempt === 1) {
@@ -207,11 +198,11 @@ async function verifyRuntimeMigrationHistory(): Promise<void> {
   }
 }
 
-function scheduleRuntimeMigrationHistoryVerification(): void {
+export function scheduleRuntimeMigrationHistoryVerification(): void {
   if (runtimeMigrationVerificationCompleted || runtimeMigrationVerificationPromise) return
   runtimeMigrationVerificationPromise = verifyRuntimeMigrationHistory()
     .catch((error) => {
-      if (runtimeMigrationVerificationErrorWarned) return
+      if (runtimeShutdown.isQuitInProgress || runtimeMigrationVerificationErrorWarned) return
       runtimeMigrationVerificationErrorWarned = true
       logWarn('runtime-data-migration', 'Could not verify migrated Runtime history through the thread API.', {
         message: error instanceof Error ? error.message : String(error)
@@ -230,7 +221,7 @@ export function noteRuntimeHealthy(source: string, settings?: AppSettingsV1): vo
   if (settings && managedKunHostCanAutoStart(runtimeSupervisor.latestOr(settings))) {
     runtimeSupervisor.setManagedRuntimeExpected(true)
   }
-  scheduleRuntimeMigrationHistoryVerification()
+  if (mainState.startupState.isReady()) scheduleRuntimeMigrationHistoryVerification()
   // heal the persisted "local gateway enabled without an API key"
   // state so it cannot veto every later hot apply.
   if (settings) {

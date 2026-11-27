@@ -49,13 +49,29 @@ Apple references: [Input Monitoring](https://support.apple.com/guide/mac-help/mc
 [listen-event permission](https://developer.apple.com/documentation/coregraphics/cgrequestlisteneventaccess%28%29),
 [process input-running state](https://developer.apple.com/documentation/coreaudio/kaudioprocesspropertyisrunninginput).
 
-## Keyboard desk reaction
+## Keyboard and mouse desk reaction
 
-Typing uses a small keyboard on the same canvas as the resident. Physical left
-and right key groups move the corresponding paw; Space moves both. A short tap
-remains visible for one complete strike, a held key stays down without auto-tapping,
-and releasing the last key for a paw lets it spring back. Keycap depression and
-hand contact use the same geometry. Only the original head pixels blink.
+Idle built-in pets follow the global cursor with damped eye gaze and subtle head
+parallax, crossfading back to the untouched sprite art and sleeping between blink
+frames after the pointer stays still. Gently rubbing back-and-forth across the
+head or tapping the resident triggers a cozy head-pat reaction with closed/happy
+eyes, soft cheek blush and floating particles before settling back to rest.
+
+Typing or intentional cursor movement/clicks reveals a small keyboard with a
+left-side mousepad (mirror perspective facing the viewer) on the same canvas as
+the resident, holds the desk steadily across normal thinking pauses (~30 seconds
+after typing, ~12 seconds after mouse activity) to avoid flicker, and glides the
+desk away cleanly once idle or when the user pats the pet's head.
+KuroCat (`kun:kurocat` and imported `kurocat:*` / local KuroCat skin plugins)
+renders on KuroCat's live procedural 2D desk engine with a permanently grounded
+keyboard and cordless mouse, and automatically discovers custom cats, plugins
+and user settings from the local `kuro-cat-pet` directory when enabled.
+Physical keys are quantized inside the producer to a coarse 6x3 spatial grid
+(`col: 0..5, row: 0..2`) alongside left/right/both paw masks; key names, codes,
+characters and cursor targets never cross IPC. Moving or clicking the mouse
+slides the left-side mini-mouse under the viewer-left paw while keeping the
+viewer-right paw free for concurrent typing. Keycap depression, 3D pop badges
+and hand contact use the same rigid geometry.
 
 The active macOS observer is the authoritative source while available, preventing
 Kun's editor events from counting the same key twice. Without it, editor key

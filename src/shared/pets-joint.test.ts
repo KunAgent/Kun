@@ -6,9 +6,9 @@ import { jointSceneFor, parsePetJointRig } from './pets-joint'
 
 const packages = BUILTIN_PET_IDS.map((id) => JSON.parse(readFileSync(`resources/pets/${id}/pet.json`, 'utf8')))
 describe('joint character packs', () => {
-  it('ships independent rig anchors for exactly Kun, iKun and DS', () => {
-    expect(BUILTIN_PET_IDS).toEqual(['xiao-kun', 'ikun', 'whale-girl'])
-    expect(new Set(packages.map((p) => JSON.stringify(p.interactions.joint.arms))).size).toBe(3)
+  it('ships independent rig anchors for Kun, iKun, DS and KuroCat', () => {
+    expect(BUILTIN_PET_IDS).toEqual(['xiao-kun', 'ikun', 'whale-girl', 'kurocat'])
+    expect(new Set(packages.map((p) => JSON.stringify(p.interactions.joint.arms))).size).toBe(4)
     for (const pet of packages) {
       const pack = parsePetInteractionPack(pet.interactions)!
       expect(pack.joint).toEqual(pet.interactions.joint)

@@ -14,6 +14,7 @@ import {
   countActiveLinks, countOpenConfirmations, countRunLinks, createWorkbenchLink, workbenchLinkId, updateWorkbenchLink
 } from './link-store.js'
 import { prepareWorkbenchDispatchRequest, proposeWorkbenchDispatch, usesWorkbenchDispatch } from './dispatch.js'
+import { bindDailyNoteForWorkbenchLink } from './daily-notes-files.js'
 import { workbenchDispatchCapabilities } from './dispatch-capabilities.js'
 import type { WorkbenchCapabilityCeiling } from '../contracts/thread-workbench-origin.js'
 import type { RoomRequestState } from '../rooms/room-runtime-types.js'
@@ -132,6 +133,10 @@ export async function requestWorkbenchLink(scope: WorkbenchToolScope, input: {
   const created = await createWorkbenchLink(scope.store, {
     roomId: scope.roomId, participantAgentId: scope.agent.agentId, memberId: scope.memberId, memberLabel: scope.memberLabel,
     kind: input.kind, surface: input.surface, status: auto ? 'queued' : 'awaiting_confirmation', origin, request: input.request })
+  await bindDailyNoteForWorkbenchLink(
+    scope.bridge.directory, scope.agent.allowedRoots, scope.roomId,
+    created.link.id, input.request.dailyNote, scope.memberLabel
+  )
   if (dispatch) {
     try {
       const intent = await proposeWorkbenchDispatch(scope, created.link, input.agentSelection)

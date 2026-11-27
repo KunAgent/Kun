@@ -50,14 +50,7 @@ import type {
   GuiUpdateState
 } from './gui-update'
 import type { ReleaseNotice, ReleaseNoticeRequest } from './release-notice'
-import type {
-  BrowserUseControlInput,
-  BrowserUseDecisionInput,
-  BrowserUseMountInput,
-  BrowserUseNavigationInput,
-  BrowserUseZoomInput,
-  BrowserUseViewState
-} from './browser-use'
+import type { KunGuiBrowserUseApi } from './browser-use'
 import type { StorageRelocationApi } from './storage-relocation'
 import type { StorageCleanupApi } from './storage-cleanup'
 import type { UninstallApi } from './uninstall'
@@ -249,7 +242,7 @@ import {
 import type { KunGuiProviderApi } from './kun-gui-api-surface-provider'
 import type { KunGuiMarketApi } from './market/kun-gui-api-market'
 import type { KunGuiColabApi } from './colab/kun-gui-api-colab'
-export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi & KunGuiColabApi &
+export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & RemoteSshApi & ProviderAuthApi & RuntimeRequestIpcApi & KunGuiSseSurface & KunGuiLocalSpeechApi & KunGuiPaperApi & KunGuiWriteAiApi & KunGuiProviderApi & KunGuiMarketApi & KunGuiColabApi & KunGuiBrowserUseApi &
   import('./app-sandbox').KunGuiAppSandboxApi & import('./git-commit').KunGuiGitCommitApi & import('./terminal-dock').KunGuiTerminalDockApi &
   import('./kun-gui-api-data-migration').KunGuiDataMigrationApi &
   import('./git-turn-undo').KunGuiGitTurnUndoApi & import('./office-version').KunGuiOfficeVersionApi & import('./artifact-thumbnail').KunGuiArtifactThumbnailApi &
@@ -658,16 +651,6 @@ export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & R
   requestComputerUsePermission: (
     kind: ComputerUsePermissionKind
   ) => Promise<ComputerUsePermissions>
-  getBrowserUseState: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
-  mountBrowserUse: (input: BrowserUseMountInput) => Promise<BrowserUseViewState>
-  decideBrowserUseOrigin: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
-  decideBrowserUseAction: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
-  setBrowserUseControl: (input: BrowserUseControlInput) => Promise<BrowserUseViewState>
-  navigateBrowserUse: (input: BrowserUseNavigationInput) => Promise<BrowserUseViewState>
-  setBrowserUseZoom: (input: BrowserUseZoomInput) => Promise<BrowserUseViewState>
-  stopBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
-  clearBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
-  onBrowserUseState: (handler: (state: BrowserUseViewState) => void) => () => void
   showTurnCompleteNotification: (
     payload: TurnCompleteNotificationPayload
   ) => Promise<SystemNotificationResult>
@@ -693,6 +676,7 @@ export type KunGuiApi = KunGuiLatexApi & KunGuiTerminalApi & ExtensionIpcApi & R
   getLogPath: () => Promise<string>
   openLogDir: () => Promise<{ ok: boolean; message?: string }>
   pets: import('./pets').PetDesktopBridge
+  dailyNotes?: import('./daily-notes').DailyNotesWorkbenchBridge
 }
 
 export type { KunProtectedApprovalRequest, KunProtectedApprovalResult } from './kun-gui-api-protected-approval'

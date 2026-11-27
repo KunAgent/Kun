@@ -54,6 +54,7 @@ type ElicitField = {
   minItems?: number
   maxItems?: number
   hints?: string
+  otherFieldName?: string
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -154,7 +155,7 @@ function normalizeField(
 }
 
 /** Parse the requested form schema into ordered fields (lenient, capped). */
-export function fieldsFromSchema(schema: unknown): ElicitField[] {
+export function fieldsFromSchema(schema: unknown, harnessId?: string): ElicitField[] {
   const root = asRecord(schema)
   const properties = asRecord(root?.properties)
   if (!properties) return []
@@ -163,9 +164,26 @@ export function fieldsFromSchema(schema: unknown): ElicitField[] {
       ? root.required.filter((v): v is string => typeof v === 'string')
       : []
   )
-  return Object.entries(properties)
+  const fields = Object.entries(properties)
     .slice(0, 32)
     .map(([name, raw]) => normalizeField(name, raw, required.has(name)))
+  return harnessId === 'antigravity' ? foldAntigravityOtherFields(fields) : fields
+}
+
+/** agy encodes the choice and its write-in alternative as two optional properties. */
+function foldAntigravityOtherFields(fields: ElicitField[]): ElicitField[] {
+  const byName = new Map(fields.map((field) => [field.name, field]))
+  const folded = new Set<string>()
+  for (const field of fields) {
+    if (!field.options?.length || field.required || !['string', 'array'].includes(field.type)) continue
+    const other = byName.get(`${field.name}_other`)
+    if (other?.type === 'string' && !other.required && !other.options && !other.hints &&
+        other.title === 'Other' && other.description === `Optional free-form answer to: ${field.title}`) {
+      field.otherFieldName = other.name
+      folded.add(other.name)
+    }
+  }
+  return fields.filter((field) => !folded.has(field.name))
 }
 
 /** Fields → user_input questions: selects carry options, scalars stay free-form. */
@@ -228,6 +246,16 @@ export function contentFromAnswers(
   for (const field of fields) {
     const answer = byId.get(field.name)
     if (!answer) continue
+    if (field.otherFieldName && answer.label === 'Other') {
+      // A mixed multi-select carries checked labels followed by the write-in in values.
+      const labels = answer.labels ?? []
+      const text = labels.length ? answer.values?.[labels.length] : answer.value
+      const literalOption = text === 'Other' && field.options?.some((option) => option.label === text)
+      if (text && !literalOption) {
+        content[field.otherFieldName] = text
+        if (!labels.length) continue
+      }
+    }
     const value = fieldValue(field, answer)
     if (value !== undefined) content[field.name] = value
   }
@@ -304,7 +332,8 @@ export function acpElicitForTurn(
   deps: AcpElicitationDeps,
   thread: Pick<ThreadRecord, 'id' | 'executionUnit'>,
   turn: Pick<Turn, 'id' | 'disableUserInput'>,
-  signal: AbortSignal
+  signal: AbortSignal,
+  harnessId?: string
 ): AcpElicitFn | undefined {
   if (thread.executionUnit?.kind === 'worker') {
     const callbacks = deps.workerCallbacks
@@ -334,7 +363,7 @@ export function acpElicitForTurn(
   )
   if (!awaitUserInput) return undefined
   return async ({ message, requestedSchema }) => {
-    const fields = fieldsFromSchema(requestedSchema)
+    const fields = fieldsFromSchema(requestedSchema, harnessId)
     const resolution = await awaitUserInput({
       id: deps.ids.next('uinput'),
       itemId: deps.ids.next('item'),

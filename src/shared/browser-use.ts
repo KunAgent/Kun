@@ -172,3 +172,16 @@ export const BrowserUseAuditEntrySchema = z.object({
   errorCode: z.string().max(128).optional()
 }).strict()
 export type BrowserUseAuditEntry = z.infer<typeof BrowserUseAuditEntrySchema>
+
+export interface KunGuiBrowserUseApi {
+  getBrowserUseState: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
+  mountBrowserUse: (input: BrowserUseMountInput) => Promise<BrowserUseViewState>
+  decideBrowserUseOrigin: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
+  decideBrowserUseAction: (input: BrowserUseDecisionInput) => Promise<BrowserUseViewState>
+  setBrowserUseControl: (input: BrowserUseControlInput) => Promise<BrowserUseViewState>
+  navigateBrowserUse: (input: BrowserUseNavigationInput) => Promise<BrowserUseViewState>
+  setBrowserUseZoom: (input: BrowserUseZoomInput) => Promise<BrowserUseViewState>
+  stopBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
+  clearBrowserUse: (threadId: string, expectedTurnId?: string) => Promise<BrowserUseViewState>
+  onBrowserUseState: (handler: (state: BrowserUseViewState) => void) => () => void
+}

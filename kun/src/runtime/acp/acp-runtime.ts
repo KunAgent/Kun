@@ -456,7 +456,7 @@ export class AcpRuntime implements DelegatedTurnRuntime {
         const drafts = mapper.recordTerminal(snapshot)
         emitQueue = emitQueue.then(() => emitter.emitAll(drafts)).catch(failStream)
       },
-      elicit: acpElicitForTurn(this.deps, thread, turn, signal),
+      elicit: acpElicitForTurn(this.deps, thread, turn, signal, definition.id),
       terminalEnv: acpChildEnv(this.deps, definition, credentialEnv, secretEnv),
       signal,
       nextId: (prefix) => this.deps.ids.next(prefix)

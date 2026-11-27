@@ -8,7 +8,12 @@ const lookup = [
   'import json, sys',
   'from colab_cli.common import state',
   'state.config_path = sys.argv[1]',
-  's = state.get_session(sys.argv[2], ignore_missing_session=True)',
+  // An adopted assignment may have no local CLI session (its display name is synthetic).
+  // Never resolve it by label, create an assignment, or attach a kernel to obtain stats.
+  'if sys.argv[3]:',
+  '    s = next((a.runtime_proxy_info for a in state.client.list_assignments() if a.endpoint == sys.argv[3]), None)',
+  'else:',
+  '    s = state.get_session(sys.argv[2], ignore_missing_session=True)',
   'if not s: sys.exit(1)',
   'print(json.dumps({"url": s.url, "token": s.token}))'
 ].join('\n')
@@ -17,6 +22,7 @@ export function colabUploadAccess(options: {
   pythonPath: string
   sessionsJsonPath: string
   sessionName: string
+  endpoint?: string
   env: Record<string, string>
 }): UploadAccess {
   let cached: { baseUrl: string; proxyToken: string; checkedAt: number } | undefined
@@ -24,7 +30,7 @@ export function colabUploadAccess(options: {
     signal.throwIfAborted()
     if (cached && Date.now() - cached.checkedAt < 60_000) return cached
     try {
-      const { stdout } = await execFileAsync(options.pythonPath, ['-c', lookup, options.sessionsJsonPath, options.sessionName], {
+      const { stdout } = await execFileAsync(options.pythonPath, ['-c', lookup, options.sessionsJsonPath, options.sessionName, options.endpoint ?? ''], {
         env: options.env, signal, timeout: 30_000, maxBuffer: 64 * 1024, windowsHide: true
       })
       const { url, token } = JSON.parse(stdout.trim()) as { url: string; token: string }

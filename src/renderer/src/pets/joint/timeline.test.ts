@@ -8,11 +8,19 @@ import { bodyPoint, skinPoint } from './geometry'
 import { createRigMesh, paintRigVertices } from './mesh'
 import { jointHitPath, sampleJointVisit } from './timeline'
 
-const ids = ['xiao-kun', 'ikun', 'whale-girl']
+const ids = ['xiao-kun', 'ikun', 'whale-girl', 'kurocat']
 const pets = ids.map((id): PetSummary => ({ ...JSON.parse(readFileSync(`resources/pets/${id}/pet.json`, 'utf8')),
   id: `kun:${id}`, sourceId: id, source: 'kun-builtin', available: true, sourceMissing: false }))
-const casts = [...pets.flatMap((a) => pets.filter((b) => b !== a).map((b) => [a, b])), pets, [pets[2], pets[0], pets[1]], [pets[1], pets[2], pets[0]]]
-function input(scene: PetJointSceneId, cast = pets, progress = .5) {
+const defaultTrio = pets.slice(0, 3)
+const casts = [
+  ...pets.flatMap((a) => pets.filter((b) => b !== a).map((b) => [a, b])),
+  defaultTrio,
+  [pets[2], pets[0], pets[1]],
+  [pets[1], pets[2], pets[0]],
+  [pets[3], pets[0], pets[2]],
+  [pets[0], pets[3], pets[1]]
+]
+function input(scene: PetJointSceneId, cast = defaultTrio, progress = .5) {
   const duration = PET_SCENES[scene].duration
   const visit: PetVisit = { id: 1, scene, primaryId: cast[0].id, guestIds: cast.slice(1).map((p) => p.id),
     reason: 'manual', seed: .7, startedAt: 1000, playUntil: 2600 + duration, plannedPlayUntil: 2600 + duration, endsAt: 4200 + duration }
@@ -46,7 +54,7 @@ describe('one shared pet world', () => {
   })
 
   it('makes the same impact move the shared blanket, star and every participant', () => {
-    const before = sampleJointVisit(input('cheer', pets, .41)), impact = sampleJointVisit(input('cheer', pets, .44))
+    const before = sampleJointVisit(input('cheer', defaultTrio, .41)), impact = sampleJointVisit(input('cheer', defaultTrio, .44))
     expect(impact.blanket!.sag).toBeGreaterThan(before.blanket!.sag)
     expect(impact.actors.every((a, i) => a.crouch > before.actors[i].crouch)).toBe(true)
     for (const point of impact.blanket!.points) {

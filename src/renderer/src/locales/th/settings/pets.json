@@ -15,9 +15,11 @@
   "petsImportErrors": "ข้อผิดพลาดในการนำเข้า",
   "petsShow": "แสดงสัตว์เลี้ยงบนเดสก์ท็อป",
   "petsImportCodex": "นำเข้าสัตว์เลี้ยงจาก Codex อัตโนมัติ",
+  "petsImportKurocat": "นำเข้าสัตว์เลี้ยงและปลั๊กอินจาก KuroCat อัตโนมัติ",
   "petsRefresh": "รีเฟรช",
   "petsOpenKunDir": "เปิดโฟลเดอร์สัตว์เลี้ยงของ Kun",
   "petsOpenCodexDir": "เปิดโฟลเดอร์สัตว์เลี้ยงของ Codex",
+  "petsOpenKurocatDir": "เปิดโฟลเดอร์ KuroCat",
   "petsSourceMissing": "ไม่มีแพ็กเกจต้นทาง",
   "petsReport": "ล้มเหลว {{failed}} หายไป {{missing}}",
   "petsContextSettings": "ตั้งค่า",
@@ -25,6 +27,7 @@
   "petsSource": {
     "kun-builtin": "ในตัว",
     "kun-local": "ในเครื่อง",
-    "codex-custom": "Codex"
+    "codex-custom": "Codex",
+    "kurocat-custom": "KuroCat"
   }
 }

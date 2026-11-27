@@ -20,6 +20,8 @@ Modules follow business capabilities, not delivery milestones. Keep each maintai
 | `messages/` | Message reads/search, history versions and bounded external-source content |
 | `execution/` | Queue operations, steering, resume and stop |
 | `goals/` | Task goal reads and updates |
+| `todos/` | Read-only session execution-task and plan checklist projections |
+| `project-board/` | Authorized project-scoped board snapshots, summaries and CAS mutations |
 | `files/` | Authorized project files, attachment admission, local artifacts and transfer receipts |
 | `approvals/` | Protected approval preparation/decisions and supplemental input |
 | `attention/` | Pending-work projections |

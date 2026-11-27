@@ -110,8 +110,14 @@ export function buildColabToolProviders(options?: {
         },
         accelerator: {
           type: 'string',
-          enum: ['T4', 'L4', 'A100', 'CPU'],
-          description: 'Colab hardware accelerator. Defaults to T4.'
+          enum: ['T4', 'L4', 'G4', 'A100', 'H100', 'V6E1', 'V5E1', 'CPU'],
+          description:
+            'Colab hardware accelerator: GPUs T4 (15GB), L4 (24GB), G4 (96GB), A100 (40/80GB), H100 (80GB); TPUs V6E1 (v6e-1), V5E1 (v5e-1); or CPU. Defaults to T4.'
+        },
+        highMem: {
+          type: 'boolean',
+          description:
+            'Request a High-RAM VM shape (--high-mem) when supported by the accelerator (CPU, T4, A100).'
         },
         syncPaths: {
           type: 'array',
@@ -165,14 +171,25 @@ export function buildColabToolProviders(options?: {
       const cmd = typeof args.entryCommand === 'string' ? args.entryCommand : 'python train.py'
       let requireUser = true
       let connSummary = '当前工作区默认连接'
-      let rateCu = accel === 'A100' ? 11.8 : accel === 'L4' ? 4.8 : accel === 'CPU' ? 0.1 : 1.8
+      const defaultRates: Record<string, number> = {
+        T4: 1.8,
+        L4: 4.8,
+        G4: 8.8,
+        A100: 11.8,
+        H100: 18.1,
+        V6E1: 4.1,
+        V5E1: 2.9,
+        CPU: 0.1
+      }
+      let rateCu = defaultRates[accel] ?? 1.8
+      let accelLabel = accel === 'V6E1' ? 'v6e-1 TPU' : accel === 'V5E1' ? 'v5e-1 TPU' : accel
       let balanceSuffix = ''
 
       try {
         const preview = await callColabBridge<{
           requireApprovalForAgent: boolean
           connection: { name: string; email: string; balanceCu: number | null } | null
-          acceleratorSpec: { estimatedCuPerHour: number }
+          acceleratorSpec: { estimatedCuPerHour: number; fullLabel?: string }
         }>(
           binding,
           '/v1/colab/preview',
@@ -185,6 +202,7 @@ export function buildColabToolProviders(options?: {
         )
         requireUser = preview.requireApprovalForAgent
         rateCu = preview.acceleratorSpec?.estimatedCuPerHour ?? rateCu
+        accelLabel = preview.acceleratorSpec?.fullLabel ?? accelLabel
         if (preview.connection) {
           connSummary = `${preview.connection.name} · ${preview.connection.email}`
           if (preview.connection.balanceCu !== null) {
@@ -197,10 +215,11 @@ export function buildColabToolProviders(options?: {
 
       const maxCu = Number((rateCu * maxHours).toFixed(1))
       const mountDrive = args.mountDrive !== false
+      const highMemSuffix = args.highMem === true ? '（高内存）' : ''
       const userReason = typeof args.reason === 'string' && args.reason.trim() ? args.reason.trim() : ''
       const fullReason = [
         `连接：${connSummary}`,
-        `加速器：${accel} · ~${rateCu} CU/h`,
+        `加速器：${accelLabel}${highMemSuffix} · ~${rateCu} CU/h`,
         ...(mountDrive ? ['云盘：自动挂载 /content/drive（持久化模型与 Checkpoint）'] : []),
         `命令：${cmd}`,
         `上限：${maxHours} 小时 · 最多 ~${maxCu} CU${balanceSuffix}`,
@@ -252,6 +271,7 @@ export function buildColabToolProviders(options?: {
             workspaceRoot: context.workspace || '',
             entryCommand: args.entryCommand,
             accelerator: args.accelerator ?? 'T4',
+            ...(typeof args.highMem === 'boolean' ? { highMem: args.highMem } : {}),
             syncPaths: Array.isArray(args.syncPaths) ? args.syncPaths : [],
             outputRemoteDir: args.outputRemoteDir ?? 'outputs/',
             outputLocalDir: args.outputLocalDir ?? './outputs',

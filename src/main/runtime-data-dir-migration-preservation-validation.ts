@@ -2,6 +2,7 @@ import {
   readFileSync
 } from 'node:fs'
 import {
+  dirname,
   join
 } from 'node:path'
 import {
@@ -31,10 +32,8 @@ import {
   updatePreservationJournal
 } from './runtime-data-dir-migration-journal-preservation'
 import {
-  inventoriesEqual,
   readSettingsSelection,
   runtimeStoreInventory,
-  runtimeTreeFingerprint,
   threadIds
 } from './runtime-data-dir-migration-inventory'
 import {
@@ -90,7 +89,7 @@ export function assertPreservationSettingsSelectionStable(
 export function writePreservationReport(
   userDataPath: string,
   journal: PreservationJournal,
-  extra: Record<string, unknown> = {}
+  preservedPath = canonicalLegacyKunDataDir(dirname(dirname(journal.targetPath)))
 ): string {
   const reportPath = join(userDataPath, PRESERVATION_REPORT_FILE_NAME)
   writeDurableJson(reportPath, {
@@ -117,11 +116,18 @@ export function writePreservationReport(
     sqliteQuickCheck: journal.sqliteQuickCheck,
     completedAt: journal.completedAt,
     runtimeVerifiedAt: journal.runtimeVerifiedAt,
+    runtimeVerificationInventory: journal.runtimeVerificationInventory,
     runtimeVerificationAttempts: journal.runtimeVerificationAttempts,
     runtimeVerificationLastAttemptAt: journal.runtimeVerificationLastAttemptAt,
     runtimeVerificationMissingThreadIds: journal.runtimeVerificationMissingThreadIds,
     runtimeVerificationStoppedAt: journal.runtimeVerificationStoppedAt,
-    ...extra
+    exactPreMigrationSnapshot: journal.provenance !== 'reconstructed-from-current',
+    ...(journal.provenance === 'no-legacy-source' ? { sourceExisted: false } : {}),
+    ...(journal.provenance === 'reconstructed-from-current' ? {
+      reconstructedPath: preservedPath,
+      warning: 'The version-2 migration did not retain an independent original; ' +
+        'this directory was reconstructed from the current store.'
+    } : {})
   })
   return reportPath
 }
@@ -211,38 +217,6 @@ export function validateHistoryPreservingCandidate(
   }
 }
 
-export function logPreservedHistoryDrift(
-  journal: PreservationJournal,
-  preservedPath: string,
-  recordedFingerprint: string | undefined,
-  options: PreservationMigrationOptions
-): void {
-  const requireFullVerification =
-    !journal.runtimeVerifiedAt ||
-    process.env.KUN_VERIFY_PRESERVED_HISTORY === '1'
-  if (requireFullVerification) {
-    const current = runtimeTreeFingerprint(preservedPath)
-    if (recordedFingerprint && current.fingerprint !== recordedFingerprint) {
-      options.log('legacy-migration: preserved Runtime history fingerprint changed', {
-        preservedPath,
-        recordedFingerprint,
-        currentFingerprint: current.fingerprint,
-        verification: 'full-fingerprint'
-      })
-    }
-    return
-  }
-  const currentInventory = runtimeStoreInventory(preservedPath)
-  if (!inventoriesEqual(currentInventory, journal.sourceInventory)) {
-    options.log('legacy-migration: preserved Runtime history inventory changed', {
-      preservedPath,
-      recordedInventory: journal.sourceInventory,
-      currentInventory,
-      verification: 'inventory'
-    })
-  }
-}
-
 export function maintainCompletedPreservationMigration(
   initialJournal: PreservationJournal,
   options: PreservationMigrationOptions,
@@ -275,33 +249,14 @@ export function maintainCompletedPreservationMigration(
     if (selection.authority === 'unknown') {
       throw new Error('could not determine Runtime data authority from the active settings source')
     }
+    const preservedPath = canonicalLegacyKunDataDir(options.homeDir, options.platform)
     if (journal.provenance === 'original-legacy-source') {
       if (pathState(journal.sourcePath) !== 'dir') {
         throw new Error('preserved legacy Runtime source is no longer a real directory')
       }
-      if (!skipPreservedHistoryDriftCheck) {
-        logPreservedHistoryDrift(
-          journal,
-          journal.sourcePath,
-          journal.sourceFingerprint,
-          options
-        )
-      }
     } else if (journal.provenance === 'reconstructed-from-current') {
-      const reconstructedPath = canonicalLegacyKunDataDir(
-        options.homeDir,
-        options.platform
-      )
-      if (pathState(reconstructedPath) !== 'dir') {
+      if (pathState(preservedPath) !== 'dir') {
         throw new Error('reconstructed legacy Runtime history is no longer a real directory')
-      }
-      if (!skipPreservedHistoryDriftCheck) {
-        logPreservedHistoryDrift(
-          journal,
-          reconstructedPath,
-          journal.candidateFingerprint,
-          options
-        )
       }
       const v2JournalPath = join(options.userDataPath, JOURNAL_FILE_NAME)
       const v2Journal = readJournal(v2JournalPath)
@@ -332,24 +287,13 @@ export function maintainCompletedPreservationMigration(
       )
       rewriteSettingsToCurrent(selection.writePath)
     }
-    const reportPath = writePreservationReport(
-      options.userDataPath,
-      journal,
-      journal.provenance === 'reconstructed-from-current'
-        ? {
-            exactPreMigrationSnapshot: false,
-            reconstructedPath: canonicalLegacyKunDataDir(
-              options.homeDir,
-              options.platform
-            ),
-            warning:
-              'The version-2 migration did not retain an independent original; ' +
-              'this directory was reconstructed from the current store.'
-          }
-        : journal.provenance === 'original-legacy-source'
-          ? { exactPreMigrationSnapshot: true }
-          : { exactPreMigrationSnapshot: true, sourceExisted: false }
-    )
+    const reportPath = writePreservationReport(options.userDataPath, journal, preservedPath)
+    // Activation has already checked the candidate bytes. A later audit of the
+    // independent backup can report drift once the desktop is ready.
+    const checkContents = process.env.KUN_VERIFY_PRESERVED_HISTORY === '1' ||
+      (!journal.runtimeVerifiedAt && !journal.runtimeVerificationStoppedAt)
+    const fingerprint = journal.provenance === 'reconstructed-from-current'
+      ? journal.candidateFingerprint : journal.sourceFingerprint
     return {
       status: 'completed',
       authority: 'current',
@@ -359,7 +303,14 @@ export function maintainCompletedPreservationMigration(
         ? { destinationBackupPath: journal.destinationBackupPath }
         : {}),
       journalPath,
-      reportPath
+      reportPath,
+      ...(!skipPreservedHistoryDriftCheck && journal.provenance !== 'no-legacy-source' ? {
+        preservedHistoryCheck: {
+          path: preservedPath,
+          inventory: journal.sourceInventory,
+          ...(checkContents ? { fingerprint } : {})
+        }
+      } : {})
     }
   } catch (error) {
     return {

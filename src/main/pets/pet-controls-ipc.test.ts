@@ -8,7 +8,8 @@ function fixture() {
       event.isMainFrame && kinds.includes(event.senderKind),
     startChat: vi.fn(async (_prompt: string) => ({ ok: true })),
     getVoiceInputAvailable: vi.fn(async () => true),
-    setBubblesCollapsed: vi.fn(async (_collapsed: boolean) => undefined)
+    setBubblesCollapsed: vi.fn(async (_collapsed: boolean) => undefined),
+    setPetSoundEnabled: vi.fn(async (enabled: boolean) => ({ soundEnabled: enabled }))
   }
   return { api, handlers: petIpcHandlers(api as unknown as PetIpcApi) }
 }
@@ -39,5 +40,8 @@ describe('pet quick controls IPC', () => {
     await handlers[PET_IPC.overlayBubblesCollapsed](overlay, true)
     expect(api.setBubblesCollapsed).toHaveBeenCalledWith(true)
     await expect(handlers[PET_IPC.overlayBubblesCollapsed](overlay, 'true')).rejects.toThrow('invalid collapsed')
+    await expect(handlers[PET_IPC.setPetSoundEnabled](overlay, false)).resolves.toEqual({ soundEnabled: false })
+    expect(api.setPetSoundEnabled).toHaveBeenCalledWith(false)
+    await expect(handlers[PET_IPC.setPetSoundEnabled](overlay, 'false')).rejects.toThrow('invalid pet sound')
   })
 })

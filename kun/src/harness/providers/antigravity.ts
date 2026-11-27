@@ -109,6 +109,7 @@ export const ANTIGRAVITY_MODULE: AgentProviderModule = {
     mcpToolListMeta: selectAntigravityMcpToolListMeta,
     continuePendingTools: true,
     emptyEffortsWithoutThoughtLevel: true,
+    probeAllModelEfforts: true,
     managesReasoningBudget: isAntigravityOrchestrator,
     turnInstructions: [
       'In this ACP session, wait for native background commands and scheduled checks to finish before ending your response. Use the existing task id to wait for or inspect the result; do not end with a promise to continue automatically. A native schedule is not a Kun-owned continuation.'

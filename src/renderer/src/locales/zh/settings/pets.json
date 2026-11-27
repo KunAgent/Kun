@@ -15,9 +15,11 @@
   "petsImportErrors": "导入错误",
   "petsShow": "在桌面显示宠物",
   "petsImportCodex": "自动导入 Codex 宠物",
+  "petsImportKurocat": "自动导入 KuroCat 宠物与插件",
   "petsRefresh": "刷新",
   "petsOpenKunDir": "打开 Kun 宠物目录",
   "petsOpenCodexDir": "打开 Codex 宠物目录",
+  "petsOpenKurocatDir": "打开 KuroCat 目录",
   "petsSourceMissing": "原始宠物包已缺失",
   "petsReport": "{{failed}} 个失败，{{missing}} 个来源缺失",
   "petsContextSettings": "设置",
@@ -25,6 +27,7 @@
   "petsSource": {
     "kun-builtin": "内置",
     "kun-local": "本地",
-    "codex-custom": "Codex"
+    "codex-custom": "Codex",
+    "kurocat-custom": "KuroCat"
   }
 }

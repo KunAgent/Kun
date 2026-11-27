@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parsePetPresenceSignal } from './pets-interactions'
 import { parsePetNativeActivity } from './pets-global-activity'
-import { PetKeyboardState, petTypingMaskForCode, updatePetTyping } from './pets-typing'
+import { PetKeyboardState, petTypingMaskForCode, petTypingZoneForCode, updatePetTyping } from './pets-typing'
 
 describe('keyboard-to-paw state', () => {
   it('groups physical positions without translating characters or keyboard layouts', () => {
@@ -37,5 +37,29 @@ describe('keyboard-to-paw state', () => {
       .toEqual({ type: 'keys', sequence: 1, held: 3, tap: 3 })
     for (const value of [-1, 4, .5, NaN, '1']) expect(parsePetPresenceSignal({ type: 'keyboard', source: 'editor', held: value, tap: 1 })).toBeNull()
     expect(parsePetNativeActivity('{"type":"keys","sequence":-1,"held":1,"tap":1}')).toBeNull()
+  })
+
+  it('quantizes physical keys into coarse 6x3 zones and sanitizes mouse button/wheel signals', () => {
+    expect(petTypingZoneForCode('KeyQ')).toEqual({ col: 0, row: 0 })
+    expect(petTypingZoneForCode('KeyF')).toEqual({ col: 2, row: 1 })
+    expect(petTypingZoneForCode('KeyJ')).toEqual({ col: 3, row: 1 })
+    expect(petTypingZoneForCode('Enter')).toEqual({ col: 5, row: 1 })
+    expect(petTypingZoneForCode('Space')).toEqual({ col: 2, row: 2 })
+    expect(petTypingZoneForCode('ShiftLeft')).toBeUndefined()
+
+    const spaceHit = updatePetTyping(undefined, 3, 3, 1200, { col: 2, row: 2 })
+    expect(spaceHit.left).toMatchObject({ col: 2, row: 2 })
+    expect(spaceHit.right).toMatchObject({ col: 3, row: 2 })
+
+    expect(parsePetPresenceSignal({ type: 'keyboard', source: 'editor', held: 1, tap: 1, zone: { col: 1, row: 2, key: 'x' }, text: 'secret' }))
+      .toEqual({ type: 'keyboard', source: 'editor', held: 1, tap: 1, zone: { col: 1, row: 2 } })
+    expect(parsePetPresenceSignal({ type: 'keyboard', source: 'editor', held: 1, tap: 1, zone: { col: 9, row: 0 } }))
+      .toEqual({ type: 'keyboard', source: 'editor', held: 1, tap: 1 })
+
+    expect(parsePetNativeActivity('{"type":"mouse","sequence":3,"buttons":1,"wheel":-1,"x":500,"y":300}'))
+      .toEqual({ type: 'mouse', sequence: 3, buttons: 1, wheel: -1 })
+    expect(parsePetNativeActivity('{"type":"mouse","sequence":1,"buttons":9,"wheel":0}')).toBeNull()
+    expect(parsePetPresenceSignal({ type: 'mouse', source: 'editor', buttons: 2, wheel: 1, clientX: 99 }))
+      .toEqual({ type: 'mouse', source: 'editor', buttons: 2, wheel: 1 })
   })
 })
