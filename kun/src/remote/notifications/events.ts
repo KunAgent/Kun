@@ -13,7 +13,7 @@ const ID = /^[A-Za-z0-9_-]{1,128}$/
 const MAX_NOTIFICATION_TITLE_CHARS = 80
 export function sanitizeNotificationTitle(raw?: string | null): string | undefined {
   if (typeof raw !== 'string') return undefined
-  const cleaned = raw.replace(/[\u0000-\u001F\u007F-\u009F]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const cleaned = raw.replace(/[\p{Cc}\s]+/gu, ' ').trim()
   if (!cleaned) return undefined
   const chars = Array.from(cleaned)
   return chars.length > MAX_NOTIFICATION_TITLE_CHARS

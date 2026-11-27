@@ -5,10 +5,12 @@ import { MOBILE_REMOTE_SCOPES } from '@shared/mobile-link-scopes'
 import { MobileScopeOptions, selectMobileScope } from './MobileScopeOptions'
 
 describe('trusted desktop advanced mobile permissions', () => {
+  const advancedScopeCount = MOBILE_REMOTE_SCOPES.filter(scope => scope !== 'personal').length
   it('checks all advanced options with default mobile scopes and reports narrowed states accurately', () => {
     const fullHtml = renderToStaticMarkup(createElement(MobileScopeOptions, { zh: true, value: MOBILE_REMOTE_SCOPES, onChange: () => {} }))
-    expect(fullHtml.match(/type="checkbox"/g)).toHaveLength(9)
-    expect(fullHtml.match(/checked=""/g)).toHaveLength(9)
+    expect(fullHtml.match(/type="checkbox"/g)).toHaveLength(advancedScopeCount)
+    expect(fullHtml.match(/checked=""/g)).toHaveLength(advancedScopeCount)
+    expect(fullHtml).toContain('手动输入 Mac 登录密码解锁')
     expect(fullHtml).toContain('已全部开启')
     expect(fullHtml).toContain('默认开启')
     expect(fullHtml).toContain('桌面自动运行')
@@ -28,6 +30,6 @@ describe('trusted desktop advanced mobile permissions', () => {
     expect(selected).toEqual(['personal'])
     const html = renderToStaticMarkup(createElement(MobileScopeOptions, { zh: false,
       value: ['personal', 'groups.read'], onChange: () => {}, disabled: true }))
-    expect(html).toContain('checked=""'); expect(html.match(/disabled=""/g)).toHaveLength(9)
+    expect(html).toContain('checked=""'); expect(html.match(/disabled=""/g)).toHaveLength(advancedScopeCount)
   })
 })

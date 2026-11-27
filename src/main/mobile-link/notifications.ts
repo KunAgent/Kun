@@ -5,7 +5,7 @@ type Intent = { eventId: string; resourceKind: 'agent' | 'code'; resourceId: str
 const REQUIRED_KEYS = ['eventId', 'kind', 'resourceId', 'resourceKind']
 const ALLOWED_KEYS = new Set([...REQUIRED_KEYS, 'title'])
 function validTitle(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0 && Array.from(value.trim()).length <= 80 && !/[\u0000-\u001F\u007F-\u009F]/.test(value)
+  return typeof value === 'string' && value.trim().length > 0 && Array.from(value.trim()).length <= 80 && !/\p{Cc}/u.test(value)
 }
 function intent(raw: unknown): Intent {
   const p = raw as Record<string, unknown>
@@ -117,7 +117,8 @@ export class MobileNotifications {
                       if (payload.title && (error as { status?: number })?.status === 400) {
                         const { title: _title, ...legacy } = payload
                         payload = legacy
-                        try { await api.request('/notifications/events', 'POST', payload, false, signal); break } catch {}
+                        try { await api.request('/notifications/events', 'POST', payload, false, signal); break }
+                        catch { /* Retry the title-free payload with the same backoff and failure reporting below. */ }
                       }
                       if (retry === 2) this.deps.diagnostic?.('NOTIFICATION_POST_FAILED'); else await delay(2000, signal)
                     }

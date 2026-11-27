@@ -1,3 +1,4 @@
+import { ipcMain } from 'electron'
 import { afterEach, expect, it, vi } from 'vitest'
 import { admitControlOperation, pauseControlAdmission, resumeControlAdmission } from '../control-host/admission'
 const h = vi.hoisted(() => ({ resource: vi.fn(), windows: [] as any[], handlers: new Map<string, (...args: any[]) => any>() }))
@@ -11,12 +12,19 @@ vi.mock('electron', async () => {
     constructor() { super(); h.windows.push(this) }
     destroy() { this.destroyed = true; this.emit('closed') }
     isDestroyed() { return this.destroyed }
+    isVisible() { return true }
+    isMinimized() { return false }
     isFullScreen() { return this.full }
     show() {}
   }
   return { app: {getAppPath: () => '/app'}, BrowserWindow: Window,
-    ipcMain: {handle: (name: string, run: (...args: any[]) => any) => h.handlers.set(name, run),
-      removeHandler: (name: string) => h.handlers.delete(name), on: vi.fn(), removeListener: vi.fn()}, powerMonitor: new EventEmitter() }
+    ipcMain: Object.assign(new EventEmitter(), {handle: (name: string, run: (...args: any[]) => any) => h.handlers.set(name, run),
+      removeHandler: (name: string) => h.handlers.delete(name)}), powerMonitor: new EventEmitter() }
+})
+vi.mock('node:child_process', async importOriginal => {
+  const { EventEmitter } = await import('node:events')
+  // The Linux session watcher belongs to the OS, not to the mocked viewer lifecycle.
+  return { ...await importOriginal<typeof import('node:child_process')>(), spawn: () => new EventEmitter() }
 })
 vi.mock('../control-host/runtime-host', () => ({ controlRuntimeHost: () => ({viewerResource: h.resource}) }))
 vi.mock('../control-host/viewer-resources', () => ({ loadControlViewer: vi.fn(async () => {}), secureControlViewer: vi.fn() }))
@@ -77,15 +85,19 @@ it('waits for native fullscreen, coalesces clicks and follows an exit performed 
   await expect(again).rejects.toThrow('DESKTOP_CANCELLED')
 })
 it('reports a native fullscreen transition that never completed and allows another request', async () => {
-  fixture(); await viewer!.open('host')
-  const window = h.windows[0], contents = window.webContents
   vi.useFakeTimers()
   try {
-    const finished = h.handlers.get('computer-viewer:fullscreen')!({sender:contents,senderFrame:contents.mainFrame}, true)
-    const rejected = expect(finished).rejects.toThrow('DESKTOP_FULLSCREEN_FAILED')
-    await vi.advanceTimersByTimeAsync(4500)
+    fixture(); await viewer!.open('host')
+    const window = h.windows[0], contents = window.webContents
+    const event = { sender: contents, senderFrame: contents.mainFrame }
+    const toggle = () => h.handlers.get('computer-viewer:fullscreen')!(event, true)
+    const rejected = expect(toggle()).rejects.toThrow('DESKTOP_FULLSCREEN_FAILED')
+    for (let elapsed = 0; elapsed < 4500; elapsed += 500) {
+      ipcMain.emit('computer-viewer:heartbeat', event)
+      await vi.advanceTimersByTimeAsync(500)
+    }
     await rejected
-    const retry = h.handlers.get('computer-viewer:fullscreen')!({sender:contents,senderFrame:contents.mainFrame}, true)
+    const retry = toggle()
     window.full = true; window.emit('enter-full-screen')
     await expect(retry).resolves.toBe(true)
   } finally { vi.useRealTimers() }
