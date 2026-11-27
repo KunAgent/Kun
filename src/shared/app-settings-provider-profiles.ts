@@ -411,10 +411,7 @@ export function withPresetModelProfiles(
   for (const [rawModelId, presetProfile] of Object.entries(presetProfiles)) {
     const modelId = normalizeModelKey(rawModelId)
     if (!modelId) continue
-    if (knownModelKeys.size > 0 && !knownModelKeys.has(modelId)) {
-      const aliases = normalizeProviderModels(presetProfile.aliases)
-      if (!aliases.some((alias) => knownModelKeys.has(normalizeModelKey(alias)))) continue
-    }
+    if (modelId !== '*' && !knownModelKeys.has(modelId)) continue
     merged[modelId] = normalizeModelProviderModelProfile({ ...presetProfile, evidence: presetProfile.evidence ?? metadataEvidence(presetProfile, 'adapter') })
   }
   const profiles = { ...stored }

@@ -24,10 +24,11 @@ concurrency:
 jobs:
   visual:
     name: Real Electron Rooms-to-Agent flow
-    runs-on: macos-latest
+    # Leave native/esbuild headroom around the 6 GiB renderer heap on a 14 GB runner.
+    runs-on: macos-15-intel
     timeout-minutes: 35
     env:
-      # Match the successful native workspace build on the same macOS runner.
+      # The renderer needs this heap in addition to native build memory.
       NODE_OPTIONS: '--max-old-space-size=6144'
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
     steps:

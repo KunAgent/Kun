@@ -63,6 +63,7 @@ import type {
   GuiSharedSettings
 } from './gui-settings-bridge-catalog.js'
 import { assertSupportedGuiSettingsVersion } from './gui-settings-schema.js'
+import { mergeGuiProfilePreferences, selectGuiModelProfiles } from '../config/gui-model-profile-selection.js'
 
 export async function projectModelConnectionsToGuiSettings(
   settings: GuiSharedSettings,
@@ -73,7 +74,8 @@ export async function projectModelConnectionsToGuiSettings(
   if (!metadata.isFile() || metadata.size > MAX_GUI_SETTINGS_BYTES) {
     throw new Error(`GUI settings file is unavailable: ${settings.settingsPath}`)
   }
-  const parsed = JSON.parse(await readFile(settings.settingsPath, 'utf8')) as unknown
+  const previousText = await readFile(settings.settingsPath, 'utf8')
+  const parsed = JSON.parse(previousText) as unknown
   if (!isRecordValue(parsed)) throw new Error('GUI settings must be a JSON object')
   assertSupportedGuiSettingsVersion(parsed, settings.settingsPath)
   const providerSettings = isRecordValue(parsed.provider) ? { ...parsed.provider } : {}
@@ -102,7 +104,7 @@ export async function projectModelConnectionsToGuiSettings(
       endpointFormat: profile.endpointFormat,
       kind: profile.kind,
       models: [...profile.models],
-      modelProfiles: projectGuiModelProfiles(existing.modelProfiles, profile.modelCapabilities)
+      modelProfiles: projectGuiModelProfiles(existing.modelProfiles, profile.models, profile.modelCapabilities)
     }
   })
   const agents = isRecordValue(parsed.agents) ? { ...parsed.agents } : {}
@@ -127,7 +129,8 @@ export async function projectModelConnectionsToGuiSettings(
       }
     }
   }
-  await writeAtomicOwnerOnly(settings.settingsPath, `${JSON.stringify(next, null, 2)}\n`)
+  const nextText = `${JSON.stringify(next, null, 2)}\n`
+  if (previousText !== nextText) await writeAtomicOwnerOnly(settings.settingsPath, nextText)
   return {
     ...settings,
     defaultProviderId: snapshot.defaultProviderId ?? '',
@@ -146,7 +149,7 @@ export async function projectModelConnectionsToGuiSettings(
         endpointFormat: profile.endpointFormat,
         kind: profile.kind,
         models: [...profile.models],
-        modelProfiles: projectGuiModelProfiles(undefined, profile.modelCapabilities)
+        modelProfiles: projectGuiModelProfiles(existingById.get(profile.id)?.modelProfiles, profile.models, profile.modelCapabilities)
       }
     })
   }
@@ -266,6 +269,7 @@ export async function syncGuiProviderCatalogToConfig(
         ...(baseUrl ? { baseUrl } : {}),
         endpointFormat: provider.endpointFormat ?? current?.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
         models: provider.models,
+        ...(current?.modelProfiles ? { modelProfiles: selectGuiModelProfiles(current.modelProfiles, provider.models) } : {}),
         modelCapabilities: Object.fromEntries(
           provider.models.map((model) => [model, guiModelCapability(provider, model)])
         ),
@@ -312,8 +316,9 @@ export async function syncGuiProviderCatalogToConfig(
     const nextModels = ModelConfigSchema.parse({
       ...existingModels,
       profiles: {
-        ...existingProfiles,
-        ...guiModelProfilesForConfig(settings)
+        ...selectGuiModelProfiles(existingProfiles, Object.values(providers).flatMap(provider => provider.models ?? [])),
+        ...Object.fromEntries(Object.entries(guiModelProfilesForConfig(settings)).map(([id, profile]) =>
+          [id, mergeGuiProfilePreferences(existingProfiles[id], profile)]))
       }
     })
     // Preserve capability sections written by a newer GUI. This bridge owns

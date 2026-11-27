@@ -1,4 +1,5 @@
 import { migrateModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
+import { selectGuiModelProfiles } from '../../kun/src/config/gui-model-profile-selection.js'
 import { ModelCapabilityFactsSchema, ModelReasoningCapabilityMetadata } from '../../kun/src/contracts/capabilities-core.js'
 import { ModelMetadataEvidenceSchema } from '../../kun/src/contracts/model-metadata-evidence.js'
 import {
@@ -108,18 +109,12 @@ export function normalizeModelProviderModelProfiles(
 ): Record<string, ModelProviderModelProfileV1> {
   const profiles: Record<string, ModelProviderModelProfileV1> = {}
   if (!input || typeof input !== 'object' || Array.isArray(input)) return profiles
-  const knownModelKeys = new Set(models.map(normalizeModelKey).filter(Boolean))
   for (const [rawModelId, rawProfile] of Object.entries(input)) {
     const modelId = normalizeModelKey(rawModelId)
     if (!modelId || rawProfile === null) continue
-    // `*` holds provider-wide facts for models without a profile of their own.
-    if (knownModelKeys.size > 0 && !knownModelKeys.has(modelId) && modelId !== PROVIDER_WIDE_MODEL_KEY) {
-      const aliases = normalizeProviderModels(rawProfile.aliases)
-      if (!aliases.some((alias) => knownModelKeys.has(normalizeModelKey(alias)))) continue
-    }
     profiles[modelId] = normalizeModelProviderModelProfile(rawProfile)
   }
-  return profiles
+  return selectGuiModelProfiles(profiles, models)
 }
 
 export function normalizeModelProviderModelProfile(
