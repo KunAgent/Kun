@@ -107,7 +107,9 @@ describe('Code harness discovery and validation', () => {
     expect(await h.service.resolve(h.request())).toMatchObject({ harnessId: 'codex' })
     expect(() => h.service.assertCapabilityCeiling(h.request(), ceiling)).toThrow('cannot enforce')
     const candidates = await h.service.list(undefined, ceiling)
-    expect(candidates.agents.find((agent) => agent.harnessId === 'codex')?.available).toBe(false)
+    expect(candidates.agents.find((agent) => agent.harnessId === 'codex')).toMatchObject({
+      available: false, models: [], reason: expect.stringContaining('choose an available Kun route from list_code_harnesses')
+    })
     expect(candidates.agents.find((agent) => agent.harnessId === 'kun')?.available).toBe(true)
   })
 
