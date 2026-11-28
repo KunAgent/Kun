@@ -75,6 +75,7 @@
   "roomsWorkbenchPolicyCode": "Code 任务",
   "roomsWorkbenchPolicyWork": "Work 文档",
   "roomsWorkbenchPolicyMax": "同时进行的任务数",
+  "roomsWorkbenchExternalWorkHint": "选择“只读”后，编程 Agent 可以读取 Work 文档，但不能创建或编辑文档。",
   "roomsWorkbenchPolicyHint": "关闭表示 Agent 无法使用该模式；先询问会先给你一张卡片，需你确认；直接开始只对你刚发送的消息生效，且只限你已在使用的项目。",
   "roomsWorkbenchPolicy_off": "关闭",
   "roomsWorkbenchPolicy_read": "只读",

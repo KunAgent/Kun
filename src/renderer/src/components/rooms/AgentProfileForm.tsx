@@ -9,6 +9,7 @@ import './agents.css'
 
 const DEFAULT_WORKBENCH: NonNullable<AgentIdentity['workbench']> = { code: 'confirm', work: 'read', maxActiveTasks: 3 }
 const CODE_LEVELS = ['off', 'confirm', 'auto'] as const
+const EXTERNAL_WORK_LEVELS = ['off', 'read'] as const
 const WORK_LEVELS = ['off', 'read', 'confirm', 'auto'] as const
 const lines = (text: string) => [...new Set(text.split(/[,\n]/).map((item) => item.trim()).filter(Boolean))]
 export function AgentProfileForm({ agent: initialAgent, draft, active = true, onSaved }: { agent: AgentIdentity | null; draft?: { name?: string; title?: string; instructions?: string }; active?: boolean; onSaved: (agent: AgentIdentity) => void }) {
@@ -33,7 +34,9 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
   const [skillsEnabled, setSkillsEnabled] = useState(agent?.capabilityOverrides?.skillsEnabled !== false)
   const [reviewerId, setReviewerId] = useState(agent?.reviewerAgentId), [reviewerName, setReviewerName] = useState('')
   const [memory, setMemory] = useState(agent?.memory ?? { readEnabled: true, captureEnabled: true })
-  const [workbench, setWorkbench] = useState({ ...DEFAULT_WORKBENCH, ...agent?.workbench })
+  const [workbench, setWorkbench] = useState<NonNullable<AgentIdentity['workbench']>>(() => ({
+    ...DEFAULT_WORKBENCH, ...agent?.workbench, ...(agent?.executor ? { work: agent.workbench?.work === 'read' ? 'read' : 'off' } : {})
+  }))
   const [advancedDirty, setAdvancedDirty] = useState(false)
   const [error, setError] = useState(''), [busy, setBusy] = useState(false)
   const pending = useRef<{ hash: string; id: string } | null>(null)
@@ -112,8 +115,9 @@ export function AgentProfileForm({ agent: initialAgent, draft, active = true, on
             <strong className="agent-profile-label">{t('roomsWorkbenchPolicyTitle')}</strong>
             <label className="agent-profile-field">{t('roomsWorkbenchPolicyCode')}<select value={workbench.code} onChange={(e) => setWorkbench({ ...workbench, code: e.target.value as typeof workbench.code })}>
               {CODE_LEVELS.map((level) => <option key={level} value={level}>{t('roomsWorkbenchPolicy_' + level)}</option>)}</select></label>
-            <label className="agent-profile-field">{t('roomsWorkbenchPolicyWork')}<select value={workbench.work} onChange={(e) => setWorkbench({ ...workbench, work: e.target.value as typeof workbench.work })}>
-              {WORK_LEVELS.map((level) => <option key={level} value={level}>{t('roomsWorkbenchPolicy_' + level)}</option>)}</select></label>
+            <label className="agent-profile-field">{t('roomsWorkbenchPolicyWork')}<select value={workbench.work} aria-describedby={agent?.executor ? uid + '-external-work' : undefined} onChange={(e) => setWorkbench({ ...workbench, work: e.target.value as typeof workbench.work })}>
+              {(agent?.executor ? EXTERNAL_WORK_LEVELS : WORK_LEVELS).map((level) => <option key={level} value={level}>{t('roomsWorkbenchPolicy_' + level)}</option>)}</select></label>
+            {agent?.executor ? <span id={uid + '-external-work'} className="agent-profile-hint">{t('roomsWorkbenchExternalWorkHint')}</span> : null}
             <label className="agent-profile-field">{t('roomsWorkbenchPolicyMax')}<input type="number" min={1} max={5} value={workbench.maxActiveTasks}
               onChange={(e) => setWorkbench({ ...workbench, maxActiveTasks: Math.min(5, Math.max(1, Math.round(Number(e.target.value)) || 1)) })} /></label>
             <span className="agent-profile-hint">{t('roomsWorkbenchPolicyHint')}</span>

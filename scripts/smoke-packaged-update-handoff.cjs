@@ -503,7 +503,14 @@ async function quitDesktopNormally(desktop, debuggingPort, timeoutMs) {
         // below is what actually decides success.
       }
       const waitMs = Math.min(Math.max(deadline - Date.now(), 0), 5_000)
-      if (waitMs > 0 && await waitForProcessExit(desktop.child.pid, waitMs)) return
+      if (waitMs > 0 && await waitForProcessExit(desktop.child.pid, waitMs)) {
+        if (process.platform === 'darwin') {
+          process.stdout.write(`Ordinary macOS GUI quit observed: ` +
+            `exitCode=${desktop.child.exitCode}, signal=${desktop.child.signalCode ?? 'none'}, ` +
+            `cleanupConfirmed=${desktop.output().includes('final quit: cleanupConfirmed=true')}\n`)
+        }
+        return
+      }
     }
     throw new Error(`Packaged GUI PID ${desktop.child.pid} did not exit after its ordinary quit request`)
   } finally {

@@ -17,6 +17,11 @@ describe('workbench policy', () => {
   it('defaults conservatively and hides tools the policy does not allow', () => {
     expect(resolveWorkbenchPolicy(undefined)).toEqual({ code: 'confirm', work: 'read', maxActiveTasks: 3 })
     expect(resolveWorkbenchPolicy({ code: 'nonsense' })).toEqual({ code: 'confirm', work: 'read', maxActiveTasks: 3 })
+    expect(resolveWorkbenchPolicy(undefined, 'external').work).toBe('off')
+    for (const value of [{}, { work: 'confirm' }, { work: 'auto' }, { work: 'read', code: 'invalid' }]) {
+      expect(resolveWorkbenchPolicy(value, 'external').work).toBe('off')
+    }
+    expect(resolveWorkbenchPolicy({ work: 'read' }, 'external').work).toBe('read')
     const off = workbenchToolNamesForPolicy(resolveWorkbenchPolicy({ code: 'off', work: 'off' }))
     expect(off).toEqual([])
     const read = workbenchToolNamesForPolicy(resolveWorkbenchPolicy({ code: 'off', work: 'read' }))

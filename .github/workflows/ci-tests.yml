@@ -75,6 +75,8 @@ jobs:
         working-directory: kun
         env:
           KUN_TEST_SHARD: ${{ matrix.shard }}/4
+          # Bound concurrent durable-store fixtures without extending their deadlines.
+          VITEST_MAX_WORKERS: '2'
         # Preserve the large-history regression's isolated process and Electron
         # SQLite routing; passing --shard directly to Vitest bypasses both.
         run: node scripts/run-tests.mjs

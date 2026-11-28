@@ -20,6 +20,7 @@ import { exitSecondaryDesktopInstance, startMainApp } from './main-ready'
 import { desktopProcessStack } from './runtime/desktop-process-stack'
 import { notifyApplicationQuitting } from './app-quit-signal'
 import { beginOwnedProcessShutdown } from '../../kun/src/process/owned-process.js'
+import { installMacosNativeExitGuard } from './runtime/macos-native-exit-guard'
 import {
   packagedUpdateHandoffSmokeFailure,
   packagedUpdateHandoffSmokeRequested,
@@ -60,6 +61,8 @@ export function startDesktopMainEntry(): void {
 
   let quitBarrierPromise: Promise<void> | null = null
   let quitBarrierCompleted = false
+  let quitCleanupConfirmed = false
+  installMacosNativeExitGuard(app, () => quitBarrierCompleted && quitCleanupConfirmed)
 
   app.on('before-quit', (event) => {
     if (quitBarrierCompleted) return
@@ -70,6 +73,7 @@ export function startDesktopMainEntry(): void {
     beginOwnedProcessShutdown()
     stopRuntimeWatchdog()
     stopCheckpointCleanupTimer()
+    console.info('[kun-gui] application quit: cleanup starting')
     quitBarrierPromise = (async () => {
       try {
         await stopBuiltinSimulatorEngines().catch(() => console.warn('[kun-gui] simulator cleanup was not confirmed'))
@@ -94,11 +98,12 @@ export function startDesktopMainEntry(): void {
         }
         stopRuntimeWatchdog()
         stopCheckpointCleanupTimer()
-        if (!runtimeShutdown.isStoppedForQuit) {
-          await stopManagedRuntimesForQuit().catch((error) => {
-            console.warn('[kun-gui] failed to stop Kun runtime:', error)
-          })
-        }
+        // Even an update-prepared quit must release the final session reservation.
+        await stopManagedRuntimesForQuit().then(() => {
+          quitCleanupConfirmed = runtimeShutdown.isStoppedForQuit
+        }).catch((error) => {
+          console.warn('[kun-gui] failed to stop Kun runtime:', error)
+        })
         if (runtimeShutdown.isStoppedForQuit) {
           try { releaseRuntimeDataRecoveryMigrationLock() } catch (error) {
             console.error('[kun-gui] failed to release Runtime data recovery lock during quit:', error)
@@ -106,6 +111,7 @@ export function startDesktopMainEntry(): void {
         }
       } finally {
         quitBarrierCompleted = true
+        console.info(`[kun-gui] application quit: cleanup confirmed=${quitCleanupConfirmed}`)
         app.quit()
       }
     })()

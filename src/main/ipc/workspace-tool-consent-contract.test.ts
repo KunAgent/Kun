@@ -32,6 +32,13 @@ describe('workspace smoke consent observation contract', () => {
     'observes real persisted %s events, not nonexistent room-run approval items', async (outcome) => {
       const directory = await mkdtemp(join(tmpdir(), 'workspace-consent-contract-'))
       const sessions = new FileSessionStore({ dataDir: directory })
+      if (outcome === 'allowed') {
+        const append = sessions.appendEvent.bind(sessions)
+        vi.spyOn(sessions, 'appendEvent').mockImplementationOnce(async (...args) => {
+          await new Promise(resolve => setTimeout(resolve, 200))
+          return append(...args)
+        })
+      }
       const bus = new InMemoryEventBus()
       let seq = 0
       const recorder = new RuntimeEventRecorder({ eventBus: bus, sessionStore: sessions,
@@ -139,8 +146,11 @@ describe('workspace smoke consent observation contract', () => {
         expect(gate.pending(run.threadId)).toHaveLength(1)
         const page = await roomRunItems(deps, 'room-1', 'run-1', { limit: 100, maxBytes: 262144 })
         expect(page).toMatchObject({ items: [], hasMore: false, availability: { status: 'available' } })
-        const poll = async (check: () => Promise<boolean>) => {
-          for (let attempt = 0; attempt < 20; attempt++) { if (await check()) return; await new Promise((resolve) => setTimeout(resolve, 5)) }
+        const poll = async (check: () => Promise<boolean>, timeoutMs: number) => {
+          // Real Windows appends and SSE replay can outlast twenty short polls.
+          // Keep negative fixtures bounded within the surrounding test deadline.
+          const deadline = Date.now() + Math.min(timeoutMs, 2000)
+          while (Date.now() < deadline) { if (await check()) return; await new Promise((resolve) => setTimeout(resolve, 5)) }
           throw new Error('No matching durable approval event')
         }
         const options = { page: { locator: () => card, evaluate }, roomId: 'room-1', expected, request, poll, capture: async () => {} }

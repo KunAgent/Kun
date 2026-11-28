@@ -35,7 +35,8 @@ it('routes a private chat to the coding Agent engine and posts its final reply',
   cleanup.push(async () => { await runtime.close(); await h.turns.interruptActiveTurns(); await store.close(); await rm(root, { recursive: true, force: true }) })
   runtime.agents.setExecutorValidator(async (executor) => executor)
   const { agent } = await runtime.agents.create({ clientRequestId: 'codex', name: 'Codex',
-    executor: { kind: 'harness', harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-5.5' } })
+    executor: { kind: 'harness', harnessId: 'codex', credentialMode: 'native-login', model: 'gpt-5.5' },
+    workbench: { code: 'off', work: 'read', maxActiveTasks: 1 } })
   const { room } = await openAgentConversation(runtime.agents, runtime.service, agent.id)
   const sent = await runtime.service.send(room.id, { clientRequestId: 'ask', body: 'Why does parsing fail?' })
   for (let i = 0; i < 12; i++) {
@@ -57,6 +58,12 @@ it('routes a private chat to the coding Agent engine and posts its final reply',
   expect(thread.model).toBe('gpt-5.5')
   expect(thread.mode).toBe('agent')
   expect(thread.roomContext?.blockedToolNames).toContain('send_im_message')
+  expect(thread.roomContext?.blockedToolNames).not.toContain('list_work_spaces')
+  expect(thread.roomContext?.blockedToolNames).not.toContain('search_work_documents')
+  expect(thread.roomContext?.blockedToolNames).not.toContain('read_work_document')
+  expect(thread.roomContext?.blockedToolNames).toEqual(expect.arrayContaining([
+    'create_work_document', 'propose_work_edit', 'create_work_task'
+  ]))
   expect(thread.systemPrompt).toContain('You are Codex, a coding Agent')
   expect(thread.turns[0]).toMatchObject({ harnessId: 'codex', credentialMode: 'native-login' })
   expect(prompts.join('\n')).toContain('Why does parsing fail?')
@@ -66,6 +73,41 @@ it('routes a private chat to the coding Agent engine and posts its final reply',
   const run = (await store.get<RoomRunRecord>('room_run', request.privateRunId!))!.value
   expect(run).toMatchObject({ outcome: 'published', publishedMessageId: messages[0].id })
   expect(run.communicationRequired).toBe(false)
+
+  // The queued request froze read. A later profile edit must not bind that
+  // snapshot to the ID a new, disabled request is about to use.
+  const beforeEdit = await runtime.service.send(room.id, { clientRequestId: 'queued-with-read', body: 'Check another file' })
+  await runtime.agents.update(agent.id, { clientRequestId: 'disable-work', expectedRevision: agent.revision,
+    workbench: { code: 'off', work: 'off', maxActiveTasks: 1 } })
+  expect((await runtime.workbench.agentScope(agent.id)).policy.work).toBe('off')
+  const pending = (await store.get<RoomRequestState>('request', beforeEdit.requestId))!
+  expect(pending.value.roomSnapshot.members[0]?.workbenchPolicy?.work).toBe('read')
+  await runner.tick(pending)
+  expect((await store.get<RoomRequestState>('request', beforeEdit.requestId))?.value.threadId).toBe(thread.id)
+  const afterEdit = await runtime.service.send(room.id, { clientRequestId: 'queued-without-read', body: 'No Work access' })
+  const getNext = async () => (await store.get<RoomRequestState>('request', afterEdit.requestId))!
+  await runner.tick(await getNext())
+  await runner.tick(await getNext())
+  const withoutRead = (await h.threads.getMetadata((await getNext()).value.threadId))!
+  expect(withoutRead.id).not.toBe(thread.id)
+  expect(withoutRead.turns[0]?.prompt).toContain('Why does parsing fail?')
+  expect(withoutRead.turns[0]?.prompt).toContain('Looked at the repo. The bug is in parser.ts.')
+  expect((await h.threads.getMetadata(thread.id))?.turns[0]?.id).toBe(thread.turns[0]?.id)
+  expect((await store.get<RoomMessage>('message', messages[0]!.id))?.value.body).toBe(messages[0]!.body)
+  expect(withoutRead.roomContext?.blockedToolNames).toEqual(expect.arrayContaining([
+    'list_work_spaces', 'search_work_documents', 'read_work_document', 'create_work_document'
+  ]))
+  const revised = await runtime.agents.get(agent.id)
+  await runtime.agents.update(agent.id, { clientRequestId: 'limited-read', expectedRevision: revised.revision,
+    workbench: { work: 'read' }, capabilityOverrides: { blockedTools: ['search_work_documents'] } })
+  const again = await runtime.service.send(room.id, { clientRequestId: 'new-read', body: 'Read a Work document' })
+  const current = async () => (await store.get<RoomRequestState>('request', again.requestId))!
+  await runner.tick(await current())
+  await runner.tick(await current())
+  const limited = (await h.threads.getMetadata((await current()).value.threadId))!
+  expect(limited.id).not.toBe(withoutRead.id)
+  expect(limited.roomContext?.blockedToolNames).not.toContain('read_work_document')
+  expect(limited.roomContext?.blockedToolNames).toEqual(expect.arrayContaining(['search_work_documents', 'create_work_document']))
 })
 
 it('runs a coding Agent group member read-only in discussion and never as a task owner', async () => {
@@ -92,6 +134,9 @@ it('runs a coding Agent group member read-only in discussion and never as a task
   const thread = await ensureRoomThread(deps, { id: 'discuss-thread', roomId: room.id, requestId: request.id, member,
     kind: 'discussion', collaborationProtocol: 'peer' })
   expect(thread).toMatchObject({ harnessId: 'codex', model: 'kun/api/model', mode: 'agent', sandboxMode: 'read-only', approvalPolicy: 'never' })
+  expect(thread.roomContext?.blockedToolNames).toEqual(expect.arrayContaining([
+    'list_work_spaces', 'search_work_documents', 'read_work_document', 'create_work_document', 'propose_work_edit', 'create_work_task'
+  ]))
   expect(thread.roomContext?.allowedToolNames).not.toContain('propose_room_action')
   expect(thread.roomContext?.allowedToolNames).toContain('send_room_message')
   expect(thread.systemPrompt).toContain('This discussion is read-only')
