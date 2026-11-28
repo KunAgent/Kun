@@ -69,7 +69,12 @@ export class WorkbenchHarnessService {
       workbenchOrigin: { kind: 'bot', roomId: 'scope-check', linkId: 'scope-check', agentId: 'source', agentName: '', capabilityCeiling: ceiling } })
     const turn = createTurnRecord({ id: 'scope-check', threadId: thread.id, prompt: '', ...route })
     const admitted = this.deps.router.resolve(thread, turn)
-    if (!admitted.ok) throw new Error(`This Code Agent cannot enforce the source Agent's tool limits: ${admitted.error.userMessage}`)
+    if (!admitted.ok) {
+      const { code, userMessage } = admitted.error
+      if (code !== 'capability_missing' && code !== 'sandbox_insufficient') throw new Error(userMessage)
+      throw new Error(`This Code Agent cannot enforce the source Agent's tool limits (${userMessage}). ` +
+        'For this restricted task, choose an available Kun route from list_code_harnesses.')
+    }
   }
 
   isUserSelection(request: WorkbenchRequest, userIntent: string): boolean {
