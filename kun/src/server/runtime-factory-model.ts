@@ -1,4 +1,4 @@
-import { scopeBuiltInModelCapability } from '../loop/model-provider-profile-scope.js'
+import { providerOwnsBuiltInModel, scopeBuiltInModelCapability } from '../loop/model-provider-profile-scope.js'
 import { MODEL_CONTEXT_PROFILES, resolveModelContextProfile } from '../loop/model-context-profile.js'
 import { resolveModelMetadata, withModelObservation } from '../services/model-metadata-resolver.js'
 import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
@@ -283,6 +283,8 @@ function providerDispatchFields(provider: ServeProviderConfig | undefined): Reco
   return provider && Object.fromEntries(Object.entries(provider).filter(([key]) => !NON_DISPATCH_PROVIDER_FIELDS.has(key)))
 }
 
+const builtInModelIds = new Set(MODEL_CONTEXT_PROFILES.map((profile) => profile.canonicalModel))
+
 export function modelContextProfilesByProvider(
   providers: KunServeRuntimeOptions['providers']
 ): Map<string, ReturnType<typeof modelContextProfilesFromConfig>> {
@@ -293,7 +295,15 @@ export function modelContextProfilesByProvider(
     const declared = { ...provider.modelProfiles, ...provider.modelCapabilities }
     const names = new Set(Object.keys(declared).map((name) => name.trim().toLowerCase()))
     out.set(normalized, modelContextProfilesFromConfig({ models: { profiles: declared } })
-      .filter((profile) => names.has(profile.canonicalModel)))
+      .filter((profile) => names.has(profile.canonicalModel))
+      .map((profile) => {
+        // Old GUI settings list deepseek-flash as an alias of text-only V4.
+        // Leave the exact vendor model available to global/user profiles;
+        // relays may legitimately map the same names differently.
+        const modelIds = profile.modelIds.filter((id) => id === profile.canonicalModel || !builtInModelIds.has(id) ||
+          !providerOwnsBuiltInModel({ baseUrl: provider.baseUrl, endpoints: provider.endpoints, model: id }))
+        return modelIds.length === profile.modelIds.length ? profile : { ...profile, modelIds }
+      }))
   }
   return out
 }

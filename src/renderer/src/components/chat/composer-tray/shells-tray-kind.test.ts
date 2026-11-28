@@ -211,26 +211,28 @@ describe('useShellsTrayKind', () => {
     const writeText = vi.fn(async () => undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
     attach.result = false
+    const finishedAt = new Date().toISOString()
+    // Place the empty-output command first to exercise per-session action targeting.
     runtimeRequest.mockImplementation(async () => response([
-      settled('fail', 'npm test', 1, { output: 'AssertionError: expected 1 to be 2' }),
-      settled('quiet', 'npm run nothing', 2)
+      settled('quiet', 'npm run nothing', 2, { finishedAt }),
+      settled('fail', 'npm test', 1, { output: 'AssertionError: expected 1 to be 2', finishedAt })
     ]))
     await render()
     await openSheet()
     const sendTitles = ['Attach this output to the message box', "Couldn't attach this output to the message box"]
-    const sendButtons = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonElement>('[data-tray-sheet="shells"] button')]
-      .filter((button) => sendTitles.includes(button.title))
-    await act(async () => sendButtons()[0]!.click())
+    const sendButton = (id: string): HTMLButtonElement | undefined => [...host.querySelectorAll<HTMLButtonElement>(`[data-background-shell-row="${id}"] button`)]
+      .find((button) => sendTitles.includes(button.title))
+    await act(async () => sendButton('fail')!.click())
     await settle()
     expect(attach.calls).toHaveLength(1)
     expect(writeText).toHaveBeenCalledWith('AssertionError: expected 1 to be 2')
     expect(host.querySelector('[data-tray-sheet="shells"]')).not.toBeNull()
-    expect(sendButtons()[0]!.textContent).toBe('Copied instead')
-    expect(sendButtons()[0]!.getAttribute('data-send-notice')).toBe('copied')
+    expect(sendButton('fail')!.textContent).toBe('Copied instead')
+    expect(sendButton('fail')!.getAttribute('data-send-notice')).toBe('copied')
     // Nothing to copy either: say so instead of doing nothing.
-    await act(async () => sendButtons()[1]!.click())
+    await act(async () => sendButton('quiet')!.click())
     await settle()
-    expect(sendButtons()[1]!.textContent).toBe("Can't attach")
+    expect(sendButton('quiet')!.textContent).toBe("Can't attach")
     Reflect.deleteProperty(navigator, 'clipboard')
   })
 

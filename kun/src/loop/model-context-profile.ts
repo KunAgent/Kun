@@ -1,5 +1,5 @@
 import { providerPresetScopeMatches } from '@kun/provider-catalog'
-import { scopeBuiltInModelCapability } from './model-provider-profile-scope.js'
+import { providerOwnsBuiltInModel, scopeBuiltInModelCapability } from './model-provider-profile-scope.js'
 import { MODEL_METADATA_FIELDS } from '../contracts/model-metadata-evidence.js'
 import { metadataEvidence } from '../contracts/model-metadata-evidence.js'
 import type {
@@ -57,15 +57,12 @@ const DEFAULT_MODEL_MESSAGE_PARTS: readonly ModelMessagePartSupport[] = ['text']
 
 export const MODEL_CONTEXT_PROFILES: readonly ModelContextProfile[] = [
   deepseekV4Profile('deepseek-v4-pro', ['deepseek-v4-pro']),
-  deepseekV4Profile('deepseek-v4-flash', [
-    'deepseek-v4-flash',
-    // Back-compat aliases currently routed by DeepSeek to v4-flash modes. The
-    // harness catalogs advertise the short `deepseek-flash` id, so it must
-    // resolve to the same reasoning and context facts.
-    'deepseek-flash',
-    'deepseek-chat',
-    'deepseek-reasoner'
-  ]),
+  deepseekV4Profile('deepseek-v4-flash', ['deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner']),
+  {
+    ...deepseekV4Profile('deepseek-flash', ['deepseek-flash']),
+    inputModalities: ['text', 'image'],
+    messageParts: ['text', 'image_url']
+  },
   glmReasoningProfile('glm-5.3-flash', 200_000),
   glmReasoningProfile('glm-5.2', 1_000_000),
   glmReasoningProfile('glm-5.1', 200_000),
@@ -82,13 +79,27 @@ export const MODEL_CONTEXT_PROFILES: readonly ModelContextProfile[] = [
   codexReasoningProfile('gpt-5.3-codex-spark', 128_000, false, false)
 ]
 
+// Config merging creates a new profile even if an explicit value equals the default.
+const implicitBuiltIns = new Set(MODEL_CONTEXT_PROFILES)
+
 export function resolveModelContextProfile(
   model: string | undefined,
-  profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES
+  profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES,
+  provider?: ProviderModelCapabilityInput
 ): ModelContextProfile | null {
   const normalized = normalizeModelId(model)
   if (!normalized) return null
-  return profiles.find((profile) =>
+  const exact = profiles.find((profile) => profile.canonicalModel === normalized)
+  // Saved exact settings and proven vendor IDs win. On a relay, an implicit
+  // fallback has no authority over a configured alias's image support or limits.
+  const unprovenExact = exact && (exact.unprovenBuiltIn ||
+    (provider && implicitBuiltIns.has(exact) && !providerOwnsBuiltInModel({ ...provider, model: normalized })))
+  if (unprovenExact) {
+    const declared = profiles.find((profile) => profile !== exact && !profile.unprovenBuiltIn &&
+      !implicitBuiltIns.has(profile) && profile.modelIds.includes(normalized))
+    if (declared) return declared
+  }
+  return exact ?? profiles.find((profile) =>
     profile.modelIds.some((modelId) => normalized === modelId || normalized.endsWith(`/${modelId}`))
   ) ?? null
 }
@@ -167,8 +178,8 @@ export function modelCapabilitiesForProviderModel(
   profiles: readonly ModelContextProfile[] = MODEL_CONTEXT_PROFILES
 ): ModelCapabilityMetadata {
   const model = input.model?.trim()
-  const candidate = modelCapabilitiesForModel(model, profiles)
-  const selected = resolveModelContextProfile(model, profiles)
+  const selected = resolveModelContextProfile(model, profiles, input)
+  const candidate = modelCapabilitiesForModel(model, selected ? [selected] : [])
   const builtIn = scopeBuiltInModelCapability(input, candidate, Boolean(selected &&
     MODEL_CONTEXT_PROFILES.some((profile) => profile.canonicalModel === selected.canonicalModel)))
   const reasoning = providerReasoningCapability(input)
@@ -195,6 +206,7 @@ export function modelContextProfilesForProvider(input: ProviderModelCapabilityIn
     const { id: _id, ...facts } = scoped
     const capacity = scoped.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS
     return { ...base, ...facts, canonicalModel: profile.canonicalModel, modelIds: profile.modelIds,
+      ...(implicitBuiltIns.has(profile) ? { unprovenBuiltIn: true as const } : {}),
       contextWindowTokens: capacity,
       softThreshold: Math.min(profile.softThreshold, Math.floor(capacity * 0.75)),
       hardThreshold: Math.min(profile.hardThreshold, Math.floor(capacity * 0.85)) }
