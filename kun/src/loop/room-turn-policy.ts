@@ -28,7 +28,8 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
   if (!policy) return context
   const readOnly = !['execution', 'conversation'].includes(policy.kind) || thread.sandboxMode === 'read-only'
   const fullAccess = policy.kind === 'conversation' && thread.sandboxMode === 'danger-full-access'
-  const discussionHostReads = policy.kind === 'discussion' && context.allowedReadPaths === undefined
+  const unattendedCodexDiscussion = policy.kind === 'discussion' && thread.harnessId === 'codex' && thread.approvalPolicy === 'never'
+  const discussionHostReads = policy.kind === 'discussion' && !unattendedCodexDiscussion && context.allowedReadPaths === undefined
   const agentTools = policy.participantAgentId ? [...AGENT_COLLABORATION_TOOLS] : []
   const peerTools = policy.kind === 'discussion' && policy.collaborationProtocol === 'peer'
     ? ['read_room_updates', 'send_room_message'] : []
@@ -56,6 +57,10 @@ export function applyRoomToolPolicy(context: ToolHostContext, thread: ThreadReco
     ...context,
     roomStepKind: policy.kind, roomAgent: Boolean(policy.participantAgentId),
     roomPeer: peerTools.length > 0,
+    // Native escalations stay denied. Only assigned, workspace-scoped file reads may cross the Kun bridge.
+    unattendedRoomReads: unattendedCodexDiscussion
+      ? (['read', 'ls'] as const).filter((name) => policy.allowedToolNames?.includes(name) && allowed?.includes(name))
+      : undefined,
     guiRoomExcalidrawCanvas: policy.kind === 'conversation' && context.clientSurface === 'gui' &&
       !readOnly && context.threadMode !== 'plan' && !context.guiPlan,
     workspace: thread.workspace,

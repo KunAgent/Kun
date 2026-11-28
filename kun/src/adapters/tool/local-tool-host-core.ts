@@ -12,7 +12,7 @@ import { runPostToolUseHooks, runPreToolUseHooks, type PostToolUseOutcome, type 
 import type { ResolvedHook } from '../../hooks/hook-engine.js'
 import { normalizeRateLimitedToolOutput } from './tool-rate-limit.js'
 import { normalizeReadTrackerOptions, ReadTracker } from './read-tracker.js'
-import { effectiveSandboxMode, externalWriteTargetsForApproval, isWorkspaceApprovalCommandTool, sandboxBlockForTool, type SandboxBlock } from './sandbox-policy.js'
+import { effectiveSandboxMode, externalWriteTargetsForApproval, isUnattendedRoomRead, isWorkspaceApprovalCommandTool, sandboxBlockForTool, type SandboxBlock } from './sandbox-policy.js'
 import { createToolOperationIdentity, ToolOperationJournal } from '../../reliability/operation-journal.js'
 import { planModeToolBlock } from './plan-mode-tool-policy.js'
 import { normalizeRawToolArgumentsEnvelope } from '../../domain/tool-argument-envelope.js'
@@ -580,7 +580,7 @@ export class LocalToolHost implements ToolHost {
     tool: LocalTool,
     call: ToolCallLike,
     context: ToolHostContext,
-    provider: Pick<ToolProviderPolicy, 'kind'>
+    provider: Pick<ToolProviderPolicy, 'id' | 'kind'>
   ): SandboxBlock | { code: 'approval_policy_blocked'; message: string } | null {
     const sandboxBlock = sandboxBlockForTool(
       { name: call.toolName, toolKind: call.toolKind ?? tool.toolKind },
@@ -590,7 +590,7 @@ export class LocalToolHost implements ToolHost {
     if (sandboxBlock) return sandboxBlock
     if (this.isInteractiveGuiGateTool(call.toolName)) return null
     if (context.approvalPolicy !== 'never') return null
-    if (tool.policy === 'never') return null
+    if (tool.policy === 'never' || isUnattendedRoomRead(tool, provider, context)) return null
     return {
       code: 'approval_policy_blocked',
       message: `tool ${call.toolName} is disabled by runtime approval policy`

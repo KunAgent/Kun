@@ -10,7 +10,8 @@ import type {
   ApprovedExternalWriteTarget,
   ToolCallLike,
   ToolHostContext,
-  ToolProviderKind
+  ToolProviderKind,
+  ToolProviderPolicy
 } from '../../ports/tool-host.js'
 import type { LocalTool } from './local-tool-host.js'
 import { isSharedAttachmentCachePath } from '../../attachments/shared-attachment-content.js'
@@ -37,6 +38,16 @@ export function isWorkspaceApprovalCommandTool(
 ): boolean {
   return tool.toolKind === 'command_execution' &&
     WORKSPACE_APPROVAL_COMMAND_TOOLS.has(tool.name)
+}
+
+/** An unattended room grant covers these built-in file reads, not other approval-free or same-named tools. */
+export function isUnattendedRoomRead(tool: LocalTool, provider: Pick<ToolProviderPolicy, 'id' | 'kind'>, context: ToolHostContext): boolean {
+  return context.roomStepKind === 'discussion' && context.sandboxMode === 'read-only' &&
+    context.allowHostReads !== true && context.allowedReadPaths !== undefined &&
+    context.unattendedRoomReads?.some((name) => name === tool.name) === true &&
+    provider.id === 'builtin' && provider.kind === 'built-in' &&
+    tool.policy === 'auto' && tool.toolKind === 'tool_call' && tool.sideEffect === 'read-only' &&
+    !tool.requiresExplicitApproval && !tool.requiresApprovalInFullAccess
 }
 
 /**

@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createThreadRecord } from '../domain/thread.js'
 import { createTurnRecord } from '../domain/turn.js'
@@ -7,7 +10,8 @@ import { TurnContextResolver, resolveTurnModeContext, type TurnContextResolverIn
 import type { ToolHostContext } from '../ports/tool-host.js'
 import { canWritePath } from '../adapters/tool/sandbox-policy.js'
 import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
-import type { LocalTool } from '../adapters/tool/local-tool-host.js'
+import { LocalToolHost, type LocalTool } from '../adapters/tool/local-tool-host.js'
+import { createReadLocalTool, createLsLocalTool, createWriteLocalTool, createBashLocalTool } from '../adapters/tool/builtin-tools.js'
 
 function roomThread(overrides: Partial<NonNullable<ThreadRecord['roomContext']>> = {}) {
   return createThreadRecord({ id: 'room_thread', title: 'Room', workspace: '/workspace', model: 'test',
@@ -61,6 +65,62 @@ describe('frozen room turn policy', () => {
     const review = applyRoomToolPolicy({ ...raw, allowHostReads: true }, roomThread({ kind: 'review' }))
     expect(review.allowHostReads).toBeUndefined()
     expect(review.allowedReadPaths).toEqual(['.'])
+  })
+
+  it('executes only assigned built-in file reads in unattended Codex discussion', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-discussion-read-'))
+    try {
+      const workspace = join(root, 'repo')
+      await mkdir(workspace)
+      await writeFile(join(workspace, 'note.txt'), 'repository fixture')
+      await writeFile(join(root, 'other.txt'), 'outside fixture')
+      const thread: ThreadRecord = { ...roomThread({ kind: 'discussion', allowedToolNames: ['ls', 'read'] }),
+        workspace, harnessId: 'codex', sandboxMode: 'read-only', approvalPolicy: 'never' }
+      const awaitApproval = vi.fn(async () => 'deny' as const)
+      const raw: ToolHostContext = { threadId: thread.id, turnId: 'turn', workspace,
+        approvalPolicy: 'never', allowHostReads: true, additionalWorkspaces: [root],
+        abortSignal: new AbortController().signal, awaitApproval }
+      const ctx = applyRoomToolPolicy(raw, thread)
+      const registry = CapabilityRegistry.fromLocalTools([
+        createReadLocalTool(), createLsLocalTool(), createWriteLocalTool(), createBashLocalTool()
+      ])
+      const host = new LocalToolHost({ registry })
+      let id = 0
+      const run = (name: string, args: Record<string, unknown>, scope = ctx, engine = host) =>
+        engine.execute({ toolName: name, callId: 'call_' + ++id, arguments: args }, scope)
+      expect((await host.listTools(ctx)).map((tool) => tool.name).sort()).toEqual(['ls', 'read'])
+      expect((await run('read', { path: 'note.txt' })).item).toMatchObject({
+        kind: 'tool_result', isError: false, output: { content: expect.stringContaining('repository fixture') }
+      })
+      expect((await run('ls', { path: '.' })).item).toMatchObject({ isError: false, output: { names: ['note.txt'] } })
+      const privateDir = join(root, 'private')
+      await mkdir(privateDir)
+      await writeFile(join(privateDir, 'private.txt'), 'not part of the assigned repository')
+      await symlink(privateDir, join(workspace, 'linked'), 'junction')
+      for (const path of ['../other.txt', join(root, 'other.txt'), 'linked/private.txt']) {
+        expect((await run('read', { path })).item).toMatchObject({ isError: true, output: { error: expect.stringContaining('read scopes') } })
+      }
+      const narrow = applyRoomToolPolicy({ ...raw, allowedReadPaths: ['note.txt'] }, thread)
+      expect((await run('ls', { path: '.' }, narrow)).item).toMatchObject({ isError: true })
+      for (const tool of ['write', 'bash']) await expect(run(tool, {})).rejects.toThrow('active tool policy')
+      const blocked = applyRoomToolPolicy({ ...raw, blockedToolNames: ['ls'] }, thread)
+      await expect(run('ls', {}, blocked)).rejects.toThrow('active tool policy')
+      expect((await run('read', { path: 'note.txt' }, raw)).item).toMatchObject({
+        isError: true, output: { code: 'approval_policy_blocked' }
+      })
+      const otherProvider = new LocalToolHost({ registry: new CapabilityRegistry([{
+        id: 'third-party', kind: 'mcp', enabled: true, available: true, tools: [createReadLocalTool()]
+      }]) })
+      expect((await run('read', {}, ctx, otherProvider)).item).toMatchObject({ isError: true, output: { code: 'approval_policy_blocked' } })
+      const gated = new LocalToolHost({ tools: [{ ...createReadLocalTool(), requiresExplicitApproval: true }] })
+      expect((await run('read', {}, ctx, gated)).item).toMatchObject({ isError: true, output: { code: 'approval_policy_blocked' } })
+      const implicit = applyRoomToolPolicy(raw, { ...thread, roomContext: { ...thread.roomContext!, allowedToolNames: undefined } })
+      expect((await run('read', {}, implicit)).item).toMatchObject({ isError: true, output: { code: 'approval_policy_blocked' } })
+      expect(ctx.approvalPolicy).toBe('never')
+      expect(awaitApproval).not.toHaveBeenCalled()
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('does not recall memories and passes frozen skill restrictions to discovery', async () => {
