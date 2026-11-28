@@ -198,6 +198,50 @@ describe('remote artifact previews', () => {
     await expect(f.service.asset(scope, assetRequest(artifact!, preview.entryAssetId!))).rejects.toThrow('ARTIFACT_UNAVAILABLE')
   })
 
+  it('delivers a managed board as versioned read-only scene data and rechecks the source at download', async () => {
+    const boardId = 'cb_123456abcdef'
+    const target = { serverId: 'kun_canvas', toolName: 'canvas_create', resourceUri: 'ui://kun-canvas/index.html' }
+    const receipt = { boardId, title: 'Sketch', revision: 1, elementCount: 1 }
+    const output = { serverId: target.serverId, toolName: target.toolName, result: { structuredContent: receipt } }
+    const f = await fixture([tool('board-card', 'mcp_kun_canvas_canvas_create', output, { mcpApp: target })])
+    const scene = {
+      elements: [{ id: 'label', type: 'text', text: '初稿', kunSkeleton: true }],
+      files: { picture: { id: 'picture', dataURL: 'data:image/png;base64,YQ==' } },
+      appState: { viewBackgroundColor: '#fffacd' }
+    }
+    let board = { ...scene, boardId, revision: 1, appState: { ...scene.appState, collaborators: ['private'] }, recentOperations: ['private'] }
+    let enabled = true
+    const callTool = vi.fn(async () => ({ result: { structuredContent: { board } } }))
+    Object.assign(f.runtime, { mcpApps: () => ({ catalog: () => enabled ? [target] : [], callTool }) })
+    const list = async () => (await f.service.list(scope, { resource })).artifacts[0]!
+    const original = await list()
+    expect(original).toMatchObject({ kind: 'canvas', title: 'Sketch', available: true, messageId: 'board-card' })
+    const preview = await f.service.get(scope, request(original))
+    expect(preview.renderer).toBe('data')
+    expect(preview.assets.map(asset => asset.id)).toEqual([preview.dataAssetId])
+    const asset = assetRequest(original, preview.dataAssetId!)
+    expect(JSON.parse((await f.service.asset(scope, asset)).data.toString())).toEqual(scene)
+    expect(callTool).toHaveBeenCalledWith(expect.objectContaining({
+      serverId: 'kun_canvas', name: 'canvas_get', arguments: { boardId }, workspace: expect.stringContaining('project'),
+      context: expect.objectContaining({ threadId: resource.id, approvalPolicy: 'never' })
+    }))
+    await expect(f.service.asset({ ...scope, authorizationId: 'another' }, asset)).rejects.toThrow('REFRESH_ARTIFACTS')
+
+    board = { ...board, revision: 2, elements: [{ ...scene.elements[0]!, text: '修改稿' }] }
+    await expect(f.service.asset(scope, asset)).rejects.toThrow('ARTIFACT_CHANGED')
+    const updated = await list()
+    expect(updated.id).toBe(original.id)
+    expect(updated.revision).not.toBe(original.revision)
+    const latest = await f.service.get(scope, request(updated))
+    const latestAsset = assetRequest(updated, latest.dataAssetId!)
+    expect(JSON.parse((await f.service.asset(scope, latestAsset)).data.toString()).elements).toEqual(board.elements)
+    enabled = false
+    await expect(f.service.asset(scope, latestAsset)).rejects.toThrow('ARTIFACT_UNAVAILABLE')
+    enabled = true
+    board = { ...board, boardId: 'cb_000000000000' }
+    expect(await list()).toMatchObject({ id: original.id, kind: 'canvas', available: false })
+  })
+
   it('enforces reference-count bounds in CSS and JavaScript as well as HTML', async () => {
     const f = await fixture()
     for (const [name, text] of [

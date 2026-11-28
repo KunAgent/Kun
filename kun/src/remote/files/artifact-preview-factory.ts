@@ -9,7 +9,7 @@ import { readableAgentArtifact, artifactDownloadName, artifactMimeType } from '.
 import { ArtifactBundle, artifactHash } from './artifact-bundle.js'
 import { collectArtifactDependencies } from './artifact-dependencies.js'
 import { designPreviewPages } from './artifact-design-pages.js'
-import { buildMcpArtifact } from './artifact-mcp-preview.js'
+import { buildMcpArtifact, buildMcpCanvas } from './artifact-mcp-preview.js'
 import { record, type ArtifactSource } from './artifact-sources.js'
 
 export interface PreparedArtifact {
@@ -96,6 +96,9 @@ export async function prepareArtifact(
       assetOrigins: [...GEN_UI_STATIC_ORIGINS], scriptOrigins: [...GEN_UI_STATIC_ORIGINS], connectOrigins: []
     }
     await collectArtifactDependencies(bundle, [entry])
+  } else if (source.kind === 'canvas' && source.canvasReceipt) {
+    preview.dataAssetId = await buildMcpCanvas(runtime, bundle, resource.id, source.canvasReceipt)
+    preview.renderer = 'data'
   } else if (source.kind === 'mcp-app') {
     Object.assign(preview, await buildMcpArtifact(runtime, bundle, source))
     preview.renderer = 'html'

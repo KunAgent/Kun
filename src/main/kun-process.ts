@@ -504,6 +504,7 @@ async function prepareKunLaunch(
     KUN_OPENALEX_MAILTO: paperSearch.search.openAlexMailto || paperSearch.scholar.crossrefMailto || '',
     KUN_UNPAYWALL_EMAIL: paperSearch.search.unpaywallEmail || '',
     KUN_PPT_TOOLCHAIN_DIR: pptToolchainDirectory,
+    KUN_DAILY_NOTES_DIR: join(app.getPath('userData'), 'daily-notes'),
     ...(activeProviderKind ? { KUN_RUNTIME_PROVIDER_KIND: activeProviderKind } : {}),
     ...(claudeBinary ? { KUN_CLAUDE_BINARY: claudeBinary } : {}),
     ...(officeCliBinary ? { KUN_OFFICECLI_BINARY: officeCliBinary } : {}),

@@ -60,6 +60,57 @@ describe('artifact source extraction', () => {
     expect(mergeArtifactSources([{ ...call, arguments: { value: 'x'.repeat(65537) } }, result])[0]?.toolInput).toBeUndefined()
   })
 
+  it('projects native and historical delegated canvas deliveries under the original per-turn artifact ID', () => {
+    const boardId = 'cb_123456abcdef', serverId = 'kun_canvas', resourceUri = 'ui://kun-canvas/index.html'
+    for (const toolName of ['canvas_create', 'canvas_open', 'canvas_apply']) {
+      const result = { structuredContent: { boardId, revision: 3, title: 'Sketch' } }
+      const envelope = { serverId, toolName, result }
+      const sideband = { mcpApp: { serverId, resourceUri, toolName } }
+      const wrapped = { content: [{ type: 'text', text: JSON.stringify(envelope) }], structuredContent: null }
+      for (const delivery of [
+        item('mcp_kun_canvas_' + toolName, envelope, sideband),
+        item('mcp__kun__mcp_kun_canvas_' + toolName, wrapped),
+        item('mcp:kun/mcp_kun_canvas_' + toolName, wrapped),
+        item('mcp:kun_canvas/' + toolName, result),
+        item('mcp_call', envelope, sideband)
+      ]) {
+        const entries = artifactSourcesFromItem(delivery)
+        expect(entries).toHaveLength(1)
+        expect(entries[0]).toMatchObject({ kind: 'canvas', key: `mcp-app:${serverId}:${resourceUri}:result-1`,
+          title: 'Sketch', itemId: delivery.id, turnId: delivery.turnId, canvasReceipt: { boardId, revision: 3 } })
+      }
+    }
+  })
+
+  it('only takes a managed board ID from a matching successful canvas receipt', () => {
+    const toolName = 'canvas_open', resourceUri = 'ui://kun-canvas/index.html'
+    const meta = { mcpApp: { serverId: 'kun_canvas', toolName, resourceUri } }
+    const result = { structuredContent: { boardId: 'cb_123456abcdef', revision: 1 } }
+    const output = { serverId: 'kun_canvas', toolName, result }
+    for (const delivery of [
+      item('bash', output, meta),
+      item('mcp_call', { serverId: 'other', toolName: 'show', result: output }, meta),
+      item('mcp_call', { result: { content: [{ type: 'text', text: JSON.stringify(output) }] } }),
+      item('mcp_kun_canvas_canvas_create', output, meta),
+      item('mcp_kun_canvas_canvas_open', { ...output, result: { ...result, isError: true } }, meta),
+      item('mcp_kun_canvas_canvas_open', { ...output, result: { content: [{ type: 'text', text: result.structuredContent.boardId }] } }, meta),
+      item('mcp_kun_canvas_canvas_open', { ...output, result: { structuredContent: { boardId: '../other' } } }, meta),
+      { ...item('mcp_kun_canvas_canvas_open', output, meta), isError: true }
+    ]) expect(artifactSourcesFromItem(delivery).some(entry => entry.canvasReceipt)).toBe(false)
+  })
+
+  it('keeps one card for the board in each turn when the SDK replays the host receipt', () => {
+    const envelope = { serverId: 'kun_canvas', toolName: 'canvas_open', result: { structuredContent: {
+      boardId: 'cb_123456abcdef', title: 'Preview', revision: 1
+    } } }
+    const host = item('mcp_kun_canvas_canvas_open', envelope)
+    const replay = { ...item('mcp:kun/mcp_kun_canvas_canvas_open', {
+      content: [{ type: 'text', text: JSON.stringify(envelope) }]
+    }), id: 'sdk-result' }
+    const nextTurn = { ...host, id: 'opened-again', turnId: 'later' }
+    expect(mergeArtifactSources([host, replay, nextTurn]).map(entry => entry.itemId)).toEqual([nextTurn.id, host.id])
+  })
+
   it('does not create capabilities from arbitrary text, failed calls, or escaped design paths', () => {
     expect(artifactSourcesFromItem({ ...item('design_open', design([screen('1111aaaa', 'Home')])), kind: 'assistant_text' })).toEqual([])
     expect(artifactSourcesFromItem({ ...item('design_open', design([screen('1111aaaa', 'Home')])), isError: true })).toEqual([])

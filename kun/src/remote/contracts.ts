@@ -24,6 +24,7 @@ import { RequestParamSchemas } from './requests/contracts.js'
 import { ApprovalParamSchemas } from './approvals/contracts.js'
 import { TodoParamSchemas } from './todos/contracts.js'
 import { ProjectBoardParamSchemas } from './project-board/contracts.js'
+import { DailyNotesParamSchemas } from './daily-notes/contracts.js'
 export const RemoteId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
 const schemas = {
   ...CodeChangesParamSchemas,
@@ -50,6 +51,7 @@ const schemas = {
   ...ApprovalParamSchemas,
   ...TodoParamSchemas,
   ...ProjectBoardParamSchemas,
+  ...DailyNotesParamSchemas,
   'agent.directory.list': AgentDirectoryParams,
   'catalog.get': z.object({}).strict()
 } as const

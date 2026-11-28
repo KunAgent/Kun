@@ -53,6 +53,8 @@ import { TodoParamSchemas } from './todos/contracts.js'
 import { RemoteTodos } from './todos/service.js'
 import { ProjectBoardParamSchemas } from './project-board/contracts.js'
 import { RemoteProjectBoard } from './project-board/service.js'
+import { DailyNotesParamSchemas } from './daily-notes/contracts.js'
+import { RemoteDailyNotes } from './daily-notes/service.js'
 import { remoteCatalog, remoteCapabilityDescriptors } from './catalog.js'
 
 const strictMethods = new Set<string>(OPERATION_METHODS)
@@ -86,6 +88,7 @@ export class RemoteFacade {
   private readonly plugins: RemotePlugins
   private readonly todos: RemoteTodos
   private readonly projectBoard: RemoteProjectBoard
+  private readonly dailyNotes: RemoteDailyNotes
   private readonly attachmentAdmissions: RemoteAttachmentAdmissions
   private readonly handlers = new Map<string, (scope: Envelope, params: any) => Promise<unknown>>()
 
@@ -116,6 +119,7 @@ export class RemoteFacade {
     this.plugins = new RemotePlugins(runtime)
     this.todos = new RemoteTodos(runtime)
     this.projectBoard = new RemoteProjectBoard(runtime)
+    this.dailyNotes = new RemoteDailyNotes(runtime)
     this.attachmentAdmissions = new RemoteAttachmentAdmissions(runtime)
     this.dispatches = new RemoteDispatch(runtime, () => this.tasks.models())
     this.registerHandlers()
@@ -149,6 +153,7 @@ export class RemoteFacade {
     if (Object.hasOwn(GroupParamSchemas, method)) return this.groups.preflight(method, params, envelope)
     if (method === 'plugin.setEnabled') return this.plugins.preflight(envelope, params)
     if (Object.hasOwn(ProjectBoardParamSchemas, method)) return this.projectBoard.preflight(method, params)
+    if (Object.hasOwn(DailyNotesParamSchemas, method)) return this.dailyNotes.preflight(method, params)
     if (Object.hasOwn(CodeManagementParamSchemas, method)) return this.code.preflight(method, params)
     try {
       if (this.history.supports(method)) return await this.history.preflight(method, params)
@@ -176,6 +181,7 @@ export class RemoteFacade {
     else if (Object.hasOwn(GroupWriteParamSchemas, method)) result = await this.groups.recoverMutation(scope, receipt)
     else if (method === 'plugin.setEnabled') result = await this.plugins.recover(scope, receipt)
     else if (Object.hasOwn(ProjectBoardParamSchemas, method)) result = await this.projectBoard.recover(scope, receipt)
+    else if (Object.hasOwn(DailyNotesParamSchemas, method)) result = await this.dailyNotes.recover(scope, receipt)
     else if (method === 'group.message.send' && typeof receipt.params.roomId === 'string')
       result = await this.groups.recover(scope, receipt.params.roomId, receipt.requestId)
     return { receipt: result === undefined ? receipt : await this.receipts.recovered(scope, id, result) }
@@ -222,6 +228,7 @@ export class RemoteFacade {
     add(CodeHistoryParamSchemas, (scope, p) => this.history.dispatch(scope.call.method, p, scope))
     add(TodoParamSchemas, (_scope, p) => this.todos.get(p.threadId))
     add(ProjectBoardParamSchemas, (scope, p) => this.projectBoard.dispatch(scope, p))
+    add(DailyNotesParamSchemas, (scope, p) => this.dailyNotes.dispatch(scope, p))
     const single: Partial<Record<Method, (scope: Envelope, p: any) => Promise<unknown>>> = {
       'catalog.get': (scope) => remoteCatalog(this.runtime, scope, () => this.tasks.models(),
         () => remoteCapabilityDescriptors(this.runtime, scope, this.agents, this.source)),

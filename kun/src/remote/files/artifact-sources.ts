@@ -12,6 +12,12 @@ export interface PreviewSourcePage {
   section?: string
 }
 
+export interface CanvasReceipt extends McpAppToolOutputMeta {
+  serverId: 'kun_canvas'
+  boardId: string
+  revision: number
+}
+
 export interface ArtifactSource {
   key: string
   kind: ArtifactKind
@@ -26,6 +32,7 @@ export interface ArtifactSource {
   data?: Record<string, unknown>
   widget?: GenUiWidgetRef
   mcp?: McpAppToolOutputMeta
+  canvasReceipt?: CanvasReceipt
   toolOutput?: unknown
   toolInput?: Record<string, unknown>
   viewport?: { width: number; height: number }
@@ -147,17 +154,46 @@ function slides(item: ArtifactToolItem, payload: Record<string, unknown>): Artif
   }
 }
 
+/** A board read is authorized by its successful built-in tool delivery in this thread. */
+function deliveredCanvas(item: ArtifactToolItem, name: string, payloads: Record<string, unknown>[]): ArtifactSource | undefined {
+  const serverId = 'kun_canvas', resourceUri = 'ui://kun-canvas/index.html'
+  const sideband = parseMcpAppToolOutputMeta(record(item.meta)?.mcpApp)
+  const [outer, inner] = payloads
+  if (!outer || outer.isError === true) return
+  // The SDK can wrap the gateway envelope in one text block. Nested tool output cannot establish its own origin.
+  const wrapped = !('serverId' in outer) && !('result' in outer) && !record(outer.structuredContent) &&
+    Array.isArray(outer.content) && outer.content.length === 1 && record(outer.content[0])?.type === 'text'
+  const envelope = wrapped && inner ? inner : outer
+  if (envelope.isError === true) return
+  const tool = ['canvas_create', 'canvas_open', 'canvas_apply'].find(operation =>
+    name === `mcp_kun_canvas_${operation}` || name === `mcp:kun_canvas/${operation}` ||
+    (name === 'mcp_call' || name === 'mcp_read_only_call') && envelope.serverId === serverId && envelope.toolName === operation)
+  if (!tool || sideband && (sideband.serverId !== serverId || sideband.toolName !== tool || sideband.resourceUri !== resourceUri)) return
+  if ('serverId' in envelope && (envelope.serverId !== serverId || envelope.toolName !== tool)) return
+  const result = 'serverId' in envelope ? record(envelope.result) : envelope
+  const receipt = record(result?.structuredContent), boardId = receipt?.boardId, revision = receipt?.revision
+  if (result?.isError || typeof boardId !== 'string' || !/^cb_[a-z0-9]{12}$/.test(boardId) ||
+    typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 1) return
+
+  // Preserve the original MCP card's identity and turn when refreshing an existing conversation.
+  const card = source(item, 'mcp-app', `${serverId}:${resourceUri}:${item.id}`, receipt?.title ?? boardId)
+  return { ...card, kind: 'canvas', canvasReceipt: { boardId, revision, serverId, toolName: tool, resourceUri } }
+}
+
 /** Only successful structured tool deliveries produce entries; ordinary assistant prose never does. */
 export function artifactSources(item: ArtifactToolItem): ArtifactSource[] {
   if (item.kind !== 'tool_result' || item.isError) return []
   const output: ArtifactSource[] = [], name = toolName(item.toolName)
+  const payloads = artifactPayloads(item.output)
+  const canvas = deliveredCanvas(item, name, payloads)
+  if (canvas) output.push(canvas)
   const meta = record(item.meta)
   const widget = record(meta?.genUi)
   if (widget && /^gw_[a-f0-9]{64}$/.test(artifactText(widget.widgetId, 80)) &&
     /^[a-f0-9]{64}$/.test(artifactText(widget.sha256, 64))) {
     output.push({ ...source(item, 'widget', widget.widgetId as string, widget.title), widget: widget as unknown as GenUiWidgetRef })
   }
-  for (const payload of artifactPayloads(item.output)) {
+  for (const payload of payloads) {
     if (name === 'design_open') {
       const entry = design(item, payload.designRequest)
       if (entry) output.push(entry)
@@ -185,7 +221,7 @@ export function artifactSources(item: ArtifactToolItem): ArtifactSource[] {
       if (entry) output.push(entry)
     }
     const mcp = parseMcpAppToolOutputMeta(payload.mcpApp ?? record(payload.meta)?.mcpApp ?? meta?.mcpApp)
-    if (mcp) output.push({ ...source(item, 'mcp-app', `${mcp.serverId}:${mcp.resourceUri}:${item.id}`, mcp.surface || mcp.toolName),
+    if (mcp && !canvas) output.push({ ...source(item, 'mcp-app', `${mcp.serverId}:${mcp.resourceUri}:${item.id}`, mcp.surface || mcp.toolName),
       mcp, toolOutput: payload })
     if (name === 'design_apply_excalidraw' || name === 'design_open_excalidraw') {
       const boardId = artifactText(payload.boardId, 128)
@@ -207,10 +243,18 @@ export function artifactSources(item: ArtifactToolItem): ArtifactSource[] {
 export function mergeArtifactSources(items: readonly ArtifactToolItem[]) {
   const merged = new Map<string, ArtifactSource>()
   const calls = new Map<string, Record<string, unknown>>()
+  const canvasReceipts = new Set<string>()
   for (const item of items) {
     if (item.kind === 'tool_call' && item.callId && record(item.arguments) &&
       JSON.stringify(item.arguments).length <= 64 * 1024) calls.set(item.callId, item.arguments!)
     for (const next of artifactSources(item)) {
+      // A delegated harness can replay the same board after the host has already recorded its card.
+      if (next.canvasReceipt && next.turnId) {
+        const { toolName, boardId, revision } = next.canvasReceipt
+        const key = JSON.stringify([next.turnId, toolName, boardId, revision])
+        if (canvasReceipts.has(key)) continue
+        canvasReceipts.add(key)
+      }
       if (next.kind === 'mcp-app' && item.callId) next.toolInput = calls.get(item.callId)
       const previous = merged.get(next.key)
       if (previous?.kind === 'design' && next.kind === 'design') {

@@ -103,7 +103,13 @@ export const REMOTE_METHOD_ORDER = [
   "project.board.create",
   "project.board.update",
   "project.board.move",
-  "project.board.delete"
+  "project.board.delete",
+  "daily.notes.list",
+  "daily.notes.get",
+  "daily.notes.create",
+  "daily.notes.update",
+  "daily.notes.delete",
+  "daily.notes.rollover"
 ] as const
 
 /** Historical capability presentation order is distinct from the wire schema order. */
@@ -197,5 +203,11 @@ export const REMOTE_CAPABILITY_ORDER = [
   "project.board.create",
   "project.board.update",
   "project.board.move",
-  "project.board.delete"
+  "project.board.delete",
+  "daily.notes.list",
+  "daily.notes.get",
+  "daily.notes.create",
+  "daily.notes.update",
+  "daily.notes.delete",
+  "daily.notes.rollover"
 ] as const
