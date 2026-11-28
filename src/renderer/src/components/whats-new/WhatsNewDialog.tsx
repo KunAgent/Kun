@@ -8,18 +8,22 @@ import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 import { pulseFocusModeSwitch } from '../../lib/focus-mode'
 import type { WhatsNewContent } from './whats-new-content'
 import { WhatsNewArtifactsSpotlight } from './WhatsNewArtifactsSpotlight'
+import { WhatsNewEverydayHighlights, type WhatsNewEverydayDestination } from './WhatsNewEverydayHighlights'
 import { WhatsNewFocusSpotlight } from './WhatsNewFocusSpotlight'
 import { WhatsNewOlderVersions } from './WhatsNewOlderVersions'
 import { WhatsNewResearchHighlights, type WhatsNewResearchDestination } from './WhatsNewResearchHighlights'
 import { WhatsNewWorkbenchHighlights } from './WhatsNewWorkbenchHighlights'
 import './whats-new-workbench.css'
 import './whats-new-research.css'
+import './whats-new-everyday.css'
 import { SPOTLIGHT_HIGHLIGHT_LIMIT, whatsNewSpotlight } from './whats-new-spotlights'
+
+export type WhatsNewDestination = WhatsNewResearchDestination | WhatsNewEverydayDestination
 
 type Props = {
   content: WhatsNewContent
   onClose: () => void
-  onNavigate?: (destination: WhatsNewResearchDestination) => void
+  onNavigate?: (destination: WhatsNewDestination) => void
 }
 
 const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
@@ -63,11 +67,12 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
   const releaseVersion = content.version.trim().replace(/^v/i, '')
   const workbench = releaseVersion === '0.4.4' && (summary?.features.length ?? 0) >= 3
   const research = releaseVersion === '0.4.6' && (summary?.features.length ?? 0) >= 3
-  const editorial = workbench || research
+  const everyday = releaseVersion === '0.4.7' && (summary?.features.length ?? 0) >= 3
+  const editorial = workbench || research || everyday
   const [featuresOpen, setFeaturesOpen] = useState(false)
   const [fixesOpen, setFixesOpen] = useState(fixesOnly)
-  // 0.4.5 and 0.4.6 have more features than the three primary highlights show.
-  const otherFeatures = summary && (spotlight?.id === 'artifacts' || releaseVersion === '0.4.5' || research)
+  // 0.4.5+ releases have more features than the three primary highlights show.
+  const otherFeatures = summary && (spotlight?.id === 'artifacts' || releaseVersion === '0.4.5' || research || everyday)
     ? summary.features.filter((item) => !spotlight?.covers.test(item.title) && !isCatchAllItem(item)).slice(picked?.highlights.length ?? 0)
     : []
   const fixesRef = useRef<HTMLDivElement>(null)
@@ -81,7 +86,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
     dismiss()
     openArtifactsPage()
   }, [dismiss])
-  const selectResearchFeature = useCallback((destination: WhatsNewResearchDestination): void => {
+  const selectEditorialFeature = useCallback((destination: WhatsNewDestination): void => {
     dismiss()
     onNavigate?.(destination)
   }, [dismiss, onNavigate])
@@ -186,7 +191,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
         className="kun-wn-dialog"
         data-whats-new-dialog={fixesOnly ? 'patch' : skipped ? 'skipped' : 'release'}
         data-variant={fixesOnly ? 'patch' : undefined}
-        data-release-layout={workbench ? 'workbench' : research ? 'research' : undefined}
+        data-release-layout={workbench ? 'workbench' : research ? 'research' : everyday ? 'everyday' : undefined}
         data-spotlight={spotlight?.id}
         onKeyDown={onKeyDown}
       >
@@ -202,7 +207,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
                   <span className="kun-wn-path"><span>{content.previousVersion}</span><ArrowRight size={12} aria-hidden="true" /><span>{content.version}</span></span>
                 ) : null}
               </div>
-            ) : research ? (
+            ) : research || everyday ? (
               <div className="kun-wn-workbench-meta">
                 <strong>Kun {content.version}</strong>
                 <span className="kun-wn-research-pill">
@@ -220,10 +225,12 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
               </span>
             )}
             <h2 id={titleId} className="kun-wn-title">
-              {t(workbench ? 'whatsNewWorkbenchTitle' : research ? 'whatsNewResearchTitle' : fixesOnly ? 'whatsNewPatchTitle' : 'whatsNewTitle', { version: content.version })}
+              {t(workbench ? 'whatsNewWorkbenchTitle' : research ? 'whatsNewResearchTitle' : everyday ? 'whatsNewEverydayTitle' : fixesOnly ? 'whatsNewPatchTitle' : 'whatsNewTitle', { version: content.version })}
             </h2>
             {workbench ? <p className="kun-wn-workbench-description">{t('whatsNewWorkbenchBody')}</p> : research ? (
               <p className="kun-wn-workbench-description">{t('whatsNewResearchBody')}</p>
+            ) : everyday ? (
+              <p className="kun-wn-workbench-description">{t('whatsNewEverydayBody')}</p>
             ) : content.previousVersion ? (
               <div className="kun-wn-path">
                 <span>{content.previousVersion}</span>
@@ -240,7 +247,8 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
           {summary.intro && !fixesOnly && !editorial ? <p className="kun-wn-intro">{summary.intro}</p> : null}
 
           {workbench ? <WhatsNewWorkbenchHighlights /> : null}
-          {research ? <WhatsNewResearchHighlights onSelect={selectResearchFeature} /> : null}
+          {research ? <WhatsNewResearchHighlights onSelect={selectEditorialFeature} /> : null}
+          {everyday ? <WhatsNewEverydayHighlights onSelect={selectEditorialFeature} /> : null}
 
           {spotlight?.id === 'focus-mode' ? <WhatsNewFocusSpotlight /> : null}
           {spotlight?.id === 'artifacts' ? <WhatsNewArtifactsSpotlight onOpen={openArtifacts} /> : null}
@@ -276,7 +284,7 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
               >
                 <Sparkles className="h-4 w-4" strokeWidth={2} aria-hidden />
                 <span className="kun-wn-disclosure-label">{t('whatsNewAlsoUpdated')}</span>
-                {research && !featuresOpen ? (
+                {(research || everyday) && !featuresOpen ? (
                   <span className="kun-wn-more-preview" aria-hidden="true">
                     {otherFeatures.slice(0, 3).map((item) => (
                       <span key={item.title} className="kun-wn-more-pill">{item.title}</span>
@@ -320,6 +328,8 @@ export default function WhatsNewDialog({ content, onClose: dismiss, onNavigate }
                     <span className="kun-wn-workbench-fix-hint">{t('whatsNewWorkbenchStableBody')}</span>
                   ) : research ? (
                     <span className="kun-wn-workbench-fix-hint">{t('whatsNewResearchStableBody')}</span>
+                  ) : everyday ? (
+                    <span className="kun-wn-workbench-fix-hint">{t('whatsNewEverydayStableBody')}</span>
                   ) : null}
                   <ChevronDown className="kun-wn-chevron h-4 w-4" strokeWidth={2} aria-hidden />
                 </button>

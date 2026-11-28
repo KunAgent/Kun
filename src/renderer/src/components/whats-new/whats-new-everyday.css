@@ -1,0 +1,301 @@
+/* The 0.4.7 release card: daily notes, installable widget apps, and phone direct link. */
+.kun-wn-dialog[data-release-layout='everyday'] {
+  --ev-canvas: var(--ds-bg-sidebar);
+  --ev-paper: var(--ds-bg-canvas);
+  --ev-line: color-mix(in srgb, var(--ds-text-muted) 20%, var(--ev-paper));
+  --ev-amber: #c26a12;
+  --ev-amber-soft: color-mix(in srgb, #d97706 16%, var(--ev-paper));
+  --ev-violet: #6d5ce7;
+  --ev-violet-soft: color-mix(in srgb, #6d5ce7 15%, var(--ev-paper));
+  --ev-emerald: #129958;
+  --ev-emerald-soft: color-mix(in srgb, #129958 15%, var(--ev-paper));
+  width: min(860px, 100%);
+  max-height: min(780px, 100%);
+  border-radius: 22px;
+  background: var(--ds-surface-elevated);
+}
+
+[data-theme='dark'] .kun-wn-dialog[data-release-layout='everyday'] {
+  --ev-amber: #f0a646;
+  --ev-amber-soft: rgba(240, 166, 70, 0.17);
+  --ev-violet: #b0a4f7;
+  --ev-violet-soft: rgba(154, 138, 247, 0.18);
+  --ev-emerald: #44cf85;
+  --ev-emerald-soft: rgba(68, 207, 133, 0.16);
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-hero {
+  display: flex;
+  height: auto;
+  align-items: center;
+  gap: 20px;
+  padding: 30px 36px 24px;
+  overflow: hidden;
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, #d97706 9%, var(--ds-surface-elevated)) 0%,
+    color-mix(in srgb, var(--ds-accent) 5%, var(--ds-surface-elevated)) 48%,
+    var(--ds-surface-elevated) 100%
+  );
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-glow {
+  top: -88px;
+  right: -32px;
+  width: 260px;
+  height: 260px;
+  opacity: 0.7;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-art {
+  position: relative;
+  z-index: 1;
+  order: 2;
+  flex: none;
+  width: 132px;
+  height: 132px;
+  margin-right: 16px;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-heading {
+  position: relative;
+  z-index: 1;
+  top: auto;
+  right: auto;
+  left: auto;
+  flex: 1;
+  min-width: 0;
+  gap: 10px;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-title {
+  margin-top: 2px;
+  font-size: 28px;
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-body {
+  min-height: 0;
+  gap: 14px;
+  padding: 4px 36px 10px;
+}
+
+.kun-wn-everyday-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kun-wn-everyday-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 12px;
+  border: 1px solid var(--wn-line);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--wn-surface) 78%, var(--wn-surface-2));
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+
+.kun-wn-everyday-card:hover {
+  border-color: color-mix(in srgb, var(--wn-accent) 36%, var(--wn-line));
+  background: var(--wn-surface);
+}
+
+.kun-wn-everyday-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 13px 2px 2px;
+}
+
+.kun-wn-everyday-copy h3 {
+  margin: 0 0 6px;
+  font-size: 14.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.kun-wn-everyday-copy p {
+  margin: 0;
+  color: var(--wn-text-3);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.kun-wn-everyday-action {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 5px;
+  margin-top: auto;
+  padding: 10px 0 0;
+  border: 0;
+  background: none;
+  color: var(--wn-accent-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kun-wn-everyday-action svg {
+  transition: transform 150ms ease;
+}
+
+.kun-wn-everyday-action:hover svg {
+  transform: translateX(3px);
+}
+
+.kun-wn-everyday-action:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--ds-focus-ring, var(--wn-accent));
+  outline-offset: 3px;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-more-features {
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-more-features > .kun-wn-disclosure .kun-wn-disclosure-label,
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fixes > .kun-wn-disclosure .kun-wn-disclosure-label {
+  flex: none;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-disclosure .kun-wn-count {
+  margin-left: auto;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fixes .kun-wn-count {
+  order: 2;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fixes .kun-wn-chevron {
+  order: 3;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-feature-list:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 6px 0 8px;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fixes {
+  margin-top: 0;
+  padding-top: 6px;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fix-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 32px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fix-list > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 13px 0;
+  border-top: 1px solid var(--wn-line);
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fix-list > li > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--wn-accent-ink);
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fix-list p {
+  margin: 4px 0 0;
+  color: var(--wn-text-3);
+  line-height: 1.55;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-footer {
+  padding: 16px 36px 18px;
+}
+
+.kun-wn-dialog[data-release-layout='everyday'] .kun-wn-primary {
+  display: inline-flex;
+  min-height: 40px;
+  height: auto;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  gap: 18px;
+  padding: 10px 18px;
+  border-radius: 10px;
+}
+
+@media (max-width: 800px) {
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-hero {
+    padding: 24px;
+  }
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-art {
+    width: 90px;
+    height: 90px;
+    margin-right: 0;
+  }
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-title {
+    font-size: 23px;
+  }
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-body {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+  .kun-wn-everyday-features {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .kun-wn-everyday-card {
+    display: grid;
+    grid-template-columns: 148px minmax(0, 1fr);
+    column-gap: 14px;
+    align-items: center;
+  }
+  .kun-wn-everyday-card .kun-wn-preview {
+    height: 118px;
+  }
+  .kun-wn-everyday-copy {
+    padding: 2px 0;
+  }
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-feature-list:not([hidden]),
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-fix-list {
+    grid-template-columns: 1fr;
+  }
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-footer {
+    padding: 15px 24px;
+  }
+}
+
+@media (max-width: 460px) {
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-art {
+    display: none;
+  }
+  .kun-wn-everyday-card {
+    grid-template-columns: 1fr;
+    row-gap: 10px;
+  }
+  .kun-wn-dialog[data-release-layout='everyday'] .kun-wn-footer {
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kun-wn-everyday-card,
+  .kun-wn-everyday-action svg {
+    transition: none;
+  }
+}

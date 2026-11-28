@@ -4,7 +4,8 @@ import { X } from 'lucide-react'
 import i18n from '../../i18n'
 import { useChatStore } from '../../store/chat-store'
 import { loadWhatsNewContent, releaseNotesLanguage } from './whats-new-content'
-import type { WhatsNewResearchDestination } from './WhatsNewResearchHighlights'
+import type { WhatsNewDestination } from './WhatsNewDialog'
+import { openArtifactsPage } from '../../artifacts/artifact-library-store'
 import { openCurrentWhatsNew, useWhatsNewStore } from './whats-new-store'
 import { markOverviewTourPending, overviewReplacesNotice, useGuidedTourStore } from '../guided-tour/guided-tour-store'
 import './whats-new.css'
@@ -70,14 +71,20 @@ export function WhatsNewHost(): ReactElement | null {
           <WhatsNewDialog
             content={content}
             onClose={() => useWhatsNewStore.getState().close()}
-            onNavigate={(destination: WhatsNewResearchDestination) => {
+            onNavigate={(destination: WhatsNewDestination) => {
               const chat = useChatStore.getState()
               if (destination === 'notebook') {
                 chat.setRoute('colab')
               } else if (destination === 'latex') {
                 void chat.openWrite()
-              } else {
+              } else if (destination === 'agents') {
                 chat.openSettings('agentsHarnesses')
+              } else if (destination === 'daily-notes') {
+                void window.kunGui?.openDailyNotes?.()
+              } else if (destination === 'widget-apps') {
+                openArtifactsPage()
+              } else if (destination === 'phone-link') {
+                chat.openClaw()
               }
             }}
           />
