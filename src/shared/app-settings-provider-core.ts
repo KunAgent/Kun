@@ -1,4 +1,5 @@
 import { resolveModelMetadata } from '../../kun/src/services/model-metadata-resolver.js'
+import { selectGuiModelProfiles } from '../../kun/src/config/gui-model-profile-selection.js'
 import { normalizeRouteEffort } from './app-settings-route-rules'
 import { normalizeExtensionExports, normalizeGatewayMiddleware, projectExecutableModelRoutePools, routePoolExtras } from './app-settings-route-projection'
 import {
@@ -185,7 +186,7 @@ export function normalizeModelProviderSettings(
           apiKey,
           baseUrl,
           modelProfiles: {
-            ...defaultProvider.modelProfiles,
+            ...selectGuiModelProfiles(defaultProvider.modelProfiles, provider.models),
             ...provider.modelProfiles
           }
         }

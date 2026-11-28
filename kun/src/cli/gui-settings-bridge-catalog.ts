@@ -43,6 +43,7 @@ import {
 import { modelCapabilitiesForProviderModel } from '../loop/model-context-profile.js'
 import { readRuntimeDiscovery } from '../server/runtime-discovery.js'
 import { isLoopbackHost } from '../server/loopback-host.js'
+import { mergeGuiProfilePreferences, selectGuiModelProfiles } from '../config/gui-model-profile-selection.js'
 import {
   withRuntimeDataDirConfigWriter,
   type RuntimeDataDirWriterAuthority
@@ -423,20 +424,21 @@ export function shouldUseBuiltInReasoning(
 
 export function projectGuiModelProfiles(
   existing: unknown,
+  models: readonly string[],
   capabilities: Record<string, ModelCapability> | undefined
 ): Record<string, z.infer<typeof GuiModelProfileSchema>> {
   const current = isRecordValue(existing) ? existing : {}
   const projected: Record<string, z.infer<typeof GuiModelProfileSchema>> = {}
-  for (const [model, profile] of Object.entries(current)) {
+  for (const [model, profile] of Object.entries(selectGuiModelProfiles(current, models))) {
     const parsed = GuiModelProfileSchema.safeParse(profile)
     if (parsed.success) projected[model] = parsed.data
   }
   if (!capabilities) return projected
-  for (const [model, capability] of Object.entries(capabilities)) {
+  for (const [model, capability] of Object.entries(selectGuiModelProfiles(capabilities, models))) {
     const { id: _id, ...profile } = capability
     projected[model] = GuiModelProfileSchema.parse({
       ...(projected[model] ?? {}),
-      ...profile
+      ...mergeGuiProfilePreferences(projected[model], profile)
     })
   }
   return projected

@@ -13,6 +13,7 @@ import {
   type ModelProviderProfileV1
 } from '../../shared/app-settings'
 import { composeDispatchPreferencePrompt } from '../../shared/ade-collaboration-settings'
+import { mergeGuiProfilePreferences, selectGuiModelProfiles } from '../../../kun/src/config/gui-model-profile-selection.js'
 import { legacyProviderCredentialSourceId } from '../legacy-provider-settings-migration'
 
 const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
@@ -33,26 +34,34 @@ const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
 
 export function modelConfigForRuntime(
   existing: Record<string, unknown>,
-  guiModelProfiles: Record<string, ModelProviderModelProfileV1> = {}
+  guiModelProfiles: Record<string, ModelProviderModelProfileV1> = {},
+  selectedModels?: readonly string[]
 ): Record<string, unknown> {
-  const existingProfiles = objectValue(existing.profiles)
-  const guiProfiles = modelConfigProfilesFromProviderProfiles(guiModelProfiles)
-  const profileDefaults = { ...DEFAULT_KUN_MODEL_PROFILES, ...guiProfiles }
+  const selectedIds = selectedModels && new Set(selectedModels.map(id => id.trim().toLowerCase()))
+  const existingProfiles = selectedModels
+    ? selectGuiModelProfiles(objectValue(existing.profiles), selectedModels)
+    : objectValue(existing.profiles)
+  const guiProfiles = modelConfigProfilesFromProviderProfiles(selectedModels
+    ? selectGuiModelProfiles(guiModelProfiles, selectedModels) : guiModelProfiles)
+  const defaults = Object.fromEntries(Object.entries(DEFAULT_KUN_MODEL_PROFILES)
+    .filter(([id]) => !selectedIds || selectedIds.has(id)))
+  const profileDefaults = { ...defaults, ...guiProfiles }
   const profiles: Record<string, unknown> = {}
   for (const modelId of new Set([...Object.keys(profileDefaults), ...Object.keys(existingProfiles)])) {
     const defaultProfile = objectValue(profileDefaults[modelId])
     const existingProfile = objectValue(existingProfiles[modelId])
     const guiProfile = objectValue(guiProfiles[modelId])
     const baseProfile = Object.prototype.hasOwnProperty.call(guiProfiles, modelId)
-      ? { ...defaultProfile, ...guiProfile }
+      ? { ...defaultProfile, ...mergeGuiProfilePreferences(existingProfile, guiProfile) }
       : { ...defaultProfile, ...existingProfile }
+    const contextCompaction = {
+      ...objectValue(defaultProfile.contextCompaction),
+      ...objectValue(existingProfile.contextCompaction),
+      ...objectValue(guiProfile.contextCompaction)
+    }
     profiles[modelId] = {
       ...baseProfile,
-      contextCompaction: {
-        ...objectValue(defaultProfile.contextCompaction),
-        ...objectValue(existingProfile.contextCompaction),
-        ...objectValue(guiProfile.contextCompaction)
-      }
+      ...(Object.keys(contextCompaction).length ? { contextCompaction } : {})
     }
   }
   return { ...existing, profiles }
@@ -101,7 +110,7 @@ export function providersConfigForRuntime(
       ...(selectedModel ? { selectedModel } : {}),
       retry: provider.retry,
       useProxy: provider.useProxy,
-      modelProfiles: modelConfigProfilesFromProviderProfiles(provider.modelProfiles),
+      modelProfiles: modelConfigProfilesFromProviderProfiles(provider.modelProfiles, true),
       modelProxyUrl: resolveProviderProxyUrl(settings, provider),
       // Credential-derived transport headers are reconstructed in Kun from
       // the protected binding and are never persisted in config.json.
@@ -394,13 +403,14 @@ export function rolesConfigForRuntime(runtime: Pick<
 }
 
 function modelConfigProfilesFromProviderProfiles(
-  profiles: Record<string, ModelProviderModelProfileV1>
+  profiles: Record<string, ModelProviderModelProfileV1>, keepWildcard = false
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [modelId, profile] of Object.entries(profiles)) {
     const trimmed = modelId.trim()
-    if (!trimmed || trimmed === '*') continue
+    if (!trimmed || (trimmed === '*' && !keepWildcard)) continue
     out[trimmed] = {
+      ...(profile.metadata ? { metadata: profile.metadata } : {}),
       ...(profile.aliases?.length ? { aliases: profile.aliases } : {}),
       ...(profile.contextWindowTokens ? { contextWindowTokens: profile.contextWindowTokens } : {}),
       ...(profile.maxOutputTokens ? { maxOutputTokens: profile.maxOutputTokens } : {}),

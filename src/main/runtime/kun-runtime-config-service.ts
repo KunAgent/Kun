@@ -262,7 +262,8 @@ async function writeGuiManagedKunConfig(
       ...(providerFailover && providerFailover.length > 0 ? { providerFailover } : {}),
       ...(localModelGateway ? { localModelGateway } : {})
     },
-    models: modelConfigForRuntime(objectValue(existing?.models), modelProfiles),
+    models: modelConfigForRuntime(objectValue(existing?.models), modelProfiles,
+      appSettings ? getModelProviderSettings(appSettings).providers.flatMap(provider => provider.models) : undefined),
     contextCompaction: contextCompactionConfigForRuntime(
       runtime.contextCompaction,
       objectValue(existing?.contextCompaction)

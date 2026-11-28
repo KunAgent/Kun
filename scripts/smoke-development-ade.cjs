@@ -129,7 +129,7 @@ async function main() {
     await writeFile(join(evidenceRoot, 'report.json'), JSON.stringify({
       ok: false, status: 'running', startedAt, build, compiledRenderer, visualOnly, agentModeOnly, roomsHarnessOnly, protectedApprovalOnly, locale: visualLocale, theme: visualTheme, scale: visualScale
     }, null, 2) + '\n')
-    for (const name of ['failure.txt', 'failure-page.txt', 'failure.png', 'failure-runtime-fixture.json',
+    for (const name of ['failure.txt', 'failure-page.txt', 'failure.png', 'failure-runtime-fixture.json', 'failure-workspace-controls.json',
       'failure-workbench-fixture.json', 'failure-workspaces-fixture.json']) {
       await rm(join(evidenceRoot, name), { force: true })
     }
@@ -262,7 +262,6 @@ async function main() {
     for (const stream of [electronProcess.stdout, electronProcess.stderr]) {
       stream?.on('data', (chunk) => { electronOutput = `${electronOutput}${chunk}`.slice(-64 * 1024) })
     }
-    await resize(electronApplication, 1360, 900)
     page = await findWorkbenchWindow(electronApplication, timeoutMs)
     page.setDefaultTimeout(30_000)
     page.on('pageerror', (error) => pageErrors.push(error.message))
@@ -271,22 +270,26 @@ async function main() {
     })
     // The smoke run uses a fresh vite cache each time, so the first module
     // graph transform can exceed the default 30s window on a busy machine.
-    await page.waitForLoadState('domcontentloaded', { timeout: 120_000 })
-    await page.locator('[data-workspace-mode-trigger]').first().waitFor()
+    const rendererReadyDeadline = Date.now() + timeoutMs
+    await page.waitForLoadState('domcontentloaded', { timeout: timeoutMs })
+    await page.locator('[data-workspace-mode-trigger]:visible').first().waitFor({
+      timeout: Math.max(1, rendererReadyDeadline - Date.now())
+    })
+    await resize(electronApplication, page, 1360, 900)
 
     let assertions
     if (codingAgentOnly) {
       roomsHarnessReadiness = await verifyCodingAgentReadiness({ page, poll, runtimeRequest })
       assertions = await runCodingAgentFlow({ page, capture, poll, runtimeRequest, auditFile: codingAgentAudit,
-        resize: (width, height) => resize(electronApplication, width, height) })
+        resize: (width, height) => resize(electronApplication, page, width, height) })
     } else if (roomsHarnessOnly) {
       roomsHarnessReadiness = await verifyRoomsHarnessReadiness({ page, poll, runtimeRequest })
       assertions = await runRoomsHarnessFlow({ page, capture, poll, runtimeRequest, workspaceRoot, releaseFile, modelFixture,
-        resize: (width, height) => resize(electronApplication, width, height) })
+        resize: (width, height) => resize(electronApplication, page, width, height) })
     } else if (protectedApprovalOnly) {
       assertions = await runProtectedApprovalFlow({ application: electronApplication, page, capture, poll, runtimeRequest })
     } else if (devinModelsOnly) {
-      assertions = await runDevinModelFlow({ page, capture, poll, resize: (width, height) => resize(electronApplication, width, height) })
+      assertions = await runDevinModelFlow({ page, capture, poll, resize: (width, height) => resize(electronApplication, page, width, height) })
     } else if (installOnly) {
       assertions = await runAgentInstallFlow({ page, capture, poll, runtimeRequest })
     } else if (openCodeAgentsOnly) {
@@ -306,7 +309,7 @@ async function main() {
         application: electronApplication, nativeApprovalTimeoutMs })
     } else if (visualOnly) {
       assertions = await runUnifiedCodeVisuals({ page, capture, poll, runtimeRequest,
-        resize: (width, height) => resize(electronApplication, width, height) })
+        resize: (width, height) => resize(electronApplication, page, width, height) })
     } else {
       assertions = await runUnifiedCodeFlow({
         page, capture, poll, runtimeRequest, expectedSetupCommand,
@@ -332,6 +335,12 @@ async function main() {
     if (page) await writeFile(join(evidenceRoot, 'failure-page.txt'),
       await page.locator('body').innerText().catch(() => '')).catch(() => undefined)
     if (page) {
+      const controls = await page.locator('[data-workspace-mode-trigger]').evaluateAll(nodes => nodes.map(node => {
+        const style = getComputedStyle(node), bounds = node.getBoundingClientRect()
+        return { mode: node.getAttribute('data-workspace-mode'), display: style.display,
+          visibility: style.visibility, width: bounds.width, height: bounds.height }
+      })).catch(() => [])
+      await writeFile(join(evidenceRoot, 'failure-workspace-controls.json'), JSON.stringify(controls, null, 2)).catch(() => undefined)
       const inventory = await runtimeRequest(page, '/v1/threads?limit=100').catch(() => null)
       if (inventory) {
         const threads = await Promise.all(inventory.threads.map((thread) =>
@@ -450,12 +459,17 @@ function runtimeRequest(page, path, method = 'GET', body) {
   }, { path, method, body })
 }
 
-function resize(application, width, height) {
-  return application.evaluate(({ BrowserWindow }, bounds) => {
-    const window = BrowserWindow.getAllWindows().find((window) => !window.isDestroyed())
-    window?.setMinimumSize(960, 640)
-    window?.setBounds({ x: 20, y: 20, ...bounds })
-  }, { width, height })
+async function resize(application, page, width, height) {
+  const window = await application.browserWindow(page)
+  try {
+    await window.evaluate((target, bounds) => {
+      if (target.isDestroyed()) throw new Error('The smoke workbench window was destroyed')
+      target.setMinimumSize(960, 640)
+      target.setBounds({ x: 20, y: 20, ...bounds })
+    }, { width, height })
+  } finally {
+    await window.dispose()
+  }
 }
 
 async function poll(check, timeoutMs, description) {

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { buildRuntimeCapabilityManifest } from '../contracts/capabilities.js'
+import { setModelMetadataOverride } from '../services/model-metadata-resolver.js'
 import { publishRuntimeDiscovery } from '../server/runtime-discovery.js'
 import {
   acquireRuntimeDataDirMigrationLock,
@@ -23,6 +24,37 @@ import {
 
 describe('GUI settings bridge', () => {
   const roots: string[] = []
+
+  it('prunes removed automatic profiles without resurrecting them or losing CLI preferences on restart', async () => {
+    const fixture = await createFixture()
+    const settings = await readGuiSharedSettings({
+      env: { KUN_GUI_SETTINGS_PATH: fixture.settingsPath }, platform: 'darwin', homeDir: fixture.home
+    })
+    const provider = settings!.providers.find(p => p.id === 'deepseek')!
+    provider.models = ['deepseek-flash']
+    const path = join(fixture.dataDir, 'config.json')
+    const existing = JSON.parse(await readFile(path, 'utf8'))
+    const generated = { aliases: ['deepseek-flash'], inputModalities: ['text'],
+      evidence: { inputModalities: { source: 'adapter', status: 'declared' } } }
+    const manual = { contextWindowTokens: 96_000, contextCompaction: { softThreshold: 80_000 } }
+    const explicit = setModelMetadataOverride({ inputModalities: ['text'] }, 'maxOutputTokens', 12_345)
+    const profiles = { 'deepseek-v4-flash': generated, 'custom-cli': manual }
+    existing.models = { profiles: { ...profiles, 'deepseek-flash': explicit } }
+    existing.serve.providers.deepseek.modelProfiles = { ...profiles, '*': manual }
+    await writeFile(path, JSON.stringify(existing))
+
+    await syncGuiProviderCatalogToConfig(fixture.dataDir, settings!)
+    const bytes = await readFile(path, 'utf8')
+    const stored = JSON.parse(bytes)
+    expect(stored.models.profiles['deepseek-flash']).toMatchObject({
+      maxOutputTokens: 12_345, metadata: { overrides: { maxOutputTokens: 12_345 } }
+    })
+    expect(stored.models.profiles).not.toHaveProperty('deepseek-v4-flash')
+    expect(stored.models.profiles['custom-cli']).toEqual(manual)
+    expect(stored.serve.providers.deepseek.modelProfiles).toEqual({ 'custom-cli': manual, '*': manual })
+    expect((await syncGuiProviderCatalogToConfig(fixture.dataDir, settings!))?.changed).toBe(false)
+    expect(await readFile(path, 'utf8')).toBe(bytes)
+  })
 
   it('preserves canonical permission defaults when legacy GUI settings omit them', async () => {
     const fixture = await createFixture()

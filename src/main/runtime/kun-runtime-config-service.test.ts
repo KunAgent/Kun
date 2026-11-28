@@ -29,6 +29,39 @@ import {
 } from './kun-runtime-capability-config'
 
 describe('Kun runtime config service', () => {
+  it('does not repopulate removed DeepSeek profiles across settings normalisation and startup sync', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-runtime-profile-selection-'))
+    const base = normalizeAppSettings({} as AppSettingsV1)
+    const builtin = defaultModelProviderSettings().providers[0]!
+    const explicit: typeof builtin.modelProfiles[string] = {
+      contextWindowTokens: 92_000, inputModalities: ['text', 'image'], outputModalities: ['text'],
+      supportsToolCalling: true, messageParts: ['text', 'image_url']
+    }
+    const input = { ...base, provider: { ...base.provider, providers: [{ ...builtin,
+      models: ['deepseek-flash'], modelProfiles: { ...builtin.modelProfiles,
+        'deepseek-flash': explicit, '*': explicit, 'custom-cli': explicit } }] } }
+    try {
+      const first = normalizeAppSettings(input)
+      const reopened = normalizeAppSettings(JSON.parse(JSON.stringify(first)))
+      const provider = reopened.provider.providers.find(p => p.id === 'deepseek')!
+      expect(Object.keys(provider.modelProfiles).sort()).toEqual(['*', 'custom-cli', 'deepseek-flash'])
+      expect(provider.modelProfiles['deepseek-flash']).toMatchObject(explicit)
+      const options = { appSettings: reopened, mcpConfigPath: join(dataDir, 'fixture-mcp.json') }
+      await syncGuiManagedKunConfig(dataDir, resolveKunRuntimeSettings(reopened), options)
+      const path = join(dataDir, 'config.json'), bytes = await readFile(path, 'utf8')
+      const config = JSON.parse(bytes)
+      for (const profiles of [config.models.profiles, config.serve.providers.deepseek.modelProfiles]) {
+        expect(profiles['deepseek-v4-pro']).toBeUndefined()
+        expect(profiles['deepseek-v4-flash']).toBeUndefined()
+        expect(profiles['deepseek-flash']).toMatchObject(explicit)
+        expect(profiles['custom-cli']).toMatchObject(explicit)
+      }
+      expect(config.serve.providers.deepseek.modelProfiles['*']).toMatchObject(explicit)
+      await syncGuiManagedKunConfig(dataDir, resolveKunRuntimeSettings(reopened), options)
+      expect(await readFile(path, 'utf8')).toBe(bytes)
+    } finally { await rm(dataDir, { recursive: true, force: true }) }
+  })
+
   it('projects the Memory distillation opt-in without changing approval policy', () => {
     const base = normalizeAppSettings({} as AppSettingsV1)
     const settings = normalizeAppSettings({

@@ -330,7 +330,8 @@ export function normalizeSkillRootPath(path: string | undefined): string {
 async function discoverCodexPluginSkillRoots(): Promise<string[]> {
   const roots: string[] = []
   await collectSkillRoots(codexPluginCacheBase(), roots, 0, 5)
-  return roots
+  // Parallel directory reads must not change skill precedence or rewrite an unchanged config.
+  return roots.sort()
 }
 
 function codexPluginCacheBase(): string {
