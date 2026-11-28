@@ -1,10 +1,8 @@
 import { z } from 'zod'
 import { DAILY_NOTES_QUADRANTS } from '@kun/remote-protocol'
+import { isNoteDay } from '../../contracts/daily-notes.js'
 
-const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((value) => {
-  const date = new Date(value + 'T12:00:00Z')
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
-})
+const Day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isNoteDay)
 const Month = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)
 const DailyRevision = z.string().regex(/^daily-v1:[a-f0-9]{64}$/)
 const Quadrant = z.union([

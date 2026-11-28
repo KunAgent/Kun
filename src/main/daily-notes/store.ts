@@ -1,109 +1,79 @@
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { Rectangle } from 'electron'
+import { DailyNoteFiles } from '../../../kun/src/adapters/file/daily-note-files'
 import { rolloverIncompleteDailyNoteTasks } from '../../../kun/src/contracts/daily-notes-markdown'
-import { isNoteDay, type DailyNoteRolloverResult } from '../../shared/daily-notes'
+import type { DailyNoteRolloverResult, DailyNoteSaveResult, DailyNoteSnapshot } from '../../shared/daily-notes'
 import { atomicWriteFile } from '../atomic-json-file'
 
-type PendingNote = { markdown: string; saved: Promise<void> }
 export type NoteWindowState = { bounds: Rectangle; pinned: boolean }
 
 export class DailyNotesStore {
-  private readonly pending = new Map<string, PendingNote>()
+  private readonly pending = new Map<string, Promise<DailyNoteSaveResult>>()
+  private readonly files: DailyNoteFiles
 
-  constructor(private readonly directory: string) {}
+  constructor(private readonly directory: string) {
+    this.files = new DailyNoteFiles(directory)
+  }
 
   getDirectory(): string {
     return this.directory
   }
 
-  hasPending(day: string): boolean {
-    return this.pending.has(day)
+  listDays(): Promise<string[]> {
+    return this.files.listDays()
   }
 
-  private notePath(day: string): string {
-    if (!isNoteDay(day)) throw new Error('Invalid note date')
-    return join(this.directory, day + '.md')
+  async read(day: string): Promise<DailyNoteSnapshot> {
+    await this.pending.get(day)?.catch(() => undefined)
+    return this.files.read(day)
   }
 
-  async listDays(): Promise<string[]> {
+  async save(day: string, markdown: string, expectedRevision: string): Promise<DailyNoteSaveResult> {
+    const previous = this.pending.get(day) ?? Promise.resolve()
+    const pending = previous.catch(() => undefined).then(async () => {
+      await delay(250)
+      return this.files.save(day, markdown, expectedRevision)
+    })
+    this.pending.set(day, pending)
     try {
-      const entries = await readdir(this.directory, { withFileTypes: true })
-      return entries.filter(entry => entry.isFile() && entry.name.endsWith('.md'))
-        .map(entry => entry.name.slice(0, -3)).filter(isNoteDay).sort().reverse()
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-      throw error
-    }
-  }
-
-  async read(day: string): Promise<string> {
-    const path = this.notePath(day)
-    await this.pending.get(day)?.saved
-    try {
-      return await readFile(path, 'utf8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
-      throw error
-    }
-  }
-
-  save(day: string, markdown: string): Promise<void> {
-    const path = this.notePath(day)
-    if (typeof markdown !== 'string') throw new Error('Invalid note content')
-    const active = this.pending.get(day)
-    if (active) {
-      active.markdown = markdown
-      return active.saved
-    }
-    const batch: PendingNote = { markdown, saved: Promise.resolve() }
-    this.pending.set(day, batch)
-    batch.saved = this.persist(day, path, batch)
-    return batch.saved
-  }
-
-  // A quiet editor usually writes once. Continuous typing also reaches disk at
-  // regular intervals. A save acknowledgement includes edits made during I/O.
-  private async persist(day: string, path: string, batch: PendingNote): Promise<void> {
-    try {
-      for (;;) {
-        await delay(250)
-        const snapshot = batch.markdown
-        await atomicWriteFile(path, snapshot)
-        if (snapshot === batch.markdown) return
-      }
+      return await pending
     } finally {
-      this.pending.delete(day)
+      if (this.pending.get(day) === pending) this.pending.delete(day)
     }
   }
 
-  async mutateDay(day: string, updater: (markdown: string) => string | null): Promise<{ changed: boolean; markdown: string }> {
-    const path = this.notePath(day)
-    await this.pending.get(day)?.saved
-    const current = await this.read(day)
-    const next = updater(current)
-    if (next === null || next === current) return { changed: false, markdown: current }
-    await atomicWriteFile(path, next)
-    return { changed: true, markdown: next }
+  async mutateDay(day: string, updater: (markdown: string) => string | null): Promise<boolean> {
+    await this.pending.get(day)
+    return this.files.mutate(async write => {
+      const current = await this.files.readMarkdown(day)
+      const next = updater(current)
+      if (next === null || next === current) return false
+      await write(day, next)
+      return true
+    })
   }
 
   async rollover(fromDay: string, toDay: string): Promise<DailyNoteRolloverResult> {
-    const fromPath = this.notePath(fromDay)
-    const toPath = this.notePath(toDay)
-    if (fromDay === toDay) return { movedCount: 0, fromMarkdown: await this.read(fromDay), toMarkdown: await this.read(toDay) }
-    await this.flush()
-    const [fromMarkdown, toMarkdown] = await Promise.all([this.read(fromDay), this.read(toDay)])
-    const { nextFrom, nextTo, movedCount } = rolloverIncompleteDailyNoteTasks(fromMarkdown, toMarkdown)
-    if (movedCount > 0) {
-      await atomicWriteFile(toPath, nextTo)
-      await atomicWriteFile(fromPath, nextFrom)
+    if (fromDay === toDay) {
+      const { markdown } = await this.read(fromDay)
+      return { movedCount: 0, fromMarkdown: markdown, toMarkdown: markdown }
     }
-    return { movedCount, fromMarkdown: nextFrom, toMarkdown: nextTo }
+    await this.flush()
+    return this.files.mutate(async write => {
+      const [from, to] = await Promise.all([this.files.readMarkdown(fromDay), this.files.readMarkdown(toDay)])
+      const { nextFrom, nextTo, movedCount } = rolloverIncompleteDailyNoteTasks(from, to)
+      if (movedCount > 0) {
+        await write(toDay, nextTo)
+        await write(fromDay, nextFrom)
+      }
+      return { movedCount, fromMarkdown: nextFrom, toMarkdown: nextTo }
+    })
   }
 
   async flush(): Promise<void> {
-    await Promise.all([...this.pending.values()].map(note => note.saved))
+    await Promise.all(this.pending.values())
   }
 
   async readWindowState(): Promise<NoteWindowState | null> {

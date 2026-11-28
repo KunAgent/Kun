@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { DailyNoteLinkSummary, DailyNotesApi } from '@shared/daily-notes'
+import type { DailyNoteLinkSummary, DailyNoteSnapshot, DailyNotesApi } from '@shared/daily-notes'
 import { noteDate, shiftDay } from './calendar'
 import type { DailyNotesCopy } from './copy'
 import {
@@ -36,7 +36,9 @@ export function EarlierDayStream({
   onOpenLink
 }: Props) {
   const [limit, setLimit] = useState(INITIAL_LIMIT)
-  const [contents, setContents] = useState<Record<string, string>>({})
+  const [contents, setContents] = useState<Record<string, DailyNoteSnapshot>>({})
+  const [savingDays, setSavingDays] = useState<Record<string, boolean>>({})
+  const [issues, setIssues] = useState<Record<string, 'conflict' | 'error' | undefined>>({})
 
   const candidateDays = days.filter(day => day < selected)
   const visibleCandidates = candidateDays.slice(0, limit)
@@ -50,11 +52,11 @@ export function EarlierDayStream({
     if (!candidatesKey) return
     let cancelled = false
     const list = candidatesKey.split(',')
-    void Promise.all(list.map(async day => [day, await api.read(day).catch(() => '')] as const)).then(entries => {
+    void Promise.all(list.map(async day => [day, await api.read(day).catch(() => undefined)] as const)).then(entries => {
       if (cancelled) return
       setContents(prev => {
         const next = { ...prev }
-        for (const [day, text] of entries) next[day] = text
+        for (const [day, note] of entries) if (note) next[day] = note
         return next
       })
     })
@@ -62,8 +64,8 @@ export function EarlierDayStream({
   }, [api, candidatesKey, externalTick])
 
   const yesterday = shiftDay(today, -1)
-  const nonEmptyDays = visibleCandidates.filter(day => (contents[day] ?? '').trim().length > 0)
-  if (nonEmptyDays.length === 0 && candidateDays.length <= limit) return null
+  const streamDays = visibleCandidates.filter(day => contents[day]?.markdown.trim() || issues[day])
+  if (streamDays.length === 0 && candidateDays.length <= limit) return null
 
   const formatDayHeader = (day: string): { main: string; tag?: string } => {
     const d = noteDate(day)
@@ -78,18 +80,26 @@ export function EarlierDayStream({
 
   const toggleStreamTask = async (day: string, task: NoteTask): Promise<void> => {
     const current = contents[day]
-    if (typeof current !== 'string' || disabled) return
-    const next = applyNoteChange(current, toggleChange(task))
-    setContents(prev => ({ ...prev, [day]: next }))
-    await api.save(day, next).catch(() => {
-      setContents(prev => ({ ...prev, [day]: current }))
-    })
+    if (!current || disabled || savingDays[day]) return
+    const markdown = applyNoteChange(current.markdown, toggleChange(task))
+    setSavingDays(prev => ({ ...prev, [day]: true }))
+    setIssues(prev => ({ ...prev, [day]: undefined }))
+    try {
+      const result = await api.save(day, markdown, current.revision)
+      const next = result.status === 'saved' ? { markdown, revision: result.revision } : result.current
+      setContents(prev => prev[day]?.revision === current.revision ? { ...prev, [day]: next } : prev)
+      if (result.status === 'conflict') setIssues(prev => ({ ...prev, [day]: 'conflict' }))
+    } catch {
+      setIssues(prev => ({ ...prev, [day]: 'error' }))
+    } finally {
+      setSavingDays(prev => ({ ...prev, [day]: false }))
+    }
   }
 
   return (
     <section className="note-day-stream" aria-label={copy.loadMoreDays}>
-      {nonEmptyDays.map(day => {
-        const markdown = contents[day] ?? ''
+      {streamDays.map(day => {
+        const markdown = contents[day]?.markdown ?? ''
         const tasks = parseTasks(markdown)
         const header = formatDayHeader(day)
         const proseLines = tasks.length === 0
@@ -109,6 +119,11 @@ export function EarlierDayStream({
                 {header.tag && <span className="note-stream-tag">{header.tag}</span>}
               </button>
             </header>
+            {issues[day] && (
+              <div className="note-stream-issue" role="alert">
+                {issues[day] === 'conflict' ? copy.streamConflict : copy.saveFailed}
+              </div>
+            )}
 
             {tasks.length > 0 ? (
               <div className="note-stream-tasks">
@@ -135,7 +150,7 @@ export function EarlierDayStream({
                       <button
                         type="button"
                         className={'note-stream-check' + (task.done ? ' is-checked' : '')}
-                        disabled={disabled}
+                        disabled={disabled || savingDays[day]}
                         aria-pressed={task.done}
                         aria-label={`${day}: ${task.text || copy.task}`}
                         onClick={() => void toggleStreamTask(day, task)}

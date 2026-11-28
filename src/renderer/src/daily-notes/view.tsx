@@ -24,9 +24,8 @@ import {
   appendTaskChange, applyNoteChange, countTasks, formatKunRoomUrl, formatKunThreadUrl,
   linkChange, parseTasks, summarizeDay, taskAt, type DaySummary, type NoteChange, type NoteTask
 } from './tasks'
+import { useNoteDraft } from './use-note-draft'
 
-type Page = { day: string; markdown: string; pending?: Promise<void> }
-type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 type ViewMode = DailyNoteViewMode
 
 const THREAD_DRAG_MIME = 'application/x-kun-thread-id'
@@ -53,8 +52,6 @@ export function DailyNotesView({
   const [context, setContext] = useState<DailyNotesContext>()
   const [today, setToday] = useState(() => localNoteDay())
   const [days, setDays] = useState<string[]>([])
-  const [page, setPage] = useState<Page>()
-  const [text, setText] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>(() => targetViewMode ?? 'page')
   const [focusedLine, setFocusedLine] = useState<number | null>(null)
   const [startingTask, setStartingTask] = useState<NoteTask | null>(null)
@@ -64,11 +61,9 @@ export function DailyNotesView({
   const [summaries, setSummaries] = useState<Record<string, DaySummary>>({})
   const [linkSummaries, setLinkSummaries] = useState<Record<string, DailyNoteLinkSummary>>({})
   const [busy, setBusy] = useState(true)
-  const [status, setStatus] = useState<SaveState>('idle')
   const [loadFailure, setLoadFailure] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pinFailed, setPinFailed] = useState(false)
-  const current = useRef<Page | undefined>(undefined)
   const todayRef = useRef(today)
   const closing = useRef(false)
   const navigation = useRef(0)
@@ -90,63 +85,42 @@ export function DailyNotesView({
     setSummaries(previous => ({ ...previous, [day]: summary }))
   }, [])
 
+  const onSaved = useCallback((day: string) => {
+    setDays(previous => previous.includes(day) ? previous : [...previous, day].sort().reverse())
+  }, [])
+  const { current, page, replace, edit, finish, refresh, retry, copyDraftAndReload } =
+    useNoteDraft(api, surface, recordSummary, onSaved)
+  const text = page?.markdown ?? ''
+  const status = page?.status ?? 'idle'
+
   const ensureDaySummary = useCallback((day: string) => {
     if (!noteDaysRef.current.has(day) || summariesRef.current[day] || loadingDays.current.has(day)) return
     loadingDays.current.add(day)
-    void api.read(day).then(markdown => {
+    void api.read(day).then(({ markdown }) => {
       loadingDays.current.delete(day)
       if (current.current?.day === day || summariesRef.current[day]) return
       recordSummary(day, markdown)
     }, () => {
       loadingDays.current.delete(day)
     })
-  }, [api, recordSummary])
+  }, [api, current, recordSummary])
 
   const inspectMonth = useCallback((month: string) => {
     for (const { day } of monthCells(month)) ensureDaySummary(day)
   }, [ensureDaySummary])
 
-  const edit = useCallback((day: string, markdown: string) => {
-    const target = current.current
-    if (!target || day !== target.day) return
-    target.markdown = markdown
-    setText(markdown)
-    recordSummary(day, markdown)
-    setStatus('saving')
-    const pending = api.save(day, markdown)
-    target.pending = pending
-    void pending.then(() => {
-      if (target.pending !== pending) return
-      target.pending = undefined
-      if (current.current !== target) return
-      setStatus('saved')
-      setDays(previous => previous.includes(day) ? previous : [...previous, day].sort().reverse())
-    }, () => {
-      if (target.pending === pending && current.current === target) setStatus('error')
-    })
-  }, [api, recordSummary])
-
   const applyChange = useCallback((change: NoteChange) => {
     const target = current.current
     if (!target) return
     edit(target.day, applyNoteChange(target.markdown, change))
-  }, [edit])
+  }, [current, edit])
 
   const finishEditing = useCallback(async (): Promise<boolean> => {
     editor.current?.contentDOM.blur()
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
     await new Promise(resolve => setTimeout(resolve, 0))
-    const target = current.current
-    while (target?.pending) {
-      const pending = target.pending
-      try {
-        await pending
-      } catch {
-        if (pending === target.pending) return false
-      }
-    }
-    return true
-  }, [])
+    return finish()
+  }, [finish])
 
   const openDay = useCallback(async (day: string, focusTaskLine?: number) => {
     if (closing.current) return
@@ -156,22 +130,17 @@ export function DailyNotesView({
     setActionError(null)
     try {
       if (!await finishEditing()) return
-      const markdown = await api.read(day)
+      const note = await api.read(day)
       if (request !== navigation.current || closing.current) return
-      const next = { day, markdown }
-      current.current = next
-      setPage(next)
-      setText(markdown)
+      replace(day, note)
       setFocusedLine(focusTaskLine ?? null)
       setCalendarMonth(monthOf(day))
-      recordSummary(day, markdown)
-      setStatus(markdown ? 'saved' : 'idle')
     } catch {
       if (request === navigation.current) setLoadFailure(day)
     } finally {
       if (request === navigation.current && !closing.current) setBusy(false)
     }
-  }, [api, finishEditing, recordSummary])
+  }, [api, finishEditing, replace])
 
   const initialize = useCallback(async () => {
     setBusy(true)
@@ -198,20 +167,12 @@ export function DailyNotesView({
     const unsubscribeExternal = api.onExternalChange?.(event => {
       setDays(event.days)
       setExternalTick(tick => tick + 1)
-      recordSummary(event.day, event.markdown)
-      const applyIncoming = (): void => {
-        const active = current.current
-        if (active && active.day === event.day && !active.pending && active.markdown !== event.markdown) {
-          active.markdown = event.markdown
-          setText(event.markdown)
-          setStatus(event.markdown ? 'saved' : 'idle')
-        }
-      }
-      const active = current.current
-      if (active && active.day === event.day && active.pending) {
-        void active.pending.finally(applyIncoming)
+      if (current.current?.day === event.day) {
+        void refresh(event.day).catch(() => undefined)
       } else {
-        applyIncoming()
+        void api.read(event.day).then(({ markdown }) => {
+          if (current.current?.day !== event.day) recordSummary(event.day, markdown)
+        }).catch(() => undefined)
       }
     })
     const unsubscribeSummaries = api.onLinkSummaries?.(incoming => {
@@ -223,7 +184,7 @@ export function DailyNotesView({
       unsubscribeExternal?.()
       unsubscribeSummaries?.()
     }
-  }, [api, initialize, finishEditing, recordSummary])
+  }, [api, current, initialize, finishEditing, recordSummary, refresh])
 
   useEffect(() => {
     if (!focusNonce) return
@@ -233,7 +194,7 @@ export function DailyNotesView({
     } else {
       editor.current?.focus()
     }
-  }, [focusNonce, openDay, targetDay, targetViewMode])
+  }, [current, focusNonce, openDay, targetDay, targetViewMode])
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>
@@ -253,7 +214,7 @@ export function DailyNotesView({
     checkDay()
     window.addEventListener('focus', checkDay)
     return () => { clearTimeout(timer); window.removeEventListener('focus', checkDay) }
-  }, [openDay])
+  }, [current, openDay])
 
   useEffect(() => {
     if (viewMode === 'calendar') inspectMonth(calendarMonth)
@@ -313,9 +274,24 @@ export function DailyNotesView({
     await api.dockToWorkbench({ day: selected, viewMode })
   }
 
+  const recoverConflict = async (): Promise<void> => {
+    setBusy(true)
+    setActionError(null)
+    try {
+      await copyDraftAndReload()
+      setFocusedLine(null)
+    } catch {
+      setActionError(copy.conflictRecoveryFailed)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const sendTasksToKun = useCallback(async (items: NoteTask[], draftOnly: boolean) => {
     if (!api.sendToKun || items.length === 0) return
     setActionError(null)
+    // Kun can bind a dispatch link as soon as the task is handed off.
+    if (!await finishEditing()) return
     const ordered = [...items].sort((a, b) => (a.quadrant ?? 9) - (b.quadrant ?? 9) || a.line - b.line)
     const response = await api.sendToKun({
       mode: draftOnly ? 'draft' : 'send',
@@ -343,21 +319,21 @@ export function DailyNotesView({
       }
     }
     if (nextMarkdown !== target.markdown) edit(target.day, nextMarkdown)
-  }, [api, copy.kunBadge, copy.sendFailed, edit, selected])
+  }, [api, copy.kunBadge, copy.sendFailed, current, edit, finishEditing, selected])
 
   const sendLineToKun = useCallback((line: number, draftOnly: boolean) => {
     const target = current.current
     if (!target) return
     const found = taskAt(target.markdown, line)
     if (found && found.text) void sendTasksToKun([found], draftOnly)
-  }, [sendTasksToKun])
+  }, [current, sendTasksToKun])
 
   const openStartSessionLine = useCallback((line: number) => {
     const target = current.current
     if (!target) return
     const found = taskAt(target.markdown, line)
     if (found && found.text) setStartingTask(found)
-  }, [])
+  }, [current])
 
   const handleSessionStarted = useCallback((task: NoteTask, result: { threadId: string; label: string }) => {
     setStartingTask(null)
@@ -370,7 +346,7 @@ export function DailyNotesView({
       url: formatKunThreadUrl(result.threadId)
     }))
     if (nextMarkdown !== target.markdown) edit(target.day, nextMarkdown)
-  }, [copy.threadBadge, edit, selected])
+  }, [copy.threadBadge, current, edit, selected])
 
   const openTaskLink = useCallback((url: string) => {
     if (!api.openLink) return
@@ -388,20 +364,16 @@ export function DailyNotesView({
       if (!await finishEditing()) return
       const result = await api.rollover(fromDay, today)
       recordSummary(fromDay, result.fromMarkdown)
-      recordSummary(today, result.toMarkdown)
+      if (current.current?.day !== today) recordSummary(today, result.toMarkdown)
       setExternalTick(tick => tick + 1)
-      if (current.current?.day === today) {
-        current.current.markdown = result.toMarkdown
-        setText(result.toMarkdown)
-        setStatus('saved')
-      }
-      setDays(previous => previous.includes(today) ? previous : [today, ...previous].sort().reverse())
+      await refresh(today)
+      if (result.movedCount > 0) onSaved(today)
     } catch {
       setActionError(copy.saveFailed)
     } finally {
       setBusy(false)
     }
-  }, [api, copy.saveFailed, finishEditing, recordSummary, today])
+  }, [api, copy.saveFailed, current, finishEditing, onSaved, recordSummary, refresh, today])
 
   const hasDraggedThread = (event: DragEvent<HTMLElement>): boolean =>
     Array.from(event.dataTransfer.types).includes(THREAD_DRAG_MIME)
@@ -512,13 +484,13 @@ export function DailyNotesView({
           <>
             {onPopout && (
               <button type="button" className="note-icon-button" title={copy.popoutWindow}
-                aria-label={copy.popoutWindow} onClick={onPopout}>
+                aria-label={copy.popoutWindow} onClick={() => void finishEditing().then(saved => { if (saved) onPopout() })}>
                 <PictureInPicture2 size={14} />
               </button>
             )}
             {onCloseDocked && (
               <button type="button" className="note-icon-button" title={copy.closeDocked}
-                aria-label={copy.closeDocked} onClick={onCloseDocked}>
+                aria-label={copy.closeDocked} onClick={() => void finishEditing().then(saved => { if (saved) onCloseDocked() })}>
                 <X size={15} />
               </button>
             )}
@@ -657,13 +629,16 @@ export function DailyNotesView({
         />
       )}
 
-      {(loadFailure !== null || (status === 'error' && page) || pinFailed || actionError !== null) && <div className="note-alert">
-        {loadFailure !== null ? <>
+      {(loadFailure !== null || status === 'error' || status === 'conflict' || pinFailed || actionError !== null) && <div className="note-alert">
+        {status === 'conflict' ? <>
+          <span role="alert">{actionError ?? copy.saveConflict}</span>
+          <button type="button" disabled={busy} onClick={() => void recoverConflict()}>{copy.copyDraftAndReload}</button>
+        </> : loadFailure !== null ? <>
           <span role="alert">{copy.loadFailed}</span>
           <button type="button" onClick={() => void (loadFailure === 'initial' ? initialize() : openDay(loadFailure))}>{copy.retry}</button>
-        </> : status === 'error' && page ? <>
+        </> : status === 'error' ? <>
           <span role="alert">{copy.saveFailed}</span>
-          <button type="button" onClick={() => edit(page.day, page.markdown)}>{copy.retry}</button>
+          <button type="button" onClick={retry}>{copy.retry}</button>
         </> : actionError !== null ? <>
           <span role="alert">{actionError}</span>
           <button type="button" onClick={() => setActionError(null)}>×</button>

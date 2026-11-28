@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { ChevronRight, CornerLeftUp, Plus } from 'lucide-react'
 import type { EditorView } from '@codemirror/view'
 import type { DailyNoteLinkSummary, DailyNotesApi } from '@shared/daily-notes'
@@ -57,7 +57,7 @@ export function FocusTaskView({
 
   const taskLine = task?.line
   const taskText = task?.text
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (taskText !== undefined) setTitleDraft(taskText)
   }, [taskLine, taskText])
 

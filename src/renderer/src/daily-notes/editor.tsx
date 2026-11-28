@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObje
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { foldedRanges, syntaxTree } from '@codemirror/language'
 import { markdown as cmMarkdown, markdownLanguage as cmMarkdownLang } from '@codemirror/lang-markdown'
-import { EditorSelection, EditorState, Prec, StateEffect, type Range } from '@codemirror/state'
+import { EditorSelection, EditorState, Prec, StateEffect, Transaction, type Range } from '@codemirror/state'
 import { Decoration, EditorView, ViewPlugin, WidgetType, keymap, placeholder, type DecorationSet, type ViewUpdate } from '@codemirror/view'
 import type {
   DailyNoteLinkSummary,
@@ -605,7 +605,7 @@ export function NoteEditor({
   }, [api, ariaLabel, copy, day, onEdit, placeholderText, viewRef])
 
   // Apply external mutations (e.g. Xiao Kun binding a link or adding a task) without resetting the editor.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const view = viewRef.current
     if (!view) return
     const current = view.state.doc.toString()
@@ -615,7 +615,8 @@ export function NoteEditor({
     try {
       view.dispatch({
         changes: { from: 0, to: current.length, insert: value },
-        selection: { anchor: head }
+        selection: { anchor: head },
+        annotations: Transaction.addToHistory.of(false)
       })
     } finally {
       syncingExternal.current = false

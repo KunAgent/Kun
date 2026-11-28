@@ -51,7 +51,7 @@ export function DailyNotesDockedColumn() {
       }),
       listDays: () => bridge.listDays(),
       read: day => bridge.read(day),
-      save: (day, markdown) => bridge.save(day, markdown),
+      save: (day, markdown, expectedRevision) => bridge.save(day, markdown, expectedRevision),
       setPinned: async () => false,
       onCloseRequest: () => () => undefined,
       rollover: (fromDay, toDay) => bridge.rollover(fromDay, toDay),

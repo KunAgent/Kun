@@ -1,5 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto'
-import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type {
   DailyNoteQuadrant,
@@ -23,35 +23,19 @@ import {
   type DailyNoteTask,
   type DailyNoteTaskLink
 } from '../../contracts/daily-notes-markdown.js'
+import { atomicWriteFile } from '../../adapters/file/atomic-write.js'
+import { DailyNoteFiles, dailyNoteRevision } from '../../adapters/file/daily-note-files.js'
+import { isNoteDay, localNoteDay } from '../../contracts/daily-notes.js'
 import type { WorkbenchLink } from '../../contracts/workbench-links.js'
 import type { ServerRuntime } from '../../server/routes/server-runtime.js'
-import { pathWithin } from '../../workbench-bridge/directory.js'
 import type { Envelope, RemoteScope } from '../contracts.js'
 import { receiptKey, type Receipt } from '../requests/receipts.js'
 import { RemoteNoEffect } from '../requests/rejections.js'
 import { threadTodoProgress } from '../todos/service.js'
 
-const DAY_RE = /^\d{4}-\d{2}-\d{2}$/
 const RECEIPTS_FILE = 'remote-receipts.json'
 
 type CreateLedgerEntry = { day: string; revision: string; createdAt: number }
-
-export function isValidNoteDay(value: string): boolean {
-  if (!DAY_RE.test(value)) return false
-  const date = new Date(value + 'T12:00:00Z')
-  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value
-}
-
-export function localNoteDay(now = new Date()): string {
-  const month = String(now.getMonth() + 1).padStart(2, '0')
-  const day = String(now.getDate()).padStart(2, '0')
-  return `${now.getFullYear()}-${month}-${day}`
-}
-
-export function dailyNoteRevision(day: string, markdown: string): string {
-  const normalized = markdown.replace(/\r\n/g, '\n')
-  return 'daily-v1:' + createHash('sha256').update(`${day}\n${normalized}`).digest('hex')
-}
 
 function createIdempotencyId(scope: RemoteScope, requestId: string): string {
   return createHash('sha256').update(receiptKey(scope, requestId)).digest('hex').slice(0, 32)
@@ -111,8 +95,6 @@ export function dailyNotesAvailable(runtime: ServerRuntime): boolean {
 }
 
 export class RemoteDailyNotes {
-  private readonly dirQueues = new Map<string, Promise<unknown>>()
-
   constructor(private runtime: ServerRuntime) {}
 
   private async resolveDirectory(): Promise<string> {
@@ -125,41 +107,6 @@ export class RemoteDailyNotes {
     const fallback = this.runtime.rooms?.deps.dataDir
     if (fallback) return resolve(join(fallback, 'daily-notes'))
     throw new Error('UNSUPPORTED_OPERATION')
-  }
-
-  private notePath(dir: string, day: string): string {
-    if (!isValidNoteDay(day)) throw new RemoteNoEffect('INVALID_REQUEST')
-    const target = resolve(join(dir, `${day}.md`))
-    if (!pathWithin(dir, target)) throw new RemoteNoEffect('INVALID_REQUEST')
-    return target
-  }
-
-  private withDirLock<T>(dir: string, fn: () => Promise<T>): Promise<T> {
-    const prev = this.dirQueues.get(dir) ?? Promise.resolve()
-    const run = prev.catch(() => undefined).then(fn)
-    this.dirQueues.set(dir, run)
-    void run.finally(() => {
-      if (this.dirQueues.get(dir) === run) this.dirQueues.delete(dir)
-    }).catch(() => undefined)
-    return run
-  }
-
-  private async readDayMarkdown(dir: string, day: string): Promise<string> {
-    const path = this.notePath(dir, day)
-    try {
-      return await readFile(path, 'utf8')
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return ''
-      throw error
-    }
-  }
-
-  private async writeDayMarkdown(dir: string, day: string, markdown: string): Promise<void> {
-    const path = this.notePath(dir, day)
-    await mkdir(dir, { recursive: true })
-    const tmp = `${path}.${randomUUID()}.tmp`
-    await writeFile(tmp, markdown, 'utf8')
-    await rename(tmp, path)
   }
 
   private async readCreateLedger(dir: string): Promise<Record<string, CreateLedgerEntry>> {
@@ -175,26 +122,9 @@ export class RemoteDailyNotes {
     const current = await this.readCreateLedger(dir)
     current[key] = entry
     const entries = Object.entries(current).sort((a, b) => b[1].createdAt - a[1].createdAt).slice(0, 200)
-    await mkdir(dir, { recursive: true })
-    const target = join(dir, RECEIPTS_FILE)
-    const tmp = `${target}.${randomUUID()}.tmp`
-    await writeFile(tmp, JSON.stringify(Object.fromEntries(entries)), 'utf8')
-    await rename(tmp, target)
-  }
-
-  private async listDiskDays(dir: string): Promise<string[]> {
-    try {
-      const entries = await readdir(dir, { withFileTypes: true })
-      return entries
-        .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-        .map((entry) => entry.name.slice(0, -3))
-        .filter(isValidNoteDay)
-        .sort()
-        .reverse()
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
-      throw error
-    }
+    await atomicWriteFile(join(dir, RECEIPTS_FILE), JSON.stringify(Object.fromEntries(entries)), {
+      allowDirectWriteFallback: false
+    })
   }
 
   private async hydrateLinks(tasks: readonly DailyNoteTask[]): Promise<Map<string, RemoteDailyNoteTaskLink>> {
@@ -320,31 +250,31 @@ export class RemoteDailyNotes {
   }
 
   async preflight(method: string, p: any): Promise<void> {
-    const dir = await this.resolveDirectory()
+    const notes = new DailyNoteFiles(await this.resolveDirectory())
     if (method === 'daily.notes.create') {
       if (p.expectedRevision !== undefined) {
-        const current = await this.readDayMarkdown(dir, p.day)
+        const current = await notes.readMarkdown(p.day)
         if (dailyNoteRevision(p.day, current) !== p.expectedRevision) throw new RemoteNoEffect('REVISION_CONFLICT')
       }
       return
     }
     if (method === 'daily.notes.rollover') {
       if (p.expectedFromRevision !== undefined) {
-        const current = await this.readDayMarkdown(dir, p.fromDay)
+        const current = await notes.readMarkdown(p.fromDay)
         if (dailyNoteRevision(p.fromDay, current) !== p.expectedFromRevision) throw new RemoteNoEffect('REVISION_CONFLICT')
       }
       return
     }
-    const current = await this.readDayMarkdown(dir, p.day)
+    const current = await notes.readMarkdown(p.day)
     if (dailyNoteRevision(p.day, current) !== p.expectedRevision) throw new RemoteNoEffect('REVISION_CONFLICT')
     const hit = parseDailyNoteTasks(current).find((task) => task.line === p.line)
     if (!hit) throw new RemoteNoEffect('NOT_FOUND')
   }
 
   async list(p: { limitDays?: number; month?: string }): Promise<RemoteDailyNotesOverview> {
-    const dir = await this.resolveDirectory()
+    const notes = new DailyNoteFiles(await this.resolveDirectory())
     const today = localNoteDay()
-    const diskDays = await this.listDiskDays(dir)
+    const diskDays = await notes.listDays()
     const limitDays = p.limitDays ?? 14
     const targetMonth = p.month
 
@@ -357,7 +287,7 @@ export class RemoteDailyNotes {
     const orderedDays = [...summaryDaySet].sort().reverse()
     const markdownByDay = new Map<string, string>()
     await Promise.all(orderedDays.map(async (day) => {
-      markdownByDay.set(day, await this.readDayMarkdown(dir, day))
+      markdownByDay.set(day, await notes.readMarkdown(day))
     }))
 
     const days: RemoteDailyNoteDaySummary[] = orderedDays
@@ -377,8 +307,8 @@ export class RemoteDailyNotes {
   }
 
   async get(day: string): Promise<RemoteDailyNotePage> {
-    const dir = await this.resolveDirectory()
-    const markdown = await this.readDayMarkdown(dir, day)
+    const notes = new DailyNoteFiles(await this.resolveDirectory())
+    const markdown = await notes.readMarkdown(day)
     return this.formatPage(day, markdown)
   }
 
@@ -388,15 +318,16 @@ export class RemoteDailyNotes {
     if (method === 'daily.notes.get') return this.get(p.day)
 
     const dir = await this.resolveDirectory()
-    return this.withDirLock(dir, async () => {
+    const notes = new DailyNoteFiles(dir)
+    const formatResult = await notes.mutate(async write => {
       if (method === 'daily.notes.create') {
         const ledgerKey = createIdempotencyId(envelope, requestId)
         const ledger = await this.readCreateLedger(dir)
         if (ledger[ledgerKey]) {
-          const existing = await this.readDayMarkdown(dir, p.day)
-          return this.formatPage(p.day, existing)
+          const existing = await notes.readMarkdown(p.day)
+          return () => this.formatPage(p.day, existing)
         }
-        const current = await this.readDayMarkdown(dir, p.day)
+        const current = await notes.readMarkdown(p.day)
         if (p.expectedRevision !== undefined && dailyNoteRevision(p.day, current) !== p.expectedRevision) {
           throw new RemoteNoEffect('REVISION_CONFLICT')
         }
@@ -412,17 +343,17 @@ export class RemoteDailyNotes {
             }
           }
         }
-        await this.writeDayMarkdown(dir, p.day, next)
+        await write(p.day, next)
         await this.writeCreateLedger(dir, ledgerKey, {
           day: p.day,
           revision: dailyNoteRevision(p.day, next),
           createdAt: Date.now()
         })
-        return this.formatPage(p.day, next)
+        return () => this.formatPage(p.day, next)
       }
 
       if (method === 'daily.notes.update') {
-        let current = await this.readDayMarkdown(dir, p.day)
+        let current = await notes.readMarkdown(p.day)
         if (dailyNoteRevision(p.day, current) !== p.expectedRevision) {
           throw new RemoteNoEffect('REVISION_CONFLICT')
         }
@@ -452,68 +383,74 @@ export class RemoteDailyNotes {
         }
 
         if (p.moveToDay !== undefined) {
-          const destCurrent = await this.readDayMarkdown(dir, p.moveToDay)
+          const destCurrent = await notes.readMarkdown(p.moveToDay)
           const { remaining, block } = cutTaskSubtree(current, target)
           const destNext = appendRawBlock(destCurrent, block)
-          await this.writeDayMarkdown(dir, p.moveToDay, destNext)
-          await this.writeDayMarkdown(dir, p.day, remaining)
-          const [page, movedToPage] = await Promise.all([
-            this.formatPage(p.day, remaining),
-            this.formatPage(p.moveToDay, destNext)
-          ])
-          return { page, movedToPage } satisfies RemoteDailyNoteUpdateResult
+          await write(p.moveToDay, destNext)
+          await write(p.day, remaining)
+          return async () => {
+            const [page, movedToPage] = await Promise.all([
+              this.formatPage(p.day, remaining),
+              this.formatPage(p.moveToDay, destNext)
+            ])
+            return { page, movedToPage } satisfies RemoteDailyNoteUpdateResult
+          }
         }
 
-        await this.writeDayMarkdown(dir, p.day, current)
-        return { page: await this.formatPage(p.day, current) } satisfies RemoteDailyNoteUpdateResult
+        await write(p.day, current)
+        return async () => ({ page: await this.formatPage(p.day, current) } satisfies RemoteDailyNoteUpdateResult)
       }
 
       if (method === 'daily.notes.delete') {
-        const current = await this.readDayMarkdown(dir, p.day)
+        const current = await notes.readMarkdown(p.day)
         if (dailyNoteRevision(p.day, current) !== p.expectedRevision) {
           throw new RemoteNoEffect('REVISION_CONFLICT')
         }
         const target = parseDailyNoteTasks(current).find((task) => task.line === p.line)
         if (!target) throw new RemoteNoEffect('NOT_FOUND')
         const { remaining } = cutTaskSubtree(current, target)
-        await this.writeDayMarkdown(dir, p.day, remaining)
-        return this.formatPage(p.day, remaining)
+        await write(p.day, remaining)
+        return () => this.formatPage(p.day, remaining)
       }
 
       if (method === 'daily.notes.rollover') {
         const [fromMarkdown, toMarkdown] = await Promise.all([
-          this.readDayMarkdown(dir, p.fromDay),
-          this.readDayMarkdown(dir, p.toDay)
+          notes.readMarkdown(p.fromDay),
+          notes.readMarkdown(p.toDay)
         ])
         if (p.expectedFromRevision !== undefined && dailyNoteRevision(p.fromDay, fromMarkdown) !== p.expectedFromRevision) {
           throw new RemoteNoEffect('REVISION_CONFLICT')
         }
         const { nextFrom, nextTo, movedCount } = rolloverIncompleteDailyNoteTasks(fromMarkdown, toMarkdown)
         if (movedCount > 0) {
-          await this.writeDayMarkdown(dir, p.toDay, nextTo)
-          await this.writeDayMarkdown(dir, p.fromDay, nextFrom)
+          await write(p.toDay, nextTo)
+          await write(p.fromDay, nextFrom)
         }
-        const [fromPage, toPage] = await Promise.all([
-          this.formatPage(p.fromDay, nextFrom),
-          this.formatPage(p.toDay, nextTo)
-        ])
-        return { movedCount, fromPage, toPage } satisfies RemoteDailyNoteRolloverResult
+        return async () => {
+          const [fromPage, toPage] = await Promise.all([
+            this.formatPage(p.fromDay, nextFrom),
+            this.formatPage(p.toDay, nextTo)
+          ])
+          return { movedCount, fromPage, toPage } satisfies RemoteDailyNoteRolloverResult
+        }
       }
 
       throw new RemoteNoEffect('INVALID_REQUEST')
     })
+    // Link status can involve other services. Release the write lock first.
+    return formatResult()
   }
 
   async recover(scope: RemoteScope, receipt: Receipt): Promise<RemoteDailyNotePage | undefined> {
     if (receipt.method !== 'daily.notes.create') return undefined
     const day = receipt.params?.day
-    if (typeof day !== 'string' || !isValidNoteDay(day)) return undefined
+    if (!isNoteDay(day)) return undefined
     const dir = await this.resolveDirectory().catch(() => null)
     if (!dir) return undefined
     const ledgerKey = createIdempotencyId(scope, receipt.requestId)
     const ledger = await this.readCreateLedger(dir)
     if (!ledger[ledgerKey]) return undefined
-    const markdown = await this.readDayMarkdown(dir, day)
+    const markdown = await new DailyNoteFiles(dir).readMarkdown(day)
     return this.formatPage(day, markdown)
   }
 }

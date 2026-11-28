@@ -1,9 +1,12 @@
-// Runs the built notes page and both sandboxed preloads in an isolated Electron profile.
+// Runs the built notes page, sandboxed preloads and remote writer in an isolated profile.
 'use strict'
 const assert = require('node:assert/strict')
+const { execFile } = require('node:child_process')
 const { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
 const { join, resolve } = require('node:path')
+const { pathToFileURL } = require('node:url')
+const { promisify } = require('node:util')
 const { build } = require('esbuild')
 const { _electron } = require('playwright-core')
 const { scrubDesktopEnvironment } = require('./smoke-packaged-extension-desktop-runtime.cjs')
@@ -63,6 +66,14 @@ async function main() {
       const { app, BrowserWindow } = require('electron')
       const { join } = require('node:path')
       const { registerDailyNotesIpc } = require('./src/main/daily-notes/window')
+      const { DailyNotesStore } = require('./src/main/daily-notes/store')
+      const originalSave = DailyNotesStore.prototype.save
+      DailyNotesStore.prototype.save = async function (...args) {
+        const pause = globalThis.nextDesktopNoteSave
+        globalThis.nextDesktopNoteSave = undefined
+        await pause
+        return originalSave.apply(this, args)
+      }
       app.setPath('userData', join(app.getAppPath(), 'profile'))
       app.whenReady().then(async () => {
         const out = join(app.getAppPath(), 'out')
@@ -281,22 +292,61 @@ async function main() {
     const dockedPayloads = await owner.evaluate(() => window.__kunDockedPayloads)
     assert.equal(dockedPayloads[0]?.day, followingDay)
     const wbRead = await owner.evaluate(targetDay => window.kunGui.dailyNotes.read(targetDay), followingDay)
-    assert.match(wbRead, /kun:\/\/thread\/thr-direct-1/)
-    assert.match(wbRead, / {2}- 根源分析说明/)
+    assert.match(wbRead.markdown, /kun:\/\/thread\/thr-direct-1/)
+    assert.match(wbRead.markdown, / {2}- 根源分析说明/)
 
     // Reopen standalone window for final flush-on-quit check.
     page = await open()
     await pickQuickDate(page, day)
     await page.getByRole('checkbox', { name: '跟进反馈' }).waitFor()
 
+    // Pause the desktop autosave while the real Kun remote service writes in another process.
+    await application.evaluate(() => {
+      globalThis.nextDesktopNoteSave = new Promise(resolve => { globalThis.resumeDesktopNoteSave = resolve })
+    })
+    const stale = await page.evaluate(targetDay => window.kunDailyNotes.read(targetDay), day)
+    await page.getByRole('textbox').press('ControlOrMeta+End')
+    await page.keyboard.insertText('\n本地草稿')
+    await page.getByText('正在保存…', { exact: true }).waitFor()
+    const remoteWriter = pathToFileURL(join(root, 'kun', 'dist', 'remote', 'daily-notes', 'service.js')).href
+    await promisify(execFile)(process.execPath, ['--input-type=module', '--eval', `
+      const [moduleUrl, dailyNotesDir, day, revision] = process.argv.slice(1)
+      const { RemoteDailyNotes } = await import(moduleUrl)
+      const remote = new RemoteDailyNotes({ dailyNotesDir, threadService: { getMetadata: async () => null } })
+      const page = await remote.get(day)
+      const task = page.tasks.find(task => task.title === '跟进反馈')
+      if (!task?.done) throw new Error('Expected a completed task')
+      const params = { day, line: task.line, expectedRevision: revision, done: false }
+      const method = 'daily.notes.update'
+      await remote.preflight(method, params)
+      const result = await remote.dispatch({ call: { method, requestId: 'remote-check' } }, params)
+      if (result.page.tasks.find(candidate => candidate.line === task.line)?.done !== false) {
+        throw new Error('Remote update did not persist')
+      }
+    `, remoteWriter, notes, day, stale.revision], { timeout: 10_000 })
+    await application.evaluate(() => globalThis.resumeDesktopNoteSave())
+    await page.getByRole('alert').filter({ hasText: '草稿仍保留' }).waitFor()
+    assert.match(await page.getByRole('textbox').textContent(), /本地草稿/)
+    assert.match(await readFile(todayFile, 'utf8'), /- \[ \] 跟进反馈/)
+
+    await page.evaluate(() => {
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.__copiedDraft = text } } })
+    })
+    await page.getByRole('button', { name: '复制草稿并载入最新版' }).click()
+    await page.getByRole('checkbox', { name: '跟进反馈', checked: false }).waitFor()
+    assert.match(await page.evaluate(() => window.__copiedDraft), /本地草稿/)
+
     await page.getByRole('textbox').press('ControlOrMeta+End')
     await page.keyboard.insertText('保存')
     await application.close()
     application = null
     assert.match(await readFile(todayFile, 'utf8'), /保存$/)
-    console.log('Daily notes passed: singleton, IME, checkbox, date-picker, stream, focus-drilldown, direct-session, dock-bridge, quadrants, calendar, Kun handoff, live link sync, reverse append, rollover, midnight, close, geometry, pin and quit.')
+    console.log('Daily notes passed: singleton, IME, checkbox, date-picker, stream, focus-drilldown, direct-session, dock-bridge, quadrants, calendar, Kun handoff, live link sync, reverse append, rollover, midnight, close, geometry, pin, cross-process save conflicts, draft recovery and quit.')
   } finally {
-    if (application) await application.close()
+    if (application) {
+      await application.evaluate(({ app }) => app.exit()).catch(() => undefined)
+      await application.close().catch(() => undefined)
+    }
     await rm(fixture, { recursive: true, force: true })
   }
 }

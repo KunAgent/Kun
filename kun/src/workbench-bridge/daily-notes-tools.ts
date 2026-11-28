@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { ThreadStore } from '../ports/thread-store.js'
 import { LocalToolHost, type LocalTool } from '../adapters/tool/local-tool-host.js'
+import { DailyNoteFiles } from '../adapters/file/daily-note-files.js'
+import { isNoteDay, localNoteDay } from '../contracts/daily-notes.js'
 import {
   appendDailyNoteTaskChange, applyDailyNoteChange, findMatchingDailyNoteTask,
   parseDailyNoteTasks, toggleDailyNoteTaskChange, type DailyNoteQuadrant
@@ -8,7 +10,6 @@ import {
 import { DAILY_NOTES_TOOL_NAMES } from '../contracts/workbench-policy.js'
 import { interactionFingerprint, interactionId, interactionReplay } from '../rooms/room-interaction-store.js'
 import { ROOM_AX_TOOL_DESCRIPTIONS } from '../rooms/room-ax-surfaces.js'
-import { atomicWriteNote, isValidNoteDay, listSavedNoteDays, localNoteDay, readNoteText } from './daily-notes-files.js'
 import { advertiseWorkbenchTool, workbenchFail, workbenchToolMeta, workbenchToolScope, type WorkbenchToolScope } from './tool-scope.js'
 
 export { DAILY_NOTES_TOOL_NAMES }
@@ -80,8 +81,8 @@ export function workbenchDailyNotesTools(threads: ThreadStore): LocalTool[] {
       const dir = await requireDailyNotesDir(scope, false)
       const today = localNoteDay()
       const day = input.day ?? today
-      if (!isValidNoteDay(day)) throw new Error('Invalid note date; expected YYYY-MM-DD')
-      const [markdown, savedDays] = await Promise.all([readNoteText(dir, day), listSavedNoteDays(dir)])
+      const notes = new DailyNoteFiles(dir)
+      const [markdown, savedDays] = await Promise.all([notes.readMarkdown(day), notes.listDays()])
       const tasks = parseDailyNoteTasks(markdown).map(task => ({
         line: task.line,
         done: task.done,
@@ -107,34 +108,39 @@ export function workbenchDailyNotesTools(threads: ThreadStore): LocalTool[] {
       const input = args as z.infer<typeof AddTaskInput>
       const dir = await requireDailyNotesDir(scope, true)
       const day = input.day ?? localNoteDay()
-      if (!isValidNoteDay(day)) throw new Error('Invalid note date; expected YYYY-MM-DD')
+      if (!isNoteDay(day)) throw new Error('Invalid note date; expected YYYY-MM-DD')
       const receipt = 'daily-note-add:' + interactionId('daily-note', scope.runId, scope.toolCallId)
       const fingerprint = interactionFingerprint({ day, text: input.text, quadrant: input.quadrant ?? null })
-      const replay = await interactionReplay<{ added: true; day: string; text: string; quadrant: number | null }>(scope.store, receipt, fingerprint)
-      if (replay) return { output: replay }
-      const current = await readNoteText(dir, day)
-      const quadrant = (input.quadrant ?? null) as DailyNoteQuadrant | null
-      const updated = applyDailyNoteChange(current, appendDailyNoteTaskChange(current, input.text, quadrant))
-      await atomicWriteNote(dir, day, updated)
-      const result = { added: true as const, day, text: input.text, quadrant }
-      await scope.store.commit({ requestId: receipt, fingerprint, checks: [], puts: [], events: [], result })
-      return { output: result }
+      const notes = new DailyNoteFiles(dir)
+      return notes.mutate(async write => {
+        const replay = await interactionReplay<{ added: true; day: string; text: string; quadrant: number | null }>(
+          scope.store, receipt, fingerprint
+        )
+        if (replay) return { output: replay }
+        const current = await notes.readMarkdown(day)
+        const quadrant = (input.quadrant ?? null) as DailyNoteQuadrant | null
+        await write(day, applyDailyNoteChange(current, appendDailyNoteTaskChange(current, input.text, quadrant)))
+        const result = { added: true as const, day, text: input.text, quadrant }
+        await scope.store.commit({ requestId: receipt, fingerprint, checks: [], puts: [], events: [], result })
+        return { output: result }
+      })
     }, { needsToolCall: true }),
 
     define('set_daily_note_task_done', SetDoneInput, async (scope, args) => {
       const input = args as z.infer<typeof SetDoneInput>
       const dir = await requireDailyNotesDir(scope, true)
       const day = input.day ?? localNoteDay()
-      if (!isValidNoteDay(day)) throw new Error('Invalid note date; expected YYYY-MM-DD')
-      const current = await readNoteText(dir, day)
-      const tasks = parseDailyNoteTasks(current)
-      const target = findMatchingDailyNoteTask(tasks, { linkId: input.linkId, taskText: input.taskText })
-      if (!target) throw new Error(`No matching to-do found on ${day}`)
-      if (target.done !== input.done) {
-        const updated = applyDailyNoteChange(current, toggleDailyNoteTaskChange(target, input.done))
-        await atomicWriteNote(dir, day, updated)
-      }
-      return { output: { updated: true, day, text: target.text, done: input.done } }
+      if (!isNoteDay(day)) throw new Error('Invalid note date; expected YYYY-MM-DD')
+      const notes = new DailyNoteFiles(dir)
+      return notes.mutate(async write => {
+        const current = await notes.readMarkdown(day)
+        const target = findMatchingDailyNoteTask(parseDailyNoteTasks(current), { linkId: input.linkId, taskText: input.taskText })
+        if (!target) throw new Error(`No matching to-do found on ${day}`)
+        if (target.done !== input.done) {
+          await write(day, applyDailyNoteChange(current, toggleDailyNoteTaskChange(target, input.done)))
+        }
+        return { output: { updated: true, day, text: target.text, done: input.done } }
+      })
     })
   ]
 }
